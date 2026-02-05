@@ -17,13 +17,13 @@
 
   <modules>
     <module>common-lib</module>
+    <module>kafka-lib</module>
     <module>api-gateway</module>
-    <module>issue-service</module>
-    <module>auth-serice</module>
+    <module>auth-service</module>
     <module>project-service</module>
     <module>workflow-service</module>
+    <module>issue-service</module>
     <module>notification-service</module>
-    <module>kafka-lib</module>
   </modules>
 
   <properties>
@@ -31,6 +31,16 @@
 
     <lombok.version>1.18.32</lombok.version>
     <liquibase.maven.version>4.4.2</liquibase.maven.version>
+
+    <postgres.version>42.7.3</postgres.version>
+
+    <!-- gRPC + Protobuf -->
+    <grpc.version>1.65.1</grpc.version>
+    <protobuf.version>3.25.3</protobuf.version>
+
+    <!-- Reactor gRPC -->
+    <reactor.grpc.version>1.2.4</reactor.grpc.version>
+    <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
 
     <docker.tag>local</docker.tag>
     <docker.java-image>openjdk:21</docker.java-image>
@@ -47,17 +57,42 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- Централизация общих библиотек -->
+      <!-- gRPC BOM -->
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-bom</artifactId>
+        <version>${grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Protobuf -->
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${protobuf.version}</version>
+      </dependency>
+
+      <!-- Reactor gRPC runtime -->
+      <dependency>
+        <groupId>com.salesforce.servicelibs</groupId>
+        <artifactId>reactor-grpc-stub</artifactId>
+        <version>${reactor.grpc.version}</version>
+      </dependency>
+
+      <!-- DB driver -->
       <dependency>
         <groupId>org.postgresql</groupId>
         <artifactId>postgresql</artifactId>
         <version>${postgres.version}</version>
       </dependency>
 
+      <!-- Lombok -->
       <dependency>
         <groupId>org.projectlombok</groupId>
         <artifactId>lombok</artifactId>
         <version>${lombok.version}</version>
+        <scope>provided</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -171,13 +206,5 @@
   </build>
 
   <dependencies>
-    <!-- Общие для всех модулей зависимости -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
-    <!-- Тестовые -->
-
   </dependencies>
 </project>
