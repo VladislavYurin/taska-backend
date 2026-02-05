@@ -1,0 +1,291 @@
+version: "3.9"
+
+name: taska
+
+networks:
+  taska-net:
+
+volumes:
+  pg_auth_data:
+  pg_project_data:
+  pg_workflow_data:
+  pg_issue_data:
+  pg_notification_data:
+  kafka_data:
+
+services:
+  # --------------------
+  # Kafka (KRaft mode)
+  # --------------------
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: taska-kafka
+    networks: [taska-net]
+    ports:
+      - "9092:9092"   # external access from host
+    environment:
+      # KRaft single-node
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+      # listeners
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      # dev-friendly
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_NUM_PARTITIONS=3
+      - KAFKA_DEFAULT_REPLICATION_FACTOR=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # --------------------
+  # Postgres
+  # --------------------
+  auth-db:
+    image: postgres:16
+    container_name: taska-auth-db
+    networks: [taska-net]
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=auth_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  project-db:
+    image: postgres:16
+    container_name: taska-project-db
+    networks: [taska-net]
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=project_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_project_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d project_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  workflow-db:
+    image: postgres:16
+    container_name: taska-workflow-db
+    networks: [taska-net]
+    ports:
+      - "5435:5432"
+    environment:
+      - POSTGRES_DB=workflow_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_workflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d workflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  issue-db:
+    image: postgres:16
+    container_name: taska-issue-db
+    networks: [taska-net]
+    ports:
+      - "5436:5432"
+    environment:
+      - POSTGRES_DB=issue_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_issue_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d issue_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  notification-db:
+    image: postgres:16
+    container_name: taska-notification-db
+    networks: [taska-net]
+    ports:
+      - "5437:5432"
+    environment:
+      - POSTGRES_DB=notification_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_notification_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # --------------------
+  # Microservices
+  # --------------------
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: taska-auth-service
+    networks: [taska-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      auth-db:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://auth-db:5432/auth_db
+      - SPRING_R2DBC_USERNAME=taska
+      - SPRING_R2DBC_PASSWORD=taska
+
+  project-service:
+    build:
+      context: .
+      dockerfile: project-service/Dockerfile
+    container_name: taska-project-service
+    networks: [taska-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      project-db:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://project-db:5432/project_db
+      - SPRING_R2DBC_USERNAME=taska
+      - SPRING_R2DBC_PASSWORD=taska
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://project-db:5432/project_db
+      - SPRING_DATASOURCE_USERNAME=taska
+      - SPRING_DATASOURCE_PASSWORD=taska
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+  workflow-service:
+    build:
+      context: .
+      dockerfile: workflow-service/Dockerfile
+    container_name: taska-workflow-service
+    networks: [taska-net]
+    depends_on:
+      workflow-db:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5432/workflow_db
+      - SPRING_R2DBC_USERNAME=taska
+      - SPRING_R2DBC_PASSWORD=taska
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5432/workflow_db
+      - SPRING_DATASOURCE_USERNAME=taska
+      - SPRING_DATASOURCE_PASSWORD=taska
+
+  issue-service:
+    build:
+      context: .
+      dockerfile: issue-service/Dockerfile
+    container_name: taska-issue-service
+    networks: [taska-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      issue-db:
+        condition: service_healthy
+      project-service:
+        condition: service_started
+      workflow-service:
+        condition: service_started
+    ports:
+      - "8084:8080"
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://issue-db:5432/issue_db
+      - SPRING_R2DBC_USERNAME=taska
+      - SPRING_R2DBC_PASSWORD=taska
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://issue-db:5432/issue_db
+      - SPRING_DATASOURCE_USERNAME=taska
+      - SPRING_DATASOURCE_PASSWORD=taska
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: taska-notification-service
+    networks: [taska-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://notification-db:5432/notification_db
+      - SPRING_R2DBC_USERNAME=taska
+      - SPRING_R2DBC_PASSWORD=taska
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://notification-db:5432/notification_db
+      - SPRING_DATASOURCE_USERNAME=taska
+      - SPRING_DATASOURCE_PASSWORD=taska
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: taska-api-gateway
+    networks: [taska-net]
+    depends_on:
+      auth-service:
+        condition: service_started
+      project-service:
+        condition: service_started
+      issue-service:
+        condition: service_started
+      workflow-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+
+      # grpc targets
+      - AUTH_GRPC_HOST=auth-service
+      - AUTH_GRPC_PORT=9090
+      - PROJECT_GRPC_HOST=project-service
+      - PROJECT_GRPC_PORT=9090
+      - WORKFLOW_GRPC_HOST=workflow-service
+      - WORKFLOW_GRPC_PORT=9090
+      - ISSUE_GRPC_HOST=issue-service
+      - ISSUE_GRPC_PORT=9090
+      - NOTIFICATION_GRPC_HOST=notification-service
+      - NOTIFICATION_GRPC_PORT=9090
