@@ -10,7 +10,7 @@
     <version>1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>project-service</artifactId>
+  <artifactId>auth-service</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -64,7 +64,7 @@
       <groupId>com.salesforce.servicelibs</groupId>
       <artifactId>reactor-grpc-stub</artifactId>
     </dependency>
-
+    
     <dependency>
       <groupId>ru.taska</groupId>
       <artifactId>common-lib</artifactId>
