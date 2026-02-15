@@ -44,6 +44,9 @@
 
     <docker.tag>local</docker.tag>
     <docker.java-image>openjdk:21</docker.java-image>
+
+    <!-- Swagger Annotations -->
+    <swagger.annotations.version>2.2.34</swagger.annotations.version>
   </properties>
 
   <profiles>
@@ -79,6 +82,14 @@
         <artifactId>reactor-grpc-stub</artifactId>
         <version>${reactor.grpc.version}</version>
       </dependency>
+
+      <!-- Swagger Annotations -->
+      <dependency>
+        <groupId>io.swagger.core.v3</groupId>
+        <artifactId>swagger-annotations</artifactId>
+        <version>${swagger.annotations.version}</version>
+      </dependency>
+
 
       <!-- DB driver -->
       <dependency>
