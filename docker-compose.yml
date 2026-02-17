@@ -199,10 +199,10 @@ services:
     ports:
       - "8083:8080"
     environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5432/workflow_db
+      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5435/workflow_db
       - SPRING_R2DBC_USERNAME=taska
       - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5432/workflow_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5435/workflow_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
 
