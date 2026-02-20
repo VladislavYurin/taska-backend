@@ -16,7 +16,6 @@ CREATE TABLE taska.users (
    email         varchar(320) NOT NULL,
    display_name  varchar(128) NOT NULL,
    status        varchar(32) NOT NULL,
-   lockout_until timestamptz NULL,
    created_at    timestamptz NOT NULL DEFAULT now(),
    updated_at    timestamptz NOT NULL DEFAULT now(),
 
@@ -28,7 +27,7 @@ CREATE TABLE taska.users (
 
 -- changeset taska:0003-users-status-index
 -- Индекс для ускорения выборки пользователей по статусу.
-CREATE INDEX users_status_idx ON taska.users(status);
+CREATE INDEX IF NOT EXISTS users_status_idx ON taska.users(status);
 
 -- changeset taska:0004-create-credentials
 -- comment: Создание таблицы credentials.
@@ -82,16 +81,16 @@ CREATE TABLE taska.credentials (
 
 -- changeset taska:0005-create-credentials-uniqueness
 -- comment: Ограничения уникальности для учётных данных.
-CREATE UNIQUE INDEX credentials_one_password_per_user_uniq
+CREATE UNIQUE INDEX IF NOT EXISTS credentials_one_password_per_user_uniq
     ON taska.credentials(user_id)
     WHERE credential_type = 'PASSWORD';
 
-CREATE UNIQUE INDEX credentials_one_external_per_user_uniq
+CREATE UNIQUE INDEX IF NOT EXISTS credentials_one_external_per_user_uniq
     ON taska.credentials(user_id, credential_type, provider)
     WHERE credential_type IN ('OAUTH', 'OIDC', 'SAML')
         AND provider IS NOT NULL;
 
-CREATE UNIQUE INDEX credentials_external_identity_global_uniq
+CREATE UNIQUE INDEX IF NOT EXISTS credentials_external_identity_global_uniq
     ON taska.credentials(credential_type, provider, subject)
     WHERE credential_type IN ('OAUTH', 'OIDC', 'SAML')
         AND provider IS NOT NULL
@@ -149,18 +148,18 @@ CREATE TABLE taska.outbox_events (
 
 -- changeset taska:0009-indexes
 -- comment: Индексы для ускорения частых операций.
-CREATE INDEX refresh_tokens_user_id_idx ON taska.refresh_tokens(user_id);
-CREATE INDEX refresh_tokens_expires_at_idx ON taska.refresh_tokens(expires_at);
-CREATE INDEX refresh_tokens_replaced_by_idx ON taska.refresh_tokens(replaced_by);
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_id_idx ON taska.refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS refresh_tokens_expires_at_idx ON taska.refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS refresh_tokens_replaced_by_idx ON taska.refresh_tokens(replaced_by);
 
-CREATE INDEX invite_tokens_user_id_idx ON taska.invite_tokens(user_id);
-CREATE INDEX invite_tokens_expires_at_idx ON taska.invite_tokens(expires_at);
-CREATE INDEX invite_tokens_used_at_idx ON taska.invite_tokens(used_at);
+CREATE INDEX IF NOT EXISTS invite_tokens_user_id_idx ON taska.invite_tokens(user_id);
+CREATE INDEX IF NOT EXISTS invite_tokens_expires_at_idx ON taska.invite_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS invite_tokens_used_at_idx ON taska.invite_tokens(used_at);
 
 -- Индекс для выборки неопубликованных событий (воркер outbox)
-CREATE INDEX outbox_events_unpublished_idx
+CREATE INDEX IF NOT EXISTS outbox_events_unpublished_idx
     ON taska.outbox_events(created_at)
     WHERE published_at IS NULL;
 
-CREATE INDEX outbox_events_aggregate_idx
+CREATE INDEX IF NOT EXISTS outbox_events_aggregate_idx
     ON taska.outbox_events(aggregate_type, aggregate_id);
