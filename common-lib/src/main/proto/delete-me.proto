@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package taska.delete_me.v1;
+
+option java_multiple_files = true;
+option java_package = "ru.taska.delete_me.v1";
+option java_outer_classname = "DeleteMeProto";
+
+service DeleteMeService {
+  rpc Delete(DeleteMeRequest) returns (DeleteMeResponse);
+}
+
+message DeleteMeRequest {
+  string id = 1;
+}
+
+message DeleteMeResponse {
+  bool success = 1;
+}

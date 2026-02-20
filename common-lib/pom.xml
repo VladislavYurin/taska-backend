@@ -13,8 +13,8 @@
   <artifactId>common-lib</artifactId>
 
   <properties>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -36,6 +36,10 @@
       <artifactId>protobuf-java</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-core</artifactId>
+    </dependency>
+    <dependency>
       <groupId>jakarta.annotation</groupId>
       <artifactId>jakarta.annotation-api</artifactId>
     </dependency>
@@ -52,29 +56,60 @@
 
     <plugins>
       <plugin>
-        <groupId>org.xolstice.maven.plugins</groupId>
+        <groupId>io.github.ascopes</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
-        <version>0.6.1</version>
+        <version>5.0.0</version>
         <configuration>
-          <!--suppress UnresolvedMavenProperty -->
-          <protocArtifact>
-            com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}
-          </protocArtifact>
-          <pluginId>grpc-java</pluginId>
-          <!--suppress UnresolvedMavenProperty -->
-          <pluginArtifact>
-            io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}
-          </pluginArtifact>
+          <protoc>${protobuf.version}</protoc>
+          <plugins>
+            <!-- gRPC Java stubs -->
+            <plugin kind="binary-maven">
+              <groupId>io.grpc</groupId>
+              <artifactId>protoc-gen-grpc-java</artifactId>
+              <version>${grpc.version}</version>
+              <options>@generated=omit</options>
+            </plugin>
+
+            <!-- Reactor gRPC stubs -->
+            <plugin kind="jvm-maven">
+              <groupId>com.salesforce.servicelibs</groupId>
+              <artifactId>reactor-grpc</artifactId>
+              <version>${reactor.grpc.version}</version>
+            </plugin>
+          </plugins>
         </configuration>
         <executions>
           <execution>
             <goals>
-              <goal>compile</goal>
-              <goal>compile-custom</goal>
+              <goal>generate</goal>
             </goals>
           </execution>
         </executions>
       </plugin>
+<!--      <plugin>-->
+<!--        <groupId>org.xolstice.maven.plugins</groupId>-->
+<!--        <artifactId>protobuf-maven-plugin</artifactId>-->
+<!--        <version>0.6.1</version>-->
+<!--        <configuration>-->
+<!--          &lt;!&ndash;suppress UnresolvedMavenProperty &ndash;&gt;-->
+<!--          <protocArtifact>-->
+<!--            com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}-->
+<!--          </protocArtifact>-->
+<!--          <pluginId>grpc-java</pluginId>-->
+<!--          &lt;!&ndash;suppress UnresolvedMavenProperty &ndash;&gt;-->
+<!--          <pluginArtifact>-->
+<!--            io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}-->
+<!--          </pluginArtifact>-->
+<!--        </configuration>-->
+<!--        <executions>-->
+<!--          <execution>-->
+<!--            <goals>-->
+<!--              <goal>compile</goal>-->
+<!--              <goal>compile-custom</goal>-->
+<!--            </goals>-->
+<!--          </execution>-->
+<!--        </executions>-->
+<!--      </plugin>-->
     </plugins>
   </build>
 
