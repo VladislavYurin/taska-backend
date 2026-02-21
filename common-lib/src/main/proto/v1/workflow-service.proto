@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package ru.taska.workflow.v1;
+
+import "v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.workflow.v1";
+option java_outer_classname = "WorkflowApiProto";
+
+service WorkflowService {
+  /*
+   * Возвращает workflow, привязанный к (project_id, issue_type).
+   */
+  rpc GetWorkflowForProject(GetWorkflowForProjectRequest)
+      returns (Workflow);
+}
+
+message GetWorkflowForProjectRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetWorkflowForProjectBody body = 2;
+}
+
+message GetWorkflowForProjectBody {
+
+  /**
+   * Идентификатор проекта.
+   */
+  string projectId = 1;
+
+  /**
+   * Тип задачи (например: TASK / BUG / STORY).
+   */
+  string issueType = 2;
+}
+
+message Workflow {
+
+  /**
+   * Идентификатор Workflow
+   */
+  string id = 1;
+
+  /**
+   * Отображаемое имя workflow в UI.
+   */
+  string name = 2;
+
+  /**
+   * Версия workflow.
+   * Может использоваться для эволюции конфигурации
+   * и обеспечения обратной совместимости.
+   */
+  int32 version = 3;
+
+  /**
+   * Временная метка создания записи (аудит).
+   */
+  string createdAt = 4;
+
+  /**
+   * Временная метка последнего изменения записи (аудит).
+   */
+  string updatedAt = 5;
+
+  /**
+   * Статусы workflow
+   */
+  repeated WorkflowStatus statuses = 6;
+
+  /**
+   * Переходы workflow
+   */
+  repeated WorkflowTransition transitions = 7;
+}
+
+message WorkflowStatus {
+
+  /**
+   * Идентификатор статуса
+   */
+  string id = 1;
+
+  /**
+   * Стабильный ключ статуса, используемый другими сервисами и в снимках состояния (snapshot).
+   * Пример: TODO / IN_PROGRESS / DONE.
+   */
+  string statusKey = 2;
+
+  /**
+   * Отображаемое имя статуса в пользовательском интерфейсе.
+   */
+  string name = 3;
+
+  /**
+   * Логическая категория статуса для группировки и семантической интерпретации.
+   * <p>
+   * Пример: TODO / IN_PROGRESS / DONE.
+   */
+  string category = 4;
+
+  /**
+   * Определяет порядок отображения статусов внутри workflow (например, порядок колонок на доске).
+   */
+  int32 sortOrder = 5;
+
+  /**
+   * Временная метка создания записи (аудит).
+   */
+  string createdAt = 6;
+
+  /**
+   * Временная метка последнего изменения записи (аудит).
+   */
+  string updatedAt = 7;
+}
+
+message WorkflowTransition {
+
+  /**
+   * Идентификатор перехода (Transition)
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор исходного статуса (текущее состояние задачи).
+   */
+  string fromStatusId = 2;
+
+  /**
+   * Идентификатор целевого статуса (состояние задачи после перехода).
+   */
+  string toStatusId = 3;
+
+  /**
+   * Отображаемое имя действия в UI.
+   */
+  string name = 4;
+
+  /**
+   * Определяет порядок отображения переходов,
+   * если из одного статуса доступно несколько вариантов.
+   */
+  int32 sortOrder = 5;
+
+  /**
+   * Временная метка создания записи (аудит).
+   */
+  string createdAt = 6;
+
+  /**
+   * Временная метка последнего изменения записи (аудит).
+   */
+  string updatedAt = 7;
+}

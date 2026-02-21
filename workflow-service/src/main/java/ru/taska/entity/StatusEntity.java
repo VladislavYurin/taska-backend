@@ -1,9 +1,6 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -20,12 +17,12 @@ import java.util.UUID;
  * Статусы являются вершинами графа workflow и используются issue-service
  * как источник истины допустимых значений состояния.
  */
-@Data
+@Getter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Table("taska.statuses")
-public class Status {
+public class StatusEntity {
 
     /**
      * Первичный ключ.

@@ -1,9 +1,6 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -18,12 +15,12 @@ import java.util.UUID;
  * (кнопке) в пользовательском интерфейсе.
  * Перед применением перехода issue-service выполняет валидацию через workflow-service.
  */
-@Data
+@Getter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Table("taska.transitions")
-public class Transition {
+public class TransitionEntity {
 
     /**
      * Первичный ключ.
