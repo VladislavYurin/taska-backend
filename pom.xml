@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.0</version>
+    <version>4.0.3</version>
   </parent>
 
   <groupId>ru.taska</groupId>
@@ -27,23 +27,22 @@
   </modules>
 
   <properties>
-    <java.version>21</java.version>
+    <java.version>25</java.version>
 
-    <lombok.version>1.18.32</lombok.version>
-    <liquibase.maven.version>4.4.2</liquibase.maven.version>
+    <lombok.version>1.18.42</lombok.version>
+    <liquibase.maven.version>5.0.1</liquibase.maven.version>
 
-    <postgres.version>42.7.3</postgres.version>
+    <postgres.version>42.7.10</postgres.version>
 
     <!-- gRPC + Protobuf -->
-    <grpc.version>1.65.1</grpc.version>
-    <protobuf.version>3.25.3</protobuf.version>
-
-    <!-- Reactor gRPC -->
+    <spring.grpc.version>1.0.2</spring.grpc.version>
+    <grpc.version>1.79.0</grpc.version>
+    <protobuf.version>4.33.5</protobuf.version>
     <reactor.grpc.version>1.2.4</reactor.grpc.version>
     <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
 
     <docker.tag>local</docker.tag>
-    <docker.java-image>openjdk:21</docker.java-image>
+    <docker.java-image>openjdk:25</docker.java-image>
   </properties>
 
   <profiles>
@@ -71,6 +70,15 @@
         <groupId>com.google.protobuf</groupId>
         <artifactId>protobuf-java</artifactId>
         <version>${protobuf.version}</version>
+      </dependency>
+
+      <!-- Spring gRPC -->
+      <dependency>
+        <groupId>org.springframework.grpc</groupId>
+        <artifactId>spring-grpc-dependencies</artifactId>
+        <version>${spring.grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
 
       <!-- Reactor gRPC runtime -->
@@ -106,7 +114,7 @@
           <artifactId>spring-boot-maven-plugin</artifactId>
         </plugin>
 
-        <!-- Компилятор под Java 21 -->
+        <!-- Компилятор под Java 25 -->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
@@ -160,7 +168,7 @@
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
-          <version>3.0.0</version>
+          <version>3.6.3</version>
           <executions>
             <execution>
               <id>docker-build</id>
