@@ -1,3 +1,6 @@
+server:
+  port: 8085
+
 management:
   endpoints:
     web:
@@ -7,3 +10,21 @@ management:
     health:
       probes:
         enabled: true
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5437/notification_db
+    username: taska
+    password: taska
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: jdbc:postgresql://localhost:5437/notification_db
+    user: taska
+    password: taska
+  kafka:
+    bootstrap-servers: localhost:9092
+
+logging:
+  level:
+    org.liquibase: INFO
+    liquibase: INFO

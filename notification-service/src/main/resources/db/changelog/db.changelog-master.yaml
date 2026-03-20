@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: db.changelog-001-notifications.sql
+      relativeToChangelogFile: true

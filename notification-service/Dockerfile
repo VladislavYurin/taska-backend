@@ -11,7 +11,7 @@ COPY workflow-service ./workflow-service
 COPY issue-service ./issue-service
 COPY notification-service ./notification-service
 
-RUN mvn -q -DskipTests -pl notification-service -am clean package
+RUN mvn -mvq -DskipTests -pl notification-service -am clean package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
