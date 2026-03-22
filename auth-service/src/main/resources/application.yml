@@ -8,6 +8,9 @@ spring:
     enabled: true
     initial-size: 10
     max-size: 20
+  autoconfigure:
+    exclude:
+      - org.springframework.grpc.autoconfigure.server.security.GrpcSecurityAutoConfiguration
 
 management:
   endpoints:
@@ -35,4 +38,7 @@ security:
 grpc:
   server:
     port: 9090
-    reflection-enabled: true
+    reflection:
+      enabled: true
+    security:
+      enabled: false
