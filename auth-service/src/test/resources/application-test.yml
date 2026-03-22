@@ -1,0 +1,26 @@
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/auth_db_test
+    username: test_user
+    password: test_pass
+  liquibase:
+    enabled: false
+
+jwt:
+  secret: testSecretKeyForJWTGenerationThatIsAtLeast32BytesLong
+  access-token-ttl: 300
+  refresh-token-ttl: 3600
+
+security:
+  max-failed-attempts: 5
+  lock-duration-minutes: 15
+
+grpc:
+  server:
+    port: 9090
+  client:
+    auth-service:
+      address: static://localhost:9090
+      enable-keep-alive: true
+      keep-alive-without-calls: true
+      negotiation-type: plaintext

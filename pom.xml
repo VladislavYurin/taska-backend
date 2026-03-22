@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.3</version>
+    <version>4.1.0-M4</version>
   </parent>
 
   <groupId>ru.taska</groupId>
@@ -28,7 +28,9 @@
 
   <properties>
     <java.version>25</java.version>
-
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <maven.compiler.release>25</maven.compiler.release>
     <lombok.version>1.18.42</lombok.version>
     <liquibase.maven.version>5.0.1</liquibase.maven.version>
     <liquibase.version>5.0.1</liquibase.version>
@@ -40,6 +42,10 @@
     <protobuf.version>4.33.5</protobuf.version>
     <reactor.grpc.version>1.2.4</reactor.grpc.version>
     <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
+
+<!--    <mockito.version>5.14.2</mockito.version>-->
+<!--    <spring-boot-test.version>4.1.0-M4</spring-boot-test.version>-->
+<!--    <reactor-test.version>3.6.10</reactor-test.version>-->
 
     <docker.tag>local</docker.tag>
     <docker.java-image>openjdk:25</docker.java-image>
@@ -108,6 +114,30 @@
         <version>${lombok.version}</version>
         <scope>provided</scope>
       </dependency>
+<!--      &lt;!&ndash; ========== TEST DEPENDENCIES ========== &ndash;&gt;-->
+<!--      &lt;!&ndash; Spring Boot Test (managed by parent) &ndash;&gt;-->
+<!--      <dependency>-->
+<!--        <groupId>org.springframework.boot</groupId>-->
+<!--        <artifactId>spring-boot-starter-test</artifactId>-->
+<!--&lt;!&ndash;        <version>${spring-boot-test-version}</version>&ndash;&gt;-->
+<!--        <scope>test</scope>-->
+<!--      </dependency>-->
+
+<!--      &lt;!&ndash; Reactor Test &ndash;&gt;-->
+<!--      <dependency>-->
+<!--        <groupId>io.projectreactor</groupId>-->
+<!--        <artifactId>reactor-test</artifactId>-->
+<!--&lt;!&ndash;        <version>${reactor-test-version}</version>&ndash;&gt;-->
+<!--        <scope>test</scope>-->
+<!--      </dependency>-->
+
+<!--      &lt;!&ndash; Mockito (optional, already included in spring-boot-starter-test) &ndash;&gt;-->
+<!--      <dependency>-->
+<!--        <groupId>org.mockito</groupId>-->
+<!--        <artifactId>mockito-core</artifactId>-->
+<!--&lt;!&ndash;        <version>${mockito.version}</version>&ndash;&gt;-->
+<!--        <scope>test</scope>-->
+<!--      </dependency>-->
     </dependencies>
   </dependencyManagement>
 
