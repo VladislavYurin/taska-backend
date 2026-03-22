@@ -23,7 +23,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.outbox_events")
+@Table(name = "outbox_events", schema = "taska")
 public class OutboxEvent {
 
     /**

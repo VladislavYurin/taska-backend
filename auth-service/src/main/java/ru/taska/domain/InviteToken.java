@@ -22,7 +22,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.invite_tokens")
+@Table(name = "invite_tokens", schema = "taska")
 public class InviteToken {
 
     /**

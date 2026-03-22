@@ -14,10 +14,11 @@
   <packaging>jar</packaging>
 
   <properties>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <protobuf.version>3.25.0</protobuf.version>
     <grpc.version>1.60.0</grpc.version>
+    <testcontainers.version>1.19.3</testcontainers.version>
   </properties>
 
   <dependencies>
@@ -50,9 +51,15 @@
     </dependency>
 
     <!-- gRPC + Reactor gRPC -->
+<!--    <dependency>-->
+<!--      <groupId>org.springframework.grpc</groupId>-->
+<!--      <artifactId>spring-grpc-spring-boot-starter</artifactId>-->
+<!--      <version>0.3.0</version>-->
+<!--    </dependency>-->
     <dependency>
-      <groupId>org.springframework.grpc</groupId>
-      <artifactId>spring-grpc-spring-boot-starter</artifactId>
+      <groupId>net.devh</groupId>
+      <artifactId>grpc-server-spring-boot-starter</artifactId>
+      <version>2.15.0.RELEASE</version>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
@@ -130,9 +137,49 @@
       <artifactId>reactor-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Testcontainers -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- AssertJ (уже включен в spring-boot-starter-test, но для явности) -->
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Для gRPC тестов -->
+    <dependency>
+      <groupId>net.devh</groupId>
+      <artifactId>grpc-client-spring-boot-starter</artifactId>
+      <version>2.15.0.RELEASE</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <extensions>
       <extension>
         <groupId>kr.motd.maven</groupId>
@@ -177,11 +224,12 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.6.0</version>
+        <version>3.14.1</version>
         <configuration>
-          <source>21</source>
-          <target>21</target>
-          <release>21</release>
+          <source>25</source>
+          <target>25</target>
+          <release>25</release>
+          <parameters>true</parameters>
         </configuration>
       </plugin>
     </plugins>

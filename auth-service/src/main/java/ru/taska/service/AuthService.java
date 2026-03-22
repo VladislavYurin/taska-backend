@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Credential;
 import ru.taska.domain.CredentialType;
-import ru.taska.domain.RefreshToken;
 import ru.taska.domain.User;
 import ru.taska.domain.UserStatus;
 import ru.taska.repository.CredentialRepository;
@@ -48,7 +47,6 @@ public class AuthService {
                         )
                 )
                 .flatMap(credential -> {
-                    // Успешная аутентификация - сбрасываем счетчик
                     if (credential.getFailedAttempts() != null && credential.getFailedAttempts() > 0) {
                         return resetFailedAttempts(credential)
                                 .then(generateTokens(credential.getUserId()));
@@ -59,10 +57,16 @@ public class AuthService {
 
     @Transactional
     public Mono<AuthResponse> refresh(String refreshToken) {
+
         return refreshTokenService.validateAndRotate(refreshToken)
-                .flatMap(token -> userRepository.findById(token.getUserId()))
-                .switchIfEmpty(Mono.error(new AuthException("User not found")))
-                .flatMap(user -> generateAccessTokenOnly(user));
+                .flatMap(rotationResult -> {
+                    String newRawRefreshToken = rotationResult.getRawToken();
+                    UUID userId = rotationResult.getRefreshToken().getUserId();
+
+                    return userRepository.findById(userId)
+                            .switchIfEmpty(Mono.error(new AuthException("User not found")))
+                            .flatMap(user -> generateAccessTokenOnlySetRefreshToken(user, newRawRefreshToken));
+                });
     }
 
     private Mono<Credential> validateUserStatus(User user) {
@@ -127,23 +131,24 @@ public class AuthService {
                         .zipWith(jwtService.getExpiresIn())
                         .map(tuple -> {
                             String accessToken = tuple.getT1().getT1();
-                            RefreshToken refreshToken = tuple.getT1().getT2();
+                            String rawRefreshToken = tuple.getT1().getT2();
                             Long expiresIn = tuple.getT2();
 
                             return AuthResponse.builder()
                                     .accessToken(accessToken)
-                                    .refreshToken(refreshToken.getTokenHash()) // raw token
+                                    .refreshToken(rawRefreshToken) // raw token
                                     .expiresIn(expiresIn)
                                     .build();
                         })
                 );
     }
 
-    private Mono<AuthResponse> generateAccessTokenOnly(User user) {
+    private Mono<AuthResponse> generateAccessTokenOnlySetRefreshToken(User user, String newRefreshToken) {
         return jwtService.generateAccessToken(user)
                 .zipWith(jwtService.getExpiresIn())
                 .map(tuple -> AuthResponse.builder()
                         .accessToken(tuple.getT1())
+                        .refreshToken(newRefreshToken)
                         .expiresIn(tuple.getT2())
                         .build()
                 );
