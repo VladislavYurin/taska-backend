@@ -9,9 +9,6 @@ public class AuthServiceApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(AuthServiceApplication.class, args);
-        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(10);
-        String hash = encoder.encode("password123");
-        System.out.println("Hash for 'password123': " + hash);
     }
 
 }
