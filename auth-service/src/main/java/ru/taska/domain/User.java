@@ -34,7 +34,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.users")
+@Table(name = "users", schema = "taska")
 public class User {
 
     /**

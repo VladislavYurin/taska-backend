@@ -50,10 +50,15 @@
     </dependency>
 
     <!-- gRPC + Reactor gRPC -->
+<!--    <dependency>-->
+<!--      <groupId>org.springframework.grpc</groupId>-->
+<!--      <artifactId>spring-grpc-spring-boot-starter</artifactId>-->
+<!--      <version>0.3.0</version>-->
+<!--    </dependency>-->
     <dependency>
-      <groupId>org.springframework.grpc</groupId>
-      <artifactId>spring-grpc-spring-boot-starter</artifactId>
-      <version>0.3.0</version>
+      <groupId>net.devh</groupId>
+      <artifactId>grpc-server-spring-boot-starter</artifactId>
+      <version>2.15.0.RELEASE</version>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>

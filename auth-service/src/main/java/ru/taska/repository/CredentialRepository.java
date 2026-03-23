@@ -13,11 +13,12 @@ import java.util.UUID;
 @Repository
 public interface CredentialRepository extends ReactiveCrudRepository<Credential, UUID> {
 
+    @Query("SELECT * FROM taska.credentials WHERE user_id = :userId AND credential_type = :credentialType")
     Mono<Credential> findByUserIdAndCredentialType(UUID userId, CredentialType credentialType);
 
-    @Query("SELECT * FROM taska.credentials WHERE user_id = $1 AND credential_type = $2")
+    @Query("SELECT * FROM taska.credentials WHERE user_id = :userId AND credential_type = :credentialType")
     Mono<Credential> findPasswordCredential(UUID userId, String credentialType);
 
-    @Query("UPDATE taska.credentials SET failed_attempts = $1, last_failed_at = $2, locked_until = $3 WHERE id = $4")
+    @Query("UPDATE taska.credentials SET failed_attempts = :attempts, last_failed_at = :lastFailedAt, locked_until = :lockedUntil WHERE id = :credentialId")
     Mono<Integer> updateFailedAttempts(Integer attempts, Instant lastFailedAt, Instant lockedUntil, UUID credentialId);
 }

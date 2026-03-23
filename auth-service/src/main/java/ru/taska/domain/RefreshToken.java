@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.refresh_tokens")
+@Table(name = "refresh_tokens", schema = "taska")
 public class RefreshToken {
 
     /**

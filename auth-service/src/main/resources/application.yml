@@ -3,14 +3,15 @@ spring:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
     password: ${SPRING_R2DBC_PASSWORD:taska}
+    dialect: POSTGRESQL
     # R2DBC настройки пула
   r2dbc-pool:
     enabled: true
     initial-size: 10
     max-size: 20
-  autoconfigure:
-    exclude:
-      - org.springframework.grpc.autoconfigure.server.security.GrpcSecurityAutoConfiguration
+#  autoconfigure:
+#    exclude:
+#      - org.springframework.grpc.autoconfigure.server.security.GrpcSecurityAutoConfiguration
 
 management:
   endpoints:
@@ -38,7 +39,12 @@ security:
 grpc:
   server:
     port: 9090
-    reflection:
-      enabled: true
+    reflection-service-enabled: true
     security:
       enabled: false
+
+logging:
+  level:
+    org.springframework.data.r2dbc: DEBUG
+    io.r2dbc.postgresql.QUERY: DEBUG
+    io.r2dbc.postgresql.PARAM: DEBUG
