@@ -35,7 +35,7 @@ public class RefreshTokenService {
                     String tokenHash = hashToken(rawToken);
 
                     RefreshToken refreshToken = RefreshToken.builder()
-                            .id(UUID.randomUUID())
+                            //.id(UUID.randomUUID())
                             .userId(user.getId())
                             .tokenHash(tokenHash)
                             .issuedAt(Instant.now())
@@ -75,7 +75,7 @@ public class RefreshTokenService {
             String tokenHash = hashToken(rawToken);
 
             return RefreshToken.builder()
-                    .id(UUID.randomUUID())
+                    //.id(UUID.randomUUID())
                     .userId(userId)
                     .tokenHash(tokenHash)
                     .issuedAt(Instant.now())
