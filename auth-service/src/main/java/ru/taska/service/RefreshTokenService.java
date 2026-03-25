@@ -1,5 +1,7 @@
 package ru.taska.service;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,7 +22,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RefreshTokenService {
 
-
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordHashService passwordHashService;
 
@@ -29,7 +30,7 @@ public class RefreshTokenService {
 
     private static final SecureRandom secureRandom = new SecureRandom();
 
-    public Mono<RefreshToken> createRefreshToken(User user) {
+    public Mono<String> createRefreshToken(User user) {
         return Mono.fromCallable(() -> {
                     String rawToken = generateRawToken();
                     String tokenHash = hashToken(rawToken);
@@ -43,46 +44,52 @@ public class RefreshTokenService {
                             .createdAt(Instant.now())
                             .build();
 
-                    return refreshToken;
-                }).flatMap(refreshTokenRepository::save)
-                .map(token -> {
-                    // Возвращаем объект с raw token для ответа клиенту
-                    token.setTokenHash(generateRawToken()); // Временно подменяем для ответа
-                    return token;
-                });
+                    System.out.println(">>> createRefreshToken: saving token with id=" + refreshToken.getId() +
+                            ", hash=" + tokenHash);
+
+                    return new TokenPair(refreshToken, rawToken);
+                })
+                .flatMap(tokenPair -> refreshTokenRepository.save(tokenPair.refreshToken)
+                        .doOnSuccess(saved -> System.out.println(">>> createRefreshToken: saved token with id=" + saved.getId()))
+                        .thenReturn(tokenPair.rawToken));
     }
 
-    public Mono<RefreshToken> validateAndRotate(String rawToken) {
+    public Mono<RefreshTokenResponse> validateAndRotate(String rawToken) {
         String tokenHash = hashToken(rawToken);
+        System.out.println(">>> validateAndRotate: looking for hash=" + tokenHash);
 
         return refreshTokenRepository.findValidToken(tokenHash, Instant.now())
-                .switchIfEmpty(Mono.error(new RuntimeException("Invalid or expired refresh token")))
+                .switchIfEmpty(Mono.defer(() -> {
+                    System.out.println(">>> validateAndRotate: token not found in DB");
+                    return Mono.error(new RuntimeException("Invalid or expired refresh token"));
+                }))
                 .flatMap(existingToken -> {
-                    // Отзываем старый токен
+                    System.out.println(">>> validateAndRotate: found existing token with id=" + existingToken.getId());
+
+                    // Генерируем новый токен
+                    String newRawToken = generateRawToken();
+                    String newTokenHash = hashToken(newRawToken);
                     UUID newTokenId = UUID.randomUUID();
+
+                    RefreshToken newRefreshToken = RefreshToken.builder()
+                            .id(newTokenId)
+                            .userId(existingToken.getUserId())
+                            .tokenHash(newTokenHash)
+                            .issuedAt(Instant.now())
+                            .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
+                            .createdAt(Instant.now())
+                            .build();
+
+                    System.out.println(">>> validateAndRotate: creating new token with id=" + newTokenId +
+                            ", hash=" + newTokenHash);
+
+                    // Отзываем старый токен
                     return refreshTokenRepository.revokeToken(Instant.now(), newTokenId, existingToken.getId())
-                            .then(createNewRefreshToken(existingToken.getUserId()))
-                            .map(newToken -> {
-                                newToken.setTokenHash(generateRawToken()); // Для ответа
-                                return newToken;
-                            });
+                            .doOnSuccess(updated -> System.out.println(">>> validateAndRotate: revoked old token, rows updated=" + updated))
+                            .then(refreshTokenRepository.save(newRefreshToken))
+                            .doOnSuccess(saved -> System.out.println(">>> validateAndRotate: saved new token with id=" + saved.getId()))
+                            .map(savedToken -> new RefreshTokenResponse(savedToken, newRawToken));
                 });
-    }
-
-    private Mono<RefreshToken> createNewRefreshToken(UUID userId) {
-        return Mono.fromCallable(() -> {
-            String rawToken = generateRawToken();
-            String tokenHash = hashToken(rawToken);
-
-            return RefreshToken.builder()
-                    //.id(UUID.randomUUID())
-                    .userId(userId)
-                    .tokenHash(tokenHash)
-                    .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
-                    .createdAt(Instant.now())
-                    .build();
-        }).flatMap(refreshTokenRepository::save);
     }
 
     private String generateRawToken() {
@@ -92,6 +99,23 @@ public class RefreshTokenService {
     }
 
     private String hashToken(String rawToken) {
-        return passwordHashService.encode(rawToken, HashingAlgorithm.BCRYPT);
+       return passwordHashService.encode(rawToken, HashingAlgorithm.BCRYPT);
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class RefreshTokenResponse {
+        private final RefreshToken refreshToken;
+        private final String rawToken;
+    }
+
+    private static class TokenPair {
+        final RefreshToken refreshToken;
+        final String rawToken;
+
+        TokenPair(RefreshToken refreshToken, String rawToken) {
+            this.refreshToken = refreshToken;
+            this.rawToken = rawToken;
+        }
     }
 }

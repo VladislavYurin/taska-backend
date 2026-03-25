@@ -60,7 +60,7 @@ public class AuthService {
     @Transactional
     public Mono<AuthResponse> refresh(String refreshToken) {
         return refreshTokenService.validateAndRotate(refreshToken)
-                .flatMap(token -> userRepository.findById(token.getUserId()))
+                .flatMap(response -> userRepository.findById(response.getRefreshToken().getUserId()))
                 .switchIfEmpty(Mono.error(new AuthException("User not found")))
                 .flatMap(user -> generateAccessTokenOnly(user));
     }
@@ -127,12 +127,12 @@ public class AuthService {
                         .zipWith(jwtService.getExpiresIn())
                         .map(tuple -> {
                             String accessToken = tuple.getT1().getT1();
-                            RefreshToken refreshToken = tuple.getT1().getT2();
+                            String rawRefreshToken = tuple.getT1().getT2();
                             Long expiresIn = tuple.getT2();
 
                             return AuthResponse.builder()
                                     .accessToken(accessToken)
-                                    .refreshToken(refreshToken.getTokenHash()) // raw token
+                                    .refreshToken(rawRefreshToken) // raw token
                                     .expiresIn(expiresIn)
                                     .build();
                         })
