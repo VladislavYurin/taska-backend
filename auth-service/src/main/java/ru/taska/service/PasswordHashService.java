@@ -16,7 +16,7 @@ import ru.taska.domain.HashingAlgorithm;
 @RequiredArgsConstructor
 public class PasswordHashService {
 
-    private static  final String FIXED_BCRYPT_SALT = "$2a$10$5gh$ghtyGE45nfh7$sfeobxscFixedSalt";
+    private static  final String FIXED_BCRYPT_SALT = "$2a$10$FixedSalt5ghfghtyGE45nfh7fsfeobx";
 
     private final PasswordEncoder bCryptEncoder = new PasswordEncoder() {
         @Override

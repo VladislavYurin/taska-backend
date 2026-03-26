@@ -39,8 +39,8 @@ public class RefreshTokenService {
                     RefreshToken refreshToken = RefreshToken.builder()
                             //.id(UUID.randomUUID())
                             .userId(user.getId())
-                            .tokenHash(rawToken)
-//                            .tokenHash(tokenHash)
+//  -->>                    .tokenHash(rawToken)
+                            .tokenHash(tokenHash)
                             .issuedAt(Instant.now())
                             .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
                             .createdAt(Instant.now())
@@ -58,35 +58,37 @@ public class RefreshTokenService {
 
     @Transactional
     public Mono<RefreshTokenResponse> validateAndRotate(String rawToken) {
-        //String tokenHash = hashToken(rawToken);
+        String tokenHash = hashToken(rawToken);  // <---
 
-        System.out.println(">>> validateAndRotate: looking for hash=" + rawToken);
+        log.debug(">>> validateAndRotate: recieved rawToken =" + rawToken);
+        log.debug(">>> validateAndRotate: looking for token_hash in DB=" + tokenHash);  // <--
 
-        return refreshTokenRepository.findValidToken(rawToken, Instant.now())
+        return refreshTokenRepository.findValidToken(tokenHash, Instant.now())   //<---
                 .switchIfEmpty(Mono.defer(() -> {
-                    System.out.println(">>> validateAndRotate: token not found in DB");
+                    log.debug(">>> validateAndRotate: token not found in DB");
                     return Mono.error(new RuntimeException("Invalid or expired refresh token"));
                 }))
                 .flatMap(existingToken -> {
-                    System.out.println(">>> validateAndRotate: found existing token with id=" + existingToken.getId());
+                    log.debug(">>> validateAndRotate: found existing token with id=" + existingToken.getId());
 
                     // Генерируем новый токен
 
                     String newRawToken = generateRawToken();
-//                    String newTokenHash = hashToken(newRawToken);
+                    String newTokenHash = hashToken(newRawToken);  // <---
                     UUID newTokenId = UUID.randomUUID();
 
                     RefreshToken newRefreshToken = RefreshToken.builder()
                             .id(newTokenId)
                             .userId(existingToken.getUserId())
-                            .tokenHash(newRawToken) ///<-----
+//                            .tokenHash(newRawToken) ///<-----
+                            .tokenHash(newTokenHash) ///<-----
                             .issuedAt(Instant.now())
                             .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
                             .createdAt(Instant.now())
                             .build();
 
-                    System.out.println(">>> validateAndRotate: creating new token with id=" + newTokenId +
-                            ", rawToken=" + newRawToken);
+                    log.debug(">>> validateAndRotate: creating new token with id=" + newTokenId +
+                            ", newRawToken=" + newRawToken);
 
                     return refreshTokenRepository.save(newRefreshToken)
                             .map(savedNewToken -> {
