@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Credential;
 import ru.taska.domain.CredentialType;
-import ru.taska.domain.RefreshToken;
 import ru.taska.domain.User;
 import ru.taska.domain.UserStatus;
 import ru.taska.repository.CredentialRepository;
@@ -59,10 +58,16 @@ public class AuthService {
 
     @Transactional
     public Mono<AuthResponse> refresh(String refreshToken) {
+
         return refreshTokenService.validateAndRotate(refreshToken)
-                .flatMap(response -> userRepository.findById(response.getRefreshToken().getUserId()))
-                .switchIfEmpty(Mono.error(new AuthException("User not found")))
-                .flatMap(user -> generateAccessTokenOnly(user));
+                .flatMap(rotationResult -> {
+                    String newRawRefreshToken = rotationResult.getRawToken();
+                    UUID userId = rotationResult.getRefreshToken().getUserId();
+
+                    return userRepository.findById(userId)
+                            .switchIfEmpty(Mono.error(new AuthException("User not found")))
+                            .flatMap(user -> generateAccessTokenOnlySetRefreshToken(user, newRawRefreshToken));
+                });
     }
 
     private Mono<Credential> validateUserStatus(User user) {
@@ -144,6 +149,17 @@ public class AuthService {
                 .zipWith(jwtService.getExpiresIn())
                 .map(tuple -> AuthResponse.builder()
                         .accessToken(tuple.getT1())
+                        .expiresIn(tuple.getT2())
+                        .build()
+                );
+    }
+
+    private Mono<AuthResponse> generateAccessTokenOnlySetRefreshToken(User user, String newRefreshToken) {
+        return jwtService.generateAccessToken(user)
+                .zipWith(jwtService.getExpiresIn())
+                .map(tuple -> AuthResponse.builder()
+                        .accessToken(tuple.getT1())
+                        .refreshToken(newRefreshToken)
                         .expiresIn(tuple.getT2())
                         .build()
                 );

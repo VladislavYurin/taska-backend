@@ -45,6 +45,8 @@ grpc:
 
 logging:
   level:
+    ru.taska: DEBUG
+    ru.taska.service: DEBUG
     org.springframework.data.r2dbc: DEBUG
     io.r2dbc.postgresql.QUERY: DEBUG
     io.r2dbc.postgresql.PARAM: DEBUG
