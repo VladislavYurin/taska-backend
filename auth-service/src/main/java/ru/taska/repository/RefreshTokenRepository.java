@@ -19,6 +19,6 @@ public interface RefreshTokenRepository extends ReactiveCrudRepository<RefreshTo
     @Query("SELECT * FROM taska.refresh_tokens WHERE token_hash = :tokenHash AND revoked_at IS NULL AND expires_at > :now")
     Mono<RefreshToken> findValidToken(String tokenHash, Instant now);
 
-    @Query("UPDATE taska.refresh_tokens SET revoked_at = :revokedAt, replaced_by = :replacedBy WHERE id = :tokenId")
-    Mono<Integer> revokeToken(Instant revokedAt, UUID replacedBy, UUID tokenId);
+    @Query("UPDATE taska.refresh_tokens SET revoked_at = :revokedAt  WHERE id = :tokenId")
+    Mono<Integer> revokeToken(Instant revokedAt,  UUID tokenId);
 }
