@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,8 +31,11 @@ class NotificationEventHandlerTest {
     @Mock
     private ProcessedEventRepository processedEventRepository;
 
+    @Mock
+    private NotificationFactory notificationFactory;
+
     @InjectMocks
-    private NotificationEventHandler handler;
+    private NotificationEventHandlerImpl handler;
 
     @Test
     void shouldNotCreateDuplicatesOnRepeatedDelivery() throws Exception {
@@ -44,6 +48,7 @@ class NotificationEventHandlerTest {
 
         UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000000");
         UUID issueId = UUID.fromString("00000000-0000-0000-0000-000000000010");
+        UUID assigneeId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         TaskaEvent event = new TaskaEvent(
                 eventId,
@@ -53,6 +58,13 @@ class NotificationEventHandlerTest {
                 payload
         );
 
+        Notification notification = Notification.builder()
+                .id(UUID.randomUUID())
+                .userId(assigneeId)
+                .build();
+
+        when(notificationFactory.create(any(), any()))
+                .thenReturn(List.of(notification));
         when(processedEventRepository.existsById(eventId.toString()))
                 .thenReturn(Mono.just(false))
                 .thenReturn(Mono.just(true));

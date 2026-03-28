@@ -1,26 +1,25 @@
 package ru.taska.kafka;
 
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.event.TaskaEvent;
 import ru.taska.service.NotificationEventHandler;
+import ru.taska.service.NotificationEventHandlerImpl;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Kafka consumer для топика {@code issue.events}.
  *
  * <p>Ответственен за десериализацию сообщения и делегирование обработки
- * в {@link NotificationEventHandler}.</p>
+ * в {@link NotificationEventHandlerImpl}.</p>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class IssueEventsKafkaListener {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(IssueEventsKafkaListener.class);
 
     private final ObjectMapper objectMapper;
     private final NotificationEventHandler eventHandler;
@@ -33,7 +32,7 @@ public class IssueEventsKafkaListener {
             // Блокируемся внутри consumer-потока, чтобы не потерять ошибки обработки.
             processing.block();
         } catch (Exception ex) {
-            LOGGER.error("Failed to process Kafka message: {}", message, ex);
+            log.error("Failed to process Kafka message: {}", message, ex);
         }
     }
 }
