@@ -56,7 +56,7 @@ public class RefreshTokenService {
 
     @Transactional
     public Mono<RefreshTokenResponse> validateAndRotate(String rawToken) {
-        String tokenHash = hashToken(rawToken);  
+        String tokenHash = hashToken(rawToken);
 
         log.debug(">>> validateAndRotate: recieved rawToken =" + rawToken);
         log.debug(">>> validateAndRotate: looking for token_hash in DB=" + tokenHash);  // <--
