@@ -27,7 +27,7 @@
   </modules>
 
   <properties>
-    <java.version>21</java.version>
+    <java.version>25</java.version>
 
     <lombok.version>1.18.42</lombok.version>
     <liquibase.maven.version>5.0.1</liquibase.maven.version>
@@ -40,6 +40,10 @@
     <protobuf.version>4.33.5</protobuf.version>
     <reactor.grpc.version>1.2.4</reactor.grpc.version>
     <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
+
+    <mockito.version>5.14.2</mockito.version>
+    <spring-boot-test.version>3.4.3</spring-boot-test.version>
+    <reactor-test.version>3.6.12</reactor-test.version>
 
     <docker.tag>local</docker.tag>
     <docker.java-image>openjdk:25</docker.java-image>
@@ -107,6 +111,30 @@
         <artifactId>lombok</artifactId>
         <version>${lombok.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <!-- ========== TEST DEPENDENCIES ========== -->
+      <!-- Spring Boot Test (managed by parent) -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <version>${spring-boot-test-version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Reactor Test -->
+      <dependency>
+        <groupId>io.projectreactor</groupId>
+        <artifactId>reactor-test</artifactId>
+        <version>${reactor-test-version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Mockito (optional, already included in spring-boot-starter-test) -->
+      <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-core</artifactId>
+        <version>${mockito.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
