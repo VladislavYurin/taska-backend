@@ -52,9 +52,8 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler{
                 .sourceType(event.aggregateType())
                 .build();
 
-        return createNotifications(event, eventId)
-                .then(processedEventRepository.save(processedEvent))
-                .then();
+        return processedEventRepository.save(processedEvent)
+                .then(createNotifications(event, eventId));
     }
 
     private Mono<Void> createNotifications(TaskaEvent event, String eventId) {

@@ -36,7 +36,7 @@ public class NotificationFactory {
         };
     }
 
-    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload,String eventId) {
+    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, String eventId) {
         UUID assigneeId = extractUuid(payload, "assigneeId");
         if (assigneeId == null) {
             log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
@@ -45,7 +45,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toIssueAssigned(event, assigneeId));
     }
 
-    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload,String eventId) {
+    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload, String eventId) {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
