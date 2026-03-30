@@ -28,6 +28,6 @@ message RefreshRequest {
 
 message RefreshResponse {
     string access_token = 1;
-    string refresh_token = 2; // может быть новым при ротации
+    string refresh_token = 2;
     int64 expires_in = 3;
 }

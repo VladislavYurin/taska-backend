@@ -47,7 +47,6 @@ public class AuthService {
                         )
                 )
                 .flatMap(credential -> {
-                    // Успешная аутентификация - сбрасываем счетчик
                     if (credential.getFailedAttempts() != null && credential.getFailedAttempts() > 0) {
                         return resetFailedAttempts(credential)
                                 .then(generateTokens(credential.getUserId()));
@@ -141,16 +140,6 @@ public class AuthService {
                                     .expiresIn(expiresIn)
                                     .build();
                         })
-                );
-    }
-
-    private Mono<AuthResponse> generateAccessTokenOnly(User user) {
-        return jwtService.generateAccessToken(user)
-                .zipWith(jwtService.getExpiresIn())
-                .map(tuple -> AuthResponse.builder()
-                        .accessToken(tuple.getT1())
-                        .expiresIn(tuple.getT2())
-                        .build()
                 );
     }
 
