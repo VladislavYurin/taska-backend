@@ -51,7 +51,10 @@ public class RefreshTokenService {
                     return new TokenPair(refreshToken, rawToken);
                 })
                 .flatMap(tokenPair -> refreshTokenRepository.save(tokenPair.refreshToken)
-                        .doOnSuccess(saved -> log.debug(">>> createRefreshToken: saved token with id=" + saved.getId()))
+                        .doOnSuccess(saved -> {
+                            assert saved != null;
+                            log.debug(">>> createRefreshToken: saved token with id=" + saved.getId());
+                        })
                         .thenReturn(tokenPair.rawToken));
     }
 

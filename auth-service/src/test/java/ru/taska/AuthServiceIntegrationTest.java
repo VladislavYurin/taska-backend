@@ -31,6 +31,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Objects;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,9 +92,9 @@ public class AuthServiceIntegrationTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        testUserId = userRepository.save(user)
-                .doOnNext(saved -> System.out.println(">>> User saved with ID: " + saved.getId()))
-                .block()
+        testUserId = Objects.requireNonNull(userRepository.save(user)
+                        .doOnNext(saved -> System.out.println(">>> User saved with ID: " + saved.getId()))
+                        .block())
                 .getId();
 
         String hashedPassword = passwordHashService.encode(testPassword, HashingAlgorithm.BCRYPT);
