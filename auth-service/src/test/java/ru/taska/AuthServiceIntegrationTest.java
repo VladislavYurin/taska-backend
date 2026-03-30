@@ -3,19 +3,32 @@ package ru.taska;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.ContextConfiguration;
-import ru.taska.domain.*;
-import ru.taska.grpc.*;
+import ru.taska.domain.Credential;
+import ru.taska.domain.CredentialType;
+import ru.taska.domain.HashingAlgorithm;
+import ru.taska.domain.RefreshToken;
+import ru.taska.domain.User;
+import ru.taska.domain.UserStatus;
+import ru.taska.grpc.AuthServiceGrpc;
+import ru.taska.grpc.LoginRequest;
+import ru.taska.grpc.LoginResponse;
+import ru.taska.grpc.RefreshRequest;
+import ru.taska.grpc.RefreshResponse;
 import ru.taska.repository.CredentialRepository;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.service.PasswordHashService;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
@@ -24,8 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@ContextConfiguration(initializers = TestcontainersConfiguration.Initializer.class)
+@ActiveProfiles("test")  // Будет использовать application-test.yml
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class AuthServiceIntegrationTest {
 
@@ -60,13 +72,18 @@ public class AuthServiceIntegrationTest {
     }
 
     private void setupTestData() {
-        // Create test user
-        testEmail = "test@example.com";
+        String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
+        testEmail = "test_" + uniqueSuffix + "@example.com";
         testPassword = "ValidPassword123!";
 
+        System.out.println(">>> =========================================");
+        System.out.println(">>> Setting up test data");
+        System.out.println(">>> Unique suffix: " + uniqueSuffix);
+        System.out.println(">>> Test email: " + testEmail);
+
+        // Создаем пользователя
         User user = User.builder()
-                .id(UUID.randomUUID())
-                .login("testuser")
+                .login("testuser_" + uniqueSuffix)
                 .email(testEmail)
                 .displayName("Test User")
                 .status(UserStatus.ACTIVE)
@@ -74,14 +91,14 @@ public class AuthServiceIntegrationTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        testUserId = user.getId();
-        userRepository.save(user).block();
+        testUserId = userRepository.save(user)
+                .doOnNext(saved -> System.out.println(">>> User saved with ID: " + saved.getId()))
+                .block()
+                .getId();
 
-        // Create password credential
         String hashedPassword = passwordHashService.encode(testPassword, HashingAlgorithm.BCRYPT);
 
         Credential credential = Credential.builder()
-                .id(UUID.randomUUID())
                 .userId(testUserId)
                 .credentialType(CredentialType.PASSWORD)
                 .secretHash(hashedPassword)
@@ -91,14 +108,15 @@ public class AuthServiceIntegrationTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        credentialRepository.save(credential).block();
+        credentialRepository.save(credential)
+                .doOnNext(saved -> System.out.println(">>> Credential saved with ID: " + saved.getId()))
+                .block();
 
-        // Create valid refresh token for testing
+        // Создаем refresh token - используем блокировку с задержкой
         String rawRefreshToken = generateRawRefreshToken();
         String refreshTokenHash = passwordHashService.encode(rawRefreshToken, HashingAlgorithm.BCRYPT);
 
         RefreshToken refreshToken = RefreshToken.builder()
-                .id(UUID.randomUUID())
                 .userId(testUserId)
                 .tokenHash(refreshTokenHash)
                 .issuedAt(Instant.now())
@@ -106,8 +124,25 @@ public class AuthServiceIntegrationTest {
                 .createdAt(Instant.now())
                 .build();
 
-        refreshTokenRepository.save(refreshToken).block();
+        RefreshToken savedToken = refreshTokenRepository.save(refreshToken)
+                .doOnNext(saved -> System.out.println(">>> Refresh token saved with ID: " + saved.getId()))
+                .block(Duration.ofSeconds(5));
+
+        if (savedToken == null) {
+            throw new RuntimeException("Failed to save refresh token");
+        }
+
         validRefreshToken = rawRefreshToken;
+
+        System.out.println(">>> Raw refresh token: " + validRefreshToken);
+
+        RefreshToken found = refreshTokenRepository.findById(savedToken.getId()).block(Duration.ofSeconds(2));
+        if (found != null) {
+            System.out.println(">>> ✅ Verified: token found in DB by ID");
+        } else {
+            System.err.println(">>> ❌ ERROR: token NOT found in DB after save!");
+        }
+        System.out.println(">>> =========================================");
     }
 
     private String generateRawRefreshToken() {
@@ -119,10 +154,19 @@ public class AuthServiceIntegrationTest {
 
     @AfterAll
     void tearDown() {
-        // Clean up test data
-        refreshTokenRepository.deleteAll().block();
-        credentialRepository.deleteAll().block();
-        userRepository.deleteAll().block();
+        // Очищаем данные после всех тестов
+        System.out.println(">>> Cleaning up test data for user: " + testEmail);
+
+        if (testUserId != null) {
+            try {
+                refreshTokenRepository.deleteById(testUserId).block(Duration.ofSeconds(2));
+                credentialRepository.deleteById(testUserId).block(Duration.ofSeconds(2));
+                userRepository.deleteById(testUserId).block(Duration.ofSeconds(2));
+                System.out.println(">>> ✅ Cleanup completed");
+            } catch (Exception e) {
+                System.err.println(">>> Cleanup error: " + e.getMessage());
+            }
+        }
 
         if (channel != null && !channel.isShutdown()) {
             channel.shutdown();
@@ -149,11 +193,20 @@ public class AuthServiceIntegrationTest {
 
     @Test
     @DisplayName("Should successfully refresh token with valid refresh token")
-    void testSuccessfulRefresh() {
+    void testSuccessfulRefresh() { // Проверим, что токен есть в БД
+        refreshTokenRepository.findByTokenHash(
+                passwordHashService.encode(validRefreshToken, HashingAlgorithm.BCRYPT)
+        ).doOnNext(token -> {
+            System.out.println("Found token in DB: " + token);
+        }).doOnError(error -> {
+            System.out.println("Error finding token: " + error);
+        }).block();
+
         RefreshRequest request = RefreshRequest.newBuilder()
                 .setRefreshToken(validRefreshToken)
                 .build();
 
+        System.out.println("testSuccessfulRefresh().request = " + request);
         RefreshResponse response = authStub.refresh(request);
 
         assertThat(response).isNotNull();
@@ -182,7 +235,7 @@ public class AuthServiceIntegrationTest {
     @DisplayName("Should fail login with non-existent email")
     void testFailedLoginNonExistentEmail() {
         LoginRequest request = LoginRequest.newBuilder()
-                .setEmail("nonexistent@example.com")
+                .setEmail("nonexistent_" + UUID.randomUUID() + "@example.com")
                 .setPassword("somePassword123!")
                 .build();
 
@@ -202,6 +255,4 @@ public class AuthServiceIntegrationTest {
                 .isInstanceOf(StatusRuntimeException.class)
                 .hasMessageContaining("UNAUTHENTICATED");
     }
-
-    // Добавьте остальные тесты по аналогии...
 }

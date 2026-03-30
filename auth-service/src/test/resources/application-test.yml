@@ -1,13 +1,13 @@
 spring:
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/auth_db
-    username: test
-    password: test
+    url: r2dbc:postgresql://localhost:5433/auth_db
+    username: taska
+    password: taska
   flyway:
     enabled: true
-    url: jdbc:postgresql://localhost:5432/auth_db
-    user: test
-    password: test
+    url: jdbc:postgresql://localhost:5433/auth_db
+    user: taska
+    password: taska
 
 jwt:
   secret: testSecretKeyForJWTGenerationThatIsAtLeast32BytesLong
@@ -27,3 +27,7 @@ grpc:
       enable-keep-alive: true
       keep-alive-without-calls: true
       negotiation-type: plaintext
+
+      # Отключаем Testcontainers
+      testcontainers:
+        enabled: false

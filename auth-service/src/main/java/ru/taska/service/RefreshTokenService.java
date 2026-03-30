@@ -31,6 +31,7 @@ public class RefreshTokenService {
 
     private static final SecureRandom secureRandom = new SecureRandom();
 
+    @Transactional
     public Mono<String> createRefreshToken(User user) {
         return Mono.fromCallable(() -> {
                     String rawToken = generateRawToken();
