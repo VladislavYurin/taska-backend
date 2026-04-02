@@ -3,7 +3,6 @@ package ru.taska.repository;
 import java.util.UUID;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
 
 public interface NotificationRepository extends ReactiveCrudRepository<Notification, UUID> {
