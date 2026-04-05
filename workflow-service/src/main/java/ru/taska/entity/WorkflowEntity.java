@@ -1,9 +1,6 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -21,12 +18,12 @@ import java.util.UUID;
  * и применяемые к ним правила валидации.
  * Привязывается к (projectId, issueType) через таблицу workflow_bindings.
  */
-@Data
+@Getter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Table("taska.workflows")
-public class Workflow {
+public class WorkflowEntity {
 
     /**
      * Первичный ключ.

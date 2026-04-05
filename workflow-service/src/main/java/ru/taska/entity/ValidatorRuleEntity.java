@@ -1,10 +1,7 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
+import lombok.*;
 import tools.jackson.databind.JsonNode;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -22,12 +19,12 @@ import java.util.UUID;
  * и при необходимости содержит конфигурацию в формате JSON.
  * В случае ошибки возвращается нарушение (errorCode + errorMessage).
  */
-@Data
+@Getter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 @Table("taska.validator_rules")
-public class ValidatorRule {
+public class ValidatorRuleEntity {
 
     /**
      * Первичный ключ.

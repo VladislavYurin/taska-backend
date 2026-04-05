@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package ru.taska.common.v1;
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.common.v1";
+option java_outer_classname = "CommonApiProto";
+
+/**
+ * Универсальный заголовок gRPC-запроса.
+ */
+message Header {
+
+  /**
+   * Уникальный идентификатор запроса для сквозной трассировки.
+   * Генерируется на стороне клиента и логируется на каждом этапе обработки.
+   */
+  string request_id = 1;
+
+  /**
+   * Идентификатор узла (сервиса), отправляющего запрос.
+   */
+  string node_id = 2;
+}
