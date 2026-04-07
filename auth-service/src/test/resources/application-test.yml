@@ -4,7 +4,9 @@ spring:
     username: test_user
     password: test_pass
   liquibase:
-    enabled: false
+    enabled: true
+    change-log: db/changelog/db.changelog-master.yaml
+    url: jdbc:postgresql://localhost:5432/auth_db_test
 
 jwt:
   secret: testSecretKeyForJWTGenerationThatIsAtLeast32BytesLong

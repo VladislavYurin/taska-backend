@@ -124,7 +124,6 @@ public class AuthServiceImpl implements AuthService {
         passwordPolicyValidator.validate(newPassword);
 
         String tokenHash = hashToken(token);
-        Instant now = Instant.now();
 
         log.debug("setPasswordByToken: processing token hash: {}", DataMaskingHelper.maskJwt(tokenHash));
 

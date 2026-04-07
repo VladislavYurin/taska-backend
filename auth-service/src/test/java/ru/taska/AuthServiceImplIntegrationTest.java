@@ -3,32 +3,34 @@ package ru.taska;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import liquibase.database.jvm.JdbcConnection;
-import liquibase.resource.ClassLoaderResourceAccessor;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
 import ru.taska.api.auth.v1.LoginResponse;
+import ru.taska.api.auth.v1.PasswordByTokenRequest;
+import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.api.auth.v1.RefreshResponse;
-import ru.taska.api.auth.v1.PasswordByTokenRequest;
-import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.common.v1.Header;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
@@ -44,82 +46,10 @@ import ru.taska.repository.UserRepository;
 import ru.taska.security.PasswordHashServiceImpl;
 import ru.taska.service.AuthService;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Base64;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Testcontainers
 @Slf4j
-public class AuthServiceImplIntegrationTest {
-
-    private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
-            .withDatabaseName("auth_db_test")
-            .withUsername("test_user")
-            .withPassword("test_pass");
+public class AuthServiceImplIntegrationTest extends AbstractIT {
 
     private static final String TOKEN_HASH_ALGORITHM = "SHA-256";
-
-    // Статический метод для запуска миграций (как было до рефакторинга)
-    @BeforeAll
-    static void runLiquibaseMigrations() {
-        String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s",
-                postgres.getHost(),
-                postgres.getMappedPort(5432),
-                postgres.getDatabaseName());
-
-        log.debug(">>> Running Liquibase migrations on: " + jdbcUrl);
-
-        try (Connection connection = DriverManager.getConnection(jdbcUrl, "test_user", "test_pass")) {
-            liquibase.Liquibase liquibase = new liquibase.Liquibase(
-                    "db/changelog/db.changelog-master.yaml",
-                    new ClassLoaderResourceAccessor(),
-                    new JdbcConnection(connection)
-            );
-
-            liquibase.update("test");
-            log.debug(">>> Liquibase migrations completed successfully!");
-
-            try (Statement stmt = connection.createStatement()) {
-                var rs = stmt.executeQuery(
-                        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'taska' AND table_name = 'users'"
-                );
-                rs.next();
-                log.debug(">>> Users table exists: " + (rs.getInt(1) > 0));
-            }
-
-        } catch (Exception e) {
-            System.err.println(">>> Liquibase migration failed: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Failed to run Liquibase migrations", e);
-        }
-    }
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        if (!postgres.isRunning()) {
-            postgres.start();
-        }
-
-        registry.add("spring.r2dbc.url", () ->
-                String.format("r2dbc:postgresql://%s:%d/%s",
-                        postgres.getHost(),
-                        postgres.getMappedPort(5432),
-                        postgres.getDatabaseName()));
-        registry.add("spring.r2dbc.username", postgres::getUsername);
-        registry.add("spring.r2dbc.password", postgres::getPassword);
-    }
 
     @Autowired
     private AuthService authService;
@@ -139,8 +69,8 @@ public class AuthServiceImplIntegrationTest {
     @Autowired
     private PasswordHashServiceImpl passwordHashServiceImpl;
 
-    private ManagedChannel channel;
-    private ReactorAuthServiceGrpc.ReactorAuthServiceStub authStub;
+    private static ManagedChannel channel;
+    private static ReactorAuthServiceGrpc.ReactorAuthServiceStub authStub;
 
     private UUID testUserId;
     private String testEmail;
@@ -154,25 +84,23 @@ public class AuthServiceImplIntegrationTest {
     private String inviteTokenHash;
 
     @BeforeAll
-    void setUp() {
+    static void setUp() {
         // Ждем пока Liquibase применит миграции и gRPC сервер запустится
-        try {
-            TimeUnit.SECONDS.sleep(5);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+//        try {
+//            TimeUnit.SECONDS.sleep(5);
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//        }
 
         // Создаем канал к gRPC серверу
         channel = ManagedChannelBuilder.forAddress("localhost", 9090)
                 .usePlaintext()
                 .build();
         authStub = ReactorAuthServiceGrpc.newReactorStub(channel);
-
-        setupTestData();
-        setupInvitedUserTestData();
     }
 
-    private void setupInvitedUserTestData() {
+    @BeforeEach
+    void setupInvitedUserTestData() {
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         invitedUserEmail = "invited_" + uniqueSuffix + "@example.com";
         inviteTokenRaw = generateRawToken();
@@ -216,7 +144,8 @@ public class AuthServiceImplIntegrationTest {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private void setupTestData() {
+    @BeforeEach
+    void setupTestData() {
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         testEmail = "test_" + uniqueSuffix + "@example.com";
         testPassword = "ValidPassword123!";
@@ -290,8 +219,8 @@ public class AuthServiceImplIntegrationTest {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    @AfterAll
-    void tearDown() {
+    @AfterEach
+    void cleanTestData() {
         log.debug(">>> Cleaning up test data for user: {}", testEmail);
 
         if (testUserId != null) {
@@ -310,12 +239,12 @@ public class AuthServiceImplIntegrationTest {
             try {
                 // Сначала находим и удаляем invite token по userId
                 inviteTokenRepository.findByUserId(invitedUserId)
-                        .flatMap(token -> inviteTokenRepository.deleteById(token.getId()))
-                        .block(Duration.ofSeconds(5));
+                                     .flatMap(token -> inviteTokenRepository.deleteById(token.getId()))
+                                     .block(Duration.ofSeconds(5));
                 // Удаляем credential если он был создан
                 credentialRepository.findByUserIdAndCredentialType(invitedUserId, CredentialType.PASSWORD)
-                        .flatMap(cred -> credentialRepository.deleteById(cred.getId()))
-                        .block(Duration.ofSeconds(5));
+                                    .flatMap(cred -> credentialRepository.deleteById(cred.getId()))
+                                    .block(Duration.ofSeconds(5));
                 // Удаляем пользователя
                 userRepository.deleteById(invitedUserId).block(Duration.ofSeconds(5));
                 log.debug(">>> Invited user cleanup completed");
@@ -323,7 +252,10 @@ public class AuthServiceImplIntegrationTest {
                 log.error("Invited user cleanup error: {}", e.getMessage());
             }
         }
+    }
 
+    @AfterAll
+    static void tearDown() {
         if (channel != null && !channel.isShutdown()) {
             channel.shutdown();
             try {
@@ -332,7 +264,6 @@ public class AuthServiceImplIntegrationTest {
                 Thread.currentThread().interrupt();
             }
         }
-
     }
 
     @Test
@@ -554,7 +485,7 @@ public class AuthServiceImplIntegrationTest {
     void testSuccessfulSetPasswordByToken() {
         String newPassword = "NewSecurePassword456!";
 
-        PasswordByTokenRequest request = PasswordByTokenRequest.newBuilder()
+        PasswordByTokenRequest.newBuilder()
                 .setHeader(Header.newBuilder()
                         .setRequestId("test-req-set-pwd")
                         .setNodeId("test-node")

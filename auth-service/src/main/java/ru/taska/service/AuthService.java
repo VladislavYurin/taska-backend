@@ -2,7 +2,6 @@ package ru.taska.service;
 
 import reactor.core.publisher.Mono;
 import ru.taska.dto.AuthResponseDto;
-import ru.taska.dto.PasswordByTokenResponseDto;
 
 /**
  * Сервис аутентификации и управления сессиями.
@@ -16,7 +15,7 @@ public interface AuthService {
      * @param email    email пользователя
      * @param password пароль в открытом виде
      * @return {@link Mono}, содержащий {@link AuthResponseDto} с токенами
-     * @throws DomainException если пользователь не найден, заблокирован, не активирован,
+     * @throws ru.taska.exception.DomainException если пользователь не найден, заблокирован, не активирован,
      *                         пароль неверен, превышен лимит попыток и т.д.
      */
     Mono<AuthResponseDto> login(String email, String password);
@@ -26,7 +25,7 @@ public interface AuthService {
      *
      * @param refreshToken сырой refresh-токен
      * @return {@link Mono}, содержащий новую пару токенов
-     * @throws DomainException если refresh-токен недействителен, истёк или пользователь не найден
+     * @throws ru.taska.exception.DomainException если refresh-токен недействителен, истёк или пользователь не найден
      */
     Mono<AuthResponseDto> refresh(String refreshToken);
 
