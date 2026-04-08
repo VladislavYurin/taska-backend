@@ -1,13 +1,10 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,11 +15,12 @@ import java.util.UUID;
  * Определяет, какой workflow используется
  * для конкретной комбинации (projectId, issueType).
  */
-@Data
+@Getter
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkflowBinding {
+@Table("taska.workflow_bindings")
+public class WorkflowBindingEntity {
 
     /**
      * Ссылка на projects, к которому привязан workflow.
