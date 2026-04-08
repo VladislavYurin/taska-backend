@@ -3,8 +3,6 @@ package ru.taska;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import liquibase.Liquibase;
-import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +19,7 @@ import ru.taska.grpc.RefreshRequest;
 import ru.taska.repository.CredentialRepository;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
-import ru.taska.service.PasswordHashService;
+import ru.taska.service.PasswordHashServiceImpl;
 import ru.taska.grpc.AuthServiceGrpc;
 import ru.taska.grpc.LoginRequest;
 import ru.taska.grpc.LoginResponse;
@@ -79,7 +77,7 @@ public class AuthServiceIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
-    private PasswordHashService passwordHashService;
+    private PasswordHashServiceImpl passwordHashServiceImpl;
 
     private ManagedChannel channel;
     private AuthServiceGrpc.AuthServiceBlockingStub authStub;
@@ -170,7 +168,7 @@ public class AuthServiceIntegrationTest {
                         .block(Duration.ofSeconds(10)))
                 .getId();
 
-        String hashedPassword = passwordHashService.encode(testPassword, HashingAlgorithm.BCRYPT);
+        String hashedPassword = passwordHashServiceImpl.encode(testPassword, HashingAlgorithm.BCRYPT);
 
         Credential credential = Credential.builder()
                 .userId(testUserId)
@@ -188,7 +186,7 @@ public class AuthServiceIntegrationTest {
                 .block(Duration.ofSeconds(10));
 
         String rawRefreshToken = generateRawRefreshToken();
-        String refreshTokenHash = passwordHashService.encode(rawRefreshToken, HashingAlgorithm.BCRYPT);
+        String refreshTokenHash = passwordHashServiceImpl.encode(rawRefreshToken, HashingAlgorithm.BCRYPT);
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .userId(testUserId)

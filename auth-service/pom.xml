@@ -49,13 +49,6 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
     </dependency>
-
-    <!-- gRPC + Reactor gRPC -->
-<!--    <dependency>-->
-<!--      <groupId>org.springframework.grpc</groupId>-->
-<!--      <artifactId>spring-grpc-spring-boot-starter</artifactId>-->
-<!--      <version>0.3.0</version>-->
-<!--    </dependency>-->
     <dependency>
       <groupId>net.devh</groupId>
       <artifactId>grpc-server-spring-boot-starter</artifactId>
@@ -135,6 +128,16 @@
     <dependency>
       <groupId>io.projectreactor</groupId>
       <artifactId>reactor-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- Testcontainers -->

@@ -1,16 +1,15 @@
 package ru.taska.service;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.config.JwtProperties;
 import ru.taska.domain.HashingAlgorithm;
 import ru.taska.domain.RefreshToken;
 import ru.taska.domain.User;
+import ru.taska.dto.RefreshTokenResponseDto;
 import ru.taska.repository.RefreshTokenRepository;
 
 import java.security.SecureRandom;
@@ -25,9 +24,7 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordHashService passwordHashService;
-
-    @Value("${jwt.refresh-token-ttl}")
-    private long refreshTokenTtl;
+    private final JwtProperties jwtProperties;
 
     private static final SecureRandom secureRandom = new SecureRandom();
 
@@ -41,7 +38,7 @@ public class RefreshTokenService {
                             .userId(user.getId())
                             .tokenHash(tokenHash)
                             .issuedAt(Instant.now())
-                            .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
+                            .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
                             .createdAt(Instant.now())
                             .build();
 
@@ -59,7 +56,7 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public Mono<RefreshTokenResponse> validateAndRotate(String rawToken) {
+    public Mono<RefreshTokenResponseDto> validateAndRotate(String rawToken) {
         String tokenHash = hashToken(rawToken);
 
         log.debug(">>> validateAndRotate: recieved rawToken =" + rawToken);
@@ -81,7 +78,7 @@ public class RefreshTokenService {
                             .userId(existingToken.getUserId())
                             .tokenHash(newTokenHash)
                             .issuedAt(Instant.now())
-                            .expiresAt(Instant.now().plusSeconds(refreshTokenTtl))
+                            .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
                             .createdAt(Instant.now())
                             .build();
 
@@ -97,7 +94,7 @@ public class RefreshTokenService {
                                         .doOnSuccess(updated -> {
                                             log.debug(">>> validateAndRotate: revoked old token, rows updated=" + updated);
                                         })
-                                        .thenReturn(new RefreshTokenResponse(savedNewToken, newRawToken));
+                                        .thenReturn(new RefreshTokenResponseDto(savedNewToken, newRawToken));
                             });
                 });
     }
@@ -110,13 +107,6 @@ public class RefreshTokenService {
 
     private String hashToken(String rawToken) {
        return passwordHashService.encode(rawToken, HashingAlgorithm.BCRYPT);
-    }
-
-    @Getter
-    @AllArgsConstructor
-    public static class RefreshTokenResponse {
-        private final RefreshToken refreshToken;
-        private final String rawToken;
     }
 
     private static class TokenPair {

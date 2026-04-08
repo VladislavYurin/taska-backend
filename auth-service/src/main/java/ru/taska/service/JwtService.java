@@ -3,9 +3,12 @@ package ru.taska.service;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.config.JwtProperties;
 import ru.taska.domain.User;
 
 import javax.crypto.SecretKey;
@@ -15,14 +18,25 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
-public class JwtService {private final SecretKey secretKey;
-    private final long accessTokenTtl;
+@Slf4j
+@RequiredArgsConstructor
+public class JwtService {
+    private final JwtProperties jwtProperties;
+    private SecretKey secretKey;
 
-    public JwtService(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.access-token-ttl}") long accessTokenTtl) {
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.accessTokenTtl = accessTokenTtl;
+    @PostConstruct
+    public void init() {
+        if (jwtProperties.getSecret() == null || jwtProperties.getSecret().isEmpty()) {
+            throw new IllegalStateException("JWT secret is not configured in application properties");
+        }
+
+        this.secretKey = Keys.hmacShaKeyFor(
+                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
+        );
+
+        log.info("JWT Service initialized with access TTL: {} seconds, refresh TTL: {} seconds",
+                jwtProperties.getAccessTokenTtl(),
+                jwtProperties.getRefreshTokenTtl());
     }
 
     public Mono<String> generateAccessToken(User user) {
@@ -36,7 +50,7 @@ public class JwtService {private final SecretKey secretKey;
                     .setClaims(claims)
                     .setSubject(user.getId().toString())
                     .setIssuedAt(new Date())
-                    .setExpiration(new Date(System.currentTimeMillis() + accessTokenTtl * 1000))
+                    .setExpiration(new Date(System.currentTimeMillis() + jwtProperties.getAccessTokenTtl() * 1000))
                     .signWith(secretKey)
                     .compact();
         });
@@ -53,6 +67,6 @@ public class JwtService {private final SecretKey secretKey;
     }
 
     public Mono<Long> getExpiresIn() {
-        return Mono.just(accessTokenTtl);
+        return Mono.just(jwtProperties.getAccessTokenTtl());
     }
 }
