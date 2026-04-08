@@ -26,8 +26,8 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AuthService Unit Tests")
-class AuthServiceTest {
+@DisplayName("AuthServiceImpl Unit Tests")
+class AuthServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
@@ -39,16 +39,16 @@ class AuthServiceTest {
     private PasswordHashService passwordHashService;
 
     @Mock
-    private JwtService jwtService;
+    private JwtServiceImpl jwtServiceImpl;
 
     @Mock
-    private RefreshTokenService refreshTokenService;
+    private RefreshTokenServiceImpl refreshTokenServiceImpl;
 
     @Mock
     private SecurityProperties securityProperties;
 
     @InjectMocks
-    private AuthService authService;
+    private AuthServiceImpl authServiceImpl;
 
     private UUID testUserId;
     private User testUser;
@@ -107,11 +107,11 @@ class AuthServiceTest {
             when(passwordHashService.matches(testCredential, password)).thenReturn(Mono.just(true));
             when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
 
-            when(jwtService.generateAccessToken(testUser)).thenReturn(Mono.just("access-token-123"));
-            when(refreshTokenService.createRefreshToken(testUser)).thenReturn(Mono.just("refresh-token-456"));
-            when(jwtService.getExpiresIn()).thenReturn(Mono.just(900L));
+            when(jwtServiceImpl.generateAccessToken(testUser)).thenReturn(Mono.just("access-token-123"));
+            when(refreshTokenServiceImpl.createRefreshToken(testUser)).thenReturn(Mono.just("refresh-token-456"));
+            when(jwtServiceImpl.getExpiresIn()).thenReturn(Mono.just(900L));
 
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     // Then
                     .expectNextMatches(response ->
                             response.getAccessToken().equals("access-token-123") &&
@@ -124,8 +124,8 @@ class AuthServiceTest {
             verify(userRepository).findById(testUserId); // Добавить проверку
             verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
             verify(passwordHashService).matches(testCredential, password);
-            verify(jwtService).generateAccessToken(testUser);
-            verify(refreshTokenService).createRefreshToken(testUser);
+            verify(jwtServiceImpl).generateAccessToken(testUser);
+            verify(refreshTokenServiceImpl).createRefreshToken(testUser);
             verify(credentialRepository, never()).save(any());
         }
 
@@ -146,11 +146,11 @@ class AuthServiceTest {
 
             when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
 
-            when(jwtService.generateAccessToken(testUser)).thenReturn(Mono.just("access-token-123"));
-            when(refreshTokenService.createRefreshToken(testUser)).thenReturn(Mono.just("refresh-token-456"));
-            when(jwtService.getExpiresIn()).thenReturn(Mono.just(900L));
+            when(jwtServiceImpl.generateAccessToken(testUser)).thenReturn(Mono.just("access-token-123"));
+            when(refreshTokenServiceImpl.createRefreshToken(testUser)).thenReturn(Mono.just("refresh-token-456"));
+            when(jwtServiceImpl.getExpiresIn()).thenReturn(Mono.just(900L));
 
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectNextMatches(response -> response.getAccessToken() != null)
                     .verifyComplete();
 
@@ -169,7 +169,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail(email)).thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Invalid credentials")
@@ -191,7 +191,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
 
             // When & Then
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Account is blocked")
@@ -212,7 +212,7 @@ class AuthServiceTest {
             when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
 
             // When & Then
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Account not activated")
@@ -232,7 +232,7 @@ class AuthServiceTest {
                     .thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Password not set")
@@ -255,7 +255,7 @@ class AuthServiceTest {
             when(credentialRepository.save(any(Credential.class))).thenReturn(Mono.just(testCredential));
 
             // When & Then
-            StepVerifier.create(authService.login(email, wrongPassword))
+            StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Invalid credentials")
@@ -264,7 +264,7 @@ class AuthServiceTest {
 
             verify(credentialRepository).save(testCredential);
             assert testCredential.getFailedAttempts() == 1;
-            verify(jwtService, never()).generateAccessToken(any());
+            verify(jwtServiceImpl, never()).generateAccessToken(any());
         }
 
         @Test
@@ -284,7 +284,7 @@ class AuthServiceTest {
             when(credentialRepository.save(any(Credential.class))).thenReturn(Mono.just(testCredential));
 
             // When & Then
-            StepVerifier.create(authService.login(email, wrongPassword))
+            StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("Invalid credentials")
@@ -307,14 +307,14 @@ class AuthServiceTest {
             // Given
             String refreshToken = "valid-refresh-token";
 
-            when(refreshTokenService.validateAndRotate(refreshToken))
+            when(refreshTokenServiceImpl.validateAndRotate(refreshToken))
                     .thenReturn(Mono.just(testRefreshTokenResponse));
             when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            when(jwtService.generateAccessToken(testUser)).thenReturn(Mono.just("new-access-token-123"));
-            when(jwtService.getExpiresIn()).thenReturn(Mono.just(900L));
+            when(jwtServiceImpl.generateAccessToken(testUser)).thenReturn(Mono.just("new-access-token-123"));
+            when(jwtServiceImpl.getExpiresIn()).thenReturn(Mono.just(900L));
 
             // When
-            StepVerifier.create(authService.refresh(refreshToken))
+            StepVerifier.create(authServiceImpl.refresh(refreshToken))
                     // Then
                     .expectNextMatches(response ->
                             response.getAccessToken().equals("new-access-token-123") &&
@@ -323,9 +323,9 @@ class AuthServiceTest {
                     )
                     .verifyComplete();
 
-            verify(refreshTokenService).validateAndRotate(refreshToken);
+            verify(refreshTokenServiceImpl).validateAndRotate(refreshToken);
             verify(userRepository).findById(testUserId);
-            verify(jwtService).generateAccessToken(testUser);
+            verify(jwtServiceImpl).generateAccessToken(testUser);
         }
 
         @Test
@@ -334,11 +334,11 @@ class AuthServiceTest {
             // Given
             String invalidRefreshToken = "invalid-refresh-token";
 
-            when(refreshTokenService.validateAndRotate(invalidRefreshToken))
+            when(refreshTokenServiceImpl.validateAndRotate(invalidRefreshToken))
                     .thenReturn(Mono.error(new RuntimeException("Invalid or expired refresh token")));
 
             // When & Then
-            StepVerifier.create(authService.refresh(invalidRefreshToken))
+            StepVerifier.create(authServiceImpl.refresh(invalidRefreshToken))
                     .expectErrorMatches(error ->
                             error instanceof RuntimeException &&
                                     error.getMessage().equals("Invalid or expired refresh token")
@@ -346,7 +346,7 @@ class AuthServiceTest {
                     .verify();
 
             verify(userRepository, never()).findById((UUID) any());
-            verify(jwtService, never()).generateAccessToken(any());
+            verify(jwtServiceImpl, never()).generateAccessToken(any());
         }
 
         @Test
@@ -363,12 +363,12 @@ class AuthServiceTest {
 
             RefreshTokenResponseDto responseDto = new RefreshTokenResponseDto(refreshTokenEntity, "new-token");
 
-            when(refreshTokenService.validateAndRotate(refreshToken))
+            when(refreshTokenServiceImpl.validateAndRotate(refreshToken))
                     .thenReturn(Mono.just(responseDto));
             when(userRepository.findById(nonExistentUserId)).thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authService.refresh(refreshToken))
+            StepVerifier.create(authServiceImpl.refresh(refreshToken))
                     .expectErrorMatches(error ->
                             error instanceof AuthException &&
                                     error.getMessage().equals("User not found")
@@ -376,7 +376,7 @@ class AuthServiceTest {
                     .verify();
 
             verify(userRepository).findById(nonExistentUserId);
-            verify(jwtService, never()).generateAccessToken(any());
+            verify(jwtServiceImpl, never()).generateAccessToken(any());
         }
     }
 
@@ -400,7 +400,7 @@ class AuthServiceTest {
             when(credentialRepository.save(any(Credential.class))).thenReturn(Mono.just(testCredential));
 
             // When & Then
-            StepVerifier.create(authService.login(email, wrongPassword))
+            StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectError(AuthException.class)
                     .verify();
 
@@ -422,11 +422,11 @@ class AuthServiceTest {
                     .thenReturn(Mono.error(new RuntimeException("Hash service error")));
 
             // When & Then
-            StepVerifier.create(authService.login(email, password))
+            StepVerifier.create(authServiceImpl.login(email, password))
                     .expectError(RuntimeException.class)
                     .verify();
 
-            verify(jwtService, never()).generateAccessToken(any());
+            verify(jwtServiceImpl, never()).generateAccessToken(any());
         }
     }
 }
