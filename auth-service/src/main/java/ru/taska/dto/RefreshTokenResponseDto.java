@@ -2,7 +2,7 @@ package ru.taska.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import ru.taska.domain.RefreshToken;
+import ru.taska.entity.RefreshToken;
 
 @Getter
 @AllArgsConstructor

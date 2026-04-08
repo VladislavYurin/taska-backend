@@ -4,8 +4,8 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Credential;
-import ru.taska.domain.CredentialType;
+import ru.taska.entity.Credential;
+import ru.taska.entity.CredentialType;
 
 import java.time.Instant;
 import java.util.UUID;
