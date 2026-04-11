@@ -19,45 +19,34 @@
   </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-protobuf</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-stub</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.salesforce.servicelibs</groupId>
-      <artifactId>reactor-grpc-stub</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.projectreactor</groupId>
-      <artifactId>reactor-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>jakarta.annotation</groupId>
-      <artifactId>jakarta.annotation-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-    </dependency>
+    <!-- Spring -->
     <dependency>
       <groupId>org.springframework.data</groupId>
       <artifactId>spring-data-commons</artifactId>
     </dependency>
+
+    <!-- R2DBC -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>r2dbc-postgresql</artifactId>
     </dependency>
+
+    <!-- Jackson -->
     <dependency>
       <groupId>tools.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
+    </dependency>
+
+    <!-- Jakarta -->
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
     </dependency>
   </dependencies>
 
@@ -71,61 +60,7 @@
     </extensions>
 
     <plugins>
-      <plugin>
-        <groupId>io.github.ascopes</groupId>
-        <artifactId>protobuf-maven-plugin</artifactId>
-        <version>5.0.0</version>
-        <configuration>
-          <protoc>${protobuf.version}</protoc>
-          <plugins>
-            <!-- gRPC Java stubs -->
-            <plugin kind="binary-maven">
-              <groupId>io.grpc</groupId>
-              <artifactId>protoc-gen-grpc-java</artifactId>
-              <version>${grpc.version}</version>
-              <options>@generated=omit</options>
-            </plugin>
 
-            <!-- Reactor gRPC stubs -->
-            <plugin kind="jvm-maven">
-              <groupId>com.salesforce.servicelibs</groupId>
-              <artifactId>reactor-grpc</artifactId>
-              <version>${reactor.grpc.version}</version>
-            </plugin>
-          </plugins>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>generate</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-<!--      <plugin>-->
-<!--        <groupId>org.xolstice.maven.plugins</groupId>-->
-<!--        <artifactId>protobuf-maven-plugin</artifactId>-->
-<!--        <version>0.6.1</version>-->
-<!--        <configuration>-->
-<!--          &lt;!&ndash;suppress UnresolvedMavenProperty &ndash;&gt;-->
-<!--          <protocArtifact>-->
-<!--            com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}-->
-<!--          </protocArtifact>-->
-<!--          <pluginId>grpc-java</pluginId>-->
-<!--          &lt;!&ndash;suppress UnresolvedMavenProperty &ndash;&gt;-->
-<!--          <pluginArtifact>-->
-<!--            io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}-->
-<!--          </pluginArtifact>-->
-<!--        </configuration>-->
-<!--        <executions>-->
-<!--          <execution>-->
-<!--            <goals>-->
-<!--              <goal>compile</goal>-->
-<!--              <goal>compile-custom</goal>-->
-<!--            </goals>-->
-<!--          </execution>-->
-<!--        </executions>-->
-<!--      </plugin>-->
     </plugins>
   </build>
 

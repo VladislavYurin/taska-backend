@@ -31,6 +31,7 @@ jobs:
         # Должны совпадать с <modules> в корневом pom.xml
         mod:
           - { name: common-lib,          module: common-lib }
+          - { name: grpc-common-lib,     module: grpc-common-lib }
           - { name: kafka-lib,           module: kafka-lib }
           - { name: api-gateway,         module: api-gateway }
           - { name: auth-service,        module: auth-service }

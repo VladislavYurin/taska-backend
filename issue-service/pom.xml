@@ -69,9 +69,15 @@
       <artifactId>reactor-grpc-stub</artifactId>
     </dependency>
 
+    <!-- Common -->
     <dependency>
       <groupId>ru.taska</groupId>
       <artifactId>common-lib</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>ru.taska</groupId>
+      <artifactId>grpc-common-lib</artifactId>
       <version>${project.version}</version>
     </dependency>
 
