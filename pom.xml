@@ -17,6 +17,7 @@
 
   <modules>
     <module>common-lib</module>
+    <module>grpc-common-lib</module>
     <module>kafka-lib</module>
     <module>api-gateway</module>
     <module>auth-service</module>

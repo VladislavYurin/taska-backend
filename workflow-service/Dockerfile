@@ -3,6 +3,7 @@ WORKDIR /workspace
 
 COPY pom.xml ./
 COPY common-lib ./common-lib
+COPY grpc-common-lib ./grpc-common-lib
 COPY kafka-lib ./kafka-lib
 COPY api-gateway ./api-gateway
 COPY auth-service ./auth-service
