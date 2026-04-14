@@ -19,6 +19,39 @@
   </properties>
 
   <dependencies>
+
+    <!-- JWT validation dependencies -->
+    <!-- Source: https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>0.13.0</version>
+      <scope>compile</scope>
+    </dependency>
+    <!-- Source: https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-impl -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>0.13.0</version>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- Source: https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-jackson -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>0.13.0</version>
+      <scope>runtime</scope>
+    </dependency>
+
+
+    <!-- cloud gateway on webFlux -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+    </dependency>
+
+
+
     <!-- WebFlux (reactor) -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -36,6 +69,12 @@
       <groupId>io.grpc</groupId>
       <artifactId>grpc-netty-shaded</artifactId>
     </dependency>
+    <!-- работает вместе с grpc-netty-shaded, но необходим для работы api gateway -->
+    <!-- почему? cloud gateway требует явных классов из netty, которые shaded прячет -->
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-netty</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-stub</artifactId>
@@ -45,7 +84,7 @@
       <artifactId>reactor-grpc-stub</artifactId>
     </dependency>
 
-    <!-- Common -->
+    <!-- Common Lib of project -->
     <dependency>
       <groupId>ru.taska</groupId>
       <artifactId>common-lib</artifactId>
@@ -57,14 +96,14 @@
       <version>${project.version}</version>
     </dependency>
 
-    <!-- Lombok -->
+    <!-- lombok -->
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
       <scope>provided</scope>
     </dependency>
 
-    <!-- Tests -->
+    <!-- tests -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

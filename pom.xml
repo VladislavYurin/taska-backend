@@ -44,6 +44,9 @@
 
     <docker.tag>local</docker.tag>
     <docker.java-image>openjdk:25</docker.java-image>
+
+    <!-- lastest version of spring cloud -->
+    <spring-cloud.version>2025.1.1</spring-cloud.version>
   </properties>
 
   <profiles>
@@ -57,6 +60,16 @@
 
   <dependencyManagement>
     <dependencies>
+
+      <!-- lastest version of spring cloud (need in API GATEWAY) -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
      <!-- Liquibase -->
      <dependency>
        <groupId>org.liquibase</groupId>
