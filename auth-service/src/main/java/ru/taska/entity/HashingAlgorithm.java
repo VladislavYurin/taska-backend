@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
 /**
  * Алгоритм хэширования секретов (паролей, токенов).

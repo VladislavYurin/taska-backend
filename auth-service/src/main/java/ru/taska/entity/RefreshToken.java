@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.refresh_tokens")
+@Table(name = "refresh_tokens", schema = "taska")
 public class RefreshToken {
 
     /**

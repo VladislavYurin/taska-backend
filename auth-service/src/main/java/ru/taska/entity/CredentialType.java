@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.entity;
 
 /**
  * Тип учётных данных пользователя.
