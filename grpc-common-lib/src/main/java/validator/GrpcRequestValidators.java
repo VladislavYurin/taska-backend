@@ -1,5 +1,6 @@
 package validator;
 
+import com.google.protobuf.ProtocolMessageEnum;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -53,5 +54,22 @@ public final class GrpcRequestValidators {
                     .asRuntimeException());
         }
         return Mono.just(raw);
+    }
+
+    /**
+     * Проверяет что proto enum задан (не является значением UNSPECIFIED, т.е. не равен 0).
+     *
+     * @param value     значение proto enum
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT}
+     *         если передан 0 (UNSPECIFIED)
+     */
+    public static <T extends ProtocolMessageEnum> Mono<T> requireSpecifiedOrInvalidArgument(T value, String fieldName) {
+        if (value.getNumber() == 0) {
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be specified")
+                    .asRuntimeException());
+        }
+        return Mono.just(value);
     }
 }
