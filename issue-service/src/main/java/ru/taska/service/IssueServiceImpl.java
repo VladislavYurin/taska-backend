@@ -5,14 +5,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.mapper.IssueMapper;
+import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
@@ -27,8 +30,9 @@ public class IssueServiceImpl implements IssueService {
 
     private final ProjectCounterRepository projectCounterRepository;
     private final IssueRepository issueRepository;
+    private final IssueHistoryRepository issueHistoryRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
+    private final IssueMapper issueMapper;
 
     @Override
     @Transactional
@@ -43,28 +47,24 @@ public class IssueServiceImpl implements IssueService {
         //todo add membership check. depends on TAS-21: CheckProjectRole
 
         return projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
-                .map(number -> Issue.builder()
-                        .projectId(projectId)
-                        .issueNumber(number)
-                        .issueKey("") //todo depends on TAS-20: GetProject
-                        .issueType(issueType)
-                        .summary(summary)
-                        .description(description)
-                        .statusKey(INIT_STATUS)
-                        .priority(priority)
-                        .reporterId(reporterId)
-                        .version(INIT_VERSION)
-                        .build()
-                )
+                .map(number -> issueMapper.buildIssue(
+                        projectId,
+                        number,
+                        "", //todo assign issue key. depends on TAS-20: GetProject
+                        issueType,
+                        summary,
+                        description,
+                        priority,
+                        reporterId,
+                        INIT_STATUS,
+                        INIT_VERSION))
                 .flatMap(issueRepository::save)
                 .flatMap(issue -> {
-                    OutboxEvent event = OutboxEvent.builder()
-                            .aggregateType(ISSUE_AGGREGATE_TYPE)
-                            .aggregateId(issue.getId())
-                            .eventType(OUTBOX_EVENT_TYPE)
-                            .payload(objectMapper.valueToTree(issue))
-                            .build();
-                    return outboxEventRepository.save(event).thenReturn(issue);
+                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
+                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, OUTBOX_EVENT_TYPE);
+                    return issueHistoryRepository.save(history)
+                            .then(outboxEventRepository.save(event))
+                            .thenReturn(issue);
                 });
     }
 }

@@ -1,15 +1,68 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.OutboxEvent;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class IssueMapper {
+
+    private final ObjectMapper objectMapper;
+
+    public Issue buildIssue(
+            UUID projectId,
+            Integer number,
+            String issueKey,
+            IssueType issueType,
+            String summary,
+            String description,
+            IssuePriority priority,
+            UUID reporterId,
+            IssueStatus initStatus,
+            int initVersion
+    ) {
+        return Issue.builder()
+                .projectId(projectId)
+                .issueNumber(number)
+                .issueKey(issueKey)
+                .issueType(issueType)
+                .summary(summary)
+                .description(description)
+                .statusKey(initStatus)
+                .priority(priority)
+                .reporterId(reporterId)
+                .version(initVersion)
+                .build();
+    }
+
+    public IssueHistory buildIssueHistory(Issue issue, IssueEventType eventType, UUID actorUserId) {
+        return IssueHistory.builder()
+                .issueId(issue.getId())
+                .eventType(eventType)
+                .actorUserId(actorUserId)
+                .build();
+    }
+
+    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, String eventType) {
+        return OutboxEvent.builder()
+                .aggregateType(aggregateType)
+                .aggregateId(issue.getId())
+                .eventType(eventType)
+                .payload(objectMapper.valueToTree(issue))
+                .build();
+    }
 
     public IssueResponse toIssueProto(Issue issue) {
         return IssueResponse.newBuilder()

@@ -2,6 +2,7 @@ package ru.taska.transport.grpc;
 
 import exception.DomainException;
 import exception.DomainStatus;
+import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,9 +65,15 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                 }))
                 .map(issueMapper::toIssueProto)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof io.grpc.StatusRuntimeException),
-                        e -> log.error("createIssue failed", e))
+                        e -> {
+                            log.error("createIssue: database error", e);
+                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
+                        })
+                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
+                        e -> {
+                            log.error("createIssue: unexpected error", e);
+                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
+                        })
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

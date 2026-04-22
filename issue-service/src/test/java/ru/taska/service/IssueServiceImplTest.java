@@ -6,12 +6,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.mapper.IssueMapper;
+import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
@@ -21,7 +25,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IssueServiceImplTest {
@@ -33,17 +39,19 @@ class IssueServiceImplTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private OutboxEventRepository outboxEventRepository;
+    private IssueHistoryRepository issueHistoryRepository;
 
     @Mock
-    private ObjectMapper objectMapper;
+    private OutboxEventRepository outboxEventRepository;
+
+    @Spy
+    private IssueMapper issueMapper = new IssueMapper(new ObjectMapper());
 
     @InjectMocks
     private IssueServiceImpl issueService;
 
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -54,10 +62,10 @@ class IssueServiceImplTest {
                     Issue issue = invocation.getArgument(0);
                     return Mono.just(issue.toBuilder().id(UUID.randomUUID()).build());
                 });
+        when(issueHistoryRepository.save(any()))
+                .thenAnswer(invocation -> Mono.just((IssueHistory) invocation.getArgument(0)));
         when(outboxEventRepository.save(any()))
                 .thenAnswer(invocation -> Mono.just((OutboxEvent) invocation.getArgument(0)));
-        when(objectMapper.valueToTree(any()))
-                .thenReturn(OBJECT_MAPPER.createObjectNode());
     }
 
     @Test
