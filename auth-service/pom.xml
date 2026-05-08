@@ -80,6 +80,11 @@
       <artifactId>grpc-common-lib</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>ru.taska</groupId>
+      <artifactId>kafka-lib</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <!-- Lombok -->
     <dependency>
