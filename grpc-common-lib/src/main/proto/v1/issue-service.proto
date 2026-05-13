@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package ru.taska.issue.v1;
+
+import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.issue.v1";
+option java_outer_classname = "IssueApiProto";
+
+enum IssueType {
+  ISSUE_TYPE_UNSPECIFIED = 0;
+  ISSUE_TYPE_TASK = 1;
+  ISSUE_TYPE_BUG = 2;
+  ISSUE_TYPE_STORY = 3;
+}
+
+enum IssuePriority {
+  ISSUE_PRIORITY_UNSPECIFIED = 0;
+  ISSUE_PRIORITY_LOW = 1;
+  ISSUE_PRIORITY_MEDIUM = 2;
+  ISSUE_PRIORITY_HIGH = 3;
+}
+
+enum IssueStatus {
+  ISSUE_STATUS_UNSPECIFIED = 0;
+  ISSUE_STATUS_TODO = 1;
+  ISSUE_STATUS_IN_PROGRESS = 2;
+  ISSUE_STATUS_DONE = 3;
+}
+
+service IssueService {
+  /*
+   * Создаёт новую задачу в проекте.
+   */
+  rpc CreateIssue(CreateIssueRequest)
+      returns (IssueResponse);
+}
+
+message CreateIssueRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateIssueBody body = 2;
+}
+
+message CreateIssueBody {
+
+  /**
+   * Идентификатор проекта, в котором создаётся задача.
+   */
+  string project_id = 1;
+
+  /**
+   * Тип задачи.
+   */
+  IssueType issue_type = 2;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Подробное описание задачи.
+   */
+  string description = 4;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 5;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
+  string reporter_id = 6;
+}
+
+message IssueResponse {
+
+  /**
+   * Идентификатор задачи.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Порядковый номер задачи внутри проекта (например, 123 в ABC-123).
+   */
+  int32 issue_number = 3;
+
+  /**
+   * Денормализованный ключ задачи (например, ABC-123).
+   */
+  string issue_key = 4;
+
+  /**
+   * Тип задачи.
+   */
+  IssueType issue_type = 5;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 6;
+
+  /**
+   * Подробное описание задачи.
+   */
+  string description = 7;
+
+  /**
+   * Текущий статус задачи.
+   */
+  IssueStatus status_key = 8;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 9;
+
+  /**
+   * Идентификатор исполнителя задачи.
+   */
+  string assignee_id = 10;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
+  string reporter_id = 11;
+
+  /**
+   * Временная метка создания записи (аудит).
+   */
+  google.protobuf.Timestamp created_at = 12;
+
+  /**
+   * Временная метка последнего изменения записи (аудит).
+   */
+  google.protobuf.Timestamp updated_at = 13;
+
+  /**
+   * Версия задачи.
+   */
+  int32 version = 14;
+}

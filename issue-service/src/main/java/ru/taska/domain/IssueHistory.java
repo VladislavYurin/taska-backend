@@ -1,13 +1,14 @@
 package ru.taska.domain;
 
-import tools.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -53,6 +54,7 @@ public class IssueHistory {
     /**
      * Временная метка наступления события.
      */
+    @CreatedDate
     @Column("occurred_at")
     private Instant occurredAt;
 
