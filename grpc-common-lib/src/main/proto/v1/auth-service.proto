@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package ru.taska.auth.v1;
+
+import "v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.v1";
+option java_outer_classname = "AuthApiProto";
+
+service AuthService {
+    rpc Login (LoginRequest) returns (LoginResponse);
+    rpc Refresh (RefreshRequest) returns (RefreshResponse);
+}
+
+message LoginRequest {
+    ru.taska.common.v1.Header header = 1;
+    LoginRequestBody body = 2;
+}
+
+message LoginRequestBody {
+    string email = 1;
+    string password = 2;
+}
+
+message LoginResponse {
+    string access_token = 1;
+    string refresh_token = 2;
+    int64 expires_in = 3; // seconds
+}
+
+message RefreshRequest {
+    ru.taska.common.v1.Header header = 1;
+    RefreshRequestBody body = 2;
+}
+
+message RefreshRequestBody {
+    string refresh_token = 1;
+}
+
+message RefreshResponse {
+    string access_token = 1;
+    string refresh_token = 2;
+    int64 expires_in = 3;
+}

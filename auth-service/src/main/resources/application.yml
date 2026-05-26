@@ -3,6 +3,12 @@ spring:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
     password: ${SPRING_R2DBC_PASSWORD:taska}
+    dialect: POSTGRESQL
+    # R2DBC настройки пула
+  r2dbc-pool:
+    enabled: true
+    initial-size: 10
+    max-size: 20
 
 management:
   endpoints:
@@ -13,3 +19,28 @@ management:
     health:
       probes:
         enabled: true
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-and-validation-must-be-long-enough}
+  access-token-ttl: ${JWT_ACCESS_TTL:900} # 15 minutes in seconds
+  refresh-token-ttl: ${JWT_REFRESH_TTL:604800} # 7 days in seconds
+
+# Security
+security:
+  max-failed-attempts: 5
+  lock-duration-minutes: 15
+  password-encoder: ${PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
+
+# gRPC
+grpc:
+  server:
+    port: 9090
+
+logging:
+  level:
+    ru.taska: INFO
+    ru.taska.service: INFO
+    org.springframework.data.r2dbc: INFO
+    io.r2dbc.postgresql.QUERY: INFO
+    io.r2dbc.postgresql.PARAM: INFO
