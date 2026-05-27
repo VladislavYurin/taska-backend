@@ -1,8 +1,11 @@
 package ru.taska.service;
 
+import exception.DomainException;
+import exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
@@ -10,6 +13,7 @@ import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IssueHistoryRepository;
@@ -66,5 +70,19 @@ public class IssueServiceImpl implements IssueService {
                             .then(outboxEventRepository.save(event))
                             .thenReturn(issue);
                 });
+    }
+
+    @Override
+    public Mono<IssueWithHistory> getIssue(UUID issueId) {
+        return issueRepository.findByIdAndDeletedAtIsNull(issueId)
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId)))
+                .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId)
+                        .collectList()
+                        .map(history -> new IssueWithHistory(issue, history)));
+    }
+
+    @Override
+    public Flux<Issue> listIssues(UUID projectId, IssueStatus status, UUID assigneeId) {
+        return issueRepository.findByFilter(projectId, status, assigneeId);
     }
 }
