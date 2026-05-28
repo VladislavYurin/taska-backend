@@ -226,6 +226,7 @@ services:
         condition: service_started
     ports:
       - "8084:8080"
+      - "9090:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://issue-db:5432/issue_db
       - SPRING_R2DBC_USERNAME=taska

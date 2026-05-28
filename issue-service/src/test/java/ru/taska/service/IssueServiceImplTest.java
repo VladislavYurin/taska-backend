@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import java.util.UUID;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -12,8 +13,6 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import tools.jackson.databind.ObjectMapper;
-
-import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 public class IssueServiceImplTest {
@@ -42,8 +41,9 @@ public class IssueServiceImplTest {
     @Spy
     protected IssueListProperties issueListProperties = new IssueListProperties(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
-    protected static final UUID ISSUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    protected static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
-    protected static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
+    protected static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    protected static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    protected static final UUID ISSUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     protected static final UUID ASSIGNEE_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
+    protected static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
 }
