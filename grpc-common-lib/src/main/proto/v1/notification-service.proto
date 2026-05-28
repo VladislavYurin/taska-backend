@@ -1,0 +1,252 @@
+syntax = "proto3";
+
+package ru.taska.notification.v1;
+
+import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.notification.v1";
+option java_outer_classname = "NotificationApiProto";
+
+/**
+ * gRPC API notification-service для inbox уведомлений пользователя.
+ *
+ * Через этот сервис API Gateway/BFF сможет:
+ * - получить список уведомлений пользователя;
+ * - пометить уведомление прочитанным.
+ */
+service NotificationService {
+
+  /**
+   * Возвращает уведомления пользователя.
+   *
+   * Если unread_only = true, возвращаются только непрочитанные уведомления.
+   * Если unread_only = false, возвращаются все уведомления пользователя.
+   */
+  rpc ListNotifications(ListNotificationsRequest)
+      returns (ListNotificationsResponse);
+
+  /**
+   * Помечает уведомление пользователя как прочитанное.
+   *
+   * Важно: user_id нужен, чтобы пользователь не мог отметить чужое уведомление.
+   */
+  rpc MarkAsRead(MarkAsReadRequest)
+      returns (MarkAsReadResponse);
+}
+
+/**
+ * Тип уведомления.
+ *
+ * Значения должны соответствовать domain enum NotificationType
+ * в notification-service.
+ */
+enum NotificationKind {
+
+  /**
+   * Тип уведомления не указан.
+   */
+  NOTIFICATION_KIND_UNSPECIFIED = 0;
+
+  /**
+   * Уведомление о назначении задачи на пользователя.
+   */
+  NOTIFICATION_KIND_ISSUE_ASSIGNED = 1;
+
+  /**
+   * Уведомление об изменении статуса задачи.
+   */
+  NOTIFICATION_KIND_ISSUE_TRANSITIONED = 2;
+
+  /**
+   * Уведомление о создании задачи.
+   */
+  NOTIFICATION_KIND_ISSUE_CREATED = 3;
+
+  /**
+   * Уведомление о приглашении пользователя.
+   */
+  NOTIFICATION_KIND_USER_INVITED = 4;
+}
+
+/**
+ * Запрос на получение списка уведомлений.
+ */
+message ListNotificationsRequest {
+
+  /**
+   * Общий технический заголовок запроса:
+   * request_id - id запроса для трассировки;
+   * node_id - id сервиса, который отправил запрос.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Бизнес-данные запроса.
+   */
+  ListNotificationsBody body = 2;
+}
+
+/**
+ * Бизнес-данные запроса ListNotifications.
+ */
+message ListNotificationsBody {
+
+  /**
+   * Идентификатор пользователя, для которого нужно получить уведомления.
+   *
+   * Пока передаем явно в body, потому что в задаче и диаграмме указано:
+   * ListNotifications(userId, unreadOnly).
+   */
+  string user_id = 1;
+
+  /**
+   * Флаг фильтрации.
+   *
+   * true  - вернуть только непрочитанные уведомления, где read_at отсутствует;
+   * false - вернуть все уведомления пользователя.
+   */
+  bool unread_only = 2;
+
+  /**
+   * Количество уведомлений, которое нужно вернуть за один запрос.
+   *
+   * Нужно для пагинации, чтобы не возвращать сразу весь список уведомлений.
+   * Если значение не передано или передано некорректное значение,
+   * сервис использует значение по умолчанию.
+   */
+  int32 page_size = 3;
+
+  /**
+   * Смещение от начала списка уведомлений.
+   *
+   * Например:
+   * offset = 0  - первая страница;
+   * offset = 20 - пропустить первые 20 уведомлений и вернуть следующие.
+   *
+   * Используется вместе с page_size.
+   */
+  int64 offset = 4;
+}
+
+/**
+ * Ответ со списком уведомлений.
+ */
+message ListNotificationsResponse {
+
+  /**
+   * Список уведомлений.
+   *
+   * Если уведомлений нет, вернется пустой список.
+   */
+  repeated NotificationResponse notifications = 1;
+}
+
+/**
+ * Запрос на отметку уведомления прочитанным.
+ */
+message MarkAsReadRequest {
+
+  /**
+   * Общий технический заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Бизнес-данные запроса.
+   */
+  MarkAsReadBody body = 2;
+}
+
+/**
+ * Бизнес-данные запроса MarkAsRead.
+ */
+message MarkAsReadBody {
+
+  /**
+   * Идентификатор уведомления, которое нужно пометить прочитанным.
+   */
+  string notification_id = 1;
+
+  /**
+   * Идентификатор пользователя-владельца уведомления.
+   *
+   * Нужен для проверки ownership:
+   * UPDATE/SELECT должны идти не просто по notification_id,
+   * а по notification_id + user_id.
+   */
+  string user_id = 2;
+}
+
+/**
+ * Ответ после отметки уведомления прочитанным.
+ */
+message MarkAsReadResponse {
+
+  /**
+   * Обновленное уведомление.
+   *
+   * У него уже должен быть заполнен read_at.
+   */
+  NotificationResponse notification = 1;
+}
+
+/**
+ * DTO уведомления, которое notification-service возвращает наружу по gRPC.
+ */
+message NotificationResponse {
+
+  /**
+   * Идентификатор уведомления.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор пользователя-владельца уведомления.
+   */
+  string user_id = 2;
+
+  /**
+   * Тип уведомления.
+   */
+  NotificationKind notification_type = 3;
+
+  /**
+   * Заголовок уведомления.
+   */
+  string title = 4;
+
+  /**
+   * Текст уведомления.
+   */
+  string body = 5;
+
+  /**
+   * Ссылка для перехода в UI.
+   *
+   * Например: /projects/ABC/issues/ABC-123
+   * Может быть пустой строкой, если ссылки нет.
+   */
+  string link = 6;
+
+  /**
+   * Время создания уведомления.
+   */
+  google.protobuf.Timestamp created_at = 7;
+
+  /**
+   * Время прочтения уведомления.
+   *
+   * Если уведомление еще не прочитано, поле не заполняется.
+   */
+  google.protobuf.Timestamp read_at = 8;
+
+  /**
+   * Идентификатор исходного события, из которого создано уведомление.
+   *
+   * Например, event id из Kafka.
+   */
+  string source_event_id = 9;
+  
+}

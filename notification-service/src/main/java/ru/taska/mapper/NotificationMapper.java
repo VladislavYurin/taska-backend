@@ -1,9 +1,12 @@
 package ru.taska.mapper;
 
-import ru.taska.event.TaskaEvent;
+import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
+import ru.taska.api.notification.v1.NotificationKind;
+import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
+import ru.taska.event.TaskaEvent;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -57,5 +60,50 @@ public class NotificationMapper {
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
+    }
+
+    public NotificationResponse toNotificationProto(Notification notification) {
+        NotificationResponse.Builder builder = NotificationResponse.newBuilder()
+                .setId(toStringOrEmpty(notification.getId()))
+                .setUserId(toStringOrEmpty(notification.getUserId()))
+                .setNotificationType(toProtoNotificationKind(notification.getNotificationType()))
+                .setTitle(toStringOrEmpty(notification.getTitle()))
+                .setBody(toStringOrEmpty(notification.getBody()))
+                .setLink(toStringOrEmpty(notification.getLink()))
+                .setSourceEventId(toStringOrEmpty(notification.getSourceEventId()));
+
+        if (notification.getCreatedAt() != null) {
+            builder.setCreatedAt(toTimestamp(notification.getCreatedAt()));
+        }
+
+        if (notification.getReadAt() != null) {
+            builder.setReadAt(toTimestamp(notification.getReadAt()));
+        }
+
+        return builder.build();
+    }
+
+    private NotificationKind toProtoNotificationKind(NotificationType domain) {
+        if (domain == null) {
+            return NotificationKind.NOTIFICATION_KIND_UNSPECIFIED;
+        }
+
+        return switch (domain) {
+            case ISSUE_ASSIGNED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED;
+            case ISSUE_TRANSITIONED -> NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED;
+            case ISSUE_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED;
+            case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
+        };
+    }
+
+    private Timestamp toTimestamp(Instant instant) {
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
+    }
+
+    private String toStringOrEmpty(Object value) {
+        return value == null ? "" : value.toString();
     }
 }
