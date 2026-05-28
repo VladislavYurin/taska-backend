@@ -18,8 +18,11 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
+import ru.taska.api.auth.v1.PasswordByTokenRequest;
+import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
+import ru.taska.dto.PasswordByTokenResponseDto;
 import ru.taska.grpc.AuthGrpcService;
 import ru.taska.service.AuthService;
 
@@ -36,6 +39,9 @@ class AuthGrpcServiceTest {
     private LoginRequest validLoginRequest;
     private RefreshRequest validRefreshRequest;
     private ru.taska.dto.AuthResponseDto authResponseDto;
+    private PasswordByTokenResponseDto passwordByTokenResponseDto;
+    private PasswordByTokenRequest validPasswordByTokenRequest;
+
 
     @BeforeEach
     void setUp() {
@@ -64,6 +70,18 @@ class AuthGrpcServiceTest {
                 .accessToken("access-token-123")
                 .refreshToken("refresh-token-456")
                 .expiresIn(900L)
+                .build();
+        passwordByTokenResponseDto = new PasswordByTokenResponseDto("testuser@example.com");
+
+        validPasswordByTokenRequest = PasswordByTokenRequest.newBuilder()
+                .setHeader(ru.taska.api.common.v1.Header.newBuilder()
+                        .setRequestId("test-request-id")
+                        .setNodeId("test-node-id")
+                        .build())
+                .setBody(PasswordByTokenRequestBody.newBuilder()
+                        .setToken("valid-invite-token-123")
+                        .setNewPassword("NewValidPassword123!")
+                        .build())
                 .build();
     }
 
@@ -281,4 +299,44 @@ class AuthGrpcServiceTest {
 
         Mockito.verify(authService, Mockito.never()).login(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
     }
+
+    @Test
+    @DisplayName("Should successfully process setPasswordByToken request")
+    void shouldSuccessfullyProcessSetPasswordByTokenRequest() {
+        // Given
+        Mockito.when(authService.setPasswordByToken(
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyString()))
+                .thenReturn(Mono.just(passwordByTokenResponseDto));
+
+        // When & Then
+        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validPasswordByTokenRequest)))
+                .expectNextMatches(response ->
+                        response.getLogin().equals("testuser@example.com")
+                )
+                .verifyComplete();
+
+        Mockito.verify(authService).setPasswordByToken("valid-invite-token-123", "NewValidPassword123!");
+    }
+
+    @Test
+    @DisplayName("Should handle setPasswordByToken with invalid token")
+    void shouldHandleSetPasswordByTokenWithInvalidToken() {
+        // Given
+        Mockito.when(authService.setPasswordByToken(
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyString()))
+                .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")));
+
+        // When & Then
+        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validPasswordByTokenRequest)))
+                .expectErrorMatches(error ->
+                        error instanceof io.grpc.StatusRuntimeException &&
+                                error.getMessage().contains("UNAUTHENTICATED")
+                )
+                .verify();
+
+        Mockito.verify(authService).setPasswordByToken("valid-invite-token-123", "NewValidPassword123!");
+    }
+
 }

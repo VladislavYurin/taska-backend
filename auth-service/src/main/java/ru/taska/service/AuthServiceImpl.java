@@ -8,16 +8,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.dto.AuthResponseDto;
+import ru.taska.dto.PasswordByTokenResponseDto;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
+import ru.taska.entity.HashingAlgorithm;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
 import ru.taska.repository.CredentialRepository;
+import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.JwtService;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
+import org.apache.commons.codec.digest.DigestUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -39,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final SecurityProperties securityProperties;
+    private final InviteTokenRepository inviteTokenRepository;
 
     /**
      * {@inheritDoc}
@@ -84,15 +89,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-    private String maskEmail(String email){
-        if(email == null) return "***";
+    private String maskEmail(String email) {
+        if (email == null) return "***";
         String[] parts = email.split("@");
-        if(parts.length < 2 ) return "***(email without @)";
+        if (parts.length < 2) return "***(email without @)";
         String localPart = parts[0];
         int lpLength = localPart.length();
-        if(lpLength <= 1) return "***@" + parts[1];
-        if(lpLength == 2) return localPart.charAt(0) + "***@" + parts[1];
-        return localPart.charAt(0) + "***" + localPart.charAt(lpLength-1) + "@" + parts[1];
+        if (lpLength <= 1) return "***@" + parts[1];
+        if (lpLength == 2) return localPart.charAt(0) + "***@" + parts[1];
+        return localPart.charAt(0) + "***" + localPart.charAt(lpLength - 1) + "@" + parts[1];
     }
 
     /**
@@ -116,6 +121,65 @@ public class AuthServiceImpl implements AuthService {
                 });
     }
 
+    @Override
+    @Transactional
+    public Mono<PasswordByTokenResponseDto> setPasswordByToken(String token, String newPassword) {
+        if (token == null || token.isBlank() || newPassword == null || newPassword.isBlank()) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token and password are required"));
+        }
+
+        String tokenHash = hashToken(token);
+        Instant now = Instant.now();
+
+        log.debug("setPasswordByToken: processing token hash: {}", tokenHash);
+
+        return inviteTokenRepository.findByTokenHash(tokenHash)
+                .doOnNext(inviteToken -> log.debug("Found invite token for user: {}", inviteToken.getUserId()))
+                .filter(inviteToken -> inviteToken.getUsedAt() == null && inviteToken.getExpiresAt().isAfter(now))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("setPasswordByToken failed: invalid or expired token, hash: {}", tokenHash.substring(0,8) + "***");
+                    log.debug("setPasswordByToken failed: invalid or expired token, hash: {}", tokenHash);
+                    return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"));
+                }))
+                .flatMap(inviteToken -> userRepository.findById(inviteToken.getUserId())
+                        .doOnNext(user -> log.debug("Found user: {}, current status: {}", user.getLogin(), user.getStatus()))
+                        .filter(user -> user.getStatus() == UserStatus.INVITED)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("setPasswordByToken failed: user status is not INVITED, userId: {}", inviteToken.getUserId());
+                            return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"));
+                        }))
+                        .flatMap(user -> credentialRepository
+                                .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
+                                .defaultIfEmpty(createEmptyCredential(user.getId()))
+                                .flatMap(credential -> {
+                                    log.debug("Setting new password for user: {}", user.getEmail());
+                                    credential.setSecretHash(passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT));
+                                    return credentialRepository.save(credential);
+                                })
+                                .then(Mono.defer(() -> {
+                                    user.setStatus(UserStatus.ACTIVE);
+                                    inviteToken.setUsedAt(now);
+                                    log.info("User id={} activated successfully via invite token", user.getId());
+                                    return userRepository.save(user)
+                                            .then(inviteTokenRepository.save(inviteToken));
+                                }))
+                                .thenReturn(new PasswordByTokenResponseDto(user.getEmail()))
+                        ));
+    }
+
+    private Credential createEmptyCredential(UUID userId) {
+        return Credential.builder()
+                .userId(userId)
+                .credentialType(CredentialType.PASSWORD)
+                .algo(HashingAlgorithm.BCRYPT)
+                .failedAttempts(0)
+                .build();
+    }
+
+    private String hashToken(String rawToken) {
+        return DigestUtils.sha256Hex(rawToken);
+    }
+
     /**
      * Проверяет статус пользователя: активен ли, не заблокирован, активирован ли.
      *
@@ -131,7 +195,7 @@ public class AuthServiceImpl implements AuthService {
         }
         if (user.getStatus() == UserStatus.INVITED) {
             log.warn("Login attempt for not activated user: {}", maskEmail(user.getEmail()));
-            log.debug("Login attempt for not activated user: {}",user.getEmail());
+            log.debug("Login attempt for not activated user: {}", user.getEmail());
             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Account not activated"));
         }
         return Mono.just(user);
@@ -148,9 +212,9 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Сверяет переданный пароль с хэшем в учётных данных.
      *
-     * @param credential учётные данные
+     * @param credential  учётные данные
      * @param rawPassword пароль в открытом виде
-     * @param user пользователь (для логирования)
+     * @param user        пользователь (для логирования)
      * @return учётные данные при успешной проверке, иначе обработка неудачной попытки
      */
     private Mono<Credential> verifyPassword(Credential credential, String rawPassword, User user) {
@@ -234,7 +298,7 @@ public class AuthServiceImpl implements AuthService {
      * Генерирует только новый access-токен, используя уже существующий (новый) refresh-токен.
      * Применяется при ротации refresh-токена.
      *
-     * @param user пользователь
+     * @param user            пользователь
      * @param newRefreshToken уже созданный сырой refresh-токен
      * @return DTO с токенами
      */

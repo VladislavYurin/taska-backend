@@ -11,6 +11,7 @@ option java_outer_classname = "AuthApiProto";
 service AuthService {
     rpc Login (LoginRequest) returns (LoginResponse);
     rpc Refresh (RefreshRequest) returns (RefreshResponse);
+    rpc SetPasswordByToken(PasswordByTokenRequest) returns (PasswordByTokenResponse);
 }
 
 message LoginRequest {
@@ -42,4 +43,18 @@ message RefreshResponse {
     string access_token = 1;
     string refresh_token = 2;
     int64 expires_in = 3;
+}
+////
+message PasswordByTokenRequest {
+    ru.taska.common.v1.Header header = 1;
+    PasswordByTokenRequestBody body = 2;
+}
+
+message PasswordByTokenRequestBody {
+    string token = 1;
+    string newPassword = 2;
+}
+
+message PasswordByTokenResponse {
+    string login = 1;
 }
