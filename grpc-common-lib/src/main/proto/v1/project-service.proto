@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.project.v1";
+
+import "google/protobuf/timestamp.proto";
+
+service ProjectService{
+  rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
+  rpc GetProject (GetProjectRequest) returns (ProjectResponse);
+  rpc ListMyProjects (ListMyProjectsRequest) returns (ListMyProjectsResponse);
+}
+
+message CreateProjectRequest {
+  string projectKey = 1;
+  string name = 2;
+  string userId = 3;
+}
+
+message GetProjectRequest {
+  string projectId = 1;
+}
+
+message RequestAllProjectsDto {
+  repeated string requestedProjects = 1;
+}
+
+message ProjectResponse {
+  string id = 1;
+  string project_key = 2;
+  string name = 3;
+  string created_by = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  optional google.protobuf.Timestamp archived_at = 7;
+}
+
+message ListMyProjectsResponse {
+  repeated ProjectResponse projects = 1;
+}
+
+message ListMyProjectsRequest {
+  string user_id = 1;
+}
