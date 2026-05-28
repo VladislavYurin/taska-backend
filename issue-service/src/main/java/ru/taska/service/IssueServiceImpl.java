@@ -83,6 +83,9 @@ public class IssueServiceImpl implements IssueService {
 
     @Override
     public Flux<Issue> listIssues(UUID projectId, IssueStatus status, UUID assigneeId) {
+        if (projectId == null) {
+            return Flux.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "projectId is required"));
+        }
         return issueRepository.findByFilter(projectId, status, assigneeId);
     }
 }
