@@ -29,6 +29,7 @@ public class NotificationFactory {
             case ISSUE_ASSIGNED     -> buildIssueAssigned(event, payload, eventId);
             case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
             case USER_INVITED       -> buildUserInvited(event, eventId);
+            case USER_ACTIVATED     -> buildUserActivated(event, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
@@ -95,6 +96,15 @@ public class NotificationFactory {
             return List.of();
         }
         return List.of(notificationMapper.toUserInvited(event));
+    }
+
+    private List<Notification> buildUserActivated(TaskaEvent event, String eventId) {
+        UUID userId = event.aggregateId();
+        if (userId == null) {
+            log.warn("UserActivated event without aggregateId (user id), eventId={}", eventId);
+            return List.of();
+        }
+        return List.of(notificationMapper.toUserActivated(event));
     }
 
     private UUID extractUuid(JsonNode payload, String fieldName) {

@@ -68,6 +68,11 @@ enum NotificationKind {
    * Уведомление о приглашении пользователя.
    */
   NOTIFICATION_KIND_USER_INVITED = 4;
+
+  /**
+   * Уведомление об активации пользователя.
+   */
+  NOTIFICATION_KIND_USER_ACTIVATED  = 5;
 }
 
 /**

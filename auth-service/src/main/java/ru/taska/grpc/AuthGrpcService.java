@@ -1,5 +1,6 @@
 package ru.taska.grpc;
 
+import com.google.protobuf.Empty;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcException;
@@ -11,6 +12,7 @@ import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginResponse;
+import ru.taska.api.auth.v1.PasswordByTokenRequest;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
@@ -94,4 +96,35 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
-}
+
+    @Override
+    public Mono<Empty> setPasswordByToken(Mono<PasswordByTokenRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getToken(), "body.token"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getNewPassword(), "body.newPassword")
+                ))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    String token = t.getT3();
+                    String newPassword = t.getT4();
+
+                    log.info("[{}][{}] Set new password request", requestId, nodeId);
+                    return authService.setPasswordByToken(token, newPassword)
+                            .doOnSuccess(response -> log.info("[{}][{}] Set new password successful", requestId, nodeId))
+                            .doOnError(error -> log.error("[{}][{}] Set new password failed", requestId, nodeId, error));
+                })
+                .thenReturn(Empty.getDefaultInstance())
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                }
+    }
