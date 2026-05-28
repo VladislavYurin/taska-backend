@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.project.v1";
+option java_outer_classname = "ProjectApiProto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "v1/common.proto";
+
+enum ProjectRole  {
+    ADMIN = 0;
+    MEMBER = 1;
+    VIEWER = 2;
+}
+
+service ProjectService  {
+  /*
+ * Создаёт новый проект
+ */
+  rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
+
+  /*
+ * Возвращает проект по айди
+ */
+  rpc GetProject (GetProjectRequest) returns (ProjectResponse);
+
+  /*
+ * Возвращает список всех проектов по айди пользователя
+ */
+  rpc ListMyProjects (GetUsersProjectsRequest) returns (UsersProjectsResponse);
+
+  /*
+* Добавляет участника в проект
+*/
+  rpc AddProjectMember (AddProjectMemberRequest) returns (AddProjectMemberResponse);
+
+  /*
+* Удаляет участника из проекта
+*/
+  rpc RmProjectMember (RmProjectMemberRequest) returns (RmProjectMemberResponse);
+
+  /*
+* Меняет роль участника проекта
+*/
+  rpc ChangeProjectMemberRole (ChangeRoleRequest) returns (ChangeRoleResponse);
+}
+
+//Создание и получение проекта/ов
+message CreateProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  CreateProjectRequestBody body = 2;
+}
+
+message CreateProjectRequestBody  {
+  string project_key = 1;
+  string name = 2;
+  string user_id = 3;
+}
+
+message GetProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectRequestBody body = 2;
+}
+
+message GetProjectRequestBody {
+  string project_id = 1;
+}
+
+message GetUsersProjectsRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetUsersProjectsRequestBody body = 2;
+}
+
+message GetUsersProjectsRequestBody {
+  string user_id = 1;
+}
+
+message ProjectResponse {
+  string id = 1;
+  string project_key = 2;
+  string name = 3;
+  string created_by = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  optional google.protobuf.Timestamp archived_at = 7;
+}
+
+message UsersProjectsResponse {
+  repeated ProjectResponse projectResponse = 1;
+}
+
+//Управление участниками и ролями
+message AddProjectMemberRequest {
+  ru.taska.common.v1.Header header = 1;
+  AddProjectMemberRequestBody body = 2;
+}
+
+message AddProjectMemberRequestBody {
+  string added_member_id = 1;
+  string adding_user_id =2 ;
+  ProjectRole role = 3;
+  string project_id = 4;
+}
+
+message AddProjectMemberResponse  {
+  string added_member_id = 1;
+  string project_id = 2;
+  ProjectRole role = 3;
+}
+
+message RmProjectMemberRequest  {
+  ru.taska.common.v1.Header header = 1;
+  RmProjectMemberRequestBody body = 2;
+}
+
+message RmProjectMemberRequestBody  {
+  string deleted_member_id = 1;
+  string project_id = 2;
+}
+
+message RmProjectMemberResponse  {
+  string deleted_member_id = 1;
+  string project_id = 2;
+}
+
+message ChangeRoleRequest {
+  ru.taska.common.v1.Header header = 1;
+  ChangeRoleRequestBody body = 2;
+}
+
+message ChangeRoleRequestBody {
+  string changed_member_id = 1;
+  ProjectRole role = 2;
+  string project_id = 3;
+}
+
+message ChangeRoleResponse  {
+  string changed_member_id = 1;
+  ProjectRole role = 2;
+  string project_id = 3;
+}
