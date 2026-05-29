@@ -110,14 +110,17 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                     UUID projectId = t.getT3();
                     UUID assigneeId = t.getT4().orElse(null);
                     IssueStatus status = req.hasStatus() ? issueMapper.toDomainIssueStatus(req.getStatus()) : null;
+                    Integer pageSize = req.hasPageSize() ? req.getPageSize() : null;
+                    Integer page = req.hasPage() ? req.getPage() : null;
 
-                    log.info("[{}][{}] listIssues: projectId={}, status={}, assigneeId={}",
-                            requestId, nodeId, projectId, status, assigneeId);
+                    log.info("[{}][{}] listIssues: projectId={}, status={}, assigneeId={}, page={}, pageSize={}",
+                            requestId, nodeId, projectId, status, assigneeId, page, pageSize);
 
-                    return issueService.listIssues(projectId, status, assigneeId)
-                            .map(issueMapper::toIssueShortProto)
-                            .collectList()
-                            .map(issues -> ListIssuesResponse.newBuilder().addAllIssues(issues).build());
+                    return issueService.listIssues(projectId, status, assigneeId, page, pageSize)
+                            .map(result -> ListIssuesResponse.newBuilder()
+                                    .addAllIssues(result.items().stream().map(issueMapper::toIssueShortProto).toList())
+                                    .setTotalCount((int) result.totalCount())
+                                    .build());
                 }))
                 .transform(withErrorHandling("listIssues"));
     }

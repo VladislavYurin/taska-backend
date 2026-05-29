@@ -138,6 +138,16 @@ message ListIssuesRequest {
    * Фильтр по идентификатору исполнителя (опционально).
    */
   optional string assignee_id = 4;
+
+  /**
+   * Размер страницы (если не указан, используется значение по умолчанию из конфига).
+   */
+  optional int32 page_size = 5;
+
+  /**
+   * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
+   */
+  optional int32 page = 6;
 }
 
 message ListIssuesResponse {
@@ -146,6 +156,11 @@ message ListIssuesResponse {
    * Список задач.
    */
   repeated IssueShortResponse issues = 1;
+
+  /**
+   * Общее количество задач, соответствующих фильтру.
+   */
+  int32 total_count = 2;
 }
 
 message IssueShortResponse {

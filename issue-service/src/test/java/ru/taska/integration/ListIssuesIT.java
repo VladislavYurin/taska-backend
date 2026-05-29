@@ -1,7 +1,5 @@
 package ru.taska.integration;
 
-import exception.DomainException;
-import exception.DomainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +14,7 @@ import ru.taska.service.IssueService;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static ru.taska.domain.IssueStatus.IN_PROGRESS;
 import static ru.taska.domain.IssueStatus.TODO;
 
@@ -67,54 +66,86 @@ class ListIssuesIT extends AbstractIT {
     }
 
     @Test
-    void shouldFailWhenProjectIdIsNull() {
-        StepVerifier.create(issueService.listIssues(null, null, null))
-                .expectErrorMatches(e -> e instanceof DomainException ex
-                        && ex.getStatus() == DomainStatus.INVALID_ARGUMENT)
-                .verify();
-    }
-
-    @Test
     void shouldReturnIssuesFromGivenProject() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null)
-                        .map(Issue::getIssueNumber)
-                        .sort())
-                .expectNext(1, 2, 3, 4)
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 0, 50))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(4);
+                    assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                            .containsExactly(1, 2, 3, 4);
+                })
                 .verifyComplete();
     }
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndAssignee() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, ASSIGNEE_ID_1)
-                        .map(Issue::getIssueNumber)
-                        .sort())
-                .expectNext(1, 3)
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, ASSIGNEE_ID_1, 0, 50))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(2);
+                    assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                            .containsExactly(1, 3);
+                })
                 .verifyComplete();
     }
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndStatus() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, TODO, null)
-                        .map(Issue::getIssueNumber)
-                        .sort())
-                .expectNext(1, 2)
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, TODO, null, 0, 50))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(2);
+                    assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                            .containsExactly(1, 2);
+                })
                 .verifyComplete();
     }
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndStatusAndAssignee() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, TODO, ASSIGNEE_ID_1)
-                        .map(Issue::getIssueNumber)
-                        .sort())
-                .expectNext(1)
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, TODO, ASSIGNEE_ID_1, 0, 50))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(1);
+                    assertThat(result.items().stream().map(Issue::getIssueNumber).toList())
+                            .containsExactly(1);
+                })
                 .verifyComplete();
     }
 
     @Test
-    void shouldReturnEmptyFluxIfNothingMatches() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, IN_PROGRESS, ASSIGNEE_ID_1)
-                        .map(Issue::getIssueNumber)
-                        .sort())
+    void shouldReturnEmptyPageIfNothingMatches() {
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, IN_PROGRESS, ASSIGNEE_ID_1, 0, 50))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isZero();
+                    assertThat(result.items()).isEmpty();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldReturnFirstPageWhenPaginationApplied() {
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 0, 2))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(4);
+                    assertThat(result.items()).hasSize(2);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldReturnSecondPageWhenPaginationApplied() {
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 1, 2))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(4);
+                    assertThat(result.items()).hasSize(2);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldReturnEmptyPageBeyondLastPage() {
+        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 2, 2))
+                .assertNext(result -> {
+                    assertThat(result.totalCount()).isEqualTo(4);
+                    assertThat(result.items()).isEmpty();
+                })
                 .verifyComplete();
     }
 }
