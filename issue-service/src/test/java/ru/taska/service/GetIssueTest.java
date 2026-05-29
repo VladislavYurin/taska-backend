@@ -2,7 +2,9 @@ package ru.taska.service;
 
 import exception.DomainException;
 import exception.DomainStatus;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -16,9 +18,6 @@ import ru.taska.domain.IssueWithHistory;
 
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
 class GetIssueTest extends IssueServiceImplTest {
 
@@ -51,14 +50,14 @@ class GetIssueTest extends IssueServiceImplTest {
         Issue issue = buildIssue();
         IssueHistory history = buildHistory();
 
-        when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID)).thenReturn(Flux.just(history));
+        Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID)).thenReturn(Flux.just(history));
 
         IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
 
-        assertThat(result).isNotNull();
-        assertThat(result.getIssue()).isEqualTo(issue);
-        assertThat(result.getHistory()).containsExactly(history);
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.getIssue()).isEqualTo(issue);
+        Assertions.assertThat(result.getHistory()).containsExactly(history);
     }
 
     @Test
@@ -68,19 +67,19 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory second = buildHistory();
         IssueHistory third = buildHistory();
 
-        when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
+        Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
                 .thenReturn(Flux.fromIterable(List.of(first, second, third)));
 
         IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
 
-        assertThat(result).isNotNull();
-        assertThat(result.getHistory()).containsExactly(first, second, third);
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.getHistory()).containsExactly(first, second, third);
     }
 
     @Test
     void shouldThrowNotFoundWhenIssueDoesNotExist() {
-        when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.empty());
+        Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.getIssue(ISSUE_ID))
                 .expectErrorMatches(ex ->
@@ -94,8 +93,8 @@ class GetIssueTest extends IssueServiceImplTest {
     void shouldPropagateErrorFromHistoryRepository() {
         Issue issue = buildIssue();
 
-        when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
+        Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
                 .thenReturn(Flux.error(new RuntimeException("DB error")));
 
         StepVerifier.create(issueService.getIssue(ISSUE_ID))

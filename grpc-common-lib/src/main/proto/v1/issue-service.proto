@@ -56,6 +56,25 @@ service IssueService {
    */
   rpc ListIssues(ListIssuesRequest)
       returns (ListIssuesResponse);
+
+  /*
+   * Назначает исполнителя задачи.
+   */
+  rpc AssignIssue(AssignIssueRequest)
+    returns (IssueResponse);
+}
+
+message AssignIssueRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AssignIssueBody body = 2;
 }
 
 message CreateIssueRequest {
@@ -69,6 +88,24 @@ message CreateIssueRequest {
    * Тело запроса.
    */
   CreateIssueBody body = 2;
+}
+
+message AssignIssueBody {
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор исполнителя.
+   */
+  string assignee_id = 2;
+
+  /**
+   * Идентификатор пользователя, кем заасайнена задача.
+   */
+  string actor_user_id = 3;
 }
 
 message CreateIssueBody {

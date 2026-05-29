@@ -10,6 +10,7 @@ import mapper.GrpcExceptionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
+import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.IssueDetails;
@@ -137,6 +138,41 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             log.error("{}: unexpected error", operationName, e);
                             return new DomainException(DomainStatus.INTERNAL, "Internal error");
                         })
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+    }
+
+    @Override
+    public Mono<IssueResponse> assignIssue(Mono<AssignIssueRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
+                ).flatMap( t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID issueId = t.getT3();
+                    UUID assigneeId = t.getT4();
+                    UUID actorUserId = t.getT5();
+
+                    log.info("[{}][{}] assignIssue: issueId={}, assigneeId={}, actorUserId={}",
+                             requestId, nodeId, issueId, assigneeId, actorUserId);
+                    return issueService.assignIssue(issueId, assigneeId, actorUserId);
+                }))
+                .map(issueMapper::toIssueProto)
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                            e -> {
+                                log.error("assignIssue: database error", e);
+                                return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
+                            })
+                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
+                            e -> {
+                                log.error("assignIssue: unexpected error", e);
+                                return new DomainException(DomainStatus.INTERNAL, "Internal error");
+                            })
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

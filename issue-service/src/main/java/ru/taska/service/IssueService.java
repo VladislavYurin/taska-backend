@@ -21,6 +21,9 @@ public interface IssueService {
             UUID reporterId
     );
 
+    Mono<Issue> assignIssue(UUID issueId, UUID assigneeId, UUID actorUserId);
+
+
     Mono<IssueWithHistory> getIssue(UUID issueId);
 
     Mono<PageResult<Issue>> listIssues(UUID projectId, IssueStatus status, UUID assigneeId, Integer page, Integer pageSize);

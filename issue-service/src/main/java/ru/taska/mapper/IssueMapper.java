@@ -51,6 +51,11 @@ public class IssueMapper {
                 .build();
     }
 
+    public Issue setIssueAssignee(Issue issue, UUID assigneeId) {
+        issue.setAssigneeId(assigneeId);
+        return issue;
+    }
+
     public IssueHistory buildIssueHistory(Issue issue, IssueEventType eventType, UUID actorUserId) {
         return IssueHistory.builder()
                 .issueId(issue.getId())

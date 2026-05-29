@@ -34,6 +34,7 @@ public class IssueServiceImpl implements IssueService {
     private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
     private static final String ISSUE_AGGREGATE_TYPE = "issue";
     private static final String OUTBOX_EVENT_TYPE = "IssueCreated";
+    private static final String ASSIGN_OUTBOX_EVENT_TYPE = "IssueAssigned";
 
     private final IssueListProperties issueListProperties;
     private final ProjectCounterRepository projectCounterRepository;
@@ -75,6 +76,38 @@ public class IssueServiceImpl implements IssueService {
                             .thenReturn(issue);
                 });
     }
+
+    @Override
+    @Transactional
+    public Mono<Issue> assignIssue(UUID issueId, UUID assigneeId, UUID actorUserId) {
+        //todo add membership check. depends on TAS-21: CheckProjectRole
+        return issueRepository.findActiveById(issueId)
+                              .switchIfEmpty(Mono.error(new DomainException(
+                                      DomainStatus.NOT_FOUND,
+                                      "Issue with id: " + issueId + " not found"
+                              )))
+                              .flatMap(issue -> {
+                                  if (isAssigned(issue,assigneeId)) {
+                                      return Mono.just(issue);
+                                  }
+                                  Issue assignedIssue = issueMapper.setIssueAssignee(issue, assigneeId);
+                                  return issueRepository.save(assignedIssue)
+                                                        .flatMap(savedIssue -> {
+                                                            IssueHistory history = issueMapper
+                                                                    .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
+                                                            OutboxEvent event = issueMapper
+                                                                    .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, ASSIGN_OUTBOX_EVENT_TYPE);
+                                                            return issueHistoryRepository.save(history)
+                                                                                         .then(outboxEventRepository.save(event))
+                                                                                         .thenReturn(savedIssue);
+                                                        });
+                              });
+    }
+
+    private boolean isAssigned(Issue issue, UUID assigneeId) {
+        return issue.getAssigneeId() != null && issue.getAssigneeId().equals(assigneeId);
+    }
+
 
     @Override
     public Mono<IssueWithHistory> getIssue(UUID issueId) {
