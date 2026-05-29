@@ -12,9 +12,7 @@ import java.util.UUID;
         collectionMappingStrategy = CollectionMappingStrategy.ADDER_PREFERRED,
         unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ProjectMapper {
-    /**
-     * Маппинг Project в ProjectResponse
-     */
+
     @Mapping(target = "id", source = "id")
     @Mapping(target = "projectKey", source = "projectKey")
     @Mapping(target = "name", source = "name")
@@ -36,11 +34,16 @@ public interface ProjectMapper {
      */
     default Timestamp mapInstantToTimestamp(Instant instant) {
         if (instant == null) {
-            return Timestamp.getDefaultInstance();
+            return null;
         }
         return Timestamp.newBuilder()
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())
                 .build();
+    }
+
+    @Condition
+    default boolean isInstantPresent(Instant instant) {
+        return instant != null;
     }
 }
