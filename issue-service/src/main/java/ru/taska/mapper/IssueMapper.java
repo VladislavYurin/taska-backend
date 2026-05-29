@@ -3,13 +3,17 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import ru.taska.api.issue.v1.IssueDetails;
+import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
+import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
 import tools.jackson.databind.ObjectMapper;
 
@@ -83,6 +87,38 @@ public class IssueMapper {
                 .build();
     }
 
+    public IssueHistoryResponse toIssueHistoryProto(IssueHistory history) {
+        return IssueHistoryResponse.newBuilder()
+                .setId(history.getId().toString())
+                .setIssueId(history.getIssueId().toString())
+                .setEventType(toProtoIssueEventType(history.getEventType()))
+                .setActorUserId(history.getActorUserId().toString())
+                .setOccurredAt(toTimestamp(history.getOccurredAt()))
+                .setPayload(history.getPayload() != null ? history.getPayload().toString() : "")
+                .build();
+    }
+
+    public IssueDetails toIssueDetailsProto(IssueWithHistory issueWithHistory) {
+        var historyProto = issueWithHistory.getHistory().stream()
+                .map(this::toIssueHistoryProto)
+                .toList();
+        return IssueDetails.newBuilder()
+                .setIssue(toIssueProto(issueWithHistory.getIssue()))
+                .addAllHistory(historyProto)
+                .build();
+    }
+
+    public IssueShortResponse toIssueShortProto(Issue issue) {
+        return IssueShortResponse.newBuilder()
+                .setId(issue.getId().toString())
+                .setIssueKey(issue.getIssueKey())
+                .setSummary(issue.getSummary())
+                .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setPriority(toProtoIssuePriority(issue.getPriority()))
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .build();
+    }
+
     public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {
         return switch (proto) {
             case ISSUE_TYPE_TASK -> IssueType.TASK;
@@ -92,12 +128,30 @@ public class IssueMapper {
         };
     }
 
+    public IssueStatus toDomainIssueStatus(ru.taska.api.issue.v1.IssueStatus proto) {
+        return switch (proto) {
+            case ISSUE_STATUS_TODO -> IssueStatus.TODO;
+            case ISSUE_STATUS_IN_PROGRESS -> IssueStatus.IN_PROGRESS;
+            case ISSUE_STATUS_DONE -> IssueStatus.DONE;
+            default -> throw new IllegalArgumentException("Unknown IssueStatus: " + proto);
+        };
+    }
+
     public IssuePriority toDomainIssuePriority(ru.taska.api.issue.v1.IssuePriority proto) {
         return switch (proto) {
             case ISSUE_PRIORITY_LOW -> IssuePriority.LOW;
             case ISSUE_PRIORITY_MEDIUM -> IssuePriority.MEDIUM;
             case ISSUE_PRIORITY_HIGH -> IssuePriority.HIGH;
             default -> throw new IllegalArgumentException("Unknown IssuePriority: " + proto);
+        };
+    }
+
+    private ru.taska.api.issue.v1.IssueEventType toProtoIssueEventType(IssueEventType domain) {
+        return switch (domain) {
+            case CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_CREATED;
+            case UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_UPDATED;
+            case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
+            case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
         };
     }
 

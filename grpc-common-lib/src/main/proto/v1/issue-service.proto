@@ -9,6 +9,14 @@ option java_multiple_files = true;
 option java_package = "ru.taska.api.issue.v1";
 option java_outer_classname = "IssueApiProto";
 
+enum IssueEventType {
+  ISSUE_EVENT_TYPE_UNSPECIFIED = 0;
+  ISSUE_EVENT_TYPE_CREATED = 1;
+  ISSUE_EVENT_TYPE_UPDATED = 2;
+  ISSUE_EVENT_TYPE_ASSIGNED = 3;
+  ISSUE_EVENT_TYPE_TRANSITIONED = 4;
+}
+
 enum IssueType {
   ISSUE_TYPE_UNSPECIFIED = 0;
   ISSUE_TYPE_TASK = 1;
@@ -36,6 +44,18 @@ service IssueService {
    */
   rpc CreateIssue(CreateIssueRequest)
       returns (IssueResponse);
+
+  /*
+   * Возвращает задачу по идентификатору.
+   */
+  rpc GetIssue(GetIssueRequest)
+      returns (IssueDetails);
+
+  /*
+   * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
+   */
+  rpc ListIssues(ListIssuesRequest)
+      returns (ListIssuesResponse);
 }
 
 message CreateIssueRequest {
@@ -82,6 +102,98 @@ message CreateIssueBody {
    * Идентификатор создателя задачи.
    */
   string reporter_id = 6;
+}
+
+message GetIssueRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+}
+
+message ListIssuesRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Фильтр по статусу задачи (опционально).
+   */
+  optional IssueStatus status = 3;
+
+  /**
+   * Фильтр по идентификатору исполнителя (опционально).
+   */
+  optional string assignee_id = 4;
+
+  /**
+   * Размер страницы (если не указан, используется значение по умолчанию из конфига).
+   */
+  optional int32 page_size = 5;
+
+  /**
+   * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
+   */
+  optional int32 page = 6;
+}
+
+message ListIssuesResponse {
+
+  /**
+   * Список задач.
+   */
+  repeated IssueShortResponse issues = 1;
+
+  /**
+   * Общее количество задач, соответствующих фильтру.
+   */
+  int32 total_count = 2;
+}
+
+message IssueShortResponse {
+
+  /**
+   * Идентификатор задачи.
+   */
+  string id = 1;
+
+  /**
+   * Денормализованный ключ задачи (например, ABC-123).
+   */
+  string issue_key = 2;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Тип задачи.
+   */
+  IssueType issue_type = 4;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 5;
+
+  /**
+   * Идентификатор исполнителя задачи.
+   */
+  string assignee_id = 6;
 }
 
 message IssueResponse {
@@ -155,4 +267,55 @@ message IssueResponse {
    * Версия задачи.
    */
   int32 version = 14;
+
+  /**
+   * Временная метка мягкого удаления (null — запись активна).
+   */
+  google.protobuf.Timestamp deleted_at = 15;
+}
+
+message IssueHistoryResponse {
+
+  /**
+   * Идентификатор записи истории.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Тип события.
+   */
+  IssueEventType event_type = 3;
+
+  /**
+   * Идентификатор пользователя, инициировавшего событие.
+   */
+  string actor_user_id = 4;
+
+  /**
+   * Временная метка наступления события.
+   */
+  google.protobuf.Timestamp occurred_at = 5;
+
+  /**
+   * Полезная нагрузка события в формате JSON.
+   */
+  string payload = 6;
+}
+
+message IssueDetails {
+
+  /**
+   * Данные задачи.
+   */
+  IssueResponse issue = 1;
+
+  /**
+   * История изменений задачи.
+   */
+  repeated IssueHistoryResponse history = 2;
 }
