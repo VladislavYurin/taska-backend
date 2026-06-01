@@ -121,6 +121,7 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .setStatusKey(toProtoIssueStatus(issue.getStatusKey()))
                 .build();
     }
 
