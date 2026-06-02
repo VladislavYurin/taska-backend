@@ -1,10 +1,11 @@
 package ru.taska.service;
 
+import ru.taska.event.EventType;
+import ru.taska.event.TaskaEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Notification;
-import ru.taska.event.TaskaEvent;
 import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.JsonNode;
 
@@ -17,15 +18,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationFactory {
 
-    private static final String ISSUE_ASSIGNED = "IssueAssigned";
-    private static final String ISSUE_TRANSITIONED = "IssueTransitioned";
-    private static final String USER_INVITED = "UserInvited";
-
     private final NotificationMapper notificationMapper;
 
     public List<Notification> create(TaskaEvent event, String eventId) {
         JsonNode payload = event.payload();
-        return switch (event.eventType()) {
+        EventType type = EventType.fromValue(event.eventType());
+
+        return switch (type) {
+            case ISSUE_CREATED      -> buildIssueCreated(event, payload, eventId);
             case ISSUE_ASSIGNED     -> buildIssueAssigned(event, payload, eventId);
             case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
             case USER_INVITED       -> buildUserInvited(event, eventId);
@@ -34,6 +34,28 @@ public class NotificationFactory {
                 yield List.of();
             }
         };
+    }
+
+    private List<Notification> buildIssueCreated(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID reporterId = extractUuid(payload, "reporterId");
+        UUID assigneeId = extractUuid(payload, "assigneeId");
+
+        if (reporterId == null && assigneeId == null) {
+            log.warn("IssueCreated event without reporterId/assigneeId, eventId={}", eventId);
+            return List.of();
+        }
+
+        List<Notification> notifications = new ArrayList<>();
+
+        if (reporterId != null) {
+            notifications.add(notificationMapper.toIssueCreated(event, reporterId));
+        }
+
+        if (assigneeId != null && !assigneeId.equals(reporterId)) {
+            notifications.add(notificationMapper.toIssueCreated(event, assigneeId));
+        }
+
+        return notifications;
     }
 
     private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, String eventId) {

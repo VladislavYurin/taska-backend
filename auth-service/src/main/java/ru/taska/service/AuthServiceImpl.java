@@ -1,7 +1,7 @@
 package ru.taska.service;
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

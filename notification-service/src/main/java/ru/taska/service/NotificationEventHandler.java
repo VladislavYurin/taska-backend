@@ -1,7 +1,7 @@
 package ru.taska.service;
 
-import reactor.core.publisher.Mono;
 import ru.taska.event.TaskaEvent;
+import reactor.core.publisher.Mono;
 
 public interface NotificationEventHandler {
     Mono<Void> handle(TaskaEvent event);

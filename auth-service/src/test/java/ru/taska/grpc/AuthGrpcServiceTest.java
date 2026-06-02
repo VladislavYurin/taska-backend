@@ -1,7 +1,7 @@
 package ru.taska.grpc;
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcBadGrammarException;
 import io.r2dbc.spi.R2dbcNonTransientResourceException;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +20,6 @@ import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
-import ru.taska.grpc.AuthGrpcService;
 import ru.taska.service.AuthService;
 
 @ExtendWith(MockitoExtension.class)

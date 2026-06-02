@@ -1,8 +1,8 @@
 package ru.taska.security;
 
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.crypto.password.PasswordEncoder;

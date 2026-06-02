@@ -3,6 +3,15 @@ spring:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
     password: ${SPRING_R2DBC_PASSWORD:taska}
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5436/issue_db}
+    user: ${SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 issue:
   list:
@@ -18,3 +27,19 @@ management:
     health:
       probes:
         enabled: true
+
+app:
+  kafka:
+    topics:
+      issue-events: issue.events
+
+    outbox:
+      polling-interval: 3000
+      recovery-interval: 10000
+      batch-size: 100
+      max-attempts: 5
+      processing-timeout-seconds: 300
+
+logging:
+  level:
+    ru.taska: DEBUG

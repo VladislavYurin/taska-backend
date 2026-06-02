@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.UUID;
 
+import ru.taska.event.TaskaEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
 import ru.taska.domain.ProcessedEvent;
-import ru.taska.event.TaskaEvent;
 import ru.taska.repository.NotificationRepository;
 import ru.taska.repository.ProcessedEventRepository;
 import tools.jackson.databind.JsonNode;

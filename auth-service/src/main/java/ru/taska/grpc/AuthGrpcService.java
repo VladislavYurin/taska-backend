@@ -1,7 +1,7 @@
 package ru.taska.grpc;
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

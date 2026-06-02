@@ -1,4 +1,4 @@
-package converter;
+package ru.taska.converter;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

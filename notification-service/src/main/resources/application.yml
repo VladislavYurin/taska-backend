@@ -12,17 +12,17 @@ management:
         enabled: true
 spring:
   r2dbc:
-    url: r2dbc:postgresql://localhost:5437/notification_db
-    username: taska
-    password: taska
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5437/notification_db}
+    username: ${SPRING_R2DBC_USERNAME:taska}
+    password: ${SPRING_R2DBC_PASSWORD:taska}
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    url: jdbc:postgresql://localhost:5437/notification_db
-    user: taska
-    password: taska
+    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5437/notification_db}
+    user: ${SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: notification-service
       auto-offset-reset: earliest

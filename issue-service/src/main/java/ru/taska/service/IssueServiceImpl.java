@@ -1,13 +1,13 @@
 package ru.taska.service;
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import ru.taska.config.IssueListProperties;
+import ru.taska.config.props.IssueListProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -59,7 +59,7 @@ public class IssueServiceImpl implements IssueService {
                 .map(number -> issueMapper.buildIssue(
                         projectId,
                         number,
-                        "", //todo assign issue key. depends on TAS-20: GetProject
+                        UUID.randomUUID().toString(), //todo assign issue key. depends on TAS-20: GetProject (временно добавил автогенерацию UUID)
                         issueType,
                         summary,
                         description,
