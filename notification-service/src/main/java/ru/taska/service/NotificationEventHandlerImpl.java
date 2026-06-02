@@ -1,7 +1,6 @@
 package ru.taska.service;
 
-import java.time.Instant;
-import java.util.List;
+import ru.taska.event.TaskaEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -9,9 +8,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
 import ru.taska.domain.ProcessedEvent;
-import ru.taska.event.TaskaEvent;
 import ru.taska.repository.NotificationRepository;
 import ru.taska.repository.ProcessedEventRepository;
+
+import java.time.Instant;
+import java.util.List;
 
 /**
  * Бизнес-логика обработки доменных событий из Kafka и создания уведомлений.
@@ -19,7 +20,7 @@ import ru.taska.repository.ProcessedEventRepository;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class NotificationEventHandlerImpl implements NotificationEventHandler{
+public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;

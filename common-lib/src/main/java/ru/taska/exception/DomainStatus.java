@@ -1,4 +1,4 @@
-package exception;
+package ru.taska.exception;
 
 /**
  * Статусы доменных исключений, совместимые со статусами gRPC и HTTP.

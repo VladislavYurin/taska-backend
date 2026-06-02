@@ -15,6 +15,7 @@ import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.OutboxEventStatus;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
@@ -69,6 +70,7 @@ public class IssueMapper {
                 .aggregateType(aggregateType)
                 .aggregateId(issue.getId())
                 .eventType(eventType)
+                .status(OutboxEventStatus.NEW)
                 .payload(objectMapper.valueToTree(issue))
                 .build();
     }
@@ -121,7 +123,6 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .setStatusKey(toProtoIssueStatus(issue.getStatusKey()))
                 .build();
     }
 

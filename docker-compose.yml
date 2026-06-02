@@ -161,11 +161,11 @@ services:
     ports:
       - "8081:8080"
     environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://auth-db:5433/auth_db
+      - SPRING_R2DBC_URL=r2dbc:postgresql://auth-db:5432/auth_db
       - SPRING_R2DBC_USERNAME=taska
       - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5433/auth_db
-      - SPRING_DATASOURCE_USER=taska
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
 
   project-service:
@@ -202,10 +202,10 @@ services:
     ports:
       - "8083:8080"
     environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5435/workflow_db
+      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5432/workflow_db
       - SPRING_R2DBC_USERNAME=taska
       - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5435/workflow_db
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5432/workflow_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
 
@@ -231,9 +231,15 @@ services:
       - SPRING_R2DBC_URL=r2dbc:postgresql://issue-db:5432/issue_db
       - SPRING_R2DBC_USERNAME=taska
       - SPRING_R2DBC_PASSWORD=taska
+
       - SPRING_DATASOURCE_URL=jdbc:postgresql://issue-db:5432/issue_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
+
+      - SPRING_LIQUIBASE_URL=jdbc:postgresql://issue-db:5432/issue_db
+      - SPRING_LIQUIBASE_USERNAME=taska
+      - SPRING_LIQUIBASE_PASSWORD=taska
+
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
 
@@ -254,9 +260,15 @@ services:
       - SPRING_R2DBC_URL=r2dbc:postgresql://notification-db:5432/notification_db
       - SPRING_R2DBC_USERNAME=taska
       - SPRING_R2DBC_PASSWORD=taska
+
       - SPRING_DATASOURCE_URL=jdbc:postgresql://notification-db:5432/notification_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
+
+      - SPRING_LIQUIBASE_URL=jdbc:postgresql://notification-db:5432/notification_db
+      - SPRING_LIQUIBASE_USERNAME=taska
+      - SPRING_LIQUIBASE_PASSWORD=taska
+
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
   api-gateway:

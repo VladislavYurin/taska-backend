@@ -231,11 +231,6 @@ message IssueShortResponse {
    * Идентификатор исполнителя задачи.
    */
   string assignee_id = 6;
-
-  /**
-   * Текущий статус задачи.
-   */
-  IssueStatus status_key = 7;
 }
 
 message IssueResponse {

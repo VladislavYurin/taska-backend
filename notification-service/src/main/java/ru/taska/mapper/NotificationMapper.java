@@ -1,15 +1,27 @@
 package ru.taska.mapper;
 
+import ru.taska.event.TaskaEvent;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
-import ru.taska.event.TaskaEvent;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Component
 public class NotificationMapper {
+
+    public Notification toIssueCreated(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .id(UUID.randomUUID())
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_CREATED)
+                .title("Новая задача")
+                .body("Создана новая задача " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
 
     public Notification toIssueAssigned(TaskaEvent event, UUID assigneeId) {
         return Notification.builder()

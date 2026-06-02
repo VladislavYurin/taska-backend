@@ -1,5 +1,6 @@
 package ru.taska.config.converter;
 
+import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import io.r2dbc.postgresql.codec.Json;
@@ -7,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 
+@Component
 @ReadingConverter
 @RequiredArgsConstructor
 public class JsonBToJsonNodeConverter implements Converter<Json, JsonNode> {

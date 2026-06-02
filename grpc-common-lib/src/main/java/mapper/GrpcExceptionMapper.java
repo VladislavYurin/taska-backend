@@ -1,6 +1,7 @@
 package mapper;
 
-import exception.DomainException;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 /**
  * Маппер доменных и произвольных исключений в gRPC-статусы.
@@ -12,7 +13,7 @@ public final class GrpcExceptionMapper {
 
     /**
      * Преобразует {@link DomainException} в {@link io.grpc.StatusRuntimeException}
-     * на основе {@link exception.DomainStatus}.
+     * на основе {@link DomainStatus}.
      *
      * @param ex доменное исключение
      * @return {@link io.grpc.StatusRuntimeException} с соответствующим статусом и сообщением

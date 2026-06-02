@@ -3,6 +3,7 @@ package ru.taska.security;
 import reactor.core.publisher.Mono;
 import ru.taska.entity.Credential;
 import ru.taska.entity.HashingAlgorithm;
+import ru.taska.exception.DomainException;
 
 /**
  * Сервис для хэширования и верификации паролей и других секретов.
@@ -38,7 +39,7 @@ public interface PasswordHashService {
      * @param rawPassword пароль в открытом виде (не может быть null или пустым)
      * @param algorithm алгоритм хэширования (BCRYPT или ARGON2)
      * @return хэш пароля в формате, совместимом с выбранным алгоритмом
-     * @throws exception.DomainException если пароль пустой или произошла ошибка при хэшировании
+     * @throws DomainException если пароль пустой или произошла ошибка при хэшировании
      */
     String encode(String rawPassword, HashingAlgorithm algorithm);
 
@@ -63,7 +64,7 @@ public interface PasswordHashService {
      * @param rawPassword пароль в открытом виде для проверки
      * @return {@link Mono}, содержащий {@code true}, если пароль совпадает с хэшем,
      *         и {@code false} в противном случае
-     * @throws exception.DomainException если произошла ошибка при верификации
+     * @throws DomainException если произошла ошибка при верификации
      *                                   (например, неподдерживаемый алгоритм)
      */
     Mono<Boolean> matches(Credential credential, String rawPassword);

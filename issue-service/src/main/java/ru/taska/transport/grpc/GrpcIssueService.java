@@ -1,7 +1,7 @@
 package ru.taska.transport.grpc;
 
-import exception.DomainException;
-import exception.DomainStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
 import lombok.RequiredArgsConstructor;
@@ -63,16 +63,15 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             requestId, nodeId, projectId, issueType, summary, priority, reporterId);
 
                     return issueService.createIssue(
-                                    projectId,
-                                    issueMapper.toDomainIssueType(issueType),
-                                    summary,
-                                    description,
-                                    issueMapper.toDomainIssuePriority(priority),
-                                    reporterId
-                            ).map(issueMapper::toIssueProto)
-                            .doOnNext(response -> log.info("[{}][{}] createIssue: success, issueId={}, issueKey={}",
-                                    requestId, nodeId, response.getId(), response.getIssueKey()));
+                            projectId,
+                            issueMapper.toDomainIssueType(issueType),
+                            summary,
+                            description,
+                            issueMapper.toDomainIssuePriority(priority),
+                            reporterId
+                    );
                 }))
+                .map(issueMapper::toIssueProto)
                 .transform(withErrorHandling("createIssue"));
     }
 
@@ -90,11 +89,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
 
                     log.info("[{}][{}] getIssue: issueId={}", requestId, nodeId, issueId);
 
-                    return issueService.getIssue(issueId)
-                            .map(issueMapper::toIssueDetailsProto)
-                            .doOnNext(response -> log.info("[{}][{}] getIssue: success, issueId={}, issueKey={}",
-                                    requestId, nodeId, response.getIssue().getId(), response.getIssue().getIssueKey()));
+                    return issueService.getIssue(issueId);
                 }))
+                .map(issueMapper::toIssueDetailsProto)
                 .transform(withErrorHandling("getIssue"));
     }
 
@@ -124,31 +121,25 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             .map(result -> ListIssuesResponse.newBuilder()
                                     .addAllIssues(result.items().stream().map(issueMapper::toIssueShortProto).toList())
                                     .setTotalCount((int) result.totalCount())
-                                    .build())
-                            .doOnNext(response -> log.info("[{}][{}] listIssues: success, totalCount={}", requestId, nodeId, response.getTotalCount()));
+                                    .build());
                 }))
                 .transform(withErrorHandling("listIssues"));
     }
 
     private <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
         return mono -> mono
-                .doOnError(e -> logError(operationName, e))
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> {
+                            log.error("{}: database error", operationName, e);
+                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
+                        })
                 .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                        _ -> new DomainException(DomainStatus.INTERNAL, "Internal error"))
+                        e -> {
+                            log.error("{}: unexpected error", operationName, e);
+                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
+                        })
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
-    }
-
-    private void logError(String operationName, Throwable e) {
-        if (e instanceof DomainException de) {
-            log.warn("{}: domain error: status={}, message={}", operationName, de.getStatus(), de.getMessage());
-        } else if (e instanceof StatusRuntimeException sre) {
-            log.warn("{}: grpc error: {}", operationName, sre.getStatus());
-        } else {
-            log.error("{}: error", operationName, e);
-        }
     }
 
     @Override
@@ -160,7 +151,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
-                ).flatMap(t -> {
+                ).flatMap( t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID issueId = t.getT3();
@@ -168,13 +159,21 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                     UUID actorUserId = t.getT5();
 
                     log.info("[{}][{}] assignIssue: issueId={}, assigneeId={}, actorUserId={}",
-                            requestId, nodeId, issueId, assigneeId, actorUserId);
-
-                    return issueService.assignIssue(issueId, assigneeId, actorUserId)
-                            .map(issueMapper::toIssueProto)
-                            .doOnNext(response -> log.info("[{}][{}] assignIssue: success, issueId={}, issueKey={}",
-                                    requestId, nodeId, response.getId(), response.getIssueKey()));
+                             requestId, nodeId, issueId, assigneeId, actorUserId);
+                    return issueService.assignIssue(issueId, assigneeId, actorUserId);
                 }))
-                .transform(withErrorHandling("assignIssue"));
+                .map(issueMapper::toIssueProto)
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                            e -> {
+                                log.error("assignIssue: database error", e);
+                                return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
+                            })
+                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
+                            e -> {
+                                log.error("assignIssue: unexpected error", e);
+                                return new DomainException(DomainStatus.INTERNAL, "Internal error");
+                            })
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
 }

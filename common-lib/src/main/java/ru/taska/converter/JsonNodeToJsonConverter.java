@@ -1,4 +1,4 @@
-package converter;
+package ru.taska.converter;
 
 import tools.jackson.databind.JsonNode;
 import io.r2dbc.postgresql.codec.Json;

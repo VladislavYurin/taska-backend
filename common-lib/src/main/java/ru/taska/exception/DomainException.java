@@ -1,4 +1,4 @@
-package exception;
+package ru.taska.exception;
 
 import lombok.Getter;
 
