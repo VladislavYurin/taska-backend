@@ -1,11 +1,33 @@
 package ru.taska.repository;
 
-import java.util.UUID;
+import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
+
+import java.util.UUID;
 
 public interface NotificationRepository extends ReactiveCrudRepository<Notification, UUID> {
 
-    Flux<Notification> findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(UUID userId);
+    @Query("""
+            SELECT *
+            FROM notifications
+            WHERE user_id = :userId
+              AND read_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+            """)
+    Flux<Notification> findUnreadByUserId(UUID userId, int limit, long offset);
+
+    @Query("""
+            SELECT *
+            FROM notifications
+            WHERE user_id = :userId
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+            """)
+    Flux<Notification> findAllByUserId(UUID userId, int limit, long offset);
+
+    Mono<Notification> findByIdAndUserId(UUID id, UUID userId);
 }
