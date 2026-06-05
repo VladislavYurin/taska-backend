@@ -6,6 +6,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public interface NotificationRepository extends ReactiveCrudRepository<Notification, UUID> {
@@ -30,4 +31,12 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
     Flux<Notification> findAllByUserId(UUID userId, int limit, long offset);
 
     Mono<Notification> findByIdAndUserId(UUID id, UUID userId);
+
+    @Query("""
+        UPDATE notifications
+        SET read_at = :readAt
+        WHERE id = :notificationId
+          AND user_id = :userId
+        """)
+    Mono<Integer> markAsRead(UUID notificationId, UUID userId, Instant readAt);
 }

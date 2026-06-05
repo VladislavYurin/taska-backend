@@ -48,11 +48,8 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
                         return Mono.just(notification);
                     }
 
-                    Notification updatedNotification = notification.toBuilder()
-                            .readAt(Instant.now())
-                            .build();
-
-                    return notificationRepository.save(updatedNotification);
+                    return notificationRepository.markAsRead(notificationId, userId, Instant.now())
+                            .then(notificationRepository.findByIdAndUserId(notificationId, userId));
                 });
     }
 
