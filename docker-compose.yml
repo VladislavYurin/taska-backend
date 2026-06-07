@@ -181,6 +181,7 @@ services:
         condition: service_healthy
     ports:
       - "8082:8080"
+      - "9090:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://project-db:5432/project_db
       - SPRING_R2DBC_USERNAME=taska

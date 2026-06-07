@@ -9,22 +9,19 @@ import "v1/common.proto";
 service ProjectService{
   rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
   rpc GetProject (GetProjectRequest) returns (ProjectResponse);
-  rpc ListMyProjects (ListMyProjectsRequest) returns (ListMyProjectsResponse);
+  rpc ListMyProjects (ListMyProjectsRequest) returns (stream ProjectResponse);
 }
 
 message CreateProjectRequest {
   ru.taska.common.v1.Header header = 1;
-  string projectKey = 2;
+  string project_key = 2;
   string name = 3;
-  string userId = 4;
+  string user_id = 4;
 }
 
 message GetProjectRequest {
-  string projectId = 1;
-}
-
-message RequestAllProjectsDto {
-  repeated string requestedProjects = 1;
+  ru.taska.common.v1.Header header = 1;
+  string projectId = 2;
 }
 
 message ProjectResponse {
@@ -37,10 +34,7 @@ message ProjectResponse {
   optional google.protobuf.Timestamp archived_at = 7;
 }
 
-message ListMyProjectsResponse {
-  repeated ProjectResponse projects = 1;
-}
-
 message ListMyProjectsRequest {
-  string user_id = 1;
+  ru.taska.common.v1.Header header = 1;
+  string user_id = 2;
 }

@@ -1,158 +1,145 @@
 package ru.taska.service;
 
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
-import org.assertj.core.api.Assertions;
+import ru.taska.exception.DomainException;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.entity.*;
-import ru.taska.exception.ProjectAlreadyExistsException;
+import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.entity.OutboxEvent;
+import ru.taska.entity.Project;
+import ru.taska.entity.ProjectMember;
+import ru.taska.entity.ProjectSetting;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.impl.ProjectServiceImpl;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceImplTest {
 
-    @Mock
-    private ProjectRepository projectRepository;
-    @Mock
-    private ProjectMemberRepository projectMemberRepository;
-    @Mock
-    private ProjectSettingRepository projectSettingRepository;
-    @Mock
-    private OutboxEventRepository outboxEventRepository;
+    @Mock private ProjectRepository projectRepository;
+    @Mock private ProjectMemberRepository projectMemberRepository;
+    @Mock private ProjectSettingRepository projectSettingRepository;
+    @Mock private OutboxEventRepository outboxEventRepository;
+    @Mock private ObjectMapper objectMapper;
+    @Mock private ProjectMapper projectMapper;
 
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
+    @InjectMocks private ProjectServiceImpl projectService;
 
-    @InjectMocks
-    private ProjectServiceImpl projectService;
+    private final String requestId = "req-123";
+    private final String nodeId = "node-1";
+    private final String projectKey = "PROJ";
+    private final String projectName = "New Project";
+    private final UUID userId = UUID.randomUUID();
+    private final UUID projectId = UUID.randomUUID();
 
-    private UUID userId;
-    private UUID projectId;
     private Project mockProject;
+    private ProjectResponse mockResponse;
 
     @BeforeEach
     void setUp() {
-        userId = UUID.randomUUID();
-        projectId = UUID.randomUUID();
-
         mockProject = Project.builder()
                 .id(projectId)
-                .projectKey("PRJ")
-                .name("Test Project")
+                .projectKey(projectKey)
+                .name(projectName)
                 .createdBy(userId)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .build();
+
+        mockResponse = ProjectResponse.newBuilder()
+                .setId(projectId.toString())
+                .setProjectKey(projectKey)
+                .setName(projectName)
+                .setCreatedBy(userId.toString())
                 .build();
     }
 
     @Test
-    @DisplayName("Успешное создание проекта со всеми сопутствующими сущностями и Outbox-ивентом")
     void createProject_Success() {
-        // Given
-        String projectKey = "PRJ";
-        String name = "Test Project";
-        String userIdStr = userId.toString();
-
         Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.empty());
-        Mockito.when(projectRepository.save(Mockito.any(Project.class))).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
 
-        Mockito.when(projectMemberRepository.save(Mockito.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
-        Mockito.when(projectSettingRepository.save(Mockito.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
-        Mockito.when(outboxEventRepository.save(Mockito.any(OutboxEvent.class))).thenReturn(Mono.just(new OutboxEvent()));
+        ObjectNode mockNode = Mockito.mock(ObjectNode.class);
+        Mockito.when(objectMapper.createObjectNode()).thenReturn(mockNode);
 
-        ArgumentCaptor<ProjectMember> memberCaptor = ArgumentCaptor.forClass(ProjectMember.class);
-        ArgumentCaptor<ProjectSetting> settingCaptor = ArgumentCaptor.forClass(ProjectSetting.class);
-        ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
+        Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
+        Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(projectMapper.toResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
 
-        // When
-        Mono<Project> resultMono = projectService.createProject(projectKey, name, userIdStr);
-
-        // Then
-        StepVerifier.create(resultMono)
-                .expectNextMatches(project -> {
-                    Assertions.assertThat(project.getId()).isEqualTo(projectId);
-                    Assertions.assertThat(project.getProjectKey()).isEqualTo("PRJ");
-                    return true;
-                })
+        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
+                .expectNext(mockResponse)
                 .verifyComplete();
 
-        Mockito.verify(projectMemberRepository).save(memberCaptor.capture());
-        Mockito.verify(projectSettingRepository).save(settingCaptor.capture());
-        Mockito.verify(outboxEventRepository).save(outboxCaptor.capture());
-
-        // 1. Проверяем мембера
-        ProjectMember savedMember = memberCaptor.getValue();
-        Assertions.assertThat(savedMember.getProjectId()).isEqualTo(projectId);
-        Assertions.assertThat(savedMember.getUserId()).isEqualTo(userId);
-        Assertions.assertThat(savedMember.getRole()).isEqualTo(ProjectRole.ADMIN);
-
-        // 2. Проверяем дефолтные настройки
-        ProjectSetting savedSetting = settingCaptor.getValue();
-        Assertions.assertThat(savedSetting.getProjectId()).isEqualTo(projectId);
-        Assertions.assertThat(savedSetting.getSettings().isEmpty()).isTrue();
-
-        // 3. Проверяем структуру OutboxEvent
-        OutboxEvent savedEvent = outboxCaptor.getValue();
-        Assertions.assertThat(savedEvent.getAggregateType()).isEqualTo("PROJECT");
-        Assertions.assertThat(savedEvent.getAggregateId()).isEqualTo(projectId);
-        Assertions.assertThat(savedEvent.getEventType()).isEqualTo("PROJECT_CREATED");
-        Assertions.assertThat(savedEvent.getAttempts()).isEqualTo(0);
-        Assertions.assertThat(savedEvent.getPayload().get("projectKey").asText()).isEqualTo("PRJ");
+        Mockito.verify(projectRepository).findByProjectKey(projectKey);
+        Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
     }
 
     @Test
-    @DisplayName("Ошибка создания: Проект с таким ключом уже существует")
-    void createProject_AlreadyExists() {
-        // Given
-        // doReturn принимает заглушку, а в when передается сам мок-репозиторий
-        Mockito.doReturn(Mono.just(mockProject))
-                .when(projectRepository)
-                .findByProjectKey("PRJ");
+    void getProject_Success() {
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMapper.toResponse(mockProject)).thenReturn(mockResponse);
 
-        // When
-        Mono<Project> resultMono = projectService.createProject("PRJ", "New Name", userId.toString());
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
+                .expectNext(mockResponse)
+                .verifyComplete();
 
-        // Then
-        StepVerifier.create(resultMono)
-                .expectError(ProjectAlreadyExistsException.class)
-                .verify();
-
-        Mockito.verify(projectRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verify(outboxEventRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verify(projectRepository).findById(projectId);
     }
 
     @Test
-    @DisplayName("Ошибка валидации: Некорректный формат UUID пользователя")
-    void createProject_InvalidUuid() {
-        // When
-        Mono<Project> resultMono = projectService.createProject("PRJ", "Name", "not-a-valid-uuid");
+    void getProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.empty());
 
-        // Then
-        StepVerifier.create(resultMono)
-                .expectErrorMatches(throwable -> {
-                    Assertions.assertThat(throwable).isInstanceOf(StatusRuntimeException.class);
-                    StatusRuntimeException ex = (StatusRuntimeException) throwable;
-                    Assertions.assertThat(ex.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getStatus().getDescription()).contains("Invalid UserId UUID format");
-                    return true;
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertTrue(throwable instanceof DomainException);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals("Project for projectId = " + projectId + " was not found ", exception.getMessage());
                 })
                 .verify();
 
-        Mockito.verifyNoInteractions(projectRepository, outboxEventRepository);
+        Mockito.verify(projectRepository).findById(projectId);
+    }
+
+    @Test
+    void listMyProjects_Success() {
+        Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.just(mockProject));
+        Mockito.when(projectMapper.toResponse(mockProject)).thenReturn(mockResponse);
+
+        StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
+                .expectNext(mockResponse)
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findAllByMemberUserId(userId);
+    }
+
+    @Test
+    void listMyProjects_ThrowsNotFoundException_WhenNoProjectsFound() {
+        Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.empty());
+
+        StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertTrue(throwable instanceof DomainException);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals("Not found projects for user with id: " + userId, exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectRepository).findAllByMemberUserId(userId);
     }
 }

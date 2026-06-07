@@ -15,5 +15,5 @@ public interface ProjectRepository extends ReactiveCrudRepository<Project, UUID>
     @Query("SELECT p.* FROM taska.projects p JOIN taska.project_members pm ON p.id = pm.project_id WHERE pm.user_id = :userId")
     Flux<Project> findAllByMemberUserId(UUID userId);
 
-    Mono<? extends Project> findByProjectKey(String projectKey);
+    Mono<Project> findByProjectKey(String projectKey);
 }

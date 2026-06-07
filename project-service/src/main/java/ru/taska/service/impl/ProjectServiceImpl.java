@@ -1,25 +1,23 @@
 package ru.taska.service.impl;
 
-import io.grpc.Status;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.entity.OutboxEvent;
-import ru.taska.entity.Project;
-import ru.taska.entity.ProjectMember;
-import ru.taska.entity.ProjectRole;
-import ru.taska.entity.ProjectSetting;
-import ru.taska.exception.ProjectAlreadyExistsException;
+import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.entity.*;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.ProjectService;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -32,38 +30,19 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectSettingRepository projectSettingRepository;
-    private final OutboxEventRepository outboxEventRepository; // Твой репозиторий
+    private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final ProjectMapper projectMapper;
+
 
     @Override
     @Transactional
-    public Mono<Project> createProject(String projectKey, String name, String userIdStr) {
-
-        if (projectKey == null || projectKey.isBlank()) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Project key is required").asRuntimeException());
-        }
-        if (name == null || name.isBlank()) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Project name is required").asRuntimeException());
-        }
-        if (userIdStr == null || userIdStr.isBlank()) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("UserId is required").asRuntimeException());
-        }
-
-        UUID userId;
-        try {
-            userId = UUID.fromString(userIdStr);
-        } catch (IllegalArgumentException e) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Invalid UserId UUID format").asRuntimeException());
-        }
-
+    public Mono<ProjectResponse> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId) {
         return projectRepository.findByProjectKey(projectKey)
-                .flatMap(existing -> Mono.<Project>error(
-                        new ProjectAlreadyExistsException("Project with key '" + projectKey + "' already exists")
-                ))
                 .switchIfEmpty(Mono.defer(() -> {
                     Project project = Project.builder()
                             .projectKey(projectKey)
-                            .name(name)
+                            .name(projectName)
                             .createdBy(userId)
                             .build();
                     return projectRepository.save(project);
@@ -95,7 +74,7 @@ public class ProjectServiceImpl implements ProjectService {
                     OutboxEvent outboxEvent = OutboxEvent.builder()
                             .aggregateType("PROJECT")
                             .aggregateId(savedProject.getId())
-                            .eventType("PROJECT_CREATED")
+                            .eventType("CREATED")
                             .payload(eventPayload)
                             .attempts(0)
                             .createdAt(Instant.now())
@@ -105,44 +84,29 @@ public class ProjectServiceImpl implements ProjectService {
                             .then(projectSettingRepository.save(defaultSettings))
                             .then(outboxEventRepository.save(outboxEvent))
                             .then(Mono.defer(() -> {
-                                log.info("Project successfully created. Related member, settings, and outbox event persisted. Key: {}", projectKey);
+                                log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}", requestId, nodeId, projectKey, projectName, userId);
                                 return Mono.just(savedProject);
                             }));
-                });
+                })
+                .map(projectMapper::toResponse);
+
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Mono<Project> getProject(String projectIdStr) {
-        if (projectIdStr == null || projectIdStr.isBlank()) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Project ID is required").asRuntimeException());
-        }
-
-        UUID projectId;
-        try {
-            projectId = UUID.fromString(projectIdStr);
-        } catch (IllegalArgumentException e) {
-            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Invalid Project UUID format").asRuntimeException());
-        }
-
+    public Mono<ProjectResponse> getProject(String requestId, String nodeId, UUID projectId) {
         return projectRepository.findById(projectId)
-                .switchIfEmpty(Mono.error(Status.NOT_FOUND.withDescription("Project not found").asRuntimeException()));
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project for projectId = " + projectId + " was not found ")))
+                .map(projectMapper::toResponse)
+                .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Flux<Project> listMyProjects(String userIdStr) {
-        if (userIdStr == null || userIdStr.isBlank()) {
-            return Flux.error(Status.INVALID_ARGUMENT.withDescription("User ID is required").asRuntimeException());
-        }
-
-        UUID userId;
-        try {
-            userId = UUID.fromString(userIdStr);
-        } catch (IllegalArgumentException e) {
-            return Flux.error(Status.INVALID_ARGUMENT.withDescription("Invalid User UUID format").asRuntimeException());
-        }
-
-        return projectRepository.findAllByMemberUserId(userId);
+    public Flux<ProjectResponse> listMyProjects(String requestId, String nodeId, UUID userId) {
+        return projectRepository.findAllByMemberUserId(userId)
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Not found projects for user with id: " + userId)))
+                .map(projectMapper::toResponse)
+                .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects by user id: {}", requestId, nodeId, userId));
     }
 }
