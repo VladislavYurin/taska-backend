@@ -256,6 +256,7 @@ services:
         condition: service_healthy
     ports:
       - "8085:8080"
+      - "9091:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://notification-db:5432/notification_db
       - SPRING_R2DBC_USERNAME=taska

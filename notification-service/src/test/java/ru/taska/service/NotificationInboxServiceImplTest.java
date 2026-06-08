@@ -1,10 +1,8 @@
 package ru.taska.service;
 
-import ru.taska.exception.DomainException;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -15,6 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
+import ru.taska.exception.DomainException;
 import ru.taska.repository.NotificationRepository;
 
 import java.time.Instant;
@@ -83,12 +82,18 @@ class NotificationInboxServiceImplTest {
     @Test
     void shouldMarkUnreadNotificationAsRead() {
         Notification unreadNotification = notification(null);
+        Notification readNotification = notification(Instant.parse("2026-05-27T10:00:00Z"));
 
         Mockito.when(notificationRepository.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
-                .thenReturn(Mono.just(unreadNotification));
+                .thenReturn(Mono.just(unreadNotification))
+                .thenReturn(Mono.just(readNotification));
 
-        Mockito.when(notificationRepository.save(ArgumentMatchers.any(Notification.class)))
-                .thenAnswer(invocation -> Mono.just((Notification) invocation.getArgument(0)));
+        Mockito.when(notificationRepository.markAsRead(
+                        ArgumentMatchers.eq(NOTIFICATION_ID),
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                ))
+                .thenReturn(Mono.just(1));
 
         StepVerifier.create(notificationInboxService.markAsRead(NOTIFICATION_ID, USER_ID))
                 .assertNext(updatedNotification -> {
@@ -98,12 +103,18 @@ class NotificationInboxServiceImplTest {
                 })
                 .verifyComplete();
 
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        Mockito.verify(notificationRepository, Mockito.times(2))
+                .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
 
         Mockito.verify(notificationRepository, Mockito.times(1))
-                .save(captor.capture());
+                .markAsRead(
+                        ArgumentMatchers.eq(NOTIFICATION_ID),
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                );
 
-        Assertions.assertThat(captor.getValue().getReadAt()).isNotNull();
+        Mockito.verify(notificationRepository, Mockito.never())
+                .save(ArgumentMatchers.any(Notification.class));
     }
 
     @Test
@@ -118,6 +129,16 @@ class NotificationInboxServiceImplTest {
                 .expectNext(readNotification)
                 .verifyComplete();
 
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
+
+        Mockito.verify(notificationRepository, Mockito.never())
+                .markAsRead(
+                        ArgumentMatchers.any(UUID.class),
+                        ArgumentMatchers.any(UUID.class),
+                        ArgumentMatchers.any(Instant.class)
+                );
+
         Mockito.verify(notificationRepository, Mockito.never())
                 .save(ArgumentMatchers.any(Notification.class));
     }
@@ -130,6 +151,16 @@ class NotificationInboxServiceImplTest {
         StepVerifier.create(notificationInboxService.markAsRead(NOTIFICATION_ID, USER_ID))
                 .expectError(DomainException.class)
                 .verify();
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
+
+        Mockito.verify(notificationRepository, Mockito.never())
+                .markAsRead(
+                        ArgumentMatchers.any(UUID.class),
+                        ArgumentMatchers.any(UUID.class),
+                        ArgumentMatchers.any(Instant.class)
+                );
 
         Mockito.verify(notificationRepository, Mockito.never())
                 .save(ArgumentMatchers.any(Notification.class));
