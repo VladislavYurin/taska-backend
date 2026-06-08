@@ -1,14 +1,15 @@
 package ru.taska.transport.grpc;
 
 import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
+import exception.GrpcExceptionHandler;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.r2dbc.spi.R2dbcException;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
@@ -24,10 +25,6 @@ import ru.taska.domain.IssueStatus;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
 import validator.GrpcRequestValidators;
-
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Function;
 
 @Slf4j
 @Service
@@ -48,7 +45,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
                         GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getReporterId(), "body.reporterId")
-                ).flatMap(t -> {
+                ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
+                                                                             req.getHeader().getNodeId(), "createIssue"))
+                .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
@@ -69,10 +68,12 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             description,
                             issueMapper.toDomainIssuePriority(priority),
                             reporterId
-                    );
+                    ).doOnNext(issue -> log.info("[{}][{}] createIssue: successfully created, issueId={}",
+                                                requestId, nodeId, issue.getId()))
+                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "createIssue"));
                 }))
                 .map(issueMapper::toIssueProto)
-                .transform(withErrorHandling("createIssue"));
+                .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
     }
 
     @Override
@@ -82,17 +83,22 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getIssueId(), "issueId")
-                ).flatMap(t -> {
+                ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
+                                                                             req.getHeader().getNodeId(), "getIssue"))
+                .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID issueId = t.getT3();
 
                     log.info("[{}][{}] getIssue: issueId={}", requestId, nodeId, issueId);
 
-                    return issueService.getIssue(issueId);
+                    return issueService.getIssue(issueId)
+                                       .doOnSuccess(_ -> log.info("[{}][{}] getIssue: successfully found, issueId={}",
+                                                                  requestId, nodeId, issueId))
+                                       .doOnError(DomainException.class, logOnError(requestId, nodeId, "getIssue"));
                 }))
                 .map(issueMapper::toIssueDetailsProto)
-                .transform(withErrorHandling("getIssue"));
+                .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
     }
 
     @Override
@@ -105,7 +111,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         req.hasAssigneeId()
                                 ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getAssigneeId(), "assigneeId").map(Optional::of)
                                 : Mono.just(Optional.<UUID>empty())
-                ).flatMap(t -> {
+                ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
+                                                                             req.getHeader().getNodeId(), "listIssues"))
+                .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
@@ -121,25 +129,12 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             .map(result -> ListIssuesResponse.newBuilder()
                                     .addAllIssues(result.items().stream().map(issueMapper::toIssueShortProto).toList())
                                     .setTotalCount((int) result.totalCount())
-                                    .build());
+                                    .build())
+                            .doOnNext(result -> log.info("[{}][{}] listIssues: successfully found {} issues",
+                                                        requestId, nodeId, result.getTotalCount()))
+                            .doOnError(DomainException.class, logOnError(requestId, nodeId, "listIssues"));
                 }))
-                .transform(withErrorHandling("listIssues"));
-    }
-
-    private <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
-        return mono -> mono
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> {
-                            log.error("{}: database error", operationName, e);
-                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                        })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                        e -> {
-                            log.error("{}: unexpected error", operationName, e);
-                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                        })
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssues"));
     }
 
     @Override
@@ -151,7 +146,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
-                ).flatMap( t -> {
+                ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
+                                                                             req.getHeader().getNodeId(), "assignIssue"))
+                .flatMap( t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID issueId = t.getT3();
@@ -160,20 +157,31 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
 
                     log.info("[{}][{}] assignIssue: issueId={}, assigneeId={}, actorUserId={}",
                              requestId, nodeId, issueId, assigneeId, actorUserId);
-                    return issueService.assignIssue(issueId, assigneeId, actorUserId);
+                    return issueService.assignIssue(issueId, assigneeId, actorUserId)
+                                       .doOnSuccess(_ -> log.info("[{}][{}] assignIssue: successfully assigned, issueId={}",
+                                                                  requestId, nodeId, issueId))
+                                       .doOnError(DomainException.class, logOnError(requestId, nodeId, "assignIssue"));
                 }))
                 .map(issueMapper::toIssueProto)
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                            e -> {
-                                log.error("assignIssue: database error", e);
-                                return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                            })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                            e -> {
-                                log.error("assignIssue: unexpected error", e);
-                                return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                            })
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("assignIssue"));
+    }
+
+    private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {
+        return throwable -> {
+            if (throwable instanceof StatusRuntimeException e
+                    && e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
+                log.error("[{}][{}] {} validation error: {}",
+                          requestId, nodeId, operation, e.getStatus().getDescription());
+            }
+        };
+    }
+
+    private Consumer<Throwable> logOnError(String requestId, String nodeId, String operation) {
+        return throwable -> {
+            if (throwable instanceof DomainException e) {
+                log.error("[{}][{}] {} failed: status={}, message={}",
+                          requestId, nodeId, operation, e.getStatus(), e.getMessage());
+            }
+        };
     }
 }
