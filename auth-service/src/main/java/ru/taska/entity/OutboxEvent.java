@@ -52,6 +52,12 @@ public class OutboxEvent {
     private String eventType;
 
     /**
+     * Текущий статус события (NEW / PROCESSING / PUBLISHED / FAILED)
+     */
+    @Column("status")
+    private OutboxEventStatus status;
+
+    /**
      * Полезная нагрузка события в формате JSON.
      */
     @Column("payload")
@@ -81,4 +87,10 @@ public class OutboxEvent {
      */
     @Column("published_at")
     private Instant publishedAt;
+
+    /**
+     * Время начала обработки события scheduler'ом
+     */
+    @Column("processing_started_at")
+    private Instant processingStartedAt;
 }

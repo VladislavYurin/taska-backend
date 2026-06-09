@@ -9,6 +9,25 @@ spring:
     enabled: true
     initial-size: 10
     max-size: 20
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5433/auth_db}
+    user: ${SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+
+app:
+  kafka:
+    topics:
+      user-events: user.events
+    outbox:
+      polling-interval: 3000
+      recovery-interval: 10000
+      batch-size: 100
+      max-attempts: 5
+      processing-timeout-seconds: 300
 
 management:
   endpoints:
@@ -19,6 +38,8 @@ management:
     health:
       probes:
         enabled: true
+
+
 
 # JWT Configuration
 jwt:
@@ -44,3 +65,7 @@ logging:
     org.springframework.data.r2dbc: INFO
     io.r2dbc.postgresql.QUERY: INFO
     io.r2dbc.postgresql.PARAM: INFO
+    ru.taska.kafka: INFO
+    liquibase: INFO
+    org.liquibase: INFO
+    org.springframework.boot.liquibase: INFO

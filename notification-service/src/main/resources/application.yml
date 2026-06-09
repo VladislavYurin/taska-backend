@@ -37,6 +37,7 @@ spring:
           auth: true
           starttls:
             enable: true
+
 notification:
   email:
     retry-delay-seconds: 60

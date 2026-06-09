@@ -15,6 +15,7 @@ public enum EventType {
     ISSUE_ASSIGNED("IssueAssigned"),
     ISSUE_TRANSITIONED("IssueTransitioned"),
     USER_INVITED("UserInvited"),
+    USER_ACTIVATED("UserActivated"),
     UNSUPPORTED("Unsupported");
 
     private final String value;

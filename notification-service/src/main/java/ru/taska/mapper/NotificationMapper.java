@@ -1,12 +1,13 @@
 package ru.taska.mapper;
 
-import com.google.protobuf.Timestamp;
+import ru.taska.event.TaskaEvent;
 import org.springframework.stereotype.Component;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
-import ru.taska.event.TaskaEvent;
+import com.google.protobuf.Timestamp;
+
 
 import java.time.Instant;
 import java.util.UUID;
@@ -62,6 +63,18 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toUserActivated(TaskaEvent event) {
+        return Notification.builder()
+                .id(UUID.randomUUID())
+                .userId(event.aggregateId())
+                .notificationType(NotificationType.USER_ACTIVATED)
+                .title("Аккаунт активирован")
+                .body("Ваш аккаунт успешно активирован. Теперь вы можете войти в систему.")
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public NotificationResponse toNotificationProto(Notification notification) {
         NotificationResponse.Builder builder = NotificationResponse.newBuilder()
                 .setId(toStringOrEmpty(notification.getId()))
@@ -93,6 +106,7 @@ public class NotificationMapper {
             case ISSUE_TRANSITIONED -> NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED;
             case ISSUE_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED;
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
+            case USER_ACTIVATED -> NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED;
         };
     }
 

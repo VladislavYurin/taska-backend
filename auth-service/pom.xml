@@ -32,6 +32,12 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <version>1.21.0</version>
+    </dependency>
+
     <!-- R2DBC -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -40,6 +46,16 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>r2dbc-postgresql</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-liquibase</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
     </dependency>
 
     <!-- JDBC driver (для Liquibase) -->
@@ -79,6 +95,11 @@
     <dependency>
       <groupId>ru.taska</groupId>
       <artifactId>grpc-common-lib</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>ru.taska</groupId>
+      <artifactId>kafka-lib</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -180,7 +201,7 @@
       <groupId>org.liquibase</groupId>
       <artifactId>liquibase-core</artifactId>
       <version>5.0.2</version>
-      <scope>test</scope>
+      <!-- <scope>test</scope> -->
     </dependency>
   </dependencies>
 

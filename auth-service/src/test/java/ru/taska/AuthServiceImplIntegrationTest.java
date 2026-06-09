@@ -27,17 +27,22 @@ import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.api.auth.v1.RefreshResponse;
+import ru.taska.api.auth.v1.PasswordByTokenRequest;
+import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.common.v1.Header;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
 import ru.taska.entity.HashingAlgorithm;
+import ru.taska.entity.InviteToken;
 import ru.taska.entity.RefreshToken;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
 import ru.taska.repository.CredentialRepository;
+import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.PasswordHashServiceImpl;
+import ru.taska.service.AuthService;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -117,6 +122,9 @@ public class AuthServiceImplIntegrationTest {
     }
 
     @Autowired
+    private AuthService authService;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -124,6 +132,9 @@ public class AuthServiceImplIntegrationTest {
 
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private InviteTokenRepository inviteTokenRepository;
 
     @Autowired
     private PasswordHashServiceImpl passwordHashServiceImpl;
@@ -135,6 +146,12 @@ public class AuthServiceImplIntegrationTest {
     private String testEmail;
     private String testPassword;
     private String validRefreshToken;
+
+    // Данные для тестов установки пароля
+    private UUID invitedUserId;
+    private String invitedUserEmail;
+    private String inviteTokenRaw;
+    private String inviteTokenHash;
 
     @BeforeAll
     void setUp() {
@@ -152,6 +169,51 @@ public class AuthServiceImplIntegrationTest {
         authStub = ReactorAuthServiceGrpc.newReactorStub(channel);
 
         setupTestData();
+        setupInvitedUserTestData();
+    }
+
+    private void setupInvitedUserTestData() {
+        String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
+        invitedUserEmail = "invited_" + uniqueSuffix + "@example.com";
+        inviteTokenRaw = generateRawToken();
+        inviteTokenHash = org.apache.commons.codec.digest.DigestUtils.sha256Hex(inviteTokenRaw);
+
+        log.debug(">>> Setting up invited user test data");
+        log.debug(">>> Invited user email: {}", invitedUserEmail);
+        log.debug(">>> Invite token raw: {}", inviteTokenRaw);
+        log.debug(">>> Invite token hash: {}", inviteTokenHash);
+
+        User invitedUser = User.builder()
+                .login("inviteduser_" + uniqueSuffix)
+                .email(invitedUserEmail)
+                .displayName("Invited User")
+                .status(UserStatus.INVITED)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+
+        invitedUserId = userRepository.save(invitedUser)
+                .block(Duration.ofSeconds(10))
+                .getId();
+
+        InviteToken inviteToken = InviteToken.builder()
+                .userId(invitedUserId)
+                .tokenHash(inviteTokenHash)
+                .createdAt(Instant.now())
+                .expiresAt(Instant.now().plus(7, java.time.temporal.ChronoUnit.DAYS))
+                .usedAt(null)
+                .build();
+
+        inviteTokenRepository.save(inviteToken).block(Duration.ofSeconds(10));
+
+        log.debug(">>> Invited user created with id: {}", invitedUserId);
+    }
+
+    private String generateRawToken() {
+        byte[] bytes = new byte[32];
+        SecureRandom secureRandom = new SecureRandom();
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private void setupTestData() {
@@ -243,6 +305,25 @@ public class AuthServiceImplIntegrationTest {
             }
         }
 
+        // Clean up invited user data
+        if (invitedUserId != null) {
+            try {
+                // Сначала находим и удаляем invite token по userId
+                inviteTokenRepository.findByUserId(invitedUserId)
+                        .flatMap(token -> inviteTokenRepository.deleteById(token.getId()))
+                        .block(Duration.ofSeconds(5));
+                // Удаляем credential если он был создан
+                credentialRepository.findByUserIdAndCredentialType(invitedUserId, CredentialType.PASSWORD)
+                        .flatMap(cred -> credentialRepository.deleteById(cred.getId()))
+                        .block(Duration.ofSeconds(5));
+                // Удаляем пользователя
+                userRepository.deleteById(invitedUserId).block(Duration.ofSeconds(5));
+                log.debug(">>> Invited user cleanup completed");
+            } catch (Exception e) {
+                log.error("Invited user cleanup error: {}", e.getMessage());
+            }
+        }
+
         if (channel != null && !channel.isShutdown()) {
             channel.shutdown();
             try {
@@ -251,6 +332,7 @@ public class AuthServiceImplIntegrationTest {
                 Thread.currentThread().interrupt();
             }
         }
+
     }
 
     @Test
@@ -465,5 +547,57 @@ public class AuthServiceImplIntegrationTest {
 
         String hash3 = hashTokenWithSHA256("different-token");
         Assertions.assertThat(hash1).isNotEqualTo(hash3);
+    }
+
+    @Test
+    @DisplayName("Should successfully set password for invited user with valid token")
+    void testSuccessfulSetPasswordByToken() {
+        String newPassword = "NewSecurePassword456!";
+
+        PasswordByTokenRequest request = PasswordByTokenRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-set-pwd")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(PasswordByTokenRequestBody.newBuilder()
+                        .setToken(inviteTokenRaw)
+                        .setNewPassword(newPassword)
+                        .build())
+                .build();
+
+        authService.setPasswordByToken(inviteTokenRaw, newPassword).block();
+
+        // Verify user status changed to ACTIVE
+        User updatedUser = userRepository.findById(invitedUserId).block(Duration.ofSeconds(5));
+        Assertions.assertThat(updatedUser).isNotNull();
+        Assertions.assertThat(updatedUser.getStatus()).isEqualTo(UserStatus.ACTIVE);
+
+        // Verify credential was created/updated
+        Credential credential = credentialRepository
+                .findByUserIdAndCredentialType(invitedUserId, CredentialType.PASSWORD)
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(credential).isNotNull();
+        Assertions.assertThat(credential.getSecretHash()).isNotNull();
+
+        // Verify password works for login
+        LoginRequest loginRequest = LoginRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-login-after-set")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(LoginRequestBody.newBuilder()
+                        .setEmail(invitedUserEmail)
+                        .setPassword(newPassword)
+                        .build())
+                .build();
+
+        LoginResponse loginResponse = authStub.login(Mono.just(loginRequest)).block(Duration.ofSeconds(10));
+        Assertions.assertThat(loginResponse).isNotNull();
+        Assertions.assertThat(loginResponse.getAccessToken()).isNotNull();
+
+        // Verify token was marked as used
+        InviteToken usedToken = inviteTokenRepository.findByTokenHash(inviteTokenHash).block(Duration.ofSeconds(5));
+        Assertions.assertThat(usedToken).isNotNull();
+        Assertions.assertThat(usedToken.getUsedAt()).isNotNull();
     }
 }

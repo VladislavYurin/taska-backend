@@ -1,5 +1,8 @@
 package ru.taska.service;
 
+import com.google.protobuf.Empty;
+import ru.taska.entity.OutboxEvent;
+import ru.taska.entity.OutboxEventStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import org.assertj.core.api.Assertions;
@@ -20,10 +23,14 @@ import ru.taska.dto.RefreshTokenResponseDto;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
 import ru.taska.entity.HashingAlgorithm;
+import ru.taska.entity.InviteToken;
 import ru.taska.entity.RefreshToken;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
+import ru.taska.mapper.UserMapper;
 import ru.taska.repository.CredentialRepository;
+import ru.taska.repository.InviteTokenRepository;
+import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.JwtServiceImpl;
 import ru.taska.security.PasswordHashService;
@@ -56,6 +63,15 @@ class AuthServiceImplTest {
     @Mock
     private SecurityProperties securityProperties;
 
+    @Mock
+    private InviteTokenRepository inviteTokenRepository;
+
+    @Mock
+    private UserMapper userMapper;
+
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
     @InjectMocks
     private AuthServiceImpl authServiceImpl;
 
@@ -64,10 +80,15 @@ class AuthServiceImplTest {
     private Credential testCredential;
     private AuthResponseDto testAuthResponse;
     private RefreshTokenResponseDto testRefreshTokenResponse;
+    private InviteToken testInviteToken;
+    private String testRawToken;
+    private String testTokenHash;
 
     @BeforeEach
     void setUp() {
         testUserId = UUID.randomUUID();
+        testRawToken = "valid-invite-token-123";
+        testTokenHash = "hashed-invite-token";
 
         testUser = User.builder()
                 .id(testUserId)
@@ -97,6 +118,14 @@ class AuthServiceImplTest {
                 .build();
 
         testRefreshTokenResponse = new RefreshTokenResponseDto(refreshToken, "new-refresh-token-789");
+        testInviteToken = InviteToken.builder()
+                .id(UUID.randomUUID())
+                .userId(testUserId)
+                .tokenHash(testTokenHash)
+                .createdAt(Instant.now())
+                .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
+                .usedAt(null)
+                .build();
     }
 
     @Nested
@@ -542,6 +571,395 @@ class AuthServiceImplTest {
                                     ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION
                     )
                     .verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Set Password By Token Tests")
+    class SetPasswordByTokenTests {
+        private final String newPassword = "NewValidPassword123!";
+        private User invitedUser;
+        private InviteToken validInviteToken;
+        private String validTokenHash;
+
+        @BeforeEach
+        void setUpSetPasswordTests() {
+            // Вычисляем реальный хэш от testRawToken
+            validTokenHash = org.apache.commons.codec.digest.DigestUtils.sha256Hex(testRawToken);
+            // Создаём отдельного пользователя со статусом INVITED для тестов установки пароля
+            invitedUser = User.builder()
+                    .id(testUserId)
+                    .email("invited@example.com")
+                    .login("inviteduser")
+                    .status(UserStatus.INVITED)
+                    .build();
+
+            validInviteToken = InviteToken.builder()
+                    .id(UUID.randomUUID())
+                    .userId(testUserId)
+                    .tokenHash(validTokenHash )
+                    .createdAt(Instant.now())
+                    .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
+                    .usedAt(null)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should successfully set password for invited user")
+        void shouldSuccessfullySetPasswordForInvitedUser() {
+            // Given
+            OutboxEvent mockOutboxEvent = OutboxEvent.builder()
+                    .id(UUID.randomUUID())
+                    .aggregateType("user")
+                    .aggregateId(testUserId)
+                    .eventType("UserActivated")
+                    .status(OutboxEventStatus.NEW)
+                    .attempts(0)
+                    .build();
+
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.just(invitedUser));
+            Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
+                    .thenReturn(Mono.empty());
+            Mockito.when(passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT))
+                    .thenReturn("newHashedPassword");
+            Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class)))
+                    .thenReturn(Mono.just(testCredential));
+            Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
+                    .thenReturn(Mono.just(invitedUser));
+
+            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class)))
+                    .thenReturn(mockOutboxEvent);
+            Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
+                    .thenReturn(Mono.just(mockOutboxEvent));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .verifyComplete();
+
+            Mockito.verify(inviteTokenRepository).findByTokenHash(ArgumentMatchers.anyString());
+            Mockito.verify(userRepository).findById(testUserId);
+            Mockito.verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
+            Mockito.verify(passwordHashService).encode(newPassword, HashingAlgorithm.BCRYPT);
+            Mockito.verify(credentialRepository).save(ArgumentMatchers.any(Credential.class));
+            Mockito.verify(userRepository).save(ArgumentMatchers.any(User.class));
+
+            Assertions.assertThat(invitedUser.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("Should successfully set password when credential already exists")
+        void shouldSuccessfullySetPasswordWhenCredentialExists() {
+            // Given
+            OutboxEvent mockOutboxEvent = OutboxEvent.builder()
+                    .id(UUID.randomUUID())
+                    .aggregateType("user")
+                    .aggregateId(testUserId)
+                    .eventType("UserActivated")
+                    .status(OutboxEventStatus.NEW)
+                    .attempts(0)
+                    .build();
+
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.just(invitedUser));
+            Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
+                    .thenReturn(Mono.just(testCredential));
+            Mockito.when(passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT))
+                    .thenReturn("newHashedPassword");
+            Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class)))
+                    .thenReturn(Mono.just(testCredential));
+            Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
+                    .thenReturn(Mono.just(invitedUser));
+
+            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class)))
+                    .thenReturn(mockOutboxEvent);
+            Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
+                    .thenReturn(Mono.just(mockOutboxEvent));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .verifyComplete();
+
+            Mockito.verify(credentialRepository).save(testCredential);
+            Assertions.assertThat(testCredential.getSecretHash()).isEqualTo("newHashedPassword");
+        }
+
+        @Test
+        @DisplayName("Should fail when token is already used")
+        void shouldFailWhenTokenAlreadyUsed() {
+            // Given
+            testInviteToken.setUsedAt(Instant.now().minus(1, ChronoUnit.DAYS));
+
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                            .thenReturn(Mono.just(0));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            Mockito.verify(userRepository, Mockito.never()).findById(ArgumentMatchers.any(UUID.class));
+            Mockito.verify(credentialRepository, Mockito.never()).save(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when token is expired")
+        void shouldFailWhenTokenIsExpired() {
+            // Given
+            // markTokenAsUsedIfValid возвращает 0 (токен истёк, условие expires_at > NOW() не выполняется)
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(0));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            // Проверяем, что findByTokenHash НЕ вызывался
+            Mockito.verify(inviteTokenRepository, Mockito.never())
+                    .findByTokenHash(ArgumentMatchers.anyString());
+            Mockito.verify(userRepository, Mockito.never())
+                    .findById(ArgumentMatchers.any(UUID.class));
+            Mockito.verify(credentialRepository, Mockito.never())
+                    .save(ArgumentMatchers.any(Credential.class));
+        }
+
+        @Test
+        @DisplayName("Should fail when user is not in INVITED status (already ACTIVE)")
+        void shouldFailWhenUserIsAlreadyActive() {
+            // Given
+            User activeUser = User.builder()
+                    .id(testUserId)
+                    .email("active@example.com")
+                    .login("activeuser")
+                    .status(UserStatus.ACTIVE)  // ACTIVE, не INVITED
+                    .build();
+
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));  // Используем validInviteToken
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.just(activeUser));       // Используем activeUser
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            Mockito.verify(credentialRepository, Mockito.never()).findByUserIdAndCredentialType(ArgumentMatchers.any(), ArgumentMatchers.any());
+            Mockito.verify(credentialRepository, Mockito.never()).save(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when user is BLOCKED")
+        void shouldFailWhenUserIsBlocked() {
+            // Given
+            testUser.setStatus(UserStatus.BLOCKED);
+
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(testInviteToken));
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.just(testUser));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            Mockito.verify(credentialRepository, Mockito.never()).findByUserIdAndCredentialType(ArgumentMatchers.any(), ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when invite token not found")
+        void shouldFailWhenInviteTokenNotFound() {
+            // Given
+            String nonExistentToken = "non-existent-token";
+            // markTokenAsUsedIfValid возвращает 0 (токен не найден)
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(0));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(nonExistentToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            Mockito.verify(userRepository, Mockito.never()).findById(ArgumentMatchers.any(UUID.class));
+        }
+
+        @Test
+        @DisplayName("Should fail when user not found")
+        void shouldFailWhenUserNotFound() {
+            // Given
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+            // Используем validInviteToken, который связан с invitedUser
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));  // Изменено на validInviteToken
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.empty());
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            Mockito.verify(credentialRepository, Mockito.never()).save(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when token is null")
+        void shouldFailWhenTokenIsNull() {
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(null, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
+                                    error.getMessage().equals("Token and password are required")
+                    )
+                    .verify();
+
+            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when token is blank")
+        void shouldFailWhenTokenIsBlank() {
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken("", newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
+                                    error.getMessage().equals("Token and password are required")
+                    )
+                    .verify();
+
+            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when password is null")
+        void shouldFailWhenPasswordIsNull() {
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, null))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
+                                    error.getMessage().equals("Token and password are required")
+                    )
+                    .verify();
+
+            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should fail when password is blank")
+        void shouldFailWhenPasswordIsBlank() {
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, ""))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
+                                    error.getMessage().equals("Token and password are required")
+                    )
+                    .verify();
+
+            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should handle password hash service error during set password")
+        void shouldHandlePasswordHashServiceErrorDuringSetPassword() {
+            // Given
+            // markTokenAsUsedIfValid должна вернуть 1 (токен успешно заблокирован)
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(1));
+
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));
+            Mockito.when(userRepository.findById(testUserId))
+                    .thenReturn(Mono.just(invitedUser));
+            Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
+                    .thenReturn(Mono.empty());
+            Mockito.when(passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT))
+                    .thenThrow(new RuntimeException("Hash service error"));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+                    .expectError(RuntimeException.class)
+                    .verify();
+
+            // Проверяем, что encode был вызван
+            Mockito.verify(passwordHashService).encode(newPassword, HashingAlgorithm.BCRYPT);
+
+            // Проверяем, что сохранения НЕ вызывались
+            Mockito.verify(credentialRepository, Mockito.never())
+                    .save(ArgumentMatchers.any(Credential.class));
+            Mockito.verify(userRepository, Mockito.never())
+                    .save(ArgumentMatchers.any(User.class));
+            Mockito.verify(outboxEventRepository, Mockito.never())
+                    .save(ArgumentMatchers.any(OutboxEvent.class));
+        }
+
+        @Test
+        @DisplayName("Should fail when token hash is invalid")
+        void shouldFailWhenTokenHashIsInvalid() {
+            // Given - токен не существует в БД
+            String differentToken = "different-token";
+
+            // markTokenAsUsedIfValid возвращает 0 (токен не найден или уже использован)
+            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(0));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.setPasswordByToken(differentToken, newPassword))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid or expired token")
+                    )
+                    .verify();
+
+            // Проверяем, что findByTokenHash НЕ вызывался (так как mark вернул 0)
+            Mockito.verify(inviteTokenRepository, Mockito.never())
+                    .findByTokenHash(ArgumentMatchers.anyString());
+            Mockito.verify(userRepository, Mockito.never())
+                    .findById(ArgumentMatchers.any(UUID.class));
         }
     }
 }
