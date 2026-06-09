@@ -13,7 +13,9 @@ import java.util.UUID;
         unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ProjectMapper {
     /**
-     * Маппинг Project в ProjectResponse
+     * Маппинг {@link Project} в {@link ProjectResponse}
+     * param {@link Project}
+     * return {@link ProjectResponse}
      */
     @Mapping(target = "id", source = "id")
     @Mapping(target = "projectKey", source = "projectKey")
@@ -22,7 +24,7 @@ public interface ProjectMapper {
     @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "archivedAt", source = "archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
-    ProjectResponse toResponse(Project project);
+    ProjectResponse toProjectResponse(Project project);
 
     /**
      * Конвертация UUID в String

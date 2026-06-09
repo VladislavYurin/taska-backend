@@ -7,21 +7,49 @@ import "google/protobuf/timestamp.proto";
 import "v1/common.proto";
 
 service ProjectService{
+  /*
+ * Создаёт новый проект проекте.
+ */
   rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
+
+  /*
+ * Возвращает проект по айди
+ */
   rpc GetProject (GetProjectRequest) returns (ProjectResponse);
-  rpc ListMyProjects (ListMyProjectsRequest) returns (stream ProjectResponse);
+
+  /*
+ * Возвращает список всех проектов по айди пользователя
+ */
+  rpc ListMyProjects (GetUsersProjectsRequest) returns (UsersProjectsResponse);
 }
 
 message CreateProjectRequest {
   ru.taska.common.v1.Header header = 1;
-  string project_key = 2;
-  string name = 3;
-  string user_id = 4;
+  CreateProjectRequestBody body = 2;
+}
+
+message CreateProjectRequestBody  {
+  string project_key = 1;
+  string name = 2;
+  string user_id = 3;
 }
 
 message GetProjectRequest {
   ru.taska.common.v1.Header header = 1;
-  string projectId = 2;
+  GetProjectRequestBody body = 2;
+}
+
+message GetProjectRequestBody {
+  string project_id = 1;
+}
+
+message GetUsersProjectsRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetUsersProjectsRequestBody body = 2;
+}
+
+message GetUsersProjectsRequestBody {
+  string user_id = 1;
 }
 
 message ProjectResponse {
@@ -34,7 +62,7 @@ message ProjectResponse {
   optional google.protobuf.Timestamp archived_at = 7;
 }
 
-message ListMyProjectsRequest {
-  ru.taska.common.v1.Header header = 1;
-  string user_id = 2;
+
+message UsersProjectsResponse  {
+  repeated ProjectResponse projectResponse = 1;
 }

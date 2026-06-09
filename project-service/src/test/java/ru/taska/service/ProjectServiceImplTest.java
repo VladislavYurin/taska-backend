@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import ru.taska.exception.DomainException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,10 +13,13 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.UsersProjectsResponse;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.Project;
 import ru.taska.entity.ProjectMember;
 import ru.taska.entity.ProjectSetting;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectMemberRepository;
@@ -25,6 +27,7 @@ import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.impl.ProjectServiceImpl;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.util.UUID;
@@ -74,12 +77,14 @@ class ProjectServiceImplTest {
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
 
         ObjectNode mockNode = Mockito.mock(ObjectNode.class);
+        ArrayNode mockArray = Mockito.mock(ArrayNode.class);
         Mockito.when(objectMapper.createObjectNode()).thenReturn(mockNode);
+        Mockito.when(mockNode.putArray("allowedIssueTypes")).thenReturn(mockArray);
 
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
         Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
         Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class))).thenReturn(Mono.just(new OutboxEvent()));
-        Mockito.when(projectMapper.toResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
+        Mockito.when(projectMapper.toProjectResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
                 .expectNext(mockResponse)
@@ -87,12 +92,35 @@ class ProjectServiceImplTest {
 
         Mockito.verify(projectRepository).findByProjectKey(projectKey);
         Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
+        Mockito.verify(projectSettingRepository).save(ArgumentMatchers.any(ProjectSetting.class));
+        Mockito.verify(outboxEventRepository).save(ArgumentMatchers.any(OutboxEvent.class));
+    }
+
+    @Test
+    void createProject_ThrowsAlreadyExistsException_WhenProjectExists() {
+        Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.just(mockProject));
+
+        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertTrue(throwable instanceof DomainException);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.ALREADY_EXISTS, exception.getStatus());
+                    Assertions.assertEquals("Project with key " + projectKey + " already exists", exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectRepository).findByProjectKey(projectKey);
+        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
+        Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectSetting.class));
+        Mockito.verify(outboxEventRepository, Mockito.never()).save(ArgumentMatchers.any(OutboxEvent.class));
     }
 
     @Test
     void getProject_Success() {
         Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMapper.toResponse(mockProject)).thenReturn(mockResponse);
+        Mockito.when(projectMapper.toProjectResponse(mockProject)).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
                 .expectNext(mockResponse)
@@ -109,6 +137,7 @@ class ProjectServiceImplTest {
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
                     Assertions.assertEquals("Project for projectId = " + projectId + " was not found ", exception.getMessage());
                 })
                 .verify();
@@ -118,14 +147,26 @@ class ProjectServiceImplTest {
 
     @Test
     void listMyProjects_Success() {
+        ProjectResponse mockProjectResponse = ProjectResponse.newBuilder()
+                .setId(projectId.toString())
+                .setProjectKey(projectKey)
+                .setName(projectName)
+                .setCreatedBy(userId.toString())
+                .build();
+
+        UsersProjectsResponse expectedResponse = UsersProjectsResponse.newBuilder()
+                .addProjectResponse(mockProjectResponse)
+                .build();
+
         Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.just(mockProject));
-        Mockito.when(projectMapper.toResponse(mockProject)).thenReturn(mockResponse);
+        Mockito.when(projectMapper.toProjectResponse(mockProject)).thenReturn(mockProjectResponse);
 
         StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
-                .expectNext(mockResponse)
+                .expectNext(expectedResponse)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
+        Mockito.verify(projectMapper).toProjectResponse(mockProject);
     }
 
     @Test
@@ -136,10 +177,12 @@ class ProjectServiceImplTest {
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
                     Assertions.assertEquals("Not found projects for user with id: " + userId, exception.getMessage());
                 })
                 .verify();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
+        Mockito.verify(projectMapper, Mockito.never()).toProjectResponse(ArgumentMatchers.any(Project.class));
     }
 }
