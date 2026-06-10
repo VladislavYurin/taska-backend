@@ -15,7 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder(toBuilder = true)
-@Table("taska.project_members")
+@Table(value = "project_members", schema = "taska")
 public class ProjectMember {
 
     @Column("project_id")

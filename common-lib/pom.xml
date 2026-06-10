@@ -48,6 +48,14 @@
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
     </dependency>
+
+      <!-- MapStruct -->
+      <dependency>
+          <groupId>org.mapstruct</groupId>
+          <artifactId>mapstruct</artifactId>
+          <version>1.6.3</version>
+          <scope>compile</scope>
+      </dependency>
   </dependencies>
 
   <build>

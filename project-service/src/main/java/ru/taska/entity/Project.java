@@ -17,7 +17,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder(toBuilder = true)
-@Table("taska.projects")
+@Table(value = "projects", schema = "taska")
 public class Project {
 
     @Id
