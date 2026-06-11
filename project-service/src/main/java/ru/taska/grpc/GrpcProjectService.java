@@ -5,12 +5,14 @@ import io.r2dbc.spi.R2dbcException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mapper.GrpcExceptionMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.grpc.server.service.GrpcService;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.*;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
 
@@ -21,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectServiceImplBase {
     private final ProjectService projectService;
-
+    private final ProjectMemberService projectMemberService;
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
@@ -69,7 +71,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                         return projectService.getProject(requestId, nodeId, projectId);
                 })
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
                         e -> log.error("getProject failed", e))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
@@ -96,6 +98,100 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
                         e -> log.error("listMyProjects failed", e))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+    }
+
+    @Override
+    public Mono<AddProjectMemberResponse> addProjectMember(Mono<AddProjectMemberRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAddedMemberId(), "body.addedMemberId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAddingUserId(), "body.addingUserId"),
+                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body.role"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID addedMemberId = t.getT3();
+                    UUID addingUserId = t.getT4();
+                    ProjectRole role = t.getT5();
+                    UUID projectId = t.getT6();
+
+                    log.info("[{}][{}] Received request to add member to project: addedMemberId = {}, addingUserId = {}, requestedRole = {}, projectId ={}",
+                            requestId, nodeId, addedMemberId, addingUserId, role, projectId);
+
+                    return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
+                })
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> e instanceof DuplicateKeyException,
+                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("addProjectMember failed", e))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+    }
+
+    @Override
+    public Mono<RmProjectMemberResponse> rmProjectMember(Mono<RmProjectMemberRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getDeletedMemberId(), "body.deletedMemberId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID deletedMemberId = t.getT3();
+                    UUID projectId = t.getT4();
+
+                    log.info("[{}][{}] Received request to remove member from project: userId={}, projectId = {}",
+                            requestId, nodeId, deletedMemberId, projectId);
+
+                    return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, projectId);
+                })
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> e instanceof DuplicateKeyException,
+                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("removeProjectMember failed", e))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+    }
+
+    @Override
+    public Mono<ChangeRoleResponse> changeProjectMemberRole(Mono<ChangeRoleRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getChangedMemberId(), "body.changedMemberId"),
+                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body,role"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
+
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID changedMemberId = t.getT3();
+                    ProjectRole role = t.getT4();
+                    UUID projectId = t.getT5();
+
+                    log.info("[{}][{}] Received request to change user role in project: userId={}, role = {}, projectId = {}",
+                            requestId, nodeId, changedMemberId, role, projectId);
+
+                    return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, role, projectId);
+                })
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> e instanceof DuplicateKeyException,
+                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("changeProjectMemberRole failed", e))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
