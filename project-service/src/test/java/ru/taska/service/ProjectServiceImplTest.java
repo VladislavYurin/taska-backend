@@ -138,7 +138,7 @@ class ProjectServiceImplTest {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
                     Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    Assertions.assertEquals("Project for projectId = " + projectId + " was not found ", exception.getMessage());
+                    Assertions.assertEquals("Project with projectId " + projectId + " was not found ", exception.getMessage());
                 })
                 .verify();
 

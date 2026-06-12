@@ -49,7 +49,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("createProject failed", e))
+                        e -> log.error("createProject failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -73,7 +73,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("getProject failed", e))
+                        e -> log.error("getProject failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -97,7 +97,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("listMyProjects failed", e))
+                        e -> log.error("listMyProjects failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -130,7 +130,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .doOnError(e -> e instanceof DuplicateKeyException,
                         _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("addProjectMember failed", e))
+                        e -> log.error("addProjectMember failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -159,7 +159,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .doOnError(e -> e instanceof DuplicateKeyException,
                         _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("removeProjectMember failed", e))
+                        e -> log.error("removeProjectMember failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -191,7 +191,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .doOnError(e -> e instanceof DuplicateKeyException,
                         _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("changeProjectMemberRole failed", e))
+                        e -> log.error("changeProjectMemberRole failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
