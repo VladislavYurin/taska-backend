@@ -160,6 +160,7 @@ services:
         condition: service_healthy
     ports:
       - "8081:8080"
+      - "9091:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://auth-db:5432/auth_db
       - SPRING_R2DBC_USERNAME=taska
@@ -167,6 +168,11 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5432/auth_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
+      - SPRING_LIQUIBASE_URL=jdbc:postgresql://auth-db:5432/auth_db
+      - SPRING_LIQUIBASE_USERNAME=taska
+      - SPRING_LIQUIBASE_PASSWORD=taska
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - JWT_SECRET=your-super-secret-jwt-key-for-development-only-min-256-bits
 
   project-service:
     build:
@@ -181,7 +187,7 @@ services:
         condition: service_healthy
     ports:
       - "8082:8080"
-      - "9090:9090"
+      - "9096:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://project-db:5432/project_db
       - SPRING_R2DBC_USERNAME=taska
@@ -202,6 +208,7 @@ services:
         condition: service_healthy
     ports:
       - "8083:8080"
+      - "9093:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5432/workflow_db
       - SPRING_R2DBC_USERNAME=taska
@@ -227,7 +234,7 @@ services:
         condition: service_started
     ports:
       - "8084:8080"
-      - "9090:9090"
+      - "9094:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://issue-db:5432/issue_db
       - SPRING_R2DBC_USERNAME=taska
@@ -257,7 +264,7 @@ services:
         condition: service_healthy
     ports:
       - "8085:8080"
-      - "9091:9090"
+      - "9095:9090"
     environment:
       - SPRING_R2DBC_URL=r2dbc:postgresql://notification-db:5432/notification_db
       - SPRING_R2DBC_USERNAME=taska
