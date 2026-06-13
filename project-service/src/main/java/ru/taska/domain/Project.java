@@ -1,10 +1,10 @@
-package ru.taska.entity;
+package ru.taska.domain;
 
-import tools.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Column;
@@ -17,21 +17,31 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder(toBuilder = true)
-@Table(value = "project_settings", schema = "taska")
-public class ProjectSetting {
+@Table(name = "projects", schema = "taska")
+public class Project {
 
     @Id
-    @Column("project_id")
-    private UUID projectId;
+    @Column("id")
+    private UUID id;
 
-    @Column("settings")
-    private JsonNode settings;
+    @Column("project_key")
+    private String projectKey;
+
+    @Column("name")
+    private String name;
+
+    @Column("created_by")
+    private UUID createdBy;
+
+    @CreatedDate
+    @Column("created_at")
+    private Instant createdAt;
 
     @LastModifiedDate
     @Column("updated_at")
     private Instant updatedAt;
 
-    @Column("updated_by")
-    private UUID updatedBy;
+    @Column("archived_at")
+    private Instant archivedAt;
 
 }

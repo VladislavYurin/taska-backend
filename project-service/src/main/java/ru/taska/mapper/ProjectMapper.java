@@ -1,9 +1,14 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
-import org.mapstruct.*;
+import org.mapstruct.CollectionMappingStrategy;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
+import org.mapstruct.NullValueCheckStrategy;
+import org.mapstruct.ReportingPolicy;
 import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.entity.Project;
+import ru.taska.domain.Project;
 
 import java.time.Instant;
 import java.util.UUID;

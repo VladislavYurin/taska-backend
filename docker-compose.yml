@@ -195,6 +195,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://project-db:5432/project_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
+      - SPRING_LIQUIBASE_URL=jdbc:postgresql://project-db:5432/project_db
+      - SPRING_LIQUIBASE_USERNAME=taska
+      - SPRING_LIQUIBASE_PASSWORD=taska
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
   workflow-service:

@@ -1,7 +1,13 @@
+--liquibase formatted sql
+
+-- changeset taska:0000-create-schema
+-- comment: Создание схемы и расширений project-service.
 CREATE SCHEMA IF NOT EXISTS taska;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- changeset taska:0000-projects
+-- comment: Таблица проектов.
 CREATE TABLE IF NOT EXISTS taska.projects (
     id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     project_key text        NOT NULL,
@@ -16,11 +22,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_projects_project_key ON taska.projects(pr
 
 CREATE INDEX IF NOT EXISTS idx_projects_created_by ON taska.projects(created_by);
 
+-- changeset taska:0000-project-members
+-- comment: Таблица участников проекта.
 CREATE TABLE IF NOT EXISTS taska.project_members (
     project_id  uuid        NOT NULL,
     user_id     uuid        NOT NULL,
     role        text        NOT NULL,
-    added_at    timestamptz NOT NULL,
+    added_at    timestamptz NOT NULL DEFAULT now(),
     added_by    uuid        NOT NULL,
 
     CONSTRAINT pk_project_members PRIMARY KEY (project_id, user_id),
@@ -34,6 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON taska.project_members(
 
 CREATE INDEX IF NOT EXISTS idx_project_members_project_id_role ON taska.project_members(project_id, role);
 
+-- changeset taska:0000-project-settings
+-- comment: Таблица настроек проекта.
 CREATE TABLE IF NOT EXISTS taska.project_settings(
     project_id  uuid        PRIMARY KEY,
     settings    jsonb       NOT NULL DEFAULT '{}'::jsonb,
@@ -44,7 +54,9 @@ CREATE TABLE IF NOT EXISTS taska.project_settings(
         ON DELETE CASCADE
 );
 
-CREATE TABLE taska.outbox_events (
+-- changeset taska:0000-outbox-events
+-- comment: Таблица transactional outbox.
+CREATE TABLE IF NOT EXISTS taska.outbox_events (
     id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     aggregate_type      text        NOT NULL,
     aggregate_id        uuid        NOT NULL,
@@ -56,4 +68,4 @@ CREATE TABLE taska.outbox_events (
     last_error_message  text        NULL,
 
     CONSTRAINT outbox_events_attempts_chk CHECK (attempts >= 0)
-)
+);

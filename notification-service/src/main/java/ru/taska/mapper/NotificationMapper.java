@@ -59,6 +59,39 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toProjectCreated(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.PROJECT_CREATED)
+                .title("Проект создан")
+                .body("Создан новый проект " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toMemberAdded(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.MEMBER_ADDED)
+                .title("Вас добавили в проект")
+                .body("Вы добавлены в проект " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toMemberRemoved(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.MEMBER_REMOVED)
+                .title("Вас удалили из проекта")
+                .body("Вы удалены из проекта " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toUserActivated(TaskaEvent event) {
         return Notification.builder()
                 .userId(event.aggregateId())
@@ -101,6 +134,9 @@ public class NotificationMapper {
             case ISSUE_TRANSITIONED -> NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED;
             case ISSUE_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED;
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
+            case PROJECT_CREATED -> NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED;
+            case MEMBER_ADDED -> NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED;
+            case MEMBER_REMOVED -> NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED;
             case USER_ACTIVATED -> NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED;
         };
     }

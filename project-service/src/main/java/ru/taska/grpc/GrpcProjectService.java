@@ -2,6 +2,7 @@ package ru.taska.grpc;
 
 import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mapper.GrpcExceptionMapper;
@@ -46,12 +47,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.createProject(requestId, nodeId, projectKey, projectName, userId);
                 })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("createProject failed " + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(withErrorHandling("createProject"));
     }
 
     @Override
@@ -70,12 +66,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                         return projectService.getProject(requestId, nodeId, projectId);
                 })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("getProject failed " + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(withErrorHandling("getProject"));
     }
 
     @Override
@@ -94,10 +85,22 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.listMyProjects(requestId, nodeId, userId);
                 })
+                .transform(withErrorHandling("listMyProjects"));
+    }
+
+    //TODO: Создать общий GrpcErrorHanlder
+    private <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
+        return mono -> mono
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("listMyProjects failed " + e.getMessage()))
+                            e -> {
+                                log.error("{}: database error", operationName, e);
+                                return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
+                            })
+                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
+                            e -> {
+                                log.error("{}: unexpected error", operationName, e);
+                                return new DomainException(DomainStatus.INTERNAL, "Internal error");
+                            })
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

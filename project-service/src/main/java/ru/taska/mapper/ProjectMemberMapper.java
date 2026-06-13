@@ -2,8 +2,8 @@ package ru.taska.mapper;
 
 import org.mapstruct.*;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.entity.ProjectMember;
-import ru.taska.entity.ProjectRole;
+import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectRole;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProjectMemberMapper {

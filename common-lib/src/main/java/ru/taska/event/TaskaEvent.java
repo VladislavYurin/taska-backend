@@ -1,5 +1,6 @@
 package ru.taska.event;
 
+import java.util.UUID;
 import lombok.Builder;
 import tools.jackson.databind.JsonNode;
 

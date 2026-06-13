@@ -2,7 +2,7 @@ package ru.taska.repository;
 
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
-import ru.taska.entity.ProjectSetting;
+import ru.taska.domain.ProjectSetting;
 import java.util.UUID;
 
 @Repository

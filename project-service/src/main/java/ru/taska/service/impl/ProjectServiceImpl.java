@@ -1,5 +1,7 @@
 package ru.taska.service.impl;
 
+import java.time.Instant;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -7,37 +9,34 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.UsersProjectsResponse;
-import ru.taska.entity.*;
+import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.Project;
+import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectRole;
+import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
-import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
+import ru.taska.service.OutboxEventService;
 import ru.taska.service.ProjectService;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
-
-import java.time.Instant;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProjectServiceImpl implements ProjectService {
 
-    private static final String PROJECT_AGGREGATE_TYPE = "project";
-    private static final String OUTBOX_EVENT_TYPE = "projectCreated";
-
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectSettingRepository projectSettingRepository;
-    private final OutboxEventRepository outboxEventRepository;
+    private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
     private final ProjectMapper projectMapper;
-
 
     @Override
     @Transactional
@@ -50,32 +49,17 @@ public class ProjectServiceImpl implements ProjectService {
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     Project project = Project.builder()
-                            .projectKey(projectKey)
-                            .name(projectName)
-                            .createdBy(userId)
-                            .build();
+                                             .projectKey(projectKey)
+                                             .name(projectName)
+                                             .createdBy(userId)
+                                             .build();
 
                     return projectRepository.save(project)
 
                             .flatMap(savedProject -> {
-                                ProjectMember adminMember = ProjectMember.builder()
-                                        .projectId(savedProject.getId())
-                                        .userId(savedProject.getCreatedBy())
-                                        .role(ProjectRole.ADMIN)
-                                        .addedBy(savedProject.getCreatedBy())
-                                        .addedAt(Instant.now())
-                                        .build();
-
-                               ProjectSetting defaultSettings = createDefaultProjectSettings(savedProject.getId(),
-                                       savedProject.getCreatedBy());
-                                OutboxEvent outboxEvent = createOutboxEvent(savedProject.getId(),
-                                        savedProject.getProjectKey(),
-                                        savedProject.getName(),
-                                        savedProject.getCreatedBy());
-
-                                return projectMemberRepository.save(adminMember)
-                                        .then(projectSettingRepository.save(defaultSettings))
-                                        .then(outboxEventRepository.save(outboxEvent))
+                                return projectMemberRepository.save(createAdminMember(savedProject))
+                                        .then(projectSettingRepository.save(createDefaultProjectSettings(savedProject)))
+                                        .then(outboxEventService.saveProjectCreated(savedProject))
                                         .then(Mono.fromRunnable(() ->
                                                 log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
                                                         requestId, nodeId, projectKey, projectName, userId)))
@@ -109,8 +93,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .doOnSuccess(p -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
-    @Override
-    public ProjectSetting createDefaultProjectSettings(UUID projectId, UUID userId) {
+    private ProjectSetting createDefaultProjectSettings(Project project) {
         ObjectNode defaultSettingsJson = objectMapper.createObjectNode();
         ArrayNode allowedTypes = defaultSettingsJson.putArray("allowedIssueTypes");
         allowedTypes.add("TASK");
@@ -119,28 +102,20 @@ public class ProjectServiceImpl implements ProjectService {
         defaultSettingsJson.put("defaultIssueType", "TASK");
 
         return ProjectSetting.builder()
-                .projectId(projectId)
+                .projectId(project.getId())
                 .settings(defaultSettingsJson)
-                .updatedBy(userId)
+                .updatedBy(project.getCreatedBy())
                 .updatedAt(Instant.now())
                 .build();
     }
 
-    @Override
-    public OutboxEvent createOutboxEvent(UUID projectId, String projectKey, String name, UUID createdBy) {
-        ObjectNode eventPayload = objectMapper.createObjectNode();
-        eventPayload.put("projectId", String.valueOf(projectId));
-        eventPayload.put("projectKey", projectKey);
-        eventPayload.put("name", String.valueOf(name));
-        eventPayload.put("createdBy", String.valueOf(createdBy));
-
-        return OutboxEvent.builder()
-                .aggregateType(PROJECT_AGGREGATE_TYPE)
-                .aggregateId(projectId)
-                .eventType(OUTBOX_EVENT_TYPE)
-                .payload(eventPayload)
-                .attempts(0)
-                .createdAt(Instant.now())
-                .build();
+    private ProjectMember createAdminMember(Project savedProject) {
+        return ProjectMember.builder()
+                            .projectId(savedProject.getId())
+                            .userId(savedProject.getCreatedBy())
+                            .role(ProjectRole.ADMIN)
+                            .addedBy(savedProject.getCreatedBy())
+                            .addedAt(Instant.now())
+                            .build();
     }
 }

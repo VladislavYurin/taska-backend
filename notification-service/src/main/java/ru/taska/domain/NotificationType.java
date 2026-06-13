@@ -5,5 +5,8 @@ public enum NotificationType {
     ISSUE_TRANSITIONED,
     ISSUE_CREATED,
     USER_INVITED,
+    PROJECT_CREATED,
+    MEMBER_ADDED,
+    MEMBER_REMOVED,
     USER_ACTIVATED
 }

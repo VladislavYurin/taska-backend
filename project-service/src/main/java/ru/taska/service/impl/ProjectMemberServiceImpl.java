@@ -9,11 +9,12 @@ import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.entity.ProjectMember;
+import ru.taska.domain.ProjectMember;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.repository.ProjectMemberRepository;
+import ru.taska.service.OutboxEventService;
 import ru.taska.service.ProjectMemberService;
 
 import java.time.Instant;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectMemberMapper projectMemberMapper;
+    private final OutboxEventService outboxEventService;
 
     @Override
     @Transactional
@@ -46,7 +48,9 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                                     .addedBy(addingUserId)
                                     .build();
 
-                            return projectMemberRepository.save(addedMember);
+                            return projectMemberRepository.save(addedMember)
+                                    .then(outboxEventService.saveMemberAdded(addedMember))
+                                    .thenReturn(addedMember);
                         })
                 .map(projectMemberMapper::toAddProjectMemberResponse)
                 .doOnSuccess(pm ->
@@ -65,10 +69,11 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                         return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project member with id " + deletedMemberId +
                                 " was not found in project with id " + projectId));
                     }
-                    return Mono.just(RmProjectMemberResponse.newBuilder()
-                            .setDeletedMemberId(String.valueOf(deletedMemberId))
-                            .setProjectId(String.valueOf(projectId))
-                            .build());
+                    return outboxEventService.saveMemberRemoved(deletedMemberId, projectId)
+                                             .thenReturn(RmProjectMemberResponse.newBuilder()
+                                                                                .setDeletedMemberId(String.valueOf(deletedMemberId))
+                                                                                .setProjectId(String.valueOf(projectId))
+                                                                                .build());
                 })
                 .doOnSuccess(deletedMember ->
                         log.info("[{}][{}] Project member with id {} successfully deleted from project with id {}",
