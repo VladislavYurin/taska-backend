@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import ru.taska.event.TaskaEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -8,6 +7,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
 import ru.taska.domain.ProcessedEvent;
+import ru.taska.event.TaskaEvent;
 import ru.taska.repository.NotificationRepository;
 import ru.taska.repository.ProcessedEventRepository;
 
@@ -66,6 +66,13 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
         return Flux.fromIterable(notifications)
                 .flatMap(notificationRepository::save)
+                .doOnNext(notification ->
+                        log.info("Notification successfully saved: id={}", notification.getId())
+                )
+                .doOnError(ex ->
+                        log.error("Failed to save notification for event: eventId={}, message: {}",
+                                eventId, ex.getMessage())
+                )
                 .then();
     }
 }

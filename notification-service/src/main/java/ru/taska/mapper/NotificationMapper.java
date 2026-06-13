@@ -1,11 +1,11 @@
 package ru.taska.mapper;
 
-import ru.taska.event.TaskaEvent;
 import org.springframework.stereotype.Component;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
+import ru.taska.event.TaskaEvent;
 import com.google.protobuf.Timestamp;
 
 
@@ -17,7 +17,6 @@ public class NotificationMapper {
 
     public Notification toIssueCreated(TaskaEvent event, UUID userId) {
         return Notification.builder()
-                .id(UUID.randomUUID())
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_CREATED)
                 .title("Новая задача")
@@ -29,7 +28,6 @@ public class NotificationMapper {
 
     public Notification toIssueAssigned(TaskaEvent event, UUID assigneeId) {
         return Notification.builder()
-                .id(UUID.randomUUID())
                 .userId(assigneeId)
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
                 .title("Новая задача назначена на вас")
@@ -41,7 +39,6 @@ public class NotificationMapper {
 
     public Notification toIssueTransitioned(TaskaEvent event, UUID userId) {
         return Notification.builder()
-                .id(UUID.randomUUID())
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_TRANSITIONED)
                 .title("Статус задачи изменён")
@@ -53,7 +50,6 @@ public class NotificationMapper {
 
     public Notification toUserInvited(TaskaEvent event) {
         return Notification.builder()
-                .id(UUID.randomUUID())
                 .userId(event.aggregateId())
                 .notificationType(NotificationType.USER_INVITED)
                 .title("Добро пожаловать в Taska")
@@ -65,7 +61,6 @@ public class NotificationMapper {
 
     public Notification toUserActivated(TaskaEvent event) {
         return Notification.builder()
-                .id(UUID.randomUUID())
                 .userId(event.aggregateId())
                 .notificationType(NotificationType.USER_ACTIVATED)
                 .title("Аккаунт активирован")

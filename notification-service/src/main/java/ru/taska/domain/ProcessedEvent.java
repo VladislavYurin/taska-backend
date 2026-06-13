@@ -9,6 +9,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Обработанное событие из Kafka.
@@ -20,13 +21,19 @@ import java.time.Instant;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("processed_events")
+@Table(name = "processed_events", schema = "taska")
 public class ProcessedEvent {
+
+    /**
+     * Идентификатор обработанного события.
+     */
+    @Id
+    @Column("id")
+    private UUID id;
 
     /**
      * Уникальный идентификатор события (eventId).
      */
-    @Id
     @Column("event_id")
     private String eventId;
 

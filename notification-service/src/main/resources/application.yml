@@ -46,3 +46,5 @@ logging:
   level:
     org.liquibase: INFO
     liquibase: INFO
+    org.apache.kafka: WARN
+    org.springframework.kafka:  WARN

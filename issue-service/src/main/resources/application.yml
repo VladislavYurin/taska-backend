@@ -1,3 +1,6 @@
+server:
+  port: 8084
+
 spring:
   r2dbc:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
@@ -42,4 +45,5 @@ app:
 
 logging:
   level:
-    ru.taska: DEBUG
+    ru.taska: INFO
+    org.apache.kafka: WARN

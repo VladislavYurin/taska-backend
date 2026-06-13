@@ -37,7 +37,7 @@ public class OutboxEventPublisher {
             String key = event.getAggregateId().toString();
             String payload = outboxEventMapper.toTaskaEventJsonAsString(event);
 
-            log.info(
+            log.debug(
                     "Publishing outbox event started: id={}, aggregateType={}, aggregateId={}, eventType={}, topic={}",
                     event.getId(),
                     event.getAggregateType(),
