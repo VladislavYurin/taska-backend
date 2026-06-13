@@ -89,7 +89,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public Mono<ProjectResponse> getProject(String requestId, String nodeId, UUID projectId) {
         return projectRepository.findById(projectId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project for projectId = " + projectId + " was not found ")))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found ")))
                 .map(projectMapper::toProjectResponse)
                 .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
     }

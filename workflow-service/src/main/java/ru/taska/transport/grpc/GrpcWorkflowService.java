@@ -49,7 +49,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof io.grpc.StatusRuntimeException),
-                        e -> log.error("getWorkflowForProject failed", e))
+                        e -> log.error("getWorkflowForProject failed" + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
