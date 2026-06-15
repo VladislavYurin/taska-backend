@@ -15,7 +15,7 @@ import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
-import ru.taska.domain.OutboxEventStatus;
+import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;

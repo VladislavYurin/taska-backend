@@ -73,6 +73,22 @@ enum NotificationKind {
    * Уведомление об активации пользователя.
    */
   NOTIFICATION_KIND_USER_ACTIVATED  = 5;
+
+  /**
+   * Уведомление о создании проекта.
+   */
+  NOTIFICATION_KIND_PROJECT_CREATED  = 6;
+
+  /**
+ * Уведомление о добавлении участника в проект.
+ */
+  NOTIFICATION_KIND_MEMBER_ADDED  = 7;
+
+  /**
+ * Уведомление об удалении участника из проекта.
+ */
+  NOTIFICATION_KIND_MEMBER_REMOVED  = 8;
+
 }
 
 /**

@@ -9,9 +9,10 @@ import "google/protobuf/empty.proto";
 import "v1/common.proto";
 
 enum ProjectRole  {
-    ADMIN = 0;
-    MEMBER = 1;
-    VIEWER = 2;
+  UNSPECIFIED = 0;
+  ADMIN = 1;
+  MEMBER = 2;
+  VIEWER = 3;
 }
 
 service ProjectService  {

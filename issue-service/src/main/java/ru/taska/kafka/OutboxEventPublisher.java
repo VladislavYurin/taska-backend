@@ -80,5 +80,4 @@ public class OutboxEventPublisher {
         return Mono.empty();
     }
 
-
 }

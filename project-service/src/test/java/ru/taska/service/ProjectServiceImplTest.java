@@ -14,14 +14,13 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.UsersProjectsResponse;
-import ru.taska.entity.OutboxEvent;
-import ru.taska.entity.Project;
-import ru.taska.entity.ProjectMember;
-import ru.taska.entity.ProjectSetting;
+import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.Project;
+import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
-import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -38,7 +37,7 @@ class ProjectServiceImplTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private ProjectSettingRepository projectSettingRepository;
-    @Mock private OutboxEventRepository outboxEventRepository;
+    @Mock private OutboxEventService outboxEventService;
     @Mock private ObjectMapper objectMapper;
     @Mock private ProjectMapper projectMapper;
 
@@ -83,7 +82,7 @@ class ProjectServiceImplTest {
 
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
         Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
-        Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
         Mockito.when(projectMapper.toProjectResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
@@ -94,7 +93,7 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
         Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
         Mockito.verify(projectSettingRepository).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventRepository).save(ArgumentMatchers.any(OutboxEvent.class));
+        Mockito.verify(outboxEventService).saveProjectCreated(ArgumentMatchers.any(Project.class));
     }
 
     @Test
@@ -114,7 +113,7 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
         Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
         Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventRepository, Mockito.never()).save(ArgumentMatchers.any(OutboxEvent.class));
+        Mockito.verify(outboxEventService, Mockito.never()).saveProjectCreated(ArgumentMatchers.any(Project.class));
     }
 
     @Test

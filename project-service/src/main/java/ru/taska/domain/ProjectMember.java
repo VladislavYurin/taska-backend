@@ -1,4 +1,4 @@
-package ru.taska.entity;
+package ru.taska.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder(toBuilder = true)
-@Table(value = "project_members", schema = "taska")
+@Table(name = "project_members", schema = "taska")
 public class ProjectMember {
 
     @Column("project_id")

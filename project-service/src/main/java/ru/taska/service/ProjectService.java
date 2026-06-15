@@ -1,12 +1,10 @@
 package ru.taska.service;
 
+import java.util.UUID;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.UsersProjectsResponse;
-import ru.taska.entity.OutboxEvent;
-import ru.taska.entity.ProjectSetting;
-
-import java.util.UUID;
+import ru.taska.domain.ProjectSetting;
 
 public interface ProjectService {
 
@@ -42,23 +40,4 @@ public interface ProjectService {
      */
     Mono<UsersProjectsResponse> listMyProjects(String requestId, String nodeId, UUID userId);
 
-    /**
-     * Сервисный метод для создания дефолтных настроек проекта
-     *
-     * @param projectId айди проекта
-     * @param userId    айди пользователя
-     * @return {@link ProjectSetting} дефолтные настройки проекта
-     */
-    ProjectSetting createDefaultProjectSettings(UUID projectId, UUID userId);
-
-    /**
-     * Сервисный метод для создания Outbox события
-     *
-     * @param projectId  айди проекта
-     * @param projectKey ключ проекта
-     * @param name имя проекта
-     * @param createdBy айди юзера
-     * @return {@link OutboxEvent} дефолтные настройки проекта
-     */
-    OutboxEvent createOutboxEvent(UUID projectId, String projectKey, String name, UUID createdBy);
 }

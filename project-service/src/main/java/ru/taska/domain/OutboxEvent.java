@@ -1,5 +1,6 @@
-package ru.taska.entity;
+package ru.taska.domain;
 
+import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +18,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(value="outbox_events", schema = "taska")
+@Table(name = "outbox_events", schema = "taska")
 public class OutboxEvent {
 
     @Id
@@ -39,6 +40,9 @@ public class OutboxEvent {
     @Column("attempts")
     private Integer attempts;
 
+    @Column("status")
+    private OutboxEventStatus status;
+
     @Column("last_error_message")
     private String lastErrorMessage;
 
@@ -48,4 +52,7 @@ public class OutboxEvent {
 
     @Column("published_at")
     private Instant publishedAt;
+
+    @Column("processing_started_at")
+    private Instant processingStartedAt;
 }

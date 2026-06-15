@@ -1,4 +1,4 @@
-package ru.taska.entity;
+package ru.taska.domain;
 
 public enum ProjectRole {
     ADMIN,

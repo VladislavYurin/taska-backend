@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Notification;
+import ru.taska.event.TaskaEvent;
 import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.JsonNode;
 
@@ -25,10 +26,13 @@ public class NotificationFactory {
         EventType type = EventType.fromValue(event.eventType());
 
         return switch (type) {
-            case ISSUE_CREATED      -> buildIssueCreated(event, payload, eventId);
-            case ISSUE_ASSIGNED     -> buildIssueAssigned(event, payload, eventId);
-            case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
-            case USER_INVITED       -> buildUserInvited(event, eventId);
+            case ISSUE_CREATED        -> buildIssueCreated(event, payload, eventId);
+            case ISSUE_ASSIGNED       -> buildIssueAssigned(event, payload, eventId);
+            case ISSUE_TRANSITIONED   -> buildIssueTransitioned(event, payload, eventId);
+            case USER_INVITED         -> buildUserInvited(event, eventId);
+            case PROJECT_CREATED      -> buildProjectCreated(event, payload, eventId);
+            case MEMBER_ADDED         -> buildMemberAdded(event, payload, eventId);
+            case MEMBER_REMOVED       -> buildMemberRemoved(event, payload, eventId);
             case USER_ACTIVATED     -> buildUserActivated(event, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
@@ -96,6 +100,33 @@ public class NotificationFactory {
             return List.of();
         }
         return List.of(notificationMapper.toUserInvited(event));
+    }
+
+    private List<Notification> buildProjectCreated(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID createdBy = extractUuid(payload, "createdBy");
+        if (createdBy == null) {
+            log.warn("ProjectCreated event without createdBy, eventId={}", eventId);
+            return List.of();
+        }
+        return List.of(notificationMapper.toProjectCreated(event, createdBy));
+    }
+
+    private List<Notification> buildMemberAdded(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID userId = extractUuid(payload, "userId");
+        if (userId == null) {
+            log.warn("MemberAdded event without userId, eventId={}", eventId);
+            return List.of();
+        }
+        return List.of(notificationMapper.toMemberAdded(event, userId));
+    }
+
+    private List<Notification> buildMemberRemoved(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID userId = extractUuid(payload, "userId");
+        if (userId == null) {
+            log.warn("MemberRemoved event without userId, eventId={}", eventId);
+            return List.of();
+        }
+        return List.of(notificationMapper.toMemberRemoved(event, userId));
     }
 
     private List<Notification> buildUserActivated(TaskaEvent event, String eventId) {
