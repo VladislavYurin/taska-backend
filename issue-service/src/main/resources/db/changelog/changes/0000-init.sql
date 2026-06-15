@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- changeset taska:0002-create-issues
 -- comment: Создание таблицы issues.
-CREATE TABLE taska.issues (
+CREATE TABLE IF NOT EXISTS taska.issues (
     id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id    uuid        NOT NULL,
     issue_number  int         NOT NULL,
@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS issues_status_key_idx ON taska.issues(status_key);
 
 -- changeset taska:0004-create-project-counters
 -- comment: Создание таблицы project_counters для генерации следующего номера задачи в проекте.
-CREATE TABLE taska.project_counters (
+CREATE TABLE IF NOT EXISTS taska.project_counters (
     project_id        uuid  PRIMARY KEY,
     next_issue_number int   NOT NULL,
 
@@ -53,7 +53,7 @@ CREATE TABLE taska.project_counters (
 
 -- changeset taska:0005-create-issue-history
 -- comment: Создание таблицы issue_history для хранения истории изменений задач.
-CREATE TABLE taska.issue_history (
+CREATE TABLE IF NOT EXISTS taska.issue_history (
     id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id      uuid        NOT NULL,
     event_type    text        NOT NULL,
@@ -72,7 +72,7 @@ CREATE INDEX IF NOT EXISTS issue_history_actor_occurred_idx ON taska.issue_histo
 
 -- changeset taska:0007-create-issue-links
 -- comment: Создание таблицы issue_links для установления связей между задачами.
-CREATE TABLE taska.issue_links (
+CREATE TABLE IF NOT EXISTS taska.issue_links (
     id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_issue_id  uuid        NOT NULL,
     target_issue_id  uuid        NOT NULL,
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS issue_links_target_issue_idx ON taska.issue_links(tar
 
 -- changeset taska:0009-create-idempotency-keys
 -- comment: Создание таблицы idempotency_keys для защиты от дублей при ретраях во время создания или изменения задачи.
-CREATE TABLE taska.idempotency_keys (
+CREATE TABLE IF NOT EXISTS taska.idempotency_keys (
     id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     key           text        NOT NULL,
     user_id       uuid        NOT NULL,
@@ -111,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idempotency_keys_expires_at_idx ON taska.idempotency_
 
 -- changeset taska:0011-create-outbox-events
 -- comment: Создание таблицы outbox_events.
-CREATE TABLE taska.outbox_events (
+CREATE TABLE IF NOT EXISTS taska.outbox_events (
     id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     aggregate_type text        NOT NULL,
     aggregate_id   uuid        NOT NULL,

@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- changeset taska:0002-create-users
 -- comment: Создание таблицы users.
-CREATE TABLE taska.users (
+CREATE TABLE IF NOT EXISTS taska.users (
    id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
    login         varchar(64) NOT NULL,
    email         varchar(320) NOT NULL,
@@ -31,7 +31,7 @@ CREATE INDEX IF NOT EXISTS users_status_idx ON taska.users(status);
 
 -- changeset taska:0004-create-credentials
 -- comment: Создание таблицы credentials.
-CREATE TABLE taska.credentials (
+CREATE TABLE IF NOT EXISTS taska.credentials (
     id              uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id          uuid         NOT NULL,
 
@@ -99,7 +99,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS credentials_external_identity_global_uniq
 
 -- changeset taska:0006-create-refresh-tokens
 -- comment: Создание таблицы refresh_tokens.
-CREATE TABLE taska.refresh_tokens (
+CREATE TABLE IF NOT EXISTS taska.refresh_tokens (
     id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      uuid         NOT NULL,
     token_hash   varchar(255) NOT NULL,
@@ -117,7 +117,7 @@ CREATE TABLE taska.refresh_tokens (
 
 -- changeset taska:0007-create-invite-tokens
 -- comment: Создание таблицы invite_tokens.
-CREATE TABLE taska.invite_tokens (
+CREATE TABLE IF NOT EXISTS taska.invite_tokens (
     id          uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     uuid         NOT NULL,
     token_hash  varchar(255) NOT NULL,
@@ -132,7 +132,7 @@ CREATE TABLE taska.invite_tokens (
 
 -- changeset taska:0008-create-outbox-events
 -- comment: Создание таблицы outbox_events.
-CREATE TABLE taska.outbox_events (
+CREATE TABLE IF NOT EXISTS taska.outbox_events (
     id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     aggregate_type text        NOT NULL,
     aggregate_id   uuid        NOT NULL,
