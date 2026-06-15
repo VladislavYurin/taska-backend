@@ -25,6 +25,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationFactory notificationFactory;
+    private final EmailSenderService emailSenderService;
 
     /**
      * Обрабатывает событие с дедупликацией по {@code eventId}.
@@ -66,6 +67,10 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
         return Flux.fromIterable(notifications)
                 .flatMap(notificationRepository::save)
+                .flatMap(savedNotification ->
+                        emailSenderService.sendIfEnabled(savedNotification)
+                                .thenReturn(savedNotification)
+                )
                 .doOnNext(notification ->
                         log.info("Notification successfully saved: id={}", notification.getId())
                 )

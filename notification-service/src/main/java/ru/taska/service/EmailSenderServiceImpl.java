@@ -43,14 +43,20 @@ public class EmailSenderServiceImpl implements EmailSenderService{
      * При ошибке — со статусом {@code FAILED} и планирует повтор.</p>
      */
     @Override
-    public Mono<Void> sendIfEnabled(Notification notification, String toEmail) {
+    public Mono<Void> sendIfEnabled(Notification notification) {
         return preferenceRepository.findByUserId(notification.getUserId())
                 .flatMap(preference -> {
                     if (!preference.isEmailEnabled()) {
                         log.info("Email disabled for userId={}", notification.getUserId());
                         return Mono.<Void>empty();
                     }
-                    return doSend(notification, toEmail);
+
+                    if (preference.getEmail() == null || preference.getEmail().isBlank()) {
+                        log.warn("Email enabled but recipient email is empty for userId={}", notification.getUserId());
+                        return Mono.<Void>empty();
+                    }
+
+                    return doSend(notification, preference.getEmail());
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("No preference found for userId={}, skipping email", notification.getUserId());
