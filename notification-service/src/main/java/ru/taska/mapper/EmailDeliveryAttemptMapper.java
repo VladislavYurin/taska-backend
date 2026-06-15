@@ -7,7 +7,6 @@ import ru.taska.domain.EmailDeliveryAttempt;
 import ru.taska.domain.Notification;
 
 import java.time.Instant;
-import java.util.UUID;
 
 @Component
 public class EmailDeliveryAttemptMapper {
@@ -28,7 +27,6 @@ public class EmailDeliveryAttemptMapper {
             Instant nextRetryAt
     ) {
         return EmailDeliveryAttempt.builder()
-                .id(UUID.randomUUID())
                 .notificationId(notification.getId())
                 .toEmail(toEmail)
                 .subject(notification.getTitle())

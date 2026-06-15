@@ -27,6 +27,8 @@ public class IssueEventsKafkaListener {
     @KafkaListener(topics = "issue.events", groupId = "notification-service")
     public void onMessage(String message) {
         try {
+            log.info("Received message from Kafka: {}", message);
+
             TaskaEvent event = objectMapper.readValue(message, TaskaEvent.class);
             Mono<Void> processing = eventHandler.handle(event);
             // Блокируемся внутри consumer-потока, чтобы не потерять ошибки обработки.

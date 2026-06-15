@@ -18,7 +18,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("notification_preferences")
+@Table(name = "notification_preferences", schema = "taska")
 public class NotificationPreference {
 
     /**

@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("notifications")
+@Table(name = "notifications", schema = "taska")
 public class Notification {
 
     /**
