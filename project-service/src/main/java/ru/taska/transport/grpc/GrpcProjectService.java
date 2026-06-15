@@ -2,7 +2,6 @@ package ru.taska.grpc;
 
 import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
-import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mapper.GrpcExceptionMapper;
@@ -11,8 +10,11 @@ import org.springframework.grpc.server.service.GrpcService;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.*;
+import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.ProjectMapper;
+import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
@@ -25,6 +27,8 @@ import java.util.UUID;
 public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectServiceImplBase {
     private final ProjectService projectService;
     private final ProjectMemberService projectMemberService;
+    private final ProjectMapper projectMapper;
+    private final ProjectMemberMapper projectMemberMapper;
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
@@ -47,7 +51,13 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.createProject(requestId, nodeId, projectKey, projectName, userId);
                 })
-                .transform(withErrorHandling("createProject"));
+                .map(projectMapper::toProjectResponse)
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("createProject failed" + e.getMessage()))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
 
     @Override
@@ -66,7 +76,13 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                         return projectService.getProject(requestId, nodeId, projectId);
                 })
-                .transform(withErrorHandling("getProject"));
+                .map(projectMapper::toProjectResponse)
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("getProject failed" + e.getMessage()))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
 
     @Override
@@ -83,24 +99,19 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     log.info("[{}][{}] Received request to get listMyProjects: userId={}", requestId, nodeId, userId);
 
-                    return projectService.listMyProjects(requestId, nodeId, userId);
+                    return projectService.listMyProjects(requestId, nodeId, userId)
+                            .collectList();
                 })
-                .transform(withErrorHandling("listMyProjects"));
-    }
-
-    //TODO: Создать общий GrpcErrorHanlder
-    private <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
-        return mono -> mono
+                .map(projectMapper::toProjectResponseList)
+                .map(pr -> {
+                    return UsersProjectsResponse.newBuilder()
+                            .addAllProjectResponse(pr)
+                            .build();
+                })
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                            e -> {
-                                log.error("{}: database error", operationName, e);
-                                return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                            })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                            e -> {
-                                log.error("{}: unexpected error", operationName, e);
-                                return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                            })
+                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .doOnError(e -> !(e instanceof StatusRuntimeException),
+                        e -> log.error("listMyProjects failed" + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -120,7 +131,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     String nodeId = t.getT2();
                     UUID addedMemberId = t.getT3();
                     UUID addingUserId = t.getT4();
-                    ProjectRole role = t.getT5();
+                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT5());
                     UUID projectId = t.getT6();
 
                     log.info("[{}][{}] Received request to add member to project: addedMemberId = {}, addingUserId = {}, requestedRole = {}, projectId ={}",
@@ -128,12 +139,13 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
                 })
+                .map(projectMemberMapper::toAddProjectMemberResponse)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
                         _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("addProjectMember failed " + e.getMessage()))
+                        e -> log.error("addProjectMember failed" + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -157,6 +169,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, projectId);
                 })
+                .map(projectMemberMapper::toRmProjectMemberResponse)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
@@ -181,7 +194,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID changedMemberId = t.getT3();
-                    ProjectRole role = t.getT4();
+                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT4());
                     UUID projectId = t.getT5();
 
                     log.info("[{}][{}] Received request to change user role in project: userId={}, role = {}, projectId = {}",
@@ -189,12 +202,13 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, role, projectId);
                 })
+                .map(projectMemberMapper::toChangeRoleResponse)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
                         _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("changeProjectMemberRole failed " + e.getMessage()))
+                        e -> log.error("changeProjectMemberRole failed" + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

@@ -1,7 +1,11 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.*;
+import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.ChangeRoleResponse;
+import ru.taska.api.project.v1.RmProjectMemberResponse;
+import ru.taska.entity.ProjectMember;
+import ru.taska.entity.ProjectRole;
 
 import java.util.UUID;
 
@@ -19,7 +23,7 @@ public interface ProjectMemberService {
      *
      * @return Mono<{@link AddProjectMemberResponse}> с соответствующими параметрами созданного проекта
      */
-    Mono<AddProjectMemberResponse> addProjectMember(String requestId, String nodeId, UUID addedMemberId, UUID addingUserId, ProjectRole role, UUID projectId);
+    Mono<ProjectMember> addProjectMember(String requestId, String nodeId, UUID addedMemberId, UUID addingUserId, ProjectRole role, UUID projectId);
 
     /**
      * Удаляет участника из проекта по запросу {@link ru.taska.api.project.v1.RmProjectMemberRequest}
@@ -31,7 +35,7 @@ public interface ProjectMemberService {
      *
      * @return Mono<{@link RmProjectMemberResponse}> с айди проекта и удаленного участника
      */
-    Mono<RmProjectMemberResponse> rmProjectMember(String requestId, String nodeId, UUID deletedMemberId, UUID projectId);
+    Mono<ProjectMember> rmProjectMember(String requestId, String nodeId, UUID deletedMemberId, UUID projectId);
 
     /**
      * Изменяет роль участника проекта на заданную {@link ru.taska.api.project.v1.ChangeRoleRequest}
@@ -44,5 +48,5 @@ public interface ProjectMemberService {
      *
      * @return Mono<{@link ChangeRoleResponse}> с айди проекта и удаленного участника и установленной ролью
      */
-    Mono<ChangeRoleResponse> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId, ProjectRole role, UUID projectId);
+    Mono<ProjectMember> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId, ProjectRole role, UUID projectId);
 }

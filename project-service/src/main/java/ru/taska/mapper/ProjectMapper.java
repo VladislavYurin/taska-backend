@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import org.mapstruct.*;
 import org.mapstruct.CollectionMappingStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -11,6 +12,7 @@ import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.domain.Project;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING,
@@ -30,6 +32,8 @@ public interface ProjectMapper {
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "archivedAt", source = "archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project);
+
+    List<ProjectResponse> toProjectResponseList(List<Project> projects);
 
     /**
      * Конвертация UUID в String
