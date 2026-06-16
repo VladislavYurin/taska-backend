@@ -127,8 +127,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public Mono<Void> setPasswordByToken(String token, String newPassword) {
-        if (token == null || token.isBlank() || newPassword == null || newPassword.isBlank()) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token and password are required"));
+        if (token == null || token.isBlank()) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
 
         String tokenHash = hashToken(token);

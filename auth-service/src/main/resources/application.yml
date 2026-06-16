@@ -69,3 +69,12 @@ logging:
     liquibase: INFO
     org.liquibase: INFO
     org.springframework.boot.liquibase: INFO
+
+validation:
+  # Password Policy
+  password:
+    min: ${PASSWORD_MIN_LEN:8}
+    max: ${PASSWORD_MAX_LEN:128}
+    requireUpper: ${PASSWORD_REQUIRE_UPPER:false}
+    requireDigit: ${PASSWORD_REQUIRE_DIGIT:false}
+    requireSpecial: ${PASSWORD_REQUIRE_SPECIAL:false}
