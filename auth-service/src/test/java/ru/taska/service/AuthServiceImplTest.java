@@ -36,6 +36,7 @@ import ru.taska.security.JwtServiceImpl;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
+import ru.taska.validator.impl.PasswordPolicyValidator;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -850,7 +851,7 @@ class AuthServiceImplTest {
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Token and password are required")
+                                    error.getMessage().equals("Token required")
                     )
                     .verify();
 
@@ -865,7 +866,7 @@ class AuthServiceImplTest {
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Token and password are required")
+                                    error.getMessage().equals("Token required")
                     )
                     .verify();
 
@@ -880,7 +881,7 @@ class AuthServiceImplTest {
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Token and password are required")
+                                    error.getMessage().equals("Password required")
                     )
                     .verify();
 
@@ -895,7 +896,7 @@ class AuthServiceImplTest {
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Token and password are required")
+                                    error.getMessage().equals("Password required")
                     )
                     .verify();
 

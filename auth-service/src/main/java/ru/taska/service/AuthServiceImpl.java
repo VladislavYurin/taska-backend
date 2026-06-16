@@ -131,6 +131,10 @@ public class AuthServiceImpl implements AuthService {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
 
+        if (newPassword == null || newPassword.isBlank()) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Password required"));
+        }
+
         String tokenHash = hashToken(token);
         Instant now = Instant.now();
 
