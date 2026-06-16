@@ -25,9 +25,8 @@ import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.dto.PasswordByTokenResponseDto;
-import ru.taska.grpc.AuthGrpcService;
 import ru.taska.service.AuthService;
-import ru.taska.validator.impl.PasswordPolicyValidator;
+import ru.taska.util.PasswordPolicyValidator;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthGrpcService Unit Tests")

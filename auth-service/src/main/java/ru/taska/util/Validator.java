@@ -1,4 +1,4 @@
-package ru.taska.validator;
+package ru.taska.util;
 
 /**
  * Глобальный контракт для валидаторов в auth микросервисе.

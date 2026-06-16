@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import com.google.protobuf.Empty;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.OutboxEventStatus;
 import ru.taska.exception.DomainException;
@@ -36,7 +35,7 @@ import ru.taska.security.JwtServiceImpl;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
-import ru.taska.validator.impl.PasswordPolicyValidator;
+import ru.taska.util.PasswordPolicyValidator;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -48,6 +47,9 @@ class AuthServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private PasswordPolicyValidator passwordPolicyValidator;
 
     @Mock
     private CredentialRepository credentialRepository;
@@ -639,10 +641,13 @@ class AuthServiceImplTest {
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
 
+            Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
+
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
                     .verifyComplete();
 
+            Mockito.verify(passwordPolicyValidator).validate(newPassword);
             Mockito.verify(inviteTokenRepository).findByTokenHash(ArgumentMatchers.anyString());
             Mockito.verify(userRepository).findById(testUserId);
             Mockito.verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
@@ -686,10 +691,13 @@ class AuthServiceImplTest {
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
 
+            Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
+
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
                     .verifyComplete();
 
+            Mockito.verify(passwordPolicyValidator).validate(newPassword);
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getSecretHash()).isEqualTo("newHashedPassword");
         }
@@ -867,36 +875,6 @@ class AuthServiceImplTest {
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
                                     error.getMessage().equals("Token required")
-                    )
-                    .verify();
-
-            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
-        }
-
-        @Test
-        @DisplayName("Should fail when password is null")
-        void shouldFailWhenPasswordIsNull() {
-            // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, null))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Password required")
-                    )
-                    .verify();
-
-            Mockito.verify(inviteTokenRepository, Mockito.never()).findByTokenHash(ArgumentMatchers.any());
-        }
-
-        @Test
-        @DisplayName("Should fail when password is blank")
-        void shouldFailWhenPasswordIsBlank() {
-            // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, ""))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Password required")
                     )
                     .verify();
 

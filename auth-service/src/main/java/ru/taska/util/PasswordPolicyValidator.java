@@ -1,4 +1,4 @@
-package ru.taska.validator.impl;
+package ru.taska.util;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -6,17 +6,10 @@ import org.springframework.stereotype.Component;
 import ru.taska.config.props.PasswordPolicyProperties;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.validator.Validator;
 
 /**
- * Валидация паролей в соответствии с настраиваемой политикой.
- * <p>Работает с codePoints для обеспечиния безопасности для non-latin паролей.
- * <p>Проверки:
- * <ul>
- *     <li>Пароль не null и не пустой</li>
- *     <li>Длина пароля между заданным min/max</li>
- *     <li>Пароль не является слабым на основе критериев (заглавная буква, цифра, спец. символ)</li>
- * </ul>
+ * Валидация паролей на пустоту, длину и надежность
+ * <p>Работает с codePoints для обеспечиния безопасности non-latin паролей.
  * @see PasswordPolicyProperties
  */
 
@@ -48,7 +41,7 @@ public class PasswordPolicyValidator implements Validator<String> {
         log.debug("Enter password blank validation");
 
         if (password == null || password.isBlank()) {
-            log.warn("Password validation failed: null or blank");
+            log.debug("Password validation failed: null or blank");
 
             throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Password is required");
         }
@@ -62,7 +55,7 @@ public class PasswordPolicyValidator implements Validator<String> {
         int len = password.codePointCount(0, password.length());
         if (len < props.min() || len > props.max()) {
 
-            log.warn("Password validation failed: length={}, min={}, max={}",
+            log.debug("Password validation failed: length={}, min={}, max={}",
                     len, props.min(), props.max()
                     );
 
@@ -79,7 +72,7 @@ public class PasswordPolicyValidator implements Validator<String> {
         log.debug("Enter password strength validation");
 
         if (props.requireUpper() && !hasUpper(password)) {
-            log.warn("Password validation failed: required upper character");
+            log.debug("Password validation failed: required upper character");
 
             throw new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
@@ -88,7 +81,7 @@ public class PasswordPolicyValidator implements Validator<String> {
         }
 
         if (props.requireDigit() && !hasDigit(password)) {
-            log.warn("Password validation failed: required digit character");
+            log.debug("Password validation failed: required digit character");
 
             throw new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
@@ -97,7 +90,7 @@ public class PasswordPolicyValidator implements Validator<String> {
         }
 
         if (props.requireSpecial() && !hasSpecial(password)) {
-            log.warn("Password validation failed: required special character");
+            log.debug("Password validation failed: required special character");
 
             throw new DomainException(
                     DomainStatus.INVALID_ARGUMENT,

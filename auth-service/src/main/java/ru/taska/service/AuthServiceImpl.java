@@ -23,6 +23,7 @@ import ru.taska.security.JwtService;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
+import ru.taska.util.PasswordPolicyValidator;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -47,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
     private final InviteTokenRepository inviteTokenRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final UserMapper userMapper;
+    private final PasswordPolicyValidator passwordPolicyValidator;
 
     /**
      * {@inheritDoc}
@@ -131,9 +133,7 @@ public class AuthServiceImpl implements AuthService {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
 
-        if (newPassword == null || newPassword.isBlank()) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Password required"));
-        }
+        passwordPolicyValidator.validate(newPassword);
 
         String tokenHash = hashToken(token);
         Instant now = Instant.now();

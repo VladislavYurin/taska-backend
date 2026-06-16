@@ -1,4 +1,4 @@
-package ru.taska.validator;
+package ru.taska.util;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,7 +10,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import ru.taska.config.props.PasswordPolicyProperties;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.validator.impl.PasswordPolicyValidator;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
