@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,13 +11,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.ProjectMember;
-import ru.taska.domain.ProjectRole;
-import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.OutboxEvent;
-import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
@@ -27,11 +20,12 @@ import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.service.impl.ProjectMemberServiceImpl;
 
+import java.util.UUID;
+
 @ExtendWith(MockitoExtension.class)
 class ProjectMemberServiceImplTest {
 
     @Mock private ProjectMemberRepository projectMemberRepository;
-    @Mock private ProjectMemberMapper projectMemberMapper;
     @Mock private ProjectMemberMapper projectMemberMapper;
     @Mock private OutboxEventService outboxEventService;
 
@@ -49,6 +43,7 @@ class ProjectMemberServiceImplTest {
     void setUp() {
         mockMember = ProjectMember.builder()
                 .userId(memberId)
+                .addedBy(initiatorId)
                 .projectId(projectId)
                 .role(ProjectRole.MEMBER)
                 .build();
@@ -56,18 +51,17 @@ class ProjectMemberServiceImplTest {
 
     @Test
     void addProjectMember_Success() {
-        Mockito.when(projectMemberRepository.existsByUserIdAndProjectId(memberId, projectId))
-                .thenReturn(Mono.just(false));
-        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class)))
-                .thenReturn(Mono.just(mockMember));
-
         Mockito.when(projectMemberRepository.existsByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(false));
-        Mockito.when(projectMemberMapper.toProjectRole(ru.taska.api.project.v1.ProjectRole.MEMBER)).thenReturn(ProjectRole.MEMBER);
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(mockMember));
         Mockito.when(outboxEventService.saveMemberAdded(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ProjectRole.MEMBER, projectId))
-                .expectNext(mockMember)
+                .expectNextMatches(actualMember ->
+                        actualMember.getUserId().equals(memberId) &&
+                                actualMember.getProjectId().equals(projectId) &&
+                                actualMember.getRole() == ProjectRole.MEMBER &&
+                                actualMember.getAddedAt() != null &&
+                                actualMember.getAddedBy().equals(initiatorId))
                 .verifyComplete();
 
         Mockito.verify(projectMemberRepository).existsByUserIdAndProjectId(memberId, projectId);

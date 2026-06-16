@@ -55,7 +55,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("createProject failed" + e.getMessage()))
+                        e -> log.error("createProject failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

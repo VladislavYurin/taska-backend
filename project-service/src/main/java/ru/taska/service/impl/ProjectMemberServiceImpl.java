@@ -7,11 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectMember;
-import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.ProjectRole;
-import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.domain.ProjectMember;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMemberMapper;
@@ -54,7 +49,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                                     .then(outboxEventService.saveMemberAdded(addedMember))
                                     .thenReturn(addedMember);
                         })
-                .map(projectMemberMapper::toAddProjectMemberResponse)
                 .doOnSuccess(pm ->
                         log.info("[{}][{}] Project member with id {} successfully added to project with id {}",
                                 requestId, nodeId, addedMemberId, projectId));

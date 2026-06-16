@@ -73,7 +73,6 @@ class ProjectServiceImplTest {
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
         Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
         Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
-        Mockito.when(projectMapper.toProjectResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
                 .expectNext(mockProject)

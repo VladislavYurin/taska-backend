@@ -5,12 +5,7 @@ import java.util.UUID;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.UsersProjectsResponse;
-import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
-import ru.taska.domain.ProjectSetting;
-
-import java.util.UUID;
-import ru.taska.domain.ProjectSetting;
 
 public interface ProjectService {
 
