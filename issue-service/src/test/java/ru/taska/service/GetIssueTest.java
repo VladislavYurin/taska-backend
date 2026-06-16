@@ -1,5 +1,7 @@
 package ru.taska.service;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Limit;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import org.assertj.core.api.Assertions;
@@ -20,6 +22,9 @@ import java.util.List;
 import java.util.UUID;
 
 class GetIssueTest extends IssueServiceImplTest {
+
+    @Value("${issue.card.max-history-size}")
+    private int issueCardMaxHistorySize;
 
     private Issue buildIssue() {
         return Issue.builder()
@@ -51,7 +56,8 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory history = buildHistory();
 
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID)).thenReturn(Flux.just(history));
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
+                .thenReturn(Flux.just(history));
 
         IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
 
@@ -68,7 +74,7 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory third = buildHistory();
 
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
                 .thenReturn(Flux.fromIterable(List.of(first, second, third)));
 
         IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
@@ -94,7 +100,7 @@ class GetIssueTest extends IssueServiceImplTest {
         Issue issue = buildIssue();
 
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID))
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
                 .thenReturn(Flux.error(new RuntimeException("DB error")));
 
         StepVerifier.create(issueService.getIssue(ISSUE_ID))
