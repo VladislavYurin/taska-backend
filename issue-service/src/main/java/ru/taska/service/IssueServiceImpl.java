@@ -4,6 +4,8 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -29,6 +31,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class IssueServiceImpl implements IssueService {
+
+    @Value("${issue.card.max-history-size}")
+    private int issueCardMaxHistorySize;
 
     private static final int INIT_VERSION = 1;
     private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
@@ -115,7 +120,7 @@ public class IssueServiceImpl implements IssueService {
 
         return issueRepository.findByIdAndDeletedAtIsNull(issueId)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId)))
-                .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId)
+                .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueCardMaxHistorySize))
                         .collectList()
                         .map(history -> new IssueWithHistory(issue, history)));
     }
