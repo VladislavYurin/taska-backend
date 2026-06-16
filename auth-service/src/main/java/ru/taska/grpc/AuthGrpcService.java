@@ -17,6 +17,7 @@ import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
 import ru.taska.service.AuthService;
+import ru.taska.validator.impl.PasswordPolicyValidator;
 import validator.GrpcRequestValidators;
 
 @Slf4j
@@ -25,6 +26,7 @@ import validator.GrpcRequestValidators;
 public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase {
 
     private final AuthService authService;
+    private final PasswordPolicyValidator passwordValidator;
 
     @Override
     public Mono<LoginResponse> login(Mono<LoginRequest> request) {
@@ -115,6 +117,8 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     String nodeId = t.getT2();
                     String token = t.getT3();
                     String newPassword = t.getT4();
+
+                    passwordValidator.validate(newPassword);
 
                     log.info("[{}][{}] Set new password request", requestId, nodeId);
                     return authService.setPasswordByToken(token, newPassword)
