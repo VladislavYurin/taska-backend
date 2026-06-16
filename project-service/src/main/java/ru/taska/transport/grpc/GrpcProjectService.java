@@ -1,4 +1,4 @@
-package ru.taska.grpc;
+package ru.taska.transport.grpc;
 
 import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
@@ -137,7 +137,8 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     log.info("[{}][{}] Received request to add member to project: addedMemberId = {}, addingUserId = {}, requestedRole = {}, projectId ={}",
                             requestId, nodeId, addedMemberId, addingUserId, role, projectId);
 
-                    return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
+                    return projectMemberService.addProjectMember(
+                            requestId, nodeId, addedMemberId, addingUserId, role, projectId);
                 })
                 .map(projectMemberMapper::toAddProjectMemberResponse)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,

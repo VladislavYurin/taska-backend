@@ -4,8 +4,8 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeRoleResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.entity.ProjectMember;
-import ru.taska.entity.ProjectRole;
+import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectRole;
 
 import java.util.UUID;
 
