@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeRoleResponse;
+import ru.taska.api.project.v1.CheckProjectRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
@@ -14,6 +15,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.repository.ProjectMemberRepository;
+import ru.taska.repository.ProjectRepository;
 import ru.taska.service.OutboxEventService;
 import ru.taska.service.ProjectMemberService;
 
@@ -25,6 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectRepository projectRepository;
     private final ProjectMemberMapper projectMemberMapper;
     private final OutboxEventService outboxEventService;
 
@@ -33,25 +36,25 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     public Mono<AddProjectMemberResponse> addProjectMember(String requestId, String nodeId, UUID addedMemberId,
                                                            UUID addingUserId, ProjectRole role, UUID projectId) {
         return projectMemberRepository.existsByUserIdAndProjectId(addedMemberId, projectId)
-                .flatMap( exists -> {
+                .flatMap(exists -> {
                     if (exists) {
                         log.info("[{}][{}] Project member with id {} already exists in project with id {}",
                                 requestId, nodeId, addedMemberId, projectId);
                         return Mono.<ProjectMember>error(new DomainException(DomainStatus.ALREADY_EXISTS,
                                 "Project member with id " + addedMemberId + " already exists in project with id " + projectId));
                     }
-                            ProjectMember addedMember = ProjectMember.builder()
-                                    .userId(addedMemberId)
-                                    .projectId(projectId)
-                                    .role(projectMemberMapper.toProjectRole(role))
-                                    .addedAt(Instant.now())
-                                    .addedBy(addingUserId)
-                                    .build();
+                    ProjectMember addedMember = ProjectMember.builder()
+                            .userId(addedMemberId)
+                            .projectId(projectId)
+                            .role(projectMemberMapper.toProjectRole(role))
+                            .addedAt(Instant.now())
+                            .addedBy(addingUserId)
+                            .build();
 
-                            return projectMemberRepository.save(addedMember)
-                                    .then(outboxEventService.saveMemberAdded(addedMember))
-                                    .thenReturn(addedMember);
-                        })
+                    return projectMemberRepository.save(addedMember)
+                            .then(outboxEventService.saveMemberAdded(addedMember))
+                            .thenReturn(addedMember);
+                })
                 .map(projectMemberMapper::toAddProjectMemberResponse)
                 .doOnSuccess(pm ->
                         log.info("[{}][{}] Project member with id {} successfully added to project with id {}",
@@ -70,10 +73,10 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                                 " was not found in project with id " + projectId));
                     }
                     return outboxEventService.saveMemberRemoved(deletedMemberId, projectId)
-                                             .thenReturn(RmProjectMemberResponse.newBuilder()
-                                                                                .setDeletedMemberId(String.valueOf(deletedMemberId))
-                                                                                .setProjectId(String.valueOf(projectId))
-                                                                                .build());
+                            .thenReturn(RmProjectMemberResponse.newBuilder()
+                                    .setDeletedMemberId(String.valueOf(deletedMemberId))
+                                    .setProjectId(String.valueOf(projectId))
+                                    .build());
                 })
                 .doOnSuccess(deletedMember ->
                         log.info("[{}][{}] Project member with id {} successfully deleted from project with id {}",
@@ -101,4 +104,46 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                         log.info("[{}][{}] Project members role with id {} successfully updated for {} in project with id {}",
                                 requestId, nodeId, changedMemberId, role, projectId));
     }
+
+    @Override
+    public Mono<CheckProjectRoleResponse> checkProjectRole(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID userId
+    ) {
+        return projectRepository.findById(projectId)
+                .flatMap(project ->
+                        projectMemberRepository.findByUserIdAndProjectId(userId, projectId)
+                                .map(ProjectMember::getRole)
+                                .map(role ->
+                                        projectMemberMapper.toCheckProjectRoleResponse(
+                                                projectMemberMapper.toGrpcRole(role), true, true
+                                        ))
+                                .switchIfEmpty(Mono.defer(() ->
+                                        Mono.just(
+                                                projectMemberMapper.toCheckProjectRoleResponse(
+                                                        ProjectRole.UNSPECIFIED, false, true
+                                                ))
+                                ))
+                )
+                .switchIfEmpty(Mono.defer(() ->
+                        Mono.just(
+                                projectMemberMapper.toCheckProjectRoleResponse(
+                                        ProjectRole.UNSPECIFIED, false, false
+                                ))
+                ))
+                .doOnSuccess(response ->
+                        log.info("[{}][{}] Checking project role completed: " +
+                                        "projectId={}, userId={}, role={}, isMember={}, projectExists={}",
+                                requestId,
+                                nodeId,
+                                projectId,
+                                userId,
+                                response.getRole(),
+                                response.getIsMember(),
+                                response.getProjectExists()
+                        ));
+    }
+
 }
