@@ -51,7 +51,7 @@ public class OutboxEventProcessor {
                                 if (count != null && count > 0) {
                                     log.warn("Recovered stuck outbox events: count={}", count);
                                 } else {
-                                    log.trace("No stuck outbox events detected");
+                                    log.debug("No stuck outbox events detected");
                                 }
                             });
                 })
@@ -82,7 +82,7 @@ public class OutboxEventProcessor {
      * Иначе увеличивается счётчик неудачных попыток.</p>
      */
     private Mono<Void> handleProcessingError(OutboxEvent event, Throwable ex) {
-        log.error("Failed to publish event: id={}, aggregateId={}, eventType={}",
+        log.warn("Failed to publish event: id={}, aggregateId={}, eventType={}",
                 event.getId(), event.getAggregateId(), event.getEventType(), ex);
 
         int currentAttempts = event.getAttempts() == null ? 0 : event.getAttempts();
@@ -91,7 +91,7 @@ public class OutboxEventProcessor {
         if (nextAttempt >= properties.outbox().maxAttempts()) {
             return outboxEventRepository.markAsFailed(event.getId(), ex.getMessage())
                     .doOnSuccess(rows ->
-                            log.warn("Event marked as FAILED: id={}, attempts={}",
+                            log.error("Event marked as FAILED: id={}, attempts={}",
                                     event.getId(), nextAttempt)
                     )
                     .then();
@@ -99,7 +99,7 @@ public class OutboxEventProcessor {
 
         return outboxEventRepository.incrementAttempts(event.getId(), ex.getMessage())
                 .doOnSuccess(rows ->
-                        log.warn("Retry scheduled for event: id={}, attempts={}/{}",
+                        log.debug("Retry scheduled for event: id={}, attempts={}/{}",
                                 event.getId(), nextAttempt, properties.outbox().maxAttempts())
                 )
                 .then();

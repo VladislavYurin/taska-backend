@@ -23,6 +23,7 @@ import ru.taska.security.JwtService;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
+import ru.taska.util.DataMaskingHelper;
 import ru.taska.util.PasswordPolicyValidator;
 
 import java.time.Instant;
@@ -61,7 +62,6 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String normalizedEmail = email.trim().toLowerCase();
-        String maskedEmail = maskEmail(normalizedEmail);
 
         return userRepository.findByEmail(normalizedEmail)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
@@ -71,14 +71,14 @@ public class AuthServiceImpl implements AuthService {
                         .flatMap(credential -> {
                             if (credential.getLockedUntil() != null &&
                                     credential.getLockedUntil().isAfter(Instant.now())) {
-                                log.debug("Login attempt for locked account: {}", maskedEmail);
+                                log.warn("Login attempt for locked account: {}", DataMaskingHelper.maskEmail(email));
                                 return Mono.error(new DomainException(
                                         DomainStatus.UNAUTHENTICATED,
                                         "Invalid credentials"
                                 ));
                             }
                             if (user.getStatus() == UserStatus.BLOCKED || user.getStatus() == UserStatus.INVITED) {
-                                log.warn("Login attempt for BLOCKED or INVITED user: {}", maskedEmail);
+                                log.warn("Login attempt for BLOCKED or INVITED user: {}", DataMaskingHelper.maskEmail(email));
                                 return Mono.error(new DomainException(
                                         DomainStatus.UNAUTHENTICATED,
                                         "Invalid credentials"
@@ -91,18 +91,6 @@ public class AuthServiceImpl implements AuthService {
                                     );
                         })
                 );
-    }
-
-
-    private String maskEmail(String email) {
-        if (email == null) return "***";
-        String[] parts = email.split("@");
-        if (parts.length < 2) return "***(email without @)";
-        String localPart = parts[0];
-        int lpLength = localPart.length();
-        if (lpLength <= 1) return "***@" + parts[1];
-        if (lpLength == 2) return localPart.charAt(0) + "***@" + parts[1];
-        return localPart.charAt(0) + "***" + localPart.charAt(lpLength - 1) + "@" + parts[1];
     }
 
     /**
@@ -138,12 +126,12 @@ public class AuthServiceImpl implements AuthService {
         String tokenHash = hashToken(token);
         Instant now = Instant.now();
 
-        log.debug("setPasswordByToken: processing token hash: {}",  tokenHash.substring(0, 8) + "***");
+        log.debug("setPasswordByToken: processing token hash: {}", DataMaskingHelper.maskJwt(tokenHash));
 
         return inviteTokenRepository.markTokenAsUsedIfValid(tokenHash)
                 .flatMap(updatedRows -> {
                     if (updatedRows == 0) {
-                        log.warn("setPasswordByToken failed: invalid or expired token, hash: {}", tokenHash.substring(0, 8) + "***");
+                        log.debug("setPasswordByToken failed: invalid or expired token, hash: {}", DataMaskingHelper.maskJwt(tokenHash));
                         return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"));
                     }
                     return inviteTokenRepository.findByTokenHash(tokenHash)
@@ -194,13 +182,11 @@ public class AuthServiceImpl implements AuthService {
      */
     private Mono<User> validateUserStatus(User user) {
         if (user.getStatus() == UserStatus.BLOCKED) {
-            log.warn("Login attempt for blocked user: {}", maskEmail(user.getEmail()));
-            log.debug("Login attempt for blocked user: {}", user.getEmail());
+            log.warn("Login attempt for blocked user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Account is blocked"));
         }
         if (user.getStatus() == UserStatus.INVITED) {
-            log.warn("Login attempt for not activated user: {}", maskEmail(user.getEmail()));
-            log.debug("Login attempt for not activated user: {}", user.getEmail());
+            log.warn("Login attempt for not activated user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Account not activated"));
         }
         return Mono.just(user);
@@ -226,12 +212,10 @@ public class AuthServiceImpl implements AuthService {
         return passwordHashService.matches(credential, rawPassword)
                 .flatMap(matches -> {
                     if (matches) {
-                        log.info("Successful login for user: {}", maskEmail(user.getEmail()));
-                        log.debug("Successful login for user: {}", user.getEmail());
+                        log.info("Successful login for user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
                         return Mono.just(credential);
                     } else {
-                        log.warn("Failed login attempt for user: {}", maskEmail(user.getEmail()));
-                        log.debug("Failed login attempt for user: {}", user.getEmail());
+                        log.warn("Failed login attempt for user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
                         return handleFailedAttempt(credential);
                     }
                 });

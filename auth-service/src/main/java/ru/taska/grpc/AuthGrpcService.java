@@ -17,6 +17,7 @@ import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
 import ru.taska.service.AuthService;
+import ru.taska.util.DataMaskingHelper;
 import validator.GrpcRequestValidators;
 
 @Slf4j
@@ -45,13 +46,13 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     String email = t.getT3();
                     String password = t.getT4();
 
-                    log.debug("[{}][{}] Login request for email: {}", requestId, nodeId, email);
+                    log.info("[{}][{}] Login request for email: {}", requestId, nodeId, DataMaskingHelper.maskEmail(email));
 
                     return authService.login(email, password)
                             .doOnSuccess(response -> log.debug("[{}][{}] Login successful for email: {}",
-                                    requestId, nodeId, email))
-                            .doOnError(error -> log.debug("[{}][{}] Login failed for email: {}",
-                                    requestId, nodeId, email, error));
+                                    requestId, nodeId, DataMaskingHelper.maskEmail(email)))
+                            .doOnError(error -> log.warn("[{}][{}] Login failed for email: {}",
+                                    requestId, nodeId, DataMaskingHelper.maskEmail(email), error));
                 })
                 .map(response -> LoginResponse.newBuilder()
                         .setAccessToken(response.getAccessToken())
@@ -83,8 +84,8 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     log.info("[{}][{}] Refresh request", requestId, nodeId);
 
                     return authService.refresh(refreshToken)
-                            .doOnSuccess(response -> log.info("[{}][{}] Refresh successful", requestId, nodeId))
-                            .doOnError(error -> log.error("[{}][{}] Refresh failed", requestId, nodeId, error));
+                            .doOnSuccess(response -> log.debug("[{}][{}] Refresh successful", requestId, nodeId))
+                            .doOnError(error -> log.warn("[{}][{}] Refresh failed", requestId, nodeId, error));
                 })
                 .map(response -> RefreshResponse.newBuilder()
                         .setAccessToken(response.getAccessToken())
@@ -118,8 +119,8 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
 
                     log.info("[{}][{}] Set new password request", requestId, nodeId);
                     return authService.setPasswordByToken(token, newPassword)
-                            .doOnSuccess(response -> log.info("[{}][{}] Set new password successful", requestId, nodeId))
-                            .doOnError(error -> log.error("[{}][{}] Set new password failed", requestId, nodeId, error));
+                            .doOnSuccess(response -> log.debug("[{}][{}] Set new password successful", requestId, nodeId))
+                            .doOnError(error -> log.warn("[{}][{}] Set new password failed", requestId, nodeId, error));
                 })
                 .thenReturn(Empty.getDefaultInstance())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,

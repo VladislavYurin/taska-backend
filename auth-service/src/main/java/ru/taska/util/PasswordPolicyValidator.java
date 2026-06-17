@@ -33,25 +33,17 @@ public class PasswordPolicyValidator implements Validator<String> {
         checkBlank(password);
         checkLength(password);
         checkStrength(password);
-
-        log.debug("Password validation completed successfully");
     }
 
     private void checkBlank(String password) {
-        log.debug("Enter password blank validation");
-
         if (password == null || password.isBlank()) {
             log.debug("Password validation failed: null or blank");
 
             throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Password is required");
         }
-
-        log.debug("Password blank validation passed");
     }
 
     private void checkLength(String password) {
-        log.debug("Enter password length validation");
-
         int len = password.codePointCount(0, password.length());
         if (len < props.min() || len > props.max()) {
 
@@ -64,13 +56,9 @@ public class PasswordPolicyValidator implements Validator<String> {
                     String.format("Password must be at least %d characters and not exceed %d characters",
                             props.min(), props.max()));
         }
-
-        log.debug("Password length validation passed: length={}", len);
     }
 
     private void checkStrength(String password) {
-        log.debug("Enter password strength validation");
-
         if (props.requireUpper() && !hasUpper(password)) {
             log.debug("Password validation failed: required upper character");
 
@@ -97,8 +85,6 @@ public class PasswordPolicyValidator implements Validator<String> {
                     "Password must have at least 1 special character"
             );
         }
-
-        log.debug("Password strength validation passed");
     }
 
     private static boolean hasUpper(String password) {
