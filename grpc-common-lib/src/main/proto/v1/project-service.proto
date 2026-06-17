@@ -45,6 +45,11 @@ service ProjectService  {
 * Меняет роль участника проекта
 */
   rpc ChangeProjectMemberRole (ChangeRoleRequest) returns (ChangeRoleResponse);
+
+  /**
+   * Проверяет роль пользователя в проекте
+   */
+  rpc CheckProjectRole(CheckProjectRoleRequest) returns (CheckProjectRoleResponse);
 }
 
 //Создание и получение проекта/ов
@@ -77,6 +82,36 @@ message GetUsersProjectsRequestBody {
   string user_id = 1;
 }
 
+/**
+ * Запрос на проверку роли пользователя в проекте.
+ */
+message CheckProjectRoleRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CheckProjectRoleRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на проверку роли пользователя в проекте.
+ */
+message CheckProjectRoleRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор участника проекта.
+   */
+  string user_id = 2;
+}
+
 message ProjectResponse {
   string id = 1;
   string project_key = 2;
@@ -99,7 +134,7 @@ message AddProjectMemberRequest {
 
 message AddProjectMemberRequestBody {
   string added_member_id = 1;
-  string adding_user_id =2 ;
+  string adding_user_id = 2 ;
   ProjectRole role = 3;
   string project_id = 4;
 }
@@ -140,4 +175,24 @@ message ChangeRoleResponse  {
   string changed_member_id = 1;
   ProjectRole role = 2;
   string project_id = 3;
+}
+
+/**
+ * Ответ проверки роли пользователя в проекте.
+ */
+message CheckProjectRoleResponse {
+  /**
+   * Роль пользователя.
+   */
+  ProjectRole role = 1;
+
+  /**
+   * Является ли пользователь участником проекта.
+   */
+  bool is_member = 2;
+
+  /**
+   * Существует ли проект.
+   */
+  bool project_exists = 3;
 }

@@ -1,7 +1,12 @@
 package ru.taska.mapper;
 
-import org.mapstruct.*;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
+import org.mapstruct.ValueMapping;
+import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.CheckProjectRoleResponse;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 
@@ -30,7 +35,41 @@ public interface ProjectMemberMapper {
             @ValueMapping(source = "ADMIN", target = "ADMIN"),
             @ValueMapping(source = "MEMBER", target = "MEMBER"),
             @ValueMapping(source = "VIEWER", target = "VIEWER"),
-            @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "VIEWER")})
+            @ValueMapping(source = "UNSPECIFIED", target = "UNSPECIFIED"),
+            @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "UNSPECIFIED")})
     ProjectRole toProjectRole(ru.taska.api.project.v1.ProjectRole role);
 
+    /**
+     * Маппит {@link ProjectRole} в транспортный {@link ru.taska.api.project.v1.ProjectRole}
+     *
+     * @param role роль участника из enum ProjectRole
+     * @return {@link ru.taska.api.project.v1.ProjectRole} из enum, используемого в grpc .proto
+     */
+    @ValueMappings({
+            @ValueMapping(source = "ADMIN", target = "ADMIN"),
+            @ValueMapping(source = "MEMBER", target = "MEMBER"),
+            @ValueMapping(source = "VIEWER", target = "VIEWER"),
+            @ValueMapping(source = "UNSPECIFIED", target = "UNSPECIFIED"),
+            @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "UNSPECIFIED")})
+    ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
+
+    /**
+     * Билдер, который создает транспортный {@link ru.taska.api.project.v1.CheckProjectRoleResponse}
+     *
+     * @param role          роль участника из {@link ru.taska.api.project.v1.ProjectRole}
+     * @param isMember      boolean, сигнализирующий о том, является ли пользователь участником проекта
+     * @param projectExists boolean, сигнализирующий о том, существует ли такой проект
+     * @return {@link ru.taska.api.project.v1.CheckProjectRoleResponse} DTO для передачи в grpc
+     */
+    default CheckProjectRoleResponse toCheckProjectRoleResponse(
+            ru.taska.api.project.v1.ProjectRole role,
+            boolean isMember,
+            boolean projectExists
+    ) {
+        return CheckProjectRoleResponse.newBuilder()
+                .setRole(role)
+                .setIsMember(isMember)
+                .setProjectExists(projectExists)
+                .build();
+    }
 }

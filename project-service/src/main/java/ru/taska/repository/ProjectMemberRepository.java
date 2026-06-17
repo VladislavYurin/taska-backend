@@ -20,4 +20,6 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
     Mono<Long> updateRole(UUID changedMemberId, ProjectRole role, UUID projectId);
 
     Mono<Boolean> existsByUserIdAndProjectId(UUID addedMemberId, UUID projectId);
+
+    Mono<ProjectMember> findByUserIdAndProjectId(UUID userId, UUID projectId);
 }
