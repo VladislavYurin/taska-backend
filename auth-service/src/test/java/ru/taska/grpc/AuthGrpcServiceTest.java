@@ -1,6 +1,7 @@
 package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
+import ru.taska.config.props.PasswordPolicyProperties;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcBadGrammarException;
@@ -24,8 +25,8 @@ import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.dto.PasswordByTokenResponseDto;
-import ru.taska.grpc.AuthGrpcService;
 import ru.taska.service.AuthService;
+import ru.taska.util.PasswordPolicyValidator;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthGrpcService Unit Tests")
@@ -33,6 +34,9 @@ class AuthGrpcServiceTest {
 
     @Mock
     private AuthService authService;
+
+    @Mock
+    private PasswordPolicyValidator passwordPolicyValidator;
 
     @InjectMocks
     private AuthGrpcService authGrpcService;
@@ -42,7 +46,6 @@ class AuthGrpcServiceTest {
     private ru.taska.dto.AuthResponseDto authResponseDto;
     private PasswordByTokenResponseDto passwordByTokenResponseDto;
     private PasswordByTokenRequest validPasswordByTokenRequest;
-
 
     @BeforeEach
     void setUp() {
