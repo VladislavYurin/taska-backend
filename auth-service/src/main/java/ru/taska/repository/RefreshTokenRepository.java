@@ -23,4 +23,8 @@ public interface RefreshTokenRepository extends ReactiveCrudRepository<RefreshTo
     Mono<Integer> revokeToken(Instant revokedAt,  UUID tokenId);
 
     Mono<Long> countByUserId(UUID blockedUserId);
+
+    @Query("UPDATE taska.refresh_tokens SET replaced_by = :newTokenId, revoked_at = :revokedAt " +
+            "WHERE id = :oldTokenId AND revoked_at IS NULL AND replaced_by IS NULL")
+    Mono<Long> markReplacedIfActive(UUID oldTokenId, UUID newTokenId, Instant revokedAt);
 }

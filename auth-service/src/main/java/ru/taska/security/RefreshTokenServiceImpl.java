@@ -93,7 +93,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                     if (user.getStatus() == UserStatus.BLOCKED) {
                                         log.debug("Token refresh FAILED due to user with id={} is blocked: token id={} ", user.getId(),existingToken.getId());
                                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
-                                                                "invalid credentials"));
+                                                "invalid credentials"));
                                     }
 
                                     log.debug("Found existing token with id: {}", existingToken.getId());
@@ -112,7 +112,10 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                     return refreshTokenRepository.save(newRefreshToken)
                                             .flatMap(savedNewToken -> {
                                                 log.debug("Saved new token with id: {}", savedNewToken.getId());
-                                                return refreshTokenRepository.revokeToken(Instant.now(), existingToken.getId())
+                                                return refreshTokenRepository.markReplacedIfActive(
+                                                                existingToken.getId(),
+                                                                newRefreshToken.getId(),
+                                                                Instant.now())
                                                         .doOnSuccess(updated -> log.debug("Revoked old token, rows updated: {}", updated))
                                                         .thenReturn(new RefreshTokenResponseDto(savedNewToken, newRawToken));
                                             });
