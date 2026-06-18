@@ -14,6 +14,7 @@ import ru.taska.entity.UserStatus;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.config.JwtProperties;
+import ru.taska.util.DataMaskingHelper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -78,8 +79,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     public Mono<RefreshTokenResponseDto> validateAndRotate(String rawToken) {
         String tokenHash = hashToken(rawToken);
 
-        log.debug("Validating and rotating refresh token");
-        log.debug("Token hash: {}", tokenHash);
+        log.debug("Validating and rotating refresh token: {}", DataMaskingHelper.maskJwt(tokenHash));
 
         return refreshTokenRepository.findValidToken(tokenHash, Instant.now())
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED,
@@ -91,7 +91,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                         "User not found")))
                                 .flatMap(user -> {
                                     if (user.getStatus() == UserStatus.BLOCKED) {
-                                        log.debug("Token refresh FAILED due to user with id={} is blocked: token  id={} ", user.getId(),existingToken.getId());
+                                        log.debug("Token refresh FAILED due to user with id={} is blocked: token id={} ", user.getId(),existingToken.getId());
                                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
                                                                 "invalid credentials"));
                                     }

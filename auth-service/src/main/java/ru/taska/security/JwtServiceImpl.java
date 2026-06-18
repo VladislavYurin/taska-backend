@@ -38,7 +38,7 @@ public class JwtServiceImpl implements JwtService {
                 jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
         );
 
-        log.info("JWT Service initialized with access TTL: {} seconds, refresh TTL: {} seconds",
+        log.debug("JWT Service initialized with access TTL: {} seconds, refresh TTL: {} seconds",
                 jwtProperties.getAccessTokenTtl(),
                 jwtProperties.getRefreshTokenTtl());
     }

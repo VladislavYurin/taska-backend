@@ -39,7 +39,7 @@ public class OutboxEventMapper {
         try {
             return objectMapper.writeValueAsString(toTaskaEvent(event));
         } catch (Exception e) {
-            log.error("Failed to serialize TaskaEvent for event id: {}", event.getId(), e);
+            log.warn("Failed to serialize TaskaEvent for event id: {}", event.getId(), e);
             throw new RuntimeException("Failed to serialize TaskaEvent", e);
         }
     }
