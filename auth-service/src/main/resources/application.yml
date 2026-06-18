@@ -60,21 +60,15 @@ grpc:
 
 logging:
   level:
-    ru.taska: INFO
-    ru.taska.service: INFO
-    org.springframework.data.r2dbc: INFO
-    io.r2dbc.postgresql.QUERY: INFO
-    io.r2dbc.postgresql.PARAM: INFO
-    ru.taska.kafka: INFO
-    liquibase: INFO
-    org.liquibase: INFO
-    org.springframework.boot.liquibase: INFO
+    ru.taska: ${LOG_LEVEL_ROOT:INFO}
+    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}
 
 validation:
   # Password Policy
   password:
     min: ${PASSWORD_MIN_LEN:8}
     max: ${PASSWORD_MAX_LEN:128}
-    requireUpper: ${PASSWORD_REQUIRE_UPPER:false}
-    requireDigit: ${PASSWORD_REQUIRE_DIGIT:false}
-    requireSpecial: ${PASSWORD_REQUIRE_SPECIAL:false}
+    requireUpper: ${PASSWORD_REQUIRE_UPPER:true}
+    requireDigit: ${PASSWORD_REQUIRE_DIGIT:true}
+    requireSpecial: ${PASSWORD_REQUIRE_SPECIAL:true}
