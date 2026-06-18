@@ -1,15 +1,15 @@
 package ru.taska.service;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Limit;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Limit;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -17,11 +17,27 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 class GetIssueTest extends IssueServiceImplTest {
+
+    private Set<ProjectRole> allowedRoles;
+
+    @BeforeEach
+    void setUp() {
+        allowedRoles = Set.of(
+                ProjectRole.ADMIN,
+                ProjectRole.MEMBER,
+                ProjectRole.VIEWER
+        );
+
+        Mockito.when(issueProperties.allowedRoles().getIssueRoles()).thenReturn(allowedRoles);
+    }
 
     @Value("${issue.card.max-history-size}")
     private int issueCardMaxHistorySize;
@@ -55,15 +71,24 @@ class GetIssueTest extends IssueServiceImplTest {
         Issue issue = buildIssue();
         IssueHistory history = buildHistory();
 
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
+
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
         Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
                 .thenReturn(Flux.just(history));
 
-        IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
+        IssueWithHistory result = issueService.getIssue(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID
+        ).block();
 
         Assertions.assertThat(result).isNotNull();
         Assertions.assertThat(result.getIssue()).isEqualTo(issue);
         Assertions.assertThat(result.getHistory()).containsExactly(history);
+
+        Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
     }
 
     @Test
@@ -73,41 +98,72 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory second = buildHistory();
         IssueHistory third = buildHistory();
 
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
         Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
                 .thenReturn(Flux.fromIterable(List.of(first, second, third)));
 
-        IssueWithHistory result = issueService.getIssue(ISSUE_ID).block();
+        IssueWithHistory result = issueService.getIssue(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID
+        ).block();
 
         Assertions.assertThat(result).isNotNull();
         Assertions.assertThat(result.getHistory()).containsExactly(first, second, third);
+
+        Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
     }
 
     @Test
     void shouldThrowNotFoundWhenIssueDoesNotExist() {
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.empty());
 
-        StepVerifier.create(issueService.getIssue(ISSUE_ID))
+        StepVerifier.create(issueService.getIssue(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID)
+                )
                 .expectErrorMatches(ex ->
                         ex instanceof DomainException domainEx &&
                                 domainEx.getStatus() == DomainStatus.NOT_FOUND
                 )
                 .verify();
+
+        Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                Mockito.anyString(), Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.any()
+        );
+
     }
 
     @Test
     void shouldPropagateErrorFromHistoryRepository() {
         Issue issue = buildIssue();
 
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
         Mockito.when(issueRepository.findByIdAndDeletedAtIsNull(ISSUE_ID)).thenReturn(Mono.just(issue));
         Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(ISSUE_ID, Limit.of(issueCardMaxHistorySize)))
                 .thenReturn(Flux.error(new RuntimeException("DB error")));
 
-        StepVerifier.create(issueService.getIssue(ISSUE_ID))
+        StepVerifier.create(issueService.getIssue(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID)
+                )
                 .expectErrorMatches(ex ->
                         ex instanceof RuntimeException &&
                                 ex.getMessage().equals("DB error")
                 )
                 .verify();
+
+        Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
+        );
     }
 }

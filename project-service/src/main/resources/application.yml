@@ -13,9 +13,6 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
-  grpc:
-    server:
-      port: ${GRPC_SERVER_PORT:9090}
   liquibase:
     enabled: true
     url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5434/project_db}

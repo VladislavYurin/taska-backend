@@ -11,6 +11,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public abstract class AbstractIT {
 
+    static {
+        System.setProperty("java.net.preferIPv4Stack", "true");
+    }
+
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
@@ -28,5 +32,11 @@ public abstract class AbstractIT {
                 postgres.getDatabaseName()));
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
+
+        registry.add("grpc.server.address", () -> "127.0.0.1");
+        registry.add("grpc.server.port", () -> "9090");
+        registry.add("app.grpc.client.project-service.host", () -> "127.0.0.1");
+        registry.add("app.grpc.client.project-service.port", () -> "9090");
+
     }
 }

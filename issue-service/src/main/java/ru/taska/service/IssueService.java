@@ -16,6 +16,8 @@ import java.util.UUID;
 public interface IssueService {
 
     Mono<Issue> createIssue(
+            String requestId,
+            String nodeId,
             UUID projectId,
             IssueType issueType,
             String summary,
@@ -24,23 +26,51 @@ public interface IssueService {
             UUID reporterId
     );
 
-    Mono<Issue> assignIssue(UUID issueId, UUID assigneeId, UUID actorUserId);
+    Mono<Issue> assignIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID assigneeId,
+            UUID actorUserId
+    );
 
 
-    Mono<IssueWithHistory> getIssue(UUID issueId);
+    Mono<IssueWithHistory> getIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID actorUserId
+    );
 
-    Mono<PageResult<Issue>> listIssues(UUID projectId, IssueStatus status, UUID assigneeId, Integer page, Integer pageSize);
+    Mono<PageResult<Issue>> listIssues(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId,
+            IssueStatus status,
+            UUID assigneeId,
+            Integer page,
+            Integer pageSize
+    );
 
     /**
-     ** Производит мягкое удаление задачи по айди задачи, устанавливая значение
+     * * Производит мягкое удаление задачи по айди задачи, устанавливая значение
      * в поле deleted_at. После удаления данные остаются в БД, но объект больше не участвует в выдаче.
      *
-     * @param requestId айди запроса.
-     * @param nodeId айди узла.
-     * @param issueId айди удаляемой задачи.
+     * @param requestId   айди запроса.
+     * @param nodeId      айди узла.
+     * @param projectId   айди проекта.
+     * @param issueId     айди удаляемой задачи.
      * @param actorUserId айди юзера, удаляющего задачу.
-     *
      * @return Mono<{@link Issue}> тело удаленной задачи.
      */
-    Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId);
+    Mono<Issue> deleteIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID actorUserId
+    );
 }

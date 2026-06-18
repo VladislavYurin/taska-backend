@@ -7,7 +7,9 @@ import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.config.props.IssueListProperties;
+import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -26,7 +28,9 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
+import ru.taska.transport.grpc.ProjectRoleChecker;
 
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -41,16 +45,20 @@ public class IssueServiceImpl implements IssueService {
     private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
     private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
+    private final IssueProperties issueProperties;
     private final IssueListProperties issueListProperties;
     private final ProjectCounterRepository projectCounterRepository;
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final IssueMapper issueMapper;
+    private final ProjectRoleChecker projectRoleChecker;
 
     @Override
     @Transactional
     public Mono<Issue> createIssue(
+            String requestId,
+            String nodeId,
             UUID projectId,
             IssueType issueType,
             String summary,
@@ -58,76 +66,113 @@ public class IssueServiceImpl implements IssueService {
             IssuePriority priority,
             UUID reporterId
     ) {
-        //todo add membership check. depends on TAS-21: CheckProjectRole
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
 
-        return projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
-                .map(number -> issueMapper.buildIssue(
-                        projectId,
-                        number,
-                        UUID.randomUUID().toString(), //todo assign issue key. depends on TAS-20: GetProject (временно добавил автогенерацию UUID)
-                        issueType,
-                        summary,
-                        description,
-                        priority,
-                        reporterId,
-                        INIT_STATUS,
-                        INIT_VERSION))
-                .flatMap(issueRepository::save)
-                .flatMap(issue -> {
-                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED);
-                    return issueHistoryRepository.save(history)
-                            .then(outboxEventRepository.save(event))
-                            .thenReturn(issue);
-                });
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
+                .then(projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
+                        .map(number -> issueMapper.buildIssue(
+                                projectId,
+                                number,
+                                UUID.randomUUID().toString(), //todo assign issue key. depends on TAS-20: GetProject (временно добавил автогенерацию UUID)
+                                issueType,
+                                summary,
+                                description,
+                                priority,
+                                reporterId,
+                                INIT_STATUS,
+                                INIT_VERSION))
+                        .flatMap(issueRepository::save)
+                        .flatMap(issue -> {
+                            IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
+                            OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED);
+                            return issueHistoryRepository.save(history)
+                                    .then(outboxEventRepository.save(event))
+                                    .then(Mono.fromRunnable(() ->
+                                            log.debug("[{}][{}] Issue successfully created by user with id: {}",
+                                                    requestId, nodeId, reporterId)))
+                                    .thenReturn(issue);
+                        }));
     }
 
     @Override
     @Transactional
-    public Mono<Issue> assignIssue(UUID issueId, UUID assigneeId, UUID actorUserId) {
-        //todo add membership check. depends on TAS-21: CheckProjectRole
-        return issueRepository.findActiveById(issueId)
-                .switchIfEmpty(Mono.error(new DomainException(
-                        DomainStatus.NOT_FOUND,
-                        "Issue with id: " + issueId + " not found"
-                )))
-                .flatMap(issue -> {
-                    if (isAssigned(issue, assigneeId)) {
-                        return Mono.just(issue);
-                    }
-                    Issue assignedIssue = issueMapper.setIssueAssignee(issue, assigneeId);
-                    return issueRepository.save(assignedIssue)
-                            .flatMap(savedIssue -> {
-                                IssueHistory history = issueMapper
-                                        .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
-                                OutboxEvent event = issueMapper
-                                        .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
-                                return issueHistoryRepository.save(history)
-                                        .then(outboxEventRepository.save(event))
-                                        .thenReturn(savedIssue);
-                            });
-                });
+    public Mono<Issue> assignIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID assigneeId,
+            UUID actorUserId
+    ) {
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().assignIssueRoles();
+
+        Mono<Void> actorCheck = projectRoleChecker.checkProjectRole(
+                requestId, nodeId, projectId, actorUserId, allowedRoles
+        );
+
+        Mono<Void> assigneeCheck = actorUserId.equals(assigneeId)
+                ? Mono.empty()
+                : projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, assigneeId, allowedRoles);
+
+        return actorCheck
+                .then(assigneeCheck)
+                .then(issueRepository.findActiveById(issueId)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("[{}][{}] Issue with id: " + issueId + " was not found", requestId, nodeId);
+
+                            return Mono.error(new DomainException(
+                                    DomainStatus.NOT_FOUND,
+                                    "Issue with id: " + issueId + " not found"
+                            ));
+                        }))
+                        .flatMap(issue -> {
+                            if (isAssigned(issue, assigneeId)) {
+                                return Mono.just(issue);
+                            }
+                            Issue assignedIssue = issueMapper.setIssueAssignee(issue, assigneeId);
+                            return issueRepository.save(assignedIssue)
+                                    .flatMap(savedIssue -> {
+                                        IssueHistory history = issueMapper
+                                                .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
+                                        OutboxEvent event = issueMapper
+                                                .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
+                                        return issueHistoryRepository.save(history)
+                                                .then(outboxEventRepository.save(event))
+                                                .then(Mono.fromRunnable(() ->
+                                                        log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
+                                                                requestId, nodeId, assigneeId, issueId)))
+                                                .thenReturn(savedIssue);
+                                    });
+                        }));
     }
 
     @Override
-    public Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
-        //todo add membership check. depends on TAS-21: CheckProjectRole
-        return issueRepository.softDeleteAndReturn(issueId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.info("Issue with id: " + issueId + " was not found");
-                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
-                }))
-                .flatMap(deletedIssue -> {
-                    IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);
-                    OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED);
+    public Mono<Issue> deleteIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID actorUserId
+    ) {
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
 
-                    return issueHistoryRepository.save(history)
-                            .then(outboxEventRepository.save(outboxEvent))
-                            .then(Mono.fromRunnable(() ->
-                                    log.info("[{}][{}] Issue with id: {} successfully soft-deleted by user with id: {}",
-                                            requestId, nodeId, issueId, actorUserId)))
-                            .thenReturn(deletedIssue);
-                });
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(issueRepository.softDeleteAndReturn(issueId)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("[{}][{}] Issue with id: " + issueId + " was not found", requestId, nodeId);
+                            return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
+                        }))
+                        .flatMap(deletedIssue -> {
+                            IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);
+                            OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED);
+
+                            return issueHistoryRepository.save(history)
+                                    .then(outboxEventRepository.save(outboxEvent))
+                                    .then(Mono.fromRunnable(() ->
+                                            log.debug("[{}][{}] Issue with id: {} successfully soft-deleted by user with id: {}",
+                                                    requestId, nodeId, issueId, actorUserId)))
+                                    .thenReturn(deletedIssue);
+                        }));
     }
 
     private boolean isAssigned(Issue issue, UUID assigneeId) {
@@ -136,30 +181,50 @@ public class IssueServiceImpl implements IssueService {
 
 
     @Override
-    public Mono<IssueWithHistory> getIssue(UUID issueId) {
-        //todo add membership check. depends on TAS-21: CheckProjectRole
+    public Mono<IssueWithHistory> getIssue(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID issueId,
+            UUID actorUserId
+    ) {
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().getIssueRoles();
 
-        return issueRepository.findByIdAndDeletedAtIsNull(issueId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId)))
-                .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueCardMaxHistorySize))
-                        .collectList()
-                        .map(history -> new IssueWithHistory(issue, history)));
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(issueRepository.findByIdAndDeletedAtIsNull(issueId)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("[{}][{}] Issue with id: " + issueId + " was not found", requestId, nodeId);
+
+                            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId));
+                        }))
+                        .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueCardMaxHistorySize))
+                                .collectList()
+                                .map(history -> new IssueWithHistory(issue, history))));
     }
 
     @Override
-    public Mono<PageResult<Issue>> listIssues(UUID projectId, IssueStatus status, UUID assigneeId, Integer page, Integer pageSize) {
-        //todo add membership check. depends on TAS-21: CheckProjectRole
-
-        if (projectId == null) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "projectId is required"));
-        }
+    public Mono<PageResult<Issue>> listIssues(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId,
+            IssueStatus status,
+            UUID assigneeId,
+            Integer page,
+            Integer pageSize
+    ) {
         int resolvedPage = validatePage(page);
         int resolvedPageSize = validatePageSize(pageSize);
         long offset = (long) resolvedPage * resolvedPageSize;
-        return Mono.zip(
-                issueRepository.countByFilter(projectId, status, assigneeId),
-                issueRepository.findByFilter(projectId, status, assigneeId, resolvedPageSize, offset).collectList()
-        ).map(t -> new PageResult<>(t.getT2(), t.getT1()));
+
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
+
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(Mono.zip(
+                        issueRepository.countByFilter(projectId, status, assigneeId),
+                        issueRepository.findByFilter(projectId, status, assigneeId, resolvedPageSize, offset)
+                                .collectList()
+                ).map(t -> new PageResult<>(t.getT2(), t.getT1())));
     }
 
     private int validatePage(Integer page) {
