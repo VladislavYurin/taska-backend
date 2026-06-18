@@ -10,6 +10,8 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
+import ru.taska.transport.kafka.OutboxEventProcessor;
+import ru.taska.transport.kafka.OutboxEventScheduler;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventSchedulerTest {

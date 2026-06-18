@@ -5,11 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.CheckProjectRoleResponse;
-import ru.taska.api.project.v1.ProjectRole;
-import ru.taska.api.project.v1.RmProjectMemberResponse;
+import ru.taska.api.project.v1.*;
 import ru.taska.domain.ProjectMember;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -106,7 +102,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     }
 
     @Override
-    public Mono<CheckProjectRoleResponse> checkProjectRole(
+    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole(
             String requestId,
             String nodeId,
             UUID projectId,

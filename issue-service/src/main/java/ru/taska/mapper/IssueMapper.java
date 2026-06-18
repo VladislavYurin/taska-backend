@@ -3,10 +3,7 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.issue.v1.IssueDetails;
-import ru.taska.api.issue.v1.IssueHistoryResponse;
-import ru.taska.api.issue.v1.IssueResponse;
-import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.*;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -65,11 +62,11 @@ public class IssueMapper {
                 .build();
     }
 
-    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, String eventType) {
+    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, IssueEventType eventType) {
         return OutboxEvent.builder()
                 .aggregateType(aggregateType)
                 .aggregateId(issue.getId())
-                .eventType(eventType)
+                .eventType(String.valueOf(eventType))
                 .status(OutboxEventStatus.NEW)
                 .payload(objectMapper.valueToTree(issue))
                 .build();
@@ -126,6 +123,13 @@ public class IssueMapper {
                 .build();
     }
 
+    public DeleteIssueResponse toDeleteIssueProto(Issue issue) {
+        return DeleteIssueResponse.newBuilder()
+                .setDeletedIssueId(issue.getId().toString())
+                .setIssueEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED)
+                .build();
+    }
+
     public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {
         return switch (proto) {
             case ISSUE_TYPE_TASK -> IssueType.TASK;
@@ -159,6 +163,7 @@ public class IssueMapper {
             case UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_UPDATED;
             case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
             case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
+            case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
         };
     }
 

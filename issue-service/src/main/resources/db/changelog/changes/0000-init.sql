@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS taska.issue_history (
     payload       jsonb       NOT NULL DEFAULT '{}'::jsonb,
 
     CONSTRAINT issue_history_issue_fk FOREIGN KEY (issue_id) REFERENCES taska.issues (id) ON DELETE CASCADE,
-    CONSTRAINT issue_history_event_type_chk CHECK (event_type IN ('CREATED', 'UPDATED', 'ASSIGNED', 'TRANSITIONED'))
+    CONSTRAINT issue_history_event_type_chk CHECK (event_type IN ('CREATED', 'UPDATED', 'ASSIGNED', 'TRANSITIONED', 'DELETED'))
 );
 
 -- changeset taska:0006-issue-history-indexes

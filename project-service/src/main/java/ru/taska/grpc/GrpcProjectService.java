@@ -9,21 +9,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.grpc.server.service.GrpcService;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.AddProjectMemberRequest;
-import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleRequest;
-import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.CheckProjectRoleRequest;
-import ru.taska.api.project.v1.CheckProjectRoleResponse;
-import ru.taska.api.project.v1.CreateProjectRequest;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.GetUsersProjectsRequest;
-import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.api.project.v1.ProjectRole;
-import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.api.project.v1.RmProjectMemberRequest;
-import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.UsersProjectsResponse;
+import ru.taska.api.project.v1.*;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.service.ProjectMemberService;
@@ -197,7 +183,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
     }
 
     @Override
-    public Mono<CheckProjectRoleResponse> checkProjectRole(Mono<CheckProjectRoleRequest> request) {
+    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole(Mono<CheckProjectMemberRoleRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -224,7 +210,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     log.info("[{}][{}] Received checkProjectRole request: projectId={}, userId={}",
                             requestId, nodeId, projectId, userId);
 
-                    return projectMemberService.checkProjectRole(requestId, nodeId, projectId, userId);
+                    return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
                 })
                 .transform(withErrorHandling("checkProjectRole"));
 

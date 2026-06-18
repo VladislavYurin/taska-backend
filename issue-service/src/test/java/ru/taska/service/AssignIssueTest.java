@@ -32,7 +32,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.when(issueMapper.buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID))
                .thenReturn(history);
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.empty());
-        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, "issue", "IssueAssigned"))
+        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, "issue", IssueEventType.ASSIGNED))
                .thenReturn(event);
         Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.empty());
         existingIssue.setAssigneeId(null);
@@ -54,7 +54,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
         Mockito.verify(issueMapper).buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, "issue", "IssueAssigned");
+        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, "issue", IssueEventType.ASSIGNED);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }

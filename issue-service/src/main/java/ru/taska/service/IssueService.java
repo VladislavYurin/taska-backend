@@ -27,4 +27,6 @@ public interface IssueService {
     Mono<IssueWithHistory> getIssue(UUID issueId);
 
     Mono<PageResult<Issue>> listIssues(UUID projectId, IssueStatus status, UUID assigneeId, Integer page, Integer pageSize);
+
+    Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId);
 }

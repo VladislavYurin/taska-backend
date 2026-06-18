@@ -7,5 +7,6 @@ public enum IssueEventType {
     CREATED,
     UPDATED,
     ASSIGNED,
-    TRANSITIONED
+    TRANSITIONED,
+    DELETED
 }

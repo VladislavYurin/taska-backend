@@ -40,7 +40,7 @@ public class IssueHistory {
     private UUID issueId;
 
     /**
-     * Тип события (CREATED, UPDATED, ASSIGNED, TRANSITIONED).
+     * Тип события (CREATED, UPDATED, ASSIGNED, TRANSITIONED, DELETED).
      */
     @Column("event_type")
     private IssueEventType eventType;
