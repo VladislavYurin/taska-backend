@@ -1,6 +1,5 @@
 package ru.taska.service.impl;
 
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,11 +12,12 @@ import ru.taska.event.OutboxEventStatus;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
-import ru.taska.mapper.OutboxEventMapper;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.UUID;
 
 @Slf4j
 @Service
