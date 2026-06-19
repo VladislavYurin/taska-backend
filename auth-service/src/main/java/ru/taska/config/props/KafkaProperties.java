@@ -5,12 +5,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 @ConfigurationProperties(prefix = "app.kafka")
-public record KafkaTopicsProperties(
+public record KafkaProperties(
         Topics topics,
         Outbox outbox
 ) {
     public record Topics(
-            String issueEvents
+            String userEvents
     ) {
     }
 
@@ -22,5 +22,4 @@ public record KafkaTopicsProperties(
             Duration processingTimeout
     ) {
     }
-
 }

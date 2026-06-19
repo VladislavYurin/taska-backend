@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.config.OutboxConfig;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
 
@@ -16,7 +16,7 @@ import ru.taska.repository.OutboxEventRepository;
 public class OutboxEventProcessor {
 
     private final OutboxEventRepository outboxEventRepository;
-    private final OutboxConfig outboxConfig;
+    private final KafkaProperties kafkaProperties;
     private final OutboxEventPublisher publisher;
 
     /**
@@ -28,7 +28,7 @@ public class OutboxEventProcessor {
         AtomicInteger success = new AtomicInteger();
         AtomicInteger failure = new AtomicInteger();
 
-        return outboxEventRepository.findUnpublished(outboxConfig.batchSize())
+        return outboxEventRepository.findUnpublished(kafkaProperties.outbox().batchSize())
                                     .concatMap(event -> processEvent(event, success, failure))
                                     .then()
                                     .doFinally(signal -> {                                       // сводный лог здесь
@@ -74,7 +74,7 @@ public class OutboxEventProcessor {
     public Mono<Void> processStuckEvents() {
         return Mono.defer(() -> {
                        Instant threshold = Instant.now()
-                                                  .minusSeconds(outboxConfig.processingTimeoutSeconds());
+                                                  .minusSeconds(kafkaProperties.outbox().processingTimeout().toSeconds());
 
                        return outboxEventRepository.resetStuckProcessingEvents(threshold)
                                                    .doOnSuccess(count -> {
@@ -105,7 +105,7 @@ public class OutboxEventProcessor {
         );
         int currentAttempts = event.getAttempts() == null ? 0 : event.getAttempts();
 
-        if (currentAttempts + 1 >= outboxConfig.maxAttempts()) {
+        if (currentAttempts + 1 >= kafkaProperties.outbox().maxAttempts()) {
             return outboxEventRepository.markAsFailed(event.getId(), ex.getMessage())
                                         .doOnSuccess(rows ->
                                                              log.warn(
@@ -123,7 +123,7 @@ public class OutboxEventProcessor {
                                                                  "Retry scheduled for event: id={}, attempts={}/{}",
                                                                  event.getId(),
                                                                  event.getAttempts(),
-                                                                 outboxConfig.maxAttempts()
+                                                                 kafkaProperties.outbox().maxAttempts()
                                                          )
                                     )
                                     .then();

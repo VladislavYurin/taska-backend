@@ -15,6 +15,7 @@ import ru.taska.mapper.EmailDeliveryAttemptMapper;
 import ru.taska.repository.EmailDeliveryAttemptRepository;
 import ru.taska.repository.NotificationPreferenceRepository;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -28,8 +29,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class EmailSenderServiceImpl implements EmailSenderService{
 
-    @Value("${notification.email.retry-delay-seconds}")
-    private long retryDelaySeconds;
+    @Value("${notification.email.retry-delay}")
+    private Duration retryDelay;
 
     private final JavaMailSender mailSender;
     private final NotificationPreferenceRepository preferenceRepository;
@@ -90,6 +91,6 @@ public class EmailSenderServiceImpl implements EmailSenderService{
     }
 
     private Instant nextRetryAt() {
-        return Instant.now().plusSeconds(retryDelaySeconds);
+        return Instant.now().plusSeconds(retryDelay.toSeconds());
     }
 }

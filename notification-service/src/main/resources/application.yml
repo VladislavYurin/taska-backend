@@ -1,15 +1,6 @@
 server:
   port: ${SERVER_PORT:8085}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-  endpoint:
-    health:
-      probes:
-        enabled: true
 spring:
   grpc:
     server:
@@ -27,11 +18,11 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: notification-service
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-service}
       auto-offset-reset: earliest
   mail:
-    host: smtp.gmail.com
-    port: 587
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
@@ -41,9 +32,19 @@ spring:
           starttls:
             enable: true
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 notification:
   email:
-    retry-delay-seconds: 60
+    retry-delay: ${NOTIFICATION_EMAIL_RETRY_DELAY:1m}
 
 logging:
   level:

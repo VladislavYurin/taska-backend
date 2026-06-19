@@ -9,31 +9,29 @@ spring:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
     password: ${SPRING_R2DBC_PASSWORD:taska}
-    dialect: POSTGRESQL
-    # R2DBC настройки пула
   r2dbc-pool:
     enabled: true
     initial-size: 10
     max-size: 20
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
     url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5433/auth_db}
     user: ${SPRING_LIQUIBASE_USERNAME:taska}
     password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 app:
   kafka:
     topics:
-      user-events: user.events
+      user-events: ${KAFKA_TOPIC_USER_EVENTS:user.events}
     outbox:
-      polling-interval: 3000
-      recovery-interval: 10000
-      batch-size: 100
-      max-attempts: 5
-      processing-timeout-seconds: 300
+      polling-interval: ${KAFKA_OUTBOX_POLLING_INTERVAL:3s}
+      recovery-interval: ${KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
+      batch-size: ${KAFKA_OUTBOX_BATCH_SIZE:100}
+      max-attempts: ${KAFKA_OUTBOX_MAX_ATTEMPTS:5}
+      processing-timeout: ${KAFKA_PROCESSING_TIMEOUT:5m}
 
 management:
   endpoints:
@@ -45,20 +43,15 @@ management:
       probes:
         enabled: true
 
-invite:
-  token:
-    expiration-days: 7
-
-# JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-and-validation-must-be-long-enough}
-  access-token-ttl: ${JWT_ACCESS_TTL:900} # 15 minutes in seconds
-  refresh-token-ttl: ${JWT_REFRESH_TTL:604800} # 7 days in seconds
+  access-token-ttl: ${JWT_ACCESS_TTL:15m}
+  refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+  invite-token-ttl: ${JWT_INVITE_TTL:7d}
 
-# Security
 security:
-  max-failed-attempts: 5
-  lock-duration-minutes: 15
+  max-failed-attempts: ${SECURITY_MAX_FAILED_ATTEMPTS:5}
+  lock-duration: ${SECURITY_LOCK_DURATION:15m}
   password-encoder: ${PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
 
 logging:

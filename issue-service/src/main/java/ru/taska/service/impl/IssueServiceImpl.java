@@ -2,13 +2,11 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectRole;
-import ru.taska.config.props.IssueListProperties;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
@@ -45,15 +43,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IssueServiceImpl implements IssueService {
 
-    @Value("${issue.card.max-history-size}")
-    private int issueCardMaxHistorySize;
-
     private static final int INIT_VERSION = 1;
     private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
     private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
     private final IssueProperties issueProperties;
-    private final IssueListProperties issueListProperties;
     private final GrpcProjectServiceClient grpcProjectServiceClient;
     private final ProjectCounterRepository projectCounterRepository;
     private final IssueRepository issueRepository;
@@ -268,7 +262,7 @@ public class IssueServiceImpl implements IssueService {
 
                             return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId));
                         }))
-                        .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueCardMaxHistorySize))
+                        .flatMap(issue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
                                 .collectList()
                                 .map(history -> new IssueWithHistory(issue, history))));
     }
@@ -311,15 +305,15 @@ public class IssueServiceImpl implements IssueService {
 
     private int validatePageSize(Integer pageSize) {
         if (pageSize == null) {
-            return issueListProperties.defaultPageSize();
+            return issueProperties.list().defaultPageSize();
         }
         if (pageSize < 1) {
-            log.warn("Invalid pageSize value: {}, falling back to default {}", pageSize, issueListProperties.defaultPageSize());
-            return issueListProperties.defaultPageSize();
+            log.warn("Invalid pageSize value: {}, falling back to default {}", pageSize, issueProperties.list().defaultPageSize());
+            return issueProperties.list().defaultPageSize();
         }
-        if (pageSize > issueListProperties.maxPageSize()) {
-            log.warn("Requested pageSize {} exceeds max {}, clamping to max", pageSize, issueListProperties.maxPageSize());
-            return issueListProperties.maxPageSize();
+        if (pageSize > issueProperties.list().maxPageSize()) {
+            log.warn("Requested pageSize {} exceeds max {}, clamping to max", pageSize, issueProperties.list().maxPageSize());
+            return issueProperties.list().maxPageSize();
         }
         return pageSize;
     }

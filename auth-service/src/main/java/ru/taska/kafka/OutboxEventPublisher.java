@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
-import ru.taska.config.props.KafkaTopicsProperties;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -25,7 +25,7 @@ import java.util.UUID;
 public class OutboxEventPublisher {
 
     private final KafkaSender<String, String> kafkaSender;
-    private final KafkaTopicsProperties properties;
+    private final KafkaProperties properties;
     private final OutboxEventMapper outboxEventMapper;
 
     /**

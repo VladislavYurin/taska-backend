@@ -39,7 +39,7 @@ public class OutboxEventProcessor {
     public Mono<Void> processStuckEvents() {
         return Mono.defer(() -> {
                     Instant threshold = Instant.now()
-                            .minusSeconds(properties.outbox().processingTimeoutSeconds());
+                            .minusSeconds(properties.outbox().processingTimeout().toSeconds());
 
                     return outboxEventRepository.resetStuckProcessingEvents(threshold)
                             .doOnSuccess(count -> {

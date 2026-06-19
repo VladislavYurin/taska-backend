@@ -40,6 +40,11 @@ import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
 import ru.taska.util.PasswordPolicyValidator;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthServiceImpl Unit Tests")
 class AuthServiceImplTest {
@@ -328,7 +333,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(testCredential));
             Mockito.when(passwordHashService.matches(testCredential, wrongPassword)).thenReturn(Mono.just(false));
             Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
-            Mockito.when(securityProperties.getLockDurationMinutes()).thenReturn(15);
+            Mockito.when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
             Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
 
             // When & Then

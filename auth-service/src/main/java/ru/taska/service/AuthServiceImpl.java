@@ -232,7 +232,7 @@ public class AuthServiceImpl implements AuthService {
         Instant lockedUntil = null;
 
         if (newAttempts >= securityProperties.getMaxFailedAttempts()) {
-            lockedUntil = now.plus(securityProperties.getLockDurationMinutes(), ChronoUnit.MINUTES);
+            lockedUntil = now.plus(securityProperties.getLockDuration().toMinutes(), ChronoUnit.MINUTES);
             log.warn("Account locked until {} due to {} failed attempts", lockedUntil, newAttempts);
         }
 

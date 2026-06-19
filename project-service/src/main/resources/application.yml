@@ -9,6 +9,12 @@ spring:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
     password: ${SPRING_R2DBC_PASSWORD:taska}
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5434/project_db}
+    user: ${SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -16,12 +22,17 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
-  liquibase:
-    enabled: true
-    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5434/project_db}
-    user: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
-    change-log: classpath:/db/changelog/db.changelog-master.yaml
+
+app:
+  kafka:
+    topics:
+      project-events: ${KAFKA_TOPIC_PROJECT_EVENTS:project.events}
+    outbox:
+      polling-interval: ${KAFKA_OUTBOX_POLLING_INTERVAL:3s}
+      recovery-interval: ${KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
+      batch-size: ${KAFKA_OUTBOX_BATCH_SIZE:100}
+      max-attempts: ${KAFKA_OUTBOX_MAX_ATTEMPTS:5}
+      processing-timeout: ${KAFKA_PROCESSING_TIMEOUT:5m}
 
 management:
   endpoints:
@@ -32,14 +43,6 @@ management:
     health:
       probes:
         enabled: true
-
-outbox:
-  scheduler-delay: ${SCHEDULER_DELAY:5000}
-  recovery-interval: ${RECOVERY_INTERVAL:10000}
-  topic: ${OUTBOX_TOPIC:project.events}
-  batch-size: ${OUTBOX_BATCH_SIZE:100}
-  max-attempts: ${OUTBOX_MAX_ATTEMPTS:10}
-  processing-timeout-seconds: ${PROCESSING_TIMEOUT:300}
 
 logging:
   level:

@@ -12,10 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.config.OutboxConfig;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -37,7 +38,17 @@ class OutboxEventProcessorTest {
 
     @BeforeEach
     void setUp() {
-        OutboxConfig config = new OutboxConfig("project.events", BATCH_SIZE, MAX_ATTEMPTS, 1_000, 60);
+        KafkaProperties config = new KafkaProperties(
+                new KafkaProperties.Topics("project.events"),
+                new KafkaProperties.Outbox(
+                        Duration.ofSeconds(5),
+                        Duration.ofSeconds(10),
+                        BATCH_SIZE,
+                        MAX_ATTEMPTS,
+                        Duration.ofMinutes(5)
+                )
+        );
+
         processor = new OutboxEventProcessor(repository, config, publisher);
 
         event = OutboxEvent.builder()
