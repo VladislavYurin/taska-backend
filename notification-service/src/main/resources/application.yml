@@ -44,7 +44,6 @@ notification:
 
 logging:
   level:
-    org.liquibase: INFO
-    liquibase: INFO
-    org.apache.kafka: WARN
-    org.springframework.kafka:  WARN
+    ru.taska: ${LOG_LEVEL_ROOT:INFO}
+    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}

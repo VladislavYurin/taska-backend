@@ -13,3 +13,8 @@ management:
     health:
       probes:
         enabled: true
+
+logging:
+  level:
+    ru.taska: ${LOG_LEVEL_ROOT:INFO}
+    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}

@@ -47,5 +47,6 @@ app:
 
 logging:
   level:
-    ru.taska: INFO
-    org.apache.kafka: WARN
+    ru.taska: ${LOG_LEVEL_ROOT:INFO}
+    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}

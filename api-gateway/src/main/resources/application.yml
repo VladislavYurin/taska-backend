@@ -44,3 +44,7 @@ spring:
               filters:
                 - JwtValidating
               # тут будет фильтр валидации jwt токена
+
+logging:
+  level:
+    ru.taska: ${LOG_LEVEL_ROOT:INFO}
