@@ -29,6 +29,12 @@ public class NotificationPreference {
     private UUID userId;
 
     /**
+     * Email-адрес получателя уведомлений.
+     */
+    @Column("email")
+    private String email;
+
+    /**
      * Разрешены ли in‑app уведомления.
      */
     @Column("in_app_enabled")
