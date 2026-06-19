@@ -13,6 +13,7 @@ public record IssueProperties(
     public record AllowedRoles(
             Set<ProjectRole> createIssueRoles,
             Set<ProjectRole> assignIssueRoles,
+            Set<ProjectRole> updateIssueRoles,
             Set<ProjectRole> deleteIssueRoles,
             Set<ProjectRole> getIssueRoles,
             Set<ProjectRole> listIssueRoles

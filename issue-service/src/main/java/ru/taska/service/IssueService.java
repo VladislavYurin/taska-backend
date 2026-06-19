@@ -73,4 +73,28 @@ public interface IssueService {
             UUID issueId,
             UUID actorUserId
     );
+
+    /**
+     * Обновляет задачу на основе данных из Mono<{@link ru.taska.api.issue.v1.UpdateIssueRequest}>
+     * Получает данные из header (requestId, nodeId) для логирования
+     * и issueId, actorUserId, summary, description, priority для создания проекта.
+     *
+     * @param requestId   айди запроса
+     * @param nodeId      айди узла
+     * @param projectId   айди проекта
+     * @param issueId     айди изменяемой задачи
+     * @param actorUserId айди изменяющего юзера
+     * @param summary     короткие описание задачи
+     * @param description полное описание задачи
+     * @param priority    обновленный приоритет задачи
+     * @return Mono<{@link Issue}> с соответствующими параметрами обновленного проекта
+     */
+    Mono<Issue> updateIssue(String requestId,
+                            String nodeId,
+                            UUID projectId,
+                            UUID issueId,
+                            UUID actorUserId,
+                            String summary,
+                            String description,
+                            IssuePriority priority);
 }

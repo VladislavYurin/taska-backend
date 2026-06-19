@@ -1,4 +1,4 @@
-package ru.taska.event.payload;
+package ru.taska.event.payload.issueService;
 
 import java.util.UUID;
 

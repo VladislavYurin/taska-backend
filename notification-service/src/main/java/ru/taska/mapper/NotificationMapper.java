@@ -48,6 +48,17 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toIssueUpdated(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_UPDATED)
+                .title("Задача обновлена")
+                .body("Задача обновлена " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toIssueDeleted(TaskaEvent event, UUID userId) {
         return Notification.builder()
                 .userId(userId)
@@ -144,6 +155,7 @@ public class NotificationMapper {
             case ISSUE_ASSIGNED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED;
             case ISSUE_TRANSITIONED -> NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED;
             case ISSUE_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED;
+            case ISSUE_UPDATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_UPDATED;
             case ISSUE_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED;
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
             case PROJECT_CREATED -> NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED;

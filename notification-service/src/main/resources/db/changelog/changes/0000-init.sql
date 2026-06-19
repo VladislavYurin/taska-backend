@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS taska.notifications
     CONSTRAINT notifications_type_chk CHECK (
         notification_type IN (
                               'ISSUE_ASSIGNED', 'ISSUE_TRANSITIONED',
-                              'ISSUE_CREATED', 'USER_INVITED',
-                              'MEMBER_REMOVED', 'MEMBER_ADDED',
+                              'ISSUE_CREATED', 'ISSUE_UPDATED', 'ISSUE_DELETED',
+                              'USER_INVITED', 'MEMBER_REMOVED', 'MEMBER_ADDED',
                               'PROJECT_CREATED', 'MEMBER_ROLE_CHANGED'
             )
         )
