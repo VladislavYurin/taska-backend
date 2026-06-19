@@ -4,7 +4,7 @@
 -- comment: Добавление статуса событий outbox.
 
 ALTER TABLE taska.outbox_events
-    ADD COLUMN status text;
+    ADD COLUMN IF NOT EXISTS status text;
 
 UPDATE taska.outbox_events
 SET status =
@@ -26,7 +26,7 @@ ALTER TABLE taska.outbox_events
 -- comment: Добавление processing_started_at для recovery outbox событий
 
 ALTER TABLE taska.outbox_events
-    ADD COLUMN processing_started_at timestamptz NULL;
+    ADD COLUMN IF NOT EXISTS processing_started_at timestamptz NULL;
 
 -- changeset taska:0015-outbox-events-indexes
 -- comment: Создание индексов для оптимизации outbox механизма

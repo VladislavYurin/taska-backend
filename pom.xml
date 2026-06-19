@@ -48,7 +48,7 @@
     <!-- lastest version of spring cloud -->
     <spring-cloud.version>2025.1.1</spring-cloud.version>
 
-    <testcontainers.version>1.21.1</testcontainers.version>
+    <testcontainers.version>1.21.4</testcontainers.version>
   </properties>
 
   <profiles>
