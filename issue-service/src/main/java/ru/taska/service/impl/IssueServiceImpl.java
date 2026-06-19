@@ -26,7 +26,11 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -47,6 +51,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueHistoryRepository issueHistoryRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final IssueMapper issueMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -95,11 +100,18 @@ public class IssueServiceImpl implements IssueService {
                     if (isAssigned(issue, assigneeId)) {
                         return Mono.just(issue);
                     }
+
+                    ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
+                            "oldAssigneeId", Optional.ofNullable(issue.getAssigneeId()),
+                            "newAssigneeId", assigneeId
+                    ));
+
                     Issue assignedIssue = issueMapper.setIssueAssignee(issue, assigneeId);
                     return issueRepository.save(assignedIssue)
                             .flatMap(savedIssue -> {
                                 IssueHistory history = issueMapper
                                         .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
+                                history.setPayload(historyPayload);
                                 OutboxEvent event = issueMapper
                                         .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
                                 return issueHistoryRepository.save(history)
@@ -110,12 +122,50 @@ public class IssueServiceImpl implements IssueService {
     }
 
     @Override
+    @Transactional
+    public Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
+                                   String summary, String description, IssuePriority priority) {
+        //todo add membership check. depends on TAS-BE-007: CheckProjectRole
+        return issueRepository.findActiveById(issueId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND,
+                            "Issue with id: " + issueId + " was not found"));
+                }))
+                .flatMap(issue -> {
+
+                    ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
+                            "oldSummary", issue.getSummary(),
+                            "newSummary",summary,
+                            "oldDescription", Optional.ofNullable(issue.getDescription()),
+                            "newDescription", description,
+                            "oldPriority", issue.getPriority(),
+                            "newPriority", String.valueOf(priority)
+                    ));
+
+                    issue.setSummary(summary);
+                    issue.setDescription(description);
+                    issue.setPriority(priority);
+                    issue.setVersion(issue.getVersion() + 1);
+
+                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
+                    history.setPayload(historyPayload);
+                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, IssueEventType.UPDATED);
+
+                    return issueRepository.save(issue)
+                            .then(issueHistoryRepository.save(history))
+                            .then(outboxEventRepository.save(event))
+                            .thenReturn(issue);
+                });
+    }
+
+    @Override
     public Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
         //todo add membership check. depends on TAS-21: CheckProjectRole
         return issueRepository.softDeleteAndReturn(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.info("Issue with id: " + issueId + " was not found");
-                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
+                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId + " was not found"));
                 }))
                 .flatMap(deletedIssue -> {
                     IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);

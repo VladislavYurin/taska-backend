@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import java.util.UUID;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -14,6 +13,8 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.impl.IssueServiceImpl;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 public class IssueServiceImplTest {
@@ -32,6 +33,9 @@ public class IssueServiceImplTest {
 
     @Spy
     protected IssueMapper issueMapper = new IssueMapper(new ObjectMapper());
+
+    @Spy
+    protected ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     protected IssueServiceImpl issueService;

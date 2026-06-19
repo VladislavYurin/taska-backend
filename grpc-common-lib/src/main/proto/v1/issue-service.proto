@@ -59,6 +59,11 @@ service IssueService {
       returns (DeleteIssueResponse);
 
   /*
+* Обновление данных задачи
+*/
+  rpc UpdateIssue(UpdateIssueRequest)
+      returns (UpdateIssueResponse);
+  /*
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
    */
   rpc ListIssues(ListIssuesRequest)
@@ -187,6 +192,47 @@ message DeleteIssueRequestBody {
   string actor_user_id = 2;
 }
 
+message UpdateIssueRequest {
+
+  /**
+ * Заголовок запроса.
+ */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+ * Тело запроса.
+ */
+  UpdateIssueRequestBody body = 2;
+}
+
+message UpdateIssueRequestBody {
+
+  /**
+ * Айди задачи
+ */
+  string issue_id = 1;
+
+  /**
+ * Айди инициатора
+ */
+  string actor_user_id = 2;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Подробное описание задачи.
+   */
+  string description = 4;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 5;
+}
+
 message ListIssuesRequest {
 
   /**
@@ -230,6 +276,29 @@ message DeleteIssueResponse {
  * Тип события по задаче.
  */
   IssueEventType issue_event_type = 2;
+}
+
+message UpdateIssueResponse {
+
+  /**
+   * Айди обновленной задачи.
+   */
+  string updated_issue_id = 1;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 2;
+
+  /**
+   * Подробное описание задачи.
+   */
+  string description = 3;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 4;
 }
 
 message ListIssuesResponse {

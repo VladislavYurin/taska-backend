@@ -8,6 +8,7 @@ import ru.taska.api.issue.v1.IssueDetails;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -132,6 +133,15 @@ public class IssueMapper {
         return DeleteIssueResponse.newBuilder()
                 .setDeletedIssueId(issue.getId().toString())
                 .setIssueEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED)
+                .build();
+    }
+
+    public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
+        return UpdateIssueResponse.newBuilder()
+                .setUpdatedIssueId(issue.getId().toString())
+                .setSummary(issue.getSummary())
+                .setDescription(issue.getDescription())
+                .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .build();
     }
 

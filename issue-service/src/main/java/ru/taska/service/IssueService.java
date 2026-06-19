@@ -42,5 +42,40 @@ public interface IssueService {
      *
      * @return Mono<{@link Issue}> тело удаленной задачи.
      */
+    /**
+     * Обновляет задачу на основе данных из Mono<{@link ru.taska.api.issue.v1.UpdateIssueRequest}>
+     * Получает данные из header (requestId, nodeId) для логирования
+     * и issueId, actorUserId, summary, description, priority для создания проекта.
+     *
+     * @param requestId   айди запроса
+     * @param nodeId      айди узла
+     * @param issueId     айди изменяемой задачи
+     * @param actorUserId айди изменяющего юзера
+     * @param summary     короткие описание задачи
+     * @param description полное описание задачи
+     * @param priority    обновленный приоритет задачи
+     * @return Mono<{@link Issue}> с соответствующими параметрами обновленного проекта
+     */
+    Mono<Issue> updateIssue(String requestId,
+                            String nodeId,
+                            UUID issueId,
+                            UUID actorUserId,
+                            String summary,
+                            String description,
+                            IssuePriority priority);
+
+    /**
+     * Мягко удаляет задачу на основе данных из Mono<{@link ru.taska.api.issue.v1.DeleteIssueRequest}>
+     * При удалении, устанавливается поле deletedAt, задача остается в БД, но не отображается при вызове
+     * GetIssue или ListIssues.
+     * Получает данные из header (requestId, nodeId) для логирования
+     * и issueId, actorUserId для удаления задачи
+     *
+     * @param requestId   айди запроса
+     * @param nodeId      айди узла
+     * @param issueId     айди удаляемой задачи
+     * @param actorUserId айди удаляющего задачу юзера
+     * @return Mono<{@link Issue}> с соответствующими параметрами удаленного проекта
+     */
     Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId);
 }

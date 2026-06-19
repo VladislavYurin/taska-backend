@@ -19,6 +19,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.IssueStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
@@ -170,7 +172,13 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     }
 
 
+    /**
+     * Удаляет задачу на основе Mono<{@link ru.taska.api.issue.v1.DeleteIssueRequest}>
+     *
+     * @param request .proto с айди задачи и инициатором удаления
 
+     * @return Mono<{@link DeleteIssueResponse}> с соответствующими параметрами созданного проекта
+     */
     @Override
     public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
         return request
@@ -192,6 +200,42 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         })
                         .map(issueMapper::toDeleteIssueProto)
                         .transform(GrpcExceptionHandler.withErrorHandling("deleteIssue")));
+    }
+
+    /**
+     * Обновляет задачу на основе Mono<{@link ru.taska.api.issue.v1.UpdateIssueRequest}>
+     *
+     * @param request .proto с параметрами на обновление задачи
+
+     * @return Mono<{@link UpdateIssueResponse}> с соответствующими параметрами созданного проекта
+     */
+    @Override
+    public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request)  {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getDescription(), "body.description"),
+                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority")
+                ))
+                .flatMap( t-> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID issueId = t.getT3();
+                    UUID actorUserId = t.getT4();
+                    String summary = t.getT5();
+                    String description = t.getT6();
+                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT7());
+
+                    log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
+                            requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                    return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                })
+                .map(issueMapper::toUpdateIssueProto)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {
