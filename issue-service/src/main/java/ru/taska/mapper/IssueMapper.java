@@ -3,7 +3,11 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.issue.v1.*;
+import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.IssueDetails;
+import ru.taska.api.issue.v1.IssueHistoryResponse;
+import ru.taska.api.issue.v1.IssueResponse;
+import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -12,6 +16,7 @@ import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.EventType;
 import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.ObjectMapper;
 
@@ -62,11 +67,11 @@ public class IssueMapper {
                 .build();
     }
 
-    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, IssueEventType eventType) {
+    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, EventType eventType) {
         return OutboxEvent.builder()
                 .aggregateType(aggregateType)
                 .aggregateId(issue.getId())
-                .eventType(String.valueOf(eventType))
+                .eventType(eventType.getValue())
                 .status(OutboxEventStatus.NEW)
                 .payload(objectMapper.valueToTree(issue))
                 .build();

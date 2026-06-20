@@ -17,6 +17,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.PageResult;
+import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
@@ -26,7 +27,6 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -75,7 +75,7 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issueRepository::save)
                 .flatMap(issue -> {
                     IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, IssueEventType.CREATED);
+                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED);
                     return issueHistoryRepository.save(history)
                             .then(outboxEventRepository.save(event))
                             .thenReturn(issue);
@@ -101,7 +101,7 @@ public class IssueServiceImpl implements IssueService {
                                 IssueHistory history = issueMapper
                                         .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
                                 OutboxEvent event = issueMapper
-                                        .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, IssueEventType.ASSIGNED);
+                                        .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
                                 return issueHistoryRepository.save(history)
                                         .then(outboxEventRepository.save(event))
                                         .thenReturn(savedIssue);
@@ -112,23 +112,21 @@ public class IssueServiceImpl implements IssueService {
     @Override
     public Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
         //todo add membership check. depends on TAS-21: CheckProjectRole
-        return issueRepository.findActiveById(issueId)
+        return issueRepository.softDeleteAndReturn(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("Issue with id: " + issueId + " was not found");
                     return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
                 }))
-                .flatMap(issue -> {
-                    issue.setDeletedAt(Instant.now());
-                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.DELETED, actorUserId);
-                    OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, IssueEventType.DELETED);
+                .flatMap(deletedIssue -> {
+                    IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);
+                    OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED);
 
-                    return issueRepository.save(issue)
-                            .then(issueHistoryRepository.save(history))
+                    return issueHistoryRepository.save(history)
                             .then(outboxEventRepository.save(outboxEvent))
                             .then(Mono.fromRunnable(() ->
                                     log.info("[{}][{}] Issue with id: {} successfully soft-deleted by user with id: {}",
                                             requestId, nodeId, issueId, actorUserId)))
-                            .thenReturn(issue);
+                            .thenReturn(deletedIssue);
                 });
     }
 
