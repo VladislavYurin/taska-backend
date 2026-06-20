@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS taska.notifications (
     source_event_id   UUID        NOT NULL,
 
     CONSTRAINT notifications_type_chk
-        CHECK (notification_type IN ('ISSUE_ASSIGNED', 'ISSUE_TRANSITIONED', 'ISSUE_CREATED', 'USER_INVITED', 'MEMBER_REMOVED', 'MEMBER_ADDED', 'PROJECT_CREATED'))
+        CHECK (notification_type IN ('ISSUE_ASSIGNED', 'ISSUE_TRANSITIONED', 'ISSUE_CREATED', 'ISSUE_DELETED', 'USER_INVITED', 'MEMBER_REMOVED', 'MEMBER_ADDED', 'PROJECT_CREATED'))
 );
 
 -- changeset taska:0003-notifications-indexes

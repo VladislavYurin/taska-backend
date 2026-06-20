@@ -48,6 +48,17 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toIssueDeleted(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_DELETED)
+                .title("Задача удалена")
+                .body("Задача удалена " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toUserInvited(TaskaEvent event) {
         return Notification.builder()
                 .userId(event.aggregateId())
@@ -133,6 +144,7 @@ public class NotificationMapper {
             case ISSUE_ASSIGNED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED;
             case ISSUE_TRANSITIONED -> NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED;
             case ISSUE_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED;
+            case ISSUE_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED;
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
             case PROJECT_CREATED -> NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED;
             case MEMBER_ADDED -> NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED;

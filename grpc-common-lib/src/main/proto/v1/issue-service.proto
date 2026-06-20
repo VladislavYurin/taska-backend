@@ -15,6 +15,7 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_UPDATED = 2;
   ISSUE_EVENT_TYPE_ASSIGNED = 3;
   ISSUE_EVENT_TYPE_TRANSITIONED = 4;
+  ISSUE_EVENT_TYPE_DELETED = 5;
 }
 
 enum IssueType {
@@ -52,6 +53,12 @@ service IssueService {
       returns (IssueDetails);
 
   /*
+ * Мягкое удаление задачи
+ */
+  rpc DeleteIssue(DeleteIssueRequest)
+      returns (DeleteIssueResponse);
+
+  /*
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
    */
   rpc ListIssues(ListIssuesRequest)
@@ -61,7 +68,7 @@ service IssueService {
    * Назначает исполнителя задачи.
    */
   rpc AssignIssue(AssignIssueRequest)
-    returns (IssueResponse);
+      returns (IssueResponse);
 }
 
 message AssignIssueRequest {
@@ -154,6 +161,32 @@ message GetIssueRequest {
   string issue_id = 2;
 }
 
+message DeleteIssueRequest {
+
+  /**
+ * Заголовок запроса.
+ */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+ * Тело запроса.
+ */
+  DeleteIssueRequestBody body = 2;
+}
+
+message DeleteIssueRequestBody {
+
+  /**
+ * Айди задачи
+ */
+  string issue_id = 1;
+
+  /**
+ * Айди инициатора
+ */
+  string actor_user_id = 2;
+}
+
 message ListIssuesRequest {
 
   /**
@@ -185,6 +218,18 @@ message ListIssuesRequest {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 6;
+}
+
+message DeleteIssueResponse {
+
+  /**
+ * Айди удаленной задачи.
+ */
+  string deleted_issue_id = 1;
+  /**
+ * Тип события по задаче.
+ */
+  IssueEventType issue_event_type = 2;
 }
 
 message ListIssuesResponse {

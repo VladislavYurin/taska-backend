@@ -13,8 +13,8 @@ import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeRoleRequest;
 import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.CheckProjectRoleRequest;
-import ru.taska.api.project.v1.CheckProjectRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetUsersProjectsRequest;
@@ -197,7 +197,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
     }
 
     @Override
-    public Mono<CheckProjectRoleResponse> checkProjectRole(Mono<CheckProjectRoleRequest> request) {
+    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole(Mono<CheckProjectMemberRoleRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -224,7 +224,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     log.info("[{}][{}] Received checkProjectRole request: projectId={}, userId={}",
                             requestId, nodeId, projectId, userId);
 
-                    return projectMemberService.checkProjectRole(requestId, nodeId, projectId, userId);
+                    return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
                 })
                 .transform(withErrorHandling("checkProjectRole"));
 

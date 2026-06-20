@@ -15,6 +15,8 @@ import reactor.test.StepVerifier;
 import ru.taska.config.props.KafkaTopicsProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
+import ru.taska.transport.kafka.OutboxEventProcessor;
+import ru.taska.transport.kafka.OutboxEventPublisher;
 
 import java.time.Instant;
 import java.util.UUID;

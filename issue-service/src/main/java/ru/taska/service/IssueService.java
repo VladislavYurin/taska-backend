@@ -10,6 +10,9 @@ import ru.taska.domain.PageResult;
 
 import java.util.UUID;
 
+/**
+ * Сервис для управления задачами.
+ */
 public interface IssueService {
 
     Mono<Issue> createIssue(
@@ -27,4 +30,17 @@ public interface IssueService {
     Mono<IssueWithHistory> getIssue(UUID issueId);
 
     Mono<PageResult<Issue>> listIssues(UUID projectId, IssueStatus status, UUID assigneeId, Integer page, Integer pageSize);
+
+    /**
+     ** Производит мягкое удаление задачи по айди задачи, устанавливая значение
+     * в поле deleted_at. После удаления данные остаются в БД, но объект больше не участвует в выдаче.
+     *
+     * @param requestId айди запроса.
+     * @param nodeId айди узла.
+     * @param issueId айди удаляемой задачи.
+     * @param actorUserId айди юзера, удаляющего задачу.
+     *
+     * @return Mono<{@link Issue}> тело удаленной задачи.
+     */
+    Mono<Issue> deleteIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId);
 }

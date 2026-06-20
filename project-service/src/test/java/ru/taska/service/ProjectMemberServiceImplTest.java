@@ -13,7 +13,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.CheckProjectRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
@@ -184,7 +184,7 @@ class ProjectMemberServiceImplTest {
                 .userId(memberId)
                 .build();
 
-        var expectedResponse = CheckProjectRoleResponse.newBuilder()
+        var expectedResponse = CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(ru.taska.api.project.v1.ProjectRole.ADMIN)
                 .setIsMember(true)
                 .setProjectExists(true)
@@ -204,7 +204,7 @@ class ProjectMemberServiceImplTest {
                 ))
                 .thenReturn(expectedResponse);
 
-        StepVerifier.create(projectMemberService.checkProjectRole(requestId, nodeId, projectId, memberId))
+        StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
                 .expectNext(expectedResponse)
                 .verifyComplete();
 
@@ -229,7 +229,7 @@ class ProjectMemberServiceImplTest {
                 .id(projectId)
                 .build();
 
-        var expecterResponse = CheckProjectRoleResponse.newBuilder()
+        var expecterResponse = CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(ru.taska.api.project.v1.ProjectRole.UNSPECIFIED)
                 .setIsMember(false)
                 .setProjectExists(true)
@@ -246,7 +246,7 @@ class ProjectMemberServiceImplTest {
                 ))
                 .thenReturn(expecterResponse);
 
-        StepVerifier.create(projectMemberService.checkProjectRole(requestId, nodeId, projectId, memberId))
+        StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
                 .expectNext(expecterResponse)
                 .verifyComplete();
 
@@ -264,7 +264,7 @@ class ProjectMemberServiceImplTest {
 
     @Test
     void checkProjectRole_returnsUnspecified_WhenProjectNotExist() {
-        var expecterResponse = CheckProjectRoleResponse.newBuilder()
+        var expecterResponse = CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(ru.taska.api.project.v1.ProjectRole.UNSPECIFIED)
                 .setIsMember(false)
                 .setProjectExists(false)
@@ -278,7 +278,7 @@ class ProjectMemberServiceImplTest {
                 ))
                 .thenReturn(expecterResponse);
 
-        StepVerifier.create(projectMemberService.checkProjectRole(requestId, nodeId, projectId, memberId))
+        StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
                 .expectNext(expecterResponse)
                 .verifyComplete();
 
