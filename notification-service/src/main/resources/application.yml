@@ -1,5 +1,5 @@
 server:
-  port: 8085
+  port: ${SERVER_PORT:8085}
 
 management:
   endpoints:
@@ -11,6 +11,9 @@ management:
       probes:
         enabled: true
 spring:
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9095}
   r2dbc:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5437/notification_db}
     username: ${SPRING_R2DBC_USERNAME:taska}

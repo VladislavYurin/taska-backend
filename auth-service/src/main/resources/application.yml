@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:8081}
+
 spring:
   r2dbc:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
@@ -54,9 +57,10 @@ security:
   password-encoder: ${PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
 
 # gRPC
-grpc:
-  server:
-    port: 9090
+spring:
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9091}
 
 logging:
   level:

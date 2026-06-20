@@ -173,6 +173,8 @@ services:
       - SPRING_LIQUIBASE_PASSWORD=taska
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - JWT_SECRET=your-super-secret-jwt-key-for-development-only-min-256-bits
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=9090
 
   project-service:
     build:
@@ -199,6 +201,8 @@ services:
       - SPRING_LIQUIBASE_USERNAME=taska
       - SPRING_LIQUIBASE_PASSWORD=taska
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=9090
 
   workflow-service:
     build:
@@ -219,6 +223,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5432/workflow_db
       - SPRING_DATASOURCE_USERNAME=taska
       - SPRING_DATASOURCE_PASSWORD=taska
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=9090
 
   issue-service:
     build:
@@ -252,7 +258,8 @@ services:
       - SPRING_LIQUIBASE_PASSWORD=taska
 
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=9090
 
   notification-service:
     build:
@@ -282,6 +289,8 @@ services:
       - SPRING_LIQUIBASE_PASSWORD=taska
 
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SERVER_PORT=8080
+      - GRPC_SERVER_PORT=9090
 
   api-gateway:
     build:
