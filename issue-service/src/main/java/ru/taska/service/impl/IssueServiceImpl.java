@@ -7,6 +7,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.client.ProjectServiceClient;
 import ru.taska.config.props.IssueListProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
@@ -42,6 +43,7 @@ public class IssueServiceImpl implements IssueService {
     private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
     private final IssueListProperties issueListProperties;
+    private final ProjectServiceClient projectServiceClient;
     private final ProjectCounterRepository projectCounterRepository;
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
@@ -51,6 +53,7 @@ public class IssueServiceImpl implements IssueService {
     @Override
     @Transactional
     public Mono<Issue> createIssue(
+            String requestId,
             UUID projectId,
             IssueType issueType,
             String summary,
@@ -60,18 +63,19 @@ public class IssueServiceImpl implements IssueService {
     ) {
         //todo add membership check. depends on TAS-21: CheckProjectRole
 
-        return projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
-                .map(number -> issueMapper.buildIssue(
-                        projectId,
-                        number,
-                        UUID.randomUUID().toString(), //todo assign issue key. depends on TAS-20: GetProject (временно добавил автогенерацию UUID)
-                        issueType,
-                        summary,
-                        description,
-                        priority,
-                        reporterId,
-                        INIT_STATUS,
-                        INIT_VERSION))
+        return projectServiceClient.getProjectKey(requestId, projectId)
+                .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
+                        .map(number -> issueMapper.buildIssue(
+                                projectId,
+                                number,
+                                projectKey + "-" + number,
+                                issueType,
+                                summary,
+                                description,
+                                priority,
+                                reporterId,
+                                INIT_STATUS,
+                                INIT_VERSION)))
                 .flatMap(issueRepository::save)
                 .flatMap(issue -> {
                     IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);

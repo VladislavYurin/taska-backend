@@ -19,6 +19,12 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
+grpc:
+  client:
+    project-service:
+      host: ${PROJECT_GRPC_HOST:localhost}
+      port: ${PROJECT_GRPC_PORT:9096}
+
 issue:
   list:
     default-page-size: 20

@@ -16,6 +16,7 @@ import java.util.UUID;
 public interface IssueService {
 
     Mono<Issue> createIssue(
+            String requestId,
             UUID projectId,
             IssueType issueType,
             String summary,

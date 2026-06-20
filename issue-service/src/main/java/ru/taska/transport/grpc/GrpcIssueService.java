@@ -65,6 +65,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                     requestId, nodeId, projectId, issueType, summary, priority, reporterId);
 
                             return issueService.createIssue(
+                                            requestId,
                                             projectId,
                                             issueMapper.toDomainIssueType(issueType),
                                             summary,

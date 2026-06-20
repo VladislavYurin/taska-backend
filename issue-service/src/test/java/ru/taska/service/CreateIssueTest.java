@@ -19,6 +19,8 @@ class CreateIssueTest extends IssueServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.when(projectServiceClient.getProjectKey(REQUEST_ID, PROJECT_ID))
+                .thenReturn(Mono.just("TSK"));
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
         Mockito.when(issueRepository.save(Mockito.any()))
@@ -35,7 +37,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     @Test
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                REQUEST_ID, PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
         Mockito.verify(projectCounterRepository, Mockito.times(1)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -48,7 +50,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(nextIssueNumber));
 
         Issue result = issueService.createIssue(
-                PROJECT_ID, IssueType.BUG, "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
+                REQUEST_ID, PROJECT_ID, IssueType.BUG, "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
         ).block();
 
         Assertions.assertThat(result).isNotNull();
@@ -62,10 +64,10 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(2));
 
         Issue first = issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Задача 1", null, IssuePriority.LOW, REPORTER_ID
+                REQUEST_ID, PROJECT_ID, IssueType.TASK, "Задача 1", null, IssuePriority.LOW, REPORTER_ID
         ).block();
         Issue second = issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Задача 2", null, IssuePriority.LOW, REPORTER_ID
+                REQUEST_ID, PROJECT_ID, IssueType.TASK, "Задача 2", null, IssuePriority.LOW, REPORTER_ID
         ).block();
 
         Mockito.verify(projectCounterRepository, Mockito.times(2)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -76,9 +78,24 @@ class CreateIssueTest extends IssueServiceImplTest {
     }
 
     @Test
+    void shouldAssignCorrectIssueKey() {
+        Mockito.when(projectServiceClient.getProjectKey(REQUEST_ID, PROJECT_ID))
+                .thenReturn(Mono.just("ABC"));
+        Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
+                .thenReturn(Mono.just(7));
+
+        Issue result = issueService.createIssue(
+                REQUEST_ID, PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+        ).block();
+
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.getIssueKey()).isEqualTo("ABC-7");
+    }
+
+    @Test
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                REQUEST_ID, PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
