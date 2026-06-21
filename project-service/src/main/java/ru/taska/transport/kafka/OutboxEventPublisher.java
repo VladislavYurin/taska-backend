@@ -1,4 +1,4 @@
-package ru.taska.kafka;
+package ru.taska.transport.kafka;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

@@ -4,16 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.api.project.v1.UsersProjectsResponse;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -36,16 +34,15 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
-    private final ProjectMapper projectMapper;
 
     @Override
     @Transactional
-    public Mono<ProjectResponse> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId) {
+    public Mono<Project> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId) {
         return projectRepository.findByProjectKey(projectKey)
                 .flatMap(p -> {
                     log.info("[{}][{}] Project already exists: projectKey={}",
                             requestId, nodeId, projectKey);
-                    return Mono.<ProjectResponse>error(new DomainException(DomainStatus.ALREADY_EXISTS, "Project with key " + projectKey + " already exists"));
+                    return Mono.<Project>error(new DomainException(DomainStatus.ALREADY_EXISTS, "Project with key " + projectKey + " already exists"));
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     Project project = Project.builder()
@@ -64,33 +61,24 @@ public class ProjectServiceImpl implements ProjectService {
                                                 log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
                                                         requestId, nodeId, projectKey, projectName, userId)))
                                         .thenReturn(savedProject);
-                            })
-                .map(projectMapper::toProjectResponse);
+                            });
                 }));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Mono<ProjectResponse> getProject(String requestId, String nodeId, UUID projectId) {
+    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId) {
         return projectRepository.findById(projectId)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found ")))
-                .map(projectMapper::toProjectResponse)
                 .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Mono<UsersProjectsResponse> listMyProjects(String requestId, String nodeId, UUID userId) {
+    public Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId) {
         return projectRepository.findAllByMemberUserId(userId)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Not found projects for user with id: " + userId)))
-                .map(projectMapper::toProjectResponse)
-                .collectList()
-                .map(p -> {
-                    return UsersProjectsResponse.newBuilder()
-                            .addAllProjectResponse(p)
-                            .build();
-                })
-                .doOnSuccess(p -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
+                .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
     private ProjectSetting createDefaultProjectSettings(Project project) {

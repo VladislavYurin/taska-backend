@@ -11,17 +11,13 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.service.impl.ProjectMemberServiceImpl;
@@ -33,9 +29,6 @@ class ProjectMemberServiceImplTest {
 
     @Mock
     private ProjectMemberRepository projectMemberRepository;
-
-    @Mock
-    private ProjectMemberMapper projectMemberMapper;
 
     @Mock
     private OutboxEventService outboxEventService;
@@ -65,20 +58,12 @@ class ProjectMemberServiceImplTest {
 
     @Test
     void addProjectMember_Success() {
-        AddProjectMemberResponse mockResponse = AddProjectMemberResponse.newBuilder()
-                .setAddedMemberId(memberId.toString())
-                .setProjectId(projectId.toString())
-                .setRole(ru.taska.api.project.v1.ProjectRole.MEMBER)
-                .build();
-
         Mockito.when(projectMemberRepository.existsByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(false));
-        Mockito.when(projectMemberMapper.toProjectRole(ru.taska.api.project.v1.ProjectRole.MEMBER)).thenReturn(ProjectRole.MEMBER);
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(mockMember));
-        Mockito.when(projectMemberMapper.toAddProjectMemberResponse(ArgumentMatchers.any(ProjectMember.class))).thenReturn(mockResponse);
         Mockito.when(outboxEventService.saveMemberAdded(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new OutboxEvent()));
 
-        StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ru.taska.api.project.v1.ProjectRole.MEMBER, projectId))
-                .expectNext(mockResponse)
+        StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ProjectRole.MEMBER, projectId))
+                .expectNextMatches(pm -> pm.getUserId().equals(memberId) && pm.getProjectId().equals(projectId) && pm.getRole().equals(ProjectRole.MEMBER))
                 .verifyComplete();
 
         Mockito.verify(projectMemberRepository).existsByUserIdAndProjectId(memberId, projectId);
@@ -90,7 +75,7 @@ class ProjectMemberServiceImplTest {
     void addProjectMember_ThrowsAlreadyExistsException_WhenMemberExists() {
         Mockito.when(projectMemberRepository.existsByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(true));
 
-        StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ru.taska.api.project.v1.ProjectRole.MEMBER, projectId))
+        StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ProjectRole.MEMBER, projectId))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
@@ -105,20 +90,15 @@ class ProjectMemberServiceImplTest {
 
     @Test
     void rmProjectMember_Success() {
-        RmProjectMemberResponse mockResponse = RmProjectMemberResponse.newBuilder()
-                .setDeletedMemberId(memberId.toString())
-                .setProjectId(projectId.toString())
-                .build();
-
         Mockito.when(projectMemberRepository.deleteByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(1L));
-        Mockito.when(outboxEventService.saveMemberRemoved(Mockito.any(), Mockito.any())).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(outboxEventService.saveMemberRemoved(memberId, projectId)).thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectMemberService.rmProjectMember(requestId, nodeId, memberId, projectId))
-                .expectNext(mockResponse)
+                .expectNextMatches(pm -> pm.getUserId().equals(memberId) && pm.getProjectId().equals(projectId))
                 .verifyComplete();
 
         Mockito.verify(projectMemberRepository).deleteByUserIdAndProjectId(memberId, projectId);
-        Mockito.verify(outboxEventService).saveMemberRemoved(Mockito.any(), Mockito.any());
+        Mockito.verify(outboxEventService).saveMemberRemoved(memberId, projectId);
     }
 
     @Test
@@ -135,21 +115,15 @@ class ProjectMemberServiceImplTest {
                 .verify();
 
         Mockito.verify(projectMemberRepository).deleteByUserIdAndProjectId(memberId, projectId);
+        Mockito.verify(outboxEventService, Mockito.never()).saveMemberRemoved(Mockito.any(), Mockito.any());
     }
 
     @Test
     void changeProjectMemberRole_Success() {
-        ChangeRoleResponse mockResponse = ChangeRoleResponse.newBuilder()
-                .setChangedMemberId(memberId.toString())
-                .setRole(ru.taska.api.project.v1.ProjectRole.VIEWER)
-                .setProjectId(projectId.toString())
-                .build();
-
-        Mockito.when(projectMemberMapper.toProjectRole(ru.taska.api.project.v1.ProjectRole.VIEWER)).thenReturn(ProjectRole.VIEWER);
         Mockito.when(projectMemberRepository.updateRole(memberId, ProjectRole.VIEWER, projectId)).thenReturn(Mono.just(1L));
 
-        StepVerifier.create(projectMemberService.changeProjectMemberRole(requestId, nodeId, memberId, ru.taska.api.project.v1.ProjectRole.VIEWER, projectId))
-                .expectNext(mockResponse)
+        StepVerifier.create(projectMemberService.changeProjectMemberRole(requestId, nodeId, memberId, ProjectRole.VIEWER, projectId))
+                .expectNextMatches(pm -> pm.getUserId().equals(memberId) && pm.getProjectId().equals(projectId) && pm.getRole().equals(ProjectRole.VIEWER))
                 .verifyComplete();
 
         Mockito.verify(projectMemberRepository).updateRole(memberId, ProjectRole.VIEWER, projectId);
@@ -157,10 +131,9 @@ class ProjectMemberServiceImplTest {
 
     @Test
     void changeProjectMemberRole_ThrowsNotFoundException_WhenMemberDoesNotExist() {
-        Mockito.when(projectMemberMapper.toProjectRole(ru.taska.api.project.v1.ProjectRole.VIEWER)).thenReturn(ProjectRole.VIEWER);
         Mockito.when(projectMemberRepository.updateRole(memberId, ProjectRole.VIEWER, projectId)).thenReturn(Mono.just(0L));
 
-        StepVerifier.create(projectMemberService.changeProjectMemberRole(requestId, nodeId, memberId, ru.taska.api.project.v1.ProjectRole.VIEWER, projectId))
+        StepVerifier.create(projectMemberService.changeProjectMemberRole(requestId, nodeId, memberId, ProjectRole.VIEWER, projectId))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
@@ -173,125 +146,47 @@ class ProjectMemberServiceImplTest {
     }
 
     @Test
-    void checkProjectRole_returnRole_whenMemberExists() {
-        var project = Project.builder()
-                .id(projectId)
-                .build();
+    void checkProjectMemberRole_ProjectExists_AndUserIsMember() {
+        Project mockProject = Project.builder().id(projectId).build();
+        ProjectMembershipInfoDto mockDto = new ProjectMembershipInfoDto(ProjectRole.MEMBER, true, true);
 
-        var member = ProjectMember.builder()
-                .role(ProjectRole.ADMIN)
-                .projectId(projectId)
-                .userId(memberId)
-                .build();
-
-        var expectedResponse = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ru.taska.api.project.v1.ProjectRole.ADMIN)
-                .setIsMember(true)
-                .setProjectExists(true)
-                .build();
-
-        Mockito.when(projectRepository.findById(projectId))
-                .thenReturn(Mono.just(project));
-
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(memberId, projectId))
-                .thenReturn(Mono.just(member));
-
-        Mockito.when(projectMemberMapper.toGrpcRole(ProjectRole.ADMIN))
-                .thenReturn(ru.taska.api.project.v1.ProjectRole.ADMIN);
-
-        Mockito.when(projectMemberMapper.toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.ADMIN, true, true
-                ))
-                .thenReturn(expectedResponse);
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(mockMember));
 
         StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
-                .expectNext(expectedResponse)
+                .expectNext(mockDto)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository)
-                .findById(projectId);
-
-        Mockito.verify(projectMemberRepository)
-                .findByUserIdAndProjectId(memberId, projectId);
-
-        Mockito.verify(projectMemberMapper)
-                .toGrpcRole(ProjectRole.ADMIN);
-
-        Mockito.verify(projectMemberMapper)
-                .toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.ADMIN, true, true
-                );
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(memberId, projectId);
     }
 
     @Test
-    void checkProjectRole_returnsUnspecified_WhenMemberNotExist() {
-        var project = Project.builder()
-                .id(projectId)
-                .build();
+    void checkProjectMemberRole_ProjectExists_ButUserIsNotMember() {
+        Project mockProject = Project.builder().id(projectId).build();
+        ProjectMembershipInfoDto mockDto = new ProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, true);
 
-        var expecterResponse = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ru.taska.api.project.v1.ProjectRole.UNSPECIFIED)
-                .setIsMember(false)
-                .setProjectExists(true)
-                .build();
-
-        Mockito.when(projectRepository.findById(projectId))
-                .thenReturn(Mono.just(project));
-
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(memberId, projectId))
-                .thenReturn(Mono.empty());
-
-        Mockito.when(projectMemberMapper.toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.UNSPECIFIED, false, true
-                ))
-                .thenReturn(expecterResponse);
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.empty());
 
         StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
-                .expectNext(expecterResponse)
+                .expectNext(mockDto)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository)
-                .findById(projectId);
-
-        Mockito.verify(projectMemberRepository)
-                .findByUserIdAndProjectId(memberId, projectId);
-
-        Mockito.verify(projectMemberMapper)
-                .toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.UNSPECIFIED, false, true
-                );
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(memberId, projectId);
     }
 
     @Test
-    void checkProjectRole_returnsUnspecified_WhenProjectNotExist() {
-        var expecterResponse = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ru.taska.api.project.v1.ProjectRole.UNSPECIFIED)
-                .setIsMember(false)
-                .setProjectExists(false)
-                .build();
-
-        Mockito.when(projectRepository.findById(projectId))
-                .thenReturn(Mono.empty());
-
-        Mockito.when(projectMemberMapper.toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.UNSPECIFIED, false, false
-                ))
-                .thenReturn(expecterResponse);
+    void checkProjectMemberRole_ProjectDoesNotExist() {
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.empty());
+        ProjectMembershipInfoDto mockDto = new ProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, false);
 
         StepVerifier.create(projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, memberId))
-                .expectNext(expecterResponse)
+                .expectNext(mockDto)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository)
-                .findById(projectId);
-
-        Mockito.verify(projectMemberRepository, Mockito.never())
-                .findByUserIdAndProjectId(memberId, projectId);
-
-        Mockito.verify(projectMemberMapper)
-                .toCheckProjectRoleResponse(
-                        ru.taska.api.project.v1.ProjectRole.UNSPECIFIED, false, false
-                );
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository, Mockito.never()).findByUserIdAndProjectId(Mockito.any(), Mockito.any());
     }
-
 }

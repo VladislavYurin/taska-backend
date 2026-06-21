@@ -1,37 +1,32 @@
-package ru.taska.grpc;
+package ru.taska.transport.grpc;
 
-import io.grpc.StatusRuntimeException;
-import io.r2dbc.spi.R2dbcException;
+import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.grpc.server.service.GrpcService;
-import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.ChangeRoleRequest;
-import ru.taska.api.project.v1.ChangeRoleResponse;
+import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
+import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetUsersProjectsRequest;
 import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.api.project.v1.UsersProjectsResponse;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
+import ru.taska.domain.ProjectRole;
+import ru.taska.mapper.ProjectMapper;
+import ru.taska.mapper.ProjectMemberMapper;
 import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
 
 import java.util.UUID;
-import java.util.function.Function;
 
 @GrpcService
 @Slf4j
@@ -39,6 +34,8 @@ import java.util.function.Function;
 public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectServiceImplBase {
     private final ProjectService projectService;
     private final ProjectMemberService projectMemberService;
+    private final ProjectMapper projectMapper;
+    private final ProjectMemberMapper projectMemberMapper;
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
@@ -61,7 +58,8 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.createProject(requestId, nodeId, projectKey, projectName, userId);
                 })
-                .transform(withErrorHandling("createProject"));
+                .map(projectMapper::toProjectResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProject"));
     }
 
     @Override
@@ -80,7 +78,8 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.getProject(requestId, nodeId, projectId);
                 })
-                .transform(withErrorHandling("getProject"));
+                .map(projectMapper::toProjectResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProject"));
     }
 
     @Override
@@ -97,9 +96,16 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     log.info("[{}][{}] Received request to get listMyProjects: userId={}", requestId, nodeId, userId);
 
-                    return projectService.listMyProjects(requestId, nodeId, userId);
+                    return projectService.listMyProjects(requestId, nodeId, userId)
+                            .map(projectMapper::toProjectResponse)
+                            .collectList()
+                            .map(p -> {
+                                return UsersProjectsResponse.newBuilder()
+                                        .addAllProjectResponse(p)
+                                        .build();
+                            });
                 })
-                .transform(withErrorHandling("listMyProjects"));
+                .transform(GrpcExceptionHandler.withErrorHandling("listMyProjects"));
     }
 
     @Override
@@ -117,7 +123,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     String nodeId = t.getT2();
                     UUID addedMemberId = t.getT3();
                     UUID addingUserId = t.getT4();
-                    ProjectRole role = t.getT5();
+                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT5());
                     UUID projectId = t.getT6();
 
                     log.info("[{}][{}] Received request to add member to project: addedMemberId = {}, addingUserId = {}, requestedRole = {}, projectId ={}",
@@ -125,14 +131,8 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
                 })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> e instanceof DuplicateKeyException,
-                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("addProjectMember failed " + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .map(projectMemberMapper::toAddProjectMemberResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("addProjectMember"));
     }
 
     @Override
@@ -154,31 +154,25 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, projectId);
                 })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> e instanceof DuplicateKeyException,
-                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("removeProjectMember failed " + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .map(projectMemberMapper::toRmProjectMemberResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("rmProjectMember"));
     }
 
     @Override
-    public Mono<ChangeRoleResponse> changeProjectMemberRole(Mono<ChangeRoleRequest> request) {
+    public Mono<ChangeProjectMemberRoleResponse> changeProjectMemberRole(Mono<ChangeProjectMemberRoleRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getChangedMemberId(), "body.changedMemberId"),
-                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body,role"),
+                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body.role"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
 
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID changedMemberId = t.getT3();
-                    ProjectRole role = t.getT4();
+                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT4());
                     UUID projectId = t.getT5();
 
                     log.info("[{}][{}] Received request to change user role in project: userId={}, role = {}, projectId = {}",
@@ -186,18 +180,13 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, role, projectId);
                 })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> e instanceof DuplicateKeyException,
-                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
-                .doOnError(e -> !(e instanceof StatusRuntimeException),
-                        e -> log.error("changeProjectMemberRole failed " + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .map(projectMemberMapper::toChangeProjectMemberRoleResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));
     }
 
     @Override
-    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole(Mono<CheckProjectMemberRoleRequest> request) {
+    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole
+            (Mono<CheckProjectMemberRoleRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -220,30 +209,12 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     UUID projectId = t.getT3();
                     UUID userId = t.getT4();
 
-
                     log.info("[{}][{}] Received checkProjectRole request: projectId={}, userId={}",
                             requestId, nodeId, projectId, userId);
 
                     return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
                 })
-                .transform(withErrorHandling("checkProjectRole"));
-
-    }
-
-    //TODO: Создать общий GrpcErrorHanlder
-    private <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
-        return mono -> mono
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> {
-                            log.error("{}: database error", operationName, e);
-                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                        })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                        e -> {
-                            log.error("{}: unexpected error", operationName, e);
-                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                        })
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .map(projectMemberMapper::toCheckProjectRoleResponse)
+                .transform(GrpcExceptionHandler.withErrorHandling("checkProjectRole"));
     }
 }
