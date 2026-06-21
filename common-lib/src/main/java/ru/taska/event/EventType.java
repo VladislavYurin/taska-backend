@@ -14,6 +14,7 @@ public enum EventType {
     ISSUE_CREATED("IssueCreated"),
     ISSUE_ASSIGNED("IssueAssigned"),
     ISSUE_TRANSITIONED("IssueTransitioned"),
+    ISSUE_UPDATED("IssueUpdated"),
     ISSUE_DELETED("IssueDeleted"),
     USER_INVITED("UserInvited"),
     PROJECT_CREATED("ProjectCreated"),

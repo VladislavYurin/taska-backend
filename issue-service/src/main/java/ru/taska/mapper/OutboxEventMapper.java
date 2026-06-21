@@ -5,10 +5,11 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
-import ru.taska.event.payload.IssueAssignedPayload;
-import ru.taska.event.payload.IssueCreatedPayload;
-import ru.taska.event.payload.IssueDeletedPayload;
-import ru.taska.event.payload.IssueTransitionedPayload;
+import ru.taska.event.payload.issueService.IssueAssignedPayload;
+import ru.taska.event.payload.issueService.IssueCreatedPayload;
+import ru.taska.event.payload.issueService.IssueDeletedPayload;
+import ru.taska.event.payload.issueService.IssueTransitionedPayload;
+import ru.taska.event.payload.issueService.IssueUpdatedPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,6 +58,11 @@ public class OutboxEventMapper {
             ));
 
             case ISSUE_DELETED -> objectMapper.valueToTree(new IssueDeletedPayload(
+                    getUuid(sourcePayload, REPORTER),
+                    getUuid(sourcePayload, ASSIGNEE)
+            ));
+
+            case ISSUE_UPDATED -> objectMapper.valueToTree(new IssueUpdatedPayload(
                     getUuid(sourcePayload, REPORTER),
                     getUuid(sourcePayload, ASSIGNEE)
             ));

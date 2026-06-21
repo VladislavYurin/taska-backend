@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -16,6 +17,7 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
@@ -28,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
-class UpdateIssueTest   {
+class UpdateIssueTest {
 
     @Mock
     private IssueRepository issueRepository;
@@ -51,24 +53,14 @@ class UpdateIssueTest   {
     private static final UUID ACTOR_USER_ID = UUID.randomUUID();
     private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
+    @DisplayName("Успешное обновление события")
     @Test
     void updateIssue_Success() {
         ReflectionTestUtils.setField(issueService, "objectMapper", new ObjectMapper());
 
-        String oldSummary = "Old Summary";
-        String oldDescription = "Old Description";
-        IssuePriority oldPriority = IssuePriority.LOW;
-
         String newSummary = "New Summary";
         String newDescription = "New Description";
         IssuePriority newPriority = IssuePriority.HIGH;
-
-        Issue existingIssue = new Issue();
-        existingIssue.setId(ISSUE_ID);
-        existingIssue.setSummary(oldSummary);
-        existingIssue.setDescription(oldDescription);
-        existingIssue.setPriority(oldPriority);
-        existingIssue.setVersion(1);
 
         Issue updatedIssue = new Issue();
         updatedIssue.setId(ISSUE_ID);
@@ -80,13 +72,13 @@ class UpdateIssueTest   {
         IssueHistory history = new IssueHistory();
         OutboxEvent event = new OutboxEvent();
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        Mockito.when(issueMapper.buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID))
-               .thenReturn(history);
-        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, IssueEventType.UPDATED))
-               .thenReturn(event);
+        Mockito.when(issueRepository.updateActiveByIdAndReturn(ISSUE_ID, newSummary, newDescription, newPriority))
+                .thenReturn(Mono.just(updatedIssue));
+        Mockito.when(issueMapper.buildIssueHistory(updatedIssue, IssueEventType.UPDATED, ACTOR_USER_ID))
+                .thenReturn(history);
+        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED))
+                .thenReturn(event);
 
-        Mockito.when(issueRepository.save(existingIssue)).thenReturn(Mono.just(updatedIssue));
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.empty());
         Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.empty());
 
@@ -96,8 +88,7 @@ class UpdateIssueTest   {
                 .expectNext(updatedIssue)
                 .verifyComplete();
 
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(issueRepository).save(existingIssue);
+        Mockito.verify(issueRepository).updateActiveByIdAndReturn(ISSUE_ID, newSummary, newDescription, newPriority);
 
         ArgumentCaptor<IssueHistory> historyCaptor = ArgumentCaptor.forClass(IssueHistory.class);
         Mockito.verify(issueHistoryRepository).save(historyCaptor.capture());
@@ -108,19 +99,21 @@ class UpdateIssueTest   {
         Mockito.verify(outboxEventRepository).save(eventCaptor.capture());
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
-        Mockito.verify(issueMapper).buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, IssueEventType.UPDATED);
+        Mockito.verify(issueMapper).buildIssueHistory(updatedIssue, IssueEventType.UPDATED, ACTOR_USER_ID);
+        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 
+    @DisplayName("Выбрасывание ошибки, если задачи нет или она отмечена удаленной")
     @Test
     void updateIssue_NotFound() {
         String newSummary = "New Summary";
         String newDescription = "New Description";
         IssuePriority newPriority = IssuePriority.HIGH;
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.empty());
+        Mockito.when(issueRepository.updateActiveByIdAndReturn(ISSUE_ID, newSummary, newDescription, newPriority))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.updateIssue(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
@@ -133,7 +126,7 @@ class UpdateIssueTest   {
                 })
                 .verify();
 
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
+        Mockito.verify(issueRepository).updateActiveByIdAndReturn(ISSUE_ID, newSummary, newDescription, newPriority);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 }

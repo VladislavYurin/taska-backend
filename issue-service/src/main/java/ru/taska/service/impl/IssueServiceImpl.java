@@ -126,36 +126,35 @@ public class IssueServiceImpl implements IssueService {
     public Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
                                    String summary, String description, IssuePriority priority) {
         //todo add membership check. depends on TAS-BE-007: CheckProjectRole
-        return issueRepository.findActiveById(issueId)
+        return issueRepository.updateActiveByIdAndReturn(issueId, summary, description, priority)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
                     return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND,
                             "Issue with id: " + issueId + " was not found"));
                 }))
-                .flatMap(issue -> {
+                .flatMap(updatedIssue -> {
+
+                //TODO выбрать вариант одно обращение к БД -> без истории или два обращения -> с историей
 
                     ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
-                            "oldSummary", issue.getSummary(),
-                            "newSummary",summary,
-                            "oldDescription", Optional.ofNullable(issue.getDescription()),
+                            "oldSummary", updatedIssue.getSummary(),
+                            "newSummary", summary,
+                            "oldDescription", Optional.ofNullable(updatedIssue.getDescription()),
                             "newDescription", description,
-                            "oldPriority", issue.getPriority(),
+                            "oldPriority", updatedIssue.getPriority(),
                             "newPriority", String.valueOf(priority)
                     ));
 
-                    issue.setSummary(summary);
-                    issue.setDescription(description);
-                    issue.setPriority(priority);
-                    issue.setVersion(issue.getVersion() + 1);
-
-                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
+                    IssueHistory history = issueMapper.buildIssueHistory(updatedIssue, IssueEventType.UPDATED, actorUserId);
                     history.setPayload(historyPayload);
-                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, IssueEventType.UPDATED);
+                    OutboxEvent event = issueMapper.buildOutboxEvent(updatedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED);
 
-                    return issueRepository.save(issue)
-                            .then(issueHistoryRepository.save(history))
+                    return issueHistoryRepository.save(history)
                             .then(outboxEventRepository.save(event))
-                            .thenReturn(issue);
+                            .then(Mono.fromRunnable(() ->
+                                    log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
+                                            requestId, nodeId, issueId, actorUserId)))
+                            .thenReturn(updatedIssue);
                 });
     }
 

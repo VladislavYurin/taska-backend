@@ -2,6 +2,7 @@ package ru.taska.service;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -11,8 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
@@ -21,6 +24,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.impl.IssueServiceImpl;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,35 +60,28 @@ public class DeleteIssueTest {
 
         mockIssue = new Issue();
         mockIssue.setId(issueId);
+        mockIssue.setDeletedAt(Instant.now());
     }
 
+    @DisplayName("Успешное мягкое удаление задачи")
     @Test
     public void testDeleteIssue_Success() {
         IssueHistory mockHistory = new IssueHistory();
         OutboxEvent mockOutbox = new OutboxEvent();
 
-        Mockito.when(issueRepository.findActiveById(issueId))
+        Mockito.when(issueRepository.softDeleteAndReturn(issueId))
                 .thenReturn(Mono.just(mockIssue));
 
-        Mockito.when(issueMapper.buildIssueHistory(
-                        Mockito.any(Issue.class),
-                        Mockito.any(),
-                        Mockito.eq(actorUserId)))
+        Mockito.when(issueMapper.buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId))
                 .thenReturn(mockHistory);
 
-        Mockito.when(issueMapper.buildOutboxEvent(
-                        Mockito.any(Issue.class),
-                        Mockito.any(),
-                        Mockito.any()))
+        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED))
                 .thenReturn(mockOutbox);
 
-        Mockito.when(issueRepository.save(Mockito.any(Issue.class)))
-                .thenReturn(Mono.just(mockIssue));
-
-        Mockito.when(issueHistoryRepository.save(Mockito.any(IssueHistory.class)))
+        Mockito.when(issueHistoryRepository.save(mockHistory))
                 .thenReturn(Mono.just(mockHistory));
 
-        Mockito.when(outboxEventRepository.save(Mockito.any(OutboxEvent.class)))
+        Mockito.when(outboxEventRepository.save(mockOutbox))
                 .thenReturn(Mono.just(mockOutbox));
 
         Mono<Issue> resultMono = issueService.deleteIssue(requestId, nodeId, issueId, actorUserId);
@@ -97,31 +94,32 @@ public class DeleteIssueTest {
                 .expectComplete()
                 .verify();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).save(Mockito.any(Issue.class));
-        Mockito.verify(issueHistoryRepository, Mockito.times(1)).save(mockHistory);
-        Mockito.verify(outboxEventRepository, Mockito.times(1)).save(mockOutbox);
+        Mockito.verify(issueRepository).softDeleteAndReturn(issueId);
+        Mockito.verify(issueHistoryRepository).save(mockHistory);
+        Mockito.verify(outboxEventRepository).save(mockOutbox);
+        Mockito.verify(issueMapper).buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId);
+        Mockito.verify(issueMapper).buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 
+    @DisplayName("Выкидывание ошибки при отсутствии задачи в БД или если отмечена удаленной.")
     @Test
     public void testDeleteIssue_NotFound_ThrowsDomainException() {
-        Mockito.when(issueRepository.findActiveById(issueId))
+        Mockito.when(issueRepository.softDeleteAndReturn(issueId))
                 .thenReturn(Mono.empty());
 
         Mono<Issue> resultMono = issueService.deleteIssue(requestId, nodeId, issueId, actorUserId);
 
         StepVerifier.create(resultMono)
-                .expectErrorMatches(throwable -> {
-                    if (throwable instanceof DomainException) {
-                        DomainException exception = (DomainException) throwable;
-                        return exception.getStatus() == DomainStatus.NOT_FOUND
-                                && exception.getMessage().contains(issueId.toString());
-                    }
-                    return false;
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertInstanceOf(DomainException.class, throwable);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                    Assertions.assertTrue(exception.getMessage().contains("Issue with id: " + issueId + " was not found"));
                 })
                 .verify();
 
-        Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any(Issue.class));
-        Mockito.verify(issueHistoryRepository, Mockito.never()).save(Mockito.any(IssueHistory.class));
-        Mockito.verify(outboxEventRepository, Mockito.never()).save(Mockito.any(OutboxEvent.class));
+        Mockito.verify(issueRepository).softDeleteAndReturn(issueId);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 }
