@@ -20,6 +20,9 @@ spring:
     url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5433/auth_db}
     user: ${SPRING_LIQUIBASE_USERNAME:taska}
     password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9091}
 
 app:
   kafka:
@@ -55,12 +58,6 @@ security:
   max-failed-attempts: 5
   lock-duration-minutes: 15
   password-encoder: ${PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
-
-# gRPC
-spring:
-  grpc:
-    server:
-      port: ${GRPC_SERVER_PORT:9091}
 
 logging:
   level:

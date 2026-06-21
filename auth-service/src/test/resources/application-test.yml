@@ -5,6 +5,9 @@ spring:
     password: test_pass
   liquibase:
     enabled: false
+  grpc:
+    server:
+      port: 9090
 
 jwt:
   secret: testSecretKeyForJWTGenerationThatIsAtLeast32BytesLong
@@ -15,10 +18,6 @@ security:
   max-failed-attempts: 5
   lock-duration-minutes: 15
   password-encoder: bcrypt
-
-grpc:
-  server:
-    port: 9090
 
 logging:
   level:
