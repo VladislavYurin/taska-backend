@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS taska.issue_history
 
     CONSTRAINT issue_history_event_type_chk CHECK
         (event_type IN (
-                        'CREATED', 'UPDATED',
+                        'CREATED', 'DELETED', 'UPDATED',
                         'ASSIGNED', 'TRANSITIONED'
             )
         )

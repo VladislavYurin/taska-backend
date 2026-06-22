@@ -47,6 +47,9 @@ public class IssueServiceImplTest {
     @Spy
     protected IssueMapper issueMapper = new IssueMapper(new ObjectMapper());
 
+    @Spy
+    protected ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     protected IssueServiceImpl issueService;
 

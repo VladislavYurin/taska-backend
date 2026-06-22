@@ -28,6 +28,7 @@ public class NotificationFactory {
             case ISSUE_CREATED -> buildIssueCreated(event, payload, eventId);
             case ISSUE_ASSIGNED -> buildIssueAssigned(event, payload, eventId);
             case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
+            case ISSUE_UPDATED -> buildIssueUpdated(event, payload, eventId);
             case ISSUE_DELETED -> buildIssueDeleted(event, payload, eventId);
             case USER_INVITED -> buildUserInvited(event, eventId);
             case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
@@ -88,6 +89,28 @@ public class NotificationFactory {
         }
         if (assigneeId != null && !assigneeId.equals(reporterId)) {
             notifications.add(notificationMapper.toIssueTransitioned(event, assigneeId));
+        }
+
+        return notifications;
+    }
+
+    private List<Notification> buildIssueUpdated(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID reporterId = extractUuid(payload, "reporterId");
+        UUID assigneeId = extractUuid(payload, "assigneeId");
+
+        if (reporterId == null && assigneeId == null) {
+            log.warn("IssueUpdated event without reporterId/assigneeId, eventId={}", eventId);
+            return List.of();
+        }
+
+        List<Notification> notifications = new ArrayList<>();
+
+        if (reporterId != null) {
+            notifications.add(notificationMapper.toIssueUpdated(event, reporterId));
+        }
+
+        if (assigneeId != null && !assigneeId.equals(reporterId)) {
+            notifications.add(notificationMapper.toIssueUpdated(event, assigneeId));
         }
 
         return notifications;

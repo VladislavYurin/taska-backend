@@ -30,7 +30,13 @@ import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.ProjectRoleChecker;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -55,6 +61,7 @@ public class IssueServiceImpl implements IssueService {
     private final OutboxEventRepository outboxEventRepository;
     private final IssueMapper issueMapper;
     private final ProjectRoleChecker projectRoleChecker;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -132,11 +139,18 @@ public class IssueServiceImpl implements IssueService {
                             if (isAssigned(issue, assigneeId)) {
                                 return Mono.just(issue);
                             }
+
+                            ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
+                                    "oldAssigneeId", Optional.ofNullable(issue.getAssigneeId()),
+                                    "newAssigneeId", assigneeId
+                            ));
+
                             Issue assignedIssue = issueMapper.setIssueAssignee(issue, assigneeId);
                             return issueRepository.save(assignedIssue)
                                     .flatMap(savedIssue -> {
                                         IssueHistory history = issueMapper
                                                 .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
+                                        history.setPayload(historyPayload);
                                         OutboxEvent event = issueMapper
                                                 .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
                                         return issueHistoryRepository.save(history)
@@ -150,8 +164,62 @@ public class IssueServiceImpl implements IssueService {
     }
 
     @Override
-    public Mono<Issue> deleteIssue(
-            String requestId,
+    @Transactional
+    public Mono<Issue> updateIssue(String requestId, String nodeId, UUID projectId,  UUID issueId, UUID actorUserId,
+                                   String summary, String description, IssuePriority priority) {
+
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
+
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(issueRepository.findActiveById(issueId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND,
+                            "Issue with id: " + issueId + " was not found"));
+                }))
+                .flatMap(issue -> {
+                    if (!summary.equals(issue.getSummary())
+                            || !Objects.equals(description, issue.getDescription()) || !priority.equals(issue.getPriority())) {
+
+                        ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
+                                "oldSummary", issue.getSummary(),
+                                "newSummary", summary,
+                                "oldDescription", Optional.ofNullable(issue.getDescription()),
+                                "newDescription", Optional.ofNullable(description),
+                                "oldPriority", issue.getPriority(),
+                                "newPriority", String.valueOf(priority)
+                        ));
+
+                        issue.setSummary(summary);
+                        issue.setDescription(description);
+                        issue.setPriority(priority);
+                        issue.setUpdatedAt(Instant.now());
+                        issue.setVersion(issue.getVersion() + 1);
+
+                        IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
+                        history.setPayload(historyPayload);
+                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED);
+
+                        return issueRepository.save(issue)
+                                .flatMap(savedIssue -> issueHistoryRepository.save(history)
+                                        .then(outboxEventRepository.save(event))
+                                        .then(Mono.fromRunnable(() ->
+                                                log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
+                                                        requestId, nodeId, issueId, actorUserId)))
+                                        .thenReturn(savedIssue)
+                                );
+                    }
+
+                    return Mono.defer(() -> {
+                        log.info("[{}][{}] Issue with id: {} equals updated issue by user with id: {}",
+                                requestId, nodeId, issueId, actorUserId);
+                        return Mono.just(issue);
+                    });
+                }));
+    }
+
+    @Override
+    public Mono<Issue> deleteIssue(String requestId,
             String nodeId,
             UUID projectId,
             UUID issueId,
