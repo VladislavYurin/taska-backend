@@ -28,7 +28,7 @@ public class GrpcProjectServiceClient {
             UUID projectId,
             UUID userId
     ) {
-        log.debug("[{}][{}] Calling checkProjectRole with: projectId={}, userId={}",
+        log.info("[{}][{}] Calling checkProjectRole with: projectId={}, userId={}",
                 requestId, nodeId, projectId, userId);
 
         var request = CheckProjectMemberRoleRequest.newBuilder()
@@ -50,7 +50,7 @@ public class GrpcProjectServiceClient {
     }
 
     public Mono<String> getProjectKey(String requestId, String nodeId, UUID projectId) {
-        log.debug("[{}][{}] Calling getProject with: projectId={}", requestId, nodeId, projectId);
+        log.info("[{}][{}] Calling getProject with: projectId={}", requestId, nodeId, projectId);
 
         var request = GetProjectRequest.newBuilder()
                 .setHeader(
