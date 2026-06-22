@@ -1,7 +1,10 @@
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
 
 spring:
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9096}
   r2dbc:
     url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
     username: ${SPRING_R2DBC_USERNAME:taska}
