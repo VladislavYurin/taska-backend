@@ -4,13 +4,17 @@ import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 import ru.taska.entity.OutboxEvent;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Repository
 public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, UUID> {
+
+    Mono<OutboxEvent> findByAggregateId(UUID aggregateId);
 
     /**
      * Выбирает batchSize событий и возвращает их, одновременно меняя статус на 'PROCESSING'.

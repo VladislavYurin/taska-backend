@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import java.time.Instant;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,8 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
@@ -56,6 +59,7 @@ public class DeleteIssueTest {
 
         mockIssue = new Issue();
         mockIssue.setId(issueId);
+        mockIssue.setDeletedAt(Instant.now());
     }
 
     @Test
@@ -63,23 +67,14 @@ public class DeleteIssueTest {
         IssueHistory mockHistory = new IssueHistory();
         OutboxEvent mockOutbox = new OutboxEvent();
 
-        Mockito.when(issueRepository.findActiveById(issueId))
-                .thenReturn(Mono.just(mockIssue));
+        Mockito.when(issueRepository.softDeleteAndReturn(issueId))
+               .thenReturn(Mono.just(mockIssue));
 
-        Mockito.when(issueMapper.buildIssueHistory(
-                        Mockito.any(Issue.class),
-                        Mockito.any(),
-                        Mockito.eq(actorUserId)))
-                .thenReturn(mockHistory);
+        Mockito.when(issueMapper.buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId))
+               .thenReturn(mockHistory);
 
-        Mockito.when(issueMapper.buildOutboxEvent(
-                        Mockito.any(Issue.class),
-                        Mockito.any(),
-                        Mockito.any()))
-                .thenReturn(mockOutbox);
-
-        Mockito.when(issueRepository.save(Mockito.any(Issue.class)))
-                .thenReturn(Mono.just(mockIssue));
+        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED))
+               .thenReturn(mockOutbox);
 
         Mockito.when(issueHistoryRepository.save(Mockito.any(IssueHistory.class)))
                 .thenReturn(Mono.just(mockHistory));
@@ -97,14 +92,14 @@ public class DeleteIssueTest {
                 .expectComplete()
                 .verify();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).save(Mockito.any(Issue.class));
+        Mockito.verify(issueRepository, Mockito.times(1)).softDeleteAndReturn(Mockito.any(UUID.class));
         Mockito.verify(issueHistoryRepository, Mockito.times(1)).save(mockHistory);
         Mockito.verify(outboxEventRepository, Mockito.times(1)).save(mockOutbox);
     }
 
     @Test
     public void testDeleteIssue_NotFound_ThrowsDomainException() {
-        Mockito.when(issueRepository.findActiveById(issueId))
+        Mockito.when(issueRepository.softDeleteAndReturn(issueId))
                 .thenReturn(Mono.empty());
 
         Mono<Issue> resultMono = issueService.deleteIssue(requestId, nodeId, issueId, actorUserId);

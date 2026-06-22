@@ -39,7 +39,9 @@ management:
       probes:
         enabled: true
 
-
+invite:
+  token:
+    expiration-days: 7
 
 # JWT Configuration
 jwt:
