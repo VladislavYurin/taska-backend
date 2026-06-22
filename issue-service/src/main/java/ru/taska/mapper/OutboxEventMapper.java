@@ -7,6 +7,7 @@ import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
 import ru.taska.event.payload.IssueAssignedPayload;
 import ru.taska.event.payload.IssueCreatedPayload;
+import ru.taska.event.payload.IssueDeletedPayload;
 import ru.taska.event.payload.IssueTransitionedPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -51,6 +52,11 @@ public class OutboxEventMapper {
             ));
 
             case ISSUE_TRANSITIONED -> objectMapper.valueToTree(new IssueTransitionedPayload(
+                    getUuid(sourcePayload, REPORTER),
+                    getUuid(sourcePayload, ASSIGNEE)
+            ));
+
+            case ISSUE_DELETED -> objectMapper.valueToTree(new IssueDeletedPayload(
                     getUuid(sourcePayload, REPORTER),
                     getUuid(sourcePayload, ASSIGNEE)
             ));

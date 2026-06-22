@@ -1,11 +1,10 @@
 package ru.taska.service;
 
-import ru.taska.event.EventType;
-import ru.taska.event.TaskaEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Notification;
+import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
 import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.JsonNode;
@@ -26,14 +25,15 @@ public class NotificationFactory {
         EventType type = EventType.fromValue(event.eventType());
 
         return switch (type) {
-            case ISSUE_CREATED        -> buildIssueCreated(event, payload, eventId);
-            case ISSUE_ASSIGNED       -> buildIssueAssigned(event, payload, eventId);
-            case ISSUE_TRANSITIONED   -> buildIssueTransitioned(event, payload, eventId);
-            case USER_INVITED         -> buildUserInvited(event, eventId);
-            case PROJECT_CREATED      -> buildProjectCreated(event, payload, eventId);
-            case MEMBER_ADDED         -> buildMemberAdded(event, payload, eventId);
-            case MEMBER_REMOVED       -> buildMemberRemoved(event, payload, eventId);
-            case USER_ACTIVATED     -> buildUserActivated(event, eventId);
+            case ISSUE_CREATED -> buildIssueCreated(event, payload, eventId);
+            case ISSUE_ASSIGNED -> buildIssueAssigned(event, payload, eventId);
+            case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
+            case ISSUE_DELETED -> buildIssueDeleted(event, payload, eventId);
+            case USER_INVITED -> buildUserInvited(event, eventId);
+            case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
+            case MEMBER_ADDED -> buildMemberAdded(event, payload, eventId);
+            case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
+            case USER_ACTIVATED -> buildUserActivated(event, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
@@ -91,6 +91,28 @@ public class NotificationFactory {
         }
 
         return notifications;
+    }
+
+    private List<Notification> buildIssueDeleted(TaskaEvent event, JsonNode payload, String eventId) {
+        UUID reporterId = extractUuid(payload, "reporterId");
+        UUID assigneeId = extractUuid(payload, "assigneeId");
+
+            if (reporterId == null && assigneeId == null) {
+                log.warn("IssueDeleted event without reporterId/assigneeId, eventId={}", eventId);
+                return List.of();
+            }
+
+            List<Notification> notifications = new ArrayList<>();
+
+            if (reporterId != null) {
+                notifications.add(notificationMapper.toIssueDeleted(event, reporterId));
+            }
+
+            if (assigneeId != null && !assigneeId.equals(reporterId)) {
+                notifications.add(notificationMapper.toIssueDeleted(event, assigneeId));
+            }
+
+            return notifications;
     }
 
     private List<Notification> buildUserInvited(TaskaEvent event, String eventId) {

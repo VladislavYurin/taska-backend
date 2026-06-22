@@ -47,7 +47,7 @@ public interface ProjectMemberService {
     Mono<ChangeRoleResponse> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId, ProjectRole role, UUID projectId);
 
     /**
-     * Проверяет роль участника проекта на основе {@link ru.taska.api.project.v1.CheckProjectRoleRequest}
+     * Проверяет роль участника проекта на основе {@link ru.taska.api.project.v1.CheckProjectMemberRoleRequest}
      * Получает данные из header (requestId, nodeId) для логирования,
      * а так же projectId и memberId для получения роли пользователя проекта.
      *
@@ -56,8 +56,8 @@ public interface ProjectMemberService {
      * @param projectId   уникальный идентификатор проекта.
      * @param memberId    уникальный идентификатор участника проекта.
      *
-     * @return Mono<{@link CheckProjectRoleResponse}> с ролью участника, а так же boolean полями
+     * @return Mono<{@link CheckProjectMemberRoleResponse}> с ролью участника, а так же boolean полями
      * является ли пользователь участником проекта и существует ли такой проект.
      */
-    Mono<CheckProjectRoleResponse> checkProjectRole(String requestId, String nodeId, UUID projectId, UUID memberId);
+    Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole(String requestId, String nodeId, UUID projectId, UUID memberId);
 }

@@ -4,6 +4,9 @@ import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.OutboxEventStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,10 +39,6 @@ import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
 import ru.taska.util.PasswordPolicyValidator;
-
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthServiceImpl Unit Tests")

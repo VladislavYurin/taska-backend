@@ -25,18 +25,16 @@ public final class GrpcRequestValidators {
      *         если значение пустое или не является валидным UUID
      */
     public static Mono<UUID> parseUuidOrInvalidArgument(String raw, String fieldName) {
-        if (raw == null || raw.isBlank()) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must not be blank")
-                    .asRuntimeException());
-        }
-        try {
-            return Mono.just(UUID.fromString(raw));
-        } catch (IllegalArgumentException ex) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be a valid UUID")
-                    .asRuntimeException());
-        }
+        return requireNonBlank(raw, fieldName)
+                .flatMap(value -> {
+                    try {
+                        return Mono.just(UUID.fromString(value));
+                    } catch (IllegalArgumentException ex) {
+                        return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                                                  .withDescription(fieldName + " must be a valid UUID")
+                                                  .asRuntimeException());
+                    }
+                });
     }
 
     /**
@@ -48,10 +46,46 @@ public final class GrpcRequestValidators {
      *         если значение пустое
      */
     public static Mono<String> requireNonBlankOrInvalidArgument(String raw, String fieldName) {
+        return requireNonBlank(raw, fieldName);
+    }
+
+    /**
+     * Проверяет что логин не пустой и не содержит '@'.
+     *
+     * @param raw       строковое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT} при нарушении валидации
+     *
+     */
+    public static Mono<String> requireValidLogin(String raw, String fieldName) {
+        return requireNonBlank(raw, fieldName)
+                .filter(login -> !login.contains("@"))
+                .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                                                  .withDescription(fieldName + " must not contain '@'")
+                                                  .asRuntimeException()));
+    }
+
+    /**
+     * Проверяет что email не пустой и содержит '@'.
+     *
+     * @param raw       строковое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT} при нарушении валидации
+     *
+     */
+    public static Mono<String> requireValidEmail(String raw, String fieldName) {
+        return requireNonBlank(raw, fieldName)
+                .filter(email -> email.contains("@"))
+                .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                                                  .withDescription(fieldName + " must contain '@'")
+                                                  .asRuntimeException()));
+    }
+
+    private static Mono<String> requireNonBlank(String raw, String fieldName) {
         if (raw == null || raw.isBlank()) {
             return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must not be blank")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must not be blank")
+                                      .asRuntimeException());
         }
         return Mono.just(raw);
     }

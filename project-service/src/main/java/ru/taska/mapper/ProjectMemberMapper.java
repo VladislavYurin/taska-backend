@@ -1,12 +1,8 @@
 package ru.taska.mapper;
 
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingConstants;
-import org.mapstruct.ValueMapping;
-import org.mapstruct.ValueMappings;
+import org.mapstruct.*;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
-import ru.taska.api.project.v1.CheckProjectRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 
@@ -54,19 +50,19 @@ public interface ProjectMemberMapper {
     ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
 
     /**
-     * Билдер, который создает транспортный {@link ru.taska.api.project.v1.CheckProjectRoleResponse}
+     * Билдер, который создает транспортный {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse}
      *
      * @param role          роль участника из {@link ru.taska.api.project.v1.ProjectRole}
      * @param isMember      boolean, сигнализирующий о том, является ли пользователь участником проекта
      * @param projectExists boolean, сигнализирующий о том, существует ли такой проект
-     * @return {@link ru.taska.api.project.v1.CheckProjectRoleResponse} DTO для передачи в grpc
+     * @return {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse} DTO для передачи в grpc
      */
-    default CheckProjectRoleResponse toCheckProjectRoleResponse(
+    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(
             ru.taska.api.project.v1.ProjectRole role,
             boolean isMember,
             boolean projectExists
     ) {
-        return CheckProjectRoleResponse.newBuilder()
+        return CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(role)
                 .setIsMember(isMember)
                 .setProjectExists(projectExists)

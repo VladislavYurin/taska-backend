@@ -49,7 +49,7 @@ service ProjectService  {
   /**
    * Проверяет роль пользователя в проекте
    */
-  rpc CheckProjectRole(CheckProjectRoleRequest) returns (CheckProjectRoleResponse);
+  rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
 }
 
 //Создание и получение проекта/ов
@@ -85,7 +85,7 @@ message GetUsersProjectsRequestBody {
 /**
  * Запрос на проверку роли пользователя в проекте.
  */
-message CheckProjectRoleRequest {
+message CheckProjectMemberRoleRequest {
   /**
    * Заголовок запроса.
    */
@@ -94,13 +94,13 @@ message CheckProjectRoleRequest {
   /**
    * Тело запроса.
    */
-  CheckProjectRoleRequestBody body = 2;
+  CheckProjectMemberRoleRequestBody body = 2;
 }
 
 /**
  * Тело запроса на проверку роли пользователя в проекте.
  */
-message CheckProjectRoleRequestBody {
+message CheckProjectMemberRoleRequestBody {
   /**
    * Идентификатор проекта.
    */
@@ -180,7 +180,7 @@ message ChangeRoleResponse  {
 /**
  * Ответ проверки роли пользователя в проекте.
  */
-message CheckProjectRoleResponse {
+message CheckProjectMemberRoleResponse {
   /**
    * Роль пользователя.
    */

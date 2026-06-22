@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package ru.taska.admin_invite_user.v1;
+
+import "v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.admin.inviteuser.v1";
+option java_outer_classname = "AdminInviteUserApiProto";
+
+service AdminInviteUserService {
+  rpc InviteUser(AdminCreateUserRequest) returns (UserCreatedResponse);
+}
+
+message AdminCreateUserRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+  /**
+   * Тело запроса.
+   */
+  AdminCreateUserBody body = 2;
+}
+
+message AdminCreateUserBody {
+  /**
+   * Email пользователя.
+   */
+  string email = 1;
+  /**
+   * Отображаемое имя пользователя.
+   */
+  string displayName = 2;
+}
+
+message UserCreatedResponse {
+  /**
+   * Идентификатор пользователя.
+   */
+  string userId = 1;
+  /**
+   * Статус пользователя (INVITED/ACTIVE/BLOCKED).
+   */
+  UserStatus status = 2;
+}
+
+enum UserStatus {
+  ACTIVE = 0;
+  BLOCKED = 1;
+  INVITED = 2;
+}

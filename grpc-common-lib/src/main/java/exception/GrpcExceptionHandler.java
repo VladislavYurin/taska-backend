@@ -2,13 +2,14 @@ package exception;
 
 import io.grpc.StatusRuntimeException;
 import io.r2dbc.spi.R2dbcException;
-import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import mapper.GrpcExceptionMapper;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+
+import java.util.function.Function;
 
 /**
  * Централизованный обработчик ошибок gRPC servers
@@ -23,12 +24,12 @@ public final class GrpcExceptionHandler {
         return mono -> mono
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                             e -> {
-                                log.error("{}: database error", operationName, e);
+                                log.error("{}: database error {}", operationName, e.getMessage());
                                 return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
                             })
                 .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
                             e -> {
-                                log.error("{}: unexpected error", operationName, e);
+                                log.error("{}: unexpected error {}", operationName, e.getMessage());
                                 return new DomainException(DomainStatus.INTERNAL, "Internal error");
                             })
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
