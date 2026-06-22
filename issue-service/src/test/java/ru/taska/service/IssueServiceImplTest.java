@@ -14,6 +14,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.impl.IssueServiceImpl;
+import ru.taska.transport.grpc.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
 
@@ -21,6 +22,9 @@ import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 public class IssueServiceImplTest {
+
+    @Mock
+    protected GrpcProjectServiceClient grpcProjectServiceClient;
 
     @Mock
     protected ProjectCounterRepository projectCounterRepository;

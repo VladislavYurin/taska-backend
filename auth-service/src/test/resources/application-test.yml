@@ -7,6 +7,9 @@ spring:
     enabled: true
     change-log: db/changelog/db.changelog-master.yaml
     url: jdbc:postgresql://localhost:5432/auth_db_test
+  grpc:
+    server:
+      port: 9090
 
 jwt:
   secret: testSecretKeyForJWTGenerationThatIsAtLeast32BytesLong
@@ -17,10 +20,6 @@ security:
   max-failed-attempts: 5
   lock-duration-minutes: 15
   password-encoder: bcrypt
-
-grpc:
-  server:
-    port: 9090
 
 logging:
   level:

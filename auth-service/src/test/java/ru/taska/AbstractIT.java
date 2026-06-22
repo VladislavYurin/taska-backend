@@ -30,5 +30,7 @@ public abstract class AbstractIT {
                 postgres.getDatabaseName()));
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
+
+        registry.add("spring.grpc.server.port", () -> "9090");
     }
 }

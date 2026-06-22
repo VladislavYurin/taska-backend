@@ -28,6 +28,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
+import ru.taska.transport.grpc.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.ProjectRoleChecker;
 
 import java.util.Set;
@@ -47,6 +48,7 @@ public class IssueServiceImpl implements IssueService {
 
     private final IssueProperties issueProperties;
     private final IssueListProperties issueListProperties;
+    private final GrpcProjectServiceClient grpcProjectServiceClient;
     private final ProjectCounterRepository projectCounterRepository;
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
@@ -69,11 +71,12 @@ public class IssueServiceImpl implements IssueService {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
-                .then(projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
+                .then(grpcProjectServiceClient.getProjectKey(requestId, nodeId, projectId))
+                .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                         .map(number -> issueMapper.buildIssue(
                                 projectId,
                                 number,
-                                UUID.randomUUID().toString(), //todo assign issue key. depends on TAS-20: GetProject (временно добавил автогенерацию UUID)
+                                projectKey + "-" + number,
                                 issueType,
                                 summary,
                                 description,

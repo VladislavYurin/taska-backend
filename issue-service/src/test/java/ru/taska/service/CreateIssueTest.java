@@ -33,6 +33,8 @@ class CreateIssueTest extends IssueServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
+        Mockito.when(grpcProjectServiceClient.getProjectKey(REQUEST_ID, NODE_ID, PROJECT_ID))
+                .thenReturn(Mono.just("TSK"));
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
         Mockito.when(issueRepository.save(Mockito.any()))
