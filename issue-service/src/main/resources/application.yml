@@ -45,6 +45,20 @@ app:
       max-attempts: 5
       processing-timeout-seconds: 300
 
+  grpc:
+    client:
+      project-service:
+        host: ${PROJECT_GRPC_HOST:localhost}
+        port: ${PROJECT_GRPC_PORT:9096}
+
+  issue:
+    allowed-roles:
+      create-issue-roles: ADMIN,MEMBER
+      assign-issue-roles: ADMIN,MEMBER
+      delete-issue-roles: ADMIN,MEMBER
+      get-issue-roles: ADMIN,MEMBER,VIEWER
+      list-issue-roles: ADMIN,MEMBER,VIEWER
+
 logging:
   level:
     ru.taska: ${LOG_LEVEL_ROOT:INFO}

@@ -1,12 +1,14 @@
 syntax = "proto3";
 
+package ru.taska.project.v1;
+
+import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
 option java_multiple_files = true;
 option java_package = "ru.taska.api.project.v1";
 option java_outer_classname = "ProjectApiProto";
-
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/empty.proto";
-import "v1/common.proto";
 
 enum ProjectRole  {
   UNSPECIFIED = 0;

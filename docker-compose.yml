@@ -200,6 +200,9 @@ services:
       - SPRING_LIQUIBASE_PASSWORD=taska
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
+      - PROJECT_GRPC_HOST=project-service
+      - PROJECT_GRPC_PORT=9090
+
   workflow-service:
     build:
       context: .
@@ -253,6 +256,8 @@ services:
 
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
+      - PROJECT_GRPC_HOST=project-service
+      - PROJECT_GRPC_PORT=9090
 
   notification-service:
     build:

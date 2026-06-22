@@ -100,19 +100,24 @@ message CreateIssueRequest {
 message AssignIssueBody {
 
   /**
+   * Идентификатор проекта, в котором находится задача.
+   */
+  string project_id = 1;
+
+  /**
    * Идентификатор задачи.
    */
-  string issue_id = 1;
+  string issue_id = 2;
 
   /**
    * Идентификатор исполнителя.
    */
-  string assignee_id = 2;
+  string assignee_id = 3;
 
   /**
    * Идентификатор пользователя, кем заасайнена задача.
    */
-  string actor_user_id = 3;
+  string actor_user_id = 4;
 }
 
 message CreateIssueBody {
@@ -156,9 +161,27 @@ message GetIssueRequest {
   ru.taska.common.v1.Header header = 1;
 
   /**
+   * Тело запроса.
+   */
+  GetIssueRequestBody body = 2;
+}
+
+message GetIssueRequestBody {
+
+  /**
+ * Идентификатор проекта, в котором находится задача.
+ */
+  string project_id = 1;
+
+  /**
    * Идентификатор задачи.
    */
   string issue_id = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
 }
 
 message DeleteIssueRequest {
@@ -177,14 +200,19 @@ message DeleteIssueRequest {
 message DeleteIssueRequestBody {
 
   /**
+ * Идентификатор проекта, в котором находится задача.
+ */
+  string project_id = 1;
+
+  /**
  * Айди задачи
  */
-  string issue_id = 1;
+  string issue_id = 2;
 
   /**
  * Айди инициатора
  */
-  string actor_user_id = 2;
+  string actor_user_id = 3;
 }
 
 message ListIssuesRequest {
@@ -195,9 +223,22 @@ message ListIssuesRequest {
   ru.taska.common.v1.Header header = 1;
 
   /**
+   * Тело запроса.
+   */
+  ListIssuesRequestBody body = 2;
+}
+
+message ListIssuesRequestBody {
+
+  /**
    * Идентификатор проекта.
    */
-  string project_id = 2;
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
 
   /**
    * Фильтр по статусу задачи (опционально).

@@ -41,15 +41,30 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueType(), "body.issueType"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getReporterId(), "body.reporterId")
-                        ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(), "createIssue"))
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                        req.getBody().getIssueType(), "body.issueType"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getSummary(), "body.summary"
+                                ),
+                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                        req.getBody().getPriority(), "body.priority"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getReporterId(), "body.reporterId"
+                                ))
+                        .doOnError(StatusRuntimeException.class, logValidationError(
+                                req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
+                        ))
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
@@ -65,15 +80,22 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                     requestId, nodeId, projectId, issueType, summary, priority, reporterId);
 
                             return issueService.createIssue(
+                                            requestId,
+                                            nodeId,
                                             projectId,
                                             issueMapper.toDomainIssueType(issueType),
                                             summary,
                                             description,
                                             issueMapper.toDomainIssuePriority(priority),
                                             reporterId
-                                    ).doOnNext(issue -> log.info("[{}][{}] createIssue: successfully created, issueId={}",
-                                            requestId, nodeId, issue.getId()))
-                                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "createIssue"));
+                                    )
+                                    .doOnNext(issue ->
+                                            log.info("[{}][{}] createIssue: successfully created, issueId={}",
+                                                    requestId, nodeId, issue.getId())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "createIssue")
+                                    );
                         }))
                 .map(issueMapper::toIssueProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
@@ -83,22 +105,49 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     public Mono<IssueDetails> getIssue(Mono<GetIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getIssueId(), "issueId")
-                        ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(), "getIssue"))
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getIssue")
+                        )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID issueId = t.getT3();
+                            UUID projectId = t.getT3();
+                            UUID issueId = t.getT4();
+                            UUID actorUserId = t.getT5();
 
-                            log.info("[{}][{}] getIssue: issueId={}", requestId, nodeId, issueId);
+                            log.info("[{}][{}] getIssue: projectId={}, issueId={}, actorUserId={}",
+                                    requestId, nodeId, projectId, issueId, actorUserId);
 
-                            return issueService.getIssue(issueId)
-                                    .doOnSuccess(_ -> log.info("[{}][{}] getIssue: successfully found, issueId={}",
-                                            requestId, nodeId, issueId))
-                                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "getIssue"));
+                            return issueService.getIssue(
+                                            requestId,
+                                            nodeId,
+                                            projectId,
+                                            issueId,
+                                            actorUserId
+                                    )
+                                    .doOnSuccess(_ ->
+                                            log.info("[{}][{}] getIssue: successfully found, issueId={}, actorUserId={}",
+                                                    requestId, nodeId, issueId, actorUserId)
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "getIssue")
+                                    );
                         }))
                 .map(issueMapper::toIssueDetailsProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
@@ -108,34 +157,72 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     public Mono<ListIssuesResponse> listIssues(Mono<ListIssuesRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getProjectId(), "projectId"),
-                                req.hasAssigneeId()
-                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getAssigneeId(), "assigneeId").map(Optional::of)
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ),
+                                req.getBody().hasAssigneeId()
+                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
                                         : Mono.just(Optional.<UUID>empty())
-                        ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(), "listIssues"))
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssues")
+                        )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
                             UUID projectId = t.getT3();
-                            UUID assigneeId = t.getT4().orElse(null);
-                            IssueStatus status = req.hasStatus() ? issueMapper.toDomainIssueStatus(req.getStatus()) : null;
-                            Integer pageSize = req.hasPageSize() ? req.getPageSize() : null;
-                            Integer page = req.hasPage() ? req.getPage() : null;
+                            UUID actorUserId = t.getT4();
+                            UUID assigneeId = t.getT5().orElse(null);
+                            IssueStatus status = req.getBody().hasStatus()
+                                    ? issueMapper.toDomainIssueStatus(req.getBody().getStatus())
+                                    : null;
+                            Integer pageSize = req.getBody().hasPageSize()
+                                    ? req.getBody().getPageSize()
+                                    : null;
+                            Integer page = req.getBody().hasPage()
+                                    ? req.getBody().getPage()
+                                    : null;
 
-                            log.info("[{}][{}] listIssues: projectId={}, status={}, assigneeId={}, page={}, pageSize={}",
-                                    requestId, nodeId, projectId, status, assigneeId, page, pageSize);
+                            log.info("[{}][{}] listIssues: projectId={}, actorUserId={}, status={}, assigneeId={}, " +
+                                            "page={}, pageSize={}",
+                                    requestId, nodeId, projectId, actorUserId, status, assigneeId, page, pageSize);
 
-                            return issueService.listIssues(projectId, status, assigneeId, page, pageSize)
+                            return issueService.listIssues(
+                                            requestId,
+                                            nodeId,
+                                            projectId,
+                                            actorUserId,
+                                            status,
+                                            assigneeId,
+                                            page,
+                                            pageSize
+                                    )
                                     .map(result -> ListIssuesResponse.newBuilder()
-                                            .addAllIssues(result.items().stream().map(issueMapper::toIssueShortProto).toList())
+                                            .addAllIssues(
+                                                    result.items().stream()
+                                                            .map(issueMapper::toIssueShortProto)
+                                                            .toList()
+                                            )
                                             .setTotalCount((int) result.totalCount())
-                                            .build())
-                                    .doOnNext(result -> log.info("[{}][{}] listIssues: successfully found {} issues",
-                                            requestId, nodeId, result.getTotalCount()))
-                                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "listIssues"));
+                                            .build()
+                                    )
+                                    .doOnNext(result ->
+                                            log.info("[{}][{}] listIssues: successfully found {} issues",
+                                                    requestId, nodeId, result.getTotalCount())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "listIssues")
+                                    );
                         }))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssues"));
     }
@@ -144,51 +231,100 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     public Mono<IssueResponse> assignIssue(Mono<AssignIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
-                        ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(), "assignIssue"))
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getAssigneeId(), "body.assigneeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "assignIssue")
+                        )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID issueId = t.getT3();
-                            UUID assigneeId = t.getT4();
-                            UUID actorUserId = t.getT5();
+                            UUID projectId = t.getT3();
+                            UUID issueId = t.getT4();
+                            UUID assigneeId = t.getT5();
+                            UUID actorUserId = t.getT6();
 
-                            log.info("[{}][{}] assignIssue: issueId={}, assigneeId={}, actorUserId={}",
-                                    requestId, nodeId, issueId, assigneeId, actorUserId);
-                            return issueService.assignIssue(issueId, assigneeId, actorUserId)
-                                    .doOnSuccess(_ -> log.info("[{}][{}] assignIssue: successfully assigned, issueId={}",
-                                            requestId, nodeId, issueId))
-                                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "assignIssue"));
+                            log.info("[{}][{}] assignIssue: projectId={}, issueId={}, assigneeId={}, actorUserId={}",
+                                    requestId, nodeId, projectId, issueId, assigneeId, actorUserId);
+
+                            return issueService.assignIssue(
+                                            requestId,
+                                            nodeId,
+                                            projectId,
+                                            issueId,
+                                            assigneeId,
+                                            actorUserId
+                                    )
+                                    .doOnSuccess(_ ->
+                                            log.info("[{}][{}] assignIssue: successfully assigned, issueId={}",
+                                                    requestId, nodeId, issueId)
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "assignIssue")
+                                    );
                         }))
                 .map(issueMapper::toIssueProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("assignIssue"));
     }
 
 
-
     @Override
     public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
-                        ).doOnError(StatusRuntimeException.class, logValidationError(req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(), "deleteIssue"))
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteIssue")
+                        )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID issueId = t.getT3();
-                            UUID actorUserId = t.getT4();
+                            UUID projectId = t.getT3();
+                            UUID issueId = t.getT4();
+                            UUID actorUserId = t.getT5();
 
-                            log.info("[{}][{}] deleteIssue: issueId = {}, actorUserId = {}", requestId, nodeId, issueId, actorUserId);
-                            return issueService.deleteIssue(requestId, nodeId, issueId, actorUserId);
+                            log.info("[{}][{}] deleteIssue: projectId={}, issueId = {}, actorUserId = {}",
+                                    requestId, nodeId, projectId, issueId, actorUserId);
+
+                            return issueService.deleteIssue(
+                                    requestId,
+                                    nodeId,
+                                    projectId,
+                                    issueId,
+                                    actorUserId
+                            );
                         })
                         .map(issueMapper::toDeleteIssueProto)
                         .transform(GrpcExceptionHandler.withErrorHandling("deleteIssue")));

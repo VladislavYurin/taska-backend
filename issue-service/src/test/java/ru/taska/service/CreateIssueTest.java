@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
+import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
@@ -13,12 +14,25 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.EventType;
 
+import java.util.Set;
 import java.util.UUID;
 
 class CreateIssueTest extends IssueServiceImplTest {
 
+    private Set<ProjectRole> allowedRoles;
+
     @BeforeEach
     void setUp() {
+        allowedRoles = Set.of(
+                ProjectRole.ADMIN,
+                ProjectRole.MEMBER
+        );
+
+        Mockito.when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
         Mockito.when(issueRepository.save(Mockito.any()))
@@ -35,9 +49,14 @@ class CreateIssueTest extends IssueServiceImplTest {
     @Test
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
+        Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
+        );
         Mockito.verify(projectCounterRepository, Mockito.times(1)).getNextIssueNumberAndIncrement(PROJECT_ID);
     }
 
@@ -48,11 +67,17 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(nextIssueNumber));
 
         Issue result = issueService.createIssue(
-                PROJECT_ID, IssueType.BUG, "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
+                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.BUG,
+                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
         ).block();
 
         Assertions.assertThat(result).isNotNull();
         Assertions.assertThat(result.getIssueNumber()).isEqualTo(nextIssueNumber);
+
+        Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
+        );
     }
 
     @Test
@@ -62,12 +87,19 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(2));
 
         Issue first = issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Задача 1", null, IssuePriority.LOW, REPORTER_ID
+                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                "Задача 1", null, IssuePriority.LOW, REPORTER_ID
         ).block();
         Issue second = issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Задача 2", null, IssuePriority.LOW, REPORTER_ID
+                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                "Задача 2", null, IssuePriority.LOW, REPORTER_ID
         ).block();
 
+        Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2))
+                .createIssueRoles();
+        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
+        );
         Mockito.verify(projectCounterRepository, Mockito.times(2)).getNextIssueNumberAndIncrement(PROJECT_ID);
         Assertions.assertThat(first).isNotNull();
         Assertions.assertThat(second).isNotNull();
@@ -78,15 +110,22 @@ class CreateIssueTest extends IssueServiceImplTest {
     @Test
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
-                PROJECT_ID, IssueType.TASK, "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        Mockito.verify(outboxEventRepository, Mockito.times(1)).save(captor.capture());
+        Mockito.verify(outboxEventRepository, Mockito.times(1))
+                .save(captor.capture());
 
         OutboxEvent savedEvent = captor.getValue();
         Assertions.assertThat(savedEvent.getAggregateType()).isEqualTo("issue");
         Assertions.assertThat(savedEvent.getEventType()).isEqualTo(String.valueOf(EventType.ISSUE_CREATED.getValue()));
         Assertions.assertThat(savedEvent.getAggregateId()).isNotNull();
+
+        Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
+        );
     }
 }

@@ -3,8 +3,15 @@ package ru.taska.integration;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueStatus;
@@ -17,6 +24,9 @@ import java.util.UUID;
 
 class ListIssuesIT extends AbstractIT {
 
+    @MockitoBean
+    private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
+
     @Autowired
     private IssueService issueService;
 
@@ -28,6 +38,9 @@ class ListIssuesIT extends AbstractIT {
     private static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final UUID ASSIGNEE_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final UUID ASSIGNEE_ID_2 = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    private static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    private static final String REQUEST_ID = "req-001";
+    private static final String NODE_ID = "issue-service";
 
     private final Issue issue1 = buildIssue(1, PROJECT_ID_1, IssueStatus.TODO, ASSIGNEE_ID_1);
     private final Issue issue2 = buildIssue(2, PROJECT_ID_1, IssueStatus.TODO, ASSIGNEE_ID_2);
@@ -44,6 +57,16 @@ class ListIssuesIT extends AbstractIT {
     void refillDb() {
         issueRepository.deleteAll().block();
         issues.forEach(issue -> issueRepository.save(issue).block());
+    }
+
+    @BeforeEach
+    void setUp() {
+        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                        .setRole(ProjectRole.MEMBER)
+                        .setIsMember(true)
+                        .setProjectExists(true)
+                        .build()));
     }
 
     private Issue buildIssue(int number, UUID projectId, IssueStatus status, UUID assigneeId) {
@@ -63,7 +86,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnIssuesFromGivenProject() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 0, 50))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        null, null, 0, 50)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
@@ -74,7 +100,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndAssignee() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, ASSIGNEE_ID_1, 0, 50))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        null, ASSIGNEE_ID_1, 0, 50)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
                     Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
@@ -85,7 +114,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndStatus() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, IssueStatus.TODO, null, 0, 50))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        IssueStatus.TODO, null, 0, 50)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
                     Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
@@ -96,7 +128,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnIssuesFromGivenProjectAndStatusAndAssignee() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, IssueStatus.TODO, ASSIGNEE_ID_1, 0, 50))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        IssueStatus.TODO, ASSIGNEE_ID_1, 0, 50)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
                     Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).toList())
@@ -107,7 +142,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnEmptyPageIfNothingMatches() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, IssueStatus.IN_PROGRESS, ASSIGNEE_ID_1, 0, 50))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        IssueStatus.IN_PROGRESS, ASSIGNEE_ID_1, 0, 50)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isZero();
                     Assertions.assertThat(result.items()).isEmpty();
@@ -117,7 +155,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnFirstPageWhenPaginationApplied() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 0, 2))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        null, null, 0, 2)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items()).hasSize(2);
@@ -127,7 +168,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnSecondPageWhenPaginationApplied() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 1, 2))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        null, null, 1, 2)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items()).hasSize(2);
@@ -137,7 +181,10 @@ class ListIssuesIT extends AbstractIT {
 
     @Test
     void shouldReturnEmptyPageBeyondLastPage() {
-        StepVerifier.create(issueService.listIssues(PROJECT_ID_1, null, null, 2, 2))
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                        null, null, 2, 2)
+                )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items()).isEmpty();
