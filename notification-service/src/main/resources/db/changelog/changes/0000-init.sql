@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS notifications_user_unread_idx
 CREATE TABLE IF NOT EXISTS taska.notification_preferences
 (
     user_id        uuid PRIMARY KEY,
+    email          text,
     in_app_enabled boolean     NOT NULL DEFAULT true,
     email_enabled  boolean     NOT NULL DEFAULT true,
     updated_at     timestamptz NOT NULL DEFAULT now()
