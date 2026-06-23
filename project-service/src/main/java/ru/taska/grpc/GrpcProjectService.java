@@ -126,9 +126,9 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
                 })
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
-                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
                         e -> log.error("addProjectMember failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
@@ -155,9 +155,9 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, projectId);
                 })
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
-                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
                         e -> log.error("removeProjectMember failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
@@ -187,9 +187,9 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, role, projectId);
                 })
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> e instanceof DuplicateKeyException,
-                        _ -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
+                        e -> new DomainException(DomainStatus.ALREADY_EXISTS, "Already exists"))
                 .doOnError(e -> !(e instanceof StatusRuntimeException),
                         e -> log.error("changeProjectMemberRole failed " + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)

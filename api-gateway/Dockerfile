@@ -1,5 +1,4 @@
-# ---- build ----
-FROM maven:3.9.14-eclipse-temurin-25 AS build
+FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
 COPY pom.xml ./
@@ -15,8 +14,7 @@ COPY notification-service ./notification-service
 
 RUN mvn -q -DskipTests -pl api-gateway -am clean package
 
-# ---- run ----
-FROM eclipse-temurin:25-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 COPY --from=build /workspace/api-gateway/target/*.jar app.jar

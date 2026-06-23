@@ -1,249 +1,253 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <modelVersion>4.0.0</modelVersion>
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-  <parent>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-parent</artifactId>
-    <version>4.0.3</version>
-  </parent>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.3</version>
+    </parent>
 
-  <groupId>ru.taska</groupId>
-  <artifactId>taska-parent</artifactId>
-  <version>1.0-SNAPSHOT</version>
-  <packaging>pom</packaging>
+    <groupId>ru.taska</groupId>
+    <artifactId>taska-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
-  <modules>
-    <module>common-lib</module>
-    <module>grpc-common-lib</module>
-    <module>kafka-lib</module>
-    <module>api-gateway</module>
-    <module>auth-service</module>
-    <module>project-service</module>
-    <module>workflow-service</module>
-    <module>issue-service</module>
-    <module>notification-service</module>
-  </modules>
+    <modules>
+        <module>common-lib</module>
+        <module>grpc-common-lib</module>
+        <module>kafka-lib</module>
+        <module>api-gateway</module>
+        <module>auth-service</module>
+        <module>project-service</module>
+        <module>workflow-service</module>
+        <module>issue-service</module>
+        <module>notification-service</module>
+    </modules>
 
-  <properties>
-    <java.version>25</java.version>
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-    <lombok.version>1.18.42</lombok.version>
-    <liquibase.maven.version>5.0.1</liquibase.maven.version>
-    <liquibase.version>5.0.1</liquibase.version>
-    <postgres.version>42.7.10</postgres.version>
+        <lombok.version>1.18.42</lombok.version>
+        <liquibase.maven.version>5.0.1</liquibase.maven.version>
+        <liquibase.version>5.0.1</liquibase.version>
+        <postgres.version>42.7.10</postgres.version>
 
-    <!-- gRPC + Protobuf -->
-    <spring.grpc.version>1.0.2</spring.grpc.version>
-    <grpc.version>1.79.0</grpc.version>
-    <protobuf.version>4.33.5</protobuf.version>
-    <reactor.grpc.version>1.2.4</reactor.grpc.version>
-    <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
+        <!-- gRPC + Protobuf -->
+        <spring.grpc.version>1.0.2</spring.grpc.version>
+        <grpc.version>1.79.0</grpc.version>
+        <protobuf.version>4.33.5</protobuf.version>
+        <reactor.grpc.version>1.2.4</reactor.grpc.version>
+        <reactor.grpc.codegen.version>1.2.4</reactor.grpc.codegen.version>
 
-    <docker.tag>local</docker.tag>
-    <docker.java-image>openjdk:25</docker.java-image>
+        <docker.tag>local</docker.tag>
+        <docker.java-image>eclipse-temurin:21</docker.java-image>
 
-    <!-- lastest version of spring cloud -->
-    <spring-cloud.version>2025.1.1</spring-cloud.version>
+        <!-- lastest version of spring cloud -->
+        <spring-cloud.version>2025.1.1</spring-cloud.version>
 
-    <testcontainers.version>1.21.4</testcontainers.version>
-  </properties>
+        <testcontainers.version>1.21.4</testcontainers.version>
+    </properties>
 
-  <profiles>
-    <profile>
-      <id>docker-build</id>
-      <activation>
-        <activeByDefault>false</activeByDefault>
-      </activation>
-    </profile>
-  </profiles>
+    <profiles>
+        <profile>
+            <id>docker-build</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+        </profile>
+    </profiles>
 
-  <dependencyManagement>
-    <dependencies>
+    <dependencyManagement>
+        <dependencies>
 
-      <!-- lastest version of spring cloud (need in API GATEWAY) -->
-      <dependency>
-        <groupId>org.springframework.cloud</groupId>
-        <artifactId>spring-cloud-dependencies</artifactId>
-        <version>${spring-cloud.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+            <!-- lastest version of spring cloud (need in API GATEWAY) -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
-     <!-- Liquibase -->
-     <dependency>
-       <groupId>org.liquibase</groupId>
-       <artifactId>liquibase-core</artifactId>
-     </dependency>
+            <!-- Liquibase -->
+            <dependency>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-core</artifactId>
+            </dependency>
 
-      <!-- gRPC BOM -->
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-bom</artifactId>
-        <version>${grpc.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+            <!-- gRPC BOM -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
-      <!-- Testcontainers BOM -->
-      <dependency>
-        <groupId>org.testcontainers</groupId>
-        <artifactId>testcontainers-bom</artifactId>
-        <version>${testcontainers.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+            <!-- Testcontainers BOM -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
-      <!-- Protobuf -->
-      <dependency>
-        <groupId>com.google.protobuf</groupId>
-        <artifactId>protobuf-java</artifactId>
-        <version>${protobuf.version}</version>
-      </dependency>
+            <!-- Protobuf -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
 
-      <!-- Spring gRPC -->
-      <dependency>
-        <groupId>org.springframework.grpc</groupId>
-        <artifactId>spring-grpc-dependencies</artifactId>
-        <version>${spring.grpc.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
+            <!-- Spring gRPC -->
+            <dependency>
+                <groupId>org.springframework.grpc</groupId>
+                <artifactId>spring-grpc-dependencies</artifactId>
+                <version>${spring.grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
-      <!-- Reactor gRPC runtime -->
-      <dependency>
-        <groupId>com.salesforce.servicelibs</groupId>
-        <artifactId>reactor-grpc-stub</artifactId>
-        <version>${reactor.grpc.version}</version>
-      </dependency>
+            <!-- Reactor gRPC runtime -->
+            <dependency>
+                <groupId>com.salesforce.servicelibs</groupId>
+                <artifactId>reactor-grpc-stub</artifactId>
+                <version>${reactor.grpc.version}</version>
+            </dependency>
 
-      <!-- DB driver -->
-      <dependency>
-        <groupId>org.postgresql</groupId>
-        <artifactId>postgresql</artifactId>
-        <version>${postgres.version}</version>
-      </dependency>
+            <!-- DB driver -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgres.version}</version>
+            </dependency>
 
-      <!-- Lombok -->
-      <dependency>
-        <groupId>org.projectlombok</groupId>
-        <artifactId>lombok</artifactId>
-        <version>${lombok.version}</version>
-        <scope>provided</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
-  <build>
-    <pluginManagement>
-      <plugins>
-        <!-- Spring Boot -->
-        <plugin>
-          <groupId>org.springframework.boot</groupId>
-          <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>
-
-        <!-- Компилятор под Java 25 -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <configuration>
-            <release>${java.version}</release>
-            <annotationProcessorPaths>
-              <path>
+            <!-- Lombok -->
+            <dependency>
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
-              </path>
-            </annotationProcessorPaths>
-            <compilerArgs>
-              <arg>-parameters</arg>
-            </compilerArgs>
-          </configuration>
-        </plugin>
+                <scope>provided</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-        <!-- Тесты -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-surefire-plugin</artifactId>
-          <configuration>
-            <argLine>--add-opens java.base/java.nio=ALL-UNNAMED</argLine>
-          </configuration>
-        </plugin>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Spring Boot -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin>
 
-        <!-- Checkstyle -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-checkstyle-plugin</artifactId>
-          <version>3.6.0</version>
-          <configuration>
-            <configLocation>google_checks.xml</configLocation>
-            <includeResources>false</includeResources>
-            <includeTestSourceDirectory>true</includeTestSourceDirectory>
-            <failOnViolation>true</failOnViolation>
-          </configuration>
-          <executions>
-            <execution>
-              <id>run-checkstyle</id>
-              <phase>verify</phase>
-              <goals>
-                <goal>check</goal>
-              </goals>
-            </execution>
-          </executions>
-        </plugin>
+                <!-- Компилятор под Java 21 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                        <compilerArgs>
+                            <arg>-parameters</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
 
-        <!-- Exec для docker build -->
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId>
-          <artifactId>exec-maven-plugin</artifactId>
-          <version>3.6.3</version>
-          <executions>
-            <execution>
-              <id>docker-build</id>
-              <phase>package</phase>
-              <goals>
-                <goal>exec</goal>
-              </goals>
-              <configuration>
-                <executable>docker</executable>
-                <workingDirectory>${project.basedir}</workingDirectory>
-                <arguments>
-                  <argument>build</argument>
-                  <argument>--build-arg</argument>
-                  <argument>JAVA_IMAGE=${docker.java-image}</argument>
-                  <argument>--build-arg</argument>
-                  <argument>VERSION=${project.version}</argument>
-                  <argument>--build-arg</argument>
-                  <argument>NAME=${project.artifactId}</argument>
-                  <argument>-t</argument>
-                  <argument>taska/${project.artifactId}:${docker.tag}</argument>
-                  <argument>.</argument>
-                </arguments>
-              </configuration>
-            </execution>
-          </executions>
-        </plugin>
+                <!-- Тесты -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <argLine>--add-opens java.base/java.nio=ALL-UNNAMED</argLine>
+                    </configuration>
+                </plugin>
 
-        <!-- Liquibase (только версия плагина) -->
-        <plugin>
-          <groupId>org.liquibase</groupId>
-          <artifactId>liquibase-maven-plugin</artifactId>
-          <version>${liquibase.maven.version}</version>
-        </plugin>
-      </plugins>
-    </pluginManagement>
+                <!-- Checkstyle -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>3.6.0</version>
+                    <configuration>
+                        <configLocation>google_checks.xml</configLocation>
+                        <includeResources>false</includeResources>
+                        <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                        <failOnViolation>true</failOnViolation>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>run-checkstyle</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
 
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-checkstyle-plugin</artifactId>
-      </plugin>
-    </plugins>
-  </build>
+                <!-- Exec для docker build -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.6.3</version>
+                    <executions>
+                        <execution>
+                            <id>docker-build</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>exec</goal>
+                            </goals>
+                            <configuration>
+                                <executable>docker</executable>
+                                <workingDirectory>${project.basedir}</workingDirectory>
+                                <arguments>
+                                    <argument>build</argument>
+                                    <argument>--build-arg</argument>
+                                    <argument>JAVA_IMAGE=${docker.java-image}</argument>
+                                    <argument>--build-arg</argument>
+                                    <argument>VERSION=${project.version}</argument>
+                                    <argument>--build-arg</argument>
+                                    <argument>NAME=${project.artifactId}</argument>
+                                    <argument>-t</argument>
+                                    <argument>taska/${project.artifactId}:${docker.tag}</argument>
+                                    <argument>.</argument>
+                                </arguments>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
 
-  <dependencies>
-  </dependencies>
+                <!-- Liquibase (только версия плагина) -->
+                <plugin>
+                    <groupId>org.liquibase</groupId>
+                    <artifactId>liquibase-maven-plugin</artifactId>
+                    <version>${liquibase.maven.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+    </dependencies>
 </project>

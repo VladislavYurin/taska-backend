@@ -1,7 +1,5 @@
 package ru.taska.transport.grpc;
 
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +10,8 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.Workflow;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.service.WorkflowService;
 import validator.GrpcRequestValidators;
@@ -49,7 +49,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                 })
                 .map(workflowMapper::toWorkflowProto)
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        ex -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .doOnError(e -> !(e instanceof io.grpc.StatusRuntimeException),
                         e -> log.error("getWorkflowForProject failed" + e.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
