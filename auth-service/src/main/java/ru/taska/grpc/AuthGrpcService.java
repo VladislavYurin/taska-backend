@@ -1,8 +1,6 @@
 package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +14,8 @@ import ru.taska.api.auth.v1.PasswordByTokenRequest;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.service.AuthService;
 import ru.taska.util.DataMaskingHelper;
 import validator.GrpcRequestValidators;
@@ -60,7 +60,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setExpiresIn(response.getExpiresIn())
                         .build())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -93,7 +93,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setExpiresIn(response.getExpiresIn())
                         .build())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }
@@ -124,8 +124,8 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                 })
                 .thenReturn(Empty.getDefaultInstance())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        _ -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
-                }
     }
+}

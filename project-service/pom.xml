@@ -13,11 +13,6 @@
     <artifactId>project-service</artifactId>
     <packaging>jar</packaging>
 
-    <properties>
-        <maven.compiler.release>25</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
     <dependencies>
         <!-- WebFlux (reactor) -->
         <dependency>
@@ -130,18 +125,13 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
-                  <plugin>
-                    <groupId>org.liquibase</groupId>
-                    <artifactId>liquibase-maven-plugin</artifactId>
-            <!--        <configuration>-->
-            <!--          <propertyFile>src/main/resources/liquibase.properties</propertyFile>-->
-            <!--          <changeLogFile>src/main/resources/db.db.changelog/db.db.changelog-master.xml</changeLogFile>-->
-            <!--        </configuration>-->
-                  </plugin>
+            <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
                 <configuration>
                     <annotationProcessorPaths>
                         <path>

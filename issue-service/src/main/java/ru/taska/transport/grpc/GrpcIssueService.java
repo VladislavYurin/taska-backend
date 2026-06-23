@@ -143,7 +143,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             issueId,
                                             actorUserId
                                     )
-                                    .doOnSuccess(_ ->
+                                    .doOnSuccess(e ->
                                             log.info("[{}][{}] getIssue: successfully found, issueId={}, actorUserId={}",
                                                     requestId, nodeId, issueId, actorUserId)
                                     )
@@ -274,7 +274,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             assigneeId,
                                             actorUserId
                                     )
-                                    .doOnSuccess(_ ->
+                                    .doOnSuccess(e ->
                                             log.info("[{}][{}] assignIssue: successfully assigned, issueId={}",
                                                     requestId, nodeId, issueId)
                                     )
@@ -291,7 +291,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
      * Удаляет задачу на основе Mono<{@link ru.taska.api.issue.v1.DeleteIssueRequest}>
      *
      * @param request .proto с айди задачи и инициатором удаления
-
      * @return Mono<{@link DeleteIssueResponse}> с соответствующими параметрами созданного проекта
      */
     @Override
@@ -343,11 +342,10 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
      * Обновляет задачу на основе Mono<{@link ru.taska.api.issue.v1.UpdateIssueRequest}>
      *
      * @param request .proto с параметрами на обновление задачи
-
      * @return Mono<{@link UpdateIssueResponse}> с соответствующими параметрами созданного проекта
      */
     @Override
-    public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request)  {
+    public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -359,7 +357,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getDescription(), "body.description"),
                         GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority")
                 ))
-                .flatMap( t-> {
+                .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
