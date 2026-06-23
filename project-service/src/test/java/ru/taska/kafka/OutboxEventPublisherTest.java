@@ -18,10 +18,11 @@ import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
-import ru.taska.config.OutboxConfig;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
 
+import java.time.Duration;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,8 +46,16 @@ class OutboxEventPublisherTest {
 
     @BeforeEach
     void setUp() {
-        OutboxConfig config = new OutboxConfig(TOPIC, 100, 5, 1_000, 60);
-        publisher = new OutboxEventPublisher(config, mapper, kafkaSender);
+        KafkaProperties config = new KafkaProperties(
+                new KafkaProperties.Topics("project.events"),
+                new KafkaProperties.Outbox(
+                        Duration.ofSeconds(5),
+                        Duration.ofSeconds(10),
+                        100,
+                        5,
+                        Duration.ofMinutes(5)
+                )
+        );        publisher = new OutboxEventPublisher(config, mapper, kafkaSender);
 
         event = OutboxEvent.builder()
                            .id(UUID.randomUUID())

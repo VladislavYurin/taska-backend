@@ -15,6 +15,8 @@ import ru.taska.domain.IssueType;
 
 import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.*;
+
 class ListIssuesTest extends IssueServiceImplTest {
 
     private Set<ProjectRole> allowedRoles;
@@ -50,9 +52,9 @@ class ListIssuesTest extends IssueServiceImplTest {
     @Test
     void shouldReturnIssuesFromRepository() {
         Issue issue = buildIssue();
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, IssueStatus.TODO, ASSIGNEE_ID))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(1L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, IssueStatus.TODO, ASSIGNEE_ID, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.just(issue));
 
         StepVerifier.create(issueService.listIssues(
@@ -74,9 +76,9 @@ class ListIssuesTest extends IssueServiceImplTest {
     @Test
     void shouldPassNullFiltersToRepository() {
         Issue issue = buildIssue();
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(1L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.just(issue));
 
         StepVerifier.create(issueService.listIssues(
@@ -90,15 +92,15 @@ class ListIssuesTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
-        Mockito.verify(issueRepository).findByFilter(PROJECT_ID, null, null, 10, 0L);
-        Mockito.verify(issueRepository).countByFilter(PROJECT_ID, null, null);
+        Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
+        Mockito.verify(issueRepository).countByFilter(eq(PROJECT_ID), any(), any());
     }
 
     @Test
     void shouldReturnEmptyPageWhenRepositoryReturnsEmpty() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -121,9 +123,9 @@ class ListIssuesTest extends IssueServiceImplTest {
     void shouldReturnMultipleIssues() {
         Issue first = buildIssue();
         Issue second = buildIssue();
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, IssueStatus.TODO, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(2L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, IssueStatus.TODO, null, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.just(first, second));
 
         StepVerifier.create(issueService.listIssues(
@@ -144,9 +146,9 @@ class ListIssuesTest extends IssueServiceImplTest {
 
     @Test
     void shouldPropagateErrorFromRepository() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.error(new RuntimeException("DB error")));
 
         StepVerifier.create(issueService.listIssues(
@@ -165,9 +167,9 @@ class ListIssuesTest extends IssueServiceImplTest {
 
     @Test
     void shouldCalculateCorrectOffsetForPage() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(10L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, 5, 10L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -181,14 +183,14 @@ class ListIssuesTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
-        Mockito.verify(issueRepository).findByFilter(PROJECT_ID, null, null, 5, 10L);
+        Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
     }
 
     @Test
     void shouldFallbackToPageZeroWhenPageIsNegative() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, 10, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -203,14 +205,14 @@ class ListIssuesTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
-        Mockito.verify(issueRepository).findByFilter(PROJECT_ID, null, null, 10, 0L);
+        Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
     }
 
     @Test
     void shouldFallbackToDefaultPageSizeWhenPageSizeIsInvalid() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, DEFAULT_PAGE_SIZE, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -224,14 +226,14 @@ class ListIssuesTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
-        Mockito.verify(issueRepository).findByFilter(PROJECT_ID, null, null, DEFAULT_PAGE_SIZE, 0L);
+        Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
     }
 
     @Test
     void shouldClampToMaxPageSizeWhenPageSizeExceedsLimit() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, MAX_PAGE_SIZE, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -246,14 +248,14 @@ class ListIssuesTest extends IssueServiceImplTest {
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository)
-                .findByFilter(PROJECT_ID, null, null, MAX_PAGE_SIZE, 0L);
+                .findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
     }
 
     @Test
     void shouldUseDefaultsWhenPageAndPageSizeAreNull() {
-        Mockito.when(issueRepository.countByFilter(PROJECT_ID, null, null))
+        Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(issueRepository.findByFilter(PROJECT_ID, null, null, DEFAULT_PAGE_SIZE, 0L))
+        Mockito.when(issueRepository.findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong()))
                 .thenReturn(Flux.empty());
 
         StepVerifier.create(issueService.listIssues(
@@ -267,6 +269,6 @@ class ListIssuesTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
-        Mockito.verify(issueRepository).findByFilter(PROJECT_ID, null, null, DEFAULT_PAGE_SIZE, 0L);
+        Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
     }
 }

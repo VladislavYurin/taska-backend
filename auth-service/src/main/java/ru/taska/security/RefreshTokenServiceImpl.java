@@ -64,7 +64,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                     .userId(user.getId())
                     .tokenHash(tokenHash)
                     .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
+                    .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
                     .createdAt(Instant.now())
                     .build();
 
@@ -105,7 +105,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                             .userId(existingToken.getUserId())
                                             .tokenHash(newTokenHash)
                                             .issuedAt(Instant.now())
-                                            .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
+                                            .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
                                             .createdAt(Instant.now())
                                             .build();
 

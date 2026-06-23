@@ -7,20 +7,19 @@ import java.util.Base64;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.entity.InviteToken;
 import ru.taska.dto.InviteTokenResponse;
 import ru.taska.repository.InviteTokenRepository;
+import ru.taska.security.config.JwtProperties;
 
 @Service
 @RequiredArgsConstructor
 public class InviteTokenServiceImpl implements InviteTokenService {
 
-    @Value("${invite.token.expiration-days:7}")
-    private long expirationDays;
     private final InviteTokenRepository inviteTokenRepository;
+    private final JwtProperties jwtProperties;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -34,7 +33,7 @@ public class InviteTokenServiceImpl implements InviteTokenService {
         InviteToken tokenEntity = InviteToken.builder()
                                        .userId(userId)
                                        .tokenHash(hashToken(rawToken, userId))
-                                       .expiresAt(Instant.now().plus(expirationDays, ChronoUnit.DAYS))
+                                       .expiresAt(Instant.now().plus(jwtProperties.getInviteTokenTtl().toDays(), ChronoUnit.DAYS))
                                        .build();
         return inviteTokenRepository.save(tokenEntity)
                                     .map(savedToken -> InviteTokenResponse.builder()

@@ -51,8 +51,8 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     return authService.login(email, password)
                             .doOnSuccess(response -> log.debug("[{}][{}] Login successful for email: {}",
                                     requestId, nodeId, DataMaskingHelper.maskEmail(email)))
-                            .doOnError(error -> log.warn("[{}][{}] Login failed for email: {}",
-                                    requestId, nodeId, DataMaskingHelper.maskEmail(email), error));
+                            .doOnError(error -> log.warn("[{}][{}] Login failed for email: {}; {}",
+                                    requestId, nodeId, DataMaskingHelper.maskEmail(email), error.getMessage()));
                 })
                 .map(response -> LoginResponse.newBuilder()
                         .setAccessToken(response.getAccessToken())
@@ -85,7 +85,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
 
                     return authService.refresh(refreshToken)
                             .doOnSuccess(response -> log.debug("[{}][{}] Refresh successful", requestId, nodeId))
-                            .doOnError(error -> log.warn("[{}][{}] Refresh failed", requestId, nodeId, error));
+                            .doOnError(error -> log.warn("[{}][{}] Refresh failed: {}", requestId, nodeId, error.getMessage()));
                 })
                 .map(response -> RefreshResponse.newBuilder()
                         .setAccessToken(response.getAccessToken())
@@ -120,7 +120,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     log.info("[{}][{}] Set new password request", requestId, nodeId);
                     return authService.setPasswordByToken(token, newPassword)
                             .doOnSuccess(response -> log.debug("[{}][{}] Set new password successful", requestId, nodeId))
-                            .doOnError(error -> log.warn("[{}][{}] Set new password failed", requestId, nodeId, error));
+                            .doOnError(error -> log.warn("[{}][{}] Set new password failed: {}", requestId, nodeId, error.getMessage()));
                 })
                 .thenReturn(Empty.getDefaultInstance())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,

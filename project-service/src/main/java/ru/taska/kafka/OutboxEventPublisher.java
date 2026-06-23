@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderRecord;
-import ru.taska.config.OutboxConfig;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
 
@@ -17,13 +17,13 @@ import ru.taska.mapper.OutboxEventMapper;
 @RequiredArgsConstructor
 public class OutboxEventPublisher {
 
-    private final OutboxConfig outboxConfig;
+    private final KafkaProperties kafkaProperties;
     private final OutboxEventMapper outboxEventMapper;
     private final KafkaSender<String, String> kafkaSender;
 
     public Mono<Void> publish(OutboxEvent event) {
         ProducerRecord<String, String> producerRecord = new ProducerRecord<>(
-                outboxConfig.topic(),
+                kafkaProperties.topics().projectEvents(),
                 event.getAggregateId().toString(),
                 outboxEventMapper.toTaskaEventJsonAsString(event)
         );

@@ -18,6 +18,7 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.transport.kafka.OutboxEventProcessor;
 import ru.taska.transport.kafka.OutboxEventPublisher;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -46,11 +47,11 @@ class OutboxEventProcessorTest {
                 .build();
 
         var outboxProperties = new KafkaTopicsProperties.Outbox(
-                1_000,
-                2_000,
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(2),
                 100,
                 5,
-                60
+                Duration.ofSeconds(60)
         );
 
         Mockito.when(properties.outbox())

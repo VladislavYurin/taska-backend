@@ -14,22 +14,22 @@ public class OutboxEventScheduler {
     /**
      * Запускает публикацию outbox событий.
      */
-    @Scheduled(fixedDelayString = "${outbox.scheduler-delay}")
+    @Scheduled(fixedDelayString = "${app.kafka.outbox.polling-interval}")
     public void publishOutboxEvents() {
         processor.processOutboxEvents()
                  .doOnSuccess(unused -> log.trace("Outbox scheduler iteration completed successfully"))
-                 .doOnError(ex -> log.error("Outbox scheduler iteration failed", ex))
+                 .doOnError(ex -> log.error("Outbox scheduler iteration failed: {}", ex.getMessage()))
                  .subscribe();
     }
 
     /**
      * Запускает обработку застрявших событий.
      */
-    @Scheduled(fixedDelayString = "${outbox.recovery-interval}")
+    @Scheduled(fixedDelayString = "${app.kafka.outbox.recovery-interval}")
     public void recoverStuckEvents() {
         processor.processStuckEvents()
                  .doOnSuccess(unused -> log.trace("Recovery scheduler iteration completed successfully"))
-                 .doOnError(ex -> log.error("Failed to recover stuck events", ex))
+                 .doOnError(ex -> log.error("Failed to recover stuck events: {}", ex.getMessage()))
                  .subscribe();
     }
 }

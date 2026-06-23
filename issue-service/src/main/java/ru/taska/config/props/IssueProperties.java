@@ -5,9 +5,11 @@ import ru.taska.api.project.v1.ProjectRole;
 
 import java.util.Set;
 
-@ConfigurationProperties(prefix = "app.issue")
+@ConfigurationProperties(prefix = "issue")
 public record IssueProperties(
-        AllowedRoles allowedRoles
+        AllowedRoles allowedRoles,
+        List list,
+        Card card
 ) {
 
     public record AllowedRoles(
@@ -18,5 +20,14 @@ public record IssueProperties(
             Set<ProjectRole> getIssueRoles,
             Set<ProjectRole> listIssueRoles
     ) {
+    }
+
+    public record List(
+            int defaultPageSize,
+            int maxPageSize
+    ) {
+    }
+
+    public record Card(int maxHistorySize) {
     }
 }

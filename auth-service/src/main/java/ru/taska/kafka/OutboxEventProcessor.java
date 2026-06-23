@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.config.props.KafkaTopicsProperties;
+import ru.taska.config.props.KafkaProperties;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
 
@@ -21,7 +21,7 @@ public class OutboxEventProcessor {
 
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxEventPublisher publisher;
-    private final KafkaTopicsProperties properties;
+    private final KafkaProperties properties;
 
     /**
      * Обрабатывает очередную пачку событий transactional outbox.
@@ -44,7 +44,7 @@ public class OutboxEventProcessor {
     public Mono<Void> processStuckEvents() {
         return Mono.defer(() -> {
                     Instant threshold = Instant.now()
-                            .minusSeconds(properties.outbox().processingTimeoutSeconds());
+                            .minusSeconds(properties.outbox().processingTimeout().getSeconds());
 
                     return outboxEventRepository.resetStuckProcessingEvents(threshold)
                             .doOnSuccess(count -> {

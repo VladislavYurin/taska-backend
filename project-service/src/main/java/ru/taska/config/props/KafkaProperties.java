@@ -2,22 +2,24 @@ package ru.taska.config.props;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 @ConfigurationProperties(prefix = "app.kafka")
-public record KafkaTopicsProperties(
+public record KafkaProperties(
         Topics topics,
         Outbox outbox
 ) {
     public record Topics(
-            String userEvents
+            String projectEvents
     ) {
     }
 
     public record Outbox(
-            long pollingInterval,
-            long recoveryInterval,
+            Duration pollingInterval,
+            Duration recoveryInterval,
             int batchSize,
             int maxAttempts,
-            long processingTimeoutSeconds
+            Duration processingTimeout
     ) {
     }
 }

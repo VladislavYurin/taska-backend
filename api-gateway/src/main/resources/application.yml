@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 management:
   endpoints:
@@ -11,9 +11,8 @@ management:
       probes:
         enabled: true
 
-# jwt validation secret key (HARDCODE)
 jwt:
-  secret: "jwttestsecret1jwttestsecret1jwttestsecret1jwttestsecret1jwttestsecret1jwttestsecret1"
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-and-validation-must-be-long-enough}
 
 # spring cloud gateway settings
 spring:
@@ -21,29 +20,20 @@ spring:
     gateway:
       server:
         webflux:
-          # все роуты добавлять по аналогии с тем, что ниже
           routes:
-            # Пример незащищённого эндпоинта
-            # auth_login example route
+            # Незащищённый эндпоинт
             - id: auth_login
-              # эндпоинт, куда происходит редирект
-              uri: https://auth-login-example.org
-              # predicates - условия маршрутизации запроса.
-              # в данном случае по пути /auth/** будет редирект на auth-service
+              uri: ${AUTH_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/auth/**
 
-            # Пример защищённого эндпоинта
+            # Защищенный эндпоинт (пример)
             - id: test-service-protected-example
-              # куда редирект
-              uri: https://wikipedia.com # тест
-              # если нужно добавить условия редиректа - добавляем сюда.
+              uri: https://wikipedia.com
               predicates:
                 - Path=/test-service/**
-              # позволяют изменить запрос, извлечь данные и т.д.
               filters:
                 - JwtValidating
-              # тут будет фильтр валидации jwt токена
 
 logging:
   level:

@@ -40,7 +40,7 @@ public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrp
                                                  .doOnNext(resp -> log.info("[{}][{}] user invited: userId={}",
                                                                             requestId, nodeId, resp.getUserId()));
                 })
-                .doOnError(exception -> log.error("Failed to invite user", exception))
+                .doOnError(exception -> log.error("Failed to invite user: {}", exception.getMessage()))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

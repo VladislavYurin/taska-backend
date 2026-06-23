@@ -23,7 +23,7 @@ public class OutboxEventScheduler {
     public void publishOutboxEvents() {
         processor.processOutboxEvents()
                 .doOnSuccess(unused -> log.debug("Outbox scheduler iteration completed successfully"))
-                .doOnError(ex -> log.warn("Outbox scheduler iteration failed", ex))
+                .doOnError(ex -> log.warn("Outbox scheduler iteration failed: {}", ex.getMessage()))
                 .subscribe();
     }
 
@@ -34,7 +34,7 @@ public class OutboxEventScheduler {
     public void recoverStuckEvents() {
         processor.processStuckEvents()
                 .doOnSuccess(unused -> log.debug("Recovery scheduler iteration completed successfully"))
-                .doOnError(ex -> log.warn("Failed to recover stuck events", ex))
+                .doOnError(ex -> log.warn("Failed to recover stuck events: {}", ex.getMessage()))
                 .subscribe();
     }
 }

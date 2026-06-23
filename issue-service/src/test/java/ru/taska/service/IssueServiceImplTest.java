@@ -6,7 +6,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import ru.taska.config.props.IssueListProperties;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IssueHistoryRepository;
@@ -57,7 +56,7 @@ public class IssueServiceImplTest {
     protected static final int MAX_PAGE_SIZE = 100;
 
     @Spy
-    protected IssueListProperties issueListProperties = new IssueListProperties(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    protected IssueProperties.List issueListProperties = new IssueProperties.List(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
     protected static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     protected static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");

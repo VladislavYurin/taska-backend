@@ -4,11 +4,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import ru.taska.config.OutboxConfig;
+import ru.taska.config.props.KafkaProperties;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableConfigurationProperties(OutboxConfig.class)
+@EnableConfigurationProperties(KafkaProperties.class)
 public class ProjectServiceApplication {
 
     public static void main(String[] args) {

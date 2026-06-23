@@ -39,8 +39,8 @@ public class JwtServiceImpl implements JwtService {
         );
 
         log.debug("JWT Service initialized with access TTL: {} seconds, refresh TTL: {} seconds",
-                jwtProperties.getAccessTokenTtl(),
-                jwtProperties.getRefreshTokenTtl());
+                jwtProperties.getAccessTokenTtl().getSeconds(),
+                jwtProperties.getRefreshTokenTtl().getSeconds());
     }
 
     @Override
@@ -55,7 +55,7 @@ public class JwtServiceImpl implements JwtService {
                         .issuedAt(new Date())                // вместо setIssuedAt()
                         .expiration(new Date(               // вместо setExpiration()
                                 System.currentTimeMillis() +
-                                        jwtProperties.getAccessTokenTtl() * 1000
+                                        jwtProperties.getAccessTokenTtl().getSeconds() * 1000
                         ))
                         .and()                              // возврат к builder
                         .signWith(secretKey)
@@ -67,6 +67,6 @@ public class JwtServiceImpl implements JwtService {
 
 
     public Mono<Long> getExpiresIn() {
-        return Mono.just(jwtProperties.getAccessTokenTtl());
+        return Mono.just(jwtProperties.getAccessTokenTtl().getSeconds());
     }
 }
