@@ -1,20 +1,20 @@
 server:
-  port: ${SERVER_PORT:8083}
+  port: ${WORKFLOW_SERVER_PORT:8083}
 
 spring:
   grpc:
     server:
-      port: ${GRPC_SERVER_PORT:9093}
+      port: ${WORKFLOW_GRPC_SERVER_PORT:9093}
   r2dbc:
-    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5435/workflow_db}
-    username: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
+    url: ${WORKFLOW_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5435/workflow_db}
+    username: ${WORKFLOW_SPRING_R2DBC_USERNAME:taska}
+    password: ${WORKFLOW_SPRING_R2DBC_PASSWORD:taska}
   liquibase:
       enabled: true
       change-log: classpath:/db/changelog/db.changelog-master.yaml
-      url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5435/workflow_db}
-      user: ${SPRING_LIQUIBASE_USERNAME:taska}
-      password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+      url: ${WORKFLOW_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5435/workflow_db}
+      user: ${WORKFLOW_SPRING_LIQUIBASE_USERNAME:taska}
+      password: ${WORKFLOW_SPRING_LIQUIBASE_PASSWORD:taska}
 
 management:
   endpoints:
@@ -28,5 +28,5 @@ management:
 
 logging:
   level:
-    ru.taska: ${LOG_LEVEL_ROOT:INFO}
-    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
+    ru.taska: ${WORKFLOW_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${WORKFLOW_LOG_LEVEL_LIQUIBASE:INFO}

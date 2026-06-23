@@ -1,33 +1,33 @@
 server:
-  port: ${SERVER_PORT:8084}
+  port: ${ISSUE_SERVER_PORT:8084}
 
 spring:
   grpc:
     server:
-      port: ${GRPC_SERVER_PORT:9094}
+      port: ${ISSUE_GRPC_SERVER_PORT:9094}
   r2dbc:
-    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
-    username: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
+    url: ${ISSUE_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
+    username: ${ISSUE_SPRING_R2DBC_USERNAME:taska}
+    password: ${ISSUE_SPRING_R2DBC_PASSWORD:taska}
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5436/issue_db}
-    user: ${SPRING_LIQUIBASE_USERNAME:taska}
-    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+    url: ${ISSUE_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5436/issue_db}
+    user: ${ISSUE_SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${ISSUE_SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 app:
   kafka:
     topics:
-      issue-events: ${KAFKA_TOPIC_ISSUE_EVENTS:issue.events}
+      issue-events: ${ISSUE_KAFKA_TOPIC_ISSUE_EVENTS:issue.events}
     outbox:
-      polling-interval: ${KAFKA_OUTBOX_POLLING_INTERVAL:3s}
-      recovery-interval: ${KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
-      batch-size: ${KAFKA_OUTBOX_BATCH_SIZE:100}
-      max-attempts: ${KAFKA_OUTBOX_MAX_ATTEMPTS:5}
-      processing-timeout: ${KAFKA_PROCESSING_TIMEOUT:5m}
+      polling-interval: ${ISSUE_KAFKA_OUTBOX_POLLING_INTERVAL:3s}
+      recovery-interval: ${ISSUE_KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
+      batch-size: ${ISSUE_KAFKA_OUTBOX_BATCH_SIZE:100}
+      max-attempts: ${ISSUE_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
+      processing-timeout: ${KAFKA_PROCESSING_OUTBOX_TIMEOUT:5m}
 
 issue:
   list:
@@ -61,6 +61,6 @@ grpc:
 
 logging:
   level:
-    ru.taska: ${LOG_LEVEL_ROOT:INFO}
-    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
-    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}
+    ru.taska: ${ISSUE_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${ISSUE_LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${ISSUE_LOG_LEVEL_KAFKA:WARN}

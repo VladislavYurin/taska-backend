@@ -21,30 +21,11 @@ services:
     image: apache/kafka:3.9.1
     container_name: taska-kafka
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "9092:9092"   # external access from host
-    environment:
-      # KRaft single-node
-      - KAFKA_ENABLE_KRAFT=yes
-      - KAFKA_NODE_ID=1
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
 
-      # listeners
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-      # dev-friendly
-      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
-      - KAFKA_NUM_PARTITIONS=3
-      - KAFKA_DEFAULT_REPLICATION_FACTOR=1
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-
-      - ALLOW_PLAINTEXT_LISTENER=yes
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -58,6 +39,8 @@ services:
     image: postgres:16
     container_name: taska-auth-db
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "5433:5432"
     environment:
@@ -76,6 +59,8 @@ services:
     image: postgres:16
     container_name: taska-project-db
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "5434:5432"
     environment:
@@ -94,6 +79,8 @@ services:
     image: postgres:16
     container_name: taska-workflow-db
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "5435:5432"
     environment:
@@ -112,6 +99,8 @@ services:
     image: postgres:16
     container_name: taska-issue-db
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "5436:5432"
     environment:
@@ -130,6 +119,8 @@ services:
     image: postgres:16
     container_name: taska-notification-db
     networks: [taska-net]
+    env_file:
+      - .env.docker
     ports:
       - "5437:5432"
     environment:
@@ -158,23 +149,11 @@ services:
         condition: service_healthy
       auth-db:
         condition: service_healthy
+    env_file:
+      - .env.docker
     ports:
       - "8081:8080"
       - "9091:9090"
-    environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://auth-db:5432/auth_db
-      - SPRING_R2DBC_USERNAME=taska
-      - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://auth-db:5432/auth_db
-      - SPRING_DATASOURCE_USERNAME=taska
-      - SPRING_DATASOURCE_PASSWORD=taska
-      - SPRING_LIQUIBASE_URL=jdbc:postgresql://auth-db:5432/auth_db
-      - SPRING_LIQUIBASE_USERNAME=taska
-      - SPRING_LIQUIBASE_PASSWORD=taska
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - JWT_SECRET=your-super-secret-jwt-key-for-development-only-min-256-bits
-      - SERVER_PORT=8080
-      - GRPC_SERVER_PORT=9090
 
   project-service:
     build:
@@ -187,25 +166,11 @@ services:
         condition: service_healthy
       project-db:
         condition: service_healthy
+    env_file:
+      - .env.docker
     ports:
       - "8082:8080"
       - "9096:9090"
-    environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://project-db:5432/project_db
-      - SPRING_R2DBC_USERNAME=taska
-      - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://project-db:5432/project_db
-      - SPRING_DATASOURCE_USERNAME=taska
-      - SPRING_DATASOURCE_PASSWORD=taska
-      - SPRING_LIQUIBASE_URL=jdbc:postgresql://project-db:5432/project_db
-      - SPRING_LIQUIBASE_USERNAME=taska
-      - SPRING_LIQUIBASE_PASSWORD=taska
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-
-      - PROJECT_GRPC_HOST=project-service
-      - PROJECT_GRPC_PORT=9090
-      - SERVER_PORT=8080
-      - GRPC_SERVER_PORT=9090
 
   workflow-service:
     build:
@@ -216,18 +181,11 @@ services:
     depends_on:
       workflow-db:
         condition: service_healthy
+    env_file:
+      - .env.docker
     ports:
       - "8083:8080"
       - "9093:9090"
-    environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://workflow-db:5432/workflow_db
-      - SPRING_R2DBC_USERNAME=taska
-      - SPRING_R2DBC_PASSWORD=taska
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://workflow-db:5432/workflow_db
-      - SPRING_DATASOURCE_USERNAME=taska
-      - SPRING_DATASOURCE_PASSWORD=taska
-      - SERVER_PORT=8080
-      - GRPC_SERVER_PORT=9090
 
   issue-service:
     build:
@@ -244,28 +202,11 @@ services:
         condition: service_started
       workflow-service:
         condition: service_started
+    env_file:
+      - .env.docker
     ports:
       - "8084:8080"
       - "9094:9090"
-    environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://issue-db:5432/issue_db
-      - SPRING_R2DBC_USERNAME=taska
-      - SPRING_R2DBC_PASSWORD=taska
-
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://issue-db:5432/issue_db
-      - SPRING_DATASOURCE_USERNAME=taska
-      - SPRING_DATASOURCE_PASSWORD=taska
-
-      - SPRING_LIQUIBASE_URL=jdbc:postgresql://issue-db:5432/issue_db
-      - SPRING_LIQUIBASE_USERNAME=taska
-      - SPRING_LIQUIBASE_PASSWORD=taska
-
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-
-      - PROJECT_GRPC_HOST=project-service
-      - PROJECT_GRPC_PORT=9090
-      - SERVER_PORT=8080
-      - GRPC_SERVER_PORT=9090
 
   notification-service:
     build:
@@ -278,25 +219,11 @@ services:
         condition: service_healthy
       notification-db:
         condition: service_healthy
+    env_file:
+      - .env.docker
     ports:
       - "8085:8080"
       - "9095:9090"
-    environment:
-      - SPRING_R2DBC_URL=r2dbc:postgresql://notification-db:5432/notification_db
-      - SPRING_R2DBC_USERNAME=taska
-      - SPRING_R2DBC_PASSWORD=taska
-
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://notification-db:5432/notification_db
-      - SPRING_DATASOURCE_USERNAME=taska
-      - SPRING_DATASOURCE_PASSWORD=taska
-
-      - SPRING_LIQUIBASE_URL=jdbc:postgresql://notification-db:5432/notification_db
-      - SPRING_LIQUIBASE_USERNAME=taska
-      - SPRING_LIQUIBASE_PASSWORD=taska
-
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - SERVER_PORT=8080
-      - GRPC_SERVER_PORT=9090
 
   api-gateway:
     build:
@@ -315,20 +242,7 @@ services:
         condition: service_started
       notification-service:
         condition: service_started
+    env_file:
+      - .env.docker
     ports:
       - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SERVER_PORT=8080
-
-      # grpc targets
-      - AUTH_GRPC_HOST=auth-service
-      - AUTH_GRPC_PORT=9090
-      - PROJECT_GRPC_HOST=project-service
-      - PROJECT_GRPC_PORT=9090
-      - WORKFLOW_GRPC_HOST=workflow-service
-      - WORKFLOW_GRPC_PORT=9090
-      - ISSUE_GRPC_HOST=issue-service
-      - ISSUE_GRPC_PORT=9090
-      - NOTIFICATION_GRPC_HOST=notification-service
-      - NOTIFICATION_GRPC_PORT=9090

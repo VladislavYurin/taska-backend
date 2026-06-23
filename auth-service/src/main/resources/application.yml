@@ -1,14 +1,14 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${AUTH_SERVER_PORT:8081}
 
 spring:
   grpc:
     server:
-      port: ${GRPC_SERVER_PORT:9091}
+      port: ${AUTH_GRPC_SERVER_PORT:9091}
   r2dbc:
-    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
-    username: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
+    url: ${AUTH_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
+    username: ${AUTH_SPRING_R2DBC_USERNAME:taska}
+    password: ${AUTH_SPRING_R2DBC_PASSWORD:taska}
   r2dbc-pool:
     enabled: true
     initial-size: 10
@@ -16,22 +16,22 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5433/auth_db}
-    user: ${SPRING_LIQUIBASE_USERNAME:taska}
-    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+    url: ${AUTH_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5433/auth_db}
+    user: ${AUTH_SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${AUTH_SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 app:
   kafka:
     topics:
-      user-events: ${KAFKA_TOPIC_USER_EVENTS:user.events}
+      user-events: ${AUTH_KAFKA_TOPIC_USER_EVENTS:user.events}
     outbox:
-      polling-interval: ${KAFKA_OUTBOX_POLLING_INTERVAL:3s}
-      recovery-interval: ${KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
-      batch-size: ${KAFKA_OUTBOX_BATCH_SIZE:100}
-      max-attempts: ${KAFKA_OUTBOX_MAX_ATTEMPTS:5}
-      processing-timeout: ${KAFKA_PROCESSING_TIMEOUT:5m}
+      polling-interval: ${AUTH_KAFKA_OUTBOX_POLLING_INTERVAL:3s}
+      recovery-interval: ${AUTH_KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
+      batch-size: ${AUTH_KAFKA_OUTBOX_BATCH_SIZE:100}
+      max-attempts: ${AUTH_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
+      processing-timeout: ${AUTH_KAFKA_PROCESSING_TIMEOUT:5m}
 
 management:
   endpoints:
@@ -45,26 +45,26 @@ management:
 
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-and-validation-must-be-long-enough}
-  access-token-ttl: ${JWT_ACCESS_TTL:15m}
-  refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
-  invite-token-ttl: ${JWT_INVITE_TTL:7d}
+  access-token-ttl: ${AUTH_JWT_ACCESS_TTL:15m}
+  refresh-token-ttl: ${AUTH_JWT_REFRESH_TTL:7d}
+  invite-token-ttl: ${AUTH_JWT_INVITE_TTL:7d}
 
 security:
-  max-failed-attempts: ${SECURITY_MAX_FAILED_ATTEMPTS:5}
-  lock-duration: ${SECURITY_LOCK_DURATION:15m}
-  password-encoder: ${PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
-
-logging:
-  level:
-    ru.taska: ${LOG_LEVEL_ROOT:INFO}
-    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
-    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}
+  max-failed-attempts: ${AUTH_SECURITY_MAX_FAILED_ATTEMPTS:5}
+  lock-duration: ${AUTH_SECURITY_LOCK_DURATION:15}
+  password-encoder: ${AUTH_PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
 
 validation:
   # Password Policy
   password:
-    min: ${PASSWORD_MIN_LEN:8}
-    max: ${PASSWORD_MAX_LEN:128}
-    requireUpper: ${PASSWORD_REQUIRE_UPPER:true}
-    requireDigit: ${PASSWORD_REQUIRE_DIGIT:true}
-    requireSpecial: ${PASSWORD_REQUIRE_SPECIAL:true}
+    min: ${AUTH_PASSWORD_MIN_LEN:8}
+    max: ${AUTH_PASSWORD_MAX_LEN:128}
+    requireUpper: ${AUTH_PASSWORD_REQUIRE_UPPER:true}
+    requireDigit: ${AUTH_PASSWORD_REQUIRE_DIGIT:true}
+    requireSpecial: ${AUTH_PASSWORD_REQUIRE_SPECIAL:true}
+
+logging:
+  level:
+    ru.taska: ${AUTH_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${AUTH_LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${AUTH_LOG_LEVEL_KAFKA:WARN}
