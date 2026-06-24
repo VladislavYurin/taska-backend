@@ -81,19 +81,14 @@ class NotificationInboxServiceImplTest {
 
     @Test
     void shouldMarkUnreadNotificationAsRead() {
-        Notification unreadNotification = notification(null);
-        Notification readNotification = notification(Instant.parse("2026-05-27T10:00:00Z"));
-
-        Mockito.when(notificationRepository.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
-                .thenReturn(Mono.just(unreadNotification))
-                .thenReturn(Mono.just(readNotification));
+        Notification readNotification = notification(Instant.now());
 
         Mockito.when(notificationRepository.markAsRead(
                         ArgumentMatchers.eq(NOTIFICATION_ID),
                         ArgumentMatchers.eq(USER_ID),
                         ArgumentMatchers.any(Instant.class)
                 ))
-                .thenReturn(Mono.just(1));
+                .thenReturn(Mono.just(readNotification));
 
         StepVerifier.create(notificationInboxService.markAsRead(NOTIFICATION_ID, USER_ID))
                 .assertNext(updatedNotification -> {
@@ -103,9 +98,6 @@ class NotificationInboxServiceImplTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(notificationRepository, Mockito.times(2))
-                .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
-
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .markAsRead(
                         ArgumentMatchers.eq(NOTIFICATION_ID),
@@ -114,13 +106,19 @@ class NotificationInboxServiceImplTest {
                 );
 
         Mockito.verify(notificationRepository, Mockito.never())
-                .save(ArgumentMatchers.any(Notification.class));
+                .findByIdAndUserId(Mockito.any(), Mockito.any());
     }
 
     @Test
-    void shouldReturnAlreadyReadNotificationWithoutSaving() {
+    void shouldReturnAlreadyReadNotification() {
         Instant readAt = Instant.parse("2026-05-27T10:00:00Z");
         Notification readNotification = notification(readAt);
+
+        Mockito.when(notificationRepository.markAsRead(
+                ArgumentMatchers.eq(NOTIFICATION_ID),
+                ArgumentMatchers.eq(USER_ID),
+                ArgumentMatchers.any(Instant.class)
+        )).thenReturn(Mono.empty());
 
         Mockito.when(notificationRepository.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
                 .thenReturn(Mono.just(readNotification));
@@ -130,21 +128,21 @@ class NotificationInboxServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(notificationRepository, Mockito.times(1))
+                .markAsRead(Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
                 .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
-
-        Mockito.verify(notificationRepository, Mockito.never())
-                .markAsRead(
-                        ArgumentMatchers.any(UUID.class),
-                        ArgumentMatchers.any(UUID.class),
-                        ArgumentMatchers.any(Instant.class)
-                );
-
-        Mockito.verify(notificationRepository, Mockito.never())
-                .save(ArgumentMatchers.any(Notification.class));
     }
 
     @Test
     void shouldFailWhenNotificationNotFound() {
+        Mockito.when(notificationRepository.markAsRead(
+                        ArgumentMatchers.eq(NOTIFICATION_ID),
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class))
+                )
+                .thenReturn(Mono.empty());
+
         Mockito.when(notificationRepository.findByIdAndUserId(NOTIFICATION_ID, USER_ID))
                 .thenReturn(Mono.empty());
 
@@ -153,17 +151,10 @@ class NotificationInboxServiceImplTest {
                 .verify();
 
         Mockito.verify(notificationRepository, Mockito.times(1))
+                .markAsRead(Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
                 .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
-
-        Mockito.verify(notificationRepository, Mockito.never())
-                .markAsRead(
-                        ArgumentMatchers.any(UUID.class),
-                        ArgumentMatchers.any(UUID.class),
-                        ArgumentMatchers.any(Instant.class)
-                );
-
-        Mockito.verify(notificationRepository, Mockito.never())
-                .save(ArgumentMatchers.any(Notification.class));
     }
 
     private Notification notification(Instant readAt) {

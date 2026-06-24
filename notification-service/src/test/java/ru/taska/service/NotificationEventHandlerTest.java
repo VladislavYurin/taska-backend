@@ -7,7 +7,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import ru.taska.domain.Notification;
 import ru.taska.domain.ProcessedEvent;
 import ru.taska.event.TaskaEvent;
@@ -16,6 +19,7 @@ import ru.taska.repository.ProcessedEventRepository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,6 +38,9 @@ class NotificationEventHandlerTest {
     @Mock
     private EmailSenderService emailSenderService;
 
+    @Mock
+    private TransactionalOperator transactionalOperator;
+
     @InjectMocks
     private NotificationEventHandlerImpl handler;
 
@@ -49,40 +56,42 @@ class NotificationEventHandlerTest {
                 .aggregateType("ISSUE")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
-                .payload(payload("""
+                .payload(buildPayload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
                         """))
                 .build();
 
+        Notification notification = buildNotification(ASSIGNEE_ID);
+
+        Mockito.when(processedEventRepository.save(Mockito.any(ProcessedEvent.class)))
+                .thenReturn(Mono.just(new ProcessedEvent()))
+                .thenReturn(Mono.error(new DuplicateKeyException("duplicate key error")));
+
         Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(List.of(notification(ASSIGNEE_ID)));
-
-        Mockito.when(processedEventRepository.existsById(EVENT_ID.toString()))
-                .thenReturn(Mono.just(false))
-                .thenReturn(Mono.just(true));
-
-        Mockito.when(processedEventRepository.save(ArgumentMatchers.any(ProcessedEvent.class)))
-                .thenAnswer(invocation -> Mono.just((ProcessedEvent) invocation.getArgument(0)));
+                .thenReturn(List.of(notification));
 
         Mockito.when(notificationRepository.save(ArgumentMatchers.any(Notification.class)))
                 .thenAnswer(invocation -> Mono.just((Notification) invocation.getArgument(0)));
 
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
         Mockito.when(emailSenderService.sendIfEnabled(ArgumentMatchers.any(Notification.class)))
                 .thenReturn(Mono.empty());
 
-        handler.handle(event).block();
-        handler.handle(event).block();
+        StepVerifier.create(handler.handle(event))
+                .verifyComplete();
+
+        StepVerifier.create(handler.handle(event))
+                .verifyComplete();
 
         Mockito.verify(processedEventRepository, Mockito.times(2))
-                .existsById(EVENT_ID.toString());
-
-        Mockito.verify(processedEventRepository, Mockito.times(1))
                 .save(ArgumentMatchers.any(ProcessedEvent.class));
 
         Mockito.verify(notificationFactory, Mockito.times(1))
-                .create(event, EVENT_ID.toString());
+                .create(event, EVENT_ID);
 
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .save(ArgumentMatchers.any(Notification.class));
@@ -98,13 +107,16 @@ class NotificationEventHandlerTest {
         handler.handle(null).block();
 
         Mockito.verify(processedEventRepository, Mockito.never())
-                .existsById(ArgumentMatchers.any(String.class));
-
-        Mockito.verify(processedEventRepository, Mockito.never())
                 .save(ArgumentMatchers.any());
+
+        Mockito.verify(notificationFactory, Mockito.never())
+                .create(Mockito.any(), Mockito.any());
 
         Mockito.verify(notificationRepository, Mockito.never())
                 .save(ArgumentMatchers.any());
+
+        Mockito.verify(transactionalOperator, Mockito.never())
+                .transactional(Mockito.any(Mono.class));
 
         Mockito.verify(emailSenderService, Mockito.never())
                 .sendIfEnabled(ArgumentMatchers.any(Notification.class));
@@ -119,7 +131,7 @@ class NotificationEventHandlerTest {
                 .aggregateType("ISSUE")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
-                .payload(payload("""
+                .payload(buildPayload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
@@ -129,13 +141,16 @@ class NotificationEventHandlerTest {
         handler.handle(event).block();
 
         Mockito.verify(processedEventRepository, Mockito.never())
-                .existsById(ArgumentMatchers.any(String.class));
-
-        Mockito.verify(processedEventRepository, Mockito.never())
                 .save(ArgumentMatchers.any());
+
+        Mockito.verify(notificationFactory, Mockito.never())
+                .create(Mockito.any(), Mockito.any());
 
         Mockito.verify(notificationRepository, Mockito.never())
                 .save(ArgumentMatchers.any());
+
+        Mockito.verify(transactionalOperator, Mockito.never())
+                .transactional(Mockito.any(Mono.class));
 
         Mockito.verify(emailSenderService, Mockito.never())
                 .sendIfEnabled(ArgumentMatchers.any(Notification.class));
@@ -144,37 +159,42 @@ class NotificationEventHandlerTest {
     }
 
     @Test
-    void shouldSkipAlreadyProcessedEvent() throws Exception {
+    void shouldIgnoreDuplicateEvent() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(EVENT_ID)
                 .aggregateType("ISSUE")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
-                .payload(payload("""
+                .payload(buildPayload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
                         """))
                 .build();
 
-        Mockito.when(processedEventRepository.existsById(EVENT_ID.toString()))
-                .thenReturn(Mono.just(true));
+        Mockito.when(processedEventRepository.save(Mockito.any(ProcessedEvent.class)))
+                .thenReturn(Mono.error(new DuplicateKeyException("duplicate key error")));
 
-        handler.handle(event).block();
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StepVerifier.create(handler.handle(event))
+                .verifyComplete();
 
         Mockito.verify(processedEventRepository, Mockito.times(1))
-                .existsById(EVENT_ID.toString());
+                .save(Mockito.any(ProcessedEvent.class));
 
-        Mockito.verify(processedEventRepository, Mockito.never())
-                .save(ArgumentMatchers.any(ProcessedEvent.class));
+        Mockito.verify(notificationFactory, Mockito.never())
+                .create(Mockito.any(), Mockito.any());
 
         Mockito.verify(notificationRepository, Mockito.never())
-                .save(ArgumentMatchers.any(Notification.class));
+                .save(Mockito.any(Notification.class));
+
+        Mockito.verify(transactionalOperator, Mockito.times(1))
+                .transactional(Mockito.any(Mono.class));
 
         Mockito.verify(emailSenderService, Mockito.never())
-                .sendIfEnabled(ArgumentMatchers.any(Notification.class));
-
-        Mockito.verifyNoInteractions(notificationFactory);
+                .sendIfEnabled(Mockito.any(Notification.class));
     }
 
     @Test
@@ -184,24 +204,24 @@ class NotificationEventHandlerTest {
                 .aggregateType("ISSUE")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
-                .payload(payload("""
+                .payload(buildPayload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
                         """))
                 .build();
 
-        Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(List.of(notification(ASSIGNEE_ID)));
-
-        Mockito.when(processedEventRepository.existsById(EVENT_ID.toString()))
-                .thenReturn(Mono.just(false));
-
         Mockito.when(processedEventRepository.save(ArgumentMatchers.any(ProcessedEvent.class)))
                 .thenAnswer(invocation -> Mono.just((ProcessedEvent) invocation.getArgument(0)));
 
+        Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of(buildNotification(ASSIGNEE_ID)));
+
         Mockito.when(notificationRepository.save(ArgumentMatchers.any(Notification.class)))
                 .thenAnswer(invocation -> Mono.just((Notification) invocation.getArgument(0)));
+
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         Mockito.when(emailSenderService.sendIfEnabled(ArgumentMatchers.any(Notification.class)))
                 .thenReturn(Mono.empty());
@@ -212,10 +232,13 @@ class NotificationEventHandlerTest {
                 .save(ArgumentMatchers.any(ProcessedEvent.class));
 
         Mockito.verify(notificationFactory, Mockito.times(1))
-                .create(event, EVENT_ID.toString());
+                .create(event, EVENT_ID);
 
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .save(ArgumentMatchers.any(Notification.class));
+
+        Mockito.verify(transactionalOperator, Mockito.times(1))
+                .transactional(Mockito.any(Mono.class));
 
         Mockito.verify(emailSenderService, Mockito.times(1))
                 .sendIfEnabled(ArgumentMatchers.any(Notification.class));
@@ -228,7 +251,7 @@ class NotificationEventHandlerTest {
                 .aggregateType("ISSUE")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueTransitioned")
-                .payload(payload("""
+                .payload(buildPayload("""
                         {
                           "reporterId": "00000000-0000-0000-0000-000000000002",
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
@@ -236,17 +259,17 @@ class NotificationEventHandlerTest {
                         """))
                 .build();
 
-        Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(List.of(notification(REPORTER_ID), notification(ASSIGNEE_ID)));
-
-        Mockito.when(processedEventRepository.existsById(EVENT_ID.toString()))
-                .thenReturn(Mono.just(false));
-
         Mockito.when(processedEventRepository.save(ArgumentMatchers.any(ProcessedEvent.class)))
                 .thenAnswer(invocation -> Mono.just((ProcessedEvent) invocation.getArgument(0)));
 
+        Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(List.of(buildNotification(REPORTER_ID), buildNotification(ASSIGNEE_ID)));
+
         Mockito.when(notificationRepository.save(ArgumentMatchers.any(Notification.class)))
                 .thenAnswer(invocation -> Mono.just((Notification) invocation.getArgument(0)));
+
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         Mockito.when(emailSenderService.sendIfEnabled(ArgumentMatchers.any(Notification.class)))
                 .thenReturn(Mono.empty());
@@ -257,7 +280,7 @@ class NotificationEventHandlerTest {
                 .save(ArgumentMatchers.any(ProcessedEvent.class));
 
         Mockito.verify(notificationFactory, Mockito.times(1))
-                .create(event, EVENT_ID.toString());
+                .create(event, EVENT_ID);
 
         Mockito.verify(notificationRepository, Mockito.times(2))
                 .save(ArgumentMatchers.any(Notification.class));
@@ -266,11 +289,96 @@ class NotificationEventHandlerTest {
                 .sendIfEnabled(ArgumentMatchers.any(Notification.class));
     }
 
-    private JsonNode payload(String json) throws Exception {
+    @Test
+    void shouldNotSendEmailWhenNotificationsNotCreated() throws Exception {
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(buildPayload("""
+                        {
+                          "assigneeId": "00000000-0000-0000-0000-000000000001"
+                        }
+                        """))
+                .build();
+
+        Mockito.when(processedEventRepository.save(Mockito.any(ProcessedEvent.class)))
+                .thenAnswer(invocation -> Mono.just((ProcessedEvent) invocation.getArgument(0)));
+
+        Mockito.when(notificationFactory.create(Mockito.any(), Mockito.any()))
+                .thenReturn(Collections.emptyList());
+
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        handler.handle(event).block();
+
+        Mockito.verify(processedEventRepository, Mockito.times(1))
+                .save(Mockito.any(ProcessedEvent.class));
+
+        Mockito.verify(notificationFactory, Mockito.times(1))
+                .create(event, EVENT_ID);
+
+        Mockito.verify(notificationRepository, Mockito.never())
+                .save(Mockito.any(Notification.class));
+
+        Mockito.verify(emailSenderService, Mockito.never())
+                .sendIfEnabled(Mockito.any(Notification.class));
+    }
+
+    @Test
+    void shouldCompleteSuccessfullyWhenEmailSendingFails() throws Exception {
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(buildPayload("""
+                        {
+                          "assigneeId": "00000000-0000-0000-0000-000000000001"
+                        }
+                        """))
+                .build();
+
+        Notification notification = buildNotification(ASSIGNEE_ID);
+
+        Mockito.when(processedEventRepository.save(Mockito.any(ProcessedEvent.class)))
+                .thenAnswer(invocation -> Mono.just((ProcessedEvent) invocation.getArgument(0)));
+
+        Mockito.when(notificationFactory.create(Mockito.any(), Mockito.any()))
+                .thenReturn(List.of(notification));
+
+        Mockito.when(notificationRepository.save(Mockito.any(Notification.class)))
+                .thenAnswer(invocation -> Mono.just((Notification) invocation.getArgument(0)));
+
+        Mockito.when(transactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Mockito.when(emailSenderService.sendIfEnabled(Mockito.any(Notification.class)))
+                .thenReturn(Mono.error(new RuntimeException("Email sending failed")));
+
+        StepVerifier.create(handler.handle(event))
+                .verifyComplete();
+
+        Mockito.verify(processedEventRepository, Mockito.times(1))
+                .save(Mockito.any(ProcessedEvent.class));
+
+        Mockito.verify(notificationFactory, Mockito.times(1))
+                .create(event, EVENT_ID);
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .save(Mockito.any(Notification.class));
+
+        Mockito.verify(emailSenderService, Mockito.times(1))
+                .sendIfEnabled(Mockito.any(Notification.class));
+    }
+
+    private JsonNode buildPayload(String json) throws Exception {
         return new ObjectMapper().readTree(json);
     }
 
-    private Notification notification(UUID userId) {
+    private Notification buildNotification(UUID userId) {
         return Notification.builder()
                 .id(UUID.randomUUID())
                 .userId(userId)

@@ -20,7 +20,7 @@ public class NotificationFactory {
 
     private final NotificationMapper notificationMapper;
 
-    public List<Notification> create(TaskaEvent event, String eventId) {
+    public List<Notification> create(TaskaEvent event, UUID eventId) {
         JsonNode payload = event.payload();
         EventType type = EventType.fromValue(event.eventType());
 
@@ -42,7 +42,7 @@ public class NotificationFactory {
         };
     }
 
-    private List<Notification> buildIssueCreated(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildIssueCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
@@ -64,7 +64,7 @@ public class NotificationFactory {
         return notifications;
     }
 
-    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID assigneeId = extractUuid(payload, "assigneeId");
         if (assigneeId == null) {
             log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
@@ -73,7 +73,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toIssueAssigned(event, assigneeId));
     }
 
-    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
@@ -94,7 +94,7 @@ public class NotificationFactory {
         return notifications;
     }
 
-    private List<Notification> buildIssueUpdated(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildIssueUpdated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
@@ -116,7 +116,7 @@ public class NotificationFactory {
         return notifications;
     }
 
-    private List<Notification> buildIssueDeleted(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildIssueDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
@@ -138,7 +138,7 @@ public class NotificationFactory {
             return notifications;
     }
 
-    private List<Notification> buildUserInvited(TaskaEvent event, String eventId) {
+    private List<Notification> buildUserInvited(TaskaEvent event, UUID eventId) {
         UUID userId = event.aggregateId();
         if (userId == null) {
             log.warn("UserInvited event without aggregateId (user id), eventId={}", eventId);
@@ -147,7 +147,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toUserInvited(event));
     }
 
-    private List<Notification> buildProjectCreated(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildProjectCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID createdBy = extractUuid(payload, "createdBy");
         if (createdBy == null) {
             log.warn("ProjectCreated event without createdBy, eventId={}", eventId);
@@ -156,7 +156,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toProjectCreated(event, createdBy));
     }
 
-    private List<Notification> buildMemberAdded(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildMemberAdded(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID userId = extractUuid(payload, "userId");
         if (userId == null) {
             log.warn("MemberAdded event without userId, eventId={}", eventId);
@@ -165,7 +165,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toMemberAdded(event, userId));
     }
 
-    private List<Notification> buildMemberRemoved(TaskaEvent event, JsonNode payload, String eventId) {
+    private List<Notification> buildMemberRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID userId = extractUuid(payload, "userId");
         if (userId == null) {
             log.warn("MemberRemoved event without userId, eventId={}", eventId);
@@ -174,7 +174,7 @@ public class NotificationFactory {
         return List.of(notificationMapper.toMemberRemoved(event, userId));
     }
 
-    private List<Notification> buildUserActivated(TaskaEvent event, String eventId) {
+    private List<Notification> buildUserActivated(TaskaEvent event, UUID eventId) {
         UUID userId = event.aggregateId();
         if (userId == null) {
             log.warn("UserActivated event without aggregateId (user id), eventId={}", eventId);

@@ -2,7 +2,9 @@ package ru.taska.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
@@ -12,7 +14,9 @@ import ru.taska.repository.NotificationRepository;
 import ru.taska.repository.ProcessedEventRepository;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Бизнес-логика обработки доменных событий из Kafka и создания уведомлений.
@@ -26,6 +30,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationFactory notificationFactory;
     private final EmailSenderService emailSenderService;
+    private final TransactionalOperator transactionalOperator;
 
     /**
      * Обрабатывает событие с дедупликацией по {@code eventId}.
@@ -40,45 +45,66 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
             return Mono.empty();
         }
 
-        String eventId = event.id().toString();
+        UUID eventId = event.id();
 
-        return processedEventRepository.existsById(eventId)
-                .flatMap(exists -> exists ? Mono.<Void>empty()
-                        : markEventProcessedAndCreateNotifications(event, eventId));
-    }
-
-    private Mono<Void> markEventProcessedAndCreateNotifications(TaskaEvent event, String eventId) {
         ProcessedEvent processedEvent = ProcessedEvent.builder()
                 .eventId(eventId)
                 .processedAt(Instant.now())
                 .sourceType(event.aggregateType())
                 .build();
 
-        return processedEventRepository.save(processedEvent)
-                .then(createNotifications(event, eventId));
+        return Mono.defer(() ->
+                        processedEventRepository.save(processedEvent)
+                                .flatMap(saved -> createNotifications(event, eventId))
+                                .as(transactionalOperator::transactional)
+                )
+                .onErrorResume(this::isDuplicateEvent, ex -> {
+                    log.warn("Event was already processed: eventId={}", eventId);
+
+                    return Mono.empty();
+                })
+                .flatMap(notifications ->
+                        sendEmail(notifications, eventId)
+                                .onErrorResume(ex -> {
+                                    log.error("Failed to send email for event: eventId={}, message={}",
+                                            eventId, ex.getMessage());
+
+                                    return Mono.empty();
+                                })
+                );
     }
 
-    private Mono<Void> createNotifications(TaskaEvent event, String eventId) {
+    private Mono<List<Notification>> createNotifications(TaskaEvent event, UUID eventId) {
         List<Notification> notifications = notificationFactory.create(event, eventId);
 
         if (notifications.isEmpty()) {
+            log.debug("There aren't any notifications for event: eventId={}", eventId);
+
+            return Mono.just(Collections.emptyList());
+        }
+
+        return Flux.fromIterable(notifications)
+                .concatMap(notificationRepository::save)
+                .collectList()
+                .doOnNext(savedNotifications ->
+                        log.info("Created {} notifications for event: eventId={}",
+                                savedNotifications.size(), eventId)
+                );
+    }
+
+    private Mono<Void> sendEmail(List<Notification> notifications, UUID eventId) {
+        if (notifications == null || notifications.isEmpty()) {
+            log.debug("There aren't any notifications to send for event: eventId={}", eventId);
+
             return Mono.empty();
         }
 
         return Flux.fromIterable(notifications)
-                .flatMap(notificationRepository::save)
-                .flatMap(savedNotification ->
-                        emailSenderService.sendIfEnabled(savedNotification)
-                                .thenReturn(savedNotification)
-                )
-                .doOnNext(notification ->
-                        log.info("Notification successfully saved: id={}", notification.getId())
-                )
-                .doOnError(ex ->
-                        log.error("Failed to save notification for event: eventId={}, message: {}",
-                                eventId, ex.getMessage())
-                )
+                .flatMap(emailSenderService::sendIfEnabled)
                 .then();
     }
-}
 
+    private boolean isDuplicateEvent(Throwable ex) {
+        return ex instanceof DuplicateKeyException;
+    }
+}

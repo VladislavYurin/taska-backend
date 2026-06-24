@@ -51,6 +51,11 @@ kafka:
     retry:
       max-attempts: ${KAFKA_CONSUMER_RETRY_MAX_ATTEMPTS:3}
       interval: ${KAFKA_CONSUMER_RETRY_INTERVAL:3s}
+  consumer-group: ${NOTIFICATION_KAFKA_CONSUMER_GROUP_ID:notification-service}
+  topics:
+    project-events: ${NOTIFICATION_KAFKA_TOPICS_PROJECT_EVENTS:project.events}
+    user-events: ${NOTIFICATION_KAFKA_TOPICS_USER_EVENTS:user.events}
+    issue-events: ${NOTIFICATION_KAFKA_TOPICS_ISSUE_EVENTS:issue.events}
 
 notification:
   email:

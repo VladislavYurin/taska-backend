@@ -1,6 +1,5 @@
 package ru.taska.repository;
 
-import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
@@ -33,12 +32,12 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
 
     Mono<Notification> findByIdAndUserId(UUID id, UUID userId);
 
-    @Modifying
     @Query("""
             UPDATE taska.notifications
             SET read_at = :readAt
             WHERE id = :notificationId
-              AND user_id = :userId
+              AND user_id = :userId AND read_at IS NULL
+            RETURNING *
             """)
-    Mono<Integer> markAsRead(UUID notificationId, UUID userId, Instant readAt);
+    Mono<Notification> markAsRead(UUID notificationId, UUID userId, Instant readAt);
 }

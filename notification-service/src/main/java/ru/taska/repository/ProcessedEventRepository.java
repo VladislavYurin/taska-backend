@@ -3,6 +3,8 @@ package ru.taska.repository;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import ru.taska.domain.ProcessedEvent;
 
+import java.util.UUID;
+
 /**
  * Репозиторий для хранения обработанных событий Kafka.
  *
@@ -10,6 +12,6 @@ import ru.taska.domain.ProcessedEvent;
  * доставка одного и того же события не приводила к созданию дублей
  * уведомлений.</p>
  */
-public interface ProcessedEventRepository extends ReactiveCrudRepository<ProcessedEvent, String> {
+public interface ProcessedEventRepository extends ReactiveCrudRepository<ProcessedEvent, UUID> {
 }
 
