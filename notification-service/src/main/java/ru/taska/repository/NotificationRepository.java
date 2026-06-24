@@ -1,5 +1,6 @@
 package ru.taska.repository;
 
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
@@ -13,7 +14,7 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
 
     @Query("""
             SELECT *
-            FROM notifications
+            FROM taska.notifications
             WHERE user_id = :userId
               AND read_at IS NULL
             ORDER BY created_at DESC
@@ -23,7 +24,7 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
 
     @Query("""
             SELECT *
-            FROM notifications
+            FROM taska.notifications
             WHERE user_id = :userId
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
@@ -32,11 +33,12 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
 
     Mono<Notification> findByIdAndUserId(UUID id, UUID userId);
 
+    @Modifying
     @Query("""
-        UPDATE notifications
-        SET read_at = :readAt
-        WHERE id = :notificationId
-          AND user_id = :userId
-        """)
+            UPDATE taska.notifications
+            SET read_at = :readAt
+            WHERE id = :notificationId
+              AND user_id = :userId
+            """)
     Mono<Integer> markAsRead(UUID notificationId, UUID userId, Instant readAt);
 }
