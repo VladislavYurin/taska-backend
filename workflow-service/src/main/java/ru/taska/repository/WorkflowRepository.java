@@ -3,6 +3,7 @@ package ru.taska.repository;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
+import ru.taska.entity.WorkflowBindingEntity;
 import ru.taska.entity.WorkflowEntity;
 
 import java.util.UUID;

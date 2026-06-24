@@ -14,6 +14,14 @@ service WorkflowService {
    */
   rpc GetWorkflowForProject(GetWorkflowForProjectRequest)
       returns (Workflow);
+  rpc ValidateTransition(ValidateTransitionRequest) returns (ValidateTransitionResponse);
+}
+
+enum IssueStatus {
+  ISSUE_STATUS_UNSPECIFIED = 0;
+  ISSUE_STATUS_TODO = 1;
+  ISSUE_STATUS_IN_PROGRESS = 2;
+  ISSUE_STATUS_DONE = 3;
 }
 
 message GetWorkflowForProjectRequest {
@@ -160,4 +168,102 @@ message WorkflowTransition {
    * Временная метка последнего изменения записи (аудит).
    */
   string updatedAt = 7;
+}
+
+//                                     ValidateTransition items
+message ValidateTransitionRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ValidateTransitionRequestBody body = 2;
+}
+
+message ValidateTransitionRequestBody {
+
+  /**
+   * Снимок задачи с необходимыми полями для валидации перехода по workflow.
+   */
+  IssueValidateSnapshot issue_snapshot = 1;
+
+  /**
+   * Идентификатор перехода по workflow.
+   */
+  string transition_id = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
+
+  /**
+ * Дополнительные данные для перехода.
+ */
+  string payload = 4;
+}
+
+message IssueValidateSnapshot {
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Тип задачи.
+   */
+  string issue_type = 3;
+
+
+  /**
+   * Текущий статус задачи.
+   */
+  string status_key = 4;
+}
+
+message ValidateTransitionResponse {
+
+  /**
+   * Заголовок ответа.
+   */
+  ru.taska.common.v1.Header header = 1;
+  ValidateTransitionResponseBody body= 2;
+}
+
+message ValidateTransitionResponseBody{
+  /**
+ * Разрешен ли переход по workflow.
+ */
+  bool is_valid = 2;
+
+  /**
+ * Целевой статус (состояние задачи после перехода).
+ */
+  IssueStatus to_status_key = 3;
+
+  /**
+ * Список нарушений, если переход заблокирован.
+ */
+  repeated TransitionViolation transition_violations = 4;
+}
+
+message TransitionViolation {
+  /**
+   * Тип нарушения.
+   */
+  string TransitionViolationValue = 1;
+  /**
+ * Сообщение нарушения.
+ */
+  string message = 2;
 }

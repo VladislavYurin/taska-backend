@@ -1,10 +1,27 @@
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/workflow_db
+    username: taska
+    password: taska
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: jdbc:postgresql://localhost:5432/workflow_db
+    user: taska
+    password: taska
+
+grpc:
+  server:
+    address: 127.0.0.1
+    port: 9090
+
 logging:
   level:
-    ru.taska: DEBUG
-    liquibase: DEBUG
-    org.springframework.r2dbc: DEBUG
-    io.r2dbc.postgresql.QUERY: DEBUG
-    io.r2dbc.postgresql.PARAM: DEBUG
+    ru.taska: INFO
+    liquibase: INFO
+    org.springframework.r2dbc: INFO
+    io.r2dbc.postgresql.QUERY: INFO
+    io.r2dbc.postgresql.PARAM: INFO
 
 workflow:
   default-project-id: 00000000-0000-0000-0000-000000000000
