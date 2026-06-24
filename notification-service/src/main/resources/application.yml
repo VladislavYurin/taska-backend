@@ -20,6 +20,10 @@ spring:
     consumer:
       group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-service}
       auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -41,6 +45,12 @@ management:
     health:
       probes:
         enabled: true
+
+kafka:
+  consumer:
+    retry:
+      max-attempts: ${KAFKA_CONSUMER_RETRY_MAX_ATTEMPTS:3}
+      interval: ${KAFKA_CONSUMER_RETRY_INTERVAL:3s}
 
 notification:
   email:
