@@ -1,9 +1,16 @@
 package ru.taska.mapper;
 
-import org.mapstruct.*;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
+import org.mapstruct.ValueMapping;
+import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
@@ -20,6 +27,15 @@ public interface ProjectMemberMapper {
     @Mapping(source = "projectId", target = "projectId")
     @Mapping(source = "role", target = "role")
     AddProjectMemberResponse toAddProjectMemberResponse(ProjectMember projectMember);
+
+    @Mapping(source = "userId", target = "deletedMemberId")
+    @Mapping(source = "projectId", target = "projectId")
+    RmProjectMemberResponse toRmProjectMemberResponse(ProjectMember projectMember);
+
+    @Mapping(source = "userId", target = "changedMemberId")
+    @Mapping(source = "role", target = "role")
+    @Mapping(source = "projectId", target = "projectId")
+    ChangeProjectMemberRoleResponse toChangeProjectMemberRoleResponse(ProjectMember projectMember);
 
     /**
      * Маппит транспортный {@link ru.taska.api.project.v1.ProjectRole} в {@link ProjectRole} для сохранения в БД
@@ -50,22 +66,26 @@ public interface ProjectMemberMapper {
     ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
 
     /**
-     * Билдер, который создает транспортный {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse}
+     * Билдер, который создает транспортный grpc объектп.
      *
-     * @param role          роль участника из {@link ru.taska.api.project.v1.ProjectRole}
-     * @param isMember      boolean, сигнализирующий о том, является ли пользователь участником проекта
-     * @param projectExists boolean, сигнализирующий о том, существует ли такой проект
-     * @return {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse} DTO для передачи в grpc
+     * @param {@link ProjectMembershipInfoDto} из трех элементов, содержащий:
+     *               <ul>
+     *               <li>{@link ProjectRole} — роль участника проекта</li>
+     *               <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
+     *               <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
+     *               </ul>
+     * @return {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse} из трех элементов, содержащий:
+     * <ul>
+     * <li>{@link ProjectRole} — роль участника проекта</li>
+     * <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
+     * <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
+     * </ul>
      */
-    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(
-            ru.taska.api.project.v1.ProjectRole role,
-            boolean isMember,
-            boolean projectExists
-    ) {
+    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(ProjectMembershipInfoDto dto) {
         return CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(role)
-                .setIsMember(isMember)
-                .setProjectExists(projectExists)
+                .setRole(this.toGrpcRole(dto.role()))
+                .setIsMember(dto.isMember())
+                .setProjectExists(dto.isProjectExists())
                 .build();
     }
 }

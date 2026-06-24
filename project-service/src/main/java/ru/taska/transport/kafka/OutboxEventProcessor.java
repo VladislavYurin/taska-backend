@@ -1,4 +1,4 @@
-package ru.taska.kafka;
+package ru.taska.transport.kafka;
 
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;

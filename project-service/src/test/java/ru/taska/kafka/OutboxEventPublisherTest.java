@@ -21,6 +21,7 @@ import reactor.test.StepVerifier;
 import ru.taska.config.props.KafkaProperties;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
+import ru.taska.transport.kafka.OutboxEventPublisher;
 
 import java.time.Duration;
 import java.util.UUID;

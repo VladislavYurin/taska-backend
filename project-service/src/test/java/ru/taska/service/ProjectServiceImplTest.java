@@ -13,7 +13,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.api.project.v1.UsersProjectsResponse;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
@@ -61,13 +60,6 @@ class ProjectServiceImplTest {
                 .name(projectName)
                 .createdBy(userId)
                 .build();
-
-        mockResponse = ProjectResponse.newBuilder()
-                .setId(projectId.toString())
-                .setProjectKey(projectKey)
-                .setName(projectName)
-                .setCreatedBy(userId.toString())
-                .build();
     }
 
     @Test
@@ -83,10 +75,9 @@ class ProjectServiceImplTest {
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
         Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
         Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
-        Mockito.when(projectMapper.toProjectResponse(ArgumentMatchers.any(Project.class))).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
-                .expectNext(mockResponse)
+                .expectNext(mockProject)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findByProjectKey(projectKey);
@@ -119,10 +110,9 @@ class ProjectServiceImplTest {
     @Test
     void getProject_Success() {
         Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMapper.toProjectResponse(mockProject)).thenReturn(mockResponse);
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
-                .expectNext(mockResponse)
+                .expectNext(mockProject)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findById(projectId);
@@ -146,26 +136,15 @@ class ProjectServiceImplTest {
 
     @Test
     void listMyProjects_Success() {
-        ProjectResponse mockProjectResponse = ProjectResponse.newBuilder()
-                .setId(projectId.toString())
-                .setProjectKey(projectKey)
-                .setName(projectName)
-                .setCreatedBy(userId.toString())
-                .build();
 
-        UsersProjectsResponse expectedResponse = UsersProjectsResponse.newBuilder()
-                .addProjectResponse(mockProjectResponse)
-                .build();
-
-        Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.just(mockProject));
-        Mockito.when(projectMapper.toProjectResponse(mockProject)).thenReturn(mockProjectResponse);
+        Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.just(mockProject, mockProject));
 
         StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
-                .expectNext(expectedResponse)
+                .expectNext(mockProject)
+                .expectNext(mockProject)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
-        Mockito.verify(projectMapper).toProjectResponse(mockProject);
     }
 
     @Test
@@ -182,6 +161,5 @@ class ProjectServiceImplTest {
                 .verify();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
-        Mockito.verify(projectMapper, Mockito.never()).toProjectResponse(ArgumentMatchers.any(Project.class));
     }
 }

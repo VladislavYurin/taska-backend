@@ -46,7 +46,7 @@ service ProjectService  {
   /*
 * Меняет роль участника проекта
 */
-  rpc ChangeProjectMemberRole (ChangeRoleRequest) returns (ChangeRoleResponse);
+  rpc ChangeProjectMemberRole (ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
 
   /**
    * Проверяет роль пользователя в проекте
@@ -162,18 +162,18 @@ message RmProjectMemberResponse  {
   string project_id = 2;
 }
 
-message ChangeRoleRequest {
+message ChangeProjectMemberRoleRequest {
   ru.taska.common.v1.Header header = 1;
-  ChangeRoleRequestBody body = 2;
+  ChangeProjectMemberRoleRequestBody body = 2;
 }
 
-message ChangeRoleRequestBody {
+message ChangeProjectMemberRoleRequestBody {
   string changed_member_id = 1;
   ProjectRole role = 2;
   string project_id = 3;
 }
 
-message ChangeRoleResponse  {
+message ChangeProjectMemberRoleResponse  {
   string changed_member_id = 1;
   ProjectRole role = 2;
   string project_id = 3;
