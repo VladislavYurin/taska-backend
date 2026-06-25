@@ -27,7 +27,7 @@ import java.time.Instant;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class EmailSenderServiceImpl implements EmailSenderService{
+public class EmailSenderServiceImpl implements EmailSenderService {
 
     @Value("${notification.email.retry-delay}")
     private Duration retryDelay;

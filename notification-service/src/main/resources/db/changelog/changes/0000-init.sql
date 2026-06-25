@@ -23,8 +23,9 @@ CREATE TABLE IF NOT EXISTS taska.notifications
         notification_type IN (
                               'ISSUE_ASSIGNED', 'ISSUE_TRANSITIONED',
                               'ISSUE_CREATED', 'ISSUE_UPDATED', 'ISSUE_DELETED',
-                              'USER_INVITED', 'MEMBER_REMOVED', 'MEMBER_ADDED',
-                              'PROJECT_CREATED', 'MEMBER_ROLE_CHANGED'
+                              'USER_INVITED', 'USER_ACTIVATED',
+                              'MEMBER_REMOVED', 'MEMBER_ADDED', 'MEMBER_ROLE_CHANGED',
+                              'PROJECT_CREATED'
             )
         )
 );
