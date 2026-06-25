@@ -9,10 +9,10 @@ import ru.taska.domain.ProjectMember;
 
 public interface OutboxEventService {
 
-    Mono<OutboxEvent> saveProjectCreated(Project project);
+    Mono<OutboxEvent> saveProjectCreated(String requestId, Project project);
 
-    Mono<OutboxEvent> saveMemberAdded(ProjectMember member);
+    Mono<OutboxEvent> saveMemberAdded(String requestId, ProjectMember member);
 
-    Mono<OutboxEvent> saveMemberRemoved(UUID deletedMemberId, UUID projectId);
+    Mono<OutboxEvent> saveMemberRemoved(String requestId, UUID deletedMemberId, UUID projectId);
 
 }

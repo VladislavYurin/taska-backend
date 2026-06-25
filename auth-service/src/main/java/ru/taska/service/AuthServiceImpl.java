@@ -116,7 +116,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public Mono<Void> setPasswordByToken(String token, String newPassword) {
+    public Mono<Void> setPasswordByToken(String requestId, String token, String newPassword) {
         if (token == null || token.isBlank()) {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
@@ -148,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
                                                 user.setStatus(UserStatus.ACTIVE);
                                                 log.info("User id={} activated successfully via invite token", user.getId());
                                                 return userRepository.save(user)
-                                                        .then(Mono.fromCallable(() -> userMapper.buildUserActivatedOutboxEvent(user)))
+                                                        .then(Mono.fromCallable(() -> userMapper.buildUserActivatedOutboxEvent(user, requestId)))
                                                         .flatMap(outboxEventRepository::save);
                                             }))
                                     ));

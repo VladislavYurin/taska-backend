@@ -18,6 +18,8 @@ import ru.taska.exception.DomainStatus;
 
 import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.eq;
+
 public class AssignIssueTest extends IssueServiceImplTest {
 
     private Set<ProjectRole> allowedRoles;
@@ -60,7 +62,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.when(issueMapper.buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID))
                 .thenReturn(history);
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.empty());
-        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED))
+        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED, REQUEST_ID))
                 .thenReturn(event);
         Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.empty());
         existingIssue.setAssigneeId(null);
@@ -89,7 +91,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
         Mockito.verify(issueMapper).buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED);
+        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED, REQUEST_ID);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
@@ -121,7 +123,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueHistoryRepository, Mockito.never()).save(Mockito.any());
         Mockito.verify(outboxEventRepository, Mockito.never()).save(Mockito.any());
         Mockito.verify(issueMapper, Mockito.never()).buildIssueHistory(Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.verify(issueMapper, Mockito.never()).buildOutboxEvent(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(issueMapper, Mockito.never()).buildOutboxEvent(Mockito.any(), Mockito.any(), Mockito.any(), eq(REQUEST_ID));
     }
 
     @Test

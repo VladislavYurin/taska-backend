@@ -68,13 +68,14 @@ public class IssueMapper {
                 .build();
     }
 
-    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, EventType eventType) {
+    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, EventType eventType, String requestId) {
         return OutboxEvent.builder()
                 .aggregateType(aggregateType)
                 .aggregateId(issue.getId())
                 .eventType(eventType.getValue())
                 .status(OutboxEventStatus.NEW)
                 .payload(objectMapper.valueToTree(issue))
+                .requestId(requestId)
                 .build();
     }
 

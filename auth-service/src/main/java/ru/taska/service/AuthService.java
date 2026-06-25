@@ -29,5 +29,5 @@ public interface AuthService {
      */
     Mono<AuthResponseDto> refresh(String refreshToken);
 
-    Mono<Void> setPasswordByToken(String token, String newPassword);
+    Mono<Void> setPasswordByToken(String requestId, String token, String newPassword);
 }

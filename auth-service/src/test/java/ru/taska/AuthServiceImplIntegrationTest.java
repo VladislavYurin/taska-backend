@@ -496,7 +496,7 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                         .build())
                 .build();
 
-        authService.setPasswordByToken(inviteTokenRaw, newPassword).block();
+        authService.setPasswordByToken("test-req-set-pwd", inviteTokenRaw, newPassword).block();
 
         // Verify user status changed to ACTIVE
         User updatedUser = userRepository.findById(invitedUserId).block(Duration.ofSeconds(5));

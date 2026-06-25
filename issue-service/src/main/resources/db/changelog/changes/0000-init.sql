@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS taska.outbox_events
     attempts              integer     NOT NULL DEFAULT 0,
     last_error_message    text        NULL,
     processing_started_at timestamptz NULL,
+    request_id            text        NULL,
 
     CONSTRAINT outbox_events_attempts_chk CHECK (attempts >= 0),
 

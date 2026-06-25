@@ -44,17 +44,17 @@ class NotificationEventHandlerTest {
 
     @Test
     void shouldNotCreateDuplicatesOnRepeatedDelivery() throws Exception {
-        TaskaEvent event = new TaskaEvent(
-                EVENT_ID,
-                "ISSUE",
-                ISSUE_ID,
-                "IssueAssigned",
-                payload("""
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(payload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
-                        """)
-        );
+                        """))
+                .build();
 
         Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(notification(ASSIGNEE_ID)));
@@ -114,17 +114,17 @@ class NotificationEventHandlerTest {
 
     @Test
     void shouldSkipEventWithNullId() throws Exception {
-        TaskaEvent event = new TaskaEvent(
-                null,
-                "ISSUE",
-                ISSUE_ID,
-                "IssueAssigned",
-                payload("""
+        TaskaEvent event = TaskaEvent.builder()
+                .id(null)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(payload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
-                        """)
-        );
+                        """))
+                .build();
 
         handler.handle(event).block();
 
@@ -145,17 +145,17 @@ class NotificationEventHandlerTest {
 
     @Test
     void shouldSkipAlreadyProcessedEvent() throws Exception {
-        TaskaEvent event = new TaskaEvent(
-                EVENT_ID,
-                "ISSUE",
-                ISSUE_ID,
-                "IssueAssigned",
-                payload("""
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(payload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
-                        """)
-        );
+                        """))
+                .build();
 
         Mockito.when(processedEventRepository.existsById(EVENT_ID.toString()))
                 .thenReturn(Mono.just(true));
@@ -179,17 +179,17 @@ class NotificationEventHandlerTest {
 
     @Test
     void shouldSaveProcessedEventNotificationAndSendEmailFirstDelivery() throws Exception {
-        TaskaEvent event = new TaskaEvent(
-                EVENT_ID,
-                "ISSUE",
-                ISSUE_ID,
-                "IssueAssigned",
-                payload("""
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueAssigned")
+                .payload(payload("""
                         {
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
-                        """)
-        );
+                        """))
+                .build();
 
         Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(notification(ASSIGNEE_ID)));
@@ -223,18 +223,18 @@ class NotificationEventHandlerTest {
 
     @Test
     void shouldCreateTwoNotificationsAndSendTwoEmailsForIssueTransitioned() throws Exception {
-        TaskaEvent event = new TaskaEvent(
-                EVENT_ID,
-                "ISSUE",
-                ISSUE_ID,
-                "IssueTransitioned",
-                payload("""
+        TaskaEvent event = TaskaEvent.builder()
+                .id(EVENT_ID)
+                .aggregateType("ISSUE")
+                .aggregateId(ISSUE_ID)
+                .eventType("IssueTransitioned")
+                .payload(payload("""
                         {
                           "reporterId": "00000000-0000-0000-0000-000000000002",
                           "assigneeId": "00000000-0000-0000-0000-000000000001"
                         }
-                        """)
-        );
+                        """))
+                .build();
 
         Mockito.when(notificationFactory.create(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(List.of(notification(REPORTER_ID), notification(ASSIGNEE_ID)));

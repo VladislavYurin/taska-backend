@@ -31,7 +31,7 @@ public class AdminInviteUserMapper {
             .build();
     }
 
-    public OutboxEvent buildUserInvitedOutboxEvent(InviteTokenResponse inviteTokenResponse, String email) {
+    public OutboxEvent buildUserInvitedOutboxEvent(InviteTokenResponse inviteTokenResponse, String email, String requestId) {
         JsonNode payloadJson = objectMapper.valueToTree(buildUserInvitedPayload(inviteTokenResponse, email));
         return OutboxEvent.builder()
                           .aggregateType("USER")
@@ -39,6 +39,7 @@ public class AdminInviteUserMapper {
                           .eventType("USER_INVITED")
                           .payload(payloadJson)
                           .attempts(0)
+                          .requestId(requestId)
                           .build();
     }
 

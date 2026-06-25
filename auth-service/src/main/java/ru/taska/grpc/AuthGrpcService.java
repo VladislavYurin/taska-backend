@@ -118,7 +118,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                     String newPassword = t.getT4();
 
                     log.info("[{}][{}] Set new password request", requestId, nodeId);
-                    return authService.setPasswordByToken(token, newPassword)
+                    return authService.setPasswordByToken(requestId, token, newPassword)
                             .doOnSuccess(response -> log.debug("[{}][{}] Set new password successful", requestId, nodeId))
                             .doOnError(error -> log.warn("[{}][{}] Set new password failed: {}", requestId, nodeId, error.getMessage()));
                 })

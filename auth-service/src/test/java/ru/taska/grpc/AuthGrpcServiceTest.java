@@ -309,6 +309,7 @@ class AuthGrpcServiceTest {
         // Given
         Mockito.when(authService.setPasswordByToken(
                         ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyString(),
                         ArgumentMatchers.anyString()))
                 .thenReturn(Mono.empty());
 
@@ -317,7 +318,7 @@ class AuthGrpcServiceTest {
                 .expectNext(Empty.getDefaultInstance())
                 .verifyComplete();
 
-        Mockito.verify(authService).setPasswordByToken("valid-invite-token-123", "NewValidPassword123!");
+        Mockito.verify(authService).setPasswordByToken("test-request-id", "valid-invite-token-123", "NewValidPassword123!");
     }
 
     @Test
@@ -325,6 +326,7 @@ class AuthGrpcServiceTest {
     void shouldHandleSetPasswordByTokenWithInvalidToken() {
         // Given
         Mockito.when(authService.setPasswordByToken(
+                        ArgumentMatchers.anyString(),
                         ArgumentMatchers.anyString(),
                         ArgumentMatchers.anyString()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")));
@@ -337,7 +339,7 @@ class AuthGrpcServiceTest {
                 )
                 .verify();
 
-        Mockito.verify(authService).setPasswordByToken("valid-invite-token-123", "NewValidPassword123!");
+        Mockito.verify(authService).setPasswordByToken("test-request-id", "valid-invite-token-123", "NewValidPassword123!");
     }
 
 }
