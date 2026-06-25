@@ -100,7 +100,7 @@ public class DeleteIssueTest {
         Mockito.when(issueMapper.buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId))
                 .thenReturn(mockHistory);
 
-        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED))
+        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED, requestId))
                 .thenReturn(mockOutbox);
 
         Mockito.when(issueHistoryRepository.save(mockHistory))
@@ -127,7 +127,7 @@ public class DeleteIssueTest {
         Mockito.verify(issueHistoryRepository).save(mockHistory);
         Mockito.verify(outboxEventRepository).save(mockOutbox);
         Mockito.verify(issueMapper).buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId);
-        Mockito.verify(issueMapper).buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED);
+        Mockito.verify(issueMapper).buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED, requestId);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 

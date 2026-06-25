@@ -88,7 +88,7 @@ public class IssueServiceImpl implements IssueService {
                         .flatMap(issueRepository::save)
                         .flatMap(issue -> {
                             IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                            OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED);
+                            OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED, requestId);
                             return issueHistoryRepository.save(history)
                                     .then(outboxEventRepository.save(event))
                                     .then(Mono.fromRunnable(() ->
@@ -146,7 +146,7 @@ public class IssueServiceImpl implements IssueService {
                                                 .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
                                         history.setPayload(historyPayload);
                                         OutboxEvent event = issueMapper
-                                                .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED);
+                                                .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED, requestId);
                                         return issueHistoryRepository.save(history)
                                                 .then(outboxEventRepository.save(event))
                                                 .then(Mono.fromRunnable(() ->
@@ -192,7 +192,7 @@ public class IssueServiceImpl implements IssueService {
 
                         IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
                         history.setPayload(historyPayload);
-                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED);
+                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, requestId);
 
                         return issueRepository.save(issue)
                                 .flatMap(savedIssue -> issueHistoryRepository.save(history)
@@ -229,7 +229,7 @@ public class IssueServiceImpl implements IssueService {
                         }))
                         .flatMap(deletedIssue -> {
                             IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);
-                            OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED);
+                            OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED, requestId);
 
                             return issueHistoryRepository.save(history)
                                     .then(outboxEventRepository.save(outboxEvent))

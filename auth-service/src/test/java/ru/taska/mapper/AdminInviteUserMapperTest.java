@@ -14,6 +14,8 @@ import tools.jackson.databind.ObjectMapper;
 
 class AdminInviteUserMapperTest {
 
+    private static final String REQUEST_ID = "test-request-id";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final AdminInviteUserMapper mapper = new AdminInviteUserMapper(objectMapper);
@@ -35,7 +37,7 @@ class AdminInviteUserMapperTest {
                                                                .rawToken(TestConstantHolder.RAW_INVITE_TOKEN)
                                                                .expiresAt(TestConstantHolder.INVITE_TOKEN_EXPIRES_AT)
                                                                .build();
-        OutboxEvent event = mapper.buildUserInvitedOutboxEvent(tokenResponse, TestConstantHolder.TEST_USER_EMAIL);
+        OutboxEvent event = mapper.buildUserInvitedOutboxEvent(tokenResponse, TestConstantHolder.TEST_USER_EMAIL, REQUEST_ID);
         Assertions.assertThat(event.getAggregateType()).isEqualTo("USER");
         Assertions.assertThat(event.getAggregateId()).isEqualTo(TestConstantHolder.TEST_USER_ID);
         Assertions.assertThat(event.getEventType()).isEqualTo("USER_INVITED");

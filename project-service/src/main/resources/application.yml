@@ -2,6 +2,8 @@ server:
   port: ${SERVER_PORT:8082}
 
 spring:
+  application:
+    name: project-service
   grpc:
     server:
       port: ${GRPC_SERVER_PORT:9096}

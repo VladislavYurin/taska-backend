@@ -1,10 +1,9 @@
 package ru.taska.event;
 
+import java.time.Instant;
 import java.util.UUID;
 import lombok.Builder;
 import tools.jackson.databind.JsonNode;
-
-import java.util.UUID;
 
 /**
  * Универсальное доменное событие из Kafka.
@@ -18,6 +17,10 @@ public record TaskaEvent(
         String aggregateType,
         UUID aggregateId,
         String eventType,
-        JsonNode payload
+        JsonNode payload,
+        String requestId,
+        Instant occurredAt,
+        String producerService,
+        String schemaVersion
 ) {
 }

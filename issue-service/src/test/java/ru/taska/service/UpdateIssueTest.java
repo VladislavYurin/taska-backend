@@ -103,7 +103,7 @@ class UpdateIssueTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
         Mockito.when(issueMapper.buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID)).thenReturn(history);
-        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED)).thenReturn(event);
+        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, REQUEST_ID)).thenReturn(event);
 
         Mockito.when(issueRepository.save(existingIssue)).thenReturn(Mono.just(existingIssue));
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.just(history));
@@ -134,7 +134,7 @@ class UpdateIssueTest {
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
         Mockito.verify(issueMapper).buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED);
+        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, REQUEST_ID);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper, projectRoleChecker);
     }

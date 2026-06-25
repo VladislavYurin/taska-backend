@@ -40,35 +40,36 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
     @Transactional
     public Mono<UserCreatedResponse> inviteUser(AdminCreateUserRequest request) {
         return userRepository.save(inviteUserMapper.buildInvitedUserFromRequest(request))
-                             .onErrorResume(DataIntegrityViolationException.class, ex -> {
-                                 Optional<String> constraint = extractConstraintName(ex);
-                                 if (constraint.isPresent()) {
-                                     if ("users_email_uniq".equals(constraint.get())) {
-                                         return Mono.error(new DomainException(
-                                                 DomainStatus.ALREADY_EXISTS,
-                                                 "User with email " + request.getBody().getEmail() + " already exists"
-                                         ));
-                                     } else {
-                                         return Mono.error(new DomainException(
-                                                 DomainStatus.INTERNAL,
-                                                 "Data integrity violation: " + constraint.get()
-                                         ));
-                                     }
-                                 } else {
-                                     log.error("Could not extract constraint name from DataIntegrityViolationException", ex);
-                                     return Mono.error(new DomainException(
-                                             DomainStatus.INTERNAL,
-                                             "Unexpected data integrity violation"));
-                                 }
-                             })
-                             .flatMap(user -> inviteTokenService.createInviteToken(user.getId())
-                                                                .flatMap(inviteToken -> outboxEventRepository
-                                                                        .save(inviteUserMapper.buildUserInvitedOutboxEvent(inviteToken, user.getEmail())))
-                                                                .thenReturn(user))
-                             .map(user -> UserCreatedResponse.newBuilder()
-                                                              .setUserId(String.valueOf(user.getId()))
-                                                              .setStatus(UserStatus.INVITED)
-                                                              .build());
+                .onErrorResume(DataIntegrityViolationException.class, ex -> {
+                    Optional<String> constraint = extractConstraintName(ex);
+                    if (constraint.isPresent()) {
+                        if ("users_email_uniq".equals(constraint.get())) {
+                            return Mono.error(new DomainException(
+                                    DomainStatus.ALREADY_EXISTS,
+                                    "User with email " + request.getBody().getEmail() + " already exists"
+                            ));
+                        } else {
+                            return Mono.error(new DomainException(
+                                    DomainStatus.INTERNAL,
+                                    "Data integrity violation: " + constraint.get()
+                            ));
+                        }
+                    } else {
+                        log.error("Could not extract constraint name from DataIntegrityViolationException", ex);
+                        return Mono.error(new DomainException(
+                                DomainStatus.INTERNAL,
+                                "Unexpected data integrity violation"));
+                    }
+                })
+                .flatMap(user -> inviteTokenService.createInviteToken(user.getId())
+                        .flatMap(inviteToken -> outboxEventRepository
+                                .save(inviteUserMapper.buildUserInvitedOutboxEvent(
+                                        inviteToken, user.getEmail(), request.getHeader().getRequestId())))
+                        .thenReturn(user))
+                .map(user -> UserCreatedResponse.newBuilder()
+                        .setUserId(String.valueOf(user.getId()))
+                        .setStatus(UserStatus.INVITED)
+                        .build());
     }
 
     private Optional<String> extractConstraintName(Throwable ex) {

@@ -55,4 +55,7 @@ public class OutboxEvent {
 
     @Column("processing_started_at")
     private Instant processingStartedAt;
+
+    @Column("request_id")
+    private String requestId;
 }

@@ -2,6 +2,7 @@ package ru.taska.mapper;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.EventType;
@@ -29,6 +30,10 @@ public class OutboxEventMapper {
     private static final String ROLE = "role";
     private static final String CREATED_BY = "createdBy";
     private static final String ADDED_BY = "addedBy";
+    private static final String SCHEMA_VERSION = "v1";
+
+    @Value("${spring.application.name}")
+    private String producerService;
 
     private final ObjectMapper objectMapper;
 
@@ -39,6 +44,10 @@ public class OutboxEventMapper {
                          .aggregateId(event.getAggregateId())
                          .eventType(event.getEventType())
                          .payload(buildPayload(event))
+                         .requestId(event.getRequestId())
+                         .occurredAt(event.getCreatedAt())
+                         .producerService(producerService)
+                         .schemaVersion(SCHEMA_VERSION)
                          .build();
     }
 

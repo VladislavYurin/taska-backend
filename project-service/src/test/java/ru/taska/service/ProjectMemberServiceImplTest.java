@@ -24,6 +24,8 @@ import ru.taska.service.impl.ProjectMemberServiceImpl;
 
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
+
 @ExtendWith(MockitoExtension.class)
 class ProjectMemberServiceImplTest {
 
@@ -60,7 +62,7 @@ class ProjectMemberServiceImplTest {
     void addProjectMember_Success() {
         Mockito.when(projectMemberRepository.existsByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(false));
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(mockMember));
-        Mockito.when(outboxEventService.saveMemberAdded(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(outboxEventService.saveMemberAdded(ArgumentMatchers.any(), ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, memberId, initiatorId, ProjectRole.MEMBER, projectId))
                 .expectNextMatches(pm -> pm.getUserId().equals(memberId) && pm.getProjectId().equals(projectId) && pm.getRole().equals(ProjectRole.MEMBER))
@@ -68,7 +70,7 @@ class ProjectMemberServiceImplTest {
 
         Mockito.verify(projectMemberRepository).existsByUserIdAndProjectId(memberId, projectId);
         Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
-        Mockito.verify(outboxEventService).saveMemberAdded(ArgumentMatchers.any(ProjectMember.class));
+        Mockito.verify(outboxEventService).saveMemberAdded(ArgumentMatchers.any(), ArgumentMatchers.any(ProjectMember.class));
     }
 
     @Test
@@ -91,14 +93,14 @@ class ProjectMemberServiceImplTest {
     @Test
     void rmProjectMember_Success() {
         Mockito.when(projectMemberRepository.deleteByUserIdAndProjectId(memberId, projectId)).thenReturn(Mono.just(1L));
-        Mockito.when(outboxEventService.saveMemberRemoved(memberId, projectId)).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(outboxEventService.saveMemberRemoved(ArgumentMatchers.any(), eq(memberId), eq(projectId))).thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectMemberService.rmProjectMember(requestId, nodeId, memberId, projectId))
                 .expectNextMatches(pm -> pm.getUserId().equals(memberId) && pm.getProjectId().equals(projectId))
                 .verifyComplete();
 
         Mockito.verify(projectMemberRepository).deleteByUserIdAndProjectId(memberId, projectId);
-        Mockito.verify(outboxEventService).saveMemberRemoved(memberId, projectId);
+        Mockito.verify(outboxEventService).saveMemberRemoved(ArgumentMatchers.any(), eq(memberId), eq(projectId));
     }
 
     @Test
@@ -115,7 +117,7 @@ class ProjectMemberServiceImplTest {
                 .verify();
 
         Mockito.verify(projectMemberRepository).deleteByUserIdAndProjectId(memberId, projectId);
-        Mockito.verify(outboxEventService, Mockito.never()).saveMemberRemoved(Mockito.any(), Mockito.any());
+        Mockito.verify(outboxEventService, Mockito.never()).saveMemberRemoved(eq(requestId), Mockito.any(), Mockito.any());
     }
 
     @Test

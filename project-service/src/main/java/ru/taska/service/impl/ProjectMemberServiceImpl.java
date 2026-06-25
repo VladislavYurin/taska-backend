@@ -47,7 +47,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                             .build();
 
                     return projectMemberRepository.save(addedMember)
-                            .then(outboxEventService.saveMemberAdded(addedMember))
+                            .then(outboxEventService.saveMemberAdded(requestId, addedMember))
                             .thenReturn(addedMember);
                 })
                 .doOnSuccess(pm ->
@@ -72,7 +72,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                             .projectId(projectId)
                             .build();
 
-                    return outboxEventService.saveMemberRemoved(deletedMemberId, projectId)
+                    return outboxEventService.saveMemberRemoved(requestId, deletedMemberId, projectId)
                             .thenReturn(deletedMember);
                 })
                 .doOnSuccess(deletedMember ->

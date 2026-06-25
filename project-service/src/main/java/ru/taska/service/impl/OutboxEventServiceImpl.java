@@ -35,7 +35,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public Mono<OutboxEvent> saveProjectCreated(Project project) {
+    public Mono<OutboxEvent> saveProjectCreated(String requestId, Project project) {
         OutboxEvent event = OutboxEvent.builder()
                                        .aggregateType(PROJECT_AGREGATE_TYPE)
                                        .aggregateId(project.getId())
@@ -43,6 +43,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                                        .payload(projectCreatedPayload(project))
                                        .attempts(0)
                                        .status(OutboxEventStatus.NEW)
+                                       .requestId(requestId)
                                        .build();
 
         log.debug("Подготовка outbox-события [ {} ] для проекта [ ID = {} ]", "ProjectCreated", project.getId());
@@ -50,7 +51,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     }
 
     @Override
-    public Mono<OutboxEvent> saveMemberAdded(ProjectMember member) {
+    public Mono<OutboxEvent> saveMemberAdded(String requestId, ProjectMember member) {
         OutboxEvent event = OutboxEvent.builder()
                                        .aggregateType(MEMBER_AGREGATE_TYPE)
                                        .aggregateId(member.getProjectId())
@@ -58,6 +59,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                                        .payload(memberAddedPayload(member))
                                        .attempts(0)
                                        .status(OutboxEventStatus.NEW)
+                                       .requestId(requestId)
                                        .build();
 
         log.debug("Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
@@ -66,7 +68,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     }
 
     @Override
-    public Mono<OutboxEvent> saveMemberRemoved(UUID deletedMemberId, UUID projectId){
+    public Mono<OutboxEvent> saveMemberRemoved(String requestId, UUID deletedMemberId, UUID projectId){
         OutboxEvent event = OutboxEvent.builder()
                 .aggregateType(MEMBER_AGREGATE_TYPE)
                 .aggregateId(projectId)
@@ -74,6 +76,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .payload(memberRemovedPayload(deletedMemberId, projectId))
                 .attempts(0)
                 .status(OutboxEventStatus.NEW)
+                .requestId(requestId)
                 .build();
 
         log.debug("Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",

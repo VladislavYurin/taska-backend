@@ -49,6 +49,8 @@ import java.util.UUID;
 @DisplayName("AuthServiceImpl Unit Tests")
 class AuthServiceImplTest {
 
+    private static final String REQUEST_ID = "test-request-id";
+
     @Mock
     private UserRepository userRepository;
 
@@ -640,7 +642,7 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                     .thenReturn(Mono.just(invitedUser));
 
-            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class)))
+            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class), ArgumentMatchers.nullable(String.class)))
                     .thenReturn(mockOutboxEvent);
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
@@ -648,7 +650,7 @@ class AuthServiceImplTest {
             Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .verifyComplete();
 
             Mockito.verify(passwordPolicyValidator).validate(newPassword);
@@ -690,7 +692,7 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                     .thenReturn(Mono.just(invitedUser));
 
-            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class)))
+            Mockito.when(userMapper.buildUserActivatedOutboxEvent(ArgumentMatchers.any(User.class), ArgumentMatchers.nullable(String.class)))
                     .thenReturn(mockOutboxEvent);
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
@@ -698,7 +700,7 @@ class AuthServiceImplTest {
             Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .verifyComplete();
 
             Mockito.verify(passwordPolicyValidator).validate(newPassword);
@@ -716,7 +718,7 @@ class AuthServiceImplTest {
                             .thenReturn(Mono.just(0));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -737,7 +739,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(0));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -773,7 +775,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(activeUser));       // Используем activeUser
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -799,7 +801,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(testUser));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -820,7 +822,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(0));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(nonExistentToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, nonExistentToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -844,7 +846,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
@@ -859,7 +861,7 @@ class AuthServiceImplTest {
         @DisplayName("Should fail when token is null")
         void shouldFailWhenTokenIsNull() {
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(null, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, null, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
@@ -874,7 +876,7 @@ class AuthServiceImplTest {
         @DisplayName("Should fail when token is blank")
         void shouldFailWhenTokenIsBlank() {
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken("", newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, "", newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
@@ -903,7 +905,7 @@ class AuthServiceImplTest {
                     .thenThrow(new RuntimeException("Hash service error"));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(testRawToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectError(RuntimeException.class)
                     .verify();
 
@@ -930,7 +932,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(0));
 
             // When & Then
-            StepVerifier.create(authServiceImpl.setPasswordByToken(differentToken, newPassword))
+            StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, differentToken, newPassword))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&

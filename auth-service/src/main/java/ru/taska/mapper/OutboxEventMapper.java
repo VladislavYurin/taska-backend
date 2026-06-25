@@ -5,6 +5,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.event.EventType;
@@ -22,6 +23,10 @@ public class OutboxEventMapper {
     private static final String USER_ID = "userId";
     private static final String EMAIL = "email";
     private static final String INVITED_BY = "invitedBy";
+    private static final String SCHEMA_VERSION = "v1";
+
+    @Value("${spring.application.name}")
+    private String producerService;
 
     private final ObjectMapper objectMapper;
 
@@ -32,6 +37,10 @@ public class OutboxEventMapper {
                 .aggregateId(event.getAggregateId())
                 .eventType(event.getEventType())
                 .payload(buildPayload(event))
+                .requestId(event.getRequestId())
+                .occurredAt(event.getCreatedAt())
+                .producerService(producerService)
+                .schemaVersion(SCHEMA_VERSION)
                 .build();
     }
 

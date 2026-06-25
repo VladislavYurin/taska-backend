@@ -95,4 +95,10 @@ public class OutboxEvent {
     @Column("processing_started_at")
     private Instant processingStartedAt;
 
+    /**
+     * Идентификатор HTTP-запроса, в рамках которого было создано событие.
+     */
+    @Column("request_id")
+    private String requestId;
+
 }

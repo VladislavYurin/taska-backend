@@ -22,7 +22,7 @@ public class UserMapper {
     /**
      * Строит OutboxEvent для события приглашения пользователя.
      */
-    public OutboxEvent buildUserInvitedOutboxEvent(User user, String invitedBy) {
+    public OutboxEvent buildUserInvitedOutboxEvent(User user, String invitedBy, String requestId) {
         var payload = objectMapper.createObjectNode()
                 .put("userId", user.getId().toString())
                 .put("email", user.getEmail())
@@ -35,13 +35,14 @@ public class UserMapper {
                 .status(OutboxEventStatus.NEW)
                 .payload(payload)
                 .attempts(0)
+                .requestId(requestId)
                 .build();
     }
 
     /**
      * Строит OutboxEvent для события активации пользователя.
      */
-    public OutboxEvent buildUserActivatedOutboxEvent(User user) {
+    public OutboxEvent buildUserActivatedOutboxEvent(User user, String requestId) {
         var payload = objectMapper.createObjectNode()
                 .put("userId", user.getId().toString())
                 .put("email", user.getEmail());
@@ -53,6 +54,7 @@ public class UserMapper {
                 .status(OutboxEventStatus.NEW)
                 .payload(payload)
                 .attempts(0)
+                .requestId(requestId)
                 .build();
     }
 }

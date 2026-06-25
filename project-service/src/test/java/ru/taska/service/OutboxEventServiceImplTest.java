@@ -27,6 +27,7 @@ class OutboxEventServiceImplTest {
 
     private static final UUID PROJECT_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
+    private static final String REQUEST_ID = "test-request-id";
 
     @Mock
     private OutboxEventRepository outboxEventRepository;
@@ -69,7 +70,7 @@ class OutboxEventServiceImplTest {
 
         @Test
         void shouldBuildProjectCreatedEvent() {
-            outboxEventService.saveProjectCreated(project()).block();
+            outboxEventService.saveProjectCreated(REQUEST_ID, project()).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT");
@@ -86,7 +87,7 @@ class OutboxEventServiceImplTest {
 
         @Test
         void shouldBuildMemberAddedEvent() {
-            outboxEventService.saveMemberAdded(member()).block();
+            outboxEventService.saveMemberAdded(REQUEST_ID, member()).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT_MEMBER");
@@ -103,7 +104,7 @@ class OutboxEventServiceImplTest {
 
         @Test
         void shouldBuildMemberRemovedEvent() {
-            outboxEventService.saveMemberRemoved(member().getUserId(), member().getProjectId()).block();
+            outboxEventService.saveMemberRemoved(REQUEST_ID, member().getUserId(), member().getProjectId()).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT_MEMBER");
