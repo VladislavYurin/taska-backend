@@ -1,30 +1,30 @@
 server:
-  port: ${SERVER_PORT:8085}
+  port: ${NOTIFICATION_SERVER_PORT:8085}
 
 spring:
   grpc:
     server:
-      port: ${GRPC_SERVER_PORT:9095}
+      port: ${NOTIFICATION_GRPC_SERVER_PORT:9095}
   r2dbc:
-    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5437/notification_db}
-    username: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
+    url: ${NOTIFICATION_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5437/notification_db}
+    username: ${NOTIFICATION_SPRING_R2DBC_USERNAME:taska}
+    password: ${NOTIFICATION_SPRING_R2DBC_PASSWORD:taska}
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5437/notification_db}
-    user: ${SPRING_LIQUIBASE_USERNAME:taska}
-    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+    url: ${NOTIFICATION_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5437/notification_db}
+    user: ${NOTIFICATION_SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${NOTIFICATION_SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-service}
+      group-id: ${NOTIFICATION_KAFKA_CONSUMER_GROUP_ID:notification-service}
       auto-offset-reset: earliest
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    host: ${NOTIFICATION_MAIL_HOST:smtp.gmail.com}
+    port: ${NOTIFICATION_MAIL_PORT:587}
+    username: ${NOTIFICATION_MAIL_USERNAME:your-mail-username}
+    password: ${NOTIFICATION_MAIL_PASSWORD:your-mail-password}
     properties:
       mail:
         smtp:
@@ -48,6 +48,6 @@ notification:
 
 logging:
   level:
-    ru.taska: ${LOG_LEVEL_ROOT:INFO}
-    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
-    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}
+    ru.taska: ${NOTIFICATION_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${NOTIFICATION_LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${NOTIFICATION_LOG_LEVEL_KAFKA:WARN}

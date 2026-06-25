@@ -1,22 +1,22 @@
 server:
-  port: ${SERVER_PORT:8082}
+  port: ${PROJECT_SERVER_PORT:8082}
 
 spring:
   application:
     name: project-service
   grpc:
     server:
-      port: ${GRPC_SERVER_PORT:9096}
+      port: ${PROJECT_GRPC_SERVER_PORT:9096}
   r2dbc:
-    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
-    username: ${SPRING_R2DBC_USERNAME:taska}
-    password: ${SPRING_R2DBC_PASSWORD:taska}
+    url: ${PROJECT_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
+    username: ${PROJECT_SPRING_R2DBC_USERNAME:taska}
+    password: ${PROJECT_SPRING_R2DBC_PASSWORD:taska}
   liquibase:
     enabled: true
     change-log: classpath:/db/changelog/db.changelog-master.yaml
-    url: ${SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5434/project_db}
-    user: ${SPRING_LIQUIBASE_USERNAME:taska}
-    password: ${SPRING_LIQUIBASE_PASSWORD:taska}
+    url: ${PROJECT_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5434/project_db}
+    user: ${PROJECT_SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${PROJECT_SPRING_LIQUIBASE_PASSWORD:taska}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -28,13 +28,13 @@ spring:
 app:
   kafka:
     topics:
-      project-events: ${KAFKA_TOPIC_PROJECT_EVENTS:project.events}
+      project-events: ${PROJECT_KAFKA_TOPIC_PROJECT_EVENTS:project.events}
     outbox:
-      polling-interval: ${KAFKA_OUTBOX_POLLING_INTERVAL:3s}
-      recovery-interval: ${KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
-      batch-size: ${KAFKA_OUTBOX_BATCH_SIZE:100}
-      max-attempts: ${KAFKA_OUTBOX_MAX_ATTEMPTS:5}
-      processing-timeout: ${KAFKA_PROCESSING_TIMEOUT:5m}
+      polling-interval: ${PROJECT_KAFKA_OUTBOX_POLLING_INTERVAL:3s}
+      recovery-interval: ${PROJECT_KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
+      batch-size: ${PROJECT_KAFKA_OUTBOX_BATCH_SIZE:100}
+      max-attempts: ${PROJECT_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
+      processing-timeout: ${PROJECT_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
 
 management:
   endpoints:
@@ -48,6 +48,6 @@ management:
 
 logging:
   level:
-    ru.taska: ${LOG_LEVEL_ROOT:INFO}
-    liquibase: ${LOG_LEVEL_LIQUIBASE:INFO}
-    org.apache.kafka: ${LOG_LEVEL_KAFKA:WARN}
+    ru.taska: ${PROJECT_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${PROJECT_LOG_LEVEL_LIQUIBASE:INFO}
+    org.apache.kafka: ${PROJECT_LOG_LEVEL_KAFKA:WARN}
