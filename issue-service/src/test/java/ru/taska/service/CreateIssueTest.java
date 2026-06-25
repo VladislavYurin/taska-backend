@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import java.time.Duration;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -7,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
@@ -29,6 +31,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         );
 
         Mockito.when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
+        Mockito.when(issueProperties.idempotencyKeyTtl().ttl()).thenReturn(Duration.ofHours(24));
         Mockito.when(projectRoleChecker.checkProjectRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles)
                 )
@@ -37,6 +40,8 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just("TSK"));
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
+        Mockito.when(idempotencyKeyRepository.findByUserIdAndKey(Mockito.any(), Mockito.any()))
+                       .thenReturn(Mono.empty());
         Mockito.when(issueRepository.save(Mockito.any()))
                 .thenAnswer(invocation -> {
                     Issue issue = invocation.getArgument(0);
@@ -46,12 +51,14 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenAnswer(invocation -> Mono.just((IssueHistory) invocation.getArgument(0)));
         Mockito.when(outboxEventRepository.save(Mockito.any()))
                 .thenAnswer(invocation -> Mono.just((OutboxEvent) invocation.getArgument(0)));
+        Mockito.when(idempotencyKeyRepository.save(Mockito.any()))
+                .thenAnswer(invocation -> Mono.just((IdempotencyKey) invocation.getArgument(0)));
     }
 
     @Test
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
-                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
                 "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
@@ -69,7 +76,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(nextIssueNumber));
 
         Issue result = issueService.createIssue(
-                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.BUG,
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.BUG,
                 "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
         ).block();
 
@@ -89,11 +96,11 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .thenReturn(Mono.just(2));
 
         Issue first = issueService.createIssue(
-                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
                 "Задача 1", null, IssuePriority.LOW, REPORTER_ID
         ).block();
         Issue second = issueService.createIssue(
-                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_2, PROJECT_ID, IssueType.TASK,
                 "Задача 2", null, IssuePriority.LOW, REPORTER_ID
         ).block();
 
@@ -112,7 +119,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     @Test
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
-                REQUEST_ID, NODE_ID, PROJECT_ID, IssueType.TASK,
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
                 "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 

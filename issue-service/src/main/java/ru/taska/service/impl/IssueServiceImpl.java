@@ -1,5 +1,11 @@
 package ru.taska.service.impl;
 
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -8,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.config.props.IssueProperties;
+import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -21,6 +28,7 @@ import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
+import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
@@ -28,15 +36,10 @@ import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueService;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.ProjectRoleChecker;
+import ru.taska.util.RequestHasher;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
-
-import java.time.Instant;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -53,6 +56,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
     private final OutboxEventRepository outboxEventRepository;
+    private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final IssueMapper issueMapper;
     private final ProjectRoleChecker projectRoleChecker;
     private final ObjectMapper objectMapper;
@@ -62,6 +66,7 @@ public class IssueServiceImpl implements IssueService {
     public Mono<Issue> createIssue(
             String requestId,
             String nodeId,
+            String idempotencyKey,
             UUID projectId,
             IssueType issueType,
             String summary,
@@ -70,32 +75,53 @@ public class IssueServiceImpl implements IssueService {
             UUID reporterId
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
+        String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
-                .then(grpcProjectServiceClient.getProjectKey(requestId, nodeId, projectId))
-                .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
-                        .map(number -> issueMapper.buildIssue(
-                                projectId,
-                                number,
-                                projectKey + "-" + number,
-                                issueType,
-                                summary,
-                                description,
-                                priority,
-                                reporterId,
-                                INIT_STATUS,
-                                INIT_VERSION))
-                        .flatMap(issueRepository::save)
-                        .flatMap(issue -> {
-                            IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                            OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED, requestId);
-                            return issueHistoryRepository.save(history)
-                                    .then(outboxEventRepository.save(event))
-                                    .then(Mono.fromRunnable(() ->
-                                            log.debug("[{}][{}] Issue successfully created by user with id: {}",
-                                                    requestId, nodeId, reporterId)))
-                                    .thenReturn(issue);
-                        }));
+                .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
+                .flatMap(keyEntity -> {
+
+                    if (!keyEntity.getRequestHash().equals(currentRequestHash)) {
+                        log.warn("[{}][{}] Idempotency Key [{}] already used with a different request body", requestId, nodeId, idempotencyKey);
+                        return Mono.error(new DomainException(
+                                DomainStatus.FAILED_PRECONDITION,
+                                "Idempotency Key already used with a different request body"
+                        ));
+                    }
+
+                    return Mono.fromCallable(() ->
+                            objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
+                            .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
+
+                }))
+                .switchIfEmpty(grpcProjectServiceClient.getProjectKey(requestId, nodeId, projectId)
+                                                       .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
+                                                                                         .map(number -> issueMapper.buildIssue(
+                                                                                                 projectId,
+                                                                                                 number,
+                                                                                                 projectKey + "-" + number,
+                                                                                                 issueType,
+                                                                                                 summary,
+                                                                                                 description,
+                                                                                                 priority,
+                                                                                                 reporterId,
+                                                                                                 INIT_STATUS,
+                                                                                                 INIT_VERSION))
+                                                                                         .flatMap(issueRepository::save)
+                                                                                         .flatMap(issue -> {
+                                                                                             IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
+                                                                                             OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED, requestId);
+                                                                                             IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash, issue, issueProperties.idempotencyKeyTtl().ttl());
+                                                                                             return issueHistoryRepository.save(history)
+                                                                                                                          .then(outboxEventRepository.save(event))
+                                                                                                                          .then(idempotencyKeyRepository.save(keyEntity))
+                                                                                                                          .then(Mono.fromRunnable(() ->
+                                                                                                                                                          log.debug("[{}][{}] Issue successfully created by user with id: {}",
+                                                                                                                                                                    requestId, nodeId, reporterId)))
+                                                                                                                          .thenReturn(issue);
+                                                                                         }))
+                );
+
     }
 
     @Override

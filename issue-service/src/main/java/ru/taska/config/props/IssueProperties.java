@@ -1,5 +1,6 @@
 package ru.taska.config.props;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import ru.taska.api.project.v1.ProjectRole;
 
@@ -9,7 +10,8 @@ import java.util.Set;
 public record IssueProperties(
         AllowedRoles allowedRoles,
         List list,
-        Card card
+        Card card,
+        IdempotencyKeyTtl idempotencyKeyTtl
 ) {
 
     public record AllowedRoles(
@@ -29,5 +31,8 @@ public record IssueProperties(
     }
 
     public record Card(int maxHistorySize) {
+    }
+
+    public record IdempotencyKeyTtl(Duration ttl){
     }
 }

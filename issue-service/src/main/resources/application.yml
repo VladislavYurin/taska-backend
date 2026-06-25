@@ -44,6 +44,8 @@ issue:
     update-issue-roles: ${ISSUE_UPDATE_ROLES:ADMIN,MEMBER}
     get-issue-roles: ${ISSUE_GET_ROLES:ADMIN,MEMBER,VIEWER}
     list-issue-roles: ${ISSUE_LIST_ROLES:ADMIN,MEMBER,VIEWER}
+  idempotency-key-ttl:
+    ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
 
 management:
   endpoints:

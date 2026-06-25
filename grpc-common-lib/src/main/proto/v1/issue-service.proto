@@ -128,34 +128,39 @@ message AssignIssueBody {
 message CreateIssueBody {
 
   /**
+  * Ключ идемпотентности запроса.
+  */
+  string idempotency_key = 1;
+
+  /**
    * Идентификатор проекта, в котором создаётся задача.
    */
-  string project_id = 1;
+  string project_id = 2;
 
   /**
    * Тип задачи.
    */
-  IssueType issue_type = 2;
+  IssueType issue_type = 3;
 
   /**
    * Краткое описание задачи.
    */
-  string summary = 3;
+  string summary = 4;
 
   /**
    * Подробное описание задачи.
    */
-  string description = 4;
+  string description = 5;
 
   /**
    * Приоритет задачи.
    */
-  IssuePriority priority = 5;
+  IssuePriority priority = 6;
 
   /**
    * Идентификатор создателя задачи.
    */
-  string reporter_id = 6;
+  string reporter_id = 7;
 }
 
 message GetIssueRequest {
