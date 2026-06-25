@@ -23,7 +23,7 @@ import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserBody;
 import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
 import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
 import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
-import ru.taska.api.auth.admin.inviteuser.v1.UserStatus;
+import ru.taska.api.common.v1.UserStatus;
 import ru.taska.api.common.v1.Header;
 import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.OutboxEventRepository;
@@ -79,7 +79,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
         StepVerifier.create(result)
                     .assertNext(response -> {
                         Assertions.assertThat(response.getUserId()).isNotNull();
-                        Assertions.assertThat(response.getStatus()).isEqualTo(UserStatus.INVITED);
+                        Assertions.assertThat(response.getStatus()).isEqualTo(UserStatus.USER_STATUS_INVITED);
                         userIdRef.set(UUID.fromString(response.getUserId()));
                     })
                     .verifyComplete();

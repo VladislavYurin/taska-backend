@@ -42,11 +42,5 @@ message UserCreatedResponse {
   /**
    * Статус пользователя (INVITED/ACTIVE/BLOCKED).
    */
-  UserStatus status = 2;
-}
-
-enum UserStatus {
-  ACTIVE = 0;
-  BLOCKED = 1;
-  INVITED = 2;
+  ru.taska.common.v1.UserStatus status = 2;
 }

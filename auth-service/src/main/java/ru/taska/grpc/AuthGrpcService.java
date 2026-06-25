@@ -8,12 +8,7 @@ import mapper.GrpcExceptionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
-import ru.taska.api.auth.v1.LoginRequest;
-import ru.taska.api.auth.v1.LoginResponse;
-import ru.taska.api.auth.v1.PasswordByTokenRequest;
-import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
-import ru.taska.api.auth.v1.RefreshRequest;
-import ru.taska.api.auth.v1.RefreshResponse;
+import ru.taska.api.auth.v1.*;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.service.AuthService;
@@ -125,6 +120,46 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                 .thenReturn(Empty.getDefaultInstance())
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+    }
+
+    @Override
+    public Mono<ValidateAccessTokenResponse> validateAccessToken(Mono<ValidateAccessTokenRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getAccessToken(), "body.accessToken")
+                ))
+
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    String accessToken = t.getT3();
+
+                    log.info("[{}][{}] Validating access token", requestId, nodeId);
+
+                    return authService.validateAccessToken(accessToken)
+                            .doOnSuccess(userContext ->
+                                    log.info("[{}][{}] Access token validated successfully for user: {}",
+                                            requestId, nodeId, userContext.getUserId()))
+                            .doOnError(error ->
+                                    log.warn("[{}][{}] Access token validation failed: {}",
+                                            requestId, nodeId, error.getMessage())
+                            );
+                })
+                .map(userContext -> ValidateAccessTokenResponse.newBuilder()
+                        .setUserContext(userContext)
+                        .build()
+                )
+                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
+                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
+                .onErrorMap(e -> !(e instanceof DomainException),
+                        e -> new DomainException(DomainStatus.INTERNAL, "Unexpected error"))
                 .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
                 .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
     }

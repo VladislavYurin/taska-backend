@@ -18,4 +18,6 @@ public interface JwtService {
      * @return TTL в секундах
      */
     Mono<Long> getExpiresIn();
+
+    String hashToken(String rawToken);
 }

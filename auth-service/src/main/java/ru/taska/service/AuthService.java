@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
+import ru.taska.api.common.v1.UserContext;
 import ru.taska.dto.AuthResponseDto;
 
 /**
@@ -30,4 +31,6 @@ public interface AuthService {
     Mono<AuthResponseDto> refresh(String refreshToken);
 
     Mono<Void> setPasswordByToken(String requestId, String token, String newPassword);
+
+    Mono<UserContext> validateAccessToken(String accessToken);
 }

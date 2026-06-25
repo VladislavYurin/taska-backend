@@ -14,17 +14,17 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("PasswordPolicyValidator Tests")
-class PasswordPolicyValidatorTest {
+@DisplayName("PasswordValidator Tests")
+class PasswordValidatorTest {
 
     @Mock
     private PasswordPolicyProperties props;
 
-    private PasswordPolicyValidator validator;
+    private PasswordValidator validator;
 
     @BeforeEach
     void setUp() {
-        validator = new PasswordPolicyValidator(props);
+        validator = new PasswordValidator(props);
 
         Mockito.when(props.min()).thenReturn(8);
         Mockito.when(props.max()).thenReturn(128);
