@@ -6,6 +6,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.api.common.v1.UserContext;
 import ru.taska.dto.AuthResponseDto;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
@@ -24,7 +25,9 @@ import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
 import ru.taska.util.DataMaskingHelper;
-import ru.taska.util.PasswordPolicyValidator;
+import ru.taska.util.JwtValidator;
+import ru.taska.util.PasswordValidator;
+import ru.taska.util.UserStatusMapper;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -49,7 +52,8 @@ public class AuthServiceImpl implements AuthService {
     private final InviteTokenRepository inviteTokenRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final UserMapper userMapper;
-    private final PasswordPolicyValidator passwordPolicyValidator;
+    private final PasswordValidator passwordValidator;
+    private final JwtValidator jwtValidator;
 
     /**
      * {@inheritDoc}
@@ -121,8 +125,7 @@ public class AuthServiceImpl implements AuthService {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
 
-        passwordPolicyValidator.validate(newPassword);
-
+        passwordValidator.validate(newPassword);
         String tokenHash = hashToken(token);
 
         log.debug("setPasswordByToken: processing token hash: {}", DataMaskingHelper.maskJwt(tokenHash));
@@ -158,6 +161,20 @@ public class AuthServiceImpl implements AuthService {
                 .then();
     }
 
+    @Override
+    public Mono<UserContext> validateAccessToken(String accessToken) {
+        return jwtValidator.validate(accessToken)
+                .flatMap(claims -> {
+                    UUID userId = UUID.fromString(claims.getSubject());
+                    return userRepository.findById(userId)
+                            .switchIfEmpty(Mono.error(() -> {
+                                log.debug("User not found, userId: {}", userId);
+                                return new DomainException(DomainStatus.UNAUTHENTICATED, "User not found");
+                            }))
+                            .flatMap(this::validateUserStatus)
+                            .map(this::buildUserContext);
+                });
+        }
 
     private Credential createEmptyCredential(UUID userId) {
         return Credential.builder()
@@ -181,14 +198,24 @@ public class AuthServiceImpl implements AuthService {
      */
     private Mono<User> validateUserStatus(User user) {
         if (user.getStatus() == UserStatus.BLOCKED) {
-            log.warn("Login attempt for blocked user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
-            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Account is blocked"));
+            log.warn("User is blocked, userId: {}", user.getId());
+            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User is blocked"));
         }
         if (user.getStatus() == UserStatus.INVITED) {
-            log.warn("Login attempt for not activated user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
-            return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Account not activated"));
+            log.warn("User is not activated, userId: {}", user.getId());
+            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User not activated"));
         }
         return Mono.just(user);
+    }
+
+    private UserContext buildUserContext(User user) {
+        return UserContext.newBuilder()
+                .setUserId(user.getId().toString())
+                .setLogin(user.getLogin())
+                .setEmail(user.getEmail())
+                .setDisplayName(user.getDisplayName())
+                .setStatus(UserStatusMapper.toProtoStatus(user.getStatus()))
+                .build();
     }
 
     private Mono<Credential> checkAccountLock(Credential credential) {

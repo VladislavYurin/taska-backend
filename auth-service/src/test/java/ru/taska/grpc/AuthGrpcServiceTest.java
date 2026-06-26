@@ -1,6 +1,9 @@
 package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
+import org.junit.jupiter.api.Nested;
+import ru.taska.api.auth.v1.*;
+import ru.taska.api.common.v1.UserContext;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import io.r2dbc.spi.R2dbcBadGrammarException;
@@ -17,15 +20,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.auth.v1.LoginRequest;
-import ru.taska.api.auth.v1.LoginRequestBody;
-import ru.taska.api.auth.v1.PasswordByTokenRequest;
-import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
-import ru.taska.api.auth.v1.RefreshRequest;
-import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.dto.PasswordByTokenResponseDto;
 import ru.taska.service.AuthService;
-import ru.taska.util.PasswordPolicyValidator;
+import ru.taska.util.PasswordValidator;
+
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthGrpcService Unit Tests")
@@ -35,7 +34,7 @@ class AuthGrpcServiceTest {
     private AuthService authService;
 
     @Mock
-    private PasswordPolicyValidator passwordPolicyValidator;
+    private PasswordValidator passwordValidator;
 
     @InjectMocks
     private AuthGrpcService authGrpcService;
@@ -342,4 +341,124 @@ class AuthGrpcServiceTest {
         Mockito.verify(authService).setPasswordByToken("test-request-id", "valid-invite-token-123", "NewValidPassword123!");
     }
 
+    @Nested
+    @DisplayName("Validate Access Token Tests")
+    class ValidateAccessTokenTests {
+
+        private ValidateAccessTokenRequest validValidateTokenRequest;
+        private UserContext userContext;
+
+        @BeforeEach
+        void setUpValidateAccessTokenTests() {
+            userContext = UserContext.newBuilder()
+                    .setUserId(UUID.randomUUID().toString())
+                    .setLogin("testuser")
+                    .setEmail("test@example.com")
+                    .setDisplayName("Test User")
+                    .build();
+
+            validValidateTokenRequest = ru.taska.api.auth.v1.ValidateAccessTokenRequest.newBuilder()
+                    .setHeader(ru.taska.api.common.v1.Header.newBuilder()
+                            .setRequestId("test-request-id")
+                            .setNodeId("test-node-id")
+                            .build())
+                    .setBody(ru.taska.api.auth.v1.ValidateAccessTokenRequestBody.newBuilder()
+                            .setAccessToken("valid.jwt.token")
+                            .build())
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should successfully validate access token and return user context")
+        void shouldSuccessfullyValidateAccessTokenAndReturnUserContext() {
+            // Given
+            Mockito.when(authService.validateAccessToken(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(userContext));
+
+            // When & Then
+            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+                    .expectNextMatches(response ->
+                            response.getUserContext().getUserId().equals(userContext.getUserId()) &&
+                                    response.getUserContext().getLogin().equals(userContext.getLogin()) &&
+                                    response.getUserContext().getEmail().equals(userContext.getEmail()) &&
+                                    response.getUserContext().getDisplayName().equals(userContext.getDisplayName())
+                    )
+                    .verifyComplete();
+
+            Mockito.verify(authService).validateAccessToken("valid.jwt.token");
+        }
+
+        @Test
+        @DisplayName("Should propagate DomainException from AuthService")
+        void shouldPropagateDomainExceptionFromAuthService() {
+            // Given
+            Mockito.when(authService.validateAccessToken(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid JWT token")));
+
+            // When & Then
+            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+                    .expectErrorMatches(error ->
+                            error instanceof io.grpc.StatusRuntimeException &&
+                                    error.getMessage().contains("UNAUTHENTICATED")
+                    )
+                    .verify();
+
+            Mockito.verify(authService).validateAccessToken("valid.jwt.token");
+        }
+
+        @Test
+        @DisplayName("Should return UNAVAILABLE when database error occurs")
+        void shouldReturnUnavailableWhenDatabaseErrorOccurs() {
+            // Given
+            Mockito.when(authService.validateAccessToken(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.error(new R2dbcBadGrammarException("Table not found")));
+
+            // When & Then
+            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+                    .expectErrorMatches(error ->
+                            error instanceof io.grpc.StatusRuntimeException &&
+                                    error.getMessage().contains("UNAVAILABLE")
+                    )
+                    .verify();
+
+            Mockito.verify(authService).validateAccessToken("valid.jwt.token");
+        }
+
+        @Test
+        @DisplayName("Should return UNAVAILABLE when TransactionException occurs")
+        void shouldReturnUnavailableWhenTransactionExceptionOccurs() {
+            // Given
+            TransactionException transactionException = Mockito.mock(TransactionException.class);
+            Mockito.when(authService.validateAccessToken(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.error(transactionException));
+
+            // When & Then
+            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+                    .expectErrorMatches(error ->
+                            error instanceof io.grpc.StatusRuntimeException &&
+                                    error.getMessage().contains("UNAVAILABLE")
+                    )
+                    .verify();
+
+            Mockito.verify(authService).validateAccessToken("valid.jwt.token");
+        }
+
+        @Test
+        @DisplayName("Should return INTERNAL when unexpected error occurs")
+        void shouldReturnInternalWhenUnexpectedErrorOccurs() {
+            // Given
+            Mockito.when(authService.validateAccessToken(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.error(new RuntimeException("Unexpected error")));
+
+            // When & Then
+            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+                    .expectErrorMatches(error ->
+                            error instanceof io.grpc.StatusRuntimeException &&
+                                    error.getMessage().contains("Unexpected error")
+                    )
+                    .verify();
+
+            Mockito.verify(authService).validateAccessToken("valid.jwt.token");
+        }
+    }
 }

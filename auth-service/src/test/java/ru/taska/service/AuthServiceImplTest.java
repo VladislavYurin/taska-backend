@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import io.jsonwebtoken.Claims;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.OutboxEventStatus;
 import ru.taska.exception.DomainException;
@@ -38,12 +39,10 @@ import ru.taska.security.JwtServiceImpl;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
-import ru.taska.util.PasswordPolicyValidator;
+import ru.taska.util.JwtValidator;
+import ru.taska.util.PasswordValidator;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthServiceImpl Unit Tests")
@@ -55,7 +54,7 @@ class AuthServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
-    private PasswordPolicyValidator passwordPolicyValidator;
+    private PasswordValidator passwordValidator;
 
     @Mock
     private CredentialRepository credentialRepository;
@@ -80,6 +79,9 @@ class AuthServiceImplTest {
 
     @Mock
     private OutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private JwtValidator jwtValidator;
 
     @InjectMocks
     private AuthServiceImpl authServiceImpl;
@@ -647,13 +649,13 @@ class AuthServiceImplTest {
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
 
-            Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
+            Mockito.doNothing().when(passwordValidator).validate(newPassword);
 
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .verifyComplete();
 
-            Mockito.verify(passwordPolicyValidator).validate(newPassword);
+            Mockito.verify(passwordValidator).validate(newPassword);
             Mockito.verify(inviteTokenRepository).findByTokenHash(ArgumentMatchers.anyString());
             Mockito.verify(userRepository).findById(testUserId);
             Mockito.verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
@@ -697,13 +699,13 @@ class AuthServiceImplTest {
             Mockito.when(outboxEventRepository.save(ArgumentMatchers.any(OutboxEvent.class)))
                     .thenReturn(Mono.just(mockOutboxEvent));
 
-            Mockito.doNothing().when(passwordPolicyValidator).validate(newPassword);
+            Mockito.doNothing().when(passwordValidator).validate(newPassword);
 
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .verifyComplete();
 
-            Mockito.verify(passwordPolicyValidator).validate(newPassword);
+            Mockito.verify(passwordValidator).validate(newPassword);
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getSecretHash()).isEqualTo("newHashedPassword");
         }
@@ -945,6 +947,173 @@ class AuthServiceImplTest {
                     .findByTokenHash(ArgumentMatchers.anyString());
             Mockito.verify(userRepository, Mockito.never())
                     .findById(ArgumentMatchers.any(UUID.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Validate Access Token Tests")
+    class ValidateAccessTokenTests {
+
+        @Test
+        @DisplayName("Should NOT query database when JWT validation fails")
+        void shouldNotQueryDatabaseWhenJwtValidationFails() {
+            // Given
+            String invalidToken = "invalid.jwt.token";
+
+            Mockito.when(jwtValidator.validate(invalidToken))
+                    .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid JWT token")));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(invalidToken))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("Invalid JWT token")
+                    )
+                    .verify();
+
+            Mockito.verify(jwtValidator).validate(invalidToken);
+            Mockito.verify(userRepository, Mockito.never()).findById((UUID) ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should not query database when JWT token is expired")
+        void shouldNotQueryDatabaseWhenJwtTokenIsExpired() {
+            // Given
+            String expiredToken = "expired.jwt.token";
+
+            Mockito.when(jwtValidator.validate(expiredToken))
+                    .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "JWT token expired")));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(expiredToken))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("JWT token expired")
+                    )
+                    .verify();
+
+            Mockito.verify(jwtValidator).validate(expiredToken);
+            Mockito.verify(userRepository, Mockito.never()).findById((UUID) ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should return UNAUTHENTICATED when user not found")
+        void shouldReturnUnauthenticatedWhenUserNotFound() {
+            // Given
+            String accessToken = "valid.jwt.token";
+            Claims claims = Mockito.mock(Claims.class);
+            UUID unknownUserId = UUID.randomUUID();
+
+            Mockito.when(jwtValidator.validate(accessToken)).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(unknownUserId.toString());
+            Mockito.when(userRepository.findById(unknownUserId)).thenReturn(Mono.empty());
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
+                                    error.getMessage().equals("User not found")
+                    )
+                    .verify();
+
+            Mockito.verify(jwtValidator).validate(accessToken);
+            Mockito.verify(userRepository).findById(unknownUserId);
+        }
+
+        @Test
+        @DisplayName("Should return PERMISSION_DENIED when user is blocked")
+        void shouldReturnPermissionDeniedWhenUserIsBlocked() {
+            // Given
+            String accessToken = "valid.jwt.token";
+            Claims claims = Mockito.mock(Claims.class);
+            User blockedUser = User.builder()
+                    .id(testUserId)
+                    .email("blocked@example.com")
+                    .login("blockeduser")
+                    .status(UserStatus.BLOCKED)
+                    .build();
+
+            Mockito.when(jwtValidator.validate(accessToken)).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(blockedUser));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
+                                    error.getMessage().equals("User is blocked")
+                    )
+                    .verify();
+
+            Mockito.verify(jwtValidator).validate(accessToken);
+            Mockito.verify(userRepository).findById(testUserId);
+        }
+
+        @Test
+        @DisplayName("Should return PERMISSION_DENIED when user is invited")
+        void shouldReturnPermissionDeniedWhenUserIsInvited() {
+            // Given
+            String accessToken = "valid.jwt.token";
+            Claims claims = Mockito.mock(Claims.class);
+            User invitedUser = User.builder()
+                    .id(testUserId)
+                    .email("invited@example.com")
+                    .login("inviteduser")
+                    .status(UserStatus.INVITED)
+                    .build();
+
+            Mockito.when(jwtValidator.validate(accessToken)).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(invitedUser));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
+                    .expectErrorMatches(error ->
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
+                                    error.getMessage().equals("User not activated")
+                    )
+                    .verify();
+
+            Mockito.verify(jwtValidator).validate(accessToken);
+            Mockito.verify(userRepository).findById(testUserId);
+        }
+
+        @Test
+        @DisplayName("Should return correct UserContext")
+        void shouldReturnCorrectUserContext() {
+            // Given
+            String accessToken = "valid.jwt.token";
+            Claims claims = Mockito.mock(Claims.class);
+
+            User fullUser = User.builder()
+                    .id(testUserId)
+                    .email("user@example.com")
+                    .login("user")
+                    .displayName("User Name")
+                    .status(UserStatus.ACTIVE)
+                    .build();
+
+            Mockito.when(jwtValidator.validate(accessToken)).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(fullUser));
+
+            // When & Then
+            StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
+                    .expectNextMatches(userContext ->
+                            userContext.getUserId().equals(testUserId.toString()) &&
+                                    userContext.getLogin().equals("user") &&
+                                    userContext.getEmail().equals("user@example.com") &&
+                                    userContext.getDisplayName().equals("User Name")
+                    )
+                    .verifyComplete();
+
+            Mockito.verify(jwtValidator).validate(accessToken);
+            Mockito.verify(userRepository).findById(testUserId);
         }
     }
 }

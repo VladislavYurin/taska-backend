@@ -1,5 +1,8 @@
 package ru.taska.security;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import org.apache.commons.codec.digest.DigestUtils;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import io.jsonwebtoken.Jwts;
@@ -26,22 +29,7 @@ import java.util.Date;
 public class JwtServiceImpl implements JwtService {
 
     private final JwtProperties jwtProperties;
-    private SecretKey secretKey;
-
-    @PostConstruct
-    public void init() {
-        if (jwtProperties.getSecret() == null || jwtProperties.getSecret().isEmpty()) {
-            throw new IllegalStateException("JWT secret is not configured in application properties");
-        }
-
-        this.secretKey = Keys.hmacShaKeyFor(
-                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
-        );
-
-        log.debug("JWT Service initialized with access TTL: {} seconds, refresh TTL: {} seconds",
-                jwtProperties.getAccessTokenTtl().getSeconds(),
-                jwtProperties.getRefreshTokenTtl().getSeconds());
-    }
+    private final SecretKey secretKey;
 
     @Override
     public Mono<String> generateAccessToken(User user) {
@@ -65,8 +53,12 @@ public class JwtServiceImpl implements JwtService {
         );
     }
 
-
     public Mono<Long> getExpiresIn() {
         return Mono.just(jwtProperties.getAccessTokenTtl().getSeconds());
+    }
+
+    @Override
+    public String hashToken(String rawToken) {
+        return DigestUtils.sha256Hex(rawToken);
     }
 }

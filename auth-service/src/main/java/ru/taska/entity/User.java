@@ -66,7 +66,8 @@ public class User {
      * Текущий статус пользователя (INVITED, ACTIVE, BLOCKED).
      */
     @Column("status")
-    private UserStatus status;
+    @Builder.Default
+    private UserStatus status = UserStatus.INVITED;
 
     /**
      * Временная метка создания записи (аудит).

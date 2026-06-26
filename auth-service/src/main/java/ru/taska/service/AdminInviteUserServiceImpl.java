@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
 import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
-import ru.taska.api.auth.admin.inviteuser.v1.UserStatus;
+import ru.taska.api.common.v1.UserStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.AdminInviteUserMapper;
@@ -68,7 +68,7 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
                         .thenReturn(user))
                 .map(user -> UserCreatedResponse.newBuilder()
                         .setUserId(String.valueOf(user.getId()))
-                        .setStatus(UserStatus.INVITED)
+                        .setStatus(UserStatus.USER_STATUS_INVITED)
                         .build());
     }
 

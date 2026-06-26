@@ -16,7 +16,7 @@ import ru.taska.exception.DomainStatus;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class PasswordPolicyValidator implements Validator<String> {
+public class PasswordValidator {
 
     private final PasswordPolicyProperties props;
 
@@ -24,7 +24,6 @@ public class PasswordPolicyValidator implements Validator<String> {
      * Валидация переданного пароля
      * @throws ru.taska.exception.DomainException
      */
-    @Override
     public void validate(String password) {
         log.debug("Starting password validation with policy: min={}, max={}, requireUpper={}, requireDigit={}, requireSpecial={}",
                 props.min(), props.max(), props.requireUpper(), props.requireDigit(), props.requireSpecial()

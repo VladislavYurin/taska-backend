@@ -13,6 +13,7 @@ service AuthService {
     rpc Login (LoginRequest) returns (LoginResponse);
     rpc Refresh (RefreshRequest) returns (RefreshResponse);
     rpc SetPasswordByToken(PasswordByTokenRequest) returns (google.protobuf.Empty);
+    rpc ValidateAccessToken(ValidateAccessTokenRequest) returns (ValidateAccessTokenResponse);
 }
 
 message LoginRequest {
@@ -54,4 +55,17 @@ message PasswordByTokenRequest {
 message PasswordByTokenRequestBody {
     string token = 1;
     string newPassword = 2;
+}
+
+message ValidateAccessTokenRequest {
+    ru.taska.common.v1.Header header = 1;
+    ValidateAccessTokenRequestBody body = 2;
+}
+
+message ValidateAccessTokenRequestBody {
+    string access_token = 1;
+}
+
+message ValidateAccessTokenResponse {
+    ru.taska.common.v1.UserContext user_context = 1;
 }
