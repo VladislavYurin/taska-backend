@@ -1,6 +1,7 @@
-package ru.taska.domain;
+package ru.taska.domain.dto;
 
 import lombok.Builder;
+import ru.taska.domain.ProjectRole;
 
 @Builder
 public record ProjectMembershipInfoDto(
