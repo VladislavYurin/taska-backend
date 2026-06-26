@@ -28,18 +28,22 @@ public class ProjectRoleChecker {
     ) {
         return client.checkProjectRole(requestId, nodeId, projectId, userId)
                 .flatMap(response ->
-                        validateAccess(projectId, userId, allowedRoles, response)
+                        validateAccess(requestId, nodeId, projectId, userId, allowedRoles, response)
                 );
     }
 
     private Mono<Void> validateAccess(
+            String requestId,
+            String nodeId,
             UUID projectId,
             UUID userId,
             Set<ProjectRole> allowedRoles,
             CheckProjectMemberRoleResponse response
     ) {
         if (!response.getProjectExists()) {
-            log.warn("Project doesn't exist: projectId={}", projectId);
+            log.warn("[{}][{}]Project doesn't exist: projectId={}",
+                    requestId, nodeId, projectId
+            );
 
             return Mono.error(new DomainException(
                     DomainStatus.NOT_FOUND, "Project not found")
@@ -47,8 +51,8 @@ public class ProjectRoleChecker {
         }
 
         if (!response.getIsMember()) {
-            log.warn("User isn't a member of the project: projectId={}, userId={}",
-                    projectId, userId
+            log.warn("[{}][{}]User isn't a member of the project: projectId={}, userId={}",
+                    requestId, nodeId, projectId, userId
             );
 
             return Mono.error(new DomainException(
@@ -58,15 +62,15 @@ public class ProjectRoleChecker {
 
         ProjectRole role = response.getRole();
         if (!allowedRoles.contains(role)) {
-            log.warn("Not allowed role for the project: role={}, projectId={}, userId={}",
-                    role, projectId, userId
+            log.warn("[{}][{}]Not allowed role for the project: role={}, projectId={}, userId={}",
+                    requestId, nodeId, role, projectId, userId
             );
 
             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Not allowed role"));
         }
 
-        log.info("Check role successfully complete: projectId={}, userId={}, role={}",
-                projectId, userId, role
+        log.info("[{}][{}]Check role successfully complete: projectId={}, userId={}, role={}",
+                requestId, nodeId, projectId, userId, role
         );
 
         return Mono.empty();
