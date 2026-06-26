@@ -28,7 +28,14 @@ public class TaskaEventsKafkaListener {
     private final ObjectMapper objectMapper;
     private final NotificationEventHandler eventHandler;
 
-    @KafkaListener(topics = {"issue.events", "project.events", "user.events"}, groupId = "notification-service")
+    @KafkaListener(
+            topics = {
+                    "${kafka.topics.issue-events}",
+                    "${kafka.topics.project-events}",
+                    "${kafka.topics.user-events}"
+            },
+            groupId = "${kafka.consumer-group}"
+    )
     public void onMessage(String message, Acknowledgment ack,
                           @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         TaskaEvent event = null;

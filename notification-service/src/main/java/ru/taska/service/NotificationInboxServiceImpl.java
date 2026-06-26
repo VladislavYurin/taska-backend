@@ -1,18 +1,20 @@
 package ru.taska.service;
 
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.NotificationRepository;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationInboxServiceImpl implements NotificationInboxService {
@@ -38,19 +40,23 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
     @Override
     @Transactional
     public Mono<Notification> markAsRead(UUID notificationId, UUID userId) {
-        return notificationRepository.findByIdAndUserId(notificationId, userId)
-                .switchIfEmpty(Mono.error(new DomainException(
-                        DomainStatus.NOT_FOUND,
-                        "Notification not found"
-                )))
-                .flatMap(notification -> {
-                    if (notification.getReadAt() != null) {
-                        return Mono.just(notification);
-                    }
-
-                    return notificationRepository.markAsRead(notificationId, userId, Instant.now())
-                            .then(notificationRepository.findByIdAndUserId(notificationId, userId));
-                });
+        return notificationRepository.markAsRead(notificationId, userId, Instant.now())
+                .doOnNext(ignore ->
+                        log.info("Notification markAsRead successfully: id={}", notificationId)
+                )
+                .switchIfEmpty(Mono.defer(() ->
+                        notificationRepository.findByIdAndUserId(notificationId, userId)
+                                .switchIfEmpty(Mono.error(new DomainException(
+                                        DomainStatus.NOT_FOUND,
+                                        "Notification not found"
+                                )))
+                                .doOnNext(ignore ->
+                                        log.info("Notification already was read: id={}", notificationId)
+                                )
+                ))
+                .doOnError(ex ->
+                        log.error("Failed during invocation markAsRead for notification with: id={}, message={}", notificationId, ex.getMessage())
+                );
     }
 
     private int normalizePageSize(int pageSize) {

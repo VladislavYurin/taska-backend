@@ -39,6 +39,7 @@ build/
 ### Environment ###
 .env
 *.env
+.env.*
 !.env.docker.example
 
 # Локальные учётные данные Liquibase (не коммитить)

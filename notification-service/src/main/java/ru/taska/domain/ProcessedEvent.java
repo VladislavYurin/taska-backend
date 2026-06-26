@@ -35,7 +35,7 @@ public class ProcessedEvent {
      * Уникальный идентификатор события (eventId).
      */
     @Column("event_id")
-    private String eventId;
+    private UUID eventId;
 
     /**
      * Время, когда событие было успешно обработано.
