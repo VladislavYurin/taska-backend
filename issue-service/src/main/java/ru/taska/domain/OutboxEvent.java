@@ -53,7 +53,7 @@ public class OutboxEvent {
     private String eventType;
 
     /**
-     * Текущий статус события (NEW / PUBLISHED / FAILED)
+     * Текущий статус события (NEW / PROCESSING / PUBLISHED / FAILED)
      */
     @Column("status")
     private OutboxEventStatus status;

@@ -1,6 +1,5 @@
 package ru.taska.event;
 
-
 /**
  * Статус для отправки события из outbox_event в kafka
  */
@@ -25,5 +24,4 @@ public enum OutboxEventStatus {
      * Превышено количество попыток опубликовать событие
      */
     FAILED
-
 }

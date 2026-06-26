@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.entity.OutboxEvent;
-import ru.taska.entity.OutboxEventStatus;
+import ru.taska.event.OutboxEventStatus;
 import ru.taska.entity.User;
 
 @Slf4j
