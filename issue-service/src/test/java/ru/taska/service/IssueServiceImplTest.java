@@ -8,6 +8,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.mapper.IssueMapper;
+import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
@@ -38,6 +39,9 @@ public class IssueServiceImplTest {
     protected OutboxEventRepository outboxEventRepository;
 
     @Mock
+    protected IdempotencyKeyRepository idempotencyKeyRepository;
+
+    @Mock
     protected ProjectRoleChecker projectRoleChecker;
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
@@ -65,4 +69,6 @@ public class IssueServiceImplTest {
     protected static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
     protected static final String REQUEST_ID = "req-001";
     protected static final String NODE_ID = "issue-service";
+    protected static final String IDEMPOTENCY_KEY_1 = "00000000-0000-0000-0000-000000000006";
+    protected static final String IDEMPOTENCY_KEY_2 = "00000000-0000-0000-0000-000000000007";
 }

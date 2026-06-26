@@ -49,6 +49,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
+                                GrpcRequestValidators.validateIdempotencyKey(
+                                        req.getBody().getIdempotencyKey(), "body.idempotencyKey"
+                                ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getProjectId(), "body.projectId"
                                 ),
@@ -70,20 +73,22 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            IssueType issueType = t.getT4();
-                            String summary = t.getT5();
-                            IssuePriority priority = t.getT6();
-                            UUID reporterId = t.getT7();
+                            String idempotencyKey = t.getT3();
+                            UUID projectId = t.getT4();
+                            IssueType issueType = t.getT5();
+                            String summary = t.getT6();
+                            IssuePriority priority = t.getT7();
+                            UUID reporterId = t.getT8();
 
                             String description = req.getBody().getDescription();
 
-                            log.info("[{}][{}] createIssue: projectId={}, issueType={}, summary={}, priority={}, reporterId={}",
-                                    requestId, nodeId, projectId, issueType, summary, priority, reporterId);
+                            log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, priority={}, reporterId={}",
+                                    requestId, nodeId, idempotencyKey, projectId, issueType, summary, priority, reporterId);
 
                             return issueService.createIssue(
                                             requestId,
                                             nodeId,
+                                            idempotencyKey,
                                             projectId,
                                             issueMapper.toDomainIssueType(issueType),
                                             summary,

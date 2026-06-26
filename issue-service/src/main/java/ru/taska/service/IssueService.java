@@ -18,6 +18,7 @@ public interface IssueService {
     Mono<Issue> createIssue(
             String requestId,
             String nodeId,
+            String idempotencyKey,
             UUID projectId,
             IssueType issueType,
             String summary,

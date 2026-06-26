@@ -1,6 +1,8 @@
 package validator;
 
 import com.google.protobuf.ProtocolMessageEnum;
+import io.grpc.Status;
+import java.util.regex.Pattern;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -12,6 +14,9 @@ import java.util.UUID;
  * {@code INVALID_ARGUMENT}.</p>
  */
 public final class GrpcRequestValidators {
+
+    private static final int MAX_LEN = 255;
+    private static final Pattern KEY_PATTERN = Pattern.compile("^[\\x21-\\x7E]{1,255}$");
 
     private GrpcRequestValidators() {
     }
@@ -62,6 +67,21 @@ public final class GrpcRequestValidators {
                 .filter(login -> !login.contains("@"))
                 .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
                                                   .withDescription(fieldName + " must not contain '@'")
+                                                  .asRuntimeException()));
+    }
+
+    /**
+     * Проверяет ключ идемпотентности по длине и паттерну.
+     *
+     * @param raw       строковое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с ключом или ошибкой {@code INVALID_ARGUMENT} при нарушении валидации
+     */
+    public static Mono<String> validateIdempotencyKey(String raw, String fieldName) {
+        return requireNonBlank(raw, fieldName)
+                .filter(key -> key.length() <= MAX_LEN && KEY_PATTERN.matcher(key).matches())
+                .switchIfEmpty(Mono.error(Status.INVALID_ARGUMENT
+                                                  .withDescription(fieldName + " must be valid Idempotency Key")
                                                   .asRuntimeException()));
     }
 

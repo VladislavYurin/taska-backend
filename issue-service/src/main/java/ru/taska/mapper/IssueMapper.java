@@ -1,6 +1,8 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
@@ -9,6 +11,7 @@ import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -76,6 +79,16 @@ public class IssueMapper {
                 .status(OutboxEventStatus.NEW)
                 .payload(objectMapper.valueToTree(issue))
                 .requestId(requestId)
+                .build();
+    }
+
+    public IdempotencyKey buildIdempotencyKey(String key, UUID userId, String requestHash, Issue response, Duration ttl) {
+        return IdempotencyKey.builder()
+                .key(key)
+                .userId(userId)
+                .requestHash(requestHash)
+                .response(objectMapper.valueToTree(response))
+                .expiresAt(Instant.now().plus(ttl))
                 .build();
     }
 
