@@ -33,6 +33,8 @@ public record IssueProperties(
     public record Card(int maxHistorySize) {
     }
 
-    public record IdempotencyKeyTtl(Duration ttl){
+    public record IdempotencyKeyTtl(
+            Duration ttl,
+            Duration cleanInterval) {
     }
 }

@@ -46,6 +46,7 @@ issue:
     list-issue-roles: ${ISSUE_LIST_ROLES:ADMIN,MEMBER,VIEWER}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
+    clean-interval: ${CLEAN_IDEMPOTENCY_KEY_INTERVAL:12h}
 
 management:
   endpoints:
