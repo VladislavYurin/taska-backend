@@ -1,14 +1,10 @@
 package ru.taska.transport.grpc;
 
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
-import io.grpc.StatusRuntimeException;
-import io.r2dbc.spi.R2dbcException;
+import exception.GrpcExceptionHandler;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionException;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
@@ -20,10 +16,8 @@ import ru.taska.mapper.NotificationMapper;
 import ru.taska.service.NotificationInboxService;
 import validator.GrpcRequestValidators;
 
-import java.util.UUID;
-
 @Slf4j
-@Service
+@GrpcService
 @RequiredArgsConstructor
 public class GrpcNotificationService extends ReactorNotificationServiceGrpc.NotificationServiceImplBase {
 
@@ -58,18 +52,7 @@ public class GrpcNotificationService extends ReactorNotificationServiceGrpc.Noti
                                     .addAllNotifications(notifications)
                                     .build());
                 }))
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> {
-                            log.error("listNotifications: database error", e);
-                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                        })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                        e -> {
-                            log.error("listNotifications: unexpected error", e);
-                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                        })
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("listNotifications"));
     }
 
     @Override
@@ -97,18 +80,7 @@ public class GrpcNotificationService extends ReactorNotificationServiceGrpc.Noti
                 }))
                 .map(notificationMapper::toNotificationProto)
                 .map(this::toMarkAsReadResponse)
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> {
-                            log.error("markAsRead: database error", e);
-                            return new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable");
-                        })
-                .onErrorMap(e -> !(e instanceof DomainException) && !(e instanceof StatusRuntimeException),
-                        e -> {
-                            log.error("markAsRead: unexpected error", e);
-                            return new DomainException(DomainStatus.INTERNAL, "Internal error");
-                        })
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("markAsRead"));
     }
 
     private MarkAsReadResponse toMarkAsReadResponse(NotificationResponse notification) {

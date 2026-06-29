@@ -1,6 +1,7 @@
 package ru.taska.transport.grpc;
 
 import exception.GrpcExceptionHandler;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
@@ -26,10 +27,8 @@ import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
 
-import java.util.UUID;
-
-@GrpcService
 @Slf4j
+@GrpcService
 @RequiredArgsConstructor
 public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectServiceImplBase {
     private final ProjectService projectService;

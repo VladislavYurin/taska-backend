@@ -1,19 +1,18 @@
 package ru.taska.grpc;
 
+import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
-import org.springframework.stereotype.Service;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
 import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
 import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
-import ru.taska.exception.DomainException;
 import ru.taska.service.AdminInviteUserService;
 import validator.GrpcRequestValidators;
 
 @Slf4j
-@Service
+@GrpcService
 @RequiredArgsConstructor
 public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrpc.AdminInviteUserServiceImplBase {
 
@@ -40,8 +39,6 @@ public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrp
                                                  .doOnNext(resp -> log.info("[{}][{}] user invited: userId={}",
                                                                             requestId, nodeId, resp.getUserId()));
                 })
-                .doOnError(exception -> log.error("Failed to invite user: {}", exception.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("inviteUser"));
     }
 }

@@ -3,9 +3,12 @@ package ru.taska.transport.grpc;
 import exception.GrpcExceptionHandler;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
@@ -27,12 +30,8 @@ import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
 import validator.GrpcRequestValidators;
 
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Consumer;
-
 @Slf4j
-@Service
+@GrpcService
 @RequiredArgsConstructor
 public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBase {
 

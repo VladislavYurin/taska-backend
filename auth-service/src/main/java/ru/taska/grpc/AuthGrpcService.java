@@ -1,22 +1,25 @@
 package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
-import io.r2dbc.spi.R2dbcException;
+import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionException;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.auth.v1.*;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
+import ru.taska.api.auth.v1.LoginRequest;
+import ru.taska.api.auth.v1.LoginResponse;
+import ru.taska.api.auth.v1.PasswordByTokenRequest;
+import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.auth.v1.RefreshRequest;
+import ru.taska.api.auth.v1.RefreshResponse;
+import ru.taska.api.auth.v1.ValidateAccessTokenRequest;
+import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.service.AuthService;
 import ru.taska.util.DataMaskingHelper;
 import validator.GrpcRequestValidators;
 
 @Slf4j
-@Service
+@GrpcService
 @RequiredArgsConstructor
 public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase {
 
@@ -54,10 +57,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setRefreshToken(response.getRefreshToken())
                         .setExpiresIn(response.getExpiresIn())
                         .build())
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("login"));
     }
 
     @Override
@@ -87,10 +87,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setRefreshToken(response.getRefreshToken() != null ? response.getRefreshToken() : "")
                         .setExpiresIn(response.getExpiresIn())
                         .build())
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("refresh"));
     }
 
     @Override
@@ -118,10 +115,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                             .doOnError(error -> log.warn("[{}][{}] Set new password failed: {}", requestId, nodeId, error.getMessage()));
                 })
                 .thenReturn(Empty.getDefaultInstance())
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("setPasswordByToken"));
     }
 
     @Override
@@ -156,11 +150,6 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setUserContext(userContext)
                         .build()
                 )
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        e -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .onErrorMap(e -> !(e instanceof DomainException),
-                        e -> new DomainException(DomainStatus.INTERNAL, "Unexpected error"))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("validateAccessToken"));
     }
 }
