@@ -18,18 +18,20 @@ import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
-import ru.taska.config.props.KafkaProperties;
+import ru.taska.config.OutboxConfig;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
 import ru.taska.transport.kafka.OutboxEventPublisher;
 
-import java.time.Duration;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventPublisherTest {
 
     private static final String TOPIC = "project.events";
+
+    @Mock
+    private OutboxConfig config;
 
     @Mock
     private OutboxEventMapper mapper;
@@ -47,16 +49,9 @@ class OutboxEventPublisherTest {
 
     @BeforeEach
     void setUp() {
-        KafkaProperties config = new KafkaProperties(
-                new KafkaProperties.Topics("project.events"),
-                new KafkaProperties.Outbox(
-                        Duration.ofSeconds(5),
-                        Duration.ofSeconds(10),
-                        100,
-                        5,
-                        Duration.ofMinutes(5)
-                )
-        );        publisher = new OutboxEventPublisher(config, mapper, kafkaSender);
+        Mockito.when(config.getTopic()).thenReturn(TOPIC);
+
+        publisher = new OutboxEventPublisher(kafkaSender,config, mapper);
 
         event = OutboxEvent.builder()
                            .id(UUID.randomUUID())
@@ -128,6 +123,25 @@ class OutboxEventPublisherTest {
             StepVerifier.create(publisher.publish(event))
                         .expectErrorMatches(actual -> actual == expectedException)
                         .verify();
+        }
+
+        @Test
+        @DisplayName("Должен пробрасывать ошибку при ошибке сериализации")
+        void shouldPropagateError_whenMapperFails() {
+            var expectedException = new RuntimeException("Serialization error");
+
+            Mockito.when(mapper.toTaskaEventJsonAsString(event))
+                    .thenThrow(expectedException);
+
+            /// Не мокаем kafkaSender - ошибка произойдет до него
+
+            StepVerifier.create(publisher.publish(event))
+                    .expectErrorMatches(actualException -> actualException == expectedException)
+                    .verify();
+
+            Mockito.verify(mapper)
+                    .toTaskaEventJsonAsString(event);
+            Mockito.verifyNoInteractions(kafkaSender); /// Проверяем, что kafkaSender не вызывался
         }
     }
 }

@@ -1,74 +1,50 @@
 package ru.taska.kafka;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
 import reactor.kafka.sender.KafkaSender;
-import reactor.kafka.sender.SenderRecord;
-import reactor.kafka.sender.SenderResult;
-import ru.taska.config.props.KafkaProperties;
+import ru.taska.config.OutboxConfig;
 import ru.taska.entity.OutboxEvent;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.OutboxEventMapper;
+import ru.taska.publisher.AbstractOutboxEventPublisher;
 
 import java.util.UUID;
 
 /**
- * Компонент публикации outbox событий в Kafka.
+ *
  */
-@Slf4j
 @Component
-@RequiredArgsConstructor
-public class OutboxEventPublisher {
+public class OutboxEventPublisher extends AbstractOutboxEventPublisher<OutboxEvent> {
 
-    private final KafkaSender<String, String> kafkaSender;
-    private final KafkaProperties properties;
-    private final OutboxEventMapper outboxEventMapper;
+    private final OutboxConfig config;
+    private final OutboxEventMapper mapper;
 
-    /**
-     * Публикует событие в Kafka.
-     */
-    public Mono<Void> publish(OutboxEvent event) {
-        if(event == null) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Event cannot be null"));
-        }
-        return Mono.defer(() -> {
-            String topic = properties.topics().userEvents();
-            String key = event.getAggregateId().toString();
-            String value = outboxEventMapper.toTaskaEventJsonAsString(event);
-
-            log.debug(
-                    "Publishing outbox event started: id={}, aggregateType={}, aggregateId={}, eventType={}, topic={}",
-                    event.getId(),
-                    event.getAggregateType(),
-                    event.getAggregateId(),
-                    event.getEventType(),
-                    topic
-            );
-
-            ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key, value);
-            SenderRecord<String, String, UUID> senderRecord = SenderRecord.create(producerRecord, event.getId());
-
-            return kafkaSender.send(Mono.just(senderRecord))
-                    .doOnNext(result -> verifyDelivery(result, event, topic))
-                    .then();
-        });
+    public OutboxEventPublisher(
+            KafkaSender<String,String> kafkaSender,
+            OutboxConfig config,
+            OutboxEventMapper mapper
+    ){
+        super(kafkaSender);
+        this.config = config;
+        this.mapper = mapper;
     }
 
-    private void verifyDelivery(SenderResult<UUID> result, OutboxEvent event, String topic) {
-        if (result.exception() != null) {
-            log.error("Outbox event delivery failed: id={}", event.getId(), result.exception());
-            throw new RuntimeException("Failed to publish event", result.exception());
-        }
+    @Override
+    protected String getTopic(OutboxEvent event) {
+        return config.getTopic();
+    }
 
-        log.debug("Outbox event delivery confirmed: id={}, topic={}, partition={}, offset={}",
-                event.getId(),
-                topic,
-                result.recordMetadata().partition(),
-                result.recordMetadata().offset()
-        );
+    @Override
+    protected String getKey(OutboxEvent event) {
+        return event.getAggregateId().toString();
+    }
+
+    @Override
+    protected UUID getCorrelationId(OutboxEvent event) {
+        return event.getId();
+    }
+
+    @Override
+    protected String converToJsonFromString(OutboxEvent event) {
+        return mapper.toTaskaEventJsonAsString(event);
     }
 }

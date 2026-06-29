@@ -1,17 +1,12 @@
 package ru.taska.kafka;
 
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -20,26 +15,24 @@ import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.entity.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
-import ru.taska.transport.kafka.OutboxEventPublisher;
-import tools.jackson.databind.JsonNode;
 
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventPublisherTest {
 
-    private static final String TOPIC = "issue.events";
-
-    @Mock
-    private KafkaSender<String, String> kafkaSender;
+    private static final String TOPIC = "project.events";
 
     @Mock
     private OutboxConfig config;
 
     @Mock
     private OutboxEventMapper mapper;
+
+    @Mock
+    private KafkaSender<String, String> kafkaSender;
 
     private OutboxEventPublisher publisher;
 
@@ -53,85 +46,79 @@ class OutboxEventPublisherTest {
     void setUp() {
         Mockito.when(config.getTopic()).thenReturn(TOPIC);
 
-        publisher = new OutboxEventPublisher(kafkaSender, config, mapper);
+        publisher = new OutboxEventPublisher(kafkaSender,config, mapper);
 
         event = OutboxEvent.builder()
                 .id(UUID.randomUUID())
-                .aggregateType("issue")
+                .aggregateType("USER")
                 .aggregateId(UUID.randomUUID())
-                .eventType("IssueCreated")
-                .payload(Mockito.mock(JsonNode.class))
+                .eventType("UserInvited")
                 .build();
 
-        expectedJson = """
-                {"id":"%s","aggregateType":"issue","aggregateId":"%s","eventType":"IssueCreated","payload":{}}
-                """.formatted(event.getId(), event.getAggregateId());
+        expectedJson = "{\"eventType\":\"UserInvited\"}";
     }
 
     @Nested
-    class Publish {
+    class Publish{
+
         @Test
         @DisplayName("Должен успешно опубликовать событие в Kafka")
         void shouldSendEventToKafka_whenSuccess() {
+            @SuppressWarnings("unchecked")
             SenderResult<UUID> senderResult = Mockito.mock(SenderResult.class);
 
             Mockito.when(mapper.toTaskaEventJsonAsString(event))
                     .thenReturn(expectedJson);
-            RecordMetadata recordMetadata = Mockito.mock(RecordMetadata.class);
-
-            Mockito.when(senderResult.recordMetadata())
-                    .thenReturn(recordMetadata);
-
             Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
                     .thenReturn(Flux.just(senderResult));
 
             StepVerifier.create(publisher.publish(event))
                     .verifyComplete();
 
-            Mockito.verify(mapper)
-                    .toTaskaEventJsonAsString(event);
-
-            Mockito.verify(kafkaSender)
-                    .send(captor.capture());
+            Mockito.verify(mapper).toTaskaEventJsonAsString(event);
+            Mockito.verify(kafkaSender).send(captor.capture());
 
             SenderRecord<String, String, UUID> record = captor.getValue().block();
-
-            Assertions.assertThat(record)
-                    .isNotNull();
-
-            Assertions.assertThat(record.topic())
-                    .isEqualTo(TOPIC);
-
-            Assertions.assertThat(record.key())
-                    .isEqualTo(event.getAggregateId().toString());
-
-            Assertions.assertThat(record.value())
-                    .isEqualTo(expectedJson);
-
-            Assertions.assertThat(record.correlationMetadata())
-                    .isEqualTo(event.getId());
+            Assertions.assertThat(record).isNotNull();
+            Assertions.assertThat(record.topic()).isEqualTo(TOPIC);
+            Assertions.assertThat(record.key()).isEqualTo(event.getAggregateId().toString());
+            Assertions.assertThat(record.value()).isEqualTo(expectedJson);
+            Assertions.assertThat(record.correlationMetadata()).isEqualTo(event.getId());
         }
 
         @Test
-        @DisplayName("Должен пробрасывать ошибку при неудачной отправке в Kafka")
-        void shouldPropagateError_whenKafkaFails() {
-            var expectedException = new RuntimeException("Kafka unavailable");
+        @DisplayName("Должен пробрасывать ошибку при сбое отправки в Kafka")
+        void shouldPropagateError_whenKafkaFails(){
+            RuntimeException expectedException = new RuntimeException("Kafka unavailable");
 
             Mockito.when(mapper.toTaskaEventJsonAsString(event))
                     .thenReturn(expectedJson);
-
             Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
                     .thenReturn(Flux.error(expectedException));
 
             StepVerifier.create(publisher.publish(event))
-                    .expectErrorMatches(actualException -> actualException == expectedException)
+                    .expectErrorMatches(actual -> actual == expectedException)
                     .verify();
 
-            Mockito.verify(mapper)
-                    .toTaskaEventJsonAsString(event);
+        }
 
-            Mockito.verify(kafkaSender)
-                    .send(ArgumentMatchers.any(Mono.class));
+        @Test
+        @DisplayName("Должен пробрасывать ошибку, когда SenderResult содержит exception")
+        void shouldPropagateError_whenSenderResultHasException() {
+            RuntimeException expectedException = new RuntimeException("delivery timeout");
+
+            @SuppressWarnings("unchecked")
+            SenderResult<UUID> senderResult = Mockito.mock(SenderResult.class);
+            Mockito.when(senderResult.exception()).thenReturn(expectedException);
+
+            Mockito.when(mapper.toTaskaEventJsonAsString(event))
+                    .thenReturn(expectedJson);
+            Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
+                    .thenReturn(Flux.just(senderResult));
+
+            StepVerifier.create(publisher.publish(event))
+                    .expectErrorMatches(actual -> actual == expectedException)
+                    .verify();
         }
 
         @Test
