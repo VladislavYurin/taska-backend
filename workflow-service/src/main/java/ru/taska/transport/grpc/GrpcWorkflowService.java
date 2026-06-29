@@ -1,26 +1,21 @@
 package ru.taska.transport.grpc;
 
-import io.r2dbc.spi.R2dbcException;
+import exception.GrpcExceptionHandler;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionException;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.Workflow;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.service.WorkflowService;
 import validator.GrpcRequestValidators;
 
-import java.util.UUID;
-
 
 @Slf4j
-@Service
+@GrpcService
 @AllArgsConstructor
 public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServiceImplBase {
 
@@ -48,11 +43,6 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                             .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()));
                 })
                 .map(workflowMapper::toWorkflowProto)
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        ex -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof io.grpc.StatusRuntimeException),
-                        e -> log.error("getWorkflowForProject failed" + e.getMessage()))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                .transform(GrpcExceptionHandler.withErrorHandling("getWorkflowForProject"));
     }
 }

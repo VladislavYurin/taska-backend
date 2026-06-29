@@ -43,7 +43,7 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
                 .onErrorResume(DataIntegrityViolationException.class, ex -> {
                     Optional<String> constraint = extractConstraintName(ex);
                     if (constraint.isPresent()) {
-                        if ("users_email_uniq".equals(constraint.get())) {
+                        if ("users_email_key".equals(constraint.get())) {
                             return Mono.error(new DomainException(
                                     DomainStatus.ALREADY_EXISTS,
                                     "User with email " + request.getBody().getEmail() + " already exists"

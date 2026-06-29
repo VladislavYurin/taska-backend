@@ -249,8 +249,8 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("internal error")
+                                            error instanceof io.grpc.StatusRuntimeException statusException &&
+                                                    statusException.getStatus().getCode() == io.grpc.Status.Code.INTERNAL
                 )
                 .verify();
     }
@@ -453,8 +453,8 @@ class AuthGrpcServiceTest {
             // When & Then
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
-                            error instanceof io.grpc.StatusRuntimeException &&
-                                    error.getMessage().contains("Unexpected error")
+                                                error instanceof io.grpc.StatusRuntimeException statusException &&
+                                                        statusException.getStatus().getCode() == io.grpc.Status.Code.INTERNAL
                     )
                     .verify();
 
