@@ -38,9 +38,9 @@ class AdminInviteUserMapperTest {
                                                                .expiresAt(TestConstantHolder.INVITE_TOKEN_EXPIRES_AT)
                                                                .build();
         OutboxEvent event = mapper.buildUserInvitedOutboxEvent(tokenResponse, TestConstantHolder.TEST_USER_EMAIL, REQUEST_ID);
-        Assertions.assertThat(event.getAggregateType()).isEqualTo("USER");
+        Assertions.assertThat(event.getAggregateType()).isEqualTo("user");
         Assertions.assertThat(event.getAggregateId()).isEqualTo(TestConstantHolder.TEST_USER_ID);
-        Assertions.assertThat(event.getEventType()).isEqualTo("USER_INVITED");
+        Assertions.assertThat(event.getEventType()).isEqualTo("UserInvited");
         Assertions.assertThat(event.getAttempts()).isZero();
 
         JsonNode payload = event.getPayload();

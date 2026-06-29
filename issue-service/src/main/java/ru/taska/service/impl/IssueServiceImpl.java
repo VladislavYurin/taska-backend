@@ -24,6 +24,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.PageResult;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -48,7 +49,6 @@ public class IssueServiceImpl implements IssueService {
 
     private static final int INIT_VERSION = 1;
     private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
-    private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
     private final IssueProperties issueProperties;
     private final GrpcProjectServiceClient grpcProjectServiceClient;
@@ -110,7 +110,7 @@ public class IssueServiceImpl implements IssueService {
                                                                                          .flatMap(issueRepository::save)
                                                                                          .flatMap(issue -> {
                                                                                              IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                                                                                             OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_CREATED, requestId);
+                                                                                             OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_CREATED, requestId);
                                                                                              IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash, issue, issueProperties.idempotencyKeyTtl().ttl());
                                                                                              return issueHistoryRepository.save(history)
                                                                                                                           .then(outboxEventRepository.save(event))
@@ -172,7 +172,7 @@ public class IssueServiceImpl implements IssueService {
                                                 .buildIssueHistory(savedIssue, IssueEventType.ASSIGNED, actorUserId);
                                         history.setPayload(historyPayload);
                                         OutboxEvent event = issueMapper
-                                                .buildOutboxEvent(savedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_ASSIGNED, requestId);
+                                                .buildOutboxEvent(savedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_ASSIGNED, requestId);
                                         return issueHistoryRepository.save(history)
                                                 .then(outboxEventRepository.save(event))
                                                 .then(Mono.fromRunnable(() ->
@@ -218,7 +218,7 @@ public class IssueServiceImpl implements IssueService {
 
                         IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
                         history.setPayload(historyPayload);
-                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, requestId);
+                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, requestId);
 
                         return issueRepository.save(issue)
                                 .flatMap(savedIssue -> issueHistoryRepository.save(history)
@@ -255,7 +255,7 @@ public class IssueServiceImpl implements IssueService {
                         }))
                         .flatMap(deletedIssue -> {
                             IssueHistory history = issueMapper.buildIssueHistory(deletedIssue, IssueEventType.DELETED, actorUserId);
-                            OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_DELETED, requestId);
+                            OutboxEvent outboxEvent = issueMapper.buildOutboxEvent(deletedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_DELETED, requestId);
 
                             return issueHistoryRepository.save(history)
                                     .then(outboxEventRepository.save(outboxEvent))
