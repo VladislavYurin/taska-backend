@@ -16,6 +16,7 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import ru.taska.event.AggregateType;
 
 import java.util.UUID;
 
@@ -23,9 +24,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class OutboxEventServiceImpl implements OutboxEventService {
-
-    private static final String PROJECT_AGREGATE_TYPE = "PROJECT";
-    private static final String MEMBER_AGREGATE_TYPE = "PROJECT_MEMBER";
 
     private static final String PROJECT_CREATED = EventType.PROJECT_CREATED.getValue();
     private static final String MEMBER_ADDED = EventType.MEMBER_ADDED.getValue();
@@ -37,7 +35,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Override
     public Mono<OutboxEvent> saveProjectCreated(String requestId, Project project) {
         OutboxEvent event = OutboxEvent.builder()
-                                       .aggregateType(PROJECT_AGREGATE_TYPE)
+                                       .aggregateType(AggregateType.PROJECT.getValue())
                                        .aggregateId(project.getId())
                                        .eventType(PROJECT_CREATED)
                                        .payload(projectCreatedPayload(project))
@@ -53,7 +51,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Override
     public Mono<OutboxEvent> saveMemberAdded(String requestId, ProjectMember member) {
         OutboxEvent event = OutboxEvent.builder()
-                                       .aggregateType(MEMBER_AGREGATE_TYPE)
+                                       .aggregateType(AggregateType.PROJECT.getValue())
                                        .aggregateId(member.getProjectId())
                                        .eventType(MEMBER_ADDED)
                                        .payload(memberAddedPayload(member))
@@ -70,7 +68,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Override
     public Mono<OutboxEvent> saveMemberRemoved(String requestId, UUID deletedMemberId, UUID projectId){
         OutboxEvent event = OutboxEvent.builder()
-                .aggregateType(MEMBER_AGREGATE_TYPE)
+                .aggregateType(AggregateType.PROJECT.getValue())
                 .aggregateId(projectId)
                 .eventType(MEMBER_REMOVED)
                 .payload(memberRemovedPayload(deletedMemberId, projectId))

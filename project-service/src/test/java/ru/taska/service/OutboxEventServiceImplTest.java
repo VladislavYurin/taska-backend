@@ -73,7 +73,7 @@ class OutboxEventServiceImplTest {
             outboxEventService.saveProjectCreated(REQUEST_ID, project()).block();
 
             OutboxEvent event = capture();
-            Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT");
+            Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
             Assertions.assertThat(event.getEventType()).isEqualTo("ProjectCreated");
             Assertions.assertThat(event.getAggregateId()).isEqualTo(PROJECT_ID);
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
@@ -90,7 +90,7 @@ class OutboxEventServiceImplTest {
             outboxEventService.saveMemberAdded(REQUEST_ID, member()).block();
 
             OutboxEvent event = capture();
-            Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT_MEMBER");
+            Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
             Assertions.assertThat(event.getEventType()).isEqualTo("MemberAdded");
             Assertions.assertThat(event.getAggregateId()).isEqualTo(PROJECT_ID);
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
@@ -107,7 +107,7 @@ class OutboxEventServiceImplTest {
             outboxEventService.saveMemberRemoved(REQUEST_ID, member().getUserId(), member().getProjectId()).block();
 
             OutboxEvent event = capture();
-            Assertions.assertThat(event.getAggregateType()).isEqualTo("PROJECT_MEMBER");
+            Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
             Assertions.assertThat(event.getEventType()).isEqualTo("MemberRemoved");
             Assertions.assertThat(event.getAggregateId()).isEqualTo(PROJECT_ID);
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);

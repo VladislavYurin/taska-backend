@@ -103,8 +103,8 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
 
         StepVerifier.create(outboxEventRepository.findByAggregateId(userId))
                 .assertNext(event -> {
-                    Assertions.assertThat(event.getAggregateType()).isEqualTo("USER");
-                    Assertions.assertThat(event.getEventType()).isEqualTo("USER_INVITED");
+                    Assertions.assertThat(event.getAggregateType()).isEqualTo("user");
+                    Assertions.assertThat(event.getEventType()).isEqualTo("UserInvited");
                     Assertions.assertThat(event.getPayload().get("rawInviteToken").asString()).isNotBlank();
                     Assertions.assertThat(event.getPayload().get("email").asString()).isEqualTo(TestConstantHolder.TEST_USER_EMAIL);
                     Assertions.assertThat(event.getPayload().get("expiresAt")).isNotNull();

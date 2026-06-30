@@ -41,7 +41,7 @@ class OutboxEventMapperTest {
                     "createdBy", createdBy.toString()
             ));
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("ProjectCreated", "PROJECT", projectId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("ProjectCreated", "project", projectId, source));
 
             Assertions.assertThat(taskaEvent.eventType()).isEqualTo("ProjectCreated");
             JsonNode payload = taskaEvent.payload();
@@ -63,7 +63,7 @@ class OutboxEventMapperTest {
                     "addedBy", addedBy.toString()
             ));
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberAdded", "PROJECT_MEMBER", projectId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberAdded", "project", projectId, source));
 
             JsonNode payload = taskaEvent.payload();
             Assertions.assertThat(payload.get("projectId").asString()).isEqualTo(projectId.toString());
@@ -82,7 +82,7 @@ class OutboxEventMapperTest {
                     "role", "ADMIN"
             ));
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberRoleChanged", "PROJECT_MEMBER", projectId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberRoleChanged", "project", projectId, source));
 
             JsonNode payload = taskaEvent.payload();
             Assertions.assertThat(payload.get("userId").asString()).isEqualTo(userId.toString());
@@ -98,7 +98,7 @@ class OutboxEventMapperTest {
                     "userId", userId.toString()
             ));
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberRemoved", "PROJECT_MEMBER", projectId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("MemberRemoved", "project", projectId, source));
 
             JsonNode payload = taskaEvent.payload();
             Assertions.assertThat(payload.get("projectId").asString()).isEqualTo(projectId.toString());
@@ -114,7 +114,7 @@ class OutboxEventMapperTest {
 
             JsonNode source = objectMapper.valueToTree(sourceMap);
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("ProjectCreated", "PROJECT", projectId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("ProjectCreated", "project", projectId, source));
 
             Assertions.assertThat(taskaEvent.payload().get("createdBy").isNull()).isTrue();
         }
@@ -124,7 +124,7 @@ class OutboxEventMapperTest {
             UUID aggregateId = UUID.randomUUID();
             JsonNode source = objectMapper.valueToTree(Map.of("custom", "value"));
 
-            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("SomethingUnknown", "PROJECT", aggregateId, source));
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("SomethingUnknown", "project", aggregateId, source));
 
             Assertions.assertThat(taskaEvent.payload().get("custom").asString()).isEqualTo("value");
         }
@@ -142,7 +142,7 @@ class OutboxEventMapperTest {
                     "createdBy", UUID.randomUUID().toString()
             ));
 
-            String json = mapper.toTaskaEventJsonAsString(event("ProjectCreated", "PROJECT", projectId, source));
+            String json = mapper.toTaskaEventJsonAsString(event("ProjectCreated", "project", projectId, source));
 
             Assertions.assertThat(json).contains("\"eventType\":\"ProjectCreated\"");
             Assertions.assertThat(json).contains("\"projectKey\":\"ABC\"");

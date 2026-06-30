@@ -12,6 +12,7 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -62,7 +63,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.when(issueMapper.buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID))
                 .thenReturn(history);
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.empty());
-        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED, REQUEST_ID))
+        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_ASSIGNED, REQUEST_ID))
                 .thenReturn(event);
         Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.empty());
         existingIssue.setAssigneeId(null);
@@ -91,7 +92,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
         Mockito.verify(issueMapper).buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, "issue", EventType.ISSUE_ASSIGNED, REQUEST_ID);
+        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_ASSIGNED, REQUEST_ID);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }

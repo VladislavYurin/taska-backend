@@ -60,7 +60,7 @@ class OutboxEventPublisherTest {
 
         event = OutboxEvent.builder()
                            .id(UUID.randomUUID())
-                           .aggregateType("PROJECT")
+                           .aggregateType("project")
                            .aggregateId(UUID.randomUUID())
                            .eventType("ProjectCreated")
                            .build();

@@ -9,6 +9,8 @@ import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
 import ru.taska.dto.InviteTokenResponse;
 import ru.taska.dto.UserInvitedPayload;
+import ru.taska.event.AggregateType;
+import ru.taska.event.EventType;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -34,9 +36,9 @@ public class AdminInviteUserMapper {
     public OutboxEvent buildUserInvitedOutboxEvent(InviteTokenResponse inviteTokenResponse, String email, String requestId) {
         JsonNode payloadJson = objectMapper.valueToTree(buildUserInvitedPayload(inviteTokenResponse, email));
         return OutboxEvent.builder()
-                          .aggregateType("USER")
+                          .aggregateType(AggregateType.USER.getValue())
                           .aggregateId(inviteTokenResponse.getUserId())
-                          .eventType("USER_INVITED")
+                          .eventType(EventType.USER_INVITED.getValue())
                           .payload(payloadJson)
                           .attempts(0)
                           .requestId(requestId)

@@ -14,6 +14,7 @@ import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 
 import java.util.Set;
@@ -128,7 +129,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .save(captor.capture());
 
         OutboxEvent savedEvent = captor.getValue();
-        Assertions.assertThat(savedEvent.getAggregateType()).isEqualTo("issue");
+        Assertions.assertThat(savedEvent.getAggregateType()).isEqualTo(AggregateType.ISSUE.getValue());
         Assertions.assertThat(savedEvent.getEventType()).isEqualTo(String.valueOf(EventType.ISSUE_CREATED.getValue()));
         Assertions.assertThat(savedEvent.getAggregateId()).isNotNull();
 
