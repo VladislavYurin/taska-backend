@@ -98,13 +98,14 @@ CREATE INDEX IF NOT EXISTS validator_rules_transition_idx
 -- Workflow Bindings
 CREATE TABLE IF NOT EXISTS taska.workflow_bindings
 (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id  uuid        NOT NULL,
     issue_type  text        NOT NULL,
     workflow_id uuid        NOT NULL REFERENCES taska.workflows (id) ON DELETE RESTRICT,
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now(),
 
-    PRIMARY KEY (project_id, issue_type)
+    CONSTRAINT workflow_bindings_project_issue_uniq UNIQUE (project_id, issue_type)
 );
 
 CREATE INDEX IF NOT EXISTS workflow_bindings_workflow_idx

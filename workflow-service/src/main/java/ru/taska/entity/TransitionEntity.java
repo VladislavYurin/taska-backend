@@ -19,7 +19,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.transitions")
+@Table(schema = "taska", name = "transitions")
 public class TransitionEntity {
 
     /**
