@@ -11,29 +11,11 @@ management:
       probes:
         enabled: true
 
-jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-and-validation-must-be-long-enough}
-
-# spring cloud gateway settings
-spring:
-  cloud:
-    gateway:
-      server:
-        webflux:
-          routes:
-            # Незащищённый эндпоинт
-            - id: auth_login
-              uri: ${GATEWAY_AUTH_SERVICE_URL:http://localhost:8081}
-              predicates:
-                - Path=/auth/**
-
-            # Защищенный эндпоинт (пример)
-            - id: test-service-protected-example
-              uri: https://wikipedia.com
-              predicates:
-                - Path=/test-service/**
-              filters:
-                - JwtValidating
+grpc:
+  client:
+    auth-service:
+      host: ${AUTH_GRPC_HOST:localhost}
+      port: ${AUTH_GRPC_PORT:9091}
 
 logging:
   level:
