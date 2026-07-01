@@ -21,8 +21,8 @@ public class ExampleController {
     private final GatewayRequestExecutor executor;
 
     @GetMapping("/me")
-    public Mono<GatewayUserContext> testEndpoint(ServerWebExchange exchange) {
-        return executor.execute(exchange, PROTECTED, context -> Mono.just(context.userContext()));
+    public Mono<GatewayContext> testEndpoint(ServerWebExchange exchange) {
+        return executor.execute(exchange, PROTECTED, Mono::just);
     }
 
     @GetMapping("/public")
