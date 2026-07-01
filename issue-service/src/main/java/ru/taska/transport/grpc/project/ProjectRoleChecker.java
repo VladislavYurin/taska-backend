@@ -1,4 +1,4 @@
-package ru.taska.transport.grpc;
+package ru.taska.transport.grpc.project;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +43,7 @@ public class ProjectRoleChecker {
             CheckProjectMemberRoleResponse response
     ) {
         if (!response.getProjectExists()) {
-            log.warn("[{}][{}]Project doesn't exist: projectId={}",
+            log.warn("[{}][{}] Project doesn't exist: projectId={}",
                     requestId, nodeId, projectId
             );
 
@@ -53,7 +53,7 @@ public class ProjectRoleChecker {
         }
 
         if (!response.getIsMember()) {
-            log.warn("[{}][{}]User isn't a member of the project: projectId={}, userId={}",
+            log.warn("[{}][{}] User isn't a member of the project: projectId={}, userId={}",
                     requestId, nodeId, projectId, userId
             );
 
@@ -64,14 +64,14 @@ public class ProjectRoleChecker {
 
         ProjectRole role = issueMapper.toDomainRole(response.getRole());
         if (!allowedRoles.contains(role)) {
-            log.warn("[{}][{}]Not allowed role for the project: role={}, projectId={}, userId={}",
+            log.warn("[{}][{}] Not allowed role for the project: role={}, projectId={}, userId={}",
                     requestId, nodeId, role, projectId, userId
             );
 
             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Not allowed role"));
         }
 
-        log.info("[{}][{}]Check role successfully complete: projectId={}, userId={}, role={}",
+        log.info("[{}][{}] Check role successfully complete: projectId={}, userId={}, role={}",
                 requestId, nodeId, projectId, userId, role
         );
 

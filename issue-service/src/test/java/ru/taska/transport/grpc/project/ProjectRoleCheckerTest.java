@@ -1,4 +1,4 @@
-package ru.taska.transport.grpc;
+package ru.taska.transport.grpc.project;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;

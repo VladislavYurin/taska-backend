@@ -8,6 +8,20 @@ option java_multiple_files = true;
 option java_package = "ru.taska.api.workflow.v1";
 option java_outer_classname = "WorkflowApiProto";
 
+enum IssueType {
+  ISSUE_TYPE_UNSPECIFIED = 0;
+  ISSUE_TYPE_TASK = 1;
+  ISSUE_TYPE_BUG = 2;
+  ISSUE_TYPE_STORY = 3;
+}
+
+enum IssueStatus {
+  ISSUE_STATUS_UNSPECIFIED = 0;
+  ISSUE_STATUS_TODO = 1;
+  ISSUE_STATUS_IN_PROGRESS = 2;
+  ISSUE_STATUS_DONE = 3;
+}
+
 service WorkflowService {
   /**
    * Возвращает workflow, привязанный к (project_id, issue_type).
@@ -20,13 +34,6 @@ service WorkflowService {
    */
   rpc ValidateTransition(ValidateTransitionRequest)
       returns (ValidateTransitionResponse);
-}
-
-enum IssueStatus {
-  ISSUE_STATUS_UNSPECIFIED = 0;
-  ISSUE_STATUS_TODO = 1;
-  ISSUE_STATUS_IN_PROGRESS = 2;
-  ISSUE_STATUS_DONE = 3;
 }
 
 message GetWorkflowForProjectRequest {
@@ -203,7 +210,7 @@ message ValidateTransitionRequestBody {
   /**
    * Дополнительные данные для перехода.
    */
-  string payload = 4;
+  optional string payload = 4;
 }
 
 message IssueValidateSnapshot {
@@ -220,12 +227,12 @@ message IssueValidateSnapshot {
   /**
    * Тип задачи.
    */
-  string issue_type = 3;
+  IssueType issue_type = 3;
 
   /**
    * Текущий статус задачи.
    */
-  string status_key = 4;
+  IssueStatus status_key = 4;
 }
 
 message ValidateTransitionResponse {
@@ -244,17 +251,17 @@ message ValidateTransitionResponseBody {
   /**
    * Разрешен ли переход по workflow.
    */
-  bool is_valid = 2;
+  bool is_valid = 1;
 
   /**
    * Целевой статус (состояние задачи после перехода).
    */
-  IssueStatus to_status_key = 3;
+  IssueStatus to_status_key = 2;
 
   /**
    * Список нарушений, если переход заблокирован.
    */
-  repeated TransitionViolation transition_violations = 4;
+  repeated TransitionViolation transition_violations = 3;
 }
 
 message TransitionViolation {

@@ -4,10 +4,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("grpc.client")
 public record GrpcClientProperties(
-        ProjectService projectService
+        ExternalService projectService,
+        ExternalService workflowService
 ) {
 
-    public record ProjectService(
+    public record ExternalService(
             String host,
             Integer port
     ) {

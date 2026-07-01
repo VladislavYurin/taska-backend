@@ -3,9 +3,6 @@ package ru.taska.transport.grpc;
 import exception.GrpcExceptionHandler;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
@@ -22,13 +19,19 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.IssueStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
+import ru.taska.service.transition.IssueTransitionProcessor;
 import validator.GrpcRequestValidators;
+
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 @Slf4j
 @GrpcService
@@ -36,6 +39,7 @@ import validator.GrpcRequestValidators;
 public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBase {
 
     private final IssueService issueService;
+    private final IssueTransitionProcessor issueTransitionProcessor;
     private final IssueMapper issueMapper;
 
     @Override
@@ -377,6 +381,73 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                 })
                 .map(issueMapper::toUpdateIssueProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
+    }
+
+    /**
+     * Выполняет переход задачи по workflow.
+     *
+     * @param request {@link Mono} с запросом {@link TransitionIssueRequest} с данными для перехода задачи по workflow.
+     * @return        {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
+     */
+    @Override
+    public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getTransitionId(), "body.transitionId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ),
+                                Mono.just(req.getBody().getPayload())
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(),
+                                        req.getHeader().getNodeId(),
+                                        "transitionIssue"
+                                ))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID issueId = t.getT3();
+                            UUID transitionId = t.getT4();
+                            UUID actorUserId = t.getT5();
+                            String payload = t.getT6();
+
+                            log.info("[{}][{}] transitionIssue: issueId={}, transitionId={}, actorUserId={}",
+                                    requestId, nodeId, issueId, transitionId, actorUserId);
+
+                            return issueTransitionProcessor.transitionIssue(
+                                            requestId,
+                                            nodeId,
+                                            issueId,
+                                            transitionId,
+                                            actorUserId,
+                                            payload
+                                    )
+                                    .doOnNext(issueWithHistory ->
+                                            log.info(
+                                                    "[{}][{}] transitionIssue: issue successfully transitioned, id={}, statusKey={}",
+                                                    requestId, nodeId,
+                                                    issueWithHistory.getIssue().getId(),
+                                                    issueWithHistory.getIssue().getStatusKey().name())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "transitionIssue")
+                                    );
+                        }))
+                .map(issueMapper::toIssueDetailsProto)
+                .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {

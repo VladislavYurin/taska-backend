@@ -14,8 +14,9 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.impl.IssueServiceImpl;
-import ru.taska.transport.grpc.GrpcProjectServiceClient;
-import ru.taska.transport.grpc.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
@@ -44,6 +45,9 @@ public class IssueServiceImplTest {
     @Mock
     protected ProjectRoleChecker projectRoleChecker;
 
+    @Mock
+    protected IssueTransitionValidator validator;
+
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     protected IssueProperties issueProperties;
 
@@ -71,4 +75,6 @@ public class IssueServiceImplTest {
     protected static final String NODE_ID = "issue-service";
     protected static final String IDEMPOTENCY_KEY_1 = "00000000-0000-0000-0000-000000000006";
     protected static final String IDEMPOTENCY_KEY_2 = "00000000-0000-0000-0000-000000000007";
+    protected static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000008");
+    protected static final String PAYLOAD = "some-kind-of-payload";
 }

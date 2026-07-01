@@ -1,8 +1,6 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
-import java.time.Duration;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
@@ -11,6 +9,7 @@ import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.workflow.v1.IssueValidateSnapshot;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
@@ -25,6 +24,8 @@ import ru.taska.event.EventType;
 import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 @Component
@@ -169,6 +170,15 @@ public class IssueMapper {
         };
     }
 
+    public IssueValidateSnapshot toIssueValidateSnapshotProto(Issue issue) {
+        return IssueValidateSnapshot.newBuilder()
+                .setIssueId(issue.getId().toString())
+                .setProjectId(issue.getProjectId().toString())
+                .setIssueType(toWorkflowProtoIssueType(issue.getIssueType()))
+                .setStatusKey(toWorkflowProtoIssueStatus(issue.getStatusKey()))
+                .build();
+    }
+
     public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {
         return switch (proto) {
             case ISSUE_TYPE_TASK -> IssueType.TASK;
@@ -179,6 +189,15 @@ public class IssueMapper {
     }
 
     public IssueStatus toDomainIssueStatus(ru.taska.api.issue.v1.IssueStatus proto) {
+        return switch (proto) {
+            case ISSUE_STATUS_TODO -> IssueStatus.TODO;
+            case ISSUE_STATUS_IN_PROGRESS -> IssueStatus.IN_PROGRESS;
+            case ISSUE_STATUS_DONE -> IssueStatus.DONE;
+            default -> throw new IllegalArgumentException("Unknown IssueStatus: " + proto);
+        };
+    }
+
+    public IssueStatus toDomainIssueStatus(ru.taska.api.workflow.v1.IssueStatus proto) {
         return switch (proto) {
             case ISSUE_STATUS_TODO -> IssueStatus.TODO;
             case ISSUE_STATUS_IN_PROGRESS -> IssueStatus.IN_PROGRESS;
@@ -214,6 +233,14 @@ public class IssueMapper {
         };
     }
 
+    private ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
+        return switch (domain) {
+            case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
+            case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
+            case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+        };
+    }
+
     private ru.taska.api.issue.v1.IssuePriority toProtoIssuePriority(IssuePriority domain) {
         return switch (domain) {
             case LOW -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW;
@@ -227,6 +254,14 @@ public class IssueMapper {
             case TODO -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_TODO;
             case IN_PROGRESS -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_IN_PROGRESS;
             case DONE -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_DONE;
+        };
+    }
+
+    private ru.taska.api.workflow.v1.IssueStatus toWorkflowProtoIssueStatus(IssueStatus domain) {
+        return switch (domain) {
+            case TODO -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_TODO;
+            case IN_PROGRESS -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_IN_PROGRESS;
+            case DONE -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_DONE;
         };
     }
 
