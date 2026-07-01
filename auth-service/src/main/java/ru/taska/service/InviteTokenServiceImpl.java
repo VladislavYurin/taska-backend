@@ -1,18 +1,19 @@
 package ru.taska.service;
 
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import ru.taska.dto.InviteTokenResponse;
+import ru.taska.entity.InviteToken;
+import ru.taska.repository.InviteTokenRepository;
+import ru.taska.security.config.JwtProperties;
+
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.codec.digest.DigestUtils;
-import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import ru.taska.entity.InviteToken;
-import ru.taska.dto.InviteTokenResponse;
-import ru.taska.repository.InviteTokenRepository;
-import ru.taska.security.config.JwtProperties;
 
 @Service
 @RequiredArgsConstructor
@@ -31,17 +32,17 @@ public class InviteTokenServiceImpl implements InviteTokenService {
     public Mono<InviteTokenResponse> createInviteToken(UUID userId) {
         String rawToken = generateRawToken();
         InviteToken tokenEntity = InviteToken.builder()
-                                       .userId(userId)
-                                       .tokenHash(hashToken(rawToken, userId))
-                                       .expiresAt(Instant.now().plus(jwtProperties.getInviteTokenTtl().toDays(), ChronoUnit.DAYS))
-                                       .build();
+                .userId(userId)
+                .tokenHash(hashToken(rawToken))
+                .expiresAt(Instant.now().plus(jwtProperties.getInviteTokenTtl().toDays(), ChronoUnit.DAYS))
+                .build();
         return inviteTokenRepository.save(tokenEntity)
-                                    .map(savedToken -> InviteTokenResponse.builder()
-                                                                          .id(savedToken.getId())
-                                                                          .userId(savedToken.getUserId())
-                                                                          .rawToken(rawToken)
-                                                                          .expiresAt(savedToken.getExpiresAt())
-                                                                          .build());
+                .map(savedToken -> InviteTokenResponse.builder()
+                        .id(savedToken.getId())
+                        .userId(savedToken.getUserId())
+                        .rawToken(rawToken)
+                        .expiresAt(savedToken.getExpiresAt())
+                        .build());
     }
 
     private String generateRawToken() {
@@ -50,8 +51,7 @@ public class InviteTokenServiceImpl implements InviteTokenService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private String hashToken(String rawToken, UUID userId) {
-        String salt = rawToken + userId.toString();
-        return DigestUtils.sha256Hex(salt);
+    private String hashToken(String rawToken) {
+        return DigestUtils.sha256Hex(rawToken);
     }
 }
