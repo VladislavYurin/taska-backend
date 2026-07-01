@@ -1,11 +1,5 @@
 package ru.taska.service.impl;
 
-import java.time.Instant;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -41,6 +35,13 @@ import ru.taska.util.RequestHasher;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -79,47 +80,47 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
                 .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
-                .flatMap(keyEntity -> {
+                        .flatMap(keyEntity -> {
 
-                    if (!keyEntity.getRequestHash().equals(currentRequestHash)) {
-                        log.warn("[{}][{}] Idempotency Key [{}] already used with a different request body", requestId, nodeId, idempotencyKey);
-                        return Mono.error(new DomainException(
-                                DomainStatus.FAILED_PRECONDITION,
-                                "Idempotency Key already used with a different request body"
-                        ));
-                    }
+                            if (!keyEntity.getRequestHash().equals(currentRequestHash)) {
+                                log.warn("[{}][{}] Idempotency Key [{}] already used with a different request body", requestId, nodeId, idempotencyKey);
+                                return Mono.error(new DomainException(
+                                        DomainStatus.FAILED_PRECONDITION,
+                                        "Idempotency Key already used with a different request body"
+                                ));
+                            }
 
-                    return Mono.fromCallable(() ->
-                            objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
-                            .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
+                            return Mono.fromCallable(() ->
+                                            objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
+                                    .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
 
-                }))
+                        }))
                 .switchIfEmpty(grpcProjectServiceClient.getProjectKey(requestId, nodeId, projectId)
-                                                       .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
-                                                                                         .map(number -> issueMapper.buildIssue(
-                                                                                                 projectId,
-                                                                                                 number,
-                                                                                                 projectKey + "-" + number,
-                                                                                                 issueType,
-                                                                                                 summary,
-                                                                                                 description,
-                                                                                                 priority,
-                                                                                                 reporterId,
-                                                                                                 INIT_STATUS,
-                                                                                                 INIT_VERSION))
-                                                                                         .flatMap(issueRepository::save)
-                                                                                         .flatMap(issue -> {
-                                                                                             IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
-                                                                                             OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_CREATED, requestId);
-                                                                                             IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash, issue, issueProperties.idempotencyKeyTtl().ttl());
-                                                                                             return issueHistoryRepository.save(history)
-                                                                                                                          .then(outboxEventRepository.save(event))
-                                                                                                                          .then(idempotencyKeyRepository.save(keyEntity))
-                                                                                                                          .then(Mono.fromRunnable(() ->
-                                                                                                                                                          log.debug("[{}][{}] Issue successfully created by user with id: {}",
-                                                                                                                                                                    requestId, nodeId, reporterId)))
-                                                                                                                          .thenReturn(issue);
-                                                                                         }))
+                        .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
+                                .map(number -> issueMapper.buildIssue(
+                                        projectId,
+                                        number,
+                                        projectKey + "-" + number,
+                                        issueType,
+                                        summary,
+                                        description,
+                                        priority,
+                                        reporterId,
+                                        INIT_STATUS,
+                                        INIT_VERSION))
+                                .flatMap(issueRepository::save)
+                                .flatMap(issue -> {
+                                    IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.CREATED, reporterId);
+                                    OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_CREATED, requestId);
+                                    IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash, issue, issueProperties.idempotencyKeyTtl().ttl());
+                                    return issueHistoryRepository.save(history)
+                                            .then(outboxEventRepository.save(event))
+                                            .then(idempotencyKeyRepository.save(keyEntity))
+                                            .then(Mono.fromRunnable(() ->
+                                                    log.debug("[{}][{}] Issue successfully created by user with id: {}",
+                                                            requestId, nodeId, reporterId)))
+                                            .thenReturn(issue);
+                                }))
                 );
 
     }
@@ -185,65 +186,65 @@ public class IssueServiceImpl implements IssueService {
 
     @Override
     @Transactional
-    public Mono<Issue> updateIssue(String requestId, String nodeId, UUID projectId,  UUID issueId, UUID actorUserId,
+    public Mono<Issue> updateIssue(String requestId, String nodeId, UUID projectId, UUID issueId, UUID actorUserId,
                                    String summary, String description, IssuePriority priority) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(issueRepository.findActiveById(issueId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
-                    return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND,
-                            "Issue with id: " + issueId + " was not found"));
-                }))
-                .flatMap(issue -> {
-                    if (!summary.equals(issue.getSummary())
-                            || !Objects.equals(description, issue.getDescription()) || !priority.equals(issue.getPriority())) {
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                            return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND,
+                                    "Issue with id: " + issueId + " was not found"));
+                        }))
+                        .flatMap(issue -> {
+                            if (!summary.equals(issue.getSummary())
+                                    || !Objects.equals(description, issue.getDescription()) || !priority.equals(issue.getPriority())) {
 
-                        ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
-                                "oldSummary", issue.getSummary(),
-                                "newSummary", summary,
-                                "oldDescription", Optional.ofNullable(issue.getDescription()),
-                                "newDescription", Optional.ofNullable(description),
-                                "oldPriority", issue.getPriority(),
-                                "newPriority", String.valueOf(priority)
-                        ));
+                                ObjectNode historyPayload = objectMapper.valueToTree(Map.of(
+                                        "oldSummary", issue.getSummary(),
+                                        "newSummary", summary,
+                                        "oldDescription", Optional.ofNullable(issue.getDescription()),
+                                        "newDescription", Optional.ofNullable(description),
+                                        "oldPriority", issue.getPriority(),
+                                        "newPriority", String.valueOf(priority)
+                                ));
 
-                        issue.setSummary(summary);
-                        issue.setDescription(description);
-                        issue.setPriority(priority);
-                        issue.setUpdatedAt(Instant.now());
-                        issue.setVersion(issue.getVersion() + 1);
+                                issue.setSummary(summary);
+                                issue.setDescription(description);
+                                issue.setPriority(priority);
+                                issue.setUpdatedAt(Instant.now());
+                                issue.setVersion(issue.getVersion() + 1);
 
-                        IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
-                        history.setPayload(historyPayload);
-                        OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, requestId);
+                                IssueHistory history = issueMapper.buildIssueHistory(issue, IssueEventType.UPDATED, actorUserId);
+                                history.setPayload(historyPayload);
+                                OutboxEvent event = issueMapper.buildOutboxEvent(issue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, requestId);
 
-                        return issueRepository.save(issue)
-                                .flatMap(savedIssue -> issueHistoryRepository.save(history)
-                                        .then(outboxEventRepository.save(event))
-                                        .then(Mono.fromRunnable(() ->
-                                                log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
-                                                        requestId, nodeId, issueId, actorUserId)))
-                                        .thenReturn(savedIssue)
-                                );
-                    }
+                                return issueRepository.save(issue)
+                                        .flatMap(savedIssue -> issueHistoryRepository.save(history)
+                                                .then(outboxEventRepository.save(event))
+                                                .then(Mono.fromRunnable(() ->
+                                                        log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
+                                                                requestId, nodeId, issueId, actorUserId)))
+                                                .thenReturn(savedIssue)
+                                        );
+                            }
 
-                    return Mono.defer(() -> {
-                        log.info("[{}][{}] Issue with id: {} equals updated issue by user with id: {}",
-                                requestId, nodeId, issueId, actorUserId);
-                        return Mono.just(issue);
-                    });
-                }));
+                            return Mono.defer(() -> {
+                                log.info("[{}][{}] Issue with id: {} equals updated issue by user with id: {}",
+                                        requestId, nodeId, issueId, actorUserId);
+                                return Mono.just(issue);
+                            });
+                        }));
     }
 
     @Override
     public Mono<Issue> deleteIssue(String requestId,
-            String nodeId,
-            UUID projectId,
-            UUID issueId,
-            UUID actorUserId
+                                   String nodeId,
+                                   UUID projectId,
+                                   UUID issueId,
+                                   UUID actorUserId
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
 

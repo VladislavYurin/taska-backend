@@ -20,6 +20,7 @@ public enum EventType {
     PROJECT_CREATED("ProjectCreated"),
     MEMBER_ADDED("MemberAdded"),
     MEMBER_REMOVED("MemberRemoved"),
+    MEMBER_UPDATED("MemberUpdated"),
     USER_ACTIVATED("UserActivated"),
     UNSUPPORTED("Unsupported");
 

@@ -10,7 +10,7 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
-import ru.taska.domain.ProjectMembershipInfoDto;
+import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
