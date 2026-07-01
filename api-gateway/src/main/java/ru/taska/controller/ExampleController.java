@@ -10,6 +10,9 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.filter.GatewayRequestExecutor;
 
+import static ru.taska.domain.EndpointSecurity.PROTECTED;
+import static ru.taska.domain.EndpointSecurity.PUBLIC;
+
 @RestController
 @RequestMapping("/api/gateway")
 @RequiredArgsConstructor
@@ -19,11 +22,11 @@ public class ExampleController {
 
     @GetMapping("/me")
     public Mono<GatewayUserContext> testEndpoint(ServerWebExchange exchange) {
-        return executor.execute(exchange, true, context -> Mono.just(context.userContext()));
+        return executor.execute(exchange, PROTECTED, context -> Mono.just(context.userContext()));
     }
 
     @GetMapping("/public")
     public Mono<GatewayContext> testNotSecuredEndpoint(ServerWebExchange exchange) {
-        return executor.execute(exchange, false, Mono::just);
+        return executor.execute(exchange, PUBLIC, Mono::just);
     }
 }

@@ -33,10 +33,10 @@ public class RequestIdProvider {
         String requestId = exchange.getRequest().getHeaders().getFirst(REQUEST_ID_HEADER);
 
         if (requestId != null && !requestId.isBlank()) {
-            log.info("[{}] Using X-Request-Id from incoming request", requestId);
+            log.debug("[{}] Using X-Request-Id from incoming request", requestId);
         } else {
             requestId = UUID.randomUUID().toString();
-            log.info("[{}] X-Request-Id not provided by client, generated new one", requestId);
+            log.debug("[{}] X-Request-Id not provided by client, generated new one", requestId);
         }
 
         exchange.getAttributes().put(REQUEST_ID_ATTR, requestId);

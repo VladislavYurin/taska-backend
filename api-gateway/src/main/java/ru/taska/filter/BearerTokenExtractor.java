@@ -46,7 +46,7 @@ public class BearerTokenExtractor {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Bearer token is blank");
         }
 
-        log.info("[{}] Token successfully extracted from Authorization header", requestId);
+        log.debug("[{}] Token successfully extracted from Authorization header", requestId);
         return token;
     }
 }

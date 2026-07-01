@@ -16,6 +16,10 @@ public class RestErrorMapper {
             case ALREADY_EXISTS -> HttpStatus.CONFLICT;
             case FAILED_PRECONDITION -> HttpStatus.BAD_REQUEST;
             case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case RESOURCE_EXHAUSTED -> HttpStatus.TOO_MANY_REQUESTS;
+            case DEADLINE_EXCEEDED -> HttpStatus.GATEWAY_TIMEOUT;
+            case ABORTED -> HttpStatus.CONFLICT;
+            case UNIMPLEMENTED -> HttpStatus.NOT_IMPLEMENTED;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }
