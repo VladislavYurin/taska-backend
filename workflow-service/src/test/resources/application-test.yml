@@ -1,0 +1,10 @@
+logging:
+  level:
+    ru.taska: DEBUG
+    liquibase: DEBUG
+    org.springframework.r2dbc: DEBUG
+    io.r2dbc.postgresql.QUERY: DEBUG
+    io.r2dbc.postgresql.PARAM: DEBUG
+
+workflow:
+  default-project-id: 00000000-0000-0000-0000-000000000000

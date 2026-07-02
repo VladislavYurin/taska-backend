@@ -42,6 +42,12 @@
             <artifactId>postgresql</artifactId>
         </dependency>
 
+        <!-- Liquibase (при старте приложения + Maven-плагин) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-liquibase</artifactId>
+        </dependency>
+
         <!-- gRPC + Reactor gRPC -->
         <dependency>
             <groupId>org.springframework.grpc</groupId>
@@ -92,6 +98,18 @@
         <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- tests -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

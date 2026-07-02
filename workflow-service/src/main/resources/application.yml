@@ -11,7 +11,7 @@ spring:
     password: ${WORKFLOW_SPRING_R2DBC_PASSWORD:taska}
   liquibase:
       enabled: true
-      change-log: classpath:/db/changelog/db.changelog-master.yaml
+      change-log: classpath:db/changelog/db.changelog-master.yaml
       url: ${WORKFLOW_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5435/workflow_db}
       user: ${WORKFLOW_SPRING_LIQUIBASE_USERNAME:taska}
       password: ${WORKFLOW_SPRING_LIQUIBASE_PASSWORD:taska}
@@ -30,3 +30,6 @@ logging:
   level:
     ru.taska: ${WORKFLOW_LOG_LEVEL_ROOT:INFO}
     liquibase: ${WORKFLOW_LOG_LEVEL_LIQUIBASE:INFO}
+
+workflow:
+  default-project-id: 00000000-0000-0000-0000-000000000000

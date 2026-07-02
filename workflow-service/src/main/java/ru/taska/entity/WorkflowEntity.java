@@ -22,7 +22,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.workflows")
+@Table(schema = "taska", name = "workflows")
 public class WorkflowEntity {
 
     /**
