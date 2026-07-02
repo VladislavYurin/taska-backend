@@ -12,7 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.config.props.KafkaProperties;
+import ru.taska.config.OutboxConfig;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.transport.kafka.OutboxEventProcessor;
@@ -32,6 +32,9 @@ class OutboxEventProcessorTest {
     private OutboxEventRepository repository;
 
     @Mock
+    private OutboxConfig config;
+
+    @Mock
     private OutboxEventPublisher publisher;
 
     private OutboxEventProcessor processor;
@@ -40,18 +43,7 @@ class OutboxEventProcessorTest {
 
     @BeforeEach
     void setUp() {
-        KafkaProperties config = new KafkaProperties(
-                new KafkaProperties.Topics("project.events"),
-                new KafkaProperties.Outbox(
-                        Duration.ofSeconds(5),
-                        Duration.ofSeconds(10),
-                        BATCH_SIZE,
-                        MAX_ATTEMPTS,
-                        Duration.ofMinutes(5)
-                )
-        );
-
-        processor = new OutboxEventProcessor(repository, config, publisher);
+        processor = new OutboxEventProcessor(publisher,config,repository);
 
         event = OutboxEvent.builder()
                            .id(UUID.randomUUID())
@@ -63,6 +55,11 @@ class OutboxEventProcessorTest {
 
     @Nested
     class ProcessOutboxEvents {
+
+        @BeforeEach
+        void setUpProcessOutboxEvents() {
+            Mockito.when(config.getBatchSize()).thenReturn(BATCH_SIZE);
+        }
 
         @Test
         @DisplayName("Успешная обработка события")
@@ -94,6 +91,8 @@ class OutboxEventProcessorTest {
         void shouldRetry_whenAttemptsLessThanMax() {
             event.setAttempts(0);
 
+            Mockito.when(config.getMaxAttempts()).thenReturn(MAX_ATTEMPTS);
+
             Mockito.when(repository.findUnpublished(BATCH_SIZE))
                    .thenReturn(Flux.just(event));
             Mockito.when(publisher.publish(event))
@@ -119,6 +118,8 @@ class OutboxEventProcessorTest {
         @DisplayName("Помечает событие FAILED, когда attempts достигает порога maxAttempts")
         void shouldMarkAsFailed_whenAttemptsReachMax() {
             event.setAttempts(MAX_ATTEMPTS - 1);
+
+            Mockito.when(config.getMaxAttempts()).thenReturn(MAX_ATTEMPTS);
 
             Mockito.when(repository.findUnpublished(BATCH_SIZE))
                    .thenReturn(Flux.just(event));
@@ -172,6 +173,11 @@ class OutboxEventProcessorTest {
 
     @Nested
     class ProcessStuckEvents {
+
+        @BeforeEach
+        void setUpProcessStuckEvents() {
+            Mockito.when(config.getProcessingTimeout()).thenReturn(Duration.ofMinutes(5));
+        }
 
         @Test
         @DisplayName("Успешное восстановление застрявших событий")

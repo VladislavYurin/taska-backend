@@ -10,7 +10,8 @@ import ru.taska.domain.OutboxEvent;
 import java.time.Instant;
 import java.util.UUID;
 
-public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, UUID> {
+public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, UUID>,
+        CommonOutboxEventRepository<OutboxEvent>{
 
     /**
      * Выбирает batchSize событий и возвращает их, одновременно меняя статус на 'PROCESSING'.

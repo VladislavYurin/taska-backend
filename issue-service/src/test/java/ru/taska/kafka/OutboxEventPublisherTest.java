@@ -4,12 +4,12 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,7 +19,7 @@ import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
-import ru.taska.config.props.KafkaTopicsProperties;
+import ru.taska.config.OutboxConfig;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.mapper.OutboxEventMapper;
@@ -31,16 +31,17 @@ import java.util.UUID;
 @ExtendWith(MockitoExtension.class)
 class OutboxEventPublisherTest {
 
+    private static final String TOPIC = "issue.events";
+
     @Mock
     private KafkaSender<String, String> kafkaSender;
 
     @Mock
-    private KafkaTopicsProperties properties;
+    private OutboxConfig config;
 
     @Mock
     private OutboxEventMapper mapper;
 
-    @InjectMocks
     private OutboxEventPublisher publisher;
 
     @Captor
@@ -51,6 +52,10 @@ class OutboxEventPublisherTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.when(config.getTopic()).thenReturn(TOPIC);
+
+        publisher = new OutboxEventPublisher(kafkaSender, config, mapper);
+
         event = OutboxEvent.builder()
                 .id(UUID.randomUUID())
                 .aggregateType(AggregateType.ISSUE.getValue())
@@ -62,89 +67,91 @@ class OutboxEventPublisherTest {
         expectedJson = """
                 {"id":"%s","aggregateType":"%s","aggregateId":"%s","eventType":"IssueCreated","payload":{}}
                 """.formatted(event.getId(), AggregateType.ISSUE.getValue(), event.getAggregateId());
-
-        var topics = new KafkaTopicsProperties.Topics("issue.events");
-
-        Mockito.when(properties.topics())
-                .thenReturn(topics);
-
-        Mockito.when(mapper.toTaskaEventJsonAsString(event))
-                .thenReturn(expectedJson);
     }
+    
+    @Nested
+    class Publish {
+        @Test
+        @DisplayName("Должен успешно опубликовать событие в Kafka")
+        void shouldSendEventToKafka_whenSuccess() {
+            SenderResult<UUID> senderResult = Mockito.mock(SenderResult.class);
 
-    @Test
-    @DisplayName("Должен успешно опубликовать событие в Kafka")
-    void publish_shouldSendEventToKafka_whenSuccess() {
-        SenderResult<UUID> senderResult = Mockito.mock(SenderResult.class);
-        RecordMetadata recordMetadata = Mockito.mock(RecordMetadata.class);
+            Mockito.when(mapper.toTaskaEventJsonAsString(event))
+                    .thenReturn(expectedJson);
+            RecordMetadata recordMetadata = Mockito.mock(RecordMetadata.class);
 
-        Mockito.when(senderResult.recordMetadata())
-                .thenReturn(recordMetadata);
+            Mockito.when(senderResult.recordMetadata())
+                    .thenReturn(recordMetadata);
 
-        Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                .thenReturn(Flux.just(senderResult));
+            Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
+                    .thenReturn(Flux.just(senderResult));
 
-        StepVerifier.create(publisher.publish(event))
-                .verifyComplete();
+            StepVerifier.create(publisher.publish(event))
+                    .verifyComplete();
 
-        Mockito.verify(mapper)
-                .toTaskaEventJsonAsString(event);
+            Mockito.verify(mapper)
+                    .toTaskaEventJsonAsString(event);
 
-        Mockito.verify(kafkaSender)
-                .send(captor.capture());
+            Mockito.verify(kafkaSender)
+                    .send(captor.capture());
 
-        SenderRecord<String, String, UUID> record = captor.getValue().block();
+            SenderRecord<String, String, UUID> record = captor.getValue().block();
 
-        Assertions.assertThat(record)
-                .isNotNull();
+            Assertions.assertThat(record)
+                    .isNotNull();
 
-        Assertions.assertThat(record.topic())
-                .isEqualTo("issue.events");
+            Assertions.assertThat(record.topic())
+                    .isEqualTo(TOPIC);
 
-        Assertions.assertThat(record.key())
-                .isEqualTo(event.getAggregateId().toString());
+            Assertions.assertThat(record.key())
+                    .isEqualTo(event.getAggregateId().toString());
 
-        Assertions.assertThat(record.value())
-                .isEqualTo(expectedJson);
+            Assertions.assertThat(record.value())
+                    .isEqualTo(expectedJson);
 
-        Assertions.assertThat(record.correlationMetadata())
-                .isEqualTo(event.getId());
-    }
+            Assertions.assertThat(record.correlationMetadata())
+                    .isEqualTo(event.getId());
+        }
 
-    @Test
-    @DisplayName("Должен пробрасывать ошибку при неудачной отправке в Kafka")
-    void publish_shouldPropagateError_whenKafkaFails() {
-        var expectedException = new RuntimeException("Kafka unavailable");
+        @Test
+        @DisplayName("Должен пробрасывать ошибку при неудачной отправке в Kafka")
+        void shouldPropagateError_whenKafkaFails() {
+            var expectedException = new RuntimeException("Kafka unavailable");
 
-        Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                .thenReturn(Flux.error(expectedException));
+            Mockito.when(mapper.toTaskaEventJsonAsString(event))
+                    .thenReturn(expectedJson);
 
-        StepVerifier.create(publisher.publish(event))
-                .expectErrorMatches(actualException -> actualException == expectedException)
-                .verify();
+            Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
+                    .thenReturn(Flux.error(expectedException));
 
-        Mockito.verify(mapper)
-                .toTaskaEventJsonAsString(event);
+            StepVerifier.create(publisher.publish(event))
+                    .expectErrorMatches(actualException -> actualException == expectedException)
+                    .verify();
 
-        Mockito.verify(kafkaSender)
-                .send(ArgumentMatchers.any(Mono.class));
-    }
+            Mockito.verify(mapper)
+                    .toTaskaEventJsonAsString(event);
 
-    @Test
-    @DisplayName("Должен пробрасывать ошибку сериализации")
-    void publish_shouldPropagateError_whenMapperFails() {
-        var expectedException = new RuntimeException("Serialization error");
+            Mockito.verify(kafkaSender)
+                    .send(ArgumentMatchers.any(Mono.class));
+        }
 
-        Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                .thenReturn(Flux.error(expectedException));
+        @Test
+        @DisplayName("Должен пробрасывать ошибку при ошибке сериализации")
+        void shouldPropagateError_whenMapperFails() {
+            var expectedException = new RuntimeException("Serialization error");
 
-        StepVerifier.create(publisher.publish(event))
-                .expectErrorMatches(actualException -> actualException == expectedException)
-                .verify();
+            Mockito.when(mapper.toTaskaEventJsonAsString(event))
+                    .thenThrow(expectedException);
 
-        Mockito.verify(mapper)
-                .toTaskaEventJsonAsString(event);
+            /// Не мокаем kafkaSender - ошибка произойдет до него
 
-        Mockito.verifyNoMoreInteractions(kafkaSender);
+            StepVerifier.create(publisher.publish(event))
+                    .expectErrorMatches(actualException -> actualException == expectedException)
+                    .verify();
+
+            Mockito.verify(mapper)
+                    .toTaskaEventJsonAsString(event);
+            Mockito.verifyNoInteractions(kafkaSender); /// Проверяем, что kafkaSender не вызывался
+        }
     }
 }

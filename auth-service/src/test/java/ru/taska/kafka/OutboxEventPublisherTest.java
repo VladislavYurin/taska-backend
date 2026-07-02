@@ -6,11 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Captor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -19,9 +15,8 @@ import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.entity.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
-import ru.taska.transport.kafka.OutboxEventPublisher;
 
 import java.util.UUID;
 
@@ -54,17 +49,17 @@ class OutboxEventPublisherTest {
         publisher = new OutboxEventPublisher(kafkaSender,config, mapper);
 
         event = OutboxEvent.builder()
-                           .id(UUID.randomUUID())
-                           .aggregateType("project")
-                           .aggregateId(UUID.randomUUID())
-                           .eventType("ProjectCreated")
-                           .build();
+                .id(UUID.randomUUID())
+                .aggregateType("USER")
+                .aggregateId(UUID.randomUUID())
+                .eventType("UserInvited")
+                .build();
 
-        expectedJson = "{\"eventType\":\"ProjectCreated\"}";
+        expectedJson = "{\"eventType\":\"UserInvited\"}";
     }
 
     @Nested
-    class Publish {
+    class Publish{
 
         @Test
         @DisplayName("Должен успешно опубликовать событие в Kafka")
@@ -73,12 +68,12 @@ class OutboxEventPublisherTest {
             SenderResult<UUID> senderResult = Mockito.mock(SenderResult.class);
 
             Mockito.when(mapper.toTaskaEventJsonAsString(event))
-                   .thenReturn(expectedJson);
+                    .thenReturn(expectedJson);
             Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                   .thenReturn(Flux.just(senderResult));
+                    .thenReturn(Flux.just(senderResult));
 
             StepVerifier.create(publisher.publish(event))
-                        .verifyComplete();
+                    .verifyComplete();
 
             Mockito.verify(mapper).toTaskaEventJsonAsString(event);
             Mockito.verify(kafkaSender).send(captor.capture());
@@ -93,17 +88,18 @@ class OutboxEventPublisherTest {
 
         @Test
         @DisplayName("Должен пробрасывать ошибку при сбое отправки в Kafka")
-        void shouldPropagateError_whenKafkaFails() {
+        void shouldPropagateError_whenKafkaFails(){
             RuntimeException expectedException = new RuntimeException("Kafka unavailable");
 
             Mockito.when(mapper.toTaskaEventJsonAsString(event))
-                   .thenReturn(expectedJson);
+                    .thenReturn(expectedJson);
             Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                   .thenReturn(Flux.error(expectedException));
+                    .thenReturn(Flux.error(expectedException));
 
             StepVerifier.create(publisher.publish(event))
-                        .expectErrorMatches(actual -> actual == expectedException)
-                        .verify();
+                    .expectErrorMatches(actual -> actual == expectedException)
+                    .verify();
+
         }
 
         @Test
@@ -116,13 +112,13 @@ class OutboxEventPublisherTest {
             Mockito.when(senderResult.exception()).thenReturn(expectedException);
 
             Mockito.when(mapper.toTaskaEventJsonAsString(event))
-                   .thenReturn(expectedJson);
+                    .thenReturn(expectedJson);
             Mockito.when(kafkaSender.send(ArgumentMatchers.any(Mono.class)))
-                   .thenReturn(Flux.just(senderResult));
+                    .thenReturn(Flux.just(senderResult));
 
             StepVerifier.create(publisher.publish(event))
-                        .expectErrorMatches(actual -> actual == expectedException)
-                        .verify();
+                    .expectErrorMatches(actual -> actual == expectedException)
+                    .verify();
         }
 
         @Test

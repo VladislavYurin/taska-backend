@@ -11,7 +11,8 @@ import reactor.core.publisher.Mono;
 import ru.taska.domain.OutboxEvent;
 
 @Repository
-public interface OutboxEventRepository extends R2dbcRepository<OutboxEvent, UUID> {
+public interface OutboxEventRepository extends R2dbcRepository<OutboxEvent, UUID>,
+        CommonOutboxEventRepository<OutboxEvent>{
 
     /**
      * Выбирает batchSize событий и возвращает их, одновременно меняя статус на 'PROCESSING'.

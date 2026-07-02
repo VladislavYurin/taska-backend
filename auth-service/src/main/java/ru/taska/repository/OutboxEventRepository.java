@@ -12,7 +12,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Repository
-public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, UUID> {
+public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, UUID>,
+        CommonOutboxEventRepository<OutboxEvent>{
 
     Mono<OutboxEvent> findByAggregateId(UUID aggregateId);
 
