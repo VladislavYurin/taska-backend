@@ -21,7 +21,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(schema = "taska", name = "statuses")
+@Table(name = "statuses", schema = "taska" )
 public class StatusEntity {
 
     /**
