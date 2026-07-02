@@ -21,6 +21,7 @@ import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
 import ru.taska.config.OutboxConfig;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.AggregateType;
 import ru.taska.mapper.OutboxEventMapper;
 import ru.taska.transport.kafka.OutboxEventPublisher;
 import tools.jackson.databind.JsonNode;
@@ -57,16 +58,15 @@ class OutboxEventPublisherTest {
 
         event = OutboxEvent.builder()
                 .id(UUID.randomUUID())
-                .aggregateType("issue")
+                .aggregateType(AggregateType.ISSUE.getValue())
                 .aggregateId(UUID.randomUUID())
                 .eventType("IssueCreated")
                 .payload(Mockito.mock(JsonNode.class))
                 .build();
 
         expectedJson = """
-                {"id":"%s","aggregateType":"issue","aggregateId":"%s","eventType":"IssueCreated","payload":{}}
-                """.formatted(event.getId(), event.getAggregateId());
-    }
+                {"id":"%s","aggregateType":"%s","aggregateId":"%s","eventType":"IssueCreated","payload":{}}
+                """.formatted(event.getId(), AggregateType.ISSUE.getValue(), event.getAggregateId());
 
     @Nested
     class Publish {

@@ -1,5 +1,7 @@
 package ru.taska.mapper;
 
+import ru.taska.event.AggregateType;
+import ru.taska.event.EventType;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,9 +15,7 @@ import ru.taska.entity.User;
 @RequiredArgsConstructor
 public class UserMapper {
 
-    private static final String USER_AGGREGATE_TYPE = "user";
-    private static final String USER_INVITED_EVENT_TYPE = "UserInvited";
-    private static final String USER_ACTIVATED_EVENT_TYPE = "UserActivated";
+
 
     private final ObjectMapper objectMapper;
 
@@ -29,9 +29,9 @@ public class UserMapper {
                 .put("invitedBy", invitedBy != null ? invitedBy : "system");
 
         return OutboxEvent.builder()
-                .aggregateType(USER_AGGREGATE_TYPE)
+                .aggregateType(AggregateType.USER.getValue())
                 .aggregateId(user.getId())
-                .eventType(USER_INVITED_EVENT_TYPE)
+                .eventType(EventType.USER_INVITED.getValue())
                 .status(OutboxEventStatus.NEW)
                 .payload(payload)
                 .attempts(0)
@@ -48,9 +48,9 @@ public class UserMapper {
                 .put("email", user.getEmail());
 
         return OutboxEvent.builder()
-                .aggregateType(USER_AGGREGATE_TYPE)
+                .aggregateType(AggregateType.USER.getValue())
                 .aggregateId(user.getId())
-                .eventType(USER_ACTIVATED_EVENT_TYPE)
+                .eventType(EventType.USER_ACTIVATED.getValue())
                 .status(OutboxEventStatus.NEW)
                 .payload(payload)
                 .attempts(0)

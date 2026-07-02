@@ -136,7 +136,7 @@ message AddProjectMemberRequest {
 
 message AddProjectMemberRequestBody {
   string added_member_id = 1;
-  string adding_user_id = 2 ;
+  string actor_user_id = 2;
   ProjectRole role = 3;
   string project_id = 4;
 }
@@ -154,7 +154,8 @@ message RmProjectMemberRequest  {
 
 message RmProjectMemberRequestBody  {
   string deleted_member_id = 1;
-  string project_id = 2;
+  string actor_user_id = 2;
+  string project_id = 3;
 }
 
 message RmProjectMemberResponse  {
@@ -169,8 +170,9 @@ message ChangeProjectMemberRoleRequest {
 
 message ChangeProjectMemberRoleRequestBody {
   string changed_member_id = 1;
-  ProjectRole role = 2;
-  string project_id = 3;
+  string actor_user_id = 2;
+  ProjectRole role = 3;
+  string project_id = 4;
 }
 
 message ChangeProjectMemberRoleResponse  {

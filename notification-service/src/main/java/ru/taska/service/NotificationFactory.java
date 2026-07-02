@@ -33,6 +33,7 @@ public class NotificationFactory {
             case USER_INVITED -> buildUserInvited(event, eventId);
             case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
             case MEMBER_ADDED -> buildMemberAdded(event, payload, eventId);
+            case MEMBER_UPDATED -> buildMemberUpdated(event, payload, eventId);
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
             case USER_ACTIVATED -> buildUserActivated(event, eventId);
             default -> {
@@ -163,6 +164,15 @@ public class NotificationFactory {
             return List.of();
         }
         return List.of(notificationMapper.toMemberAdded(event, userId));
+    }
+
+    private List<Notification> buildMemberUpdated(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "userId");
+        if (userId == null) {
+            log.warn("MemberUpdated event without userId, eventId={}", eventId);
+            return List.of();
+        }
+        return List.of(notificationMapper.toMemberUpdated(event, userId));
     }
 
     private List<Notification> buildMemberRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {

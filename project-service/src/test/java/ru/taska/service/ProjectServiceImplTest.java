@@ -74,7 +74,7 @@ class ProjectServiceImplTest {
 
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
         Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
-        Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.any(), ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
                 .expectNext(mockProject)
@@ -84,7 +84,7 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
         Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
         Mockito.verify(projectSettingRepository).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventService).saveProjectCreated(ArgumentMatchers.any(), ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService).saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class));
     }
 
     @Test
@@ -104,7 +104,6 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
         Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
         Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventService, Mockito.never()).saveProjectCreated(ArgumentMatchers.any(), ArgumentMatchers.any(Project.class));
     }
 
     @Test

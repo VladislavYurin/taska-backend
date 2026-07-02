@@ -103,6 +103,17 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toMemberUpdated(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.MEMBER_UPDATED)
+                .title("Ваша роль в проекте изменена")
+                .body("Ваша роль изменена в проекте " + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toMemberRemoved(TaskaEvent event, UUID userId) {
         return Notification.builder()
                 .userId(userId)
@@ -160,6 +171,7 @@ public class NotificationMapper {
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
             case PROJECT_CREATED -> NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED;
             case MEMBER_ADDED -> NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED;
+            case MEMBER_UPDATED -> NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED;
             case MEMBER_REMOVED -> NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED;
             case USER_ACTIVATED -> NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED;
         };

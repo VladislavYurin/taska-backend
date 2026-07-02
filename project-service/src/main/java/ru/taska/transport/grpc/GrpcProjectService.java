@@ -114,21 +114,21 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAddedMemberId(), "body.addedMemberId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAddingUserId(), "body.addingUserId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId()"),
                         GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body.role"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID addedMemberId = t.getT3();
-                    UUID addingUserId = t.getT4();
+                    UUID actorUserId = t.getT4();
                     ProjectRole role = projectMemberMapper.toProjectRole(t.getT5());
                     UUID projectId = t.getT6();
 
                     log.info("[{}][{}] Received request to add member to project: addedMemberId = {}, addingUserId = {}, requestedRole = {}, projectId ={}",
-                            requestId, nodeId, addedMemberId, addingUserId, role, projectId);
+                            requestId, nodeId, addedMemberId, actorUserId, role, projectId);
 
-                    return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, addingUserId, role, projectId);
+                    return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, actorUserId, role, projectId);
                 })
                 .map(projectMemberMapper::toAddProjectMemberResponse)
                 .transform(GrpcExceptionHandler.withErrorHandling("addProjectMember"));
@@ -141,17 +141,19 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getDeletedMemberId(), "body.deletedMemberId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId()"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID deletedMemberId = t.getT3();
-                    UUID projectId = t.getT4();
+                    UUID actorUserId = t.getT4();
+                    UUID projectId = t.getT5();
 
-                    log.info("[{}][{}] Received request to remove member from project: userId={}, projectId = {}",
-                            requestId, nodeId, deletedMemberId, projectId);
+                    log.info("[{}][{}] Received request to remove member from project: userId={}, projectId = {}, actorId = {}",
+                            requestId, nodeId, deletedMemberId, projectId, actorUserId);
 
-                    return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, projectId);
+                    return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, actorUserId, projectId);
                 })
                 .map(projectMemberMapper::toRmProjectMemberResponse)
                 .transform(GrpcExceptionHandler.withErrorHandling("rmProjectMember"));
@@ -164,6 +166,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getChangedMemberId(), "body.changedMemberId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId()"),
                         GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getRole(), "body.role"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
 
@@ -171,13 +174,14 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID changedMemberId = t.getT3();
-                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT4());
-                    UUID projectId = t.getT5();
+                    UUID actorUserId = t.getT4();
+                    ProjectRole role = projectMemberMapper.toProjectRole(t.getT5());
+                    UUID projectId = t.getT6();
 
-                    log.info("[{}][{}] Received request to change user role in project: userId={}, role = {}, projectId = {}",
-                            requestId, nodeId, changedMemberId, role, projectId);
+                    log.info("[{}][{}] Received request to change user role in project: userId={}, actorId = {}, role = {}, projectId = {}",
+                            requestId, nodeId, changedMemberId, actorUserId, role, projectId);
 
-                    return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, role, projectId);
+                    return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, actorUserId, role, projectId);
                 })
                 .map(projectMemberMapper::toChangeProjectMemberRoleResponse)
                 .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));

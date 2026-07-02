@@ -18,6 +18,7 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -100,7 +101,7 @@ public class DeleteIssueTest {
         Mockito.when(issueMapper.buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId))
                 .thenReturn(mockHistory);
 
-        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED, requestId))
+        Mockito.when(issueMapper.buildOutboxEvent(mockIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_DELETED, requestId))
                 .thenReturn(mockOutbox);
 
         Mockito.when(issueHistoryRepository.save(mockHistory))
@@ -127,7 +128,7 @@ public class DeleteIssueTest {
         Mockito.verify(issueHistoryRepository).save(mockHistory);
         Mockito.verify(outboxEventRepository).save(mockOutbox);
         Mockito.verify(issueMapper).buildIssueHistory(mockIssue, IssueEventType.DELETED, actorUserId);
-        Mockito.verify(issueMapper).buildOutboxEvent(mockIssue, "issue", EventType.ISSUE_DELETED, requestId);
+        Mockito.verify(issueMapper).buildOutboxEvent(mockIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_DELETED, requestId);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
     }
 

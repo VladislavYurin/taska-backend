@@ -20,6 +20,7 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.OutboxEvent;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -66,7 +67,6 @@ class UpdateIssueTest {
     private static final UUID PROJECT_ID = UUID.randomUUID();
     private static final UUID ISSUE_ID = UUID.randomUUID();
     private static final UUID ACTOR_USER_ID = UUID.randomUUID();
-    private static final String ISSUE_AGGREGATE_TYPE = "issue";
 
     @BeforeEach
     void setUpProps() {
@@ -103,7 +103,7 @@ class UpdateIssueTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
         Mockito.when(issueMapper.buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID)).thenReturn(history);
-        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, REQUEST_ID)).thenReturn(event);
+        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, REQUEST_ID)).thenReturn(event);
 
         Mockito.when(issueRepository.save(existingIssue)).thenReturn(Mono.just(existingIssue));
         Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.just(history));
@@ -134,7 +134,7 @@ class UpdateIssueTest {
         Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
 
         Mockito.verify(issueMapper).buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, ISSUE_AGGREGATE_TYPE, EventType.ISSUE_UPDATED, REQUEST_ID);
+        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, REQUEST_ID);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper, projectRoleChecker);
     }

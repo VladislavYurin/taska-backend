@@ -95,9 +95,14 @@ enum NotificationKind {
   NOTIFICATION_KIND_MEMBER_ADDED  = 9;
 
   /**
+ * Уведомление об изменении участника в проекте.
+ */
+  NOTIFICATION_KIND_MEMBER_UPDATED  = 10;
+
+  /**
  * Уведомление об удалении участника из проекта.
  */
-  NOTIFICATION_KIND_MEMBER_REMOVED  = 10;
+  NOTIFICATION_KIND_MEMBER_REMOVED  = 11;
 
 }
 

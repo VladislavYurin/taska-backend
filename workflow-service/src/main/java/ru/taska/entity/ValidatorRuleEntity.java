@@ -23,7 +23,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("taska.validator_rules")
+@Table(schema = "taska", name = "validator_rules")
 public class ValidatorRuleEntity {
 
     /**

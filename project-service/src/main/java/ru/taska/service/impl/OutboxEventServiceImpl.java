@@ -7,10 +7,13 @@ import reactor.core.publisher.Mono;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.event.OutboxEventStatus;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
+import ru.taska.event.payload.projectService.MemberUpdatedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.OutboxEventService;
@@ -24,9 +27,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OutboxEventServiceImpl implements OutboxEventService {
 
-    private static final String PROJECT_AGREGATE_TYPE = "PROJECT";
-    private static final String MEMBER_AGREGATE_TYPE = "PROJECT_MEMBER";
-
     private static final String PROJECT_CREATED = EventType.PROJECT_CREATED.getValue();
     private static final String MEMBER_ADDED = EventType.MEMBER_ADDED.getValue();
     private static final String MEMBER_REMOVED = EventType.MEMBER_REMOVED.getValue();
@@ -35,9 +35,9 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public Mono<OutboxEvent> saveProjectCreated(String requestId, Project project) {
+    public Mono<OutboxEvent> saveProjectCreated(String requestId, String nodeId, Project project) {
         OutboxEvent event = OutboxEvent.builder()
-                                       .aggregateType(PROJECT_AGREGATE_TYPE)
+                                       .aggregateType(AggregateType.PROJECT.getValue())
                                        .aggregateId(project.getId())
                                        .eventType(PROJECT_CREATED)
                                        .payload(projectCreatedPayload(project))
@@ -46,14 +46,15 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                                        .requestId(requestId)
                                        .build();
 
-        log.debug("Подготовка outbox-события [ {} ] для проекта [ ID = {} ]", "ProjectCreated", project.getId());
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
+                requestId, nodeId, EventType.PROJECT_CREATED, project.getId());
         return outboxEventRepository.save(event);
     }
 
     @Override
-    public Mono<OutboxEvent> saveMemberAdded(String requestId, ProjectMember member) {
+    public Mono<OutboxEvent> saveMemberAdded(String requestId, String nodeId, ProjectMember member) {
         OutboxEvent event = OutboxEvent.builder()
-                                       .aggregateType(MEMBER_AGREGATE_TYPE)
+                                       .aggregateType(AggregateType.PROJECT.getValue())
                                        .aggregateId(member.getProjectId())
                                        .eventType(MEMBER_ADDED)
                                        .payload(memberAddedPayload(member))
@@ -62,15 +63,15 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                                        .requestId(requestId)
                                        .build();
 
-        log.debug("Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
-                  "MemberAdded", member.getUserId(), member.getProjectId());
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
+                  requestId, nodeId, EventType.MEMBER_ADDED, member.getUserId(), member.getProjectId());
         return outboxEventRepository.save(event);
     }
 
     @Override
-    public Mono<OutboxEvent> saveMemberRemoved(String requestId, UUID deletedMemberId, UUID projectId){
+    public Mono<OutboxEvent> saveMemberRemoved(String requestId, String nodeId, UUID deletedMemberId, UUID projectId){
         OutboxEvent event = OutboxEvent.builder()
-                .aggregateType(MEMBER_AGREGATE_TYPE)
+                .aggregateType(AggregateType.PROJECT.getValue())
                 .aggregateId(projectId)
                 .eventType(MEMBER_REMOVED)
                 .payload(memberRemovedPayload(deletedMemberId, projectId))
@@ -79,8 +80,24 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .requestId(requestId)
                 .build();
 
-        log.debug("Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
-                  "MemberRemoved", deletedMemberId, projectId);
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
+                  requestId, nodeId, EventType.MEMBER_REMOVED, deletedMemberId, projectId);
+        return outboxEventRepository.save(event);
+    }
+
+    @Override
+    public Mono<OutboxEvent> saveMemberUpdated(String requestId, String nodeId, UUID updatedMemberId,
+                                               ProjectRole role, UUID projectId) {
+        OutboxEvent event = OutboxEvent.builder()
+                .aggregateType(AggregateType.PROJECT.getValue())
+                .aggregateId(projectId)
+                .eventType(EventType.MEMBER_UPDATED.getValue())
+                .payload(memberUpdatedPayload(updatedMemberId, role, projectId))
+                .attempts(0)
+                .status(OutboxEventStatus.NEW)
+                .build();
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
+                requestId, nodeId, EventType.MEMBER_UPDATED.getValue(), updatedMemberId, projectId);
         return outboxEventRepository.save(event);
     }
 
@@ -101,6 +118,16 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                         member.getUserId(),
                         member.getRole().toString(),
                         member.getAddedBy()
+                )
+        );
+    }
+
+    private JsonNode memberUpdatedPayload(UUID userId, ProjectRole role, UUID projectId) {
+        return objectMapper.valueToTree(
+                new MemberUpdatedPayload(
+                        userId,
+                        String.valueOf(role),
+                        projectId
                 )
         );
     }

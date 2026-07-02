@@ -56,7 +56,7 @@ public class ProjectServiceImpl implements ProjectService {
                             .flatMap(savedProject -> {
                                 return projectMemberRepository.save(createAdminMember(savedProject))
                                         .then(projectSettingRepository.save(createDefaultProjectSettings(savedProject)))
-                                        .then(outboxEventService.saveProjectCreated(requestId, savedProject))
+                                        .then(outboxEventService.saveProjectCreated(requestId, nodeId, savedProject))
                                         .then(Mono.fromRunnable(() ->
                                                 log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
                                                         requestId, nodeId, projectKey, projectName, userId)))

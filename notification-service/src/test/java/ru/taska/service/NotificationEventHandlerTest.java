@@ -53,7 +53,7 @@ class NotificationEventHandlerTest {
     void shouldNotCreateDuplicatesOnRepeatedDelivery() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(EVENT_ID)
-                .aggregateType("ISSUE")
+                .aggregateType("issue")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
                 .payload(buildPayload("""
@@ -128,7 +128,7 @@ class NotificationEventHandlerTest {
     void shouldSkipEventWithNullId() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(null)
-                .aggregateType("ISSUE")
+                .aggregateType("issue")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
                 .payload(buildPayload("""
@@ -162,7 +162,7 @@ class NotificationEventHandlerTest {
     void shouldIgnoreDuplicateEvent() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(EVENT_ID)
-                .aggregateType("ISSUE")
+                .aggregateType("issue")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
                 .payload(buildPayload("""
@@ -201,7 +201,7 @@ class NotificationEventHandlerTest {
     void shouldSaveProcessedEventNotificationAndSendEmailFirstDelivery() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(EVENT_ID)
-                .aggregateType("ISSUE")
+                .aggregateType("issue")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueAssigned")
                 .payload(buildPayload("""
@@ -248,7 +248,7 @@ class NotificationEventHandlerTest {
     void shouldCreateTwoNotificationsAndSendTwoEmailsForIssueTransitioned() throws Exception {
         TaskaEvent event = TaskaEvent.builder()
                 .id(EVENT_ID)
-                .aggregateType("ISSUE")
+                .aggregateType("issue")
                 .aggregateId(ISSUE_ID)
                 .eventType("IssueTransitioned")
                 .payload(buildPayload("""
