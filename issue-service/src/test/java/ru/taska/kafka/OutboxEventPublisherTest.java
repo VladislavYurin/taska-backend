@@ -67,7 +67,8 @@ class OutboxEventPublisherTest {
         expectedJson = """
                 {"id":"%s","aggregateType":"%s","aggregateId":"%s","eventType":"IssueCreated","payload":{}}
                 """.formatted(event.getId(), AggregateType.ISSUE.getValue(), event.getAggregateId());
-
+    }
+    
     @Nested
     class Publish {
         @Test
