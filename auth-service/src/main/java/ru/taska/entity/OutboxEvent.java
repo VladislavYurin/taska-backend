@@ -8,6 +8,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
@@ -47,7 +48,7 @@ public class OutboxEvent {
 
     /**
      * Тип доменного события (UserInvited, UserActivated и т.п.).
-     * */
+     */
     @Column("event_type")
     private String eventType;
 

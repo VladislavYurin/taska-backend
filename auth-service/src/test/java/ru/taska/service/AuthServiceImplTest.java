@@ -2,7 +2,7 @@ package ru.taska.service;
 
 import io.jsonwebtoken.Claims;
 import ru.taska.entity.OutboxEvent;
-import ru.taska.entity.OutboxEventStatus;
+import ru.taska.event.OutboxEventStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import java.time.Instant;
