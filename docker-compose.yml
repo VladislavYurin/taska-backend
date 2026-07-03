@@ -31,7 +31,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-
+  # --------------------
+  # KafkaUI
+  # --------------------
+  kafbat-ui:
+    container_name: taska-kafka-ui
+    image: ghcr.io/kafbat/kafka-ui
+    networks: [ taska-net ]
+    ports:
+      - "8088:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: taska-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
   # --------------------
   # Postgres
   # --------------------

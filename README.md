@@ -52,8 +52,25 @@ TODO
 
 
 ## Kafka-UI
+#### Запуск
 
-TODO
+Из корня проекта, где лежит `docker-compose.yml`:
+
+```bash
+    docker compose up -d --build kafbat-ui
+```
+Если нужно поднять весь стек (Kafka + Kafka UI + остальные сервисы) — выполните обычную полную сборку:
+```bash
+    docker compose up -d --build
+```
+
+#### Доступ
+
+После запуска интерфейс доступен по адресу:
+
+**[http://localhost:8088](http://localhost:8088)**
+
+Название кластера в UI: `taska-kafka`.
 
 ## Билд и деплой
 

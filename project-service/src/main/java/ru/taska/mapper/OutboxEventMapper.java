@@ -61,7 +61,7 @@ public class OutboxEventMapper {
 
         return switch (eventType) {
             case PROJECT_CREATED -> objectMapper.valueToTree(new ProjectCreatedPayload(
-                    getUuid(sourcePayload, ID),
+                    getUuid(sourcePayload, PROJECT_ID),
                     getString(sourcePayload, PROJECT_KEY),
                     getUuid(sourcePayload, CREATED_BY)
             ));

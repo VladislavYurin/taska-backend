@@ -35,7 +35,7 @@ class OutboxEventMapperTest {
             UUID projectId = UUID.randomUUID();
             UUID createdBy = UUID.randomUUID();
             JsonNode source = objectMapper.valueToTree(Map.of(
-                    "id", projectId.toString(),
+                    "projectId", projectId.toString(),
                     "projectKey", "ABC",
                     "name", "Test Project",
                     "createdBy", createdBy.toString()
