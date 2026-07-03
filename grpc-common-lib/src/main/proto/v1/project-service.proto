@@ -4,49 +4,49 @@ package ru.taska.project.v1;
 
 import "v1/common.proto";
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.project.v1";
 option java_outer_classname = "ProjectApiProto";
 
-enum ProjectRole  {
-  UNSPECIFIED = 0;
-  ADMIN = 1;
-  MEMBER = 2;
-  VIEWER = 3;
+enum ProjectRole {
+  PROJECT_ROLE_UNSPECIFIED = 0;
+  PROJECT_ROLE_ADMIN = 1;
+  PROJECT_ROLE_MEMBER = 2;
+  PROJECT_ROLE_VIEWER = 3;
 }
 
-service ProjectService  {
-  /*
- * Создаёт новый проект
- */
-  rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
+service ProjectService {
 
   /*
- * Возвращает проект по айди
- */
-  rpc GetProject (GetProjectRequest) returns (ProjectResponse);
+   * Создаёт новый проект
+   */
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
 
   /*
- * Возвращает список всех проектов по айди пользователя
- */
-  rpc ListMyProjects (GetUsersProjectsRequest) returns (UsersProjectsResponse);
+   * Возвращает проект по айди
+   */
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
 
   /*
-* Добавляет участника в проект
-*/
-  rpc AddProjectMember (AddProjectMemberRequest) returns (AddProjectMemberResponse);
+   * Возвращает список всех проектов по айди пользователя
+   */
+  rpc ListMyProjects(ListMyProjectsRequest) returns (ListMyProjectsResponse);
 
   /*
-* Удаляет участника из проекта
-*/
-  rpc RmProjectMember (RmProjectMemberRequest) returns (RmProjectMemberResponse);
+   * Добавляет участника в проект
+   */
+  rpc AddProjectMember(AddProjectMemberRequest) returns (AddProjectMemberResponse);
 
   /*
-* Меняет роль участника проекта
-*/
-  rpc ChangeProjectMemberRole (ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
+   * Удаляет участника из проекта
+   */
+  rpc RmProjectMember(RmProjectMemberRequest) returns (RmProjectMemberResponse);
+
+  /*
+   * Меняет роль участника проекта
+   */
+  rpc ChangeProjectMemberRole(ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
 
   /**
    * Проверяет роль пользователя в проекте
@@ -54,13 +54,13 @@ service ProjectService  {
   rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
 }
 
-//Создание и получение проекта/ов
+// Создание и получение проекта/ов
 message CreateProjectRequest {
   ru.taska.common.v1.Header header = 1;
   CreateProjectRequestBody body = 2;
 }
 
-message CreateProjectRequestBody  {
+message CreateProjectRequestBody {
   string project_key = 1;
   string name = 2;
   string user_id = 3;
@@ -75,12 +75,12 @@ message GetProjectRequestBody {
   string project_id = 1;
 }
 
-message GetUsersProjectsRequest {
+message ListMyProjectsRequest {
   ru.taska.common.v1.Header header = 1;
-  GetUsersProjectsRequestBody body = 2;
+  ListMyProjectsRequestBody body = 2;
 }
 
-message GetUsersProjectsRequestBody {
+message ListMyProjectsRequestBody {
   string user_id = 1;
 }
 
@@ -88,6 +88,7 @@ message GetUsersProjectsRequestBody {
  * Запрос на проверку роли пользователя в проекте.
  */
 message CheckProjectMemberRoleRequest {
+
   /**
    * Заголовок запроса.
    */
@@ -103,6 +104,7 @@ message CheckProjectMemberRoleRequest {
  * Тело запроса на проверку роли пользователя в проекте.
  */
 message CheckProjectMemberRoleRequestBody {
+
   /**
    * Идентификатор проекта.
    */
@@ -124,11 +126,19 @@ message ProjectResponse {
   optional google.protobuf.Timestamp archived_at = 7;
 }
 
-message UsersProjectsResponse {
-  repeated ProjectResponse projectResponse = 1;
+message CreateProjectResponse {
+  ProjectResponse project = 1;
 }
 
-//Управление участниками и ролями
+message GetProjectResponse {
+  ProjectResponse project = 1;
+}
+
+message ListMyProjectsResponse {
+  repeated ProjectResponse projects = 1;
+}
+
+// Управление участниками и ролями
 message AddProjectMemberRequest {
   ru.taska.common.v1.Header header = 1;
   AddProjectMemberRequestBody body = 2;
@@ -141,24 +151,24 @@ message AddProjectMemberRequestBody {
   string project_id = 4;
 }
 
-message AddProjectMemberResponse  {
+message AddProjectMemberResponse {
   string added_member_id = 1;
   string project_id = 2;
   ProjectRole role = 3;
 }
 
-message RmProjectMemberRequest  {
+message RmProjectMemberRequest {
   ru.taska.common.v1.Header header = 1;
   RmProjectMemberRequestBody body = 2;
 }
 
-message RmProjectMemberRequestBody  {
+message RmProjectMemberRequestBody {
   string deleted_member_id = 1;
   string actor_user_id = 2;
   string project_id = 3;
 }
 
-message RmProjectMemberResponse  {
+message RmProjectMemberResponse {
   string deleted_member_id = 1;
   string project_id = 2;
 }
@@ -175,7 +185,7 @@ message ChangeProjectMemberRoleRequestBody {
   string project_id = 4;
 }
 
-message ChangeProjectMemberRoleResponse  {
+message ChangeProjectMemberRoleResponse {
   string changed_member_id = 1;
   ProjectRole role = 2;
   string project_id = 3;
@@ -185,6 +195,7 @@ message ChangeProjectMemberRoleResponse  {
  * Ответ проверки роли пользователя в проекте.
  */
 message CheckProjectMemberRoleResponse {
+
   /**
    * Роль пользователя.
    */

@@ -19,10 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.AbstractIT;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserBody;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequestBody;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserResponse;
 import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
-import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.api.common.v1.Header;
 import ru.taska.repository.InviteTokenRepository;
@@ -39,7 +39,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
 
     private static final Header header = TestGrpcDataGenerator.getRequestHeader();
 
-    private static final AdminCreateUserBody body = TestGrpcDataGenerator.getAdminCreateUserRequestBody();
+    private static final InviteUserRequestBody body = TestGrpcDataGenerator.getAdminCreateUserRequestBody();
 
     @Autowired
     private UserRepository userRepository;
@@ -73,8 +73,8 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
 
     @Test
     void inviteUser_Success_ShouldSaveDataAndReturnResponse() {
-        AdminCreateUserRequest request = buildRequest();
-        Mono<UserCreatedResponse> result = stub.inviteUser(Mono.just(request));
+        InviteUserRequest request = buildRequest();
+        Mono<InviteUserResponse> result = stub.inviteUser(Mono.just(request));
         AtomicReference<UUID> userIdRef = new AtomicReference<>();
         StepVerifier.create(result)
                     .assertNext(response -> {
@@ -114,11 +114,11 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
 
     @Test
     void inviteUser_DuplicateEmail_ShouldReturnAlreadyExists() {
-        AdminCreateUserRequest firstRequest = buildRequest();
+        InviteUserRequest firstRequest = buildRequest();
 
         stub.inviteUser(Mono.just(firstRequest)).block();
 
-        AdminCreateUserRequest secondRequest = buildRequest();
+        InviteUserRequest secondRequest = buildRequest();
 
         StepVerifier.create(stub.inviteUser(Mono.just(secondRequest)))
                     .expectErrorSatisfies(throwable -> {
@@ -133,7 +133,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
     @ParameterizedTest
     @MethodSource("invalidRequestsProvider")
     void inviteUser_invalidRequest_shouldReturnInvalidArgument(
-            AdminCreateUserRequest request,
+            InviteUserRequest request,
             String expectedMessagePart) {
 
         StepVerifier.create(stub.inviteUser(Mono.just(request)))
@@ -155,7 +155,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
     private static Stream<Arguments> invalidRequestsProvider() {
         return Stream.of(
                 // 1. requestId - пустая строка ""
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                               .setHeader(Header.newBuilder()
                                                                .setRequestId(TestConstantHolder.EMPTY_STRING)
                                                                .setNodeId(TestConstantHolder.HEADER_NODE_ID)
@@ -165,7 +165,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
                         "header.requestId must not be blank"
                 ),
                 // 2. requestId == null (не установлен)
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                               .setHeader(Header.newBuilder()
                                                                .setNodeId(TestConstantHolder.HEADER_NODE_ID)
                                                                .build())
@@ -174,7 +174,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
                         "header.requestId must not be blank"
                 ),
                 // 3. nodeId - пустая строка ""
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                               .setHeader(Header.newBuilder()
                                                                .setRequestId(TestConstantHolder.HEADER_REQUEST_ID)
                                                                .setNodeId(TestConstantHolder.EMPTY_STRING)
@@ -184,7 +184,7 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
                         "header.nodeId must not be blank"
                 ),
                 // 4. nodeId ==  null
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                                    .setHeader(Header.newBuilder()
                                                                     .setRequestId(TestConstantHolder.HEADER_REQUEST_ID)
                                                                     .build())
@@ -193,36 +193,36 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
                              "header.nodeId must not be blank"
                 ),
                 // 5. email - пустая строка ""
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                               .setHeader(header)
-                                              .setBody(AdminCreateUserBody.newBuilder(body)
+                                              .setBody(InviteUserRequestBody.newBuilder(body)
                                                                           .setEmail(TestConstantHolder.EMPTY_STRING)
                                                                           .build())
                                               .build(),
                         "body.email must not be blank"
                 ),
                 // 6. email == null
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                                    .setHeader(header)
-                                                   .setBody(AdminCreateUserBody.newBuilder()
+                                                   .setBody(InviteUserRequestBody.newBuilder()
                                                                                .setDisplayName(TestConstantHolder.TEST_USER_DISPLAY_NAME)
                                                                                .build())
                                                    .build(),
                              "body.email must not be blank"
                 ),
                 // 7. displayName - пустая строка ""
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                                    .setHeader(header)
-                                                   .setBody(AdminCreateUserBody.newBuilder(body)
+                                                   .setBody(InviteUserRequestBody.newBuilder(body)
                                                                                .setDisplayName(TestConstantHolder.EMPTY_STRING)
                                                                                .build())
                                                    .build(),
                              "body.displayName must not be blank"
                 ),
                 // 8. displayName == null
-                Arguments.of(AdminCreateUserRequest.newBuilder()
+                Arguments.of(InviteUserRequest.newBuilder()
                                               .setHeader(header)
-                                              .setBody(AdminCreateUserBody.newBuilder()
+                                              .setBody(InviteUserRequestBody.newBuilder()
                                                                           .setEmail(TestConstantHolder.TEST_USER_EMAIL)
                                                                           .build())
                                               .build(),
@@ -231,11 +231,11 @@ class AdminInviteUserGrpcServiceIT extends AbstractIT {
         );
     }
 
-    private static AdminCreateUserRequest buildRequest() {
-        AdminCreateUserBody body = AdminCreateUserBody.newBuilder()
+    private static InviteUserRequest buildRequest() {
+        InviteUserRequestBody body = InviteUserRequestBody.newBuilder()
                                                       .setEmail(TestConstantHolder.TEST_USER_EMAIL)
                                                       .setDisplayName(TestConstantHolder.TEST_USER_DISPLAY_NAME)
                                                       .build();
-        return AdminCreateUserRequest.newBuilder().setHeader(header).setBody(body).build();
+        return InviteUserRequest.newBuilder().setHeader(header).setBody(body).build();
     }
 }

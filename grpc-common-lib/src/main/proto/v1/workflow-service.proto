@@ -9,11 +9,12 @@ option java_package = "ru.taska.api.workflow.v1";
 option java_outer_classname = "WorkflowApiProto";
 
 service WorkflowService {
+
   /*
    * Возвращает workflow, привязанный к (project_id, issue_type).
    */
-  rpc GetWorkflowForProject(GetWorkflowForProjectRequest)
-      returns (Workflow);
+  rpc GetWorkflowForProject(GetWorkflowForProjectRequest) returns (GetWorkflowForProjectResponse);
+
   rpc ValidateTransition(ValidateTransitionRequest) returns (ValidateTransitionResponse);
 }
 
@@ -34,26 +35,34 @@ message GetWorkflowForProjectRequest {
   /**
    * Тело запроса.
    */
-  GetWorkflowForProjectBody body = 2;
+  GetWorkflowForProjectRequestBody body = 2;
 }
 
-message GetWorkflowForProjectBody {
+message GetWorkflowForProjectRequestBody {
 
   /**
    * Идентификатор проекта.
    */
-  string projectId = 1;
+  string project_id = 1;
 
   /**
    * Тип задачи (например: TASK / BUG / STORY).
    */
-  string issueType = 2;
+  string issue_type = 2;
+}
+
+message GetWorkflowForProjectResponse {
+
+  /**
+   * Workflow, привязанный к проекту и типу задачи.
+   */
+  Workflow workflow = 1;
 }
 
 message Workflow {
 
   /**
-   * Идентификатор Workflow
+   * Идентификатор Workflow.
    */
   string id = 1;
 
@@ -72,20 +81,20 @@ message Workflow {
   /**
    * Временная метка создания записи (аудит).
    */
-  string createdAt = 4;
+  string created_at = 4;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updatedAt = 5;
+  string updated_at = 5;
 
   /**
-   * Статусы workflow
+   * Статусы workflow.
    */
   repeated WorkflowStatus statuses = 6;
 
   /**
-   * Переходы workflow
+   * Переходы workflow.
    */
   repeated WorkflowTransition transitions = 7;
 }
@@ -93,7 +102,7 @@ message Workflow {
 message WorkflowStatus {
 
   /**
-   * Идентификатор статуса
+   * Идентификатор статуса.
    */
   string id = 1;
 
@@ -101,7 +110,7 @@ message WorkflowStatus {
    * Стабильный ключ статуса, используемый другими сервисами и в снимках состояния (snapshot).
    * Пример: TODO / IN_PROGRESS / DONE.
    */
-  string statusKey = 2;
+  string status_key = 2;
 
   /**
    * Отображаемое имя статуса в пользовательском интерфейсе.
@@ -110,7 +119,6 @@ message WorkflowStatus {
 
   /**
    * Логическая категория статуса для группировки и семантической интерпретации.
-   * <p>
    * Пример: TODO / IN_PROGRESS / DONE.
    */
   string category = 4;
@@ -118,35 +126,35 @@ message WorkflowStatus {
   /**
    * Определяет порядок отображения статусов внутри workflow (например, порядок колонок на доске).
    */
-  int32 sortOrder = 5;
+  int32 sort_order = 5;
 
   /**
    * Временная метка создания записи (аудит).
    */
-  string createdAt = 6;
+  string created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updatedAt = 7;
+  string updated_at = 7;
 }
 
 message WorkflowTransition {
 
   /**
-   * Идентификатор перехода (Transition)
+   * Идентификатор перехода (Transition).
    */
   string id = 1;
 
   /**
    * Идентификатор исходного статуса (текущее состояние задачи).
    */
-  string fromStatusId = 2;
+  string from_status_id = 2;
 
   /**
    * Идентификатор целевого статуса (состояние задачи после перехода).
    */
-  string toStatusId = 3;
+  string to_status_id = 3;
 
   /**
    * Отображаемое имя действия в UI.
@@ -157,20 +165,19 @@ message WorkflowTransition {
    * Определяет порядок отображения переходов,
    * если из одного статуса доступно несколько вариантов.
    */
-  int32 sortOrder = 5;
+  int32 sort_order = 5;
 
   /**
    * Временная метка создания записи (аудит).
    */
-  string createdAt = 6;
+  string created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updatedAt = 7;
+  string updated_at = 7;
 }
 
-//                                     ValidateTransition items
 message ValidateTransitionRequest {
 
   /**
@@ -202,8 +209,8 @@ message ValidateTransitionRequestBody {
   string actor_user_id = 3;
 
   /**
- * Дополнительные данные для перехода.
- */
+   * Дополнительные данные для перехода.
+   */
   string payload = 4;
 }
 
@@ -224,7 +231,6 @@ message IssueValidateSnapshot {
    */
   string issue_type = 3;
 
-
   /**
    * Текущий статус задачи.
    */
@@ -237,33 +243,40 @@ message ValidateTransitionResponse {
    * Заголовок ответа.
    */
   ru.taska.common.v1.Header header = 1;
-  ValidateTransitionResponseBody body= 2;
+
+  /**
+   * Тело ответа.
+   */
+  ValidateTransitionResponseBody body = 2;
 }
 
-message ValidateTransitionResponseBody{
-  /**
- * Разрешен ли переход по workflow.
- */
-  bool is_valid = 2;
+message ValidateTransitionResponseBody {
 
   /**
- * Целевой статус (состояние задачи после перехода).
- */
-  IssueStatus to_status_key = 3;
+   * Разрешён ли переход по workflow.
+   */
+  bool is_valid = 1;
 
   /**
- * Список нарушений, если переход заблокирован.
- */
-  repeated TransitionViolation transition_violations = 4;
+   * Целевой статус (состояние задачи после перехода).
+   */
+  IssueStatus to_status_key = 2;
+
+  /**
+   * Список нарушений, если переход заблокирован.
+   */
+  repeated TransitionViolation transition_violations = 3;
 }
 
 message TransitionViolation {
+
   /**
    * Тип нарушения.
    */
-  string TransitionViolationValue = 1;
+  string transition_violation_value = 1;
+
   /**
- * Сообщение нарушения.
- */
+   * Сообщение нарушения.
+   */
   string message = 2;
 }

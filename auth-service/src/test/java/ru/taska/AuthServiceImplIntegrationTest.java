@@ -25,8 +25,8 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
 import ru.taska.api.auth.v1.LoginResponse;
-import ru.taska.api.auth.v1.PasswordByTokenRequest;
-import ru.taska.api.auth.v1.PasswordByTokenRequestBody;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
@@ -485,12 +485,12 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
     void testSuccessfulSetPasswordByToken() {
         String newPassword = "NewSecurePassword456!";
 
-        PasswordByTokenRequest.newBuilder()
+        SetPasswordByTokenRequest.newBuilder()
                 .setHeader(Header.newBuilder()
                         .setRequestId("test-req-set-pwd")
                         .setNodeId("test-node")
                         .build())
-                .setBody(PasswordByTokenRequestBody.newBuilder()
+                .setBody(SetPasswordByTokenRequestBody.newBuilder()
                         .setToken(inviteTokenRaw)
                         .setNewPassword(newPassword)
                         .build())

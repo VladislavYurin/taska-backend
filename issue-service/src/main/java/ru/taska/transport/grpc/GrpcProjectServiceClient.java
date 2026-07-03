@@ -10,7 +10,6 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequestBody;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 
 import java.util.UUID;
@@ -67,7 +66,7 @@ public class GrpcProjectServiceClient {
                 .build();
 
         return projectServiceStub.getProject(request)
-                .map(ProjectResponse::getProjectKey);
+                .map(resp -> resp.getProject().getProjectKey());
     }
 
 }

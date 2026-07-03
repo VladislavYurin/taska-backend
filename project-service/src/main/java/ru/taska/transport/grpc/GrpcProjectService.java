@@ -13,13 +13,14 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.CreateProjectResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.GetUsersProjectsRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.GetProjectResponse;
+import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.UsersProjectsResponse;
 import ru.taska.domain.ProjectRole;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.mapper.ProjectMemberMapper;
@@ -37,7 +38,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
     private final ProjectMemberMapper projectMemberMapper;
 
     @Override
-    public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
+    public Mono<CreateProjectResponse> createProject(Mono<CreateProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -57,12 +58,12 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.createProject(requestId, nodeId, projectKey, projectName, userId);
                 })
-                .map(projectMapper::toProjectResponse)
+                .map(p -> CreateProjectResponse.newBuilder().setProject(projectMapper.toProjectResponse(p)).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("createProject"));
     }
 
     @Override
-    public Mono<ProjectResponse> getProject(Mono<GetProjectRequest> request) {
+    public Mono<GetProjectResponse> getProject(Mono<GetProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -77,12 +78,12 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.getProject(requestId, nodeId, projectId);
                 })
-                .map(projectMapper::toProjectResponse)
+                .map(p -> GetProjectResponse.newBuilder().setProject(projectMapper.toProjectResponse(p)).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("getProject"));
     }
 
     @Override
-    public Mono<UsersProjectsResponse> listMyProjects(Mono<GetUsersProjectsRequest> request) {
+    public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -98,11 +99,9 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                     return projectService.listMyProjects(requestId, nodeId, userId)
                             .map(projectMapper::toProjectResponse)
                             .collectList()
-                            .map(p -> {
-                                return UsersProjectsResponse.newBuilder()
-                                        .addAllProjectResponse(p)
-                                        .build();
-                            });
+                            .map(p -> ListMyProjectsResponse.newBuilder()
+                                    .addAllProjects(p)
+                                    .build());
                 })
                 .transform(GrpcExceptionHandler.withErrorHandling("listMyProjects"));
     }

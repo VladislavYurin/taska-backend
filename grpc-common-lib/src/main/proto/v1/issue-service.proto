@@ -40,29 +40,31 @@ enum IssueStatus {
 }
 
 service IssueService {
+
   /*
    * Создаёт новую задачу в проекте.
    */
   rpc CreateIssue(CreateIssueRequest)
-      returns (IssueResponse);
+      returns (CreateIssueResponse);
 
   /*
    * Возвращает задачу по идентификатору.
    */
   rpc GetIssue(GetIssueRequest)
-      returns (IssueDetails);
+      returns (GetIssueResponse);
 
   /*
- * Мягкое удаление задачи
- */
+   * Мягкое удаление задачи.
+   */
   rpc DeleteIssue(DeleteIssueRequest)
       returns (DeleteIssueResponse);
 
   /*
-* Обновление данных задачи
-*/
+   * Обновление данных задачи.
+   */
   rpc UpdateIssue(UpdateIssueRequest)
       returns (UpdateIssueResponse);
+
   /*
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
    */
@@ -73,7 +75,7 @@ service IssueService {
    * Назначает исполнителя задачи.
    */
   rpc AssignIssue(AssignIssueRequest)
-      returns (IssueResponse);
+      returns (AssignIssueResponse);
 }
 
 message AssignIssueRequest {
@@ -86,7 +88,7 @@ message AssignIssueRequest {
   /**
    * Тело запроса.
    */
-  AssignIssueBody body = 2;
+  AssignIssueRequestBody body = 2;
 }
 
 message CreateIssueRequest {
@@ -99,10 +101,10 @@ message CreateIssueRequest {
   /**
    * Тело запроса.
    */
-  CreateIssueBody body = 2;
+  CreateIssueRequestBody body = 2;
 }
 
-message AssignIssueBody {
+message AssignIssueRequestBody {
 
   /**
    * Идентификатор проекта, в котором находится задача.
@@ -125,11 +127,11 @@ message AssignIssueBody {
   string actor_user_id = 4;
 }
 
-message CreateIssueBody {
+message CreateIssueRequestBody {
 
   /**
-  * Ключ идемпотентности запроса.
-  */
+   * Ключ идемпотентности запроса.
+   */
   string idempotency_key = 1;
 
   /**
@@ -179,8 +181,8 @@ message GetIssueRequest {
 message GetIssueRequestBody {
 
   /**
- * Идентификатор проекта, в котором находится задача.
- */
+   * Идентификатор проекта, в котором находится задача.
+   */
   string project_id = 1;
 
   /**
@@ -197,62 +199,62 @@ message GetIssueRequestBody {
 message DeleteIssueRequest {
 
   /**
- * Заголовок запроса.
- */
+   * Заголовок запроса.
+   */
   ru.taska.common.v1.Header header = 1;
 
   /**
- * Тело запроса.
- */
+   * Тело запроса.
+   */
   DeleteIssueRequestBody body = 2;
 }
 
 message DeleteIssueRequestBody {
 
   /**
- * Идентификатор проекта, в котором находится задача.
- */
+   * Идентификатор проекта, в котором находится задача.
+   */
   string project_id = 1;
 
   /**
- * Айди задачи
- */
+   * Идентификатор задачи.
+   */
   string issue_id = 2;
 
   /**
- * Айди инициатора
- */
+   * Идентификатор инициатора.
+   */
   string actor_user_id = 3;
 }
 
 message UpdateIssueRequest {
 
   /**
- * Заголовок запроса.
- */
+   * Заголовок запроса.
+   */
   ru.taska.common.v1.Header header = 1;
 
   /**
- * Тело запроса.
- */
+   * Тело запроса.
+   */
   UpdateIssueRequestBody body = 2;
 }
 
 message UpdateIssueRequestBody {
 
   /**
-* Айди проекта
-*/
+   * Идентификатор проекта.
+   */
   string project_id = 1;
 
   /**
- * Айди задачи
- */
+   * Идентификатор задачи.
+   */
   string issue_id = 2;
 
   /**
- * Айди инициатора
- */
+   * Идентификатор инициатора.
+   */
   string actor_user_id = 3;
 
   /**
@@ -320,19 +322,20 @@ message ListIssuesRequestBody {
 message DeleteIssueResponse {
 
   /**
- * Айди удаленной задачи.
- */
+   * Идентификатор удалённой задачи.
+   */
   string deleted_issue_id = 1;
+
   /**
- * Тип события по задаче.
- */
+   * Тип события по задаче.
+   */
   IssueEventType issue_event_type = 2;
 }
 
 message UpdateIssueResponse {
 
   /**
-   * Айди обновленной задачи.
+   * Идентификатор обновлённой задачи.
    */
   string updated_issue_id = 1;
 
@@ -509,7 +512,23 @@ message IssueHistoryResponse {
   string payload = 6;
 }
 
-message IssueDetails {
+message CreateIssueResponse {
+
+  /**
+   * Созданная задача.
+   */
+  IssueResponse issue = 1;
+}
+
+message AssignIssueResponse {
+
+  /**
+   * Задача после назначения исполнителя.
+   */
+  IssueResponse issue = 1;
+}
+
+message GetIssueResponse {
 
   /**
    * Данные задачи.

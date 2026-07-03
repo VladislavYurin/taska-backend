@@ -9,36 +9,42 @@ option java_package = "ru.taska.api.auth.admin.inviteuser.v1";
 option java_outer_classname = "AdminInviteUserApiProto";
 
 service AdminInviteUserService {
-  rpc InviteUser(AdminCreateUserRequest) returns (UserCreatedResponse);
+  rpc InviteUser(InviteUserRequest) returns (InviteUserResponse);
 }
 
-message AdminCreateUserRequest {
+message InviteUserRequest {
+
   /**
    * Заголовок запроса.
    */
   ru.taska.common.v1.Header header = 1;
+
   /**
    * Тело запроса.
    */
-  AdminCreateUserBody body = 2;
+  InviteUserRequestBody body = 2;
 }
 
-message AdminCreateUserBody {
+message InviteUserRequestBody {
+
   /**
    * Email пользователя.
    */
   string email = 1;
+
   /**
    * Отображаемое имя пользователя.
    */
-  string displayName = 2;
+  string display_name = 2;
 }
 
-message UserCreatedResponse {
+message InviteUserResponse {
+
   /**
    * Идентификатор пользователя.
    */
-  string userId = 1;
+  string user_id = 1;
+
   /**
    * Статус пользователя (INVITED/ACTIVE/BLOCKED).
    */

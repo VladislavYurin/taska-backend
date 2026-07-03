@@ -24,16 +24,14 @@ service NotificationService {
    * Если unread_only = true, возвращаются только непрочитанные уведомления.
    * Если unread_only = false, возвращаются все уведомления пользователя.
    */
-  rpc ListNotifications(ListNotificationsRequest)
-      returns (ListNotificationsResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
 
   /**
    * Помечает уведомление пользователя как прочитанное.
    *
    * Важно: user_id нужен, чтобы пользователь не мог отметить чужое уведомление.
    */
-  rpc MarkAsRead(MarkAsReadRequest)
-      returns (MarkAsReadResponse);
+  rpc MarkAsRead(MarkAsReadRequest) returns (MarkAsReadResponse);
 }
 
 /**
@@ -65,13 +63,13 @@ enum NotificationKind {
   NOTIFICATION_KIND_ISSUE_CREATED = 3;
 
   /**
-* Уведомление об удалении задачи.
-*/
+   * Уведомление об обновлении задачи.
+   */
   NOTIFICATION_KIND_ISSUE_UPDATED = 4;
 
   /**
-  * Уведомление об удалении задачи.
-  */
+   * Уведомление об удалении задачи.
+   */
   NOTIFICATION_KIND_ISSUE_DELETED = 5;
 
   /**
@@ -82,28 +80,27 @@ enum NotificationKind {
   /**
    * Уведомление об активации пользователя.
    */
-  NOTIFICATION_KIND_USER_ACTIVATED  = 7;
+  NOTIFICATION_KIND_USER_ACTIVATED = 7;
 
   /**
    * Уведомление о создании проекта.
    */
-  NOTIFICATION_KIND_PROJECT_CREATED  = 8;
+  NOTIFICATION_KIND_PROJECT_CREATED = 8;
 
   /**
- * Уведомление о добавлении участника в проект.
- */
-  NOTIFICATION_KIND_MEMBER_ADDED  = 9;
+   * Уведомление о добавлении участника в проект.
+   */
+  NOTIFICATION_KIND_MEMBER_ADDED = 9;
 
   /**
- * Уведомление об изменении участника в проекте.
- */
-  NOTIFICATION_KIND_MEMBER_UPDATED  = 10;
+   * Уведомление об изменении участника в проекте.
+   */
+  NOTIFICATION_KIND_MEMBER_UPDATED = 10;
 
   /**
- * Уведомление об удалении участника из проекта.
- */
-  NOTIFICATION_KIND_MEMBER_REMOVED  = 11;
-
+   * Уведомление об удалении участника из проекта.
+   */
+  NOTIFICATION_KIND_MEMBER_REMOVED = 11;
 }
 
 /**
@@ -121,13 +118,13 @@ message ListNotificationsRequest {
   /**
    * Бизнес-данные запроса.
    */
-  ListNotificationsBody body = 2;
+  ListNotificationsRequestBody body = 2;
 }
 
 /**
  * Бизнес-данные запроса ListNotifications.
  */
-message ListNotificationsBody {
+message ListNotificationsRequestBody {
 
   /**
    * Идентификатор пользователя, для которого нужно получить уведомления.
@@ -192,13 +189,13 @@ message MarkAsReadRequest {
   /**
    * Бизнес-данные запроса.
    */
-  MarkAsReadBody body = 2;
+  MarkAsReadRequestBody body = 2;
 }
 
 /**
  * Бизнес-данные запроса MarkAsRead.
  */
-message MarkAsReadBody {
+message MarkAsReadRequestBody {
 
   /**
    * Идентификатор уведомления, которое нужно пометить прочитанным.
@@ -284,5 +281,4 @@ message NotificationResponse {
    * Например, event id из Kafka.
    */
   string source_event_id = 9;
-  
 }

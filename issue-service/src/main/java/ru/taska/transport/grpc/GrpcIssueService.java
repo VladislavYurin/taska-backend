@@ -11,11 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.AssignIssueResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.IssueDetails;
+import ru.taska.api.issue.v1.GetIssueResponse;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
@@ -39,7 +41,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     private final IssueMapper issueMapper;
 
     @Override
-    public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
+    public Mono<CreateIssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -103,12 +105,12 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "createIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueProto)
+                .map(issue -> CreateIssueResponse.newBuilder().setIssue(issueMapper.toIssueProto(issue)).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
     }
 
     @Override
-    public Mono<IssueDetails> getIssue(Mono<GetIssueRequest> request) {
+    public Mono<GetIssueResponse> getIssue(Mono<GetIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -155,7 +157,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "getIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueDetailsProto)
+                .map(issueMapper::toGetIssueResponseProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
     }
 
@@ -234,7 +236,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     }
 
     @Override
-    public Mono<IssueResponse> assignIssue(Mono<AssignIssueRequest> request) {
+    public Mono<AssignIssueResponse> assignIssue(Mono<AssignIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -286,7 +288,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "assignIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueProto)
+                .map(issue -> AssignIssueResponse.newBuilder().setIssue(issueMapper.toIssueProto(issue)).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("assignIssue"));
     }
 

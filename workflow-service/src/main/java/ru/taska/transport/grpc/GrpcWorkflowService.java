@@ -17,6 +17,7 @@ import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.api.workflow.v1.ValidateTransitionResponseBody;
+import ru.taska.api.workflow.v1.GetWorkflowForProjectResponse;
 import ru.taska.api.workflow.v1.Workflow;
 import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.exception.DomainException;
@@ -40,7 +41,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
     private final StatusMapper statusMapper;
 
     @Override
-    public Mono<Workflow> getWorkflowForProject(Mono<GetWorkflowForProjectRequest> request) {
+    public Mono<GetWorkflowForProjectResponse> getWorkflowForProject(Mono<GetWorkflowForProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -59,7 +60,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                     return workflowService.getWorkflow(projectId, issueType)
                             .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()));
                 })
-                .map(workflowMapper::toWorkflowProto)
+                .map(w -> GetWorkflowForProjectResponse.newBuilder().setWorkflow(workflowMapper.toWorkflowProto(w)).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("getWorkflowForProject"));
     }
 
