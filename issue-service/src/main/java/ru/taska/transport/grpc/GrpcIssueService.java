@@ -121,9 +121,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -136,17 +133,15 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID actorUserId = t.getT5();
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
 
-                            log.info("[{}][{}] getIssue: projectId={}, issueId={}, actorUserId={}",
-                                    requestId, nodeId, projectId, issueId, actorUserId);
+                            log.info("[{}][{}] getIssue: issueId={}, actorUserId={}",
+                                    requestId, nodeId, issueId, actorUserId);
 
                             return issueService.getIssue(
                                             requestId,
                                             nodeId,
-                                            projectId,
                                             issueId,
                                             actorUserId
                                     )
@@ -192,7 +187,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             UUID projectId = t.getT3();
                             UUID actorUserId = t.getT4();
                             UUID assigneeId = t.getT5().orElse(null);
-                            //String statusKey = req.getBody().getStatusKey();
                             String statusKey = req.getBody().hasStatusKey()
                                     ? req.getBody().getStatusKey()
                                     : null;
@@ -248,9 +242,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -266,18 +257,16 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID assigneeId = t.getT5();
-                            UUID actorUserId = t.getT6();
+                            UUID issueId = t.getT3();
+                            UUID assigneeId = t.getT4();
+                            UUID actorUserId = t.getT5();
 
-                            log.info("[{}][{}] assignIssue: projectId={}, issueId={}, assigneeId={}, actorUserId={}",
-                                    requestId, nodeId, projectId, issueId, assigneeId, actorUserId);
+                            log.info("[{}][{}] assignIssue: issueId={}, assigneeId={}, actorUserId={}",
+                                    requestId, nodeId, issueId, assigneeId, actorUserId);
 
                             return issueService.assignIssue(
                                             requestId,
                                             nodeId,
-                                            projectId,
                                             issueId,
                                             assigneeId,
                                             actorUserId
@@ -312,9 +301,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -327,17 +313,15 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID actorUserId = t.getT5();
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
 
-                            log.info("[{}][{}] deleteIssue: projectId={}, issueId = {}, actorUserId = {}",
-                                    requestId, nodeId, projectId, issueId, actorUserId);
+                            log.info("[{}][{}] deleteIssue: issueId = {}, actorUserId = {}",
+                                    requestId, nodeId, issueId, actorUserId);
 
                             return issueService.deleteIssue(
                                     requestId,
                                     nodeId,
-                                    projectId,
                                     issueId,
                                     actorUserId
                             );
@@ -358,7 +342,6 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
@@ -368,16 +351,15 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
-                    UUID projectId = t.getT3();
-                    UUID issueId = t.getT4();
-                    UUID actorUserId = t.getT5();
-                    String summary = t.getT6();
-                    String description = t.getT7();
-                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT8());
+                    UUID issueId = t.getT3();
+                    UUID actorUserId = t.getT4();
+                    String summary = t.getT5();
+                    String description = t.getT6();
+                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT7());
 
-                    log.info("[{}][{}] updateIssue: projectId = {}, issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
+                    log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
                             requestId, nodeId, issueId, actorUserId, summary, description, priority);
-                    return issueService.updateIssue(requestId, nodeId, projectId, issueId, actorUserId, summary, description, priority);
+                    return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority);
                 })
                 .map(issueMapper::toUpdateIssueProto)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));

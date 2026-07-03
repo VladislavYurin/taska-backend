@@ -14,12 +14,20 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
     Mono<Issue> findActiveById(@Param("id") UUID id);
 
     /**
-    ** Производит мягкое удаление задачи по айди, устанавливая значение
+     * * Находит только активные задачи по айди и блокирует задачу до сохранения.
+     *
+     * @param id айди задачи.
+     * @return Mono<{@link Issue}> запрашиваемая задача.
+     */
+    @Query("SELECT * FROM taska.issues WHERE id = :id AND deleted_at IS NULL FOR UPDATE")
+    Mono<Issue> findActiveByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * * Производит мягкое удаление задачи по айди, устанавливая значение
      * в поле deleted_at и возвращает удаленный объект из БД.
      * После удаления данные остаются в БД, но объект больше не участвует в выдаче.
      *
      * @param issueId айди удаляемой задачи.
-     *
      * @return Mono<{@link Issue}> тело удаленной задачи.
      */
     @Query("UPDATE taska.issues SET deleted_at = NOW(), version = version + 1 " +

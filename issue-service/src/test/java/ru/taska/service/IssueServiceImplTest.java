@@ -17,6 +17,7 @@ import ru.taska.service.impl.IssueServiceImpl;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
+import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
@@ -40,6 +41,12 @@ public class IssueServiceImplTest {
     protected OutboxEventRepository outboxEventRepository;
 
     @Mock
+    protected IssueHistoryService issueHistoryService;
+
+    @Mock
+    protected OutboxEventService outboxEventService;
+
+    @Mock
     protected IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Mock
@@ -56,6 +63,9 @@ public class IssueServiceImplTest {
 
     @Spy
     protected ObjectMapper objectMapper = new ObjectMapper();
+
+    @Spy
+    protected PayloadSerializer payloadSerializer = new PayloadSerializer(objectMapper);
 
     @InjectMocks
     protected IssueServiceImpl issueService;
