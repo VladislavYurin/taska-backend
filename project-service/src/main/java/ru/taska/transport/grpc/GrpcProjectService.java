@@ -14,12 +14,12 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.GetUsersProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.UsersProjectsResponse;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.domain.ProjectRole;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.mapper.ProjectMemberMapper;
@@ -82,7 +82,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
     }
 
     @Override
-    public Mono<UsersProjectsResponse> listMyProjects(Mono<GetUsersProjectsRequest> request) {
+    public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -99,7 +99,7 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                             .map(projectMapper::toProjectResponse)
                             .collectList()
                             .map(p -> {
-                                return UsersProjectsResponse.newBuilder()
+                                return ListMyProjectsResponse.newBuilder()
                                         .addAllProjectResponse(p)
                                         .build();
                             });

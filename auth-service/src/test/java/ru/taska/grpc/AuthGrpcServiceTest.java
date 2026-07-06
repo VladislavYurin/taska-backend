@@ -43,7 +43,7 @@ class AuthGrpcServiceTest {
     private RefreshRequest validRefreshRequest;
     private ru.taska.dto.AuthResponseDto authResponseDto;
     private PasswordByTokenResponseDto passwordByTokenResponseDto;
-    private PasswordByTokenRequest validPasswordByTokenRequest;
+    private SetPasswordByTokenRequest validSetPasswordByTokenRequest;
 
     @BeforeEach
     void setUp() {
@@ -75,12 +75,12 @@ class AuthGrpcServiceTest {
                 .build();
         passwordByTokenResponseDto = new PasswordByTokenResponseDto("testuser@example.com");
 
-        validPasswordByTokenRequest = PasswordByTokenRequest.newBuilder()
+        validSetPasswordByTokenRequest = SetPasswordByTokenRequest.newBuilder()
                 .setHeader(ru.taska.api.common.v1.Header.newBuilder()
                         .setRequestId("test-request-id")
                         .setNodeId("test-node-id")
                         .build())
-                .setBody(PasswordByTokenRequestBody.newBuilder()
+                .setBody(SetPasswordByTokenRequestBody.newBuilder()
                         .setToken("valid-invite-token-123")
                         .setNewPassword("NewValidPassword123!")
                         .build())
@@ -313,7 +313,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.empty());
 
         // When & Then
-        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validPasswordByTokenRequest)))
+        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
                 .expectNext(Empty.getDefaultInstance())
                 .verifyComplete();
 
@@ -331,7 +331,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validPasswordByTokenRequest)))
+        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
                 .expectErrorMatches(error ->
                         error instanceof io.grpc.StatusRuntimeException &&
                                 error.getMessage().contains("UNAUTHENTICATED")

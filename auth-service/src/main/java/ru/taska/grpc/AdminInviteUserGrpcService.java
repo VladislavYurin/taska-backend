@@ -5,9 +5,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserResponse;
 import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
-import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
 import ru.taska.service.AdminInviteUserService;
 import validator.GrpcRequestValidators;
 
@@ -19,7 +19,7 @@ public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrp
     private final AdminInviteUserService adminInviteUserService;
 
     @Override
-    public Mono<UserCreatedResponse> inviteUser(Mono<AdminCreateUserRequest> request) {
+    public Mono<InviteUserResponse> inviteUser(Mono<InviteUserRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),

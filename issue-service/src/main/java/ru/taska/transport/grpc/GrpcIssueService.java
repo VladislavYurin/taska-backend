@@ -15,7 +15,7 @@ import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.IssueDetails;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
@@ -108,7 +108,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
     }
 
     @Override
-    public Mono<IssueDetails> getIssue(Mono<GetIssueRequest> request) {
+    public Mono<IssueWithHistoryResponse> getIssue(Mono<GetIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(

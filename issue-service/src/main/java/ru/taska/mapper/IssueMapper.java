@@ -6,12 +6,13 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.IssueDetails;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.IdempotencyKey;
+import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -122,11 +123,11 @@ public class IssueMapper {
                 .build();
     }
 
-    public IssueDetails toIssueDetailsProto(IssueWithHistory issueWithHistory) {
+    public IssueWithHistoryResponse toIssueDetailsProto(IssueWithHistory issueWithHistory) {
         var historyProto = issueWithHistory.getHistory().stream()
                 .map(this::toIssueHistoryProto)
                 .toList();
-        return IssueDetails.newBuilder()
+        return IssueWithHistoryResponse.newBuilder()
                 .setIssue(toIssueProto(issueWithHistory.getIssue()))
                 .addAllHistory(historyProto)
                 .build();
@@ -157,6 +158,15 @@ public class IssueMapper {
                 .setDescription(issue.getDescription())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .build();
+    }
+
+    public ProjectRole toDomainRole(ru.taska.api.project.v1.ProjectRole protoRole) {
+        return switch (protoRole) {
+            case PROJECT_ROLE_ADMIN -> ProjectRole.ADMIN;
+            case PROJECT_ROLE_MEMBER -> ProjectRole.MEMBER;
+            case PROJECT_ROLE_VIEWER -> ProjectRole.VIEWER;
+            default -> throw new IllegalArgumentException("Unknown ProjectRole: " + protoRole);
+        };
     }
 
     public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {

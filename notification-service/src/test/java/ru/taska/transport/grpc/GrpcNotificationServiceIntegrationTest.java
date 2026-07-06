@@ -12,9 +12,9 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.NotificationServiceApplication;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.notification.v1.ListNotificationsBody;
+import ru.taska.api.notification.v1.ListNotificationsRequestBody;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
-import ru.taska.api.notification.v1.MarkAsReadBody;
+import ru.taska.api.notification.v1.MarkAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
@@ -124,7 +124,7 @@ class GrpcNotificationServiceIntegrationTest {
     private static ListNotificationsRequest listRequest(boolean unreadOnly) {
         return ListNotificationsRequest.newBuilder()
                 .setHeader(header())
-                .setBody(ListNotificationsBody.newBuilder()
+                .setBody(ListNotificationsRequestBody.newBuilder()
                         .setUserId(USER_ID.toString())
                         .setUnreadOnly(unreadOnly)
                         .setPageSize(PAGE_SIZE)
@@ -136,7 +136,7 @@ class GrpcNotificationServiceIntegrationTest {
     private static MarkAsReadRequest markAsReadRequest(String notificationId, String userId) {
         return MarkAsReadRequest.newBuilder()
                 .setHeader(header())
-                .setBody(MarkAsReadBody.newBuilder()
+                .setBody(MarkAsReadRequestBody.newBuilder()
                         .setNotificationId(notificationId)
                         .setUserId(userId)
                         .build())

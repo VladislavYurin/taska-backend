@@ -40,36 +40,37 @@ enum IssueStatus {
 }
 
 service IssueService {
-  /*
+  /**
    * Создаёт новую задачу в проекте.
    */
   rpc CreateIssue(CreateIssueRequest)
       returns (IssueResponse);
 
-  /*
+  /**
    * Возвращает задачу по идентификатору.
    */
   rpc GetIssue(GetIssueRequest)
-      returns (IssueDetails);
+      returns (IssueWithHistoryResponse);
 
-  /*
- * Мягкое удаление задачи
- */
+  /**
+   * Мягкое удаление задачи.
+   */
   rpc DeleteIssue(DeleteIssueRequest)
       returns (DeleteIssueResponse);
 
-  /*
-* Обновление данных задачи
-*/
+  /**
+   * Обновление данных задачи.
+   */
   rpc UpdateIssue(UpdateIssueRequest)
       returns (UpdateIssueResponse);
-  /*
+
+  /**
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
    */
   rpc ListIssues(ListIssuesRequest)
       returns (ListIssuesResponse);
 
-  /*
+  /**
    * Назначает исполнителя задачи.
    */
   rpc AssignIssue(AssignIssueRequest)
@@ -77,7 +78,6 @@ service IssueService {
 }
 
 message AssignIssueRequest {
-
   /**
    * Заголовок запроса.
    */
@@ -86,11 +86,10 @@ message AssignIssueRequest {
   /**
    * Тело запроса.
    */
-  AssignIssueBody body = 2;
+  AssignIssueRequestBody body = 2;
 }
 
 message CreateIssueRequest {
-
   /**
    * Заголовок запроса.
    */
@@ -99,11 +98,10 @@ message CreateIssueRequest {
   /**
    * Тело запроса.
    */
-  CreateIssueBody body = 2;
+  CreateIssueRequestBody body = 2;
 }
 
-message AssignIssueBody {
-
+message AssignIssueRequestBody {
   /**
    * Идентификатор проекта, в котором находится задача.
    */
@@ -125,11 +123,10 @@ message AssignIssueBody {
   string actor_user_id = 4;
 }
 
-message CreateIssueBody {
-
+message CreateIssueRequestBody {
   /**
-  * Ключ идемпотентности запроса.
-  */
+   * Ключ идемпотентности запроса.
+   */
   string idempotency_key = 1;
 
   /**
@@ -164,7 +161,6 @@ message CreateIssueBody {
 }
 
 message GetIssueRequest {
-
   /**
    * Заголовок запроса.
    */
@@ -177,10 +173,9 @@ message GetIssueRequest {
 }
 
 message GetIssueRequestBody {
-
   /**
- * Идентификатор проекта, в котором находится задача.
- */
+   * Идентификатор проекта, в котором находится задача.
+   */
   string project_id = 1;
 
   /**
@@ -195,64 +190,60 @@ message GetIssueRequestBody {
 }
 
 message DeleteIssueRequest {
-
   /**
- * Заголовок запроса.
- */
+   * Заголовок запроса.
+   */
   ru.taska.common.v1.Header header = 1;
 
   /**
- * Тело запроса.
- */
+   * Тело запроса.
+   */
   DeleteIssueRequestBody body = 2;
 }
 
 message DeleteIssueRequestBody {
-
   /**
- * Идентификатор проекта, в котором находится задача.
- */
+   * Идентификатор проекта, в котором находится задача.
+   */
   string project_id = 1;
 
   /**
- * Айди задачи
- */
+   * Идентификатор задачи.
+   */
   string issue_id = 2;
 
   /**
- * Айди инициатора
- */
+   * Идентификатор инициатора.
+   */
   string actor_user_id = 3;
 }
 
 message UpdateIssueRequest {
-
   /**
- * Заголовок запроса.
- */
+   * Заголовок запроса.
+   */
   ru.taska.common.v1.Header header = 1;
 
   /**
- * Тело запроса.
- */
+   * Тело запроса.
+   */
   UpdateIssueRequestBody body = 2;
 }
 
 message UpdateIssueRequestBody {
-
   /**
-* Айди проекта
-*/
+   * Идентификатор проекта.
+   */
   string project_id = 1;
 
   /**
- * Айди задачи
- */
+   * Идентификатор задачи.
+   */
   string issue_id = 2;
 
   /**
- * Айди инициатора
- */
+   * Идентификатор инициатора.
+   */
   string actor_user_id = 3;
 
   /**
@@ -272,7 +263,6 @@ message UpdateIssueRequestBody {
 }
 
 message ListIssuesRequest {
-
   /**
    * Заголовок запроса.
    */
@@ -285,7 +275,6 @@ message ListIssuesRequest {
 }
 
 message ListIssuesRequestBody {
-
   /**
    * Идентификатор проекта.
    */
@@ -318,21 +307,20 @@ message ListIssuesRequestBody {
 }
 
 message DeleteIssueResponse {
+  /**
+   * Идентификатор удалённой задачи.
+   */
+  string deleted_issue_id = 1;
 
   /**
- * Айди удаленной задачи.
- */
-  string deleted_issue_id = 1;
-  /**
- * Тип события по задаче.
- */
+   * Тип события по задаче.
+   */
   IssueEventType issue_event_type = 2;
 }
 
 message UpdateIssueResponse {
-
   /**
-   * Айди обновленной задачи.
+   * Идентификатор обновлённой задачи.
    */
   string updated_issue_id = 1;
 
@@ -353,7 +341,6 @@ message UpdateIssueResponse {
 }
 
 message ListIssuesResponse {
-
   /**
    * Список задач.
    */
@@ -366,7 +353,6 @@ message ListIssuesResponse {
 }
 
 message IssueShortResponse {
-
   /**
    * Идентификатор задачи.
    */
@@ -399,7 +385,6 @@ message IssueShortResponse {
 }
 
 message IssueResponse {
-
   /**
    * Идентификатор задачи.
    */
@@ -477,7 +462,6 @@ message IssueResponse {
 }
 
 message IssueHistoryResponse {
-
   /**
    * Идентификатор записи истории.
    */
@@ -509,8 +493,10 @@ message IssueHistoryResponse {
   string payload = 6;
 }
 
-message IssueDetails {
-
+/**
+ * Ответ на получение задачи с историей.
+ */
+message IssueWithHistoryResponse {
   /**
    * Данные задачи.
    */

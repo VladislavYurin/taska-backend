@@ -2,7 +2,7 @@ package ru.taska.mapper;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
@@ -22,7 +22,7 @@ class AdminInviteUserMapperTest {
 
     @Test
     void buildInvitedUserFromRequest() {
-        AdminCreateUserRequest request = TestGrpcDataGenerator.getAdminCreateUserRequest();
+        InviteUserRequest request = TestGrpcDataGenerator.getInviteUserRequest();
         User user = mapper.buildInvitedUserFromRequest(request);
         Assertions.assertThat(user.getEmail()).isEqualTo(TestConstantHolder.TEST_USER_EMAIL);
         Assertions.assertThat(user.getLogin()).isNotNull();

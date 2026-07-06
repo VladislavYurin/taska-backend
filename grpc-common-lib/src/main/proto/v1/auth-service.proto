@@ -10,62 +10,62 @@ option java_package = "ru.taska.api.auth.v1";
 option java_outer_classname = "AuthApiProto";
 
 service AuthService {
-    rpc Login (LoginRequest) returns (LoginResponse);
-    rpc Refresh (RefreshRequest) returns (RefreshResponse);
-    rpc SetPasswordByToken(PasswordByTokenRequest) returns (google.protobuf.Empty);
-    rpc ValidateAccessToken(ValidateAccessTokenRequest) returns (ValidateAccessTokenResponse);
+  rpc Login (LoginRequest) returns (LoginResponse);
+  rpc Refresh (RefreshRequest) returns (RefreshResponse);
+  rpc SetPasswordByToken(SetPasswordByTokenRequest) returns (google.protobuf.Empty);
+  rpc ValidateAccessToken(ValidateAccessTokenRequest) returns (ValidateAccessTokenResponse);
 }
 
 message LoginRequest {
-    ru.taska.common.v1.Header header = 1;
-    LoginRequestBody body = 2;
+  ru.taska.common.v1.Header header = 1;
+  LoginRequestBody body = 2;
 }
 
 message LoginRequestBody {
-    string email = 1;
-    string password = 2;
+  string email = 1;
+  string password = 2;
 }
 
 message LoginResponse {
-    string access_token = 1;
-    string refresh_token = 2;
-    int64 expires_in = 3; // seconds
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3; // seconds
 }
 
 message RefreshRequest {
-    ru.taska.common.v1.Header header = 1;
-    RefreshRequestBody body = 2;
+  ru.taska.common.v1.Header header = 1;
+  RefreshRequestBody body = 2;
 }
 
 message RefreshRequestBody {
-    string refresh_token = 1;
+  string refresh_token = 1;
 }
 
 message RefreshResponse {
-    string access_token = 1;
-    string refresh_token = 2;
-    int64 expires_in = 3;
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;
 }
 
-message PasswordByTokenRequest {
-    ru.taska.common.v1.Header header = 1;
-    PasswordByTokenRequestBody body = 2;
+message SetPasswordByTokenRequest {
+  ru.taska.common.v1.Header header = 1;
+  SetPasswordByTokenRequestBody body = 2;
 }
 
-message PasswordByTokenRequestBody {
-    string token = 1;
-    string newPassword = 2;
+message SetPasswordByTokenRequestBody {
+  string token = 1;
+  string new_password = 2;
 }
 
 message ValidateAccessTokenRequest {
-    ru.taska.common.v1.Header header = 1;
-    ValidateAccessTokenRequestBody body = 2;
+  ru.taska.common.v1.Header header = 1;
+  ValidateAccessTokenRequestBody body = 2;
 }
 
 message ValidateAccessTokenRequestBody {
-    string access_token = 1;
+  string access_token = 1;
 }
 
 message ValidateAccessTokenResponse {
-    ru.taska.common.v1.UserContext user_context = 1;
+  ru.taska.common.v1.UserContext user_context = 1;
 }

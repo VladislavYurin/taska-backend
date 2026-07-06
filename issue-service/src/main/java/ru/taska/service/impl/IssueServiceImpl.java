@@ -6,7 +6,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.ProjectRole;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;

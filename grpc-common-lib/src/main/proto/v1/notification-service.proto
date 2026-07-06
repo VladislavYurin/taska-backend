@@ -17,7 +17,6 @@ option java_outer_classname = "NotificationApiProto";
  * - пометить уведомление прочитанным.
  */
 service NotificationService {
-
   /**
    * Возвращает уведомления пользователя.
    *
@@ -43,7 +42,6 @@ service NotificationService {
  * в notification-service.
  */
 enum NotificationKind {
-
   /**
    * Тип уведомления не указан.
    */
@@ -65,13 +63,13 @@ enum NotificationKind {
   NOTIFICATION_KIND_ISSUE_CREATED = 3;
 
   /**
-* Уведомление об удалении задачи.
-*/
+   * Уведомление об обновлении задачи.
+   */
   NOTIFICATION_KIND_ISSUE_UPDATED = 4;
 
   /**
-  * Уведомление об удалении задачи.
-  */
+   * Уведомление об удалении задачи.
+   */
   NOTIFICATION_KIND_ISSUE_DELETED = 5;
 
   /**
@@ -82,35 +80,33 @@ enum NotificationKind {
   /**
    * Уведомление об активации пользователя.
    */
-  NOTIFICATION_KIND_USER_ACTIVATED  = 7;
+  NOTIFICATION_KIND_USER_ACTIVATED = 7;
 
   /**
    * Уведомление о создании проекта.
    */
-  NOTIFICATION_KIND_PROJECT_CREATED  = 8;
+  NOTIFICATION_KIND_PROJECT_CREATED = 8;
 
   /**
- * Уведомление о добавлении участника в проект.
- */
-  NOTIFICATION_KIND_MEMBER_ADDED  = 9;
+   * Уведомление о добавлении участника в проект.
+   */
+  NOTIFICATION_KIND_MEMBER_ADDED = 9;
 
   /**
- * Уведомление об изменении участника в проекте.
- */
-  NOTIFICATION_KIND_MEMBER_UPDATED  = 10;
+   * Уведомление об изменении участника в проекте.
+   */
+  NOTIFICATION_KIND_MEMBER_UPDATED = 10;
 
   /**
- * Уведомление об удалении участника из проекта.
- */
-  NOTIFICATION_KIND_MEMBER_REMOVED  = 11;
-
+   * Уведомление об удалении участника из проекта.
+   */
+  NOTIFICATION_KIND_MEMBER_REMOVED = 11;
 }
 
 /**
  * Запрос на получение списка уведомлений.
  */
 message ListNotificationsRequest {
-
   /**
    * Общий технический заголовок запроса:
    * request_id - id запроса для трассировки;
@@ -121,14 +117,13 @@ message ListNotificationsRequest {
   /**
    * Бизнес-данные запроса.
    */
-  ListNotificationsBody body = 2;
+  ListNotificationsRequestBody body = 2;
 }
 
 /**
  * Бизнес-данные запроса ListNotifications.
  */
-message ListNotificationsBody {
-
+message ListNotificationsRequestBody {
   /**
    * Идентификатор пользователя, для которого нужно получить уведомления.
    *
@@ -170,7 +165,6 @@ message ListNotificationsBody {
  * Ответ со списком уведомлений.
  */
 message ListNotificationsResponse {
-
   /**
    * Список уведомлений.
    *
@@ -183,7 +177,6 @@ message ListNotificationsResponse {
  * Запрос на отметку уведомления прочитанным.
  */
 message MarkAsReadRequest {
-
   /**
    * Общий технический заголовок запроса.
    */
@@ -192,14 +185,13 @@ message MarkAsReadRequest {
   /**
    * Бизнес-данные запроса.
    */
-  MarkAsReadBody body = 2;
+  MarkAsReadRequestBody body = 2;
 }
 
 /**
  * Бизнес-данные запроса MarkAsRead.
  */
-message MarkAsReadBody {
-
+message MarkAsReadRequestBody {
   /**
    * Идентификатор уведомления, которое нужно пометить прочитанным.
    */
@@ -219,7 +211,6 @@ message MarkAsReadBody {
  * Ответ после отметки уведомления прочитанным.
  */
 message MarkAsReadResponse {
-
   /**
    * Обновленное уведомление.
    *
@@ -232,7 +223,6 @@ message MarkAsReadResponse {
  * DTO уведомления, которое notification-service возвращает наружу по gRPC.
  */
 message NotificationResponse {
-
   /**
    * Идентификатор уведомления.
    */
@@ -284,5 +274,4 @@ message NotificationResponse {
    * Например, event id из Kafka.
    */
   string source_event_id = 9;
-  
 }

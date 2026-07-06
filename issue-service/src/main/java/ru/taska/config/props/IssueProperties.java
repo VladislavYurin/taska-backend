@@ -2,7 +2,7 @@ package ru.taska.config.props;
 
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.ProjectRole;
 
 import java.util.Set;
 

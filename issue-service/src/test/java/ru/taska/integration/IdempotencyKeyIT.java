@@ -58,7 +58,7 @@ class IdempotencyKeyIT extends AbstractIT {
     void setUp() {
         Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                        .setRole(ProjectRole.MEMBER)
+                        .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
                         .setIsMember(true)
                         .setProjectExists(true)
                         .build()));

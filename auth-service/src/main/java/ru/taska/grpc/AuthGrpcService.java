@@ -8,7 +8,7 @@ import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginResponse;
-import ru.taska.api.auth.v1.PasswordByTokenRequest;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
@@ -91,7 +91,7 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
     }
 
     @Override
-    public Mono<Empty> setPasswordByToken(Mono<PasswordByTokenRequest> request) {
+    public Mono<Empty> setPasswordByToken(Mono<SetPasswordByTokenRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(

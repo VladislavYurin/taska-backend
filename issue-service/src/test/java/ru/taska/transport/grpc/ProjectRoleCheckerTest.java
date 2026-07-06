@@ -12,9 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.IssueMapper;
 
 import java.util.Set;
 import java.util.UUID;
@@ -24,6 +25,9 @@ class ProjectRoleCheckerTest {
 
     @Mock
     private GrpcProjectServiceClient client;
+
+    @Mock
+    private IssueMapper issueMapper;
 
     @InjectMocks
     private ProjectRoleChecker projectRoleChecker;
@@ -47,7 +51,7 @@ class ProjectRoleCheckerTest {
     @DisplayName("Успешная проверка роли пользователя")
     void checkProjectRole_shouldCompleteSuccessfully_whenRoleIsAllowed() {
         var response = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ProjectRole.MEMBER)
+                .setRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
                 .setIsMember(true)
                 .setProjectExists(true)
                 .build();
@@ -56,6 +60,9 @@ class ProjectRoleCheckerTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID)
                 )
                 .thenReturn(Mono.just(response));
+
+        Mockito.when(issueMapper.toDomainRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER))
+                .thenReturn(ProjectRole.MEMBER);
 
         StepVerifier.create(projectRoleChecker.checkProjectRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID, ALLOWED_ROLES)
@@ -71,7 +78,7 @@ class ProjectRoleCheckerTest {
     @DisplayName("Бросает исключение, если проект не найден")
     void checkProjectRole_shouldThrowException_whenProjectNotExists() {
         var response = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ProjectRole.MEMBER)
+                .setRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
                 .setProjectExists(false)
                 .build();
 
@@ -131,7 +138,7 @@ class ProjectRoleCheckerTest {
     @DisplayName("Бросает исключение, если роль пользователя не разрешена")
     void checkProjectRole_shouldThrowException_whenRoleNotAllowed() {
         var response = CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(ProjectRole.UNSPECIFIED)
+                .setRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_VIEWER)
                 .setIsMember(true)
                 .setProjectExists(true)
                 .build();
@@ -140,6 +147,9 @@ class ProjectRoleCheckerTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID)
                 )
                 .thenReturn(Mono.just(response));
+
+        Mockito.when(issueMapper.toDomainRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_VIEWER))
+                .thenReturn(ProjectRole.VIEWER);
 
         StepVerifier.create(projectRoleChecker.checkProjectRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID, ALLOWED_ROLES)
