@@ -6,10 +6,10 @@ import ru.taska.config.props.KafkaProperties;
 import java.time.Duration;
 
 @Configuration
-public class ProejctOutboxConfig implements OutboxConfig{
+public class ProjectOutboxConfig implements OutboxConfig {
     private final KafkaProperties properties;
 
-    public ProejctOutboxConfig(KafkaProperties properties) {
+    public ProjectOutboxConfig(KafkaProperties properties) {
         this.properties = properties;
     }
 
