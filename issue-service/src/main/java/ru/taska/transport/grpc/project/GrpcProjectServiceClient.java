@@ -1,4 +1,4 @@
-package ru.taska.transport.grpc;
+package ru.taska.transport.grpc.project;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

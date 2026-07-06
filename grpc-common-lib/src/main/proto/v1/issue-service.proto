@@ -75,6 +75,12 @@ service IssueService {
    */
   rpc AssignIssue(AssignIssueRequest)
       returns (IssueResponse);
+
+  /**
+   * Делает переход задачи по workflow.
+   */
+  rpc TransitionIssue(TransitionIssueRequest)
+      returns (IssueWithHistoryResponse);
 }
 
 message AssignIssueRequest {
@@ -304,6 +310,42 @@ message ListIssuesRequestBody {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 6;
+}
+
+message TransitionIssueRequest {
+
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  TransitionIssueRequestBody body = 2;
+}
+
+message TransitionIssueRequestBody {
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор перехода между двумя статусами в рамках workflow.
+   */
+  string transition_id = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
+
+  /**
+   * Дополнительные данные для перехода.
+   */
+  string payload = 4;
 }
 
 message DeleteIssueResponse {

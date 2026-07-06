@@ -52,14 +52,18 @@ CREATE INDEX IF NOT EXISTS issues_project_updated_at_idx
 CREATE INDEX IF NOT EXISTS issues_status_key_idx
     ON taska.issues (status_key);
 
+CREATE INDEX IF NOT EXISTS issues_id_active_idx
+    ON taska.issues (id)
+    WHERE deleted_at IS NULL;
+
 -- Project Counters
 CREATE TABLE IF NOT EXISTS taska.project_counters
 (
     project_id        uuid PRIMARY KEY,
     next_issue_number int NOT NULL DEFAULT 1,
 
-        CONSTRAINT project_counters_next_issue_number_chk CHECK
-            (next_issue_number >= 1)
+    CONSTRAINT project_counters_next_issue_number_chk CHECK
+        (next_issue_number >= 1)
 );
 
 -- Issue History

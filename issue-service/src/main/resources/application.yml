@@ -42,10 +42,14 @@ issue:
     assign-issue-roles: ${ISSUE_ASSIGN_ROLES:ADMIN,MEMBER}
     delete-issue-roles: ${ISSUE_DELETE_ROLES:ADMIN,MEMBER}
     update-issue-roles: ${ISSUE_UPDATE_ROLES:ADMIN,MEMBER}
+    issue-transition-roles: ${ISSUE_TRANSITION_ROLES:ADMIN,MEMBER}
     get-issue-roles: ${ISSUE_GET_ROLES:ADMIN,MEMBER,VIEWER}
     list-issue-roles: ${ISSUE_LIST_ROLES:ADMIN,MEMBER,VIEWER}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
+  retry:
+    max-attempts: ${ISSUE_TRANSITION_RETRY_MAX_ATTEMPTS:2}
+    min-backoff: ${ISSUE_TRANSITION_RETRY_MIN_BACKOFF:100ms}
 
 management:
   endpoints:
@@ -62,6 +66,9 @@ grpc:
     project-service:
       host: ${PROJECT_GRPC_HOST:localhost}
       port: ${PROJECT_GRPC_PORT:9096}
+    workflow-service:
+      host: ${WORKFLOW_GRPC_HOST:localhost}
+      port: ${WORKFLOW_GRPC_PORT:9093}
 
 logging:
   level:

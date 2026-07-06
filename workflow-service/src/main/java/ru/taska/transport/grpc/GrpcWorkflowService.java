@@ -1,17 +1,18 @@
 package ru.taska.transport.grpc;
 
 import exception.GrpcExceptionHandler;
-import io.r2dbc.spi.R2dbcException;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import mapper.GrpcExceptionMapper;
 import org.springframework.grpc.server.service.GrpcService;
-import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple8;
 import reactor.util.function.Tuples;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.IssueStatus;
+import ru.taska.api.workflow.v1.IssueType;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
@@ -19,14 +20,13 @@ import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.api.workflow.v1.ValidateTransitionResponseBody;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectResponse;
 import ru.taska.dto.ValidateTransitionResponseDto;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.StatusMapper;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.service.WorkflowService;
 import validator.GrpcRequestValidators;
 
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -69,92 +69,99 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                 .flatMap(req -> {
                     // Validate all fields
                     return Mono.zip(
-                            objects -> {
-                                // Combine all validated values into a single tuple
-                                return new Object[]{
-                                        objects[0], // requestId
-                                        objects[1], // nodeId
-                                        objects[2], // transitionId
-                                        objects[3], // payload
-                                        objects[4], // actorUserId
-                                        objects[5], // issueId
-                                        objects[6], // projectId
-                                        objects[7], // issueType
-                                        objects[8]  // statusKey
-                                };
-                            },
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getTransitionId(), "body.transition_id"),
-                            Mono.just(req.getBody().getPayload()),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getActorUserId(), "body.actor_user_id"),
-                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueId(), "body.issue_snapshot.issue_id"),
-                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getProjectId(), "body.issue_snapshot.project_id"),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueType(), "body.issue_snapshot.issue_type"),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getIssueSnapshot().getStatusKey(), "body.issue_snapshot.status_key")
-                    );
-                })
-                .flatMap(values -> {
-                    String requestId = (String) values[0];
-                    String nodeId = (String) values[1];
-                    String transitionId = (String) values[2];
-                    String payload = (String) values[3];
-                    String actorUserId = (String) values[4];
-                    UUID issueId = (UUID) values[5];
-                    UUID projectId = (UUID) values[6];
-                    String issueType = (String) values[7];
-                    String currentStatusKey = (String) values[8];
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getTransitionId(), "body.transition_id"),
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getActorUserId(), "body.actor_user_id"),
+                                    GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueId(), "body.issue_snapshot.issue_id"),
+                                    GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getProjectId(), "body.issue_snapshot.project_id"),
+                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueType(), "body.issue_snapshot.issue_type"),
+                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueSnapshot().getStatusKey(), "body.issue_snapshot.status_key")
+                            )
+                            .flatMap(tuple8 -> {
+                                if (req.getBody().hasPayload()) {
+                                    return GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getPayload(), "body.payload")
+                                            .map(payload -> Tuples.of(tuple8, payload));
+                                }
+                                return Mono.just(Tuples.of(tuple8, ""));
+                            })
+                            .doOnError(StatusRuntimeException.class,
+                                    logValidationError(
+                                            req.getHeader().getRequestId(),
+                                            req.getHeader().getNodeId(),
+                                            "validateTransition"
+                                    ))
+                            .flatMap(t -> {
+                                Tuple8<String, String, String, String, UUID, UUID, IssueType, IssueStatus> values = t.getT1();
 
-                    log.info("[{}][{}] validateTransition: projectId={}, issueType={}, transitionId={}, issueId={}, currentStatusKey={}",
-                            requestId, nodeId, projectId, issueType, transitionId, issueId, currentStatusKey);
+                                String requestId = values.getT1();
+                                String nodeId = values.getT2();
+                                String transitionId = values.getT3();
+                                String payload = t.getT2();
+                                String actorUserId = values.getT4();
+                                UUID issueId = values.getT5();
+                                UUID projectId = values.getT6();
+                                IssueType issueType = values.getT7();
+                                IssueStatus currentStatusKey = values.getT8();
 
-                    return workflowService.validateTransition(
-                            requestId,
-                            nodeId,
-                            projectId,
-                            issueType,
-                            UUID.fromString(transitionId),
-                            currentStatusKey,
-                            payload,
-                            UUID.fromString(actorUserId)
-                    )
-                   .map(dto -> Tuples.of(dto, requestId, nodeId));
-                })
-                .map(tuple  -> {
-                    ValidateTransitionResponseDto dto = tuple.getT1();
-                    String requestId = tuple.getT2();
-                    String nodeId = tuple.getT3();
+                                log.info("[{}][{}] validateTransition: projectId={}, issueType={}, transitionId={}, issueId={}, currentStatusKey={}",
+                                        requestId, nodeId, projectId, issueType, transitionId, issueId, currentStatusKey);
 
-                    IssueStatus toStatus = dto.getToStatusKey();
-                    ValidateTransitionResponseBody.Builder bodyBuilder = ValidateTransitionResponseBody
-                            .newBuilder()
-                            .setIsValid(dto.isValid())
-                            .setToStatusKey(toStatus);
-                    Header headerResponse = Header
-                            .newBuilder()
-                            .setRequestId(requestId)
-                            .setNodeId(nodeId)
-                            .build();
+                                return workflowService.validateTransition(
+                                                requestId,
+                                                nodeId,
+                                                projectId,
+                                                workflowMapper.toDomainIssueType(issueType).name(),
+                                                UUID.fromString(transitionId),
+                                                statusMapper.fromProtoStatus(currentStatusKey),
+                                                payload,
+                                                UUID.fromString(actorUserId)
+                                        )
+                                        .map(dto -> Tuples.of(dto, requestId, nodeId));
+                            })
+                            .map(tuple -> {
+                                ValidateTransitionResponseDto dto = tuple.getT1();
+                                String requestId = tuple.getT2();
+                                String nodeId = tuple.getT3();
 
-                    if (dto.getViolations() != null && !dto.getViolations().isEmpty()) {
-                        bodyBuilder.addAllTransitionViolations(
-                                dto.getViolations().stream()
-                                        .map(v -> TransitionViolation.newBuilder()
-                                                .setTransitionViolationValue(v.getViolation() != null ? v.getViolation().toString() : "")
-                                                .setMessage(v.getMessage() != null ? v.getMessage() : "")
-                                                .build())
-                                        .collect(Collectors.toList())
-                        );
-                    }
-                    return ValidateTransitionResponse.newBuilder()
-                            .setHeader(headerResponse)
-                            .setBody(bodyBuilder.build())
-                            .build();
-                })
-                .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
-                        ex -> new DomainException(DomainStatus.UNAVAILABLE, "Database unavailable"))
-                .doOnError(e -> !(e instanceof io.grpc.StatusRuntimeException), e -> log.error("validateTransition failed", e))
-                .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
-                .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+                                IssueStatus toStatus = dto.getToStatusKey();
+                                ValidateTransitionResponseBody.Builder bodyBuilder = ValidateTransitionResponseBody
+                                        .newBuilder()
+                                        .setIsValid(dto.isValid())
+                                        .setToStatusKey(toStatus);
+                                Header headerResponse = Header
+                                        .newBuilder()
+                                        .setRequestId(requestId)
+                                        .setNodeId(nodeId)
+                                        .build();
+
+                                if (dto.getViolations() != null && !dto.getViolations().isEmpty()) {
+                                    bodyBuilder.addAllTransitionViolations(
+                                            dto.getViolations().stream()
+                                                    .map(v -> TransitionViolation.newBuilder()
+                                                            .setTransitionViolationValue(v.getViolation() != null ? v.getViolation().toString() : "")
+                                                            .setMessage(v.getMessage() != null ? v.getMessage() : "")
+                                                            .build())
+                                                    .collect(Collectors.toList())
+                                    );
+                                }
+                                return ValidateTransitionResponse.newBuilder()
+                                        .setHeader(headerResponse)
+                                        .setBody(bodyBuilder.build())
+                                        .build();
+                            })
+                            .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
+                });
     }
+
+    private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {
+        return throwable -> {
+            if (throwable instanceof StatusRuntimeException e
+                    && e.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
+                log.error("[{}][{}] {} validation error: {}",
+                        requestId, nodeId, operation, e.getStatus().getDescription());
+            }
+        };
+    }
+
 }

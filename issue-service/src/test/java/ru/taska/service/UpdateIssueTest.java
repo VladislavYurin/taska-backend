@@ -29,7 +29,7 @@ import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.impl.IssueServiceImpl;
-import ru.taska.transport.grpc.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Set;

@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectResponse;
 import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.api.workflow.v1.WorkflowTransition;
+import ru.taska.domain.IssueType;
 import ru.taska.domain.WorkflowAggregate;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
@@ -23,6 +24,15 @@ public class WorkflowMapper {
                 .addAllStatuses(aggregate.statuses().stream().map(this::toWorkflowStatusProto).toList())
                 .addAllTransitions(aggregate.transitions().stream().map(this::toWorkflowTransitionProto).toList())
                 .build();
+    }
+
+    public IssueType toDomainIssueType(ru.taska.api.workflow.v1.IssueType proto) {
+        return switch (proto) {
+            case ISSUE_TYPE_TASK -> IssueType.TASK;
+            case ISSUE_TYPE_STORY -> IssueType.STORY;
+            case ISSUE_TYPE_BUG -> IssueType.BUG;
+            default -> null;
+        };
     }
 
     private WorkflowStatus toWorkflowStatusProto(StatusEntity status) {
