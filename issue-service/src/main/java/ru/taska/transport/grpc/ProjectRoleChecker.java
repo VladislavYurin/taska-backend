@@ -5,9 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.IssueMapper;
 
 import java.util.Set;
 import java.util.UUID;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class ProjectRoleChecker {
 
     private final GrpcProjectServiceClient client;
+    private final IssueMapper issueMapper;
 
     public Mono<Void> checkProjectRole(
             String requestId,
@@ -60,7 +62,7 @@ public class ProjectRoleChecker {
             );
         }
 
-        ProjectRole role = response.getRole();
+        ProjectRole role = issueMapper.toDomainRole(response.getRole());
         if (!allowedRoles.contains(role)) {
             log.warn("[{}][{}]Not allowed role for the project: role={}, projectId={}, userId={}",
                     requestId, nodeId, role, projectId, userId

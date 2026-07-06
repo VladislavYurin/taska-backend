@@ -44,10 +44,10 @@ public interface ProjectMemberMapper {
      * @return {@link ProjectRole} из enum, используемого в  entity
      */
     @ValueMappings({
-            @ValueMapping(source = "ADMIN", target = "ADMIN"),
-            @ValueMapping(source = "MEMBER", target = "MEMBER"),
-            @ValueMapping(source = "VIEWER", target = "VIEWER"),
-            @ValueMapping(source = "UNSPECIFIED", target = "UNSPECIFIED"),
+            @ValueMapping(source = "PROJECT_ROLE_ADMIN", target = "ADMIN"),
+            @ValueMapping(source = "PROJECT_ROLE_MEMBER", target = "MEMBER"),
+            @ValueMapping(source = "PROJECT_ROLE_VIEWER", target = "VIEWER"),
+            @ValueMapping(source = "PROJECT_ROLE_UNSPECIFIED", target = "UNSPECIFIED"),
             @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "UNSPECIFIED")})
     ProjectRole toProjectRole(ru.taska.api.project.v1.ProjectRole role);
 
@@ -58,11 +58,11 @@ public interface ProjectMemberMapper {
      * @return {@link ru.taska.api.project.v1.ProjectRole} из enum, используемого в grpc .proto
      */
     @ValueMappings({
-            @ValueMapping(source = "ADMIN", target = "ADMIN"),
-            @ValueMapping(source = "MEMBER", target = "MEMBER"),
-            @ValueMapping(source = "VIEWER", target = "VIEWER"),
-            @ValueMapping(source = "UNSPECIFIED", target = "UNSPECIFIED"),
-            @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "UNSPECIFIED")})
+            @ValueMapping(source = "ADMIN", target = "PROJECT_ROLE_ADMIN"),
+            @ValueMapping(source = "MEMBER", target = "PROJECT_ROLE_MEMBER"),
+            @ValueMapping(source = "VIEWER", target = "PROJECT_ROLE_VIEWER"),
+            @ValueMapping(source = "UNSPECIFIED", target = "PROJECT_ROLE_UNSPECIFIED"),
+            @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "PROJECT_ROLE_UNSPECIFIED")})
     ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
 
     /**

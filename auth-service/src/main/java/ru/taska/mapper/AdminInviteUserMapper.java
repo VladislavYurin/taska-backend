@@ -3,7 +3,7 @@ package ru.taska.mapper;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
@@ -22,9 +22,9 @@ public class AdminInviteUserMapper {
 
     //TODO: здесь создается логин из email'а, т. к. нельзя сохранить юзера без логина.
     // Это происходит из-за not null констрейнта на поле "login" в БД.
-    // Согласно документации Confluence, login не может передаваться в грпс-запросе AdminCreateUserRequest.
+    // Согласно документации Confluence, login не может передаваться в грпс-запросе InviteUserRequest.
     // Поэтому пока, при регистрации пользователя админом, рандомный login генерируется из переданного эмайла в этом методе.
-    public User buildInvitedUserFromRequest(AdminCreateUserRequest request) {
+    public User buildInvitedUserFromRequest(InviteUserRequest request) {
         return User.builder()
             .email(request.getBody().getEmail())
             .login(request.getBody().getEmail().split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 8))

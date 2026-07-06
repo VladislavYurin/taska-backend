@@ -9,8 +9,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import ru.taska.api.auth.admin.inviteuser.v1.AdminCreateUserRequest;
-import ru.taska.api.auth.admin.inviteuser.v1.UserCreatedResponse;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserResponse;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -33,12 +33,12 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
      * Создает нового пользователя с параметрами из запроса,
      * Генерирует invite токен,
      * Создает outbox-событие USER_INVITED
-     * @param request - AdminCreateUserRequest grpc-запрос
-     * @return - UserCreatedResponse grpc-ответ (userId, status=INVITED)
+     * @param request - InviteUserRequest grpc-запрос
+     * @return - InviteUserResponse grpc-ответ (userId, status=INVITED)
      */
     @Override
     @Transactional
-    public Mono<UserCreatedResponse> inviteUser(AdminCreateUserRequest request) {
+    public Mono<InviteUserResponse> inviteUser(InviteUserRequest request) {
         return userRepository.save(inviteUserMapper.buildInvitedUserFromRequest(request))
                 .onErrorResume(DataIntegrityViolationException.class, ex -> {
                     Optional<String> constraint = extractConstraintName(ex);
@@ -66,7 +66,7 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
                                 .save(inviteUserMapper.buildUserInvitedOutboxEvent(
                                         inviteToken, user.getEmail(), request.getHeader().getRequestId())))
                         .thenReturn(user))
-                .map(user -> UserCreatedResponse.newBuilder()
+                .map(user -> InviteUserResponse.newBuilder()
                         .setUserId(String.valueOf(user.getId()))
                         .setStatus(UserStatus.USER_STATUS_INVITED)
                         .build());
