@@ -20,6 +20,7 @@ grpc:
     auth-service:
       host: ${AUTH_GRPC_HOST:localhost}
       port: ${AUTH_GRPC_PORT:9091}
+      deadlineDuration: ${AUTH_GRPC_DEADLINE:3000}
 
 logging:
   level:

@@ -1,8 +1,5 @@
-package ru.taska.service;
+package ru.taska.service.impl;
 
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,6 +14,12 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.AdminInviteUserMapper;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.UserRepository;
+import ru.taska.service.AdminInviteUserService;
+import ru.taska.service.InviteTokenService;
+
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service

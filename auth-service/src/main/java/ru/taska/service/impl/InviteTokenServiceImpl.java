@@ -1,4 +1,4 @@
-package ru.taska.service;
+package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -8,6 +8,7 @@ import ru.taska.dto.InviteTokenResponse;
 import ru.taska.entity.InviteToken;
 import ru.taska.repository.InviteTokenRepository;
 import ru.taska.security.config.JwtProperties;
+import ru.taska.service.InviteTokenService;
 
 import java.security.SecureRandom;
 import java.time.Instant;

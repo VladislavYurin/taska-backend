@@ -1,0 +1,192 @@
+openapi: 3.0.3
+info:
+  title: Taska API Gateway Contract
+  version: 1.0.0
+
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Аутентификация пользователя
+      operationId: login
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequestDto'
+      responses:
+        '200':
+          description: Успешный вход
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Обновление токенов (access/refresh)
+      operationId: refresh
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequestDto'
+      responses:
+        '200':
+          description: Токены успешно обновлены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/auth/invitations/accept:
+    post:
+      summary: Принятие инвайта и установка пароля
+      operationId: setPasswordByToken
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordByTokenRequestDto'
+      responses:
+        '204':
+          description: Пароль успешно изменен (No Content)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me:
+    get:
+      summary: Получение данных текущего пользователя
+      operationId: getMyInfo
+      tags:
+        - auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateAccessTokenResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  headers:
+    X-RequestId-Header:
+      schema:
+        type: string
+      description: Возвращаемый клиенту сквозной ID запроса
+
+  responses:
+    ErrorResponse:
+      description: Единая схема ошибки гейтвея
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-RequestId-Header'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+
+  schemas:
+    LoginRequestDto:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    LoginResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+
+    RefreshRequestDto:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    RefreshResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+
+    PasswordByTokenRequestDto:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+
+    ValidateAccessTokenResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        login:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+        status:
+          type: string
+
+    RestErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
