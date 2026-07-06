@@ -6,7 +6,7 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.GetIssueResponse;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
@@ -123,11 +123,11 @@ public class IssueMapper {
                 .build();
     }
 
-    public GetIssueResponse toIssueDetailsProto(IssueWithHistory issueWithHistory) {
+    public IssueWithHistoryResponse toIssueDetailsProto(IssueWithHistory issueWithHistory) {
         var historyProto = issueWithHistory.getHistory().stream()
                 .map(this::toIssueHistoryProto)
                 .toList();
-        return GetIssueResponse.newBuilder()
+        return IssueWithHistoryResponse.newBuilder()
                 .setIssue(toIssueProto(issueWithHistory.getIssue()))
                 .addAllHistory(historyProto)
                 .build();

@@ -50,7 +50,7 @@ service IssueService {
    * Возвращает задачу по идентификатору.
    */
   rpc GetIssue(GetIssueRequest)
-      returns (GetIssueResponse);
+      returns (IssueWithHistoryResponse);
 
   /**
    * Мягкое удаление задачи.
@@ -496,7 +496,7 @@ message IssueHistoryResponse {
 /**
  * Ответ на получение задачи с историей.
  */
-message GetIssueResponse {
+message IssueWithHistoryResponse {
   /**
    * Данные задачи.
    */
