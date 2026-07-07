@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: api-gateway
+  springdoc:
+    swagger-ui:
+      url: /openapi.yml
+      path: /swagger-ui.html
+    api-docs:
+      enabled: false
 
 management:
   endpoints:
@@ -12,6 +18,7 @@ management:
         include: health,info,prometheus
   endpoint:
     health:
+      show-details: never
       probes:
         enabled: true
 

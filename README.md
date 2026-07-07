@@ -137,7 +137,52 @@ TODO
 Флаг `-v` удаляет volume `minio_data` — все файлы будут удалены, bucket-и пересозданы при следующем запуске.
 
 ## Билд и деплой
+При добавлении нового сервиса в docker-compose есть несколько правил:
+
+1. Версия image не должна быть latest, нужно указывать конкретную версию.
+2. В networks добавлять public если контейнер выходит наружу (Kafa UI, Grafana etc.)
+3. env_file = .env, .env файл использует Dokploy в нем же его нужно поправлять,
+при локальном запуске используется файл .env.docker.example. 
+Пароли из .env и .env.docker.example не должны совпадать.
+4. Все порты прописываются в .env.docker.example.
+5. restart: unless-stopped
+6. Добавляйте профили infra - Для инфраструктуры, services - для сервисов.
+Иначе они могут не запуститься при запуске docker-compose.
 
 ### Деплой в Docker
 
 ### Локальный запуск
+Проверка конфигурации без запуска:
+```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml config
+```
+Не должна выдавать ошибок, при правильно заполненом .env
+
+Запуск инфраструктуры(Kafka, Grafana, БД и тд.):
+```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile infra up -d
+```
+Запуск всего проекта:
+```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile infra --profile services up -d --build
+```
+
+Запуск отдельного сервиса:
+```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile infra --profile services up -d --build *name-service*
+```
+
+После запуска доступно:
+
+| Сервис                                                          | Локальный адрес       |
+|-----------------------------------------------------------------|-----------------------|
+| api-gateway                                                     | http://127.0.0.1:8080 |
+| auth-service                                                    | http://127.0.0.1:8081 |
+| project-service                                                 | http://127.0.0.1:8082 |
+| workflow-service                                                | http://127.0.0.1:8083 |
+| issue-service                                                   | http://127.0.0.1:8084 |
+| notification-service                                            | http://127.0.0.1:8085 |
+| Kafka                                                           | 127.0.0.1:9092        |
+| Kafka UI                                                        | 127.0.0.1:8088        |
+| auth-db / project-db / workflow-db / issue-db / notification-db | 127.0.0.1:5432–5436   |
+| PG Admin                                                        | 127.0.0.1:5050        |
