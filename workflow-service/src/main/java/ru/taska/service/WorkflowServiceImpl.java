@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.WorkflowProperties;
-import ru.taska.api.workflow.v1.IssueStatus;
 import ru.taska.domain.WorkflowAggregate;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -17,9 +16,6 @@ import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.dto.Violation;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowEntity;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.StatusMapper;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowRepository;
@@ -27,7 +23,6 @@ import ru.taska.repository.WorkflowRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -40,7 +35,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final TransitionRepository transitionRepository;
     private final WorkflowProperties workflowProperties;
     private final IssueMapper issueMapper;
-    private final StatusMapper statusMapper;
+    private static final String ISSUE_STATUS_KEY_UNSPECIFIED = "ISSUE_STATUS_UNSPECIFIED";
 
     @Override
     public Mono<WorkflowAggregate> getWorkflow(UUID projectId, String issueType) {
@@ -190,16 +185,15 @@ public class WorkflowServiceImpl implements WorkflowService {
     private ValidateTransitionResponseDto buildFailedResponse(List<TransitionViolationDto> violations) {
         return ValidateTransitionResponseDto.builder()
                 .valid(violations.isEmpty())
-                .toStatusKey(IssueStatus.ISSUE_STATUS_UNSPECIFIED)
+                .toStatusKey(ISSUE_STATUS_KEY_UNSPECIFIED)
                 .violations(violations)
                 .build();
     }
 
     private ValidateTransitionResponseDto buildSuccessResponse(TransitionEntity transition, String toStatusKey) {
-        IssueStatus issueStatus = statusMapper.toProtoStatus(toStatusKey);
         return ValidateTransitionResponseDto.builder()
                 .valid(true)
-                .toStatusKey(issueStatus)
+                .toStatusKey(toStatusKey)
                 .violations(new ArrayList<>())
                 .build();
     }

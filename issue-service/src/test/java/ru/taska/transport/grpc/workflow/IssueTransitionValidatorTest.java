@@ -16,7 +16,6 @@ import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.api.workflow.v1.ValidateTransitionResponseBody;
 import ru.taska.domain.Issue;
-import ru.taska.domain.IssueStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
@@ -43,7 +42,7 @@ class IssueTransitionValidatorTest {
     private static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final String PAYLOAD = "some-kind-of-payload";
-    private static final ru.taska.api.workflow.v1.IssueStatus TARGET_STATUS = ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_IN_PROGRESS;
+    private static final String TARGET_STATUS_KEY = "IN_PROGRESS";
 
     private static Header header;
     private static Issue issue;
@@ -69,23 +68,42 @@ class IssueTransitionValidatorTest {
                 .setBody(
                         ValidateTransitionResponseBody.newBuilder()
                                 .setIsValid(true)
-                                .setToStatusKey(TARGET_STATUS)
+                                .setToStatusKey(TARGET_STATUS_KEY)
                                 .build()
                 )
                 .build();
 
-        Mockito.when(client.validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD))
+        Mockito.when(client.validateTransition(
+                        REQUEST_ID,
+                        NODE_ID,
+                        issue,
+                        TRANSITION_ID,
+                        ACTOR_USER_ID,
+                        PAYLOAD
+                ))
                 .thenReturn(Mono.just(response));
 
-        Mockito.when(issueMapper.toDomainIssueStatus(TARGET_STATUS))
-                .thenReturn(IssueStatus.IN_PROGRESS);
-
-        StepVerifier.create(validator.validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD))
-                .expectNext(IssueStatus.IN_PROGRESS)
+        StepVerifier.create(validator.validateTransition(
+                        REQUEST_ID,
+                        NODE_ID,
+                        issue,
+                        TRANSITION_ID,
+                        ACTOR_USER_ID,
+                        PAYLOAD
+                ))
+                .expectNext(TARGET_STATUS_KEY)
                 .verifyComplete();
 
-        Mockito.verify(client).validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
-        Mockito.verify(issueMapper).toDomainIssueStatus(TARGET_STATUS);
+        Mockito.verify(client).validateTransition(
+                REQUEST_ID,
+                NODE_ID,
+                issue,
+                TRANSITION_ID,
+                ACTOR_USER_ID,
+                PAYLOAD
+        );
+
+        Mockito.verifyNoInteractions(issueMapper);
     }
 
     @Test
@@ -113,10 +131,24 @@ class IssueTransitionValidatorTest {
                 )
                 .build();
 
-        Mockito.when(client.validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD))
+        Mockito.when(client.validateTransition(
+                        REQUEST_ID,
+                        NODE_ID,
+                        issue,
+                        TRANSITION_ID,
+                        ACTOR_USER_ID,
+                        PAYLOAD
+                ))
                 .thenReturn(Mono.just(response));
 
-        StepVerifier.create(validator.validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD))
+        StepVerifier.create(validator.validateTransition(
+                        REQUEST_ID,
+                        NODE_ID,
+                        issue,
+                        TRANSITION_ID,
+                        ACTOR_USER_ID,
+                        PAYLOAD
+                ))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
 
@@ -127,8 +159,16 @@ class IssueTransitionValidatorTest {
                 })
                 .verify();
 
-        Mockito.verify(client).validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
-        Mockito.verify(issueMapper, Mockito.never()).toDomainIssueStatus(Mockito.any(ru.taska.api.workflow.v1.IssueStatus.class));
+        Mockito.verify(client).validateTransition(
+                REQUEST_ID,
+                NODE_ID,
+                issue,
+                TRANSITION_ID,
+                ACTOR_USER_ID,
+                PAYLOAD
+        );
+
+        Mockito.verifyNoInteractions(issueMapper);
     }
 
 }

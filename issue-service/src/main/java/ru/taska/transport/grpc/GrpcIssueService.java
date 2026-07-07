@@ -22,7 +22,6 @@ import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
-import ru.taska.domain.IssueStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
@@ -193,8 +192,9 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             UUID projectId = t.getT3();
                             UUID actorUserId = t.getT4();
                             UUID assigneeId = t.getT5().orElse(null);
-                            IssueStatus status = req.getBody().hasStatus()
-                                    ? issueMapper.toDomainIssueStatus(req.getBody().getStatus())
+                            //String statusKey = req.getBody().getStatusKey();
+                            String statusKey = req.getBody().hasStatusKey()
+                                    ? req.getBody().getStatusKey()
                                     : null;
                             Integer pageSize = req.getBody().hasPageSize()
                                     ? req.getBody().getPageSize()
@@ -205,14 +205,14 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
 
                             log.info("[{}][{}] listIssues: projectId={}, actorUserId={}, status={}, assigneeId={}, " +
                                             "page={}, pageSize={}",
-                                    requestId, nodeId, projectId, actorUserId, status, assigneeId, page, pageSize);
+                                    requestId, nodeId, projectId, actorUserId, statusKey, assigneeId, page, pageSize);
 
                             return issueService.listIssues(
                                             requestId,
                                             nodeId,
                                             projectId,
                                             actorUserId,
-                                            status,
+                                            statusKey,
                                             assigneeId,
                                             page,
                                             pageSize
@@ -440,7 +440,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                                     "[{}][{}] transitionIssue: issue successfully transitioned, id={}, statusKey={}",
                                                     requestId, nodeId,
                                                     issueWithHistory.getIssue().getId(),
-                                                    issueWithHistory.getIssue().getStatusKey().name())
+                                                    issueWithHistory.getIssue().getStatusKey())
                                     )
                                     .doOnError(DomainException.class,
                                             logOnError(requestId, nodeId, "transitionIssue")
