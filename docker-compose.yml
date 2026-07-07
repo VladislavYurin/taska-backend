@@ -12,6 +12,7 @@ volumes:
   pg_issue_data:
   pg_notification_data:
   kafka_data:
+  grafana_data:
 
 services:
   # --------------------
@@ -31,6 +32,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
   # --------------------
   # KafkaUI
   # --------------------
@@ -47,6 +49,50 @@ services:
       DYNAMIC_CONFIG_ENABLED: 'true'
       KAFKA_CLUSTERS_0_NAME: taska-kafka
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  # --------------------
+  # Loki
+  # --------------------
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: taska-loki
+    networks: [ taska-net ]
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # --------------------
+  # Promtail
+  # --------------------
+  promtail:
+    image: grafana/promtail:3.6.11
+    container_name: taska-promtail
+    networks: [ taska-net ]
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # --------------------
+  # Grafana
+  # --------------------
+  grafana:
+    image: grafana/grafana:11.6.16
+    container_name: taska-grafana
+    networks: [ taska-net ]
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    env_file:
+      - .env.docker
+    depends_on:
+      - loki
+
   # --------------------
   # Postgres
   # --------------------
