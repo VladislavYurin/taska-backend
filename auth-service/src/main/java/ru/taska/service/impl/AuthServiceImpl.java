@@ -1,4 +1,4 @@
-package ru.taska.service;
+package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +24,7 @@ import ru.taska.security.JwtService;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
+import ru.taska.service.AuthService;
 import ru.taska.util.DataMaskingHelper;
 import ru.taska.util.JwtValidator;
 import ru.taska.util.PasswordValidator;

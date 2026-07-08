@@ -14,6 +14,7 @@ import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.test.StepVerifier;
+import ru.taska.domain.dto.RestErrorResponse;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,9 +58,8 @@ class GatewayErrorHandlerTest {
         verify(objectMapper).writeValueAsBytes(captor.capture());
 
         RestErrorResponse body = captor.getValue();
-        assertThat(body.code()).isEqualTo("UNAUTHENTICATED");
-        assertThat(body.message()).isEqualTo("Token expired");
-        assertThat(body.requestId()).isEqualTo(REQUEST_ID);
+        assertThat(body.getCode()).isEqualTo("UNAUTHENTICATED");
+        assertThat(body.getMessage()).isEqualTo("Token expired");
     }
 
     @Test
@@ -75,9 +75,8 @@ class GatewayErrorHandlerTest {
         verify(objectMapper).writeValueAsBytes(captor.capture());
 
         RestErrorResponse body = captor.getValue();
-        assertThat(body.code()).isEqualTo("OUT_OF_RANGE");
-        assertThat(body.message()).isEqualTo("OUT_OF_RANGE");
-        assertThat(body.requestId()).isEqualTo(REQUEST_ID);
+        assertThat(body.getCode()).isEqualTo("OUT_OF_RANGE");
+        assertThat(body.getMessage()).isEqualTo("OUT_OF_RANGE");
     }
 
     @Test
@@ -93,9 +92,8 @@ class GatewayErrorHandlerTest {
         verify(objectMapper).writeValueAsBytes(captor.capture());
 
         RestErrorResponse body = captor.getValue();
-        assertThat(body.code()).isEqualTo("FORBIDDEN");
-        assertThat(body.message()).isEqualTo("Access denied");
-        assertThat(body.requestId()).isEqualTo(REQUEST_ID);
+        assertThat(body.getCode()).isEqualTo("FORBIDDEN");
+        assertThat(body.getMessage()).isEqualTo("Access denied");
     }
 
     @Test
@@ -111,9 +109,8 @@ class GatewayErrorHandlerTest {
         verify(objectMapper).writeValueAsBytes(captor.capture());
 
         RestErrorResponse body = captor.getValue();
-        assertThat(body.code()).isEqualTo("NOT_FOUND");
-        assertThat(body.message()).isEqualTo("Not Found");
-        assertThat(body.requestId()).isEqualTo(REQUEST_ID);
+        assertThat(body.getCode()).isEqualTo("NOT_FOUND");
+        assertThat(body.getMessage()).isEqualTo("Not Found");
     }
 
     @Test
@@ -129,8 +126,7 @@ class GatewayErrorHandlerTest {
         verify(objectMapper).writeValueAsBytes(captor.capture());
 
         RestErrorResponse body = captor.getValue();
-        assertThat(body.code()).isEqualTo("INTERNAL");
-        assertThat(body.message()).isEqualTo("Internal server error");
-        assertThat(body.requestId()).isEqualTo(REQUEST_ID);
+        assertThat(body.getCode()).isEqualTo("INTERNAL");
+        assertThat(body.getMessage()).isEqualTo("Internal server error");
     }
 }

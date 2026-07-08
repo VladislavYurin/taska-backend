@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import ru.taska.domain.dto.RestErrorResponse;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -21,6 +22,8 @@ public class GatewayErrorHandler {
 
     private final ObjectMapper objectMapper;
     private final RestErrorMapper restErrorMapper;
+
+    private static final String REQUEST_ID = "X-Request-Id";
 
     public Mono<Void> handleError(ServerWebExchange exchange, Throwable error, String requestId) {
         HttpStatus httpStatus;
@@ -51,11 +54,12 @@ public class GatewayErrorHandler {
             log.error("[{}] Unexpected error: {}", requestId, error.getMessage());
         }
 
-        RestErrorResponse errorResponse = new RestErrorResponse(code, message, requestId);
+        RestErrorResponse errorResponse = new RestErrorResponse(code, message);
 
         var response = exchange.getResponse();
         response.setStatusCode(httpStatus);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        response.getHeaders().set(REQUEST_ID, requestId);
 
         try {
             byte[] body = objectMapper.writeValueAsBytes(errorResponse);

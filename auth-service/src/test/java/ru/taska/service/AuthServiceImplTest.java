@@ -39,6 +39,7 @@ import ru.taska.security.JwtServiceImpl;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenServiceImpl;
 import ru.taska.security.config.SecurityProperties;
+import ru.taska.service.impl.AuthServiceImpl;
 import ru.taska.util.JwtValidator;
 import ru.taska.util.PasswordValidator;
 

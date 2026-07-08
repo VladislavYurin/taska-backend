@@ -20,11 +20,11 @@ import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.domain.GatewayUserContext;
+import ru.taska.domain.GatewayUserStatus;
 import ru.taska.mapper.ContextMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -88,7 +88,7 @@ class GatewayContextFactoryTest {
                 .thenReturn(Mono.just(grpcResponse));
 
         GatewayUserContext userCtx = new GatewayUserContext(
-                "user-1", "testuser", "test@example.com", "Test User", UserStatus.USER_STATUS_ACTIVE);
+                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE);
         when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(userCtx);
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, PROTECTED))

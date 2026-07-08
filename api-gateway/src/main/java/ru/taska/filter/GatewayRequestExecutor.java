@@ -41,6 +41,7 @@ public class GatewayRequestExecutor {
 
         return Mono.defer(() -> {
             String requestId = requestIdProvider.resolve(exchange);
+            exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
 
             log.info("[{}] Executing request, secured={}", requestId, secured);
 

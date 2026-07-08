@@ -1,6 +1,6 @@
 package ru.taska.domain;
 
-import ru.taska.api.common.v1.UserStatus;
+import lombok.Builder;
 
 /**
  * Контекст аутентифицированного пользователя.
@@ -13,12 +13,12 @@ import ru.taska.api.common.v1.UserStatus;
  * @param displayName отображаемое имя пользователя
  * @param status      статус учётной записи пользователя
  */
+@Builder
 public record GatewayUserContext(
         String userId,
         String login,
         String email,
         String displayName,
-        UserStatus status
+        GatewayUserStatus status
 ) {
-
 }
