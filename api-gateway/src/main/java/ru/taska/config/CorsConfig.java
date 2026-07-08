@@ -24,6 +24,7 @@ public class CorsConfig {
         corsConfiguration.setAllowedOrigins(splitCsv(corsProperties.allowedOrigins()));
         corsConfiguration.setAllowedMethods(splitCsv(corsProperties.allowedMethods()));
         corsConfiguration.setAllowedHeaders(splitCsv(corsProperties.allowedHeaders()));
+        corsConfiguration.setExposedHeaders(splitCsv(corsProperties.exposedHeaders()));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfiguration);

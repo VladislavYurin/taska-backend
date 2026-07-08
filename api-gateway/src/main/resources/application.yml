@@ -31,3 +31,4 @@ app:
     allow-credentials: ${GATEWAY_CORS_ALLOW_CREDENTIALS:true}
     allowed-methods: ${GATEWAY_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
     allowed-headers: ${GATEWAY_CORS_ALLOWED_HEADERS:Authorization,Content-Type,Accept,X-Request-Id,Idempotency-Key}
+    exposed-headers: ${GATEWAY_CORS_EXPOSED_HEADERS:X-Request-Id}

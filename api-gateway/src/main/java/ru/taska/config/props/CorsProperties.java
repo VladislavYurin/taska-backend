@@ -7,6 +7,7 @@ public record CorsProperties(
         String allowedOrigins,
         boolean allowCredentials,
         String allowedMethods,
-        String allowedHeaders
+        String allowedHeaders,
+        String exposedHeaders
 ) {
 }
