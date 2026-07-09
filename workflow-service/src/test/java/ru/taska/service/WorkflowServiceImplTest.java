@@ -8,12 +8,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.config.props.WorkflowProperties;
+import ru.taska.dto.TransitionViolation;
 import ru.taska.dto.TransitionViolationDto;
 import ru.taska.dto.ValidateTransitionResponseDto;
-import ru.taska.dto.Violation;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowEntity;
+import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowRepository;
@@ -31,6 +33,15 @@ class WorkflowServiceImplTest {
 
     @Mock
     private TransitionRepository transitionRepository;
+
+    @Mock
+    private WorkflowProperties workflowProperties;
+
+    @Mock
+    private IssueMapper issueMapper;
+
+    @Mock
+    private WorkflowCreateService workflowCreateService;
 
     @InjectMocks
     private WorkflowServiceImpl workflowService;
@@ -182,9 +193,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.WORKFLOW_NOT_FOUND,
-                            violation.getViolation()
-                    );
+                            TransitionViolation.WORKFLOW_NOT_FOUND,
+                            violation.getTransitionViolation());
 
                     org.junit.jupiter.api.Assertions.assertTrue(
                             violation.getMessage().contains("Workflow not found")
@@ -233,9 +243,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.TRANSITION_NOT_FOUND,
-                            violation.getViolation()
-                    );
+                            TransitionViolation.TRANSITION_NOT_FOUND,
+                            violation.getTransitionViolation());
 
                     org.junit.jupiter.api.Assertions.assertTrue(
                             violation.getMessage().contains("Transition not found")
@@ -286,14 +295,14 @@ class WorkflowServiceImplTest {
 
                     TransitionViolationDto violation1 = response.getViolations().get(0);
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.WORKFLOW_NOT_FOUND,
-                            violation1.getViolation()
+                            TransitionViolation.WORKFLOW_NOT_FOUND,
+                            violation1.getTransitionViolation()
                     );
 
                     TransitionViolationDto violation2 = response.getViolations().get(1);
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.TRANSITION_NOT_FOUND,
-                            violation2.getViolation()
+                            TransitionViolation.TRANSITION_NOT_FOUND,
+                            violation2.getTransitionViolation()
                     );
                 })
                 .verifyComplete();
@@ -359,8 +368,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.TRANSITION_DOESNT_BELONG_TO_WORKFLOW,
-                            violation.getViolation()
+                            TransitionViolation.TRANSITION_DOESNT_BELONG_TO_WORKFLOW,
+                            violation.getTransitionViolation()
                     );
 
                     org.junit.jupiter.api.Assertions.assertTrue(
@@ -426,8 +435,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.CURRENT_STATUS_NOT_FOUND,
-                            violation.getViolation()
+                            TransitionViolation.CURRENT_STATUS_NOT_FOUND,
+                            violation.getTransitionViolation()
                     );
 
                     org.junit.jupiter.api.Assertions.assertTrue(
@@ -556,8 +565,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.TARGET_STATUS_NOT_FOUND,
-                            violation.getViolation()
+                            TransitionViolation.TARGET_STATUS_NOT_FOUND,
+                            violation.getTransitionViolation()
                     );
 
                     org.junit.jupiter.api.Assertions.assertTrue(
@@ -635,8 +644,8 @@ class WorkflowServiceImplTest {
                     TransitionViolationDto violation = response.getViolations().get(0);
 
                     org.junit.jupiter.api.Assertions.assertEquals(
-                            Violation.FROM_STATUS_DOESNT_MATCH,
-                            violation.getViolation()
+                            TransitionViolation.FROM_STATUS_DOESNT_MATCH,
+                            violation.getTransitionViolation()
                     );
 
                     org.junit.jupiter.api.Assertions.assertTrue(

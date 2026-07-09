@@ -2,7 +2,14 @@ package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
 import org.junit.jupiter.api.Nested;
-import ru.taska.api.auth.v1.*;
+import ru.taska.api.auth.v1.LoginRequest;
+import ru.taska.api.auth.v1.LoginRequestBody;
+import ru.taska.api.auth.v1.RefreshRequest;
+import ru.taska.api.auth.v1.RefreshRequestBody;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequestBody;
+import ru.taska.api.auth.v1.ValidateAccessTokenRequest;
+import ru.taska.api.auth.v1.ValidateAccessTokenRequestBody;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;

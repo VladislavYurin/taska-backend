@@ -1,7 +1,12 @@
 package ru.taska.entity;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -68,12 +73,14 @@ public class TransitionEntity {
     /**
      * Временная метка создания записи (аудит).
      */
+    @CreatedDate
     @Column("created_at")
     private Instant createdAt;
 
     /**
      * Временная метка последнего изменения записи (аудит).
      */
+    @LastModifiedDate
     @Column("updated_at")
     private Instant updatedAt;
 }

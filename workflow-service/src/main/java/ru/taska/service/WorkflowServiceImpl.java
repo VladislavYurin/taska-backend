@@ -1,6 +1,5 @@
 package ru.taska.service;
 
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -8,14 +7,15 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.WorkflowProperties;
 import ru.taska.domain.WorkflowAggregate;
+import ru.taska.dto.TransitionViolation;
+import ru.taska.dto.TransitionViolationDto;
+import ru.taska.dto.ValidateTransitionResponseDto;
+import ru.taska.dto.WorkflowCreationDto;
+import ru.taska.entity.TransitionEntity;
+import ru.taska.entity.WorkflowEntity;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;
-import ru.taska.dto.TransitionViolationDto;
-import ru.taska.dto.ValidateTransitionResponseDto;
-import ru.taska.dto.Violation;
-import ru.taska.entity.TransitionEntity;
-import ru.taska.entity.WorkflowEntity;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowRepository;
@@ -23,32 +23,40 @@ import ru.taska.repository.WorkflowRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
-@Transactional(readOnly = true)
 @RequiredArgsConstructor
 @Slf4j
 public class WorkflowServiceImpl implements WorkflowService {
+
+    private static final String ISSUE_STATUS_KEY_UNSPECIFIED = "ISSUE_STATUS_UNSPECIFIED";
 
     private final WorkflowRepository workflowRepository;
     private final StatusRepository statusRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowProperties workflowProperties;
     private final IssueMapper issueMapper;
-    private static final String ISSUE_STATUS_KEY_UNSPECIFIED = "ISSUE_STATUS_UNSPECIFIED";
+    private final WorkflowCreateService workflowCreateService;
 
     @Override
+    public Mono<WorkflowAggregate> createWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
+        return workflowCreateService.validateAndCreateWorkflow(requestId, nodeId, actorUserId, dto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Mono<WorkflowAggregate> getWorkflow(UUID projectId, String issueType) {
-        if(!issueMapper.isValidType(issueType)){
+        if (!issueMapper.isValidType(issueType)) {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,
-                                        "IssueType = " + issueType + "is wrong"));
+                    "IssueType = " + issueType + "is wrong"));
         }
         return workflowRepository.findWorkflowForProject(projectId, issueType)
                 .switchIfEmpty(
                         workflowRepository.findWorkflowForProject(workflowProperties.defaultProjectId(), issueType)
                                 .switchIfEmpty(Mono.error(
                                         new DomainException(DomainStatus.NOT_FOUND,
-                                        "Default Workflow not found")))
+                                                "Default Workflow not found")))
                 )
                 .flatMap(workflow -> Mono.zip(
                         statusRepository.findActiveByWorkflowId(workflow.getId())
@@ -99,7 +107,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                     // Проверка наличия workflow
                     if (workflowOpt.isEmpty()) {
                         violations.add(new TransitionViolationDto(
-                                Violation.WORKFLOW_NOT_FOUND,
+                                TransitionViolation.WORKFLOW_NOT_FOUND,
                                 String.format("Workflow not found for projectId=%s, issueType=%s", projectId, issueType)
                         ));
                     }
@@ -107,7 +115,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                     // Проверка наличия transition
                     if (transitionOpt.isEmpty()) {
                         violations.add(new TransitionViolationDto(
-                                Violation.TRANSITION_NOT_FOUND,
+                                TransitionViolation.TRANSITION_NOT_FOUND,
                                 String.format("Transition not found: id=%s", transitionId)
                         ));
                         return Mono.just(buildFailedResponse(violations));
@@ -124,7 +132,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                     // Проверяем, что transition принадлежит этому workflow
                     if (!transition.getWorkflowId().equals(workflow.getId())) {
                         violations.add(new TransitionViolationDto(
-                                Violation.TRANSITION_DOESNT_BELONG_TO_WORKFLOW,
+                                TransitionViolation.TRANSITION_DOESNT_BELONG_TO_WORKFLOW,
                                 String.format("Transition %s does not belong to workflow %s",
                                         transitionId, workflow.getId())
                         ));
@@ -136,7 +144,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                                 // Проверяем, что найденный статус соответствует fromStatusId перехода
                                 if (!currentStatus.getId().equals(transition.getFromStatusId())) {
                                     violations.add(new TransitionViolationDto(
-                                            Violation.FROM_STATUS_DOESNT_MATCH,
+                                            TransitionViolation.FROM_STATUS_DOESNT_MATCH,
                                             String.format("Current issue status '%s' does not match transition's fromStatus",
                                                     currentStatusKey)
                                     ));
@@ -154,7 +162,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                                         .switchIfEmpty(Mono.defer(() -> {
                                             // Целевой статус не найден
                                             violations.add(new TransitionViolationDto(
-                                                    Violation.TARGET_STATUS_NOT_FOUND,
+                                                    TransitionViolation.TARGET_STATUS_NOT_FOUND,
                                                     String.format("Target status (id=%s) not found in workflow %s",
                                                             transition.getToStatusId(), workflow.getId())
                                             ));
@@ -164,7 +172,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                             .switchIfEmpty(Mono.defer(() -> {
                                 // Текущий статус не найден
                                 violations.add(new TransitionViolationDto(
-                                        Violation.CURRENT_STATUS_NOT_FOUND,
+                                        TransitionViolation.CURRENT_STATUS_NOT_FOUND,
                                         String.format("Current status '%s' not found in workflow %s",
                                                 currentStatusKey, workflow.getId())
                                 ));

@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 @Data
 @RequiredArgsConstructor
 public class TransitionViolationDto {
-    private final Violation violation;
+    private final TransitionViolation transitionViolation;
     private final String message;
 
 }

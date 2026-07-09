@@ -26,6 +26,12 @@ management:
       probes:
         enabled: true
 
+grpc:
+  client:
+    project-service:
+      host: ${PROJECT_GRPC_HOST:localhost}
+      port: ${PROJECT_GRPC_PORT:9096}
+
 logging:
   level:
     ru.taska: ${WORKFLOW_LOG_LEVEL_ROOT:INFO}
@@ -33,3 +39,9 @@ logging:
 
 workflow:
   default-project-id: 00000000-0000-0000-0000-000000000000
+  allowed-roles:
+    create-workflow-roles:
+      - ADMIN
+  validation:
+    name-max-length: 100
+    status-key-pattern: "^[A-Z][A-Z0-9_]{1,63}$"

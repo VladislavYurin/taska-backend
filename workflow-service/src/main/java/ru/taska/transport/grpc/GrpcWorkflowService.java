@@ -6,10 +6,12 @@ import io.grpc.StatusRuntimeException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple8;
 import reactor.util.function.Tuples;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.IssueType;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
@@ -17,8 +19,10 @@ import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.api.workflow.v1.ValidateTransitionResponseBody;
-import ru.taska.api.workflow.v1.GetWorkflowForProjectResponse;
+import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.dto.ValidateTransitionResponseDto;
+import ru.taska.dto.WorkflowCreationDto;
+import ru.taska.mapper.WorkflowCreationMapper;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.service.WorkflowService;
 import validator.GrpcRequestValidators;
@@ -27,7 +31,6 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-
 @Slf4j
 @GrpcService
 @AllArgsConstructor
@@ -35,9 +38,10 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
 
     private final WorkflowService workflowService;
     private final WorkflowMapper workflowMapper;
+    private final WorkflowCreationMapper workflowCreationMapper;
 
     @Override
-    public Mono<GetWorkflowForProjectResponse> getWorkflowForProject(Mono<GetWorkflowForProjectRequest> request) {
+    public Mono<WorkflowResponse> getWorkflowForProject(Mono<GetWorkflowForProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
@@ -136,7 +140,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                                     bodyBuilder.addAllTransitionViolations(
                                             dto.getViolations().stream()
                                                     .map(v -> TransitionViolation.newBuilder()
-                                                            .setTransitionViolationValue(v.getViolation() != null ? v.getViolation().toString() : "")
+                                                            .setTransitionViolationValue(v.getTransitionViolation() != null ? v.getTransitionViolation().toString() : "")
                                                             .setMessage(v.getMessage() != null ? v.getMessage() : "")
                                                             .build())
                                                     .collect(Collectors.toList())
@@ -147,8 +151,35 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                                         .setBody(bodyBuilder.build())
                                         .build();
                             })
-                            .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
+                            .transform(GrpcExceptionHandler.withErrorHandling("validateTransition"));
                 });
+    }
+
+    @Override
+    public Mono<WorkflowResponse> createWorkflow(Mono<CreateWorkflowRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                                Flux.fromIterable(req.getBody().getIssueTypesList())
+                                        .flatMap(issueType -> GrpcRequestValidators.requireSpecifiedOrInvalidArgument(issueType, "body.issueTypes"))
+                                        .collectList()
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID projectId = t.getT3();
+                            UUID actorUserId = t.getT4();
+
+                            log.info("[{}][{}] createWorkflow: projectId={}, name={}, actorUserId={}", requestId, nodeId, projectId, req.getBody().getName(), actorUserId);
+
+                            WorkflowCreationDto dto = workflowCreationMapper.toDomainDto(projectId, req.getBody());
+                            return workflowService.createWorkflow(requestId, nodeId, actorUserId, dto);
+                        }))
+                .map(workflowMapper::toWorkflowProto)
+                .transform(GrpcExceptionHandler.withErrorHandling("createWorkflow"));
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {
