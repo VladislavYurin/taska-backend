@@ -72,6 +72,32 @@ TODO
 
 Название кластера в UI: `taska-kafka`.
 
+## Логирование (Loki + Promtail + Grafana)
+#### Запуск
+
+Из корня проекта, где лежит `docker-compose.yml`:
+```bash
+    docker compose up -d loki promtail grafana
+```
+Если нужно поднять весь стек (Loki + Promtail + Grafana + остальные сервисы) — выполните обычную полную сборку:
+```bash
+    docker compose up -d --build
+```
+
+#### Доступ к интерфейсу
+* **Grafana URL**: [http://localhost:3000](http://localhost:3000)
+* **Логин/Пароль**: `admin` / `admin` (переменные заданы в `.env.docker`)
+
+#### Как посмотреть логи:
+1. Перейдите в Grafana по адресу `http://localhost:3000`.
+2. В левом меню выбрать **Dashboards** (Дашборды).
+3. Открыть дашборд **AC Taska Logs**.
+4. Отобразится дашборд логов. Сверху доступны фильтры:
+    * **Сервис**: выбор конкретного микросервиса (`auth-service`, `issue-service` и т.д.). Можно выбрать несколько.
+    * **Request ID**: текстовый поиск по requestId запроса.
+    * **Node ID**: текстовый поиск по nodeId.
+    * **Уровень лога**: фильтрация по уровню логирования (`INFO`, `WARN`, `ERROR` и т.д.). Можно выбрать несколько.
+
 ## Билд и деплой
 
 ### Деплой в Docker
