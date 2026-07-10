@@ -1,6 +1,6 @@
 package ru.taska.dto;
 
-public enum Violation {
+public enum TransitionViolation {
     WORKFLOW_NOT_FOUND,
     TRANSITION_NOT_FOUND,
     TRANSITION_DOESNT_BELONG_TO_WORKFLOW,

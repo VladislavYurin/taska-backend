@@ -1,7 +1,7 @@
 package ru.taska.mapper;
 
 import org.springframework.stereotype.Component;
-import ru.taska.api.workflow.v1.GetWorkflowForProjectResponse;
+import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.api.workflow.v1.WorkflowTransition;
 import ru.taska.domain.IssueType;
@@ -13,9 +13,9 @@ import ru.taska.entity.WorkflowEntity;
 @Component
 public class WorkflowMapper {
 
-    public GetWorkflowForProjectResponse toWorkflowProto(WorkflowAggregate aggregate) {
+    public WorkflowResponse toWorkflowProto(WorkflowAggregate aggregate) {
         WorkflowEntity entity = aggregate.workflow();
-        return GetWorkflowForProjectResponse.newBuilder()
+        return WorkflowResponse.newBuilder()
                 .setId(entity.getId().toString())
                 .setName(entity.getName())
                 .setVersion(entity.getVersion())
