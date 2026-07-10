@@ -5,7 +5,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
-import ru.taska.domain.IssueStatus;
 
 import java.util.UUID;
 
@@ -44,8 +43,8 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             SET status_key = :status,
                 version = version + 1,
                 updated_at = NOW()
-            WHERE id =:id AND version = :version AND deleted_at IS NULL
+            WHERE id = :id AND version = :version AND deleted_at IS NULL
             RETURNING *
             """)
-    Mono<Issue> changeStatus(UUID id, IssueStatus status, Integer version);
+    Mono<Issue> changeStatus(UUID id, String status, Integer version);
 }

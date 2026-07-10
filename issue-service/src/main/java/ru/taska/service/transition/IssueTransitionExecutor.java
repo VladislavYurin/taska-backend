@@ -9,7 +9,6 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -23,6 +22,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -48,7 +48,7 @@ public class IssueTransitionExecutor {
             String requestId,
             String nodeId,
             UUID issueId,
-            IssueStatus targetStatus,
+            String targetStatusKey,
             UUID transitionId,
             UUID actorUserId
     ) {
@@ -59,15 +59,15 @@ public class IssueTransitionExecutor {
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
                 }))
                 .flatMap(issue -> {
-                    IssueStatus sourceStatus = issue.getStatusKey();
+                    String sourceStatusKey = issue.getStatusKey();
 
-                    if (sourceStatus == targetStatus) {
+                    if (Objects.equals(sourceStatusKey, targetStatusKey)) {
                         log.info("[{}][{}] Old status[{}] and new status[{}] are the same for issue with ID {}",
-                                requestId, nodeId, sourceStatus, targetStatus, issue.getId());
+                                requestId, nodeId, sourceStatusKey, targetStatusKey, issue.getId());
 
                         return loadIssueWithHistory(issue);
                     }
-                    return issueRepository.changeStatus(issue.getId(), targetStatus, issue.getVersion())
+                    return issueRepository.changeStatus(issue.getId(), targetStatusKey, issue.getVersion())
                             .switchIfEmpty(Mono.defer(() -> {
                                 log.warn("[{}][{}] Issue status was modified by another process: issueId={}",
                                         requestId, nodeId, issue.getId());
@@ -78,8 +78,8 @@ public class IssueTransitionExecutor {
                                 JsonNode historyPayload = objectMapper.valueToTree(Map.of(
                                         "actorUserId", actorUserId,
                                         "issueId", issueId,
-                                        "oldStatus", sourceStatus.name(),
-                                        "newStatus", targetStatus.name(),
+                                        "oldStatus", sourceStatusKey,
+                                        "newStatus", targetStatusKey,
                                         "projectId", issue.getProjectId(),
                                         "transitionId", transitionId
                                         ));

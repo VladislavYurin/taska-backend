@@ -31,9 +31,6 @@ CREATE TABLE IF NOT EXISTS taska.issues
     CONSTRAINT issues_type_chk CHECK
         (issue_type IN ('TASK', 'BUG', 'STORY')),
 
-    CONSTRAINT issues_status_chk CHECK
-        (status_key IN ('TODO', 'IN_PROGRESS', 'DONE')),
-
     CONSTRAINT issues_priority_chk CHECK
         (priority IN ('LOW', 'MEDIUM', 'HIGH')),
 

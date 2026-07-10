@@ -14,7 +14,6 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.exception.DomainException;
@@ -51,7 +50,7 @@ class GetIssueTest extends IssueServiceImplTest {
                 .issueType(IssueType.TASK)
                 .summary("Тестовая задача")
                 .description("Описание")
-                .statusKey(IssueStatus.TODO)
+                .statusKey("TODO")
                 .priority(IssuePriority.MEDIUM)
                 .reporterId(REPORTER_ID)
                 .build();

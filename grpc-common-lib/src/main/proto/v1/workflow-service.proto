@@ -15,13 +15,6 @@ enum IssueType {
   ISSUE_TYPE_STORY = 3;
 }
 
-enum IssueStatus {
-  ISSUE_STATUS_UNSPECIFIED = 0;
-  ISSUE_STATUS_TODO = 1;
-  ISSUE_STATUS_IN_PROGRESS = 2;
-  ISSUE_STATUS_DONE = 3;
-}
-
 service WorkflowService {
   /**
    * Возвращает workflow, привязанный к (project_id, issue_type).
@@ -232,7 +225,7 @@ message IssueValidateSnapshot {
   /**
    * Текущий статус задачи.
    */
-  IssueStatus status_key = 4;
+  string status_key = 4;
 }
 
 message ValidateTransitionResponse {
@@ -256,7 +249,7 @@ message ValidateTransitionResponseBody {
   /**
    * Целевой статус (состояние задачи после перехода).
    */
-  IssueStatus to_status_key = 2;
+  string to_status_key = 2;
 
   /**
    * Список нарушений, если переход заблокирован.

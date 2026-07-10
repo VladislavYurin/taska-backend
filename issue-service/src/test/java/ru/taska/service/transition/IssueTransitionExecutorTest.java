@@ -17,7 +17,6 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -63,8 +62,8 @@ class IssueTransitionExecutorTest {
     private static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
-    private static final IssueStatus SOURCE_STATUS = IssueStatus.TODO;
-    private static final IssueStatus TARGET_STATUS = IssueStatus.IN_PROGRESS;
+    private static final String SOURCE_STATUS_KEY = "TODO";
+    private static final String TARGET_STATUS_KEY = "IN_PROGRESS";
     private static final int CURRENT_VERSION = 1;
     private static final int UPDATED_VERSION = 2;
 
@@ -74,14 +73,14 @@ class IssueTransitionExecutorTest {
         var sourceIssue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
-                .statusKey(SOURCE_STATUS)
+                .statusKey(SOURCE_STATUS_KEY)
                 .version(CURRENT_VERSION)
                 .build();
 
         var updatedIssue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
-                .statusKey(TARGET_STATUS)
+                .statusKey(TARGET_STATUS_KEY)
                 .version(UPDATED_VERSION)
                 .build();
 
@@ -96,12 +95,12 @@ class IssueTransitionExecutorTest {
                 .build();
 
         JsonNode payload = JsonNodeFactory.instance.objectNode()
-                .put("newStatus", TARGET_STATUS.name());
+                .put("newStatus", TARGET_STATUS_KEY);
 
         Mockito.when(issueRepository.findActiveById(Mockito.any(UUID.class)))
                 .thenReturn(Mono.just(sourceIssue));
 
-        Mockito.when(issueRepository.changeStatus(Mockito.any(UUID.class), Mockito.any(IssueStatus.class), Mockito.anyInt()))
+        Mockito.when(issueRepository.changeStatus(Mockito.any(UUID.class), Mockito.anyString(), Mockito.anyInt()))
                 .thenReturn(Mono.just(updatedIssue));
 
         Mockito.when(objectMapper.valueToTree(Mockito.anyMap()))
@@ -129,13 +128,13 @@ class IssueTransitionExecutorTest {
                         REQUEST_ID,
                         NODE_ID,
                         ISSUE_ID,
-                        TARGET_STATUS,
+                        TARGET_STATUS_KEY,
                         TRANSITION_ID,
                         ACTOR_USER_ID
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getIssue().getId()).isEqualTo(ISSUE_ID);
-                    Assertions.assertThat(result.getIssue().getStatusKey()).isEqualTo(TARGET_STATUS);
+                    Assertions.assertThat(result.getIssue().getStatusKey()).isEqualTo(TARGET_STATUS_KEY);
                     Assertions.assertThat(result.getIssue().getVersion()).isEqualTo(UPDATED_VERSION);
                     Assertions.assertThat(result.getHistory()).contains(history);
                 })
@@ -145,7 +144,7 @@ class IssueTransitionExecutorTest {
                 .findActiveById(ISSUE_ID);
 
         Mockito.verify(issueRepository, Mockito.times(1))
-                .changeStatus(ISSUE_ID, TARGET_STATUS, CURRENT_VERSION);
+                .changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
 
         Mockito.verify(objectMapper, Mockito.times(1))
                 .valueToTree(Mockito.anyMap());
@@ -172,7 +171,7 @@ class IssueTransitionExecutorTest {
         var issue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
-                .statusKey(IssueStatus.IN_PROGRESS)
+                .statusKey("IN_PROGRESS")
                 .build();
 
         var history = IssueHistory.builder()
@@ -193,7 +192,7 @@ class IssueTransitionExecutorTest {
                         REQUEST_ID,
                         NODE_ID,
                         ISSUE_ID,
-                        TARGET_STATUS,
+                        TARGET_STATUS_KEY,
                         TRANSITION_ID,
                         ACTOR_USER_ID
                 ))
@@ -223,7 +222,7 @@ class IssueTransitionExecutorTest {
                         REQUEST_ID,
                         NODE_ID,
                         ISSUE_ID,
-                        TARGET_STATUS,
+                        TARGET_STATUS_KEY,
                         TRANSITION_ID,
                         ACTOR_USER_ID
                 ))
@@ -247,21 +246,21 @@ class IssueTransitionExecutorTest {
     void executeTransition_shouldThrowException_whenOptimisticLockConflict() {
         var issue = Issue.builder()
                 .id(ISSUE_ID)
-                .statusKey(SOURCE_STATUS)
+                .statusKey(SOURCE_STATUS_KEY)
                 .version(CURRENT_VERSION)
                 .build();
 
         Mockito.when(issueRepository.findActiveById(Mockito.any(UUID.class)))
                 .thenReturn(Mono.just(issue));
 
-        Mockito.when(issueRepository.changeStatus(Mockito.any(UUID.class), Mockito.any(IssueStatus.class), Mockito.anyInt()))
+        Mockito.when(issueRepository.changeStatus(Mockito.any(UUID.class), Mockito.anyString(), Mockito.anyInt()))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(executor.executeTransition(
                         REQUEST_ID,
                         NODE_ID,
                         ISSUE_ID,
-                        TARGET_STATUS,
+                        TARGET_STATUS_KEY,
                         TRANSITION_ID,
                         ACTOR_USER_ID
                 ))
@@ -278,7 +277,7 @@ class IssueTransitionExecutorTest {
                 .findActiveById(ISSUE_ID);
 
         Mockito.verify(issueRepository, Mockito.times(1))
-                .changeStatus(ISSUE_ID, TARGET_STATUS, CURRENT_VERSION);
+                .changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
 
         Mockito.verifyNoInteractions(objectMapper, issueMapper, historyRepository, outboxRepository);
     }

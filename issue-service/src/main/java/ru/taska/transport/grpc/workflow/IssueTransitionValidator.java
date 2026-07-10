@@ -7,10 +7,8 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.domain.Issue;
-import ru.taska.domain.IssueStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.IssueMapper;
 
 import java.util.UUID;
 
@@ -23,18 +21,16 @@ import java.util.UUID;
 public class IssueTransitionValidator {
 
     private final GrpcWorkflowServiceClient client;
-    private final IssueMapper issueMapper;
-
 
     /**
      * Передает данные для валидации перехода по workflow gRPC клиенту {@link GrpcWorkflowServiceClient#validateTransition},
      * и получает от него ответ в виде асинхронного контейнера {@link Mono}, содержащим {@link ValidateTransitionResponse}.
-     * В случае успешной валидации конвертирует ответ в доменный статус задачи {@link IssueStatus} и возвращает его
+     * В случае успешной валидации конвертирует ответ в доменный статус задачи и возвращает его
      * внутри асинхронного контейнера {@link Mono}.
      * Если валидация не прошла, то выбрасывает исключение {@link DomainException} со статусом ошибки {@link DomainStatus#FAILED_PRECONDITION}
-     * и сообщением, которое фомируется из пришедшего из workflow-service списка нарушений перехода.
+     * и сообщением, которое формируется из пришедшего из workflow-service списка нарушений перехода.
      */
-    public Mono<IssueStatus> validateTransition(
+    public Mono<String> validateTransition(
             String requestId,
             String nodeId,
             Issue issue,
@@ -48,7 +44,7 @@ public class IssueTransitionValidator {
                 );
     }
 
-    private Mono<IssueStatus> processResponse(
+    private Mono<String> processResponse(
             Issue issue,
             UUID transitionId,
             ValidateTransitionResponse response
@@ -71,6 +67,6 @@ public class IssueTransitionValidator {
             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, violationMessage));
         }
 
-        return Mono.just(issueMapper.toDomainIssueStatus(response.getBody().getToStatusKey()));
+        return Mono.just(response.getBody().getToStatusKey());
     }
 }
