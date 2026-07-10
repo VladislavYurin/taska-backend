@@ -29,6 +29,11 @@ grpc:
       port: ${AUTH_GRPC_PORT:9091}
       deadlineDuration: ${AUTH_GRPC_DEADLINE:3000}
 
+    issue-service:
+      host: ${ISSUE_GRPC_HOST:localhost}
+      port: ${ISSUE_GRPC_PORT:9094}
+      deadlineDuration: ${ISSUE_GRPC_DEADLINE:3000}
+
 logging:
   level:
     ru.taska: ${GATEWAY_LOG_LEVEL_ROOT:INFO}

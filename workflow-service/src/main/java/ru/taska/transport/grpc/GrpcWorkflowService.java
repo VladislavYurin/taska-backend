@@ -79,13 +79,7 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                                     GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueType(), "body.issue_snapshot.issue_type"),
                                     GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getIssueSnapshot().getStatusKey(), "body.issue_snapshot.status_key")
                             )
-                            .flatMap(tuple8 -> {
-                                if (req.getBody().hasPayload()) {
-                                    return GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getPayload(), "body.payload")
-                                            .map(payload -> Tuples.of(tuple8, payload));
-                                }
-                                return Mono.just(Tuples.of(tuple8, ""));
-                            })
+                            .map(tuple8 -> Tuples.of(tuple8, req.getBody().getPayload()))
                             .doOnError(StatusRuntimeException.class,
                                     logValidationError(
                                             req.getHeader().getRequestId(),

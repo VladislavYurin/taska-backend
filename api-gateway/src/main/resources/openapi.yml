@@ -96,6 +96,266 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/issues:
+    post:
+      summary: Создание задачи
+      operationId: createIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueRequestDto'
+
+      responses:
+        '201':
+          description: Создана новая задача
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    get:
+      summary: Возвращает задачи проекта с фильтрами и пагинацией
+      operationId: listIssues
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+
+        - name: assigneeId
+          in: query
+          required: false
+          schema:
+            type: string
+
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+
+      responses:
+        '200':
+          description: Список задач успешно найден
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssuesResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/{issueId}:
+    get:
+      summary: Возвращает задачу с историей
+      operationId: getIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Задача с историей успешно найдена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    put:
+      summary: Обновляет основные поля задачи
+      operationId: updateIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssueRequestDto'
+
+      responses:
+        '200':
+          description: Данные задачи успешно обновлены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateIssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Выполняет мягкое удаление задачи
+      operationId: deleteIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '204':
+          description: Задача успешно удалена (No Content)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/{issueId}/assignee:
+    put:
+      summary: Назначает исполнителя задачи
+      operationId: assignIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignIssueRequestDto'
+
+      responses:
+        '200':
+          description: Исполнитель задачи успешно назначен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/{issueId}/transition/{transitionId}:
+    put:
+      summary: Выполняет переход задачи по workflow (меняет статус задачи)
+      operationId: transitionIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+        - name: transitionId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionIssueRequestDto'
+
+      responses:
+        '200':
+          description: Статус задачи успешно изменен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -181,6 +441,140 @@ components:
           type: string
         status:
           type: string
+
+    CreateIssueRequestDto:
+      type: object
+      required: [issueType, summary, description, priority]
+      properties:
+        issueType:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+
+    IssueResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        issueNumber:
+          type: integer
+        issueKey:
+          type: string
+        issueType:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        assigneeId:
+          type: string
+        reporterId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+
+    IssueHistoryResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        eventType:
+          type: string
+        actorUserId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+
+    IssueWithHistoryResponseDto:
+      type: object
+      properties:
+        issue:
+          $ref: '#/components/schemas/IssueResponseDto'
+        history:
+          type: array
+          items:
+           $ref: '#/components/schemas/IssueHistoryResponseDto'
+
+    IssueShortResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        issueKey:
+          type: string
+        summary:
+          type: string
+        issueType:
+          type: string
+        priority:
+          type: string
+        assigneeId:
+          type: string
+
+    ListIssuesResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueShortResponseDto'
+        totalCount:
+          type: integer
+
+    UpdateIssueRequestDto:
+      type: object
+      required: [summary, description, priority]
+      properties:
+        summary:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+
+    UpdateIssueResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+
+    AssignIssueRequestDto:
+      type: object
+      required: [assigneeId]
+      properties:
+        assigneeId:
+          type: string
+
+    TransitionIssueRequestDto:
+      type: object
+      properties:
+        payload:
+          type: object
 
     RestErrorResponse:
       type: object

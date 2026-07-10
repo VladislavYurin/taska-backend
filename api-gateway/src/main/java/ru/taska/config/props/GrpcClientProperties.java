@@ -6,14 +6,13 @@ import java.time.Duration;
 
 @ConfigurationProperties("grpc.client")
 public record GrpcClientProperties(
-        AuthService authService
+        Service authService,
+        Service issueService
 ) {
-
-    public record AuthService(
+    public record Service(
             String host,
             Integer port,
             Duration deadlineDuration
-
     ) {
     }
 }
