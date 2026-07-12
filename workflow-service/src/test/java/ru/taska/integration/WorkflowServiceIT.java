@@ -12,6 +12,7 @@ import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowBindingEntity;
 import ru.taska.entity.WorkflowEntity;
 import ru.taska.exception.DomainException;
+import ru.taska.domain.StatusCategory;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.repository.StatusRepository;
@@ -122,21 +123,21 @@ class WorkflowServiceIT extends AbstractIT{
                                                                     .workflowId(defaultWorkflow.getId())
                                                                     .statusKey("TODO")
                                                                     .name("To Do")
-                                                                    .category("TODO")
+                                                                    .category(StatusCategory.TODO)
                                                                     .sortOrder(10)
                                                                     .build()).block();
         StatusEntity inProgressStatus = statusRepository.save(StatusEntity.builder()
                                                                           .workflowId(defaultWorkflow.getId())
                                                                           .statusKey("IN_PROGRESS")
                                                                           .name("In Progress")
-                                                                          .category("IN_PROGRESS")
+                                                                          .category(StatusCategory.IN_PROGRESS)
                                                                           .sortOrder(20)
                                                                           .build()).block();
         StatusEntity doneStatus = statusRepository.save(StatusEntity.builder()
                                                                     .workflowId(defaultWorkflow.getId())
                                                                     .statusKey("DONE")
                                                                     .name("Done")
-                                                                    .category("DONE")
+                                                                    .category(StatusCategory.DONE)
                                                                     .sortOrder(30)
                                                                     .build()).block();
         TransitionEntity transitionStart = transitionRepository.save(TransitionEntity.builder()
@@ -179,21 +180,21 @@ class WorkflowServiceIT extends AbstractIT{
                                                                     .workflowId(workflow.getId())
                                                                     .statusKey("TODO")
                                                                     .name("To Do")
-                                                                    .category("TODO")
+                                                                    .category(StatusCategory.TODO)
                                                                     .sortOrder(10)
                                                                     .build()).block();
         StatusEntity inProgressStatus = statusRepository.save(StatusEntity.builder()
                                                                           .workflowId(workflow.getId())
                                                                           .statusKey("IN_PROGRESS")
                                                                           .name("In Progress")
-                                                                          .category("IN_PROGRESS")
+                                                                          .category(StatusCategory.IN_PROGRESS)
                                                                           .sortOrder(20)
                                                                           .build()).block();
         StatusEntity doneStatus = statusRepository.save(StatusEntity.builder()
                                                                     .workflowId(workflow.getId())
                                                                     .statusKey("DONE")
                                                                     .name("Done")
-                                                                    .category("DONE")
+                                                                    .category(StatusCategory.DONE)
                                                                     .sortOrder(30)
                                                                     .build()).block();
         TransitionEntity transitionStart = transitionRepository.save(TransitionEntity.builder()

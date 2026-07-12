@@ -62,7 +62,7 @@ public class WorkflowCreationMapper {
                 .workflowId(workflowId)
                 .statusKey(dto.getStatusKey())
                 .name(dto.getName())
-                .category(dto.getCategory().name())
+                .category(dto.getCategory())
                 .sortOrder(dto.getSortOrder())
                 .build();
     }

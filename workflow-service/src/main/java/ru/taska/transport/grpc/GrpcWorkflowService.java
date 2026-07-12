@@ -47,17 +47,17 @@ public class GrpcWorkflowService extends ReactorWorkflowServiceGrpc.WorkflowServ
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getIssueType(), "body.issueType")
+                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueType(), "body.issueType")
                 ))
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
-                    String issueType = t.getT4();
+                    IssueType issueType = t.getT4();
 
                     log.info("[{}][{}] getWorkflowForProject: projectId={}, issueType={}", requestId, nodeId, projectId, issueType);
 
-                    return workflowService.getWorkflow(projectId, issueType)
+                    return workflowService.getWorkflow(projectId, workflowMapper.toDomainIssueType(issueType).name())
                             .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()));
                 })
                 .map(workflowMapper::toWorkflowProto)

@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.api.workflow.v1.WorkflowTransition;
+import ru.taska.api.workflow.v1.StatusCategory;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.WorkflowAggregate;
 import ru.taska.entity.StatusEntity;
@@ -40,11 +41,20 @@ public class WorkflowMapper {
                 .setId(status.getId().toString())
                 .setStatusKey(status.getStatusKey())
                 .setName(status.getName())
-                .setCategory(status.getCategory())
+                .setCategory(toProtoStatusCategory(status.getCategory()))
                 .setSortOrder(status.getSortOrder())
                 .setCreatedAt(status.getCreatedAt().toString())
                 .setUpdatedAt(status.getUpdatedAt().toString())
                 .build();
+    }
+
+    private StatusCategory toProtoStatusCategory(ru.taska.domain.StatusCategory category) {
+        if (category == null) return StatusCategory.STATUS_CATEGORY_UNSPECIFIED;
+        return switch (category) {
+            case TODO -> StatusCategory.STATUS_CATEGORY_TODO;
+            case IN_PROGRESS -> StatusCategory.STATUS_CATEGORY_IN_PROGRESS;
+            case DONE -> StatusCategory.STATUS_CATEGORY_DONE;
+        };
     }
 
     private WorkflowTransition toWorkflowTransitionProto(TransitionEntity transition) {
