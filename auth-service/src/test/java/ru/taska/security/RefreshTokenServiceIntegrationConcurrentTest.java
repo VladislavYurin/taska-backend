@@ -20,6 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.domain.GlobalRole;
 import ru.taska.dto.RefreshTokenResponseDto;
 import ru.taska.entity.RefreshToken;
 import ru.taska.entity.User;
@@ -143,6 +144,7 @@ class RefreshTokenServiceIntegrationConcurrentTest {
         testUser = User.builder()
                 .login("testuser_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
+                .globalRole(GlobalRole.USER)
                 .displayName("Test User")
                 .status(UserStatus.ACTIVE)
                 .createdAt(Instant.now())
@@ -340,6 +342,7 @@ class RefreshTokenServiceIntegrationConcurrentTest {
         User testUser2 = User.builder()
                 .login("testuser2_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test2_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
+                .globalRole(GlobalRole.USER)
                 .displayName("Test User 2")
                 .status(UserStatus.ACTIVE)
                 .createdAt(Instant.now())

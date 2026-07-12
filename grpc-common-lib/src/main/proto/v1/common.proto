@@ -29,10 +29,17 @@ enum UserStatus {
   USER_STATUS_BLOCKED = 3;
 }
 
+enum GlobalRoleProto {
+  GLOBAL_ROLE_UNSPECIFIED = 0;
+  GLOBAL_ROLE_USER = 1;
+  GLOBAL_ROLE_ADMIN = 2;
+}
+
 message UserContext {
   string user_id = 1;
   string login = 2;
   string email = 3;
   string display_name = 4;
   UserStatus status = 5;
+  GlobalRoleProto global_role = 6;
 }

@@ -70,3 +70,6 @@ logging:
     ru.taska: ${AUTH_LOG_LEVEL_ROOT:INFO}
     liquibase: ${AUTH_LOG_LEVEL_LIQUIBASE:INFO}
     org.apache.kafka: ${AUTH_LOG_LEVEL_KAFKA:WARN}
+
+admin:
+  password: ${ADMIN_PASS:changeme}

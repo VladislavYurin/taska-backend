@@ -21,6 +21,7 @@ import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.LoginResponseDto;
 import ru.taska.domain.dto.RefreshResponseDto;
 import ru.taska.error.GatewayErrorHandler;
@@ -281,7 +282,8 @@ class AuthControllerWebTestClientTest {
                 "anna",
                 "anna@example.com",
                 "Anna Ivanova",
-                GatewayUserStatus.ACTIVE
+                GatewayUserStatus.ACTIVE,
+                GlobalRole.USER
         );
 
         ru.taska.domain.dto.ValidateAccessTokenResponseDto restResponseDto = new ru.taska.domain.dto.ValidateAccessTokenResponseDto();

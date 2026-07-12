@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.GatewayContext;
-import ru.taska.domain.GatewayUserContext;
 import ru.taska.filter.GatewayRequestExecutor;
 
+import static ru.taska.domain.EndpointSecurity.GLOBAL_ADMIN_REQUIRED;
 import static ru.taska.domain.EndpointSecurity.PROTECTED;
 import static ru.taska.domain.EndpointSecurity.PUBLIC;
 

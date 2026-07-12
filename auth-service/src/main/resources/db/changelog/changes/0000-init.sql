@@ -11,11 +11,15 @@ CREATE TABLE IF NOT EXISTS taska.users
 (
     id           uuid PRIMARY KEY      DEFAULT gen_random_uuid(),
     login        varchar(64)  NOT NULL UNIQUE,
+    global_role  varchar(32)  NOT NULL DEFAULT 'USER',
     email        varchar(320) NOT NULL UNIQUE,
     display_name varchar(128) NOT NULL,
     status       varchar(32)  NOT NULL DEFAULT 'INVITED',
     created_at   timestamptz  NOT NULL DEFAULT now(),
     updated_at   timestamptz  NOT NULL DEFAULT now(),
+
+    CONSTRAINT global_role_chk CHECK
+        (global_role IN ('USER', 'GLOBAL_ADMIN')),
 
     CONSTRAINT users_status_chk CHECK
         (status IN ('INVITED', 'ACTIVE', 'BLOCKED')),
