@@ -9,11 +9,13 @@ import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.api.auth.v1.RefreshResponse;
 import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
 import ru.taska.api.auth.v1.SetPasswordByTokenRequestBody;
+import ru.taska.api.common.v1.GlobalRoleProto;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.LoginRequestDto;
 import ru.taska.domain.dto.LoginResponseDto;
 import ru.taska.domain.dto.PasswordByTokenRequestDto;
@@ -148,6 +150,21 @@ public class AuthMapper {
             case USER_STATUS_INVITED -> GatewayUserStatus.INVITED;
             case USER_STATUS_BLOCKED -> GatewayUserStatus.BLOCKED;
             default -> GatewayUserStatus.UNSPECIFIED;
+        };
+    }
+
+    /**
+     * Преобразует перечисление (Enum) глобальной роли пользователя из Protobuf контракта во внутренние глобальные роли шлюза.
+     * Исключает префиксы gRPC-слоя (например, GLOBAL_ROLE_USER переводит в USER).
+     *
+     * @param protoGobalRole автогенерированная глобальная роль {@link GlobalRoleProto} из gRPC контракта
+     * @return соответствующий элемент доменного перечисления шлюза {@link GlobalRole}
+     */
+    public GlobalRole toGlobalRole(GlobalRoleProto protoGobalRole) {
+        return switch (protoGobalRole) {
+            case GLOBAL_ROLE_ADMIN -> GlobalRole.GLOBAL_ADMIN;
+            case GLOBAL_ROLE_USER -> GlobalRole.USER;
+            default -> GlobalRole.UNSPECIFIED;
         };
     }
 }

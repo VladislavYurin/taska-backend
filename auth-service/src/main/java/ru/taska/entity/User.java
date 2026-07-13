@@ -12,6 +12,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
 import java.util.UUID;
+import ru.taska.domain.GlobalRole;
 
 /**
  * Учётная запись пользователя системы.
@@ -49,6 +50,13 @@ public class User {
      */
     @Column("login")
     private String login;
+
+    /**
+     * Глобальная роль пользователя.
+     */
+    @Column("global_role")
+    @Builder.Default
+    private GlobalRole globalRole = GlobalRole.USER;
 
     /**
      * Email пользователя.

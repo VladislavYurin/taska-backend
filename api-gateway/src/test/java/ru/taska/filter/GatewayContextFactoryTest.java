@@ -1,5 +1,13 @@
 package ru.taska.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static ru.taska.domain.EndpointSecurity.GLOBAL_ADMIN_REQUIRED;
+import static ru.taska.domain.EndpointSecurity.PROTECTED;
+import static ru.taska.domain.EndpointSecurity.PUBLIC;
+
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,19 +25,14 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
+import ru.taska.api.common.v1.GlobalRoleProto;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
+import ru.taska.domain.GlobalRole;
 import ru.taska.mapper.ContextMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-import static ru.taska.domain.EndpointSecurity.PROTECTED;
-import static ru.taska.domain.EndpointSecurity.PUBLIC;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GatewayContextFactory Tests")
@@ -82,13 +85,14 @@ class GatewayContextFactoryTest {
                         .setEmail("test@example.com")
                         .setDisplayName("Test User")
                         .setStatus(UserStatus.USER_STATUS_ACTIVE)
+                        .setGlobalRole(GlobalRoleProto.GLOBAL_ROLE_USER)
                         .build())
                 .build();
         when(authServiceClient.validateAccessToken(REQUEST_ID, NODE_ID, "valid-token"))
                 .thenReturn(Mono.just(grpcResponse));
 
         GatewayUserContext userCtx = new GatewayUserContext(
-                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE);
+                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
         when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(userCtx);
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, PROTECTED))
@@ -129,6 +133,106 @@ class GatewayContextFactoryTest {
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, PROTECTED))
                 .verifyErrorSatisfies(e -> assertThat(e).isSameAs(grpcError));
+
+        verifyNoInteractions(contextMapper);
+    }
+
+    @Test
+    @DisplayName("GLOBAL_ADMIN_REQUIRED: валидный токен — должен извлечь токен, вызвать auth-сервис и заполнить userContext")
+    void buildContext_adminPermision_validToken_populatesUserContext() {
+        when(bearerTokenExtractor.extract(exchange, REQUEST_ID)).thenReturn("valid-token");
+
+        ValidateAccessTokenResponse grpcResponse = ValidateAccessTokenResponse.newBuilder()
+                                                                              .setUserContext(UserContext.newBuilder()
+                                                                                                         .setUserId("admin-1")
+                                                                                                         .setLogin("admin")
+                                                                                                         .setEmail("admin@adminov.ru")
+                                                                                                         .setDisplayName("Admin")
+                                                                                                         .setStatus(UserStatus.USER_STATUS_ACTIVE)
+                                                                                                         .setGlobalRole(GlobalRoleProto.GLOBAL_ROLE_ADMIN)
+                                                                                                         .build())
+                                                                              .build();
+        when(authServiceClient.validateAccessToken(REQUEST_ID, NODE_ID, "valid-token"))
+                .thenReturn(Mono.just(grpcResponse));
+
+        GatewayUserContext adminCtx = new GatewayUserContext(
+                "admin-1", "admin", "admin@adminov.ru", "Admin", GatewayUserStatus.ACTIVE, GlobalRole.GLOBAL_ADMIN);
+        when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(adminCtx);
+
+        StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))
+                    .assertNext(ctx -> {
+                        assertThat(ctx.requestId()).isEqualTo(REQUEST_ID);
+                        assertThat(ctx.nodeId()).isEqualTo(NODE_ID);
+                        assertThat(ctx.userContext()).isSameAs(adminCtx);
+                    })
+                    .verifyComplete();
+
+        verify(bearerTokenExtractor).extract(exchange, REQUEST_ID);
+        verify(authServiceClient).validateAccessToken(REQUEST_ID, NODE_ID, "valid-token");
+        verify(contextMapper).mapToGatewayUserContext(grpcResponse.getUserContext());
+    }
+
+    @Test
+    @DisplayName("GLOBAL_ADMIN_REQUIRED: пользователь не является админом, ошибка PERMISSION_DENIED передается как Mono.error")
+    void buildContext_adminPermision_validToken_userIsNotAdmin(){
+        when(bearerTokenExtractor.extract(exchange, REQUEST_ID)).thenReturn("valid-token");
+
+        ValidateAccessTokenResponse grpcResponse = ValidateAccessTokenResponse.newBuilder()
+                                                                              .setUserContext(UserContext.newBuilder()
+                                                                                                         .setUserId("user-1")
+                                                                                                         .setLogin("testuser")
+                                                                                                         .setEmail("test@example.com")
+                                                                                                         .setDisplayName("Test User")
+                                                                                                         .setStatus(UserStatus.USER_STATUS_ACTIVE)
+                                                                                                         .setGlobalRole(GlobalRoleProto.GLOBAL_ROLE_USER)
+                                                                                                         .build())
+                                                                              .build();
+
+        when(authServiceClient.validateAccessToken(REQUEST_ID, NODE_ID, "valid-token"))
+                .thenReturn(Mono.just(grpcResponse));
+
+        GatewayUserContext userCtx = new GatewayUserContext(
+                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
+        when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(userCtx);
+
+        StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))
+                    .verifyErrorSatisfies(e -> {
+                        assertThat(e).isInstanceOf(StatusRuntimeException.class);
+                        StatusRuntimeException ex = (StatusRuntimeException) e;
+                        assertThat(ex.getStatus().getCode()).isEqualTo(Status.Code.PERMISSION_DENIED);
+                        assertThat(ex.getStatus().getDescription()).isEqualTo("User doesn't have permission");
+                    });
+
+        verify(bearerTokenExtractor).extract(exchange, REQUEST_ID);
+        verify(authServiceClient).validateAccessToken(REQUEST_ID, NODE_ID, "valid-token");
+        verify(contextMapper).mapToGatewayUserContext(grpcResponse.getUserContext());
+    }
+
+    @Test
+    @DisplayName("GLOBAL_ADMIN_REQUIRED: отсутствует токен — ошибка BearerTokenExtractor должна передаваться как Mono.error")
+    void buildContext_adminPermision_missingToken_propagatesError() {
+        ResponseStatusException authError = new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization header is missing");
+        when(bearerTokenExtractor.extract(exchange, REQUEST_ID)).thenThrow(authError);
+
+        StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))
+                    .verifyErrorSatisfies(e -> assertThat(e).isSameAs(authError));
+
+        verifyNoInteractions(authServiceClient, contextMapper);
+    }
+
+    @Test
+    @DisplayName("GLOBAL_ADMIN_REQUIRED: gRPC-ошибка auth-сервиса должна передаваться как Mono.error")
+    void buildContext_adminPermision_grpcError_propagatesError() {
+        when(bearerTokenExtractor.extract(exchange, REQUEST_ID)).thenReturn("some-token");
+
+        StatusRuntimeException grpcError = Status.UNAUTHENTICATED
+                .withDescription("Token expired")
+                .asRuntimeException();
+        when(authServiceClient.validateAccessToken(REQUEST_ID, NODE_ID, "some-token"))
+                .thenReturn(Mono.error(grpcError));
+
+        StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))
+                    .verifyErrorSatisfies(e -> assertThat(e).isSameAs(grpcError));
 
         verifyNoInteractions(contextMapper);
     }

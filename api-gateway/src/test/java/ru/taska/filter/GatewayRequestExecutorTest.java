@@ -1,5 +1,14 @@
 package ru.taska.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static ru.taska.domain.EndpointSecurity.GLOBAL_ADMIN_REQUIRED;
+import static ru.taska.domain.EndpointSecurity.PROTECTED;
+import static ru.taska.domain.EndpointSecurity.PUBLIC;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,14 +23,6 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.GatewayContext;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static ru.taska.domain.EndpointSecurity.PROTECTED;
-import static ru.taska.domain.EndpointSecurity.PUBLIC;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GatewayRequestExecutor Tests")
@@ -69,6 +70,19 @@ class GatewayRequestExecutorTest {
                 .verifyComplete();
 
         verify(contextFactory).buildContext(REQUEST_ID, exchange, PROTECTED);
+    }
+
+    @Test
+    @DisplayName("GLOBAL_ADMIN_REQUIRED: должен вызвать фабрику с правильными аргументами и передать контекст в action")
+    void execute_adminPermision_delegatesToFactoryAndPassesContextToAction() {
+        var ctx = new GatewayContext(REQUEST_ID, "api-gateway", null);
+        when(contextFactory.buildContext(eq(REQUEST_ID), eq(exchange), eq(GLOBAL_ADMIN_REQUIRED))).thenReturn(Mono.just(ctx));
+
+        StepVerifier.create(executor.execute(exchange, GLOBAL_ADMIN_REQUIRED, Mono::just))
+                    .assertNext(result -> assertThat(result).isSameAs(ctx))
+                    .verifyComplete();
+
+        verify(contextFactory).buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED);
     }
 
     @Test
