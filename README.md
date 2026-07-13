@@ -98,6 +98,35 @@ TODO
     * **Node ID**: текстовый поиск по nodeId.
     * **Уровень лога**: фильтрация по уровню логирования (`INFO`, `WARN`, `ERROR` и т.д.). Можно выбрать несколько.
 
+## admin-service
+
+Backend-слой для **platform admin console**.  
+Не подключается к пользовательскому frontend и не участвует в обычном user flow через `api-gateway`.
+
+#### Порты (с хоста)
+
+| Назначение | Порт |
+|------------|------|
+| HTTP / Actuator | `8086` |
+| gRPC | `9097` |
+| PostgreSQL (`taska_admin_db`) | `5438` |
+
+#### Запуск
+
+Из корня проекта, где лежит `docker-compose.yml`:
+
+```bash
+docker compose up -d --build admin-db admin-service
+```
+
+Проверка health:
+
+```bash
+curl http://localhost:8086/actuator/health
+```
+
+Ожидаемый ответ: `{"status":"UP", ...}`.
+
 ## Билд и деплой
 
 ### Деплой в Docker

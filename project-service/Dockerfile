@@ -11,6 +11,7 @@ COPY project-service ./project-service
 COPY workflow-service ./workflow-service
 COPY issue-service ./issue-service
 COPY notification-service ./notification-service
+COPY admin-service ./admin-service
 
 RUN mvn -q -DskipTests -pl project-service -am clean package
 

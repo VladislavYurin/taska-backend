@@ -13,12 +13,12 @@ COPY issue-service ./issue-service
 COPY notification-service ./notification-service
 COPY admin-service ./admin-service
 
-RUN mvn -q -DskipTests -pl auth-service -am clean package
+RUN mvn -q -DskipTests -pl admin-service -am clean package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-COPY --from=build /workspace/auth-service/target/*.jar app.jar
+COPY --from=build /workspace/admin-service/target/*.jar app.jar
 
 EXPOSE 8080 9090
 ENTRYPOINT ["java","-jar","/app/app.jar"]

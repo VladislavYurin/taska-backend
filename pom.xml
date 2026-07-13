@@ -25,6 +25,7 @@
         <module>workflow-service</module>
         <module>issue-service</module>
         <module>notification-service</module>
+        <module>admin-service</module>
     </modules>
 
     <properties>

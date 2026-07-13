@@ -11,6 +11,7 @@ volumes:
   pg_workflow_data:
   pg_issue_data:
   pg_notification_data:
+  pg_admin_data:
   kafka_data:
   grafana_data:
 
@@ -196,6 +197,26 @@ services:
       timeout: 5s
       retries: 12
 
+  admin-db:
+    image: postgres:16
+    container_name: taska-admin-db
+    networks: [taska-net]
+    env_file:
+      - .env.docker
+    ports:
+      - "5438:5432"
+    environment:
+      - POSTGRES_DB=taska_admin_db
+      - POSTGRES_USER=taska
+      - POSTGRES_PASSWORD=taska
+    volumes:
+      - pg_admin_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taska -d taska_admin_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   # --------------------
   # Microservices
   # --------------------
@@ -285,6 +306,21 @@ services:
     ports:
       - "8085:8080"
       - "9095:9090"
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: admin-service/Dockerfile
+    container_name: taska-admin-service
+    networks: [taska-net]
+    depends_on:
+      admin-db:
+        condition: service_healthy
+    env_file:
+      - .env.docker
+    ports:
+      - "8086:8080"
+      - "9097:9090"
 
   api-gateway:
     build:

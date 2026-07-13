@@ -39,6 +39,7 @@ jobs:
           - { name: workflow-service,    module: workflow-service }
           - { name: issue-service,       module: issue-service }
           - { name: notification-service,module: notification-service }
+          - { name: admin-service,       module: admin-service }
 
     steps:
       - uses: actions/checkout@v4
