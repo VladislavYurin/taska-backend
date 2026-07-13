@@ -13,6 +13,7 @@ volumes:
   pg_notification_data:
   kafka_data:
   grafana_data:
+  minio_data:
 
 services:
   # --------------------
@@ -92,6 +93,45 @@ services:
       - .env.docker
     depends_on:
       - loki
+
+  # --------------------
+  # MinIO
+  # --------------------
+  minio:
+    image: minio/minio:latest
+    container_name: taska-minio
+    networks: [taska-net]
+    env_file:
+      - .env.docker
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: taska-minio-init
+    networks: [taska-net]
+    env_file:
+      - .env.docker
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+        mc mb --ignore-existing local/$$MINIO_BUCKET_AVATARS &&
+        mc mb --ignore-existing local/$$MINIO_BUCKET_ATTACHMENTS &&
+        echo 'Buckets initialized'
+      "
+    restart: on-failure
 
   # --------------------
   # Postgres
