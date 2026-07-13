@@ -1,0 +1,33 @@
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Собранные артефакты
+**/target/
+*.class
+*.jar
+
+# Секреты — НИКОГДА не должны попадать в build context
+.env
+.env.*
+!.env.example
+
+# Docker-специфичные файлы
+**/Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Документация и инфра-конфиги
+README.md
+docs/
+infra/
+
+# Логи, временные файлы
+*.log
+.DS_Store

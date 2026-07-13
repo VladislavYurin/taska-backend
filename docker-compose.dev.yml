@@ -1,0 +1,135 @@
+services:
+  kafka:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:9092:9092"
+
+  kafbat-ui:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:8088:8080"
+
+  grafana:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  loki:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  promtail:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+
+  minio:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  minio-init:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+
+  pgadmin:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+     - "127.0.0.1:5050:80"
+
+  auth-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  project-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5434:5432"
+
+  workflow-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5435:5432"
+
+  issue-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5436:5432"
+
+  notification-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5437:5432"
+
+  auth-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:9091:9090"
+
+  project-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8082:8080"
+      - "127.0.0.1:9096:9090"
+
+  workflow-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8083:8080"
+      - "127.0.0.1:9093:9090"
+
+  issue-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8084:8080"
+      - "127.0.0.1:9094:9090"
+
+  notification-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8085:8080"
+      - "127.0.0.1:9095:9090"
+
+  api-gateway:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8080:8080"
