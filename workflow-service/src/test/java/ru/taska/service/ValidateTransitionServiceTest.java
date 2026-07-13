@@ -8,25 +8,23 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.config.props.WorkflowProperties;
 import ru.taska.dto.TransitionViolation;
 import ru.taska.dto.TransitionViolationDto;
 import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowEntity;
-import ru.taska.mapper.IssueMapper;
+import ru.taska.domain.StatusCategory;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
-import ru.taska.repository.WorkflowRepository;
 
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
-class WorkflowServiceImplTest {
+class ValidateTransitionServiceTest {
 
     @Mock
-    private WorkflowRepository workflowRepository;
+    private WorkflowResolver workflowResolver;
 
     @Mock
     private StatusRepository statusRepository;
@@ -34,17 +32,8 @@ class WorkflowServiceImplTest {
     @Mock
     private TransitionRepository transitionRepository;
 
-    @Mock
-    private WorkflowProperties workflowProperties;
-
-    @Mock
-    private IssueMapper issueMapper;
-
-    @Mock
-    private WorkflowCreateService workflowCreateService;
-
     @InjectMocks
-    private WorkflowServiceImpl workflowService;
+    private ValidateTransitionService validateTransitionService;
 
     private UUID projectId;
     private UUID workflowId;
@@ -94,7 +83,7 @@ class WorkflowServiceImplTest {
                 .workflowId(workflowId)
                 .statusKey("TODO")
                 .name("To Do")
-                .category("TODO")
+                .category(StatusCategory.TODO)
                 .build();
 
         toStatus = StatusEntity.builder()
@@ -102,7 +91,7 @@ class WorkflowServiceImplTest {
                 .workflowId(workflowId)
                 .statusKey("IN_PROGRESS")
                 .name("In Progress")
-                .category("IN_PROGRESS")
+                .category(StatusCategory.IN_PROGRESS)
                 .build();
     }
 
@@ -110,7 +99,7 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_Success() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -127,7 +116,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.just(toStatus));
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -146,7 +135,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -164,7 +153,7 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_WorkflowNotFound_ShouldReturnViolation() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.empty());
@@ -173,7 +162,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.just(transition));
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -202,7 +191,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -215,7 +204,7 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_TransitionNotFound_ShouldReturnViolation() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -224,7 +213,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.empty());
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -252,7 +241,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType)
         );
@@ -265,7 +254,7 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_BothWorkflowAndTransitionNotFound_ShouldReturnBothViolations() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.empty());
@@ -274,7 +263,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.empty());
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -307,7 +296,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -329,7 +318,7 @@ class WorkflowServiceImplTest {
                 .name("Start Progress")
                 .build();
 
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -337,16 +326,8 @@ class WorkflowServiceImplTest {
         org.mockito.Mockito.when(transitionRepository.findById(transitionId))
                 .thenReturn(Mono.just(transitionWithDifferentWorkflow));
 
-        org.mockito.Mockito.when(statusRepository.findByWorkflowIdAndStatusKey(
-                        org.mockito.ArgumentMatchers.eq(workflowId),
-                        org.mockito.ArgumentMatchers.eq(currentStatusKey)))
-                .thenReturn(Mono.just(fromStatus));
-
-        org.mockito.Mockito.when(statusRepository.findById(toStatusId))
-                .thenReturn(Mono.just(toStatus));
-
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -378,23 +359,19 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
         org.mockito.Mockito.verify(transitionRepository).findById(transitionId);
 
-        org.mockito.Mockito.verify(statusRepository).findByWorkflowIdAndStatusKey(
-                org.mockito.ArgumentMatchers.eq(workflowId),
-                org.mockito.ArgumentMatchers.eq(currentStatusKey));
-
-        org.mockito.Mockito.verify(statusRepository).findById(toStatusId);
+        org.mockito.Mockito.verifyNoInteractions(statusRepository);
     }
 
     @Test
     void validateTransition_CurrentStatusNotFound_ShouldReturnViolation() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -408,7 +385,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.empty());
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -445,7 +422,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -462,34 +439,32 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_MultipleViolations_ShouldReturnAllViolations() {
         // Arrange
-        UUID differentWorkflowId = UUID.randomUUID();
-
-        TransitionEntity transitionWithDifferentWorkflow = TransitionEntity.builder()
-                .id(transitionId)
-                .workflowId(differentWorkflowId)
-                .fromStatusId(fromStatusId)
-                .toStatusId(toStatusId)
-                .name("Start Progress")
+        StatusEntity wrongFromStatus = StatusEntity.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .statusKey(currentStatusKey)
+                .name("To Do")
+                .category(StatusCategory.TODO)
                 .build();
 
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
 
         org.mockito.Mockito.when(transitionRepository.findById(transitionId))
-                .thenReturn(Mono.just(transitionWithDifferentWorkflow));
+                .thenReturn(Mono.just(transition));
 
         org.mockito.Mockito.when(statusRepository.findByWorkflowIdAndStatusKey(
                         org.mockito.ArgumentMatchers.eq(workflowId),
                         org.mockito.ArgumentMatchers.eq(currentStatusKey)))
-                .thenReturn(Mono.just(fromStatus));
+                .thenReturn(Mono.just(wrongFromStatus));
 
         org.mockito.Mockito.when(statusRepository.findById(toStatusId))
                 .thenReturn(Mono.empty());
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -506,11 +481,21 @@ class WorkflowServiceImplTest {
                     );
 
                     org.junit.jupiter.api.Assertions.assertNotNull(response.getViolations());
-                    org.junit.jupiter.api.Assertions.assertTrue(!response.getViolations().isEmpty());
+                    org.junit.jupiter.api.Assertions.assertEquals(2, response.getViolations().size());
+
+                    org.junit.jupiter.api.Assertions.assertEquals(
+                            TransitionViolation.FROM_STATUS_DOESNT_MATCH,
+                            response.getViolations().get(0).getTransitionViolation()
+                    );
+
+                    org.junit.jupiter.api.Assertions.assertEquals(
+                            TransitionViolation.TARGET_STATUS_NOT_FOUND,
+                            response.getViolations().get(1).getTransitionViolation()
+                    );
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -526,7 +511,7 @@ class WorkflowServiceImplTest {
     @Test
     void validateTransition_TargetStatusNotFound_ShouldReturnViolation() {
         // Arrange
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -543,7 +528,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.empty());
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -579,7 +564,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -605,7 +590,7 @@ class WorkflowServiceImplTest {
                 .name("Start Progress")
                 .build();
 
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -622,7 +607,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.just(toStatus));
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -654,7 +639,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 
@@ -672,7 +657,7 @@ class WorkflowServiceImplTest {
         // Arrange
         RuntimeException dbException = new RuntimeException("Connection refused");
 
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.error(dbException));
@@ -681,7 +666,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.just(transition));
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId, nodeId, projectId, issueType, transitionId,
                 currentStatusKey, payload, actorUserId
         );
@@ -694,7 +679,7 @@ class WorkflowServiceImplTest {
                 )
                 .verify();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
         org.mockito.Mockito.verify(transitionRepository).findById(transitionId);
@@ -712,7 +697,7 @@ class WorkflowServiceImplTest {
                 .workflowId(workflowId)
                 .statusKey(customCurrentStatusKey)
                 .name("Backlog")
-                .category("CUSTOM")
+                .category(StatusCategory.TODO)
                 .build();
 
         StatusEntity customToStatus = StatusEntity.builder()
@@ -720,10 +705,10 @@ class WorkflowServiceImplTest {
                 .workflowId(workflowId)
                 .statusKey(customTargetStatusKey)
                 .name("QA Review")
-                .category("CUSTOM")
+                .category(StatusCategory.IN_PROGRESS)
                 .build();
 
-        org.mockito.Mockito.when(workflowRepository.findWorkflowForProject(
+        org.mockito.Mockito.when(workflowResolver.resolveWorkflow(
                         org.mockito.ArgumentMatchers.eq(projectId),
                         org.mockito.ArgumentMatchers.eq(issueType)))
                 .thenReturn(Mono.just(workflow));
@@ -740,7 +725,7 @@ class WorkflowServiceImplTest {
                 .thenReturn(Mono.just(customToStatus));
 
         // Act
-        Mono<ValidateTransitionResponseDto> result = workflowService.validateTransition(
+        Mono<ValidateTransitionResponseDto> result = validateTransitionService.validateTransition(
                 requestId,
                 nodeId,
                 projectId,
@@ -767,7 +752,7 @@ class WorkflowServiceImplTest {
                 })
                 .verifyComplete();
 
-        org.mockito.Mockito.verify(workflowRepository).findWorkflowForProject(
+        org.mockito.Mockito.verify(workflowResolver).resolveWorkflow(
                 org.mockito.ArgumentMatchers.eq(projectId),
                 org.mockito.ArgumentMatchers.eq(issueType));
 

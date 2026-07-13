@@ -9,6 +9,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import ru.taska.domain.StatusCategory;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -58,7 +59,7 @@ public class StatusEntity {
      * Пример: TODO / IN_PROGRESS / DONE.
      */
     @Column("category")
-    private String category;
+    private StatusCategory category;
 
     /**
      * Определяет порядок отображения статусов внутри workflow (например, порядок колонок на доске).
