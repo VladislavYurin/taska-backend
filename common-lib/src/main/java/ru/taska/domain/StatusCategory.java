@@ -1,5 +1,5 @@
 package ru.taska.domain;
 
-public enum IssueStatus {
+public enum StatusCategory {
     TODO, IN_PROGRESS, DONE
 }

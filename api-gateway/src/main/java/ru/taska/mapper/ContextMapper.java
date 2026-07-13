@@ -18,7 +18,8 @@ public class ContextMapper {
                 proto.getLogin(),
                 proto.getEmail(),
                 proto.getDisplayName(),
-                authMapper.toGatewayUserStatus(proto.getStatus())
+                authMapper.toGatewayUserStatus(proto.getStatus()),
+                authMapper.toGlobalRole(proto.getGlobalRole())
         );
     }
 }

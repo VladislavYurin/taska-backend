@@ -14,7 +14,6 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
@@ -55,8 +54,8 @@ class IssueTransitionProcessorImplTest {
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
     private static final String PAYLOAD = "some-kind-of-payload";
-    private static final IssueStatus SOURCE_STATUS = IssueStatus.TODO;
-    private static final IssueStatus TARGET_STATUS = IssueStatus.IN_PROGRESS;
+    private static final String SOURCE_STATUS_KEY = "TODO";
+    private static final String TARGET_STATUS_KEY = "IN_PROGRESS";
 
     private Set<ProjectRole> allowedRoles;
 
@@ -101,13 +100,13 @@ class IssueTransitionProcessorImplTest {
                         Mockito.anyString()
 
                 ))
-                .thenReturn(Mono.just(TARGET_STATUS));
+                .thenReturn(Mono.just(TARGET_STATUS_KEY));
 
         Mockito.when(executor.executeTransition(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(IssueStatus.class),
+                        Mockito.anyString(),
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class)
                 ))
@@ -134,7 +133,7 @@ class IssueTransitionProcessorImplTest {
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
 
         Mockito.verify(executor, Mockito.times(1))
-                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS, TRANSITION_ID, ACTOR_USER_ID);
+                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID);
     }
 
     @Test
@@ -217,7 +216,7 @@ class IssueTransitionProcessorImplTest {
         var issue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
-                .statusKey(SOURCE_STATUS)
+                .statusKey(SOURCE_STATUS_KEY)
                 .build();
 
         var expectedResponse = Mockito.mock(IssueWithHistory.class);
@@ -245,13 +244,13 @@ class IssueTransitionProcessorImplTest {
                         Mockito.any(UUID.class),
                         Mockito.anyString()
                 ))
-                .thenReturn(Mono.just(TARGET_STATUS));
+                .thenReturn(Mono.just(TARGET_STATUS_KEY));
 
         Mockito.when(executor.executeTransition(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(IssueStatus.class),
+                        Mockito.anyString(),
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class)
                 ))
@@ -285,7 +284,7 @@ class IssueTransitionProcessorImplTest {
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
 
         Mockito.verify(executor, Mockito.times(2))
-                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS, TRANSITION_ID, ACTOR_USER_ID);
+                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID);
     }
 
 }

@@ -14,4 +14,6 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
 
     @Query("SELECT * FROM taska.users WHERE email = :email")
     Mono<User> findByEmail(String email);
+
+    Mono<Boolean> existsByLogin(String login);
 }

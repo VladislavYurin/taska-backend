@@ -16,9 +16,15 @@ COPY admin-service ./admin-service
 RUN mvn -q -DskipTests -pl api-gateway -am clean package
 
 FROM eclipse-temurin:21-jre
+
+RUN addgroup --system app && \
+    adduser --system --no-create-home --disabled-login --disabled-password --ingroup app app
+
 WORKDIR /app
 
 COPY --from=build /workspace/api-gateway/target/*.jar app.jar
+RUN chown -R app:app /app
 
+USER app
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]

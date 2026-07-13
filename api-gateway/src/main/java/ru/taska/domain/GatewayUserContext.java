@@ -12,6 +12,7 @@ import lombok.Builder;
  * @param email       адрес электронной почты пользователя
  * @param displayName отображаемое имя пользователя
  * @param status      статус учётной записи пользователя
+ * @param globalRole  глобальная роль пользователя
  */
 @Builder
 public record GatewayUserContext(
@@ -19,6 +20,7 @@ public record GatewayUserContext(
         String login,
         String email,
         String displayName,
-        GatewayUserStatus status
+        GatewayUserStatus status,
+        GlobalRole globalRole
 ) {
 }

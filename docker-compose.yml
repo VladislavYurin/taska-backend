@@ -1,9 +1,12 @@
-version: "3.9"
-
 name: taska
 
 networks:
-  taska-net:
+  taskanetwork:
+    name: taskanetwork
+    driver: bridge
+  public:
+    name: public
+    driver: bridge
 
 volumes:
   pg_auth_data:
@@ -12,8 +15,39 @@ volumes:
   pg_issue_data:
   pg_notification_data:
   pg_admin_data:
+  pgadmin_data:
   kafka_data:
   grafana_data:
+  minio_data:
+
+  # --------------------
+  # Базовые настройки для сервисов
+  # --------------------
+x-app-defaults: &app-defaults
+  restart: unless-stopped
+  env_file:
+    - .env
+  healthcheck:
+    test: "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"
+    interval: 10s
+    timeout: 5s
+    retries: 12
+
+  # --------------------
+  # Базовые настройки для БД
+  # --------------------
+x-postgres-defaults: &postgres-defaults
+  image: postgres:16
+  networks:
+    - taskanetwork
+  restart: unless-stopped
+  healthcheck:
+    test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+  env_file:
+    - .env
 
 services:
   # --------------------
@@ -22,14 +56,15 @@ services:
   kafka:
     image: apache/kafka:3.9.1
     container_name: taska-kafka
-    networks: [taska-net]
+    networks:
+     - taskanetwork
+    restart: unless-stopped
     env_file:
-      - .env.docker
-    ports:
-      - "9092:9092"   # external access from host
-
+      - .env
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1 || exit 1"]
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1 || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -39,17 +74,19 @@ services:
   # --------------------
   kafbat-ui:
     container_name: taska-kafka-ui
-    image: ghcr.io/kafbat/kafka-ui
-    networks: [ taska-net ]
-    ports:
-      - "8088:8080"
+    image: ghcr.io/kafbat/kafka-ui:260f9e8
+    networks:
+      - taskanetwork
+      - public
+    restart: unless-stopped
     depends_on:
       kafka:
         condition: service_healthy
     environment:
-      DYNAMIC_CONFIG_ENABLED: 'true'
-      KAFKA_CLUSTERS_0_NAME: taska-kafka
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: ${DYNAMIC_CONFIG_ENABLED}
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_CLUSTERS_0_NAME}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+
 
   # --------------------
   # Loki
@@ -57,9 +94,9 @@ services:
   loki:
     image: grafana/loki:3.7.3
     container_name: taska-loki
-    networks: [ taska-net ]
-    ports:
-      - "3100:3100"
+    networks:
+      - taskanetwork
+    restart: unless-stopped
     command: -config.file=/etc/loki/local-config.yaml
 
   # --------------------
@@ -68,14 +105,17 @@ services:
   promtail:
     image: grafana/promtail:3.6.11
     container_name: taska-promtail
-    networks: [ taska-net ]
+    networks:
+      - taskanetwork
+    restart: unless-stopped
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ./infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/config.yml
     depends_on:
-      - loki
+      loki:
+        condition: service_started
 
   # --------------------
   # Grafana
@@ -83,263 +123,252 @@ services:
   grafana:
     image: grafana/grafana:11.6.16
     container_name: taska-grafana
-    networks: [ taska-net ]
-    ports:
-      - "3000:3000"
+    networks:
+      - taskanetwork
+      - public
+    restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
     env_file:
-      - .env.docker
+      - .env
     depends_on:
-      - loki
+      loki:
+        condition: service_started
+
+  # --------------------
+  # MinIO
+  # --------------------
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    container_name: taska-minio
+    networks:
+      - taskanetwork
+      - public
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
+    container_name: taska-minio-init
+    networks:
+      - taskanetwork
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+        mc mb --ignore-existing local/$$MINIO_BUCKET_AVATARS &&
+        mc mb --ignore-existing local/$$MINIO_BUCKET_ATTACHMENTS &&
+        echo 'Buckets initialized'
+      "
 
   # --------------------
   # Postgres
   # --------------------
-  auth-db:
-    image: postgres:16
-    container_name: taska-auth-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5433:5432"
+  pgadmin:
+    image: dpage/pgadmin4:9.3
+    container_name: taska-pgadmin
+    networks:
+      - taskanetwork
+      - public
+    restart: unless-stopped
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
     environment:
-      - POSTGRES_DB=auth_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      project-db:
+        condition: service_healthy
+      issue-db:
+        condition: service_healthy
+      workflow-db:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+
+  auth-db:
+    <<: *postgres-defaults
+    container_name: taska-auth-db
+    environment:
+      - POSTGRES_DB=${AUTH_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_auth_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d auth_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   project-db:
-    image: postgres:16
+    <<: *postgres-defaults
     container_name: taska-project-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5434:5432"
     environment:
-      - POSTGRES_DB=project_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - POSTGRES_DB=${PROJECT_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_project_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d project_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   workflow-db:
-    image: postgres:16
+    <<: *postgres-defaults
     container_name: taska-workflow-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5435:5432"
     environment:
-      - POSTGRES_DB=workflow_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - POSTGRES_DB=${WORKFLOW_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_workflow_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d workflow_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   issue-db:
-    image: postgres:16
+    <<: *postgres-defaults
     container_name: taska-issue-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5436:5432"
     environment:
-      - POSTGRES_DB=issue_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - POSTGRES_DB=${ISSUE_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_issue_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d issue_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   notification-db:
-    image: postgres:16
+    <<: *postgres-defaults
     container_name: taska-notification-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5437:5432"
     environment:
-      - POSTGRES_DB=notification_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - POSTGRES_DB=${NOTIFICATION_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_notification_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d notification_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   admin-db:
-    image: postgres:16
+    <<: *postgres-defaults
     container_name: taska-admin-db
-    networks: [taska-net]
-    env_file:
-      - .env.docker
-    ports:
-      - "5438:5432"
     environment:
-      - POSTGRES_DB=taska_admin_db
-      - POSTGRES_USER=taska
-      - POSTGRES_PASSWORD=taska
+      - POSTGRES_DB=${ADMIN_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pg_admin_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taska -d taska_admin_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 
   # --------------------
   # Microservices
   # --------------------
   auth-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: auth-service/Dockerfile
     container_name: taska-auth-service
-    networks: [taska-net]
     depends_on:
       kafka:
         condition: service_healthy
       auth-db:
         condition: service_healthy
-    env_file:
-      - .env.docker
-    ports:
-      - "8081:8080"
-      - "9091:9090"
 
   project-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: project-service/Dockerfile
     container_name: taska-project-service
-    networks: [taska-net]
     depends_on:
       kafka:
         condition: service_healthy
       project-db:
         condition: service_healthy
-    env_file:
-      - .env.docker
-    ports:
-      - "8082:8080"
-      - "9096:9090"
 
   workflow-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: workflow-service/Dockerfile
     container_name: taska-workflow-service
-    networks: [taska-net]
     depends_on:
       workflow-db:
         condition: service_healthy
-    env_file:
-      - .env.docker
-    ports:
-      - "8083:8080"
-      - "9093:9090"
 
   issue-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: issue-service/Dockerfile
     container_name: taska-issue-service
-    networks: [taska-net]
     depends_on:
       kafka:
         condition: service_healthy
       issue-db:
         condition: service_healthy
       project-service:
-        condition: service_started
+        condition: service_healthy
       workflow-service:
-        condition: service_started
-    env_file:
-      - .env.docker
-    ports:
-      - "8084:8080"
-      - "9094:9090"
+        condition: service_healthy
 
   notification-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: taska-notification-service
-    networks: [taska-net]
     depends_on:
       kafka:
         condition: service_healthy
       notification-db:
         condition: service_healthy
-    env_file:
-      - .env.docker
-    ports:
-      - "8085:8080"
-      - "9095:9090"
 
   admin-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
     build:
       context: .
       dockerfile: admin-service/Dockerfile
     container_name: taska-admin-service
-    networks: [taska-net]
     depends_on:
       admin-db:
         condition: service_healthy
-    env_file:
-      - .env.docker
-    ports:
-      - "8086:8080"
-      - "9097:9090"
 
   api-gateway:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
+      - public
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
     container_name: taska-api-gateway
-    networks: [taska-net]
     depends_on:
       auth-service:
-        condition: service_started
+        condition: service_healthy
       project-service:
-        condition: service_started
+        condition: service_healthy
       issue-service:
-        condition: service_started
+        condition: service_healthy
       workflow-service:
-        condition: service_started
+        condition: service_healthy
       notification-service:
-        condition: service_started
-    env_file:
-      - .env.docker
-    ports:
-      - "8080:8080"
+        condition: service_healthy

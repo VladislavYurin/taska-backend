@@ -26,6 +26,7 @@ import ru.taska.security.RefreshTokenService;
 import ru.taska.security.config.SecurityProperties;
 import ru.taska.service.AuthService;
 import ru.taska.util.DataMaskingHelper;
+import ru.taska.util.GlobalRoleMapper;
 import ru.taska.util.JwtValidator;
 import ru.taska.util.PasswordValidator;
 import ru.taska.util.UserStatusMapper;
@@ -216,6 +217,7 @@ public class AuthServiceImpl implements AuthService {
                 .setEmail(user.getEmail())
                 .setDisplayName(user.getDisplayName())
                 .setStatus(UserStatusMapper.toProtoStatus(user.getStatus()))
+                .setGlobalRole(GlobalRoleMapper.toProtoGlobalRole(user.getGlobalRole()))
                 .build();
     }
 

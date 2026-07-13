@@ -16,7 +16,6 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
@@ -43,7 +42,7 @@ public class IssueMapper {
             String description,
             IssuePriority priority,
             UUID reporterId,
-            IssueStatus initStatus,
+            String initStatus,
             int initVersion
     ) {
         return Issue.builder()
@@ -103,7 +102,7 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setSummary(issue.getSummary())
                 .setDescription(issue.getDescription() != null ? issue.getDescription() : "")
-                .setStatusKey(toProtoIssueStatus(issue.getStatusKey()))
+                .setStatusKey(issue.getStatusKey())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
                 .setReporterId(issue.getReporterId().toString())
@@ -175,7 +174,7 @@ public class IssueMapper {
                 .setIssueId(issue.getId().toString())
                 .setProjectId(issue.getProjectId().toString())
                 .setIssueType(toWorkflowProtoIssueType(issue.getIssueType()))
-                .setStatusKey(toWorkflowProtoIssueStatus(issue.getStatusKey()))
+                .setStatusKey(issue.getStatusKey())
                 .build();
     }
 
@@ -185,24 +184,6 @@ public class IssueMapper {
             case ISSUE_TYPE_BUG -> IssueType.BUG;
             case ISSUE_TYPE_STORY -> IssueType.STORY;
             default -> throw new IllegalArgumentException("Unknown IssueType: " + proto);
-        };
-    }
-
-    public IssueStatus toDomainIssueStatus(ru.taska.api.issue.v1.IssueStatus proto) {
-        return switch (proto) {
-            case ISSUE_STATUS_TODO -> IssueStatus.TODO;
-            case ISSUE_STATUS_IN_PROGRESS -> IssueStatus.IN_PROGRESS;
-            case ISSUE_STATUS_DONE -> IssueStatus.DONE;
-            default -> throw new IllegalArgumentException("Unknown IssueStatus: " + proto);
-        };
-    }
-
-    public IssueStatus toDomainIssueStatus(ru.taska.api.workflow.v1.IssueStatus proto) {
-        return switch (proto) {
-            case ISSUE_STATUS_TODO -> IssueStatus.TODO;
-            case ISSUE_STATUS_IN_PROGRESS -> IssueStatus.IN_PROGRESS;
-            case ISSUE_STATUS_DONE -> IssueStatus.DONE;
-            default -> throw new IllegalArgumentException("Unknown IssueStatus: " + proto);
         };
     }
 
@@ -246,22 +227,6 @@ public class IssueMapper {
             case LOW -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW;
             case MEDIUM -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case HIGH -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH;
-        };
-    }
-
-    private ru.taska.api.issue.v1.IssueStatus toProtoIssueStatus(IssueStatus domain) {
-        return switch (domain) {
-            case TODO -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_TODO;
-            case IN_PROGRESS -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_IN_PROGRESS;
-            case DONE -> ru.taska.api.issue.v1.IssueStatus.ISSUE_STATUS_DONE;
-        };
-    }
-
-    private ru.taska.api.workflow.v1.IssueStatus toWorkflowProtoIssueStatus(IssueStatus domain) {
-        return switch (domain) {
-            case TODO -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_TODO;
-            case IN_PROGRESS -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_IN_PROGRESS;
-            case DONE -> ru.taska.api.workflow.v1.IssueStatus.ISSUE_STATUS_DONE;
         };
     }
 

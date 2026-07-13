@@ -13,7 +13,6 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.OutboxEvent;
@@ -49,7 +48,7 @@ import java.util.UUID;
 public class IssueServiceImpl implements IssueService {
 
     private static final int INIT_VERSION = 1;
-    private static final IssueStatus INIT_STATUS = IssueStatus.TODO;
+    private static final String INIT_STATUS = "TODO";
 
     private final IssueProperties issueProperties;
     private final GrpcProjectServiceClient grpcProjectServiceClient;
@@ -300,7 +299,7 @@ public class IssueServiceImpl implements IssueService {
             String nodeId,
             UUID projectId,
             UUID actorUserId,
-            IssueStatus status,
+            String statusKey,
             UUID assigneeId,
             Integer page,
             Integer pageSize
@@ -313,8 +312,8 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(Mono.zip(
-                        issueRepository.countByFilter(projectId, status, assigneeId),
-                        issueRepository.findByFilter(projectId, status, assigneeId, resolvedPageSize, offset)
+                        issueRepository.countByFilter(projectId, statusKey, assigneeId),
+                        issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset)
                                 .collectList()
                 ).map(t -> new PageResult<>(t.getT2(), t.getT1())));
     }

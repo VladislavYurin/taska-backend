@@ -3,7 +3,6 @@ package ru.taska.service;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
@@ -50,7 +49,7 @@ public interface IssueService {
             String nodeId,
             UUID projectId,
             UUID actorUserId,
-            IssueStatus status,
+            String status,
             UUID assigneeId,
             Integer page,
             Integer pageSize

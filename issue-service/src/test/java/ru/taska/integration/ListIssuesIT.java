@@ -14,7 +14,6 @@ import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueService;
@@ -41,15 +40,18 @@ class ListIssuesIT extends AbstractIT {
     private static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
+    private static final String ISSUE_STATUS_KEY_TODO = "TODO";
+    private static final String ISSUE_STATUS_KEY_DONE = "DONE";
+    private static final String ISSUE_STATUS_KEY_IN_PROGRESS = "IN_PROGRESS";
 
-    private final Issue issue1 = buildIssue(1, PROJECT_ID_1, IssueStatus.TODO, ASSIGNEE_ID_1);
-    private final Issue issue2 = buildIssue(2, PROJECT_ID_1, IssueStatus.TODO, ASSIGNEE_ID_2);
-    private final Issue issue3 = buildIssue(3, PROJECT_ID_1, IssueStatus.DONE, ASSIGNEE_ID_1);
-    private final Issue issue4 = buildIssue(4, PROJECT_ID_1, IssueStatus.DONE, ASSIGNEE_ID_2);
-    private final Issue issue5 = buildIssue(5, PROJECT_ID_2, IssueStatus.TODO, ASSIGNEE_ID_1);
-    private final Issue issue6 = buildIssue(6, PROJECT_ID_2, IssueStatus.TODO, ASSIGNEE_ID_2);
-    private final Issue issue7 = buildIssue(7, PROJECT_ID_2, IssueStatus.DONE, ASSIGNEE_ID_1);
-    private final Issue issue8 = buildIssue(8, PROJECT_ID_2, IssueStatus.DONE, ASSIGNEE_ID_2);
+    private final Issue issue1 = buildIssue(1, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1);
+    private final Issue issue2 = buildIssue(2, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_2);
+    private final Issue issue3 = buildIssue(3, PROJECT_ID_1, ISSUE_STATUS_KEY_DONE, ASSIGNEE_ID_1);
+    private final Issue issue4 = buildIssue(4, PROJECT_ID_1, ISSUE_STATUS_KEY_DONE, ASSIGNEE_ID_2);
+    private final Issue issue5 = buildIssue(5, PROJECT_ID_2, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1);
+    private final Issue issue6 = buildIssue(6, PROJECT_ID_2, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_2);
+    private final Issue issue7 = buildIssue(7, PROJECT_ID_2, ISSUE_STATUS_KEY_DONE, ASSIGNEE_ID_1);
+    private final Issue issue8 = buildIssue(8, PROJECT_ID_2, ISSUE_STATUS_KEY_DONE, ASSIGNEE_ID_2);
 
     private final List<Issue> issues = List.of(issue1, issue2, issue3, issue4, issue5, issue6, issue7, issue8);
 
@@ -69,7 +71,7 @@ class ListIssuesIT extends AbstractIT {
                         .build()));
     }
 
-    private Issue buildIssue(int number, UUID projectId, IssueStatus status, UUID assigneeId) {
+    private Issue buildIssue(int number, UUID projectId, String status, UUID assigneeId) {
         return Issue.builder()
                 .projectId(projectId)
                 .issueNumber(number)
@@ -116,7 +118,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProjectAndStatus() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        IssueStatus.TODO, null, 0, 50)
+                        ISSUE_STATUS_KEY_TODO, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
@@ -130,7 +132,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProjectAndStatusAndAssignee() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        IssueStatus.TODO, ASSIGNEE_ID_1, 0, 50)
+                        ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
@@ -144,7 +146,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnEmptyPageIfNothingMatches() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        IssueStatus.IN_PROGRESS, ASSIGNEE_ID_1, 0, 50)
+                        ISSUE_STATUS_KEY_IN_PROGRESS, ASSIGNEE_ID_1, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isZero();

@@ -74,7 +74,7 @@ public class Issue {
      * Текущий статус задачи (TODO / IN_PROGRESS / DONE).
      */
     @Column("status_key")
-    private IssueStatus statusKey;
+    private String statusKey;
 
     /**
      * Приоритет задачи (LOW / MEDIUM / HIGH).

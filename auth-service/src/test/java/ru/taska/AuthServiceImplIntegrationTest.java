@@ -32,6 +32,7 @@ import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.api.auth.v1.RefreshResponse;
 import ru.taska.api.common.v1.Header;
+import ru.taska.domain.GlobalRole;
 import ru.taska.entity.Credential;
 import ru.taska.entity.CredentialType;
 import ru.taska.entity.HashingAlgorithm;
@@ -158,6 +159,7 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .email(testEmail)
                 .displayName("Test User")
                 .status(UserStatus.ACTIVE)
+                .globalRole(GlobalRole.USER)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();

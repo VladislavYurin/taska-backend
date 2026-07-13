@@ -1,0 +1,93 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    branches: [ master, develop ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: codex-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Detailed AI review
+    runs-on: ubuntu-latest
+    if: >-
+      vars.AI_REVIEW_ENABLED == 'true' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      AI_REVIEW_PROVIDER: ${{ vars.AI_REVIEW_PROVIDER || 'openai' }}
+
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch PR branches
+        run: |
+          git fetch --no-tags origin \
+            "+refs/heads/${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}" \
+            "+refs/heads/${{ github.event.pull_request.head.ref }}:refs/remotes/origin/${{ github.event.pull_request.head.ref }}"
+
+      - name: Validate AI review provider
+        run: |
+          case "$AI_REVIEW_PROVIDER" in
+            openai|deepseek) ;;
+            *)
+              echo "Unsupported AI_REVIEW_PROVIDER: $AI_REVIEW_PROVIDER"
+              echo "Use 'openai' or 'deepseek'."
+              exit 1
+              ;;
+          esac
+
+      - name: Run Codex review
+        id: run_codex
+        if: env.AI_REVIEW_PROVIDER == 'openai'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/codex/prompts/review.md
+          output-file: codex-output.json
+          output-schema-file: .github/codex/schemas/review-output.json
+          permission-profile: ":read-only"
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+
+      - name: Run DeepSeek review
+        if: env.AI_REVIEW_PROVIDER == 'deepseek'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          DEEPSEEK_MAX_DIFF_LINES: ${{ vars.DEEPSEEK_MAX_DIFF_LINES || '6000' }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash .github/codex/scripts/deepseek-pr-review.sh
+
+      - name: Post or update PR review comment
+        uses: actions/github-script@v7
+        env:
+          REVIEW_PROVIDER: ${{ env.AI_REVIEW_PROVIDER }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const publishReview = require('./.github/codex/scripts/publish-review.js');
+            await publishReview({ github, context, core });

@@ -10,12 +10,15 @@ import reactor.test.StepVerifier;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.IssueStatus;
 import ru.taska.domain.IssueType;
 
 import java.util.Set;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 
 class ListIssuesTest extends IssueServiceImplTest {
 
@@ -43,7 +46,7 @@ class ListIssuesTest extends IssueServiceImplTest {
                 .issueNumber(1)
                 .issueType(IssueType.TASK)
                 .summary("Задача")
-                .statusKey(IssueStatus.TODO)
+                .statusKey("TODO")
                 .priority(IssuePriority.MEDIUM)
                 .reporterId(REPORTER_ID)
                 .build();
@@ -59,7 +62,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        IssueStatus.TODO, ASSIGNEE_ID, 0, 10)
+                        "TODO", ASSIGNEE_ID, 0, 10)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
@@ -130,7 +133,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        IssueStatus.TODO, null, 0, 10)
+                        "TODO", null, 0, 10)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
@@ -270,5 +273,167 @@ class ListIssuesTest extends IssueServiceImplTest {
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
+    }
+
+    @Test
+    void shouldReturnIssuesWithAllStatusesWhenStatusKeyIsNull() {
+        Issue firstIssue = buildIssue();
+        Issue secondIssue = buildIssue();
+        Issue thirdIssue = buildIssue();
+
+        firstIssue.setStatusKey("TODO");
+        secondIssue.setStatusKey("IN_PROGRESS");
+        thirdIssue.setStatusKey("DONE");
+
+        Mockito.when(issueRepository.countByFilter(
+                        eq(PROJECT_ID),
+                        isNull(),
+                        eq(ASSIGNEE_ID)
+                ))
+                .thenReturn(Mono.just(3L));
+
+        Mockito.when(issueRepository.findByFilter(
+                        eq(PROJECT_ID),
+                        isNull(),
+                        eq(ASSIGNEE_ID),
+                        anyInt(),
+                        anyLong()
+                ))
+                .thenReturn(Flux.just(firstIssue, secondIssue, thirdIssue));
+
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
+                        null, ASSIGNEE_ID, 0, 10
+                ))
+                .assertNext(result -> {
+                    Assertions.assertThat(result.totalCount()).isEqualTo(3);
+                    Assertions.assertThat(result.items())
+                            .extracting(Issue::getStatusKey)
+                            .containsExactly("TODO", "IN_PROGRESS", "DONE");
+                })
+                .verifyComplete();
+
+        Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
+        );
+
+        Mockito.verify(issueRepository).countByFilter(
+                eq(PROJECT_ID),
+                isNull(),
+                eq(ASSIGNEE_ID)
+        );
+
+        Mockito.verify(issueRepository).findByFilter(
+                eq(PROJECT_ID),
+                isNull(),
+                eq(ASSIGNEE_ID),
+                anyInt(),
+                anyLong()
+        );
+    }
+
+    @Test
+    void shouldReturnOnlyIssuesWithRequestedArbitraryStatusKey() {
+        Issue issue = buildIssue();
+        issue.setStatusKey("IN_REVIEW");
+
+        Mockito.when(issueRepository.countByFilter(
+                        eq(PROJECT_ID),
+                        eq("IN_REVIEW"),
+                        eq(ASSIGNEE_ID)
+                ))
+                .thenReturn(Mono.just(1L));
+
+        Mockito.when(issueRepository.findByFilter(
+                        eq(PROJECT_ID),
+                        eq("IN_REVIEW"),
+                        eq(ASSIGNEE_ID),
+                        anyInt(),
+                        anyLong()
+                ))
+                .thenReturn(Flux.just(issue));
+
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
+                        "IN_REVIEW", ASSIGNEE_ID, 0, 10
+                ))
+                .assertNext(result -> {
+                    Assertions.assertThat(result.totalCount()).isEqualTo(1);
+                    Assertions.assertThat(result.items()).containsExactly(issue);
+                    Assertions.assertThat(result.items())
+                            .extracting(Issue::getStatusKey)
+                            .containsExactly("IN_REVIEW");
+                })
+                .verifyComplete();
+
+        Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
+        );
+
+        Mockito.verify(issueRepository).countByFilter(
+                eq(PROJECT_ID),
+                eq("IN_REVIEW"),
+                eq(ASSIGNEE_ID)
+        );
+
+        Mockito.verify(issueRepository).findByFilter(
+                eq(PROJECT_ID),
+                eq("IN_REVIEW"),
+                eq(ASSIGNEE_ID),
+                anyInt(),
+                anyLong()
+        );
+    }
+
+    @Test
+    void shouldReturnEmptyPageWhenStatusKeyIsUnknownButValidString() {
+        String unknownStatusKey = "READY_FOR_TESTING";
+
+        Mockito.when(issueRepository.countByFilter(
+                        eq(PROJECT_ID),
+                        eq(unknownStatusKey),
+                        eq(ASSIGNEE_ID)
+                ))
+                .thenReturn(Mono.just(0L));
+
+        Mockito.when(issueRepository.findByFilter(
+                        eq(PROJECT_ID),
+                        eq(unknownStatusKey),
+                        eq(ASSIGNEE_ID),
+                        anyInt(),
+                        anyLong()
+                ))
+                .thenReturn(Flux.empty());
+
+        StepVerifier.create(issueService.listIssues(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
+                        unknownStatusKey, ASSIGNEE_ID, 0, 10
+                ))
+                .assertNext(result -> {
+                    Assertions.assertThat(result.totalCount()).isZero();
+                    Assertions.assertThat(result.items()).isEmpty();
+                })
+                .verifyComplete();
+
+        Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
+        Mockito.verify(projectRoleChecker).checkProjectRole(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
+        );
+
+        Mockito.verify(issueRepository).countByFilter(
+                eq(PROJECT_ID),
+                eq(unknownStatusKey),
+                eq(ASSIGNEE_ID)
+        );
+
+        Mockito.verify(issueRepository).findByFilter(
+                eq(PROJECT_ID),
+                eq(unknownStatusKey),
+                eq(ASSIGNEE_ID),
+                anyInt(),
+                anyLong()
+        );
     }
 }

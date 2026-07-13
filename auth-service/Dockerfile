@@ -16,9 +16,15 @@ COPY admin-service ./admin-service
 RUN mvn -q -DskipTests -pl auth-service -am clean package
 
 FROM eclipse-temurin:21-jre
+
+RUN addgroup --system app && \
+    adduser --system --no-create-home --disabled-login --disabled-password --ingroup app app
+
 WORKDIR /app
 
 COPY --from=build /workspace/auth-service/target/*.jar app.jar
+RUN chown -R app:app /app
 
-EXPOSE 8080 9090
+USER app
+EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]

@@ -15,11 +15,14 @@ enum IssueType {
   ISSUE_TYPE_STORY = 3;
 }
 
-enum IssueStatus {
-  ISSUE_STATUS_UNSPECIFIED = 0;
-  ISSUE_STATUS_TODO = 1;
-  ISSUE_STATUS_IN_PROGRESS = 2;
-  ISSUE_STATUS_DONE = 3;
+/**
+ * Логическая категория статуса для группировки и семантической интерпретации.
+ */
+enum StatusCategory {
+  STATUS_CATEGORY_UNSPECIFIED = 0;
+  STATUS_CATEGORY_TODO = 1;
+  STATUS_CATEGORY_IN_PROGRESS = 2;
+  STATUS_CATEGORY_DONE = 3;
 }
 
 service WorkflowService {
@@ -27,13 +30,19 @@ service WorkflowService {
    * Возвращает workflow, привязанный к (project_id, issue_type).
    */
   rpc GetWorkflowForProject(GetWorkflowForProjectRequest)
-      returns (GetWorkflowForProjectResponse);
+      returns (WorkflowResponse);
 
   /**
    * Валидирует переход по workflow.
    */
   rpc ValidateTransition(ValidateTransitionRequest)
       returns (ValidateTransitionResponse);
+
+  /**
+   * Создаёт новый workflow с набором статусов и переходов.
+   */
+  rpc CreateWorkflow(CreateWorkflowRequest)
+      returns (WorkflowResponse);
 }
 
 message GetWorkflowForProjectRequest {
@@ -57,13 +66,13 @@ message GetWorkflowForProjectRequestBody {
   /**
    * Тип задачи (например: TASK / BUG / STORY).
    */
-  string issue_type = 2;
+  IssueType issue_type = 2;
 }
 
 /**
  * Ответ с данными workflow.
  */
-message GetWorkflowForProjectResponse {
+message WorkflowResponse {
   /**
    * Идентификатор Workflow.
    */
@@ -123,7 +132,7 @@ message WorkflowStatus {
    * Логическая категория статуса для группировки и семантической интерпретации.
    * Пример: TODO / IN_PROGRESS / DONE.
    */
-  string category = 4;
+  StatusCategory category = 4;
 
   /**
    * Определяет порядок отображения статусов внутри workflow (например, порядок колонок на доске).
@@ -232,7 +241,7 @@ message IssueValidateSnapshot {
   /**
    * Текущий статус задачи.
    */
-  IssueStatus status_key = 4;
+  string status_key = 4;
 }
 
 message ValidateTransitionResponse {
@@ -256,7 +265,7 @@ message ValidateTransitionResponseBody {
   /**
    * Целевой статус (состояние задачи после перехода).
    */
-  IssueStatus to_status_key = 2;
+  string to_status_key = 2;
 
   /**
    * Список нарушений, если переход заблокирован.
@@ -274,4 +283,98 @@ message TransitionViolation {
    * Сообщение нарушения.
    */
   string message = 2;
+}
+
+message WorkflowStatusCreateRequest {
+  /**
+   * Произвольный стабильный ключ статуса. Пример: TODO / IN_PROGRESS / DONE / BACKLOG / DEV / QA
+   */
+  string status_key = 1;
+
+  /**
+   * Отображаемое имя статуса в пользовательском интерфейсе.
+   */
+  string name = 2;
+
+  /**
+   * Одна из системных категорий для группировки/семантики
+   */
+  StatusCategory category = 3;
+
+  /**
+   * Порядок отображения статуса внутри workflow.
+   */
+  int32 sort_order = 4;
+}
+
+message WorkflowTransitionCreateRequest {
+  /**
+   * Ключ исходного статуса.
+   */
+  string from_status_key = 1;
+
+  /**
+   * Ключ целевого статуса.
+   */
+  string to_status_key = 2;
+
+  /**
+   * Отображаемое имя перехода в пользовательском интерфейсе.
+   */
+  string name = 3;
+
+  /**
+   * Порядок отображения переходов.
+   */
+  int32 sort_order = 4;
+
+  /**
+   * Признак скрытого перехода (не отображается в UI, но доступен программно).
+   */
+  bool is_hidden = 5;
+}
+
+message CreateWorkflowRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Отображаемое имя workflow.
+   */
+  string name = 2;
+
+  /**
+   * Типы задач, к которым применяется данный workflow.
+   */
+  repeated IssueType issue_types = 3;
+
+  /**
+   * Статусы, входящие в workflow.
+   */
+  repeated WorkflowStatusCreateRequest statuses = 4;
+
+  /**
+   * Переходы между статусами workflow.
+   */
+  repeated WorkflowTransitionCreateRequest transitions = 5;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   * Используется для проверки прав доступа к проекту.
+   */
+  string actor_user_id = 6;
+}
+
+message CreateWorkflowRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateWorkflowRequestBody body = 2;
 }

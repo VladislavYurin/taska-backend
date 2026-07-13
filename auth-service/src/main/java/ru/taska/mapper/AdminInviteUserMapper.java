@@ -4,6 +4,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
+import ru.taska.domain.GlobalRole;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
@@ -30,6 +31,7 @@ public class AdminInviteUserMapper {
             .login(request.getBody().getEmail().split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 8))
             .displayName(request.getBody().getDisplayName())
             .status(UserStatus.INVITED)
+            .globalRole(GlobalRole.USER)
             .build();
     }
 

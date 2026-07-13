@@ -44,6 +44,8 @@ public abstract class AbstractIT {
         registry.add("grpc.server.port", () -> "9090");
         registry.add("app.grpc.client.workflow-service.host", () -> "127.0.0.1");
         registry.add("app.grpc.client.workflow-service.port", () -> "9090");
+        registry.add("grpc.client.project-service.host", () -> "127.0.0.1");
+        registry.add("grpc.client.project-service.port", () -> "9090");
 
     }
 }

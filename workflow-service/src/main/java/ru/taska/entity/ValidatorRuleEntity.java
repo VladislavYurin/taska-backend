@@ -1,6 +1,9 @@
 package ru.taska.entity;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import tools.jackson.databind.JsonNode;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
