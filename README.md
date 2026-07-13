@@ -98,6 +98,44 @@ TODO
     * **Node ID**: текстовый поиск по nodeId.
     * **Уровень лога**: фильтрация по уровню логирования (`INFO`, `WARN`, `ERROR` и т.д.). Можно выбрать несколько.
 
+## Хранилище файлов (MinIO)
+
+#### Запуск
+
+Из корня проекта, где лежит `docker-compose.yml`:
+```bash
+    docker compose up -d minio minio-init
+```
+Если нужно поднять весь стек — выполните обычную полную сборку:
+```bash
+    docker compose up -d --build
+```
+
+#### Доступ к консоли
+
+* **MinIO Console**: [http://localhost:9001](http://localhost:9001)
+* **Логин/Пароль**: значения `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` из `.env.docker` (по умолчанию `minioadmin` / `minioadmin`)
+
+#### Buckets
+
+При старте `minio-init` автоматически создаёт два bucket-а:
+
+| Bucket | Назначение |
+|---|---|
+| `taska-avatars` | Аватары пользователей |
+| `taska-attachments` | Вложения задач (attachments) |
+
+Имена bucket-ов задаются переменными `MINIO_BUCKET_AVATARS` и `MINIO_BUCKET_ATTACHMENTS` в `.env.docker`.
+
+#### Сброс локального хранилища
+
+```bash
+    docker compose down -v
+    docker compose up -d minio minio-init
+```
+
+Флаг `-v` удаляет volume `minio_data` — все файлы будут удалены, bucket-и пересозданы при следующем запуске.
+
 ## Билд и деплой
 
 ### Деплой в Docker
