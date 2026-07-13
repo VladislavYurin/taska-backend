@@ -44,8 +44,7 @@ public class ValidateTransitionService {
                 requestId, nodeId, projectId, issueType, transitionId, currentStatusKey);
 
         // Получаем workflow (с fallback на default project)
-        Mono<Optional<WorkflowEntity>> workflowMono = workflowResolver
-                .resolveWorkflow(projectId, issueType)
+        Mono<Optional<WorkflowEntity>> workflowMono = workflowResolver.resolveWorkflow(projectId, issueType)
                 .map(Optional::of)
                 .defaultIfEmpty(Optional.empty());
 
