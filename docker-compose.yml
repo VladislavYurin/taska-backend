@@ -162,7 +162,7 @@ services:
     container_name: taska-minio-init
     networks:
       - taskanetwork
-    restart: unless-stopped
+    restart: on-failure
     env_file:
       - .env
     depends_on:
