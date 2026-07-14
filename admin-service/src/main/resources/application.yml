@@ -1,0 +1,32 @@
+server:
+  port: ${ADMIN_SERVER_PORT:8086}
+
+spring:
+  grpc:
+    server:
+      port: ${ADMIN_GRPC_SERVER_PORT:9097}
+  r2dbc:
+    url: ${ADMIN_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5438/taska_admin_db}
+    username: ${ADMIN_SPRING_R2DBC_USERNAME:taska}
+    password: ${ADMIN_SPRING_R2DBC_PASSWORD:taska}
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    url: ${ADMIN_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5438/taska_admin_db}
+    user: ${ADMIN_SPRING_LIQUIBASE_USERNAME:taska}
+    password: ${ADMIN_SPRING_LIQUIBASE_PASSWORD:taska}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    ru.taska: ${ADMIN_LOG_LEVEL_ROOT:INFO}
+    liquibase: ${ADMIN_LOG_LEVEL_LIQUIBASE:INFO}

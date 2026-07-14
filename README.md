@@ -98,6 +98,35 @@ TODO
     * **Node ID**: текстовый поиск по nodeId.
     * **Уровень лога**: фильтрация по уровню логирования (`INFO`, `WARN`, `ERROR` и т.д.). Можно выбрать несколько.
 
+## admin-service
+
+Backend-слой для **platform admin console**.  
+Не подключается к пользовательскому frontend и не участвует в обычном user flow через `api-gateway`.
+
+#### Порты (с хоста)
+
+| Назначение | Порт |
+|------------|------|
+| HTTP / Actuator | `8086` |
+| gRPC | `9097` |
+| PostgreSQL (`taska_admin_db`) | `5438` |
+
+#### Запуск
+
+Из корня проекта:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile infra --profile services up -d --build admin-db admin-service
+```
+
+Проверка health:
+
+```bash
+curl http://127.0.0.1:8086/actuator/health
+```
+
+Ожидаемый ответ: `{"status":"UP", ...}`.
+
 ## Хранилище файлов (MinIO)
 
 #### Запуск
@@ -182,7 +211,8 @@ TODO
 | workflow-service                                                | http://127.0.0.1:8083 |
 | issue-service                                                   | http://127.0.0.1:8084 |
 | notification-service                                            | http://127.0.0.1:8085 |
+| admin-service                                                   | http://127.0.0.1:8086 |
 | Kafka                                                           | 127.0.0.1:9092        |
 | Kafka UI                                                        | 127.0.0.1:8088        |
-| auth-db / project-db / workflow-db / issue-db / notification-db | 127.0.0.1:5432–5436   |
+| auth-db / project-db / workflow-db / issue-db / notification-db / admin-db | 127.0.0.1:5433–5438 |
 | PG Admin                                                        | 127.0.0.1:5050        |
