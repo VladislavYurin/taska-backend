@@ -605,6 +605,177 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  ########################## API для issue комментариев ##################
+  /api/v1/projects/{projectId}/issues/{issueId}/comments:
+    get:
+      summary: Получение списка комментариев к задаче
+      operationId: listComments
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Список комментариев успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentsListResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление комментария к задаче
+      operationId: addComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequestDto'
+      responses:
+        '200':
+          description: Комментарий успешно добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    ########################## Окончание API для issue комментариев ##################
+
+  /api/v1/projects/{projectId}/issues/{issueId}/comments/{commentId}:
+    put:
+      summary: Обновление комментария
+      operationId: updateComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequestDto'
+      responses:
+        '200':
+          description: Комментарий успешно обновлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление комментария
+      operationId: deleteComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Комментарий успешно удален
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/workflow:
     get:
       summary: Получение workflow проекта и типа задачи
@@ -1011,6 +1182,70 @@ components:
         - TASK
         - BUG
         - STORY
+
+    # ==================== КОММЕНТАРИИ к issue ====================
+    CommentRequestDto:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          description: Содержимое комментария
+          minLength: 1
+          maxLength: 10000
+          example: "Это комментарий к задаче"
+
+    CommentResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор комментария
+        issueId:
+          type: string
+          format: uuid
+          description: Идентификатор задачи
+        projectId:
+          type: string
+          format: uuid
+          description: Идентификатор проекта
+        authorUserId:
+          type: string
+          format: uuid
+          description: Идентификатор автора комментария
+        body:
+          type: string
+          description: Текст комментария
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время последнего обновления
+        version:
+          type: integer
+          description: Версия комментария (для оптимистической блокировки)
+
+    CommentsListResponseDto:
+      type: object
+      required:
+        - items
+        - totalCount
+      properties:
+        items:
+          type: array
+          description: Список комментариев
+          items:
+            $ref: '#/components/schemas/CommentResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество комментариев (без учёта пагинации)
+    # ==================== Окончание КОММЕНТАРИИ к issue ====================
 
     WorkflowResponseDto:
       type: object

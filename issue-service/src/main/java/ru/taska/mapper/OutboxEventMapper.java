@@ -6,6 +6,9 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
+import ru.taska.event.payload.issueService.CommentCreatedPayload;
+import ru.taska.event.payload.issueService.CommentDeletedPayload;
+import ru.taska.event.payload.issueService.CommentUpdatedPayload;
 import ru.taska.event.payload.issueService.IssueAssignedPayload;
 import ru.taska.event.payload.issueService.IssueCreatedPayload;
 import ru.taska.event.payload.issueService.IssueDeletedPayload;
@@ -23,6 +26,13 @@ public class OutboxEventMapper {
     private static final String REPORTER = "reporterId";
     private static final String ASSIGNEE = "assigneeId";
     private static final String SCHEMA_VERSION = "v1";
+
+    private static final String COMMENT_ID = "commentId";
+    private static final String AUTHOR_USER_ID = "authorUserId";
+    private static final String ACTOR_USER_ID = "actorUserId";
+    private static final String BODY = "body";
+    private static final String OLD_BODY = "oldBody";
+    private static final String NEW_BODY = "newBody";
 
     @Value("${spring.application.name}")
     private String producerService;
@@ -74,6 +84,25 @@ public class OutboxEventMapper {
             case ISSUE_UPDATED -> objectMapper.valueToTree(new IssueUpdatedPayload(
                     getUuid(sourcePayload, REPORTER),
                     getUuid(sourcePayload, ASSIGNEE)
+            ));
+
+            case COMMENT_CREATED -> objectMapper.valueToTree(new CommentCreatedPayload(
+                    getUuid(sourcePayload, "commentId"),
+                    getUuid(sourcePayload, "authorUserId"),
+                    sourcePayload.path("body").asText()
+            ));
+
+            case COMMENT_UPDATED -> objectMapper.valueToTree(new CommentUpdatedPayload(
+                    getUuid(sourcePayload, "commentId"),
+                    getUuid(sourcePayload, "actorUserId"),
+                    sourcePayload.path("oldBody").asText(),
+                    sourcePayload.path("newBody").asText()
+            ));
+
+            case COMMENT_DELETED -> objectMapper.valueToTree(new CommentDeletedPayload(
+                    getUuid(sourcePayload, "commentId"),
+                    getUuid(sourcePayload, "actorUserId"),
+                    sourcePayload.path("body").asText()
             ));
 
             default -> sourcePayload;
