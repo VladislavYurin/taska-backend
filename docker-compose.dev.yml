@@ -92,6 +92,13 @@ services:
     ports:
       - "127.0.0.1:5437:5432"
 
+  admin-db:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:5438:5432"
+
   auth-service:
     env_file:
       - .env.docker.example
@@ -131,6 +138,14 @@ services:
     ports:
       - "127.0.0.1:8085:8080"
       - "127.0.0.1:9095:9090"
+
+  admin-service:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8086:8080"
+      - "127.0.0.1:9097:9090"
 
   api-gateway:
     env_file:

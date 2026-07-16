@@ -11,10 +11,9 @@ COPY project-service ./project-service
 COPY workflow-service ./workflow-service
 COPY issue-service ./issue-service
 COPY notification-service ./notification-service
-COPY metrics-starter ./metrics-starter
 COPY admin-service ./admin-service
 
-RUN mvn -q -DskipTests -pl issue-service -am clean package
+RUN mvn -q -DskipTests -pl admin-service -am clean package
 
 FROM eclipse-temurin:21-jre
 
@@ -23,7 +22,7 @@ RUN addgroup --system app && \
 
 WORKDIR /app
 
-COPY --from=build /workspace/issue-service/target/*.jar app.jar
+COPY --from=build /workspace/admin-service/target/*.jar app.jar
 RUN chown -R app:app /app
 
 USER app

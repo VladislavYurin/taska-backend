@@ -14,6 +14,7 @@ volumes:
   pg_workflow_data:
   pg_issue_data:
   pg_notification_data:
+  pg_admin_data:
   pgadmin_data:
   kafka_data:
   prometheus_data:
@@ -183,7 +184,7 @@ services:
     container_name: taska-minio-init
     networks:
       - taskanetwork
-    restart: unless-stopped
+    restart: on-failure
     env_file:
       - .env
     depends_on:
@@ -276,6 +277,16 @@ services:
     volumes:
       - pg_notification_data:/var/lib/postgresql/data
 
+  admin-db:
+    <<: *postgres-defaults
+    container_name: taska-admin-db
+    environment:
+      - POSTGRES_DB=${ADMIN_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - pg_admin_data:/var/lib/postgresql/data
+
   # --------------------
   # Microservices
   # --------------------
@@ -349,6 +360,18 @@ services:
       kafka:
         condition: service_healthy
       notification-db:
+        condition: service_healthy
+
+  admin-service:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
+    build:
+      context: .
+      dockerfile: admin-service/Dockerfile
+    container_name: taska-admin-service
+    depends_on:
+      admin-db:
         condition: service_healthy
 
   api-gateway:

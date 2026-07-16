@@ -26,6 +26,7 @@
         <module>issue-service</module>
         <module>notification-service</module>
         <module>metrics-starter</module>
+        <module>admin-service</module>
     </modules>
 
     <properties>
