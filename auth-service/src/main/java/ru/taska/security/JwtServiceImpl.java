@@ -39,6 +39,7 @@ public class JwtServiceImpl implements JwtService {
                         .add("userId", user.getId().toString())
                         .add("login", user.getLogin())
                         .add("email", user.getEmail())
+                        .add("global_role",user.getGlobalRole())
                         .subject(user.getId().toString())    // вместо setSubject()
                         .issuedAt(new Date())                // вместо setIssuedAt()
                         .expiration(new Date(               // вместо setExpiration()

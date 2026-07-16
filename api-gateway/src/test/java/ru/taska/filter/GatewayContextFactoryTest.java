@@ -149,7 +149,7 @@ class GatewayContextFactoryTest {
                                                                                                          .setEmail("admin@adminov.ru")
                                                                                                          .setDisplayName("Admin")
                                                                                                          .setStatus(UserStatus.USER_STATUS_ACTIVE)
-                                                                                                         .setGlobalRole(GlobalRoleProto.GLOBAL_ROLE_ADMIN)
+                                                                                                         .setGlobalRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                                                                                                          .build())
                                                                               .build();
         when(authServiceClient.validateAccessToken(REQUEST_ID, NODE_ID, "valid-token"))

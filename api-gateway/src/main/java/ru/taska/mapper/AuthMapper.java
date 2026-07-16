@@ -162,7 +162,7 @@ public class AuthMapper {
      */
     public GlobalRole toGlobalRole(GlobalRoleProto protoGobalRole) {
         return switch (protoGobalRole) {
-            case GLOBAL_ROLE_ADMIN -> GlobalRole.GLOBAL_ADMIN;
+            case GLOBAL_ROLE_GLOBAL_ADMIN -> GlobalRole.GLOBAL_ADMIN;
             case GLOBAL_ROLE_USER -> GlobalRole.USER;
             default -> GlobalRole.UNSPECIFIED;
         };
