@@ -2,6 +2,8 @@ server:
   port: ${WORKFLOW_SERVER_PORT:8083}
 
 spring:
+  application:
+    name: workflow-service
   grpc:
     server:
       port: ${WORKFLOW_GRPC_SERVER_PORT:9093}
@@ -26,6 +28,13 @@ management:
       show-details: never
       probes:
         enabled: true
+    prometheus:
+      # Разрешает сбор метрик Prometheus
+      enabled: true
+    metrics:
+      tags:
+        #Prometheus сразу поймет, от какого сервиса пришли метрики
+        application: ${spring.application.name}
 
 grpc:
   client:

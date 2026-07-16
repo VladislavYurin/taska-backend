@@ -11,6 +11,7 @@ COPY project-service ./project-service
 COPY workflow-service ./workflow-service
 COPY issue-service ./issue-service
 COPY notification-service ./notification-service
+COPY metrics-starter ./metrics-starter
 
 RUN mvn -q -DskipTests -pl notification-service -am clean package
 

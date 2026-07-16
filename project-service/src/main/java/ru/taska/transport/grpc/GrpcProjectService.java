@@ -1,11 +1,11 @@
 package ru.taska.transport.grpc;
 
-import exception.GrpcExceptionHandler;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
@@ -16,7 +16,6 @@ import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
@@ -28,15 +27,16 @@ import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
 
 @Slf4j
-@GrpcService
+@Service
 @RequiredArgsConstructor
-public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectServiceImplBase {
+public class GrpcProjectService  {
     private final ProjectService projectService;
     private final ProjectMemberService projectMemberService;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
 
-    @Override
+    @TrackMetrics(counter = "project-service_create-project_grpc_counter",
+                    timer = "project-service_create-project_grpc_timer")
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -57,11 +57,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.createProject(requestId, nodeId, projectKey, projectName, userId);
                 })
-                .map(projectMapper::toProjectResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("createProject"));
+                .map(projectMapper::toProjectResponse);
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_get-project_grpc_counter",
+                    timer = "project-service_get-project_grpc_timer")
     public Mono<ProjectResponse> getProject(Mono<GetProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -77,11 +77,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectService.getProject(requestId, nodeId, projectId);
                 })
-                .map(projectMapper::toProjectResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("getProject"));
+                .map(projectMapper::toProjectResponse);
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_list-myProjects_grpc_counter",
+                    timer = "project-service_list-myProjects_grpc_timer")
     public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -103,11 +103,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
                                         .addAllProjectResponse(p)
                                         .build();
                             });
-                })
-                .transform(GrpcExceptionHandler.withErrorHandling("listMyProjects"));
+                });
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_add-projectMember_grpc_counter",
+            timer = "project-service_add-projectMember_grpc_timer")
     public Mono<AddProjectMemberResponse> addProjectMember(Mono<AddProjectMemberRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -130,11 +130,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.addProjectMember(requestId, nodeId, addedMemberId, actorUserId, role, projectId);
                 })
-                .map(projectMemberMapper::toAddProjectMemberResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("addProjectMember"));
+                .map(projectMemberMapper::toAddProjectMemberResponse);
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_rm-projectMember_grpc_counter",
+            timer = "project-service_rm-projectMember_grpc_timer")
     public Mono<RmProjectMemberResponse> rmProjectMember(Mono<RmProjectMemberRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -155,11 +155,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.rmProjectMember(requestId, nodeId, deletedMemberId, actorUserId, projectId);
                 })
-                .map(projectMemberMapper::toRmProjectMemberResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("rmProjectMember"));
+                .map(projectMemberMapper::toRmProjectMemberResponse);
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_change-projectMemberRole_grpc_counter",
+            timer = "project-service_change-projectMemberRole_grpc_timer")
     public Mono<ChangeProjectMemberRoleResponse> changeProjectMemberRole(Mono<ChangeProjectMemberRoleRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -183,11 +183,11 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.changeProjectMemberRole(requestId, nodeId, changedMemberId, actorUserId, role, projectId);
                 })
-                .map(projectMemberMapper::toChangeProjectMemberRoleResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));
+                .map(projectMemberMapper::toChangeProjectMemberRoleResponse);
     }
 
-    @Override
+    @TrackMetrics(counter = "project-service_check-projectMemberRole_grpc_counter",
+            timer = "project-service_check-projectMemberRole_grpc_timer")
     public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole
             (Mono<CheckProjectMemberRoleRequest> request) {
         return request
@@ -217,7 +217,6 @@ public class GrpcProjectService extends ReactorProjectServiceGrpc.ProjectService
 
                     return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
                 })
-                .map(projectMemberMapper::toCheckProjectRoleResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("checkProjectRole"));
+                .map(projectMemberMapper::toCheckProjectRoleResponse);
     }
 }

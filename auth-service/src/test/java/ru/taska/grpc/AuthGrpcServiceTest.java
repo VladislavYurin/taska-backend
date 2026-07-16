@@ -9,7 +9,6 @@ import ru.taska.api.auth.v1.RefreshRequestBody;
 import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
 import ru.taska.api.auth.v1.SetPasswordByTokenRequestBody;
 import ru.taska.api.auth.v1.ValidateAccessTokenRequest;
-import ru.taska.api.auth.v1.ValidateAccessTokenRequestBody;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -123,8 +122,8 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAUTHENTICATED")
+                        error instanceof DomainException &&
+                                ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
                 )
                 .verify();
 
@@ -186,8 +185,8 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.refresh(Mono.just(validRefreshRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAUTHENTICATED")
+                        error instanceof DomainException &&
+                                ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
                 )
                 .verify();
 
@@ -205,8 +204,7 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAVAILABLE")
+                        error instanceof R2dbcBadGrammarException
                 )
                 .verify();
     }
@@ -223,8 +221,7 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAVAILABLE")
+                        error instanceof TransactionException
                 )
                 .verify();
     }
@@ -240,8 +237,7 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAVAILABLE")
+                        error instanceof R2dbcNonTransientResourceException
                 )
                 .verify();
     }
@@ -256,8 +252,8 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
-                                            error instanceof io.grpc.StatusRuntimeException statusException &&
-                                                    statusException.getStatus().getCode() == io.grpc.Status.Code.INTERNAL
+                        error instanceof RuntimeException &&
+                                error.getMessage().equals("Unexpected error")
                 )
                 .verify();
     }
@@ -340,8 +336,8 @@ class AuthGrpcServiceTest {
         // When & Then
         StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
                 .expectErrorMatches(error ->
-                        error instanceof io.grpc.StatusRuntimeException &&
-                                error.getMessage().contains("UNAUTHENTICATED")
+                        error instanceof DomainException &&
+                                ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
                 )
                 .verify();
 
@@ -405,8 +401,8 @@ class AuthGrpcServiceTest {
             // When & Then
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
-                            error instanceof io.grpc.StatusRuntimeException &&
-                                    error.getMessage().contains("UNAUTHENTICATED")
+                            error instanceof DomainException &&
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
                     )
                     .verify();
 
@@ -423,8 +419,7 @@ class AuthGrpcServiceTest {
             // When & Then
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
-                            error instanceof io.grpc.StatusRuntimeException &&
-                                    error.getMessage().contains("UNAVAILABLE")
+                            error instanceof R2dbcBadGrammarException
                     )
                     .verify();
 
@@ -442,8 +437,7 @@ class AuthGrpcServiceTest {
             // When & Then
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
-                            error instanceof io.grpc.StatusRuntimeException &&
-                                    error.getMessage().contains("UNAVAILABLE")
+                            error instanceof TransactionException
                     )
                     .verify();
 
@@ -460,8 +454,8 @@ class AuthGrpcServiceTest {
             // When & Then
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
-                                                error instanceof io.grpc.StatusRuntimeException statusException &&
-                                                        statusException.getStatus().getCode() == io.grpc.Status.Code.INTERNAL
+                            error instanceof RuntimeException &&
+                                    error.getMessage().equals("Unexpected error")
                     )
                     .verify();
 

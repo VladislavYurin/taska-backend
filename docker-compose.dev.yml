@@ -19,7 +19,12 @@ services:
     profiles: [infra]
     ports:
       - "127.0.0.1:3000:3000"
-
+  prometheus:
+    env_file:
+      - .env.docker.example
+    profiles: [infra]
+    ports:
+      - "127.0.0.1:9090:9090"  # Порт для веб-интерфейса. Будет доступен в браузере по адресу http://localhost:9090
   loki:
     env_file:
       - .env.docker.example
