@@ -1,4 +1,4 @@
-package ru.taska.storage;
+package ru.taska.storage.dto;
 
 /**
  * Результат генерации presigned URL для загрузки файла.

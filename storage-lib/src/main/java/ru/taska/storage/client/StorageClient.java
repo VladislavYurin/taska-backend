@@ -1,4 +1,7 @@
-package ru.taska.storage;
+package ru.taska.storage.client;
+
+import reactor.core.publisher.Mono;
+import ru.taska.storage.dto.PresignedUploadResult;
 
 import java.io.InputStream;
 
@@ -12,17 +15,17 @@ public interface StorageClient {
      * Загружает файл в хранилище через бэкенд.
      * Генерирует objectKey и возвращает его.
      */
-    String putObject(InputStream data, String contentType, long contentLength);
+    Mono<String> putObject(InputStream data, String contentType, long contentLength);
 
     /**
-     * Скачивает файл из хранилища через бэкенд и возвращает поток байт.
+     * Скачивает файл из хранилища через бэкенд и возвращает массив байт.
      */
-    InputStream getObject(String objectKey);
+    Mono<byte[]> getObject(String objectKey);
 
     /**
      * Удаляет файл из хранилища.
      */
-    void deleteObject(String objectKey);
+    Mono<Void> deleteObject(String objectKey);
 
     /**
      * Генерирует presigned URL для загрузки файла фронтендом напрямую в хранилище.
@@ -31,7 +34,7 @@ public interface StorageClient {
      * <p><b>Предпочтительный способ загрузки для фронтенда</b> — файл передаётся напрямую
      * в хранилище, минуя бэкенд.</p>
      */
-    PresignedUploadResult createPresignedUploadUrl(String contentType);
+    Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType);
 
     /**
      * Генерирует presigned URL для скачивания файла фронтендом напрямую из хранилища.
@@ -39,17 +42,17 @@ public interface StorageClient {
      * <p><b>Предпочтительный способ скачивания для фронтенда</b> — файл передаётся напрямую
      * из хранилища, минуя бэкенд.</p>
      */
-    String createPresignedDownloadUrl(String objectKey);
+    Mono<String> createPresignedDownloadUrl(String objectKey);
 
     /**
      * Проверяет размер загруженного объекта.
      * Вызывается после того как фронтенд загрузил файл напрямую в хранилище по presigned URL.
      * Если размер превышает допустимый — удаляет объект и бросает исключение.
      */
-    void validateObjectSizeAndDeleteIfNeeded(String objectKey);
+    Mono<Void> validateObjectSizeAndDeleteIfTooLarge(String objectKey);
 
     /**
      * Проверяет существование объекта в хранилище.
      */
-    boolean objectExists(String objectKey);
+    Mono<Boolean> objectExists(String objectKey);
 }
