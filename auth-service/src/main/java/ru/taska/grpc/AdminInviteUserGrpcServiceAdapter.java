@@ -12,7 +12,7 @@ import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
 @RequiredArgsConstructor
 public class AdminInviteUserGrpcServiceAdapter extends ReactorAdminInviteUserServiceGrpc.AdminInviteUserServiceImplBase{
 
-    public final AdminInviteUserGrpcService adminInviteUserGrpcService;
+    private final AdminInviteUserGrpcService adminInviteUserGrpcService;
 
     @Override
     public Mono<InviteUserResponse> inviteUser(Mono<InviteUserRequest> request) {

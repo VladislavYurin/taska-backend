@@ -32,9 +32,13 @@ import ru.taska.util.PasswordValidator;
 
 import java.util.UUID;
 
+/**
+ * Тесты для AuthGrpcServiceAdapter.
+ * Проверяют, что адаптер корректно делегирует вызовы и преобразует ошибки в gRPC статусы.
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AuthGrpcService Unit Tests")
-class AuthGrpcServiceTest {
+class AuthGrpcServiceAdapterTest {
 
     @Mock
     private AuthService authService;
@@ -43,7 +47,7 @@ class AuthGrpcServiceTest {
     private PasswordValidator passwordValidator;
 
     @InjectMocks
-    private AuthGrpcService authGrpcService;
+    private AuthGrpcServiceAdapter adapter;
 
     private LoginRequest validLoginRequest;
     private RefreshRequest validRefreshRequest;
@@ -101,7 +105,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.just(authResponseDto));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectNextMatches(response ->
                         response.getAccessToken().equals("access-token-123") &&
                                 response.getRefreshToken().equals("refresh-token-456") &&
@@ -120,7 +124,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
                         error instanceof DomainException &&
                                 ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
@@ -146,7 +150,7 @@ class AuthGrpcServiceTest {
                 .build();
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(invalidRequest)))
+        StepVerifier.create(adapter.login(Mono.just(invalidRequest)))
                 .expectErrorMatches(error ->
                         error instanceof io.grpc.StatusRuntimeException &&
                                 error.getMessage().contains("INVALID_ARGUMENT")
@@ -164,7 +168,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.just(authResponseDto));
 
         // When & Then
-        StepVerifier.create(authGrpcService.refresh(Mono.just(validRefreshRequest)))
+        StepVerifier.create(adapter.refresh(Mono.just(validRefreshRequest)))
                 .expectNextMatches(response ->
                         response.getAccessToken().equals("access-token-123") &&
                                 response.getRefreshToken().equals("refresh-token-456") &&
@@ -183,7 +187,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid refresh token")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.refresh(Mono.just(validRefreshRequest)))
+        StepVerifier.create(adapter.refresh(Mono.just(validRefreshRequest)))
                 .expectErrorMatches(error ->
                         error instanceof DomainException &&
                                 ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
@@ -202,7 +206,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new R2dbcBadGrammarException("Table not found")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
                         error instanceof R2dbcBadGrammarException
                 )
@@ -219,7 +223,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(transactionException));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
                         error instanceof TransactionException
                 )
@@ -235,7 +239,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new R2dbcNonTransientResourceException("Connection pool exhausted")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
                         error instanceof R2dbcNonTransientResourceException
                 )
@@ -250,7 +254,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new RuntimeException("Unexpected error")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(validLoginRequest)))
+        StepVerifier.create(adapter.login(Mono.just(validLoginRequest)))
                 .expectErrorMatches(error ->
                         error instanceof RuntimeException &&
                                 error.getMessage().equals("Unexpected error")
@@ -273,7 +277,7 @@ class AuthGrpcServiceTest {
                 .build();
 
         // When & Then
-        StepVerifier.create(authGrpcService.refresh(Mono.just(invalidRequest)))
+        StepVerifier.create(adapter.refresh(Mono.just(invalidRequest)))
                 .expectErrorMatches(error ->
                         error instanceof io.grpc.StatusRuntimeException &&
                                 error.getMessage().contains("INVALID_ARGUMENT")
@@ -295,7 +299,7 @@ class AuthGrpcServiceTest {
                 .build();
 
         // When & Then
-        StepVerifier.create(authGrpcService.login(Mono.just(noHeaderRequest)))
+        StepVerifier.create(adapter.login(Mono.just(noHeaderRequest)))
                 .expectErrorMatches(error ->
                         error instanceof io.grpc.StatusRuntimeException &&
                                 error.getMessage().contains("INVALID_ARGUMENT")
@@ -316,7 +320,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.empty());
 
         // When & Then
-        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
+        StepVerifier.create(adapter.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
                 .expectNext(Empty.getDefaultInstance())
                 .verifyComplete();
 
@@ -334,7 +338,7 @@ class AuthGrpcServiceTest {
                 .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")));
 
         // When & Then
-        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
+        StepVerifier.create(adapter.setPasswordByToken(Mono.just(validSetPasswordByTokenRequest)))
                 .expectErrorMatches(error ->
                         error instanceof DomainException &&
                                 ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
@@ -379,7 +383,7 @@ class AuthGrpcServiceTest {
                     .thenReturn(Mono.just(userContext));
 
             // When & Then
-            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+            StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectNextMatches(response ->
                             response.getUserContext().getUserId().equals(userContext.getUserId()) &&
                                     response.getUserContext().getLogin().equals(userContext.getLogin()) &&
@@ -399,7 +403,7 @@ class AuthGrpcServiceTest {
                     .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid JWT token")));
 
             // When & Then
-            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+            StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED
@@ -417,7 +421,7 @@ class AuthGrpcServiceTest {
                     .thenReturn(Mono.error(new R2dbcBadGrammarException("Table not found")));
 
             // When & Then
-            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+            StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
                             error instanceof R2dbcBadGrammarException
                     )
@@ -435,7 +439,7 @@ class AuthGrpcServiceTest {
                     .thenReturn(Mono.error(transactionException));
 
             // When & Then
-            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+            StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
                             error instanceof TransactionException
                     )
@@ -452,7 +456,7 @@ class AuthGrpcServiceTest {
                     .thenReturn(Mono.error(new RuntimeException("Unexpected error")));
 
             // When & Then
-            StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
+            StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectErrorMatches(error ->
                             error instanceof RuntimeException &&
                                     error.getMessage().equals("Unexpected error")
