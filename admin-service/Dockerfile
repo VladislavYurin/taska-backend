@@ -11,6 +11,7 @@ COPY project-service ./project-service
 COPY workflow-service ./workflow-service
 COPY issue-service ./issue-service
 COPY notification-service ./notification-service
+COPY metrics-starter ./metrics-starter
 COPY admin-service ./admin-service
 
 RUN mvn -q -DskipTests -pl admin-service -am clean package
