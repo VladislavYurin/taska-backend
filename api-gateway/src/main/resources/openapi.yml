@@ -4,10 +4,8 @@ info:
   version: 1.0.0
 
 servers:
-  - url: https://api.taska.ozero.dev
-    description: Production
-  - url: http://localhost:8080
-    description: Local
+  - url: /
+    description: Current host
 
 paths:
   /api/v1/auth/login:
