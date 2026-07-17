@@ -102,11 +102,6 @@ message CreateIssueRequest {
 
 message AssignIssueRequestBody {
   /**
-   * Идентификатор проекта, в котором находится задача.
-   */
-  string project_id = 1;
-
-  /**
    * Идентификатор задачи.
    */
   string issue_id = 2;
@@ -173,11 +168,6 @@ message GetIssueRequest {
 
 message GetIssueRequestBody {
   /**
-   * Идентификатор проекта, в котором находится задача.
-   */
-  string project_id = 1;
-
-  /**
    * Идентификатор задачи.
    */
   string issue_id = 2;
@@ -202,11 +192,6 @@ message DeleteIssueRequest {
 
 message DeleteIssueRequestBody {
   /**
-   * Идентификатор проекта, в котором находится задача.
-   */
-  string project_id = 1;
-
-  /**
    * Идентификатор задачи.
    */
   string issue_id = 2;
@@ -230,11 +215,6 @@ message UpdateIssueRequest {
 }
 
 message UpdateIssueRequestBody {
-  /**
-   * Идентификатор проекта.
-   */
-  string project_id = 1;
-
   /**
    * Идентификатор задачи.
    */

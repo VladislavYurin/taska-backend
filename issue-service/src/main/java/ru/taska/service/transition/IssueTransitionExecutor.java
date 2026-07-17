@@ -10,18 +10,16 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueWithHistory;
-import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
-import ru.taska.repository.OutboxEventRepository;
+import ru.taska.service.IssueHistoryService;
+import ru.taska.service.OutboxEventService;
+import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -35,10 +33,10 @@ public class IssueTransitionExecutor {
 
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
-    private final OutboxEventRepository outboxEventRepository;
     private final IssueProperties issueProperties;
-    private final IssueMapper issueMapper;
-    private final ObjectMapper objectMapper;
+    private final PayloadSerializer  payloadSerializer;
+    private final IssueHistoryService issueHistoryService;
+    private final OutboxEventService outboxEventService;
 
     /**
      * Транзакционное выполнение изменения статуса задачи.
@@ -75,22 +73,10 @@ public class IssueTransitionExecutor {
                                 return Mono.error(new DomainException(DomainStatus.ABORTED, "Issue status was modified concurrently"));
                             }))
                             .flatMap(savedIssue -> {
-                                JsonNode historyPayload = objectMapper.valueToTree(Map.of(
-                                        "actorUserId", actorUserId,
-                                        "issueId", issueId,
-                                        "oldStatus", sourceStatusKey,
-                                        "newStatus", targetStatusKey,
-                                        "projectId", issue.getProjectId(),
-                                        "transitionId", transitionId
-                                        ));
+                                JsonNode payload = payloadSerializer.createTransitionedPayload(sourceStatusKey, targetStatusKey, transitionId, actorUserId, issue.getAssigneeId());
 
-                                var history = issueMapper.buildIssueHistory(savedIssue, IssueEventType.TRANSITIONED, actorUserId);
-                                history.setPayload(historyPayload);
-
-                                var outboxEvent = issueMapper.buildOutboxEvent(savedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_TRANSITIONED, requestId);
-
-                                return issueHistoryRepository.save(history)
-                                        .then(outboxEventRepository.save(outboxEvent))
+                                return issueHistoryService.saveIssueHistory(requestId, nodeId, issue, actorUserId, IssueEventType.TRANSITIONED, payload)
+                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue, EventType.ISSUE_TRANSITIONED, payload))
                                         .thenReturn(savedIssue);
                             })
                             .flatMap(this::loadIssueWithHistory);

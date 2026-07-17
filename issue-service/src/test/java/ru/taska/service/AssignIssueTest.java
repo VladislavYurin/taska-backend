@@ -2,24 +2,21 @@ package ru.taska.service;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.OutboxEvent;
-import ru.taska.event.AggregateType;
+import ru.taska.domain.ProjectRole;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.Set;
-
-import static org.mockito.ArgumentMatchers.eq;
 
 public class AssignIssueTest extends IssueServiceImplTest {
 
@@ -32,9 +29,9 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 ProjectRole.MEMBER
         );
 
-        Mockito.when(issueProperties.allowedRoles().assignIssueRoles()).thenReturn(allowedRoles);
+        Mockito.lenient().when(issueProperties.allowedRoles().assignIssueRoles()).thenReturn(allowedRoles);
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
                 Mockito.anyString(),
                 Mockito.anyString(),
                 Mockito.eq(PROJECT_ID),
@@ -44,6 +41,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен успешно назначить исполнителя и сохранить историю и outbox")
     void assignIssueSuccess() {
         Issue existingIssue = new Issue();
         existingIssue.setId(ISSUE_ID);
@@ -54,24 +52,29 @@ public class AssignIssueTest extends IssueServiceImplTest {
         updatedIssue.setAssigneeId(ASSIGNEE_ID);
         updatedIssue.setProjectId(PROJECT_ID);
 
-        IssueHistory history = new IssueHistory();
-        OutboxEvent event = new OutboxEvent();
+        ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        Mockito.when(issueMapper.setIssueAssignee(existingIssue, ASSIGNEE_ID)).thenReturn(updatedIssue);
-        Mockito.when(issueRepository.save(updatedIssue)).thenReturn(Mono.just(updatedIssue));
-        Mockito.when(issueMapper.buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID))
-                .thenReturn(history);
-        Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.empty());
-        Mockito.when(issueMapper.buildOutboxEvent(updatedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_ASSIGNED, REQUEST_ID))
-                .thenReturn(event);
-        Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.empty());
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
+        Mockito.when(issueRepository.save(Mockito.any(Issue.class))).thenReturn(Mono.just(updatedIssue));
+
+        Mockito.when(payloadSerializer.createIssueAssignedPayload(Mockito.any(), Mockito.eq(ASSIGNEE_ID)))
+                .thenReturn(payload);
+        Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+                        Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload)))
+                .thenReturn(Mono.empty());
+        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+                        Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload)))
+                .thenReturn(Mono.empty());
+
         existingIssue.setAssigneeId(null);
 
         StepVerifier.create(issueService.assignIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ASSIGNEE_ID, ACTOR_USER_ID)
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ASSIGNEE_ID, ACTOR_USER_ID)
                 )
-                .expectNext(updatedIssue)
+                .expectNextMatches(result -> {
+                    Assertions.assertThat(result.getAssigneeId()).isEqualTo(ASSIGNEE_ID);
+                    return true;
+                })
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
@@ -79,35 +82,30 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(issueMapper).setIssueAssignee(existingIssue, ASSIGNEE_ID);
-        Mockito.verify(issueRepository).save(updatedIssue);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
 
-        ArgumentCaptor<IssueHistory> historyCaptor = ArgumentCaptor.forClass(IssueHistory.class);
-        Mockito.verify(issueHistoryRepository).save(historyCaptor.capture());
-        Assertions.assertThat(historyCaptor.getValue()).isSameAs(history);
+        Mockito.verify(payloadSerializer).createIssueAssignedPayload(Mockito.any(), Mockito.eq(ASSIGNEE_ID));
+        Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+                Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload));
+        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
+                Mockito.any(Issue.class), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
 
-        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
-        Mockito.verify(outboxEventRepository).save(eventCaptor.capture());
-        Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
-
-        Mockito.verify(issueMapper).buildIssueHistory(updatedIssue, IssueEventType.ASSIGNED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(updatedIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_ASSIGNED, REQUEST_ID);
-
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, payloadSerializer);
     }
 
     @Test
+    @DisplayName("Не должен выполнять запись в БД и сохранять историю, если исполнитель не изменился")
     void assignIssue_AlreadyAssignedToSameUser_ShouldDoNothing() {
         Issue existingIssue = new Issue();
         existingIssue.setId(ISSUE_ID);
         existingIssue.setAssigneeId(ASSIGNEE_ID);
         existingIssue.setProjectId(PROJECT_ID);
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
         StepVerifier.create(issueService.assignIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID,
+                        REQUEST_ID, NODE_ID, ISSUE_ID,
                         ASSIGNEE_ID, ACTOR_USER_ID)
                 )
                 .expectNext(existingIssue)
@@ -118,21 +116,19 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(issueMapper, Mockito.never()).setIssueAssignee(Mockito.any(), Mockito.any());
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+
         Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verify(issueHistoryRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verify(outboxEventRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verify(issueMapper, Mockito.never()).buildIssueHistory(Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.verify(issueMapper, Mockito.never()).buildOutboxEvent(Mockito.any(), Mockito.any(), Mockito.any(), eq(REQUEST_ID));
+        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService);
     }
 
     @Test
+    @DisplayName("Должен выбросить исключение NOT_FOUND, если задача для назначения не найдена")
     void assignIssue_IssueDeleted_ShouldNotAssignAndThrowException() {
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.empty());
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.assignIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID,
+                        REQUEST_ID, NODE_ID,
                         ISSUE_ID, ASSIGNEE_ID, ACTOR_USER_ID)
                 )
                 .expectErrorMatches(throwable -> throwable instanceof DomainException &&
@@ -140,13 +136,9 @@ public class AssignIssueTest extends IssueServiceImplTest {
                         throwable.getMessage().contains("not found"))
                 .verify();
 
-        Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
-                Mockito.anyString(), Mockito.anyString(), Mockito.any(),
-                Mockito.any(), Mockito.any()
-        );
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verifyNoInteractions(issueHistoryRepository, outboxEventRepository, issueMapper);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verifyNoInteractions(projectRoleChecker, payloadSerializer, issueHistoryService, outboxEventService);
     }
 }
+

@@ -4,23 +4,20 @@ import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
 import ru.taska.domain.IdempotencyKey;
-import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.OutboxEvent;
-import ru.taska.event.EventType;
-import ru.taska.event.OutboxEventStatus;
+import ru.taska.domain.ProjectRole;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -32,56 +29,6 @@ import java.util.UUID;
 public class IssueMapper {
 
     private final ObjectMapper objectMapper;
-
-    public Issue buildIssue(
-            UUID projectId,
-            Integer number,
-            String issueKey,
-            IssueType issueType,
-            String summary,
-            String description,
-            IssuePriority priority,
-            UUID reporterId,
-            String initStatus,
-            int initVersion
-    ) {
-        return Issue.builder()
-                .projectId(projectId)
-                .issueNumber(number)
-                .issueKey(issueKey)
-                .issueType(issueType)
-                .summary(summary)
-                .description(description)
-                .statusKey(initStatus)
-                .priority(priority)
-                .reporterId(reporterId)
-                .version(initVersion)
-                .build();
-    }
-
-    public Issue setIssueAssignee(Issue issue, UUID assigneeId) {
-        issue.setAssigneeId(assigneeId);
-        return issue;
-    }
-
-    public IssueHistory buildIssueHistory(Issue issue, IssueEventType eventType, UUID actorUserId) {
-        return IssueHistory.builder()
-                .issueId(issue.getId())
-                .eventType(eventType)
-                .actorUserId(actorUserId)
-                .build();
-    }
-
-    public OutboxEvent buildOutboxEvent(Issue issue, String aggregateType, EventType eventType, String requestId) {
-        return OutboxEvent.builder()
-                .aggregateType(aggregateType)
-                .aggregateId(issue.getId())
-                .eventType(eventType.getValue())
-                .status(OutboxEventStatus.NEW)
-                .payload(objectMapper.valueToTree(issue))
-                .requestId(requestId)
-                .build();
-    }
 
     public IdempotencyKey buildIdempotencyKey(String key, UUID userId, String requestHash, Issue response, Duration ttl) {
         return IdempotencyKey.builder()

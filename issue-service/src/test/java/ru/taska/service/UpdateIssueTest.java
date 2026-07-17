@@ -4,83 +4,39 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.ProjectRole;
-import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
-import ru.taska.domain.OutboxEvent;
-import ru.taska.event.AggregateType;
+import ru.taska.domain.ProjectRole;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.IssueMapper;
-import ru.taska.repository.IssueHistoryRepository;
-import ru.taska.repository.IssueRepository;
-import ru.taska.repository.OutboxEventRepository;
-import ru.taska.service.impl.IssueServiceImpl;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
 import java.util.Set;
-import java.util.UUID;
 
-@ExtendWith(MockitoExtension.class)
-class UpdateIssueTest {
-
-    @Mock
-    private IssueRepository issueRepository;
-
-    @Mock
-    private IssueHistoryRepository issueHistoryRepository;
-
-    @Mock
-    private OutboxEventRepository outboxEventRepository;
-
-    @Mock
-    private IssueMapper issueMapper;
-
-    @Mock
-    private ProjectRoleChecker projectRoleChecker;
-
-    @Mock
-    private IssueProperties issueProperties;
-
-    @Mock
-    private IssueProperties.AllowedRoles allowedRolesConfig;
-
-    @InjectMocks
-    private IssueServiceImpl issueService;
-
-    private static final String REQUEST_ID = "req-123";
-    private static final String NODE_ID = "node-1";
-    private static final UUID PROJECT_ID = UUID.randomUUID();
-    private static final UUID ISSUE_ID = UUID.randomUUID();
-    private static final UUID ACTOR_USER_ID = UUID.randomUUID();
+public class UpdateIssueTest extends IssueServiceImplTest {
+    private Set<ProjectRole> expectedRoles;
 
     @BeforeEach
     void setUpProps() {
-        Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRolesConfig);
-        Mockito.when(allowedRolesConfig.updateIssueRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
+
+        expectedRoles = Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN);
+
+        Mockito.lenient()
+                .when(issueProperties.allowedRoles().updateIssueRoles())
+                .thenReturn(expectedRoles);
     }
 
     @DisplayName("Успешное обновление полей задачи")
     @Test
     void updateIssue_Success() {
-        ReflectionTestUtils.setField(issueService, "objectMapper", new ObjectMapper());
-
         Issue existingIssue = new Issue();
         existingIssue.setId(ISSUE_ID);
+        existingIssue.setProjectId(PROJECT_ID);
         existingIssue.setSummary("Old Summary");
         existingIssue.setDescription("Old Description");
         existingIssue.setPriority(IssuePriority.LOW);
@@ -90,27 +46,27 @@ class UpdateIssueTest {
         String newDescription = "New Description";
         IssuePriority newPriority = IssuePriority.HIGH;
 
-        IssueHistory history = new IssueHistory();
-        OutboxEvent event = new OutboxEvent();
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
         Mockito.when(projectRoleChecker.checkProjectRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
                 Mockito.eq(ACTOR_USER_ID),
-                Mockito.anySet()
+                Mockito.eq(expectedRoles)
         )).thenReturn(Mono.empty());
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        Mockito.when(issueMapper.buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID)).thenReturn(history);
-        Mockito.when(issueMapper.buildOutboxEvent(existingIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, REQUEST_ID)).thenReturn(event);
+        Mockito.when(issueRepository.save(Mockito.any(Issue.class))).thenAnswer(inv -> Mono.just((Issue) inv.getArgument(0)));
 
-        Mockito.when(issueRepository.save(existingIssue)).thenReturn(Mono.just(existingIssue));
-        Mockito.when(issueHistoryRepository.save(history)).thenReturn(Mono.just(history));
-        Mockito.when(outboxEventRepository.save(event)).thenReturn(Mono.just(event));
+        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
+                        Mockito.any(Issue.class), Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class)))
+                .thenReturn(Mono.empty());
+        Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
+                        Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.UPDATED), Mockito.any(JsonNode.class)))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.updateIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID,
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
                         newSummary, newDescription, newPriority))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getSummary()).isEqualTo(newSummary);
@@ -120,71 +76,70 @@ class UpdateIssueTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.anySet());
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(issueRepository).save(existingIssue);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
+        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID),
+                Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority));
+        Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
+        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+                Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class));
+        Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+                Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.UPDATED), Mockito.any(JsonNode.class));
 
-        ArgumentCaptor<IssueHistory> historyCaptor = ArgumentCaptor.forClass(IssueHistory.class);
-        Mockito.verify(issueHistoryRepository).save(historyCaptor.capture());
-        Assertions.assertThat(historyCaptor.getValue()).isSameAs(history);
-        Assertions.assertThat(historyCaptor.getValue().getPayload()).isNotNull();
-
-        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
-        Mockito.verify(outboxEventRepository).save(eventCaptor.capture());
-        Assertions.assertThat(eventCaptor.getValue()).isSameAs(event);
-
-        Mockito.verify(issueMapper).buildIssueHistory(existingIssue, IssueEventType.UPDATED, ACTOR_USER_ID);
-        Mockito.verify(issueMapper).buildOutboxEvent(existingIssue, AggregateType.ISSUE.getValue(), EventType.ISSUE_UPDATED, REQUEST_ID);
-
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper, projectRoleChecker);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker);
     }
 
     @DisplayName("Возврат задачи без изменений, если переданные поля совпадают с текущими")
     @Test
-    void updateIssue_NoChanges() {
+    void updateIssue_return_NoChanges() {
         String sameSummary = "Same Summary";
         String sameDescription = "Same Description";
         IssuePriority samePriority = IssuePriority.MEDIUM;
 
         Issue existingIssue = new Issue();
         existingIssue.setId(ISSUE_ID);
+        existingIssue.setProjectId(PROJECT_ID);
         existingIssue.setSummary(sameSummary);
         existingIssue.setDescription(sameDescription);
         existingIssue.setPriority(samePriority);
         existingIssue.setVersion(1);
 
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
+
         Mockito.when(projectRoleChecker.checkProjectRole(
-                Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.anySet()
+                Mockito.eq(REQUEST_ID),
+                Mockito.eq(NODE_ID),
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(ACTOR_USER_ID),
+                Mockito.eq(expectedRoles)
         )).thenReturn(Mono.empty());
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-
         StepVerifier.create(issueService.updateIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID,
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
                         sameSummary, sameDescription, samePriority))
                 .expectNext(existingIssue)
                 .verifyComplete();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.anySet());
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper, projectRoleChecker);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
+        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(sameSummary), Mockito.eq(sameDescription), Mockito.eq(samePriority));
+
+        Mockito.verifyNoMoreInteractions(issueRepository, projectRoleChecker);
+        Mockito.verifyNoInteractions(issueHistoryService, outboxEventService);
     }
 
     @DisplayName("Выбрасывание ошибки, если задачи нет или она отмечена удаленной")
     @Test
-    void updateIssue_NotFound() {
+    void updateIssue_NotFound_ThrowsDomainException() {
         String newSummary = "New Summary";
         String newDescription = "New Description";
         IssuePriority newPriority = IssuePriority.HIGH;
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.anySet()
-        )).thenReturn(Mono.empty());
-
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.empty());
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.updateIssue(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ISSUE_ID, ACTOR_USER_ID,
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
                         newSummary, newDescription, newPriority))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertThat(throwable).isInstanceOf(DomainException.class);
@@ -194,8 +149,8 @@ class UpdateIssueTest {
                 })
                 .verify();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.anySet());
-        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryRepository, outboxEventRepository, issueMapper, projectRoleChecker);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verifyNoMoreInteractions(issueRepository);
+        Mockito.verifyNoInteractions(projectRoleChecker, issueHistoryService, outboxEventService);
     }
 }

@@ -1,28 +1,29 @@
 package ru.taska.service;
 
-import java.time.Duration;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.ProjectRole;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
-import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.OutboxEvent;
-import ru.taska.event.AggregateType;
-import ru.taska.event.EventType;
+import ru.taska.domain.ProjectRole;
+import ru.taska.util.RequestHasher;
 
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
 class CreateIssueTest extends IssueServiceImplTest {
 
     private Set<ProjectRole> allowedRoles;
+    private String expectedHash;
+    private MockedStatic<RequestHasher> mockedRequestHasher;
 
     @BeforeEach
     void setUp() {
@@ -31,32 +32,52 @@ class CreateIssueTest extends IssueServiceImplTest {
                 ProjectRole.MEMBER
         );
 
-        Mockito.when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
-        Mockito.when(issueProperties.idempotencyKeyTtl().ttl()).thenReturn(Duration.ofHours(24));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles)
-                )
+        expectedHash = "mocked_request_hash";
+        mockedRequestHasher = Mockito.mockStatic(RequestHasher.class);
+        mockedRequestHasher.when(() -> RequestHasher.hashIssueCreateRequest(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(expectedHash);
+
+        Mockito.lenient().when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
+        Mockito.lenient().when(issueProperties.idempotencyKeyTtl().ttl()).thenReturn(Duration.ofHours(24));
+
+        Mockito.lenient().when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
                 .thenReturn(Mono.empty());
-        Mockito.when(grpcProjectServiceClient.getProjectKey(REQUEST_ID, NODE_ID, PROJECT_ID))
+
+        Mockito.lenient().when(grpcProjectServiceClient.getProjectKey(REQUEST_ID, NODE_ID, PROJECT_ID))
                 .thenReturn(Mono.just("TSK"));
-        Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
+        Mockito.lenient().when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
-        Mockito.when(idempotencyKeyRepository.findByUserIdAndKey(Mockito.any(), Mockito.any()))
-                       .thenReturn(Mono.empty());
-        Mockito.when(issueRepository.save(Mockito.any()))
+        Mockito.lenient().when(idempotencyKeyRepository.findByUserIdAndKey(Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.empty());
+
+        Mockito.lenient().when(issueRepository.save(Mockito.any()))
                 .thenAnswer(invocation -> {
                     Issue issue = invocation.getArgument(0);
                     return Mono.just(issue.toBuilder().id(UUID.randomUUID()).build());
                 });
-        Mockito.when(issueHistoryRepository.save(Mockito.any()))
-                .thenAnswer(invocation -> Mono.just((IssueHistory) invocation.getArgument(0)));
-        Mockito.when(outboxEventRepository.save(Mockito.any()))
-                .thenAnswer(invocation -> Mono.just((OutboxEvent) invocation.getArgument(0)));
-        Mockito.when(idempotencyKeyRepository.save(Mockito.any()))
+
+        Mockito.lenient().when(issueHistoryService.saveIssueHistory(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
+                .thenReturn(Mono.empty());
+        Mockito.lenient().when(outboxEventService.saveOutboxEvent(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
+                .thenReturn(Mono.empty());
+
+        IdempotencyKey mockedKey = new IdempotencyKey();
+        Mockito.doReturn(mockedKey)
+                .when(issueMapper).buildIdempotencyKey(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.lenient().when(idempotencyKeyRepository.save(Mockito.any()))
                 .thenAnswer(invocation -> Mono.just((IdempotencyKey) invocation.getArgument(0)));
     }
 
+    @AfterEach
+    void tearDown() {
+        if (mockedRequestHasher != null) {
+            mockedRequestHasher.close();
+        }
+    }
+
     @Test
+    @DisplayName("Должен вызывать счетчик проекта при создании задачи")
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
@@ -71,6 +92,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен присваивать задаче номер, полученный из счетчика")
     void shouldAssignIssueNumberFromCounter() {
         int nextIssueNumber = 5;
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
@@ -91,6 +113,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен инкрементировать счетчик для каждой создаваемой задачи")
     void shouldIncrementCounterForEachCreatedIssue() {
         Mockito.when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1))
@@ -118,20 +141,15 @@ class CreateIssueTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен вызывать метод сохранения Outbox события при создании задачи")
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
                 "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
         ).block();
 
-        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        Mockito.verify(outboxEventRepository, Mockito.times(1))
-                .save(captor.capture());
-
-        OutboxEvent savedEvent = captor.getValue();
-        Assertions.assertThat(savedEvent.getAggregateType()).isEqualTo(AggregateType.ISSUE.getValue());
-        Assertions.assertThat(savedEvent.getEventType()).isEqualTo(String.valueOf(EventType.ISSUE_CREATED.getValue()));
-        Assertions.assertThat(savedEvent.getAggregateId()).isNotNull();
+        Mockito.verify(outboxEventService, Mockito.times(1))
+                .saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class));
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
         Mockito.verify(projectRoleChecker).checkProjectRole(

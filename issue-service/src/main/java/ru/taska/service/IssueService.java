@@ -29,7 +29,6 @@ public interface IssueService {
     Mono<Issue> assignIssue(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
             UUID assigneeId,
             UUID actorUserId
@@ -39,7 +38,6 @@ public interface IssueService {
     Mono<IssueWithHistory> getIssue(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
             UUID actorUserId
     );
@@ -61,7 +59,6 @@ public interface IssueService {
      *
      * @param requestId   айди запроса.
      * @param nodeId      айди узла.
-     * @param projectId   айди проекта.
      * @param issueId     айди удаляемой задачи.
      * @param actorUserId айди юзера, удаляющего задачу.
      * @return Mono<{@link Issue}> тело удаленной задачи.
@@ -69,7 +66,6 @@ public interface IssueService {
     Mono<Issue> deleteIssue(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
             UUID actorUserId
     );
@@ -81,7 +77,6 @@ public interface IssueService {
      *
      * @param requestId   айди запроса
      * @param nodeId      айди узла
-     * @param projectId   айди проекта
      * @param issueId     айди изменяемой задачи
      * @param actorUserId айди изменяющего юзера
      * @param summary     короткие описание задачи
@@ -91,7 +86,6 @@ public interface IssueService {
      */
     Mono<Issue> updateIssue(String requestId,
                             String nodeId,
-                            UUID projectId,
                             UUID issueId,
                             UUID actorUserId,
                             String summary,
