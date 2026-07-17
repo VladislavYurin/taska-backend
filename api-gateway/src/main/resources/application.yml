@@ -4,12 +4,14 @@ server:
 spring:
   application:
     name: api-gateway
-  springdoc:
-    swagger-ui:
-      url: /openapi.yml
-      path: /swagger-ui.html
-    api-docs:
-      enabled: false
+
+springdoc:
+  swagger-ui:
+    url: /openapi.yml
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+  api-docs:
+    enabled: true
 
 management:
   endpoints:

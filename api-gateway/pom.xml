@@ -140,7 +140,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/src/main/resources/openapi.yml</inputSpec>
+                            <inputSpec>${project.basedir}/src/main/resources/static/openapi.yml</inputSpec>
                             <generatorName>spring</generatorName>
                             <apiPackage>ru.taska.api</apiPackage>
                             <modelPackage>ru.taska.domain.dto</modelPackage>
