@@ -1,24 +1,24 @@
 package ru.taska.grpc;
 
-import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
 import ru.taska.api.auth.admin.inviteuser.v1.InviteUserResponse;
-import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
 import ru.taska.service.AdminInviteUserService;
 import validator.GrpcRequestValidators;
 
 @Slf4j
-@GrpcService
+@Service
 @RequiredArgsConstructor
-public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrpc.AdminInviteUserServiceImplBase {
+public class AdminInviteUserGrpcService {
 
     private final AdminInviteUserService adminInviteUserService;
 
-    @Override
+    @TrackMetrics(counter = "auth-service_inviteUser_grpc_counter",
+                    timer = "auth-service_inviteUser_grpc_timer")
     public Mono<InviteUserResponse> inviteUser(Mono<InviteUserRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -38,7 +38,6 @@ public class AdminInviteUserGrpcService extends ReactorAdminInviteUserServiceGrp
                     return adminInviteUserService.inviteUser(req)
                                                  .doOnNext(resp -> log.info("[{}][{}] user invited: userId={}",
                                                                             requestId, nodeId, resp.getUserId()));
-                })
-                .transform(GrpcExceptionHandler.withErrorHandling("inviteUser"));
+                });
     }
 }

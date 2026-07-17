@@ -17,6 +17,7 @@ volumes:
   pg_admin_data:
   pgadmin_data:
   kafka_data:
+  prometheus_data:
   grafana_data:
   minio_data:
 
@@ -129,13 +130,34 @@ services:
     restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro # Монтируем папку provisioning (в ней лежат папки dashboard и datasource). Без этого созданные вручную настройки пропадут при перезапуске контейнера
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro # Монтируем папку с вашими JSON-дашбордами автоматической загрузки готовых дашбордов (файлы JSON) при старте
     env_file:
       - .env
     depends_on:
-      loki:
+      prometheus:
         condition: service_started
-
+      loki:
+          condition: service_started
+  # --------------------
+  # Prometheus
+  # --------------------
+  prometheus:
+    image: prom/prometheus:v3.13.0
+    container_name: taska-prometheus
+    networks:
+      - taskanetwork
+      - public
+    env_file:
+      - .env
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Монтируем файл конфигурации. (:ro) Режим read-only. Prometheus не сможет случайно испортить ваш файл конфигурации.
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml' # Указываем Prometheus, где именно внутри контейнера искать файл настроек
+      - '--storage.tsdb.path=/prometheus'  # Указываем путь к папке, куда сохранять базу данных метрик
+      - '--web.enable-lifecycle' #  ВАЖНО: Активирует API управления. Позволяет обновить настройки на лету БЕЗ перезапуска контейнера. После изменения файла prometheus.yml достаточно выполнить команду: curl -X POST http://localhost:9090/-/reload
+    restart: unless-stopped # Автоматический перезапуск контейнера при ошибках
   # --------------------
   # MinIO
   # --------------------

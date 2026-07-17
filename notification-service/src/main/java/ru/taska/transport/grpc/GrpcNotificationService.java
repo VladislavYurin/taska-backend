@@ -1,30 +1,30 @@
 package ru.taska.transport.grpc;
 
-import exception.GrpcExceptionHandler;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.MarkAsReadResponse;
 import ru.taska.api.notification.v1.NotificationResponse;
-import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.mapper.NotificationMapper;
 import ru.taska.service.NotificationInboxService;
 import validator.GrpcRequestValidators;
 
 @Slf4j
-@GrpcService
+@Service
 @RequiredArgsConstructor
-public class GrpcNotificationService extends ReactorNotificationServiceGrpc.NotificationServiceImplBase {
+public class GrpcNotificationService {
 
     private final NotificationInboxService notificationInboxService;
     private final NotificationMapper notificationMapper;
 
-    @Override
+    @TrackMetrics(counter = "notification-service_list-Notifications_grpc_counter",
+                    timer = "notification-service_list-Notifications_grpc_timer")
     public Mono<ListNotificationsResponse> listNotifications(Mono<ListNotificationsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -51,11 +51,11 @@ public class GrpcNotificationService extends ReactorNotificationServiceGrpc.Noti
                             .map(notifications -> ListNotificationsResponse.newBuilder()
                                     .addAllNotifications(notifications)
                                     .build());
-                }))
-                .transform(GrpcExceptionHandler.withErrorHandling("listNotifications"));
+                }));
     }
 
-    @Override
+    @TrackMetrics(counter = "notification-service_mark-As-Read_grpc_counter",
+            timer = "notification-service_mark-As-Read_grpc_timer")
     public Mono<MarkAsReadResponse> markAsRead(Mono<MarkAsReadRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -79,8 +79,7 @@ public class GrpcNotificationService extends ReactorNotificationServiceGrpc.Noti
                     return notificationInboxService.markAsRead(notificationId, userId);
                 }))
                 .map(notificationMapper::toNotificationProto)
-                .map(this::toMarkAsReadResponse)
-                .transform(GrpcExceptionHandler.withErrorHandling("markAsRead"));
+                .map(this::toMarkAsReadResponse);
     }
 
     private MarkAsReadResponse toMarkAsReadResponse(NotificationResponse notification) {

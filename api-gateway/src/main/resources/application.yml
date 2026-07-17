@@ -21,6 +21,15 @@ management:
       show-details: never
       probes:
         enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+    # Разрешает сбор метрик Prometheus
+  metrics:
+    tags:
+      #Prometheus сразу поймет, от какого сервиса пришли метрики
+      application: ${spring.application.name}
 
 grpc:
   client:
@@ -28,6 +37,11 @@ grpc:
       host: ${AUTH_GRPC_HOST:localhost}
       port: ${AUTH_GRPC_PORT:9091}
       deadlineDuration: ${AUTH_GRPC_DEADLINE:3000}
+
+    issue-service:
+      host: ${ISSUE_GRPC_HOST:localhost}
+      port: ${ISSUE_GRPC_PORT:9094}
+      deadlineDuration: ${ISSUE_GRPC_DEADLINE:3000}
 
 logging:
   level:

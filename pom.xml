@@ -25,6 +25,7 @@
         <module>workflow-service</module>
         <module>issue-service</module>
         <module>notification-service</module>
+        <module>metrics-starter</module>
         <module>admin-service</module>
     </modules>
 
@@ -54,6 +55,13 @@
         <spring-cloud.version>2025.1.1</spring-cloud.version>
 
         <testcontainers.version>1.21.4</testcontainers.version>
+
+        <!-- Prometheus-->
+        <prometheus.version>1.16.4</prometheus.version>
+
+        <!-- AOP-->
+        <aop.version>3.5.16</aop.version>
+
     </properties>
 
     <profiles>
@@ -138,6 +146,22 @@
                 <version>${lombok.version}</version>
                 <scope>provided</scope>
             </dependency>
+
+            <!-- Prometheus-->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>${prometheus.version}</version>
+            </dependency>
+
+            <!--AOP-->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-aop</artifactId>
+                <version>${aop.version}</version>
+            </dependency>
+
+
         </dependencies>
     </dependencyManagement>
 

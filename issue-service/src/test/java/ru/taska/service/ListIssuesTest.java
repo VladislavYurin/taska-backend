@@ -2,15 +2,16 @@ package ru.taska.service;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.ProjectRole;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.ProjectRole;
 
 import java.util.Set;
 
@@ -33,6 +34,8 @@ class ListIssuesTest extends IssueServiceImplTest {
         );
 
         Mockito.when(issueProperties.allowedRoles().listIssueRoles()).thenReturn(allowedRoles);
+        Mockito.lenient().when(issueProperties.list().defaultPageSize()).thenReturn(10);
+        Mockito.lenient().when(issueProperties.list().maxPageSize()).thenReturn(50);
         Mockito.when(projectRoleChecker.checkProjectRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )
@@ -53,6 +56,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен успешно возвращать задачи из репозитория")
     void shouldReturnIssuesFromRepository() {
         Issue issue = buildIssue();
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
@@ -77,6 +81,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен корректно передавать null-фильтры в репозиторий")
     void shouldPassNullFiltersToRepository() {
         Issue issue = buildIssue();
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
@@ -100,6 +105,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен возвращать пустую страницу, если репозиторий пуст")
     void shouldReturnEmptyPageWhenRepositoryReturnsEmpty() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
@@ -123,6 +129,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен корректно возвращать множественные задачи")
     void shouldReturnMultipleIssues() {
         Issue first = buildIssue();
         Issue second = buildIssue();
@@ -148,6 +155,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен пробрасывать ошибку из репозитория наверх по потоку")
     void shouldPropagateErrorFromRepository() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
@@ -169,6 +177,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен рассчитывать корректный сдвиг (offset) для переданной страницы")
     void shouldCalculateCorrectOffsetForPage() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(10L));
@@ -190,6 +199,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен сбрасывать страницу в ноль, если передано отрицательное значение")
     void shouldFallbackToPageZeroWhenPageIsNegative() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
@@ -212,6 +222,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен откатываться на дефолтный размер страницы, если передан невалидный размер")
     void shouldFallbackToDefaultPageSizeWhenPageSizeIsInvalid() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
@@ -233,6 +244,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен ограничивать размер страницы максимальным лимитом, если передано слишком большое значение")
     void shouldClampToMaxPageSizeWhenPageSizeExceedsLimit() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));
@@ -255,6 +267,7 @@ class ListIssuesTest extends IssueServiceImplTest {
     }
 
     @Test
+    @DisplayName("Должен использовать значения по умолчанию, если параметры страницы и ее размера равны null")
     void shouldUseDefaultsWhenPageAndPageSizeAreNull() {
         Mockito.when(issueRepository.countByFilter(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Mono.just(0L));

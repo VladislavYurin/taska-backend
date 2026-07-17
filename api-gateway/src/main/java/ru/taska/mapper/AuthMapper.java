@@ -160,8 +160,8 @@ public class AuthMapper {
      * @param protoGobalRole автогенерированная глобальная роль {@link GlobalRoleProto} из gRPC контракта
      * @return соответствующий элемент доменного перечисления шлюза {@link GlobalRole}
      */
-    public GlobalRole toGlobalRole(GlobalRoleProto protoGobalRole) {
-        return switch (protoGobalRole) {
+    public GlobalRole toGlobalRole(GlobalRoleProto protoGlobalRole) {
+        return switch (protoGlobalRole) {
             case GLOBAL_ROLE_GLOBAL_ADMIN -> GlobalRole.GLOBAL_ADMIN;
             case GLOBAL_ROLE_USER -> GlobalRole.USER;
             default -> GlobalRole.UNSPECIFIED;

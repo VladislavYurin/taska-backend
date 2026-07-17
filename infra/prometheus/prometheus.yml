@@ -1,0 +1,82 @@
+global:
+  scrape_interval: 15s     # Как часто собирать метрики
+  evaluation_interval: 15s # Как часто проверять правила
+  scrape_timeout: 10s      # Тайм-аут для сбора метрик
+
+scrape_configs:
+  # Мониторинг самого Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090']
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-gateway'
+      - source_labels: [ job ]
+        target_label: application
+
+  # Auth Service
+  - job_name: 'auth-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['auth-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'auth-service'
+      - source_labels: [ job ]
+        target_label: application
+
+  # Project Service
+  - job_name: 'project-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['project-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'project-service'
+      - source_labels: [ job ]
+        target_label: application
+
+  # Workflow Service
+  - job_name: 'workflow-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['workflow-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'workflow-service'
+      - source_labels: [ job ]
+        target_label: application
+
+  # Issue Service
+  - job_name: 'issue-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['issue-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'issue-service'
+      - source_labels: [ job ]
+        target_label: application
+
+  # Notification Service
+  - job_name: 'notification-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notification-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'notification-service'
+      - source_labels: [ job ]
+        target_label: application

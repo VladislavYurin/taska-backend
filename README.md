@@ -72,6 +72,18 @@ TODO
 
 Название кластера в UI: `taska-kafka`.
 
+## Мониторинг (Grafana + Prometheus)
+#### Запуск
+Поднимаем контейнеры сервисов, db, Prometheus, Grafana
+```bash
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile infra --profile services up -d --build
+```
+#### Доступ
+
+После запуска интерфейс Prometheus будет доступен по адресу:
+
+**[http://localhost:9090](http://localhost:9090)**
+
 ## Логирование (Loki + Promtail + Grafana)
 #### Запуск
 
