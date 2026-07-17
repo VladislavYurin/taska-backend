@@ -3,6 +3,12 @@ info:
   title: Taska API Gateway Contract
   version: 1.0.0
 
+servers:
+  - url: https://api.taska.ozero.dev
+    description: Production
+  - url: http://localhost:8080
+    description: Local
+
 paths:
   /api/v1/auth/login:
     post:
