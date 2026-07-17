@@ -157,7 +157,7 @@ public class AuthMapper {
      * Преобразует перечисление (Enum) глобальной роли пользователя из Protobuf контракта во внутренние глобальные роли шлюза.
      * Исключает префиксы gRPC-слоя (например, GLOBAL_ROLE_USER переводит в USER).
      *
-     * @param protoGobalRole автогенерированная глобальная роль {@link GlobalRoleProto} из gRPC контракта
+     * @param protoGlobalRole автогенерированная глобальная роль {@link GlobalRoleProto} из gRPC контракта
      * @return соответствующий элемент доменного перечисления шлюза {@link GlobalRole}
      */
     public GlobalRole toGlobalRole(GlobalRoleProto protoGlobalRole) {
