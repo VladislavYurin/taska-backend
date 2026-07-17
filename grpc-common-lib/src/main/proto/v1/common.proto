@@ -32,7 +32,7 @@ enum UserStatus {
 enum GlobalRoleProto {
   GLOBAL_ROLE_UNSPECIFIED = 0;
   GLOBAL_ROLE_USER = 1;
-  GLOBAL_ROLE_ADMIN = 2;
+  GLOBAL_ROLE_GLOBAL_ADMIN = 2;
 }
 
 message UserContext {

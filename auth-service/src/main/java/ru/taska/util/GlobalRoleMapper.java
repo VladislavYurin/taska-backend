@@ -21,7 +21,7 @@ public final class GlobalRoleMapper {
      */
     public static GlobalRole toGlobalRole(GlobalRoleProto protoGobalRole) {
         return switch (protoGobalRole) {
-            case GLOBAL_ROLE_ADMIN -> GlobalRole.GLOBAL_ADMIN;
+            case GLOBAL_ROLE_GLOBAL_ADMIN -> GlobalRole.GLOBAL_ADMIN;
             case GLOBAL_ROLE_USER -> GlobalRole.USER;
             default -> GlobalRole.UNSPECIFIED;
         };
@@ -35,7 +35,7 @@ public final class GlobalRoleMapper {
      */
     public static GlobalRoleProto toProtoGlobalRole (GlobalRole globalRole) {
         return switch (globalRole) {
-            case GLOBAL_ADMIN -> GlobalRoleProto.GLOBAL_ROLE_ADMIN;
+            case GLOBAL_ADMIN -> GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN;
             case USER -> GlobalRoleProto.GLOBAL_ROLE_USER;
             default -> GlobalRoleProto.GLOBAL_ROLE_UNSPECIFIED;
         };
