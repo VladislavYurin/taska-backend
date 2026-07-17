@@ -3,6 +3,10 @@ info:
   title: Taska API Gateway Contract
   version: 1.0.0
 
+servers:
+  - url: /
+    description: Current host
+
 paths:
   /api/v1/auth/login:
     post:
