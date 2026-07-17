@@ -51,7 +51,7 @@ class GrpcAuthServiceClientTest {
     @Mock
     private GrpcClientProperties properties;
     @Mock
-    private GrpcClientProperties.AuthService authServiceProp;
+    private GrpcClientProperties.Service authServiceProp;
 
     @InjectMocks
     private GrpcAuthServiceClient client;

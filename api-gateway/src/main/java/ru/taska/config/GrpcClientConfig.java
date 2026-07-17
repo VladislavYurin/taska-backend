@@ -2,14 +2,11 @@ package ru.taska.config;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 
 @Configuration
@@ -32,5 +29,21 @@ public class GrpcClientConfig {
     @Bean
     public ReactorAuthServiceGrpc.ReactorAuthServiceStub authServiceStub() {
         return ReactorAuthServiceGrpc.newReactorStub(authManagedChannel());
+    }
+
+    @Bean
+    public ManagedChannel issueManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.issueService().host(),
+                        properties.issueService().port()
+                )
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
+    public ReactorIssueServiceGrpc.ReactorIssueServiceStub issueServiceStub() {
+        return ReactorIssueServiceGrpc.newReactorStub(issueManagedChannel());
     }
 }
