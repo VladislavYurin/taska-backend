@@ -14,7 +14,9 @@ COPY notification-service ./notification-service
 COPY metrics-starter ./metrics-starter
 COPY admin-service ./admin-service
 
-RUN mvn -q -DskipTests -pl admin-service -am clean package
+ENV MAVEN_OPTS="-Xmx512m -Xms256m"
+RUN --mount=type=cache,id=maven-repo,target=/root/.m2,sharing=locked \
+    mvn -B -ntp -DskipTests -pl admin-service -am clean package
 
 FROM eclipse-temurin:21-jre
 
