@@ -21,6 +21,15 @@ management:
       show-details: never
       probes:
         enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+    # Разрешает сбор метрик Prometheus
+  metrics:
+    tags:
+      #Prometheus сразу поймет, от какого сервиса пришли метрики
+      application: ${spring.application.name}
 
 grpc:
   client:

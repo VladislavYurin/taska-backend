@@ -2,6 +2,8 @@ server:
   port: ${NOTIFICATION_SERVER_PORT:8085}
 
 spring:
+  application:
+    name: notification-service
   grpc:
     server:
       port: ${NOTIFICATION_GRPC_SERVER_PORT:9095}
@@ -46,6 +48,15 @@ management:
       show-details: never
       probes:
         enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+    # Разрешает сбор метрик Prometheus
+  metrics:
+    tags:
+      #Prometheus сразу поймет, от какого сервиса пришли метрики
+      application: ${spring.application.name}
 
 kafka:
   consumer:

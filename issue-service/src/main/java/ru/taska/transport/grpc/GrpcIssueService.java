@@ -1,12 +1,15 @@
 package ru.taska.transport.grpc;
 
-import exception.GrpcExceptionHandler;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.grpc.server.service.GrpcService;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
@@ -18,7 +21,6 @@ import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
-import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
@@ -28,20 +30,17 @@ import ru.taska.service.IssueService;
 import ru.taska.service.transition.IssueTransitionProcessor;
 import validator.GrpcRequestValidators;
 
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Consumer;
-
 @Slf4j
-@GrpcService
+@Service
 @RequiredArgsConstructor
-public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBase {
+public class GrpcIssueService {
 
     private final IssueService issueService;
     private final IssueTransitionProcessor issueTransitionProcessor;
     private final IssueMapper issueMapper;
 
-    @Override
+    @TrackMetrics(counter = "issue-service_create-issue_grpc_counter",
+            timer = "issue-service_create-issue_grpc_timer")
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -106,11 +105,11 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "createIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueProto)
-                .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
+                .map(issueMapper::toIssueProto);
     }
 
-    @Override
+    @TrackMetrics(counter = "issue-service_get-issue_grpc_counter",
+            timer = "issue-service_get-issue_grpc_timer")
     public Mono<IssueWithHistoryResponse> getIssue(Mono<GetIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -153,11 +152,11 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "getIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueDetailsProto)
-                .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
+                .map(issueMapper::toIssueDetailsProto);
     }
 
-    @Override
+    @TrackMetrics(counter = "issue-service_list-issues_grpc_counter",
+            timer = "issue-service_list-issues_grpc_timer")
     public Mono<ListIssuesResponse> listIssues(Mono<ListIssuesRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -227,11 +226,11 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                     .doOnError(DomainException.class,
                                             logOnError(requestId, nodeId, "listIssues")
                                     );
-                        }))
-                .transform(GrpcExceptionHandler.withErrorHandling("listIssues"));
+                        }));
     }
 
-    @Override
+    @TrackMetrics(counter = "issue-service_assign-issue_grpc_counter",
+            timer = "issue-service_assign-issue_grpc_timer")
     public Mono<IssueResponse> assignIssue(Mono<AssignIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -279,8 +278,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "assignIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueProto)
-                .transform(GrpcExceptionHandler.withErrorHandling("assignIssue"));
+                .map(issueMapper::toIssueProto);
     }
 
 
@@ -290,7 +288,8 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
      * @param request .proto с айди задачи и инициатором удаления
      * @return Mono<{@link DeleteIssueResponse}> с соответствующими параметрами созданного проекта
      */
-    @Override
+    @TrackMetrics(counter = "issue-service_delete-issue_grpc_counter",
+            timer = "issue-service_delete-issue_grpc_timer")
     public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -326,8 +325,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                     actorUserId
                             );
                         })
-                        .map(issueMapper::toDeleteIssueProto)
-                        .transform(GrpcExceptionHandler.withErrorHandling("deleteIssue")));
+                        .map(issueMapper::toDeleteIssueProto));
     }
 
     /**
@@ -336,7 +334,8 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
      * @param request .proto с параметрами на обновление задачи
      * @return Mono<{@link UpdateIssueResponse}> с соответствующими параметрами созданного проекта
      */
-    @Override
+    @TrackMetrics(counter = "issue-service_update-issue_grpc_counter",
+            timer = "issue-service_update-issue_grpc_timer")
     public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -361,8 +360,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                             requestId, nodeId, issueId, actorUserId, summary, description, priority);
                     return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority);
                 })
-                .map(issueMapper::toUpdateIssueProto)
-                .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
+                .map(issueMapper::toUpdateIssueProto);
     }
 
     /**
@@ -371,7 +369,8 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
      * @param request {@link Mono} с запросом {@link TransitionIssueRequest} с данными для перехода задачи по workflow.
      * @return        {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
      */
-    @Override
+    @TrackMetrics(counter = "issue-service_transition-issue_grpc_counter",
+            timer = "issue-service_transition-issue_grpc_timer")
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -428,8 +427,7 @@ public class GrpcIssueService extends ReactorIssueServiceGrpc.IssueServiceImplBa
                                             logOnError(requestId, nodeId, "transitionIssue")
                                     );
                         }))
-                .map(issueMapper::toIssueDetailsProto)
-                .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
+                .map(issueMapper::toIssueDetailsProto);
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {

@@ -1,0 +1,2 @@
+#Помечаем для Spring Boot класс-конфигурацию MetricsAutoConfiguration для чтения.
+ru.taska.config.MetricsAutoConfiguration

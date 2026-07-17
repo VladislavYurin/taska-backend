@@ -7,4 +7,10 @@ datasources:
     url: http://loki:3100
     jsonData:
       maxLines: 1000
+    isDefault: false
+  - name: Prometheus
+    type: prometheus
+    access: proxy # Через Grafana (а не браузер)
+    url: http://prometheus:9090 # Адрес Prometheus (имя службы в docker-compose). По этому порту (к контейнеру prometheus) будет обращаться Grafana для отображения метрик.
     isDefault: true
+    editable: true

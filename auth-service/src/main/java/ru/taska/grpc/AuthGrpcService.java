@@ -1,15 +1,14 @@
 package ru.taska.grpc;
 
 import com.google.protobuf.Empty;
-import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
+import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginResponse;
 import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
-import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.auth.v1.RefreshRequest;
 import ru.taska.api.auth.v1.RefreshResponse;
 import ru.taska.api.auth.v1.ValidateAccessTokenRequest;
@@ -21,11 +20,12 @@ import validator.GrpcRequestValidators;
 @Slf4j
 @GrpcService
 @RequiredArgsConstructor
-public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase {
+public class AuthGrpcService {
 
     private final AuthService authService;
 
-    @Override
+    @TrackMetrics(counter = "auth-service_login_grpc_counter",
+            timer = "auth-service_login_grpc_timer")
     public Mono<LoginResponse> login(Mono<LoginRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -56,11 +56,11 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setAccessToken(response.getAccessToken())
                         .setRefreshToken(response.getRefreshToken())
                         .setExpiresIn(response.getExpiresIn())
-                        .build())
-                .transform(GrpcExceptionHandler.withErrorHandling("login"));
+                        .build());
     }
 
-    @Override
+    @TrackMetrics(counter = "auth-service_refresh_grpc_counter",
+            timer = "auth-service_refresh_grpc_timer")
     public Mono<RefreshResponse> refresh(Mono<RefreshRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -86,11 +86,11 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                         .setAccessToken(response.getAccessToken())
                         .setRefreshToken(response.getRefreshToken() != null ? response.getRefreshToken() : "")
                         .setExpiresIn(response.getExpiresIn())
-                        .build())
-                .transform(GrpcExceptionHandler.withErrorHandling("refresh"));
+                        .build());
     }
 
-    @Override
+    @TrackMetrics(counter = "auth-service_setPassword-byToken_grpc_counter",
+            timer = "auth-service_setPassword-byToken_grpc_timer")
     public Mono<Empty> setPasswordByToken(Mono<SetPasswordByTokenRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -114,11 +114,11 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                             .doOnSuccess(response -> log.debug("[{}][{}] Set new password successful", requestId, nodeId))
                             .doOnError(error -> log.warn("[{}][{}] Set new password failed: {}", requestId, nodeId, error.getMessage()));
                 })
-                .thenReturn(Empty.getDefaultInstance())
-                .transform(GrpcExceptionHandler.withErrorHandling("setPasswordByToken"));
+                .thenReturn(Empty.getDefaultInstance());
     }
 
-    @Override
+    @TrackMetrics(counter = "auth-service_validate-accessToken_grpc_counter",
+            timer = "auth-service_validate-accessToken_grpc_timer")
     public Mono<ValidateAccessTokenResponse> validateAccessToken(Mono<ValidateAccessTokenRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -149,7 +149,6 @@ public class AuthGrpcService extends ReactorAuthServiceGrpc.AuthServiceImplBase 
                 .map(userContext -> ValidateAccessTokenResponse.newBuilder()
                         .setUserContext(userContext)
                         .build()
-                )
-                .transform(GrpcExceptionHandler.withErrorHandling("validateAccessToken"));
+                );
     }
 }
