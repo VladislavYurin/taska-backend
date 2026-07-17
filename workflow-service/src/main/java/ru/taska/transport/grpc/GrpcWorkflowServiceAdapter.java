@@ -4,7 +4,12 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.workflow.v1.*;
+import ru.taska.api.workflow.v1.CreateWorkflowRequest;
+import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
+import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
+import ru.taska.api.workflow.v1.ValidateTransitionRequest;
+import ru.taska.api.workflow.v1.ValidateTransitionResponse;
+import ru.taska.api.workflow.v1.WorkflowResponse;
 
 @GrpcService
 @RequiredArgsConstructor

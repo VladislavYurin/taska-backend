@@ -4,7 +4,19 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.issue.v1.*;
+import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.IssueResponse;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssuesRequest;
+import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueResponse;
 
 @GrpcService
 @RequiredArgsConstructor

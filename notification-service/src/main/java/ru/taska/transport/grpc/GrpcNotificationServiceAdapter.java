@@ -4,7 +4,11 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.notification.v1.*;
+import ru.taska.api.notification.v1.ListNotificationsRequest;
+import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAsReadRequest;
+import ru.taska.api.notification.v1.MarkAsReadResponse;
+import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 
 @GrpcService
 @RequiredArgsConstructor

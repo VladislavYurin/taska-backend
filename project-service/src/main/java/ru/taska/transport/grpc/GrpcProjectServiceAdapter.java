@@ -4,7 +4,20 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.*;
+import ru.taska.api.project.v1.AddProjectMemberRequest;
+import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
+import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.GetProjectRequest;
+import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
+import ru.taska.api.project.v1.RmProjectMemberRequest;
+import ru.taska.api.project.v1.RmProjectMemberResponse;
 
 
 @GrpcService
