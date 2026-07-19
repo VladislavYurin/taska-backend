@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 
-class MinioStorageClientIT extends AbstractIT {
+class S3StorageClientIT extends AbstractIT {
 
     @Autowired
     private StorageClient storageClient;

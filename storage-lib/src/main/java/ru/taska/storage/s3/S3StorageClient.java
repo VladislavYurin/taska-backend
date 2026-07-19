@@ -1,5 +1,6 @@
-package ru.taska.storage.minio;
+package ru.taska.storage.s3;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -25,17 +26,12 @@ import java.io.InputStream;
 import java.util.UUID;
 
 @Slf4j
-public class MinioStorageClient implements StorageClient {
+@RequiredArgsConstructor
+public class S3StorageClient implements StorageClient {
 
     private final S3AsyncClient s3AsyncClient;
     private final S3Presigner s3Presigner;
     private final StorageProperties properties;
-
-    public MinioStorageClient(S3AsyncClient s3AsyncClient, S3Presigner s3Presigner, StorageProperties properties) {
-        this.s3AsyncClient = s3AsyncClient;
-        this.s3Presigner = s3Presigner;
-        this.properties = properties;
-    }
 
     @Override
     public Mono<String> putObject(InputStream data, String contentType, long contentLength) {

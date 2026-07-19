@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import ru.taska.storage.client.StorageClient;
-import ru.taska.storage.minio.MinioStorageClient;
+import ru.taska.storage.s3.S3StorageClient;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -44,6 +44,6 @@ public class StorageAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public StorageClient storageClient(S3AsyncClient s3AsyncClient, S3Presigner s3Presigner, StorageProperties properties) {
-        return new MinioStorageClient(s3AsyncClient, s3Presigner, properties);
+        return new S3StorageClient(s3AsyncClient, s3Presigner, properties);
     }
 }

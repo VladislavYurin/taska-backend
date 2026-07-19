@@ -10,7 +10,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.storage.config.StorageProperties;
 import ru.taska.storage.dto.PresignedUploadResult;
-import ru.taska.storage.minio.MinioStorageClient;
+import ru.taska.storage.s3.S3StorageClient;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class MinioStorageClientTest {
+class S3StorageClientTest {
 
     @Mock
     private S3AsyncClient s3AsyncClient;
@@ -51,7 +51,7 @@ class MinioStorageClientTest {
     private S3Presigner s3Presigner;
 
     private final StorageProperties properties = new StorageProperties();
-    private MinioStorageClient storageClient;
+    private S3StorageClient storageClient;
 
     private static final String BUCKET = "test-bucket";
     private static final String ALLOWED_CONTENT_TYPE = "image/jpeg";
@@ -64,7 +64,7 @@ class MinioStorageClientTest {
         properties.setAllowedContentTypes(List.of(ALLOWED_CONTENT_TYPE, "image/png"));
         properties.setMaxFileSizeBytes(MAX_FILE_SIZE_BYTES);
         properties.setPresignedUrlTtl(Duration.ofHours(1));
-        storageClient = new MinioStorageClient(s3AsyncClient, s3Presigner, properties);
+        storageClient = new S3StorageClient(s3AsyncClient, s3Presigner, properties);
     }
 
     // ─── generate object key ──────────────────────────────────────────────────
