@@ -19,6 +19,7 @@
         <module>common-lib</module>
         <module>grpc-common-lib</module>
         <module>kafka-lib</module>
+        <module>storage-lib</module>
         <module>api-gateway</module>
         <module>auth-service</module>
         <module>project-service</module>
@@ -62,6 +63,7 @@
         <!-- AOP-->
         <aop.version>3.5.16</aop.version>
 
+        <aws.sdk.version>2.31.75</aws.sdk.version>
     </properties>
 
     <profiles>
@@ -105,6 +107,15 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
                 <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- AWS SDK v2 BOM -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
