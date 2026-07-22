@@ -130,15 +130,10 @@ class WorkflowMapperTest {
     @Test
     @DisplayName("Должен очищать системные префиксы категорий статусов (STATUS_CATEGORY_*) в REST-строку")
     void shouldMapStatusCategoryCorrectly() {
-        var todoStatus = WorkflowStatus.newBuilder().setCategory(StatusCategory.STATUS_CATEGORY_TODO).build();
-        var inProgressStatus = WorkflowStatus.newBuilder().setCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS).build();
-        var doneStatus = WorkflowStatus.newBuilder().setCategory(StatusCategory.STATUS_CATEGORY_DONE).build();
-        var unspecifiedStatus = WorkflowStatus.newBuilder().setCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED).build();
-
-        assertThat(mapper.toStatusCategory(todoStatus)).isEqualTo("TODO");
-        assertThat(mapper.toStatusCategory(inProgressStatus)).isEqualTo("IN_PROGRESS");
-        assertThat(mapper.toStatusCategory(doneStatus)).isEqualTo("DONE");
-        assertThat(mapper.toStatusCategory(unspecifiedStatus)).isEqualTo("UNKNOWN");
+        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_TODO)).isEqualTo("TODO");
+        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
+        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
+        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
     }
 
 }

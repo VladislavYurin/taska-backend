@@ -111,7 +111,7 @@ public class WorkflowMapper {
         dto.setId(UUID.fromString(status.getId()));
         dto.setStatusKey(status.getStatusKey());
         dto.setName(status.getName());
-        dto.setCategory(toStatusCategory(status));
+        dto.setCategory(toStatusCategory(status.getCategory()));
         dto.setSortOrder(status.getSortOrder());
         dto.setCreatedAt(OffsetDateTime.parse(status.getCreatedAt()));
         dto.setUpdatedAt(OffsetDateTime.parse(status.getUpdatedAt()));
@@ -123,11 +123,11 @@ public class WorkflowMapper {
      * Преобразует перечисление (Enum) категории статуса из Protobuf контракта в очищенную REST-строку.
      * Исключает системные префиксы gRPC-слоя (например, STATUS_CATEGORY_DONE переводит в DONE).
      *
-     * @param status объект статуса {@link WorkflowStatus}, содержащий gRPC-категорию
+     * @param category объект статуса {@link StatusCategory}, содержащий gRPC-категорию
      * @return строковое представление категории для REST контракта
      */
-    public String toStatusCategory(WorkflowStatus status) {
-        return switch (status.getCategory()) {
+    public String toStatusCategory(StatusCategory category) {
+        return switch (category) {
             case STATUS_CATEGORY_TODO -> "TODO";
             case STATUS_CATEGORY_IN_PROGRESS -> "IN_PROGRESS";
             case STATUS_CATEGORY_DONE -> "DONE";
