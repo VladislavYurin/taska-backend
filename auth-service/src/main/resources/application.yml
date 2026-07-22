@@ -83,3 +83,17 @@ logging:
 
 admin:
   password: ${ADMIN_PASS:changeme}
+
+storage:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  public-url: ${MINIO_PUBLIC_URL:http://127.0.0.1:9000}
+  access-key: ${MINIO_ROOT_USER:minioadmin}
+  secret-key: ${MINIO_ROOT_PASSWORD:minioadmin}
+  region: ${MINIO_REGION:us-east-1}
+  bucket: ${MINIO_BUCKET_AVATARS:taska-avatars}
+  presigned-url-ttl: ${MINIO_PRESIGNED_URL_TTL:15m}
+  max-file-size-bytes: 2097152 # 2 MB
+  allowed-content-types:
+    - image/jpeg
+    - image/png
+    - image/webp

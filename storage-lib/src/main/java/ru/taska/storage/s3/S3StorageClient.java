@@ -91,9 +91,14 @@ public class S3StorageClient implements StorageClient {
     }
 
     @Override
-    public Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType) {
+    public Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes) {
         if (!properties.getAllowedContentTypes().contains(contentType)) {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Content type not allowed: " + contentType));
+        }
+
+        if (sizeBytes > properties.getMaxFileSizeBytes()) {
+            return Mono.error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + sizeBytes +
+                    " bytes exceeds maximum allowed size of " + properties.getMaxFileSizeBytes() + " bytes"));
         }
 
         String bucket = properties.getBucket();
