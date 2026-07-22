@@ -252,6 +252,8 @@ class ProfileServiceImplTest {
         void setUpConfirmAvatar() {
             Mockito.lenient().when(transactionalOperator.transactional(Mockito.any(Mono.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
+            Mockito.lenient().when(storageClient.objectExists(NEW_OBJECT_KEY))
+                    .thenReturn(Mono.just(true));
 
             savedAvatar = new UserAvatar();
             savedAvatar.setId(UUID.randomUUID());
