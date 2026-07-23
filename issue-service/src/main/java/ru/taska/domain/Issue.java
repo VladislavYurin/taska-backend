@@ -95,6 +95,42 @@ public class Issue {
     private UUID reporterId;
 
     /**
+     * Версия задачи. Инкрементируется при каждом изменении содержимого задачи.
+     */
+    @Column("version")
+    private Integer version;
+
+    /**
+     * Количество сторипоинтов выделенных на задачу
+     */
+    @Column("story_points")
+    private Double storyPoints;
+
+    /**
+     * Время начала выполнения задачи
+     */
+    @Column("start_date")
+    private Instant startDate;
+
+    /**
+     * Время окончания выполнения задачи
+     */
+    @Column("due_date")
+    private Instant dueDate;
+
+    /**
+     * Изначальное количество времени выделенное на выполнение задачи
+     */
+    @Column("original_estimate_minutes")
+    private Long originalEstimateMinutes;
+
+    /**
+     * Оставшееся количество времени на выполнение задачи
+     */
+    @Column("remaining_estimate_minutes")
+    private Long remainingEstimateMinutes;
+
+    /**
      * Временная метка создания записи (аудит).
      */
     @CreatedDate
@@ -107,12 +143,6 @@ public class Issue {
     @LastModifiedDate
     @Column("updated_at")
     private Instant updatedAt;
-
-    /**
-     * Версия задачи. Инкрементируется при каждом изменении содержимого задачи.
-     */
-    @Column("version")
-    private Integer version;
 
     /**
      * Временная метка мягкого удаления (null — запись активна).

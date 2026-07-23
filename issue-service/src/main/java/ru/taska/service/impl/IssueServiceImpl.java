@@ -35,7 +35,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -62,16 +61,9 @@ public class IssueServiceImpl implements IssueService {
 
     @Override
     @Transactional
-    public Mono<Issue> createIssue(
-            String requestId,
-            String nodeId,
-            String idempotencyKey,
-            UUID projectId,
-            IssueType issueType,
-            String summary,
-            String description,
-            IssuePriority priority,
-            UUID reporterId
+    public Mono<Issue> createIssue(String requestId, String nodeId, String idempotencyKey, UUID projectId, IssueType issueType,
+                                   String summary, String description, IssuePriority priority, UUID reporterId, Double storyPoints,
+                                   Instant startDate, Instant dueDate, Long originalEstimateMinutes
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
         String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
@@ -102,11 +94,16 @@ public class IssueServiceImpl implements IssueService {
                                             .issueKey(projectKey + "-" + number)
                                             .issueType(issueType)
                                             .summary(summary)
-                                            .description(Objects.requireNonNullElse(description, ""))
+                                            .description(description)
                                             .priority(priority)
                                             .reporterId(reporterId)
                                             .statusKey(INIT_STATUS)
                                             .version(INIT_VERSION)
+                                            .storyPoints(storyPoints)
+                                            .startDate(startDate)
+                                            .dueDate(dueDate)
+                                            .originalEstimateMinutes(originalEstimateMinutes)
+                                            .remainingEstimateMinutes(originalEstimateMinutes)
                                             .build());
                                 })
                                 .flatMap(issue -> {
@@ -181,7 +178,8 @@ public class IssueServiceImpl implements IssueService {
     @Override
     @Transactional
     public Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
-                                   String summary, String description, IssuePriority priority) {
+                                   String summary, String description, IssuePriority priority, Double storyPoints,
+                                   Instant startDate, Instant dueDate, Long originalEstimateMinutes, Long remainingEstimateMinutes) {
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
@@ -195,16 +193,25 @@ public class IssueServiceImpl implements IssueService {
                             .thenReturn(issue);
                 })
                 .flatMap(updatingIssue -> {
-                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority);
+                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority,
+                            storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
                     if (payload.isEmpty()) {
-                        log.info("[{}][{}] Issue with id: {} equals updated updatingIssue by user with id: {}",
+                        log.info("[{}][{}] Issue with id: {} equals updating Issue by user with id: {}",
                                 requestId, nodeId, issueId, actorUserId);
                         return Mono.just(updatingIssue);
                     }
 
-                    updatingIssue.setSummary(summary);
-                    updatingIssue.setDescription(description);
-                    updatingIssue.setPriority(priority);
+                    if (summary != null) updatingIssue.setSummary(summary);
+                    if (description != null) updatingIssue.setDescription(description);
+                    if (priority != null) updatingIssue.setPriority(priority);
+                    if (storyPoints != null) updatingIssue.setStoryPoints(storyPoints);
+                    if (startDate != null) updatingIssue.setStartDate(startDate);
+                    if (dueDate != null) updatingIssue.setDueDate(dueDate);
+                    if (originalEstimateMinutes != null) updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
+                    if (remainingEstimateMinutes != null && remainingEstimateMinutes > updatingIssue.getOriginalEstimateMinutes()) {
+                        updatingIssue.setRemainingEstimateMinutes(0L);
+                    }
+                    if (remainingEstimateMinutes != null) updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
                     updatingIssue.setUpdatedAt(Instant.now());
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
 
@@ -219,7 +226,6 @@ public class IssueServiceImpl implements IssueService {
                             );
                 });
     }
-
 
     @Override
     public Mono<Issue> deleteIssue(String requestId,

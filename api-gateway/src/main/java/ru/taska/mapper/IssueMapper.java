@@ -35,6 +35,7 @@ public class IssueMapper {
 
     private final ObjectMapper objectMapper;
 
+    //TODO разобраться с новыми полями ишью в гейтвее.
     public IssueResponseDto toRestIssueResponse(IssueResponse protoDto) {
         var restDto = new IssueResponseDto();
         restDto.setId(protoDto.getId());

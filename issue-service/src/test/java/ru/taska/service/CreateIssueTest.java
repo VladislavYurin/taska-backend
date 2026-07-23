@@ -16,6 +16,7 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.util.RequestHasher;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -81,7 +82,8 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
@@ -100,7 +102,8 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue result = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.BUG,
-                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
+                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID,
+                null, null, null, null
         ).block();
 
         Assertions.assertThat(result).isNotNull();
@@ -121,11 +124,13 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Задача 1", null, IssuePriority.LOW, REPORTER_ID
+                "Задача 1", null, IssuePriority.LOW, REPORTER_ID,
+                null, null, null, null
         ).block();
         Issue second = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_2, PROJECT_ID, IssueType.TASK,
-                "Задача 2", null, IssuePriority.LOW, REPORTER_ID
+                "Задача 2", null, IssuePriority.LOW, REPORTER_ID,
+                null, null, null, null
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2))
@@ -145,7 +150,8 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null
         ).block();
 
         Mockito.verify(outboxEventService, Mockito.times(1))
@@ -155,5 +161,43 @@ class CreateIssueTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
+    }
+
+    @Test
+    @DisplayName("Должен создать задачу без планировочных полей")
+    void createIssueWithoutPlanningFields() {
+        Issue result = issueService.createIssue(
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
+                "Задача без планирования", null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null
+        ).block();
+
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.getStoryPoints()).isNull();
+        Assertions.assertThat(result.getStartDate()).isNull();
+        Assertions.assertThat(result.getDueDate()).isNull();
+        Assertions.assertThat(result.getOriginalEstimateMinutes()).isNull();
+    }
+
+    @Test
+    @DisplayName("Должен создать задачу с валидными планировочными полями")
+    void createIssueWithValidPlanningFields() {
+        Double storyPoints = 5.5;
+        Instant startDate = Instant.now();
+        Instant dueDate = startDate.plus(Duration.ofDays(2));
+        Long originalEstimate = 120L;
+
+        Issue result = issueService.createIssue(
+                REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
+                "Задача с планированием", null, IssuePriority.MEDIUM, REPORTER_ID,
+                storyPoints, startDate, dueDate, originalEstimate
+        ).block();
+
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.getStoryPoints()).isEqualTo(storyPoints);
+        Assertions.assertThat(result.getStartDate()).isEqualTo(startDate);
+        Assertions.assertThat(result.getDueDate()).isEqualTo(dueDate);
+        Assertions.assertThat(result.getOriginalEstimateMinutes()).isEqualTo(originalEstimate);
+        Assertions.assertThat(result.getRemainingEstimateMinutes()).isEqualTo(originalEstimate);
     }
 }

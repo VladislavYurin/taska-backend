@@ -41,22 +41,47 @@ public class IssueMapper {
     }
 
     public IssueResponse toIssueProto(Issue issue) {
-        return IssueResponse.newBuilder()
+
+        IssueResponse.Builder builder = IssueResponse.newBuilder()
                 .setId(issue.getId().toString())
+                .setProjectId(issue.getProjectId().toString())
+                .setSummary(issue.getSummary())
                 .setProjectId(issue.getProjectId().toString())
                 .setIssueNumber(issue.getIssueNumber())
                 .setIssueKey(issue.getIssueKey())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setSummary(issue.getSummary())
-                .setDescription(issue.getDescription() != null ? issue.getDescription() : "")
                 .setStatusKey(issue.getStatusKey())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
                 .setReporterId(issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
-                .setVersion(issue.getVersion())
-                .build();
+                .setVersion(issue.getVersion());
+        if (issue.getAssigneeId() != null) {
+            builder.setAssigneeId(issue.getAssigneeId().toString());
+        }
+        if (issue.getDescription() != null) {
+            builder.setDescription(issue.getDescription());
+        }
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(Timestamp.newBuilder()
+                    .setSeconds(issue.getStartDate().getEpochSecond())
+                    .setNanos(issue.getStartDate().getNano())
+                    .build());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(Timestamp.newBuilder()
+                    .setSeconds(issue.getDueDate().getEpochSecond())
+                    .setNanos(issue.getDueDate().getNano())
+                    .build());
+        }
+        return builder.build();
     }
 
     public IssueHistoryResponse toIssueHistoryProto(IssueHistory history) {
@@ -81,106 +106,159 @@ public class IssueMapper {
     }
 
     public IssueShortResponse toIssueShortProto(Issue issue) {
-        return IssueShortResponse.newBuilder()
+        IssueShortResponse.Builder builder = IssueShortResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
-                .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .build();
+                .setPriority(toProtoIssuePriority(issue.getPriority()));
+        if (issue.getAssigneeId() != null) {
+            builder.setAssigneeId(issue.getAssigneeId().toString());
+        }
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(com.google.protobuf.Timestamp.newBuilder()
+                    .setSeconds(issue.getStartDate().getEpochSecond())
+                    .setNanos(issue.getStartDate().getNano())
+                    .build());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(com.google.protobuf.Timestamp.newBuilder()
+                    .setSeconds(issue.getDueDate().getEpochSecond())
+                    .setNanos(issue.getDueDate().getNano())
+                    .build());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
+        return builder.build();
     }
 
-    public DeleteIssueResponse toDeleteIssueProto(Issue issue) {
-        return DeleteIssueResponse.newBuilder()
-                .setDeletedIssueId(issue.getId().toString())
-                .setIssueEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED)
-                .build();
-    }
+public DeleteIssueResponse toDeleteIssueProto(Issue issue) {
+    return DeleteIssueResponse.newBuilder()
+            .setDeletedIssueId(issue.getId().toString())
+            .setIssueEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED)
+            .build();
+}
 
-    public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
-        return UpdateIssueResponse.newBuilder()
-                .setUpdatedIssueId(issue.getId().toString())
-                .setSummary(issue.getSummary())
-                .setDescription(issue.getDescription())
-                .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .build();
+public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
+    UpdateIssueResponse.Builder builder = UpdateIssueResponse.newBuilder()
+            .setUpdatedIssueId(issue.getId().toString());
+    if (issue.getSummary() != null) {
+        builder.setSummary(issue.getSummary());
     }
+    if (issue.getDescription() != null) {
+        builder.setDescription(issue.getDescription());
+    }
+    if (issue.getPriority() != null) {
+        builder.setPriority(toProtoIssuePriority(issue.getPriority()));
+    }
+    if (issue.getStoryPoints() != null) {
+        builder.setStoryPoints(issue.getStoryPoints());
+    }
+    if (issue.getStartDate() != null) {
+        builder.setStartDate(com.google.protobuf.Timestamp.newBuilder()
+                .setSeconds(issue.getStartDate().getEpochSecond())
+                .setNanos(issue.getStartDate().getNano())
+                .build());
+    }
+    if (issue.getDueDate() != null) {
+        builder.setDueDate(com.google.protobuf.Timestamp.newBuilder()
+                .setSeconds(issue.getDueDate().getEpochSecond())
+                .setNanos(issue.getDueDate().getNano())
+                .build());
+    }
+    if (issue.getOriginalEstimateMinutes() != null) {
+        builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+    }
+    if (issue.getRemainingEstimateMinutes() != null) {
+        builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+    }
+    return builder.build();
+}
 
-    public ProjectRole toDomainRole(ru.taska.api.project.v1.ProjectRole protoRole) {
-        return switch (protoRole) {
-            case PROJECT_ROLE_ADMIN -> ProjectRole.ADMIN;
-            case PROJECT_ROLE_MEMBER -> ProjectRole.MEMBER;
-            case PROJECT_ROLE_VIEWER -> ProjectRole.VIEWER;
-            default -> throw new IllegalArgumentException("Unknown ProjectRole: " + protoRole);
-        };
-    }
+public ProjectRole toDomainRole(ru.taska.api.project.v1.ProjectRole protoRole) {
+    return switch (protoRole) {
+        case PROJECT_ROLE_ADMIN -> ProjectRole.ADMIN;
+        case PROJECT_ROLE_MEMBER -> ProjectRole.MEMBER;
+        case PROJECT_ROLE_VIEWER -> ProjectRole.VIEWER;
+        default -> throw new IllegalArgumentException("Unknown ProjectRole: " + protoRole);
+    };
+}
 
-    public IssueValidateSnapshot toIssueValidateSnapshotProto(Issue issue) {
-        return IssueValidateSnapshot.newBuilder()
-                .setIssueId(issue.getId().toString())
-                .setProjectId(issue.getProjectId().toString())
-                .setIssueType(toWorkflowProtoIssueType(issue.getIssueType()))
-                .setStatusKey(issue.getStatusKey())
-                .build();
-    }
+public IssueValidateSnapshot toIssueValidateSnapshotProto(Issue issue) {
+    return IssueValidateSnapshot.newBuilder()
+            .setIssueId(issue.getId().toString())
+            .setProjectId(issue.getProjectId().toString())
+            .setIssueType(toWorkflowProtoIssueType(issue.getIssueType()))
+            .setStatusKey(issue.getStatusKey())
+            .build();
+}
 
-    public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {
-        return switch (proto) {
-            case ISSUE_TYPE_TASK -> IssueType.TASK;
-            case ISSUE_TYPE_BUG -> IssueType.BUG;
-            case ISSUE_TYPE_STORY -> IssueType.STORY;
-            default -> throw new IllegalArgumentException("Unknown IssueType: " + proto);
-        };
-    }
+public IssueType toDomainIssueType(ru.taska.api.issue.v1.IssueType proto) {
+    return switch (proto) {
+        case ISSUE_TYPE_TASK -> IssueType.TASK;
+        case ISSUE_TYPE_BUG -> IssueType.BUG;
+        case ISSUE_TYPE_STORY -> IssueType.STORY;
+        default -> throw new IllegalArgumentException("Unknown IssueType: " + proto);
+    };
+}
 
-    public IssuePriority toDomainIssuePriority(ru.taska.api.issue.v1.IssuePriority proto) {
-        return switch (proto) {
-            case ISSUE_PRIORITY_LOW -> IssuePriority.LOW;
-            case ISSUE_PRIORITY_MEDIUM -> IssuePriority.MEDIUM;
-            case ISSUE_PRIORITY_HIGH -> IssuePriority.HIGH;
-            default -> throw new IllegalArgumentException("Unknown IssuePriority: " + proto);
-        };
+public IssuePriority toDomainIssuePriority(ru.taska.api.issue.v1.IssuePriority proto) {
+    if (proto == null) {
+        return null;
     }
+    return switch (proto) {
+        case ISSUE_PRIORITY_LOW -> IssuePriority.LOW;
+        case ISSUE_PRIORITY_MEDIUM -> IssuePriority.MEDIUM;
+        case ISSUE_PRIORITY_HIGH -> IssuePriority.HIGH;
+        default -> throw new IllegalArgumentException("Unknown IssuePriority: " + proto);
+    };
+}
 
-    private ru.taska.api.issue.v1.IssueEventType toProtoIssueEventType(IssueEventType domain) {
-        return switch (domain) {
-            case CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_CREATED;
-            case UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_UPDATED;
-            case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
-            case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
-            case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
-        };
-    }
+private ru.taska.api.issue.v1.IssueEventType toProtoIssueEventType(IssueEventType domain) {
+    return switch (domain) {
+        case CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_CREATED;
+        case UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_UPDATED;
+        case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
+        case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
+        case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
+    };
+}
 
-    private ru.taska.api.issue.v1.IssueType toProtoIssueType(IssueType domain) {
-        return switch (domain) {
-            case TASK -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK;
-            case BUG -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG;
-            case STORY -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_STORY;
-        };
-    }
+private ru.taska.api.issue.v1.IssueType toProtoIssueType(IssueType domain) {
+    return switch (domain) {
+        case TASK -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK;
+        case BUG -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG;
+        case STORY -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_STORY;
+    };
+}
 
-    private ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
-        return switch (domain) {
-            case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
-            case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
-            case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
-        };
-    }
+private ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
+    return switch (domain) {
+        case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
+        case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
+        case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+    };
+}
 
-    private ru.taska.api.issue.v1.IssuePriority toProtoIssuePriority(IssuePriority domain) {
-        return switch (domain) {
-            case LOW -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW;
-            case MEDIUM -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM;
-            case HIGH -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH;
-        };
-    }
+private ru.taska.api.issue.v1.IssuePriority toProtoIssuePriority(IssuePriority domain) {
+    return switch (domain) {
+        case LOW -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW;
+        case MEDIUM -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM;
+        case HIGH -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH;
+    };
+}
 
-    private Timestamp toTimestamp(java.time.Instant instant) {
-        return Timestamp.newBuilder()
-                .setSeconds(instant.getEpochSecond())
-                .setNanos(instant.getNano())
-                .build();
-    }
+private Timestamp toTimestamp(java.time.Instant instant) {
+    return Timestamp.newBuilder()
+            .setSeconds(instant.getEpochSecond())
+            .setNanos(instant.getNano())
+            .build();
+}
 }

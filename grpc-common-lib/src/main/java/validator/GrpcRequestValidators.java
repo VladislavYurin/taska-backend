@@ -1,11 +1,14 @@
 package validator;
 
 import com.google.protobuf.ProtocolMessageEnum;
+import com.google.protobuf.Timestamp;
 import io.grpc.Status;
-import java.util.regex.Pattern;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Утилитный класс для валидации полей входящих gRPC-запросов.
@@ -27,7 +30,7 @@ public final class GrpcRequestValidators {
      * @param raw       строковое значение поля
      * @param fieldName имя поля (используется в сообщении об ошибке)
      * @return {@link Mono} с распарсенным {@link UUID} или ошибкой {@code INVALID_ARGUMENT}
-     *         если значение пустое или не является валидным UUID
+     * если значение пустое или не является валидным UUID
      */
     public static Mono<UUID> parseUuidOrInvalidArgument(String raw, String fieldName) {
         return requireNonBlank(raw, fieldName)
@@ -36,8 +39,8 @@ public final class GrpcRequestValidators {
                         return Mono.just(UUID.fromString(value));
                     } catch (IllegalArgumentException ex) {
                         return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                                                  .withDescription(fieldName + " must be a valid UUID")
-                                                  .asRuntimeException());
+                                .withDescription(fieldName + " must be a valid UUID")
+                                .asRuntimeException());
                     }
                 });
     }
@@ -48,7 +51,7 @@ public final class GrpcRequestValidators {
      * @param raw       строковое значение поля
      * @param fieldName имя поля (используется в сообщении об ошибке)
      * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT}
-     *         если значение пустое
+     * если значение пустое
      */
     public static Mono<String> requireNonBlankOrInvalidArgument(String raw, String fieldName) {
         return requireNonBlank(raw, fieldName);
@@ -66,8 +69,8 @@ public final class GrpcRequestValidators {
         return requireNonBlank(raw, fieldName)
                 .filter(login -> !login.contains("@"))
                 .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                                                  .withDescription(fieldName + " must not contain '@'")
-                                                  .asRuntimeException()));
+                        .withDescription(fieldName + " must not contain '@'")
+                        .asRuntimeException()));
     }
 
     /**
@@ -81,8 +84,8 @@ public final class GrpcRequestValidators {
         return requireNonBlank(raw, fieldName)
                 .filter(key -> key.length() <= MAX_LEN && KEY_PATTERN.matcher(key).matches())
                 .switchIfEmpty(Mono.error(Status.INVALID_ARGUMENT
-                                                  .withDescription(fieldName + " must be valid Idempotency Key")
-                                                  .asRuntimeException()));
+                        .withDescription(fieldName + " must be valid Idempotency Key")
+                        .asRuntimeException()));
     }
 
     /**
@@ -97,15 +100,15 @@ public final class GrpcRequestValidators {
         return requireNonBlank(raw, fieldName)
                 .filter(email -> email.contains("@"))
                 .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                                                  .withDescription(fieldName + " must contain '@'")
-                                                  .asRuntimeException()));
+                        .withDescription(fieldName + " must contain '@'")
+                        .asRuntimeException()));
     }
 
     private static Mono<String> requireNonBlank(String raw, String fieldName) {
         if (raw == null || raw.isBlank()) {
             return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                                      .withDescription(fieldName + " must not be blank")
-                                      .asRuntimeException());
+                    .withDescription(fieldName + " must not be blank")
+                    .asRuntimeException());
         }
         return Mono.just(raw);
     }
@@ -133,7 +136,7 @@ public final class GrpcRequestValidators {
      * @param value     значение proto enum
      * @param fieldName имя поля (используется в сообщении об ошибке)
      * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT}
-     *         если передан 0 (UNSPECIFIED)
+     * если передан 0 (UNSPECIFIED)
      */
     public static <T extends ProtocolMessageEnum> Mono<T> requireSpecifiedOrInvalidArgument(T value, String fieldName) {
         if (value.getNumber() == 0) {
@@ -142,5 +145,64 @@ public final class GrpcRequestValidators {
                     .asRuntimeException());
         }
         return Mono.just(value);
+    }
+
+    /**
+     * Валидирует story_points. Может быть null. Если задан, должен быть >= 0.
+     */
+    public static Mono<Optional<Double>> validateOptionalStoryPoints(boolean hasField, Double rawValue, String fieldName) {
+        if (!hasField) {
+            return Mono.just(Optional.empty());
+        }
+        if (rawValue < 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be >= 0")
+                    .asRuntimeException());
+        }
+        return Mono.just(Optional.of(rawValue));
+    }
+
+    /**
+     * Парсит строку из gRPC в Instant. Если строка пустая/отсутствует — возвращает empty.
+     */
+    public static Mono<Optional<Instant>> parseOptionalInstant(boolean hasField, Timestamp rawDate, String fieldName) {
+        if (!hasField) {
+            return Mono.just(Optional.empty());
+        }
+        if (rawDate == null || (rawDate.getSeconds() == 0 && rawDate.getNanos() == 0)) {
+            return Mono.just(Optional.ofNullable(Instant.MIN));
+        }
+        return Mono.just(Optional.of(Instant.ofEpochSecond(rawDate.getSeconds(), rawDate.getNanos())));
+    }
+
+    /**
+     * Валидирует originalEstimateMinutes или remainingEstimateMinutes. Должен быть больше нуля
+     */
+    public static Mono<Optional<Long>> validateOptionalEstimateMinutes(boolean hasFields, Long rawValue, String fieldName) {
+        if (!hasFields) {
+            return Mono.just(Optional.empty());
+        }
+        if (rawValue < 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be >= 0")
+                    .asRuntimeException());
+        }
+        return Mono.just(Optional.of(rawValue));
+    }
+
+    public static <T> Mono<Optional<T>> validateOptional(boolean hasField, T raw, String fieldName) {
+        if (!hasField) {
+            return Mono.just(Optional.empty());
+        }
+        return Mono.just(Optional.of(raw));
+    }
+
+    public static Mono<Void> validateDateRange(Instant startDate, Instant dueDate) {
+        if (startDate != null && dueDate != null && startDate.isAfter(dueDate)) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription("Start date must be less than or equal to due date")
+                    .asRuntimeException());
+        }
+        return Mono.empty();
     }
 }
