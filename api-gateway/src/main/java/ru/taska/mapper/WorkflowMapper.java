@@ -46,7 +46,7 @@ public class WorkflowMapper {
                         .build())
                 .setBody(GetWorkflowForProjectRequestBody.newBuilder()
                         .setProjectId(projectId.toString())
-                        .setIssueType(toIssueType(issueTypeDto))
+                        .setIssueType(toGrpcIssueType(issueTypeDto))
                         .setActorUserId(context.userContext().userId()))
                 .build();
 
@@ -59,7 +59,7 @@ public class WorkflowMapper {
      * @param issueTypeDto тип задачи из REST API
      * @return соответствующее значение {@link IssueType}
      */
-    public IssueType toIssueType(IssueTypeDto issueTypeDto) {
+    public IssueType toGrpcIssueType(IssueTypeDto issueTypeDto) {
         return switch (issueTypeDto) {
             case TASK -> IssueType.ISSUE_TYPE_TASK;
             case BUG -> IssueType.ISSUE_TYPE_BUG;
@@ -73,7 +73,7 @@ public class WorkflowMapper {
      * @param workflowResponse полученный от gRPC-сервиса объект {@link WorkflowResponse} с данными структуры процессов
      * @return заполненный REST DTO объект {@link WorkflowResponseDto} для отправки клиенту
      */
-    public WorkflowResponseDto toWorkflowResponseDto(WorkflowResponse workflowResponse) {
+    public WorkflowResponseDto toWorkflowResponseRestDto(WorkflowResponse workflowResponse) {
         WorkflowResponseDto dto = new WorkflowResponseDto();
 
         dto.setId(UUID.fromString(workflowResponse.getId()));
@@ -111,7 +111,7 @@ public class WorkflowMapper {
         dto.setId(UUID.fromString(status.getId()));
         dto.setStatusKey(status.getStatusKey());
         dto.setName(status.getName());
-        dto.setCategory(toStatusCategory(status.getCategory()));
+        dto.setCategory(toRestStatusCategory(status.getCategory()));
         dto.setSortOrder(status.getSortOrder());
         dto.setCreatedAt(OffsetDateTime.parse(status.getCreatedAt()));
         dto.setUpdatedAt(OffsetDateTime.parse(status.getUpdatedAt()));
@@ -126,7 +126,7 @@ public class WorkflowMapper {
      * @param category объект статуса {@link StatusCategory}, содержащий gRPC-категорию
      * @return строковое представление категории для REST контракта
      */
-    public String toStatusCategory(StatusCategory category) {
+    public String toRestStatusCategory(StatusCategory category) {
         return switch (category) {
             case STATUS_CATEGORY_TODO -> "TODO";
             case STATUS_CATEGORY_IN_PROGRESS -> "IN_PROGRESS";

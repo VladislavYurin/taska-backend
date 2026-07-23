@@ -67,6 +67,6 @@ public class GrpcWorkflowServiceClient {
                 .toGetWorkflowGrpcRequest(projectId, issueTypeDto, context);
 
         return dynamicStub().getWorkflowForProject(grpcRequest)
-                .map(workflowMapper::toWorkflowResponseDto);
+                .map(workflowMapper::toWorkflowResponseRestDto);
     }
 }

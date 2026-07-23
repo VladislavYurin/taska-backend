@@ -63,7 +63,7 @@ class WorkflowMapperTest {
     @EnumSource(IssueTypeDto.class)
     @DisplayName("Должен корректно мапить все значения IssueTypeDto в Protobuf IssueType")
     void shouldMapAllIssueTypes(IssueTypeDto issueTypeDto) {
-        var grpcType = mapper.toIssueType(issueTypeDto);
+        var grpcType = mapper.toGrpcIssueType(issueTypeDto);
 
         switch (issueTypeDto) {
             case TASK -> assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_TASK);
@@ -75,7 +75,7 @@ class WorkflowMapperTest {
 
     @Test
     @DisplayName("Должен корректно мапить gRPC WorkflowResponse в REST WorkflowResponseDto")
-    void shouldMapToWorkflowResponseDto() {
+    void shouldMapToWorkflowResponseRestDto() {
         var grpcStatus = WorkflowStatus.newBuilder()
                 .setId(STATUS_ID.toString())
                 .setStatusKey("TODO")
@@ -106,7 +106,7 @@ class WorkflowMapperTest {
                 .addTransitions(grpcTransition)
                 .build();
 
-        var dto = mapper.toWorkflowResponseDto(grpcResponse);
+        var dto = mapper.toWorkflowResponseRestDto(grpcResponse);
 
         assertThat(dto.getId()).isEqualTo(PROJECT_ID);
         assertThat(dto.getName()).isEqualTo("Default Workflow");
@@ -130,10 +130,10 @@ class WorkflowMapperTest {
     @Test
     @DisplayName("Должен очищать системные префиксы категорий статусов (STATUS_CATEGORY_*) в REST-строку")
     void shouldMapStatusCategoryCorrectly() {
-        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_TODO)).isEqualTo("TODO");
-        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
-        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
-        assertThat(mapper.toStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
+        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_TODO)).isEqualTo("TODO");
+        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
+        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
+        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
     }
 
 }

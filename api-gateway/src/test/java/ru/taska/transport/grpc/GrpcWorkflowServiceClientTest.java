@@ -85,7 +85,7 @@ class GrpcWorkflowServiceClientTest {
         Mockito.when(stub.getWorkflowForProject(grpcRequest))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(workflowMapper.toWorkflowResponseDto(grpcResponse))
+        Mockito.when(workflowMapper.toWorkflowResponseRestDto(grpcResponse))
                 .thenReturn(restResponse);
 
         StepVerifier.create(client.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE_DTO, context))
@@ -103,7 +103,7 @@ class GrpcWorkflowServiceClientTest {
                 .toGetWorkflowGrpcRequest(PROJECT_ID, ISSUE_TYPE_DTO, context);
 
         Mockito.verify(workflowMapper, Mockito.times(1))
-                .toWorkflowResponseDto(grpcResponse);
+                .toWorkflowResponseRestDto(grpcResponse);
     }
 
     @Test
@@ -125,6 +125,6 @@ class GrpcWorkflowServiceClientTest {
         Mockito.verify(stub, Mockito.times(1)).getWorkflowForProject(grpcRequest);
 
         Mockito.verify(workflowMapper, Mockito.never())
-                .toWorkflowResponseDto(Mockito.any());
+                .toWorkflowResponseRestDto(Mockito.any());
     }
 }
