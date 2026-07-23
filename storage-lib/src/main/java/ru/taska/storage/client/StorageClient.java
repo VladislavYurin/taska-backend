@@ -34,7 +34,7 @@ public interface StorageClient {
      * <p><b>Предпочтительный способ загрузки для фронтенда</b> — файл передаётся напрямую
      * в хранилище, минуя бэкенд.</p>
      */
-    Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType);
+    Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes);
 
     /**
      * Генерирует presigned URL для скачивания файла фронтендом напрямую из хранилища.

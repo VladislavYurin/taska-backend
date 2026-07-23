@@ -99,7 +99,7 @@ class S3StorageClientTest {
         when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
-        PresignedUploadResult result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE).block();
+        PresignedUploadResult result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
 
         assertThatNoException().isThrownBy(() -> UUID.fromString(result.objectKey()));
     }
@@ -110,8 +110,8 @@ class S3StorageClientTest {
         when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
-        PresignedUploadResult result1 = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE).block();
-        PresignedUploadResult result2 = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE).block();
+        PresignedUploadResult result1 = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
+        PresignedUploadResult result2 = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
 
         assertThat(result1.objectKey()).isNotEqualTo(result2.objectKey());
     }
@@ -125,7 +125,7 @@ class S3StorageClientTest {
         when(presigned.url()).thenReturn(new URL(expectedUrl));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
-        PresignedUploadResult result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE).block();
+        PresignedUploadResult result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
 
         assertThat(result.url()).isEqualTo(expectedUrl);
         assertThat(result.objectKey()).isNotEmpty();
@@ -139,7 +139,7 @@ class S3StorageClientTest {
         ArgumentCaptor<PutObjectPresignRequest> captor = ArgumentCaptor.forClass(PutObjectPresignRequest.class);
         when(s3Presigner.presignPutObject(captor.capture())).thenReturn(presigned);
 
-        storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE).block();
+        storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
 
         assertThat(captor.getValue().signatureDuration()).isEqualTo(properties.getPresignedUrlTtl());
     }
@@ -242,7 +242,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_throwsInvalidArgumentForDisallowedContentType() {
         assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> storageClient.createPresignedUploadUrl(DISALLOWED_CONTENT_TYPE).block())
+                .isThrownBy(() -> storageClient.createPresignedUploadUrl(DISALLOWED_CONTENT_TYPE, 50L).block())
                 .satisfies(ex -> {
                     assertThat(ex.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
                     assertThat(ex.getMessage()).contains(DISALLOWED_CONTENT_TYPE);
@@ -252,7 +252,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_doesNotCallPresignerForDisallowedContentType() {
         assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> storageClient.createPresignedUploadUrl(DISALLOWED_CONTENT_TYPE).block());
+                .isThrownBy(() -> storageClient.createPresignedUploadUrl(DISALLOWED_CONTENT_TYPE, 50L).block());
 
         verifyNoInteractions(s3Presigner);
     }
@@ -276,6 +276,33 @@ class S3StorageClientTest {
                         ALLOWED_CONTENT_TYPE, MAX_FILE_SIZE_BYTES + 1).block());
 
         verifyNoInteractions(s3AsyncClient);
+    }
+
+    @Test
+    void createPresignedUploadUrl_throwsOutOfRangeWhenFileSizeExceedsLimit() {
+        assertThatExceptionOfType(DomainException.class)
+                .isThrownBy(() -> storageClient.createPresignedUploadUrl(
+                        ALLOWED_CONTENT_TYPE, MAX_FILE_SIZE_BYTES + 1).block())
+                .satisfies(ex -> assertThat(ex.getStatus()).isEqualTo(DomainStatus.OUT_OF_RANGE));
+    }
+
+    @Test
+    void createPresignedUploadUrl_doesNotCallPresignerWhenFileSizeExceedsLimit() {
+        assertThatExceptionOfType(DomainException.class)
+                .isThrownBy(() -> storageClient.createPresignedUploadUrl(
+                        ALLOWED_CONTENT_TYPE, MAX_FILE_SIZE_BYTES + 1).block());
+
+        verifyNoInteractions(s3Presigner);
+    }
+
+    @Test
+    void createPresignedUploadUrl_succeedsWhenFileSizeEqualsLimit() throws Exception {
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+
+        assertThatNoException().isThrownBy(() -> storageClient.createPresignedUploadUrl(
+                ALLOWED_CONTENT_TYPE, MAX_FILE_SIZE_BYTES).block());
     }
 
     @Test
