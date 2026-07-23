@@ -100,6 +100,79 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/notifications:
+    get:
+      summary: Получение inbox уведомлений текущего пользователя
+      operationId: listNotifications
+      tags:
+        - notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Уведомления успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/notifications/{notificationId}/read:
+    patch:
+      summary: Отметка уведомления текущего пользователя как прочитанного
+      operationId: markNotificationAsRead
+      tags:
+        - notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Уведомление успешно отмечено как прочитанное
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues:
     post:
       summary: Создание задачи
@@ -516,7 +589,7 @@ components:
         history:
           type: array
           items:
-           $ref: '#/components/schemas/IssueHistoryResponseDto'
+            $ref: '#/components/schemas/IssueHistoryResponseDto'
 
     IssueShortResponseDto:
       type: object
@@ -579,6 +652,64 @@ components:
       properties:
         payload:
           type: object
+
+    NotificationListResponseDto:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponseDto'
+
+    NotificationResponseDto:
+      type: object
+      required:
+        - id
+        - notificationType
+        - title
+        - body
+        - createdAt
+        - sourceEventId
+      properties:
+        id:
+          type: string
+          format: uuid
+        notificationType:
+          $ref: '#/components/schemas/NotificationTypeDto'
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        sourceEventId:
+          type: string
+          format: uuid
+
+    NotificationTypeDto:
+      type: string
+      enum:
+        - ISSUE_ASSIGNED
+        - ISSUE_TRANSITIONED
+        - ISSUE_CREATED
+        - ISSUE_UPDATED
+        - ISSUE_DELETED
+        - USER_INVITED
+        - USER_ACTIVATED
+        - PROJECT_CREATED
+        - MEMBER_ADDED
+        - MEMBER_UPDATED
+        - MEMBER_REMOVED
 
     RestErrorResponse:
       type: object
