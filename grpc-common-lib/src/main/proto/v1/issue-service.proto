@@ -109,7 +109,7 @@ message AssignIssueRequestBody {
   /**
    * Идентификатор исполнителя.
    */
-  string assignee_id = 3;
+  optional string assignee_id = 3;
 
   /**
    * Идентификатор пользователя, кем заасайнена задача.
@@ -141,7 +141,7 @@ message CreateIssueRequestBody {
   /**
    * Подробное описание задачи.
    */
-  string description = 5;
+  optional string description = 5;
 
   /**
    * Приоритет задачи.
@@ -152,6 +152,26 @@ message CreateIssueRequestBody {
    * Идентификатор создателя задачи.
    */
   string reporter_id = 7;
+
+  /**
+ * Количество сторипоинтов выделенных на задачу
+ */
+  optional double story_points = 8;
+
+  /**
+* Время начала выполнения задачи
+*/
+  optional google.protobuf.Timestamp start_date = 9;
+
+  /**
+* Время окончания выполнения задачи
+*/
+  optional google.protobuf.Timestamp due_date = 10;
+
+  /**
+* Изначальное количество времени выделенное на выполнение задачи
+*/
+  optional int64 original_estimate_minutes = 11;
 }
 
 message GetIssueRequest {
@@ -228,17 +248,42 @@ message UpdateIssueRequestBody {
   /**
    * Краткое описание задачи.
    */
-  string summary = 4;
+  optional string summary = 4;
 
   /**
    * Подробное описание задачи.
    */
-  string description = 5;
+  optional string description = 5;
 
   /**
    * Приоритет задачи.
    */
-  IssuePriority priority = 6;
+  optional IssuePriority priority = 6;
+
+  /**
+ * Количество сторипоинтов выделенных на задачу
+ */
+  optional double story_points = 8;
+
+  /**
+* Время начала выполнения задачи
+*/
+  optional google.protobuf.Timestamp start_date = 9;
+
+  /**
+* Время окончания выполнения задачи
+*/
+  optional google.protobuf.Timestamp due_date = 10;
+
+  /**
+* Изначальное количество времени выделенное на выполнение задачи
+*/
+  optional int64 original_estimate_minutes = 11;
+
+  /**
+* Оставшееся времени на выполнение задачи
+*/
+  optional int64 remaining_estimate_minutes = 12;
 }
 
 message ListIssuesRequest {
@@ -342,17 +387,42 @@ message UpdateIssueResponse {
   /**
    * Краткое описание задачи.
    */
-  string summary = 2;
+  optional string summary = 2;
 
   /**
    * Подробное описание задачи.
    */
-  string description = 3;
+  optional string description = 3;
 
   /**
    * Приоритет задачи.
    */
-  IssuePriority priority = 4;
+  optional IssuePriority priority = 4;
+
+  /**
+ * Количество стори поинтов на задачу
+ */
+  optional double story_points = 16;
+
+  /**
+* Время начала выполнения задачи
+*/
+  optional google.protobuf.Timestamp start_date = 17;
+
+  /**
+* Время окончания выполнения задачи
+*/
+  optional google.protobuf.Timestamp due_date = 18;
+
+  /**
+* Изначальное количество времени выделенное на выполнение задачи
+*/
+  optional int64 original_estimate_minutes = 19;
+
+  /**
+* Оставшееся количество времени на выполнение задачи
+*/
+  optional int64 remaining_estimate_minutes = 20;
 }
 
 message ListIssuesResponse {
@@ -397,6 +467,31 @@ message IssueShortResponse {
    * Идентификатор исполнителя задачи.
    */
   string assignee_id = 6;
+
+  /**
+* Количество стори поинтов выделенных на задачу
+*/
+  optional double story_points = 16;
+
+  /**
+* Время начала выполнения задачи
+*/
+  optional google.protobuf.Timestamp start_date = 17;
+
+  /**
+* Время окончания выполнения задачи
+*/
+  optional google.protobuf.Timestamp due_date = 18;
+
+  /**
+* Изначальное количество времени выделенное на выполнение задачи
+*/
+  optional int64 original_estimate_minutes = 19;
+
+  /**
+* Оставшееся количество времени на выполнение задачи
+*/
+  optional int64 remaining_estimate_minutes = 20;
 }
 
 message IssueResponse {
@@ -433,7 +528,7 @@ message IssueResponse {
   /**
    * Подробное описание задачи.
    */
-  string description = 7;
+  optional string description = 7;
 
   /**
    * Текущий статус задачи.
@@ -448,7 +543,7 @@ message IssueResponse {
   /**
    * Идентификатор исполнителя задачи.
    */
-  string assignee_id = 10;
+  optional string assignee_id = 10;
 
   /**
    * Идентификатор создателя задачи.
@@ -474,6 +569,31 @@ message IssueResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 15;
+
+  /**
+ * Количество сторипоинтов выделенных на задачу
+ */
+  optional double story_points = 16;
+
+  /**
+* Время начала выполнения задачи
+*/
+  optional google.protobuf.Timestamp start_date = 17;
+
+  /**
+* Время окончания выполнения задачи
+*/
+  optional google.protobuf.Timestamp due_date = 18;
+
+  /**
+* Изначальное количество времени выделенное на выполнение задачи
+*/
+  optional int64 original_estimate_minutes = 19;
+
+  /**
+* Оставшееся количество времени на выполнение задачи
+*/
+  optional int64 remaining_estimate_minutes = 20;
 }
 
 message IssueHistoryResponse {

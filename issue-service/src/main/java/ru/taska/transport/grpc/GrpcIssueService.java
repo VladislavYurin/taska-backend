@@ -2,9 +2,6 @@ package ru.taska.transport.grpc;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,20 +12,25 @@ import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.IssueWithHistoryResponse;
-import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
-import ru.taska.api.issue.v1.IssueType;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.IssuePriority;
+import ru.taska.domain.IssueType;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
 import ru.taska.service.transition.IssueTransitionProcessor;
 import validator.GrpcRequestValidators;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 @Slf4j
 @Service
@@ -43,69 +45,81 @@ public class GrpcIssueService {
             timer = "issue-service_create-issue_grpc_timer")
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
-                .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
-                                GrpcRequestValidators.validateIdempotencyKey(
-                                        req.getBody().getIdempotencyKey(), "body.idempotencyKey"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                        req.getBody().getIssueType(), "body.issueType"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getSummary(), "body.summary"
-                                ),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                        req.getBody().getPriority(), "body.priority"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getReporterId(), "body.reporterId"
-                                ))
-                        .doOnError(StatusRuntimeException.class, logValidationError(
-                                req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
-                        ))
-                        .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            String idempotencyKey = t.getT3();
-                            UUID projectId = t.getT4();
-                            IssueType issueType = t.getT5();
-                            String summary = t.getT6();
-                            IssuePriority priority = t.getT7();
-                            UUID reporterId = t.getT8();
+                .flatMap(req -> {
+                    var traceId = Mono.zip(
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                    req.getHeader().getRequestId(), "header.requestId"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                    req.getHeader().getNodeId(), "header.nodeId")
+                    );
+                    var coreIssueMono = Mono.zip(
+                            GrpcRequestValidators.validateIdempotencyKey(
+                                    req.getBody().getIdempotencyKey(), "body.idempotencyKey"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                    req.getBody().getProjectId(), "body.projectId"),
+                            GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                    req.getBody().getIssueType(), "body.issueType"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                    req.getBody().getSummary(), "body.summary"),
+                            GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                    req.getBody().getPriority(), "body.priority"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                    req.getBody().getReporterId(), "body.reporterId"),
+                            GrpcRequestValidators.validateOptional(
+                                    req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"));
 
-                            String description = req.getBody().getDescription();
+                    var planningFields = Mono.zip(
+                            GrpcRequestValidators.validateOptionalStoryPoints(req.getBody().hasStoryPoints(),
+                                    req.getBody().getStoryPoints(), "story_points"),
+                            GrpcRequestValidators.parseOptionalInstant(req.getBody().hasStartDate(),
+                                    req.getBody().getStartDate(), "body.startDate"),
+                            GrpcRequestValidators.parseOptionalInstant(req.getBody().hasDueDate(),
+                                    req.getBody().getDueDate(), "body.dueDate"),
+                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasOriginalEstimateMinutes(),
+                                    req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"));
 
-                            log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, priority={}, reporterId={}",
-                                    requestId, nodeId, idempotencyKey, projectId, issueType, summary, priority, reporterId);
+                    return Mono.zip(traceId, coreIssueMono, planningFields)
+                            .doOnError(StatusRuntimeException.class, logValidationError(
+                                    req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
+                            ))
+                            .flatMap(t -> {
 
-                            return issueService.createIssue(
-                                            requestId,
-                                            nodeId,
-                                            idempotencyKey,
-                                            projectId,
-                                            issueMapper.toDomainIssueType(issueType),
-                                            summary,
-                                            description,
-                                            issueMapper.toDomainIssuePriority(priority),
-                                            reporterId
-                                    )
-                                    .doOnNext(issue ->
-                                            log.info("[{}][{}] createIssue: successfully created, issueId={}",
-                                                    requestId, nodeId, issue.getId())
-                                    )
-                                    .doOnError(DomainException.class,
-                                            logOnError(requestId, nodeId, "createIssue")
-                                    );
-                        }))
-                .map(issueMapper::toIssueProto);
+                                //Trace id
+                                String requestId = t.getT1().getT1();
+                                String nodeId = t.getT1().getT2();
+
+                                // Основные данные по задаче
+                                String idempotencyKey = t.getT2().getT1();
+                                UUID projectId = t.getT2().getT2();
+                                IssueType issueType = issueMapper.toDomainIssueType(t.getT2().getT3());
+                                String summary = t.getT2().getT4();
+                                IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT2().getT5());
+                                UUID reporterId = t.getT2().getT6();
+                                String description = t.getT2().getT7().orElse(null);
+
+                                // Поля планировщика задачи
+                                Double storyPoints = t.getT3().getT1().orElse(null);
+                                Instant startDate = t.getT3().getT2().orElse(null);
+                                Instant dueDate = t.getT3().getT3().orElse(null);
+                                Long originalEstimateMinutes = t.getT3().getT4().orElse(null);
+
+                                log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, description={}, priority={}, reporterId={}",
+                                        requestId, nodeId, idempotencyKey, projectId, issueType, summary, description, priority, reporterId);
+
+                                return issueService.createIssue(requestId, nodeId, idempotencyKey, projectId,
+                                                issueType, summary, description,
+                                                priority, reporterId,
+                                                storyPoints, startDate, dueDate, originalEstimateMinutes)
+                                        .doOnNext(issue ->
+                                                log.info("[{}][{}] createIssue: successfully created, issueId={}",
+                                                        requestId, nodeId, issue.getId())
+                                        )
+                                        .doOnError(DomainException.class,
+                                                logOnError(requestId, nodeId, "createIssue")
+                                        );
+                            })
+                            .map(issueMapper::toIssueProto);
+                });
     }
 
     @TrackMetrics(counter = "issue-service_get-issue_grpc_counter",
@@ -283,52 +297,6 @@ public class GrpcIssueService {
 
 
     /**
-     * Удаляет задачу на основе Mono<{@link ru.taska.api.issue.v1.DeleteIssueRequest}>
-     *
-     * @param request .proto с айди задачи и инициатором удаления
-     * @return Mono<{@link DeleteIssueResponse}> с соответствующими параметрами созданного проекта
-     */
-    @TrackMetrics(counter = "issue-service_delete-issue_grpc_counter",
-            timer = "issue-service_delete-issue_grpc_timer")
-    public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
-        return request
-                .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getIssueId(), "body.issueId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getActorUserId(), "body.actorUserId"
-                                ))
-                        .doOnError(StatusRuntimeException.class,
-                                logValidationError(
-                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteIssue")
-                        )
-                        .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            UUID issueId = t.getT3();
-                            UUID actorUserId = t.getT4();
-
-                            log.info("[{}][{}] deleteIssue: issueId = {}, actorUserId = {}",
-                                    requestId, nodeId, issueId, actorUserId);
-
-                            return issueService.deleteIssue(
-                                    requestId,
-                                    nodeId,
-                                    issueId,
-                                    actorUserId
-                            );
-                        })
-                        .map(issueMapper::toDeleteIssueProto));
-    }
-
-    /**
      * Обновляет задачу на основе Mono<{@link ru.taska.api.issue.v1.UpdateIssueRequest}>
      *
      * @param request .proto с параметрами на обновление задачи
@@ -338,36 +306,67 @@ public class GrpcIssueService {
             timer = "issue-service_update-issue_grpc_timer")
     public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
         return request
-                .flatMap(req -> Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getDescription(), "body.description"),
-                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority")
-                ))
-                .flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    UUID issueId = t.getT3();
-                    UUID actorUserId = t.getT4();
-                    String summary = t.getT5();
-                    String description = t.getT6();
-                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT7());
+                .flatMap(req -> {
 
-                    log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
-                            requestId, nodeId, issueId, actorUserId, summary, description, priority);
-                    return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority);
-                })
-                .map(issueMapper::toUpdateIssueProto);
+                    //Поля описания и приоритета задачи
+                    var specificationFields = Mono.zip(GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                            GrpcRequestValidators.validateOptional(req.getBody().hasSummary(), req.getBody().getSummary(), "body.summary"),
+                            GrpcRequestValidators.validateOptional(req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
+                            GrpcRequestValidators.validateOptional(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"));
+
+                    // Поля планировщика задачи
+                    var planningFields = Mono.zip(
+                            GrpcRequestValidators.validateOptionalStoryPoints(
+                                    req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "story_points"),
+                            GrpcRequestValidators.parseOptionalInstant(
+                                    req.getBody().hasStartDate(), req.getBody().getStartDate(), "body.startDate"),
+                            GrpcRequestValidators.parseOptionalInstant(
+                                    req.getBody().hasDueDate(), req.getBody().getDueDate(), "body.dueDate"),
+                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasOriginalEstimateMinutes(),
+                                    req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"),
+                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasRemainingEstimateMinutes(),
+                                    req.getBody().getRemainingEstimateMinutes(), "body.RemainingEstimateMinutes"));
+                    return Mono.zip(specificationFields, planningFields)
+                            .doOnError(StatusRuntimeException.class, logValidationError(
+                                    req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
+                            ))
+                            .flatMap(t -> {
+
+                                String requestId = t.getT1().getT1();
+                                String nodeId = t.getT1().getT2();
+
+                                // Основные данные по задаче
+                                UUID issueId = t.getT1().getT3();
+                                UUID actorUserId = t.getT1().getT4();
+                                String summary = t.getT1().getT5().orElse(null);
+                                String description = t.getT1().getT6().orElse(null);
+                                IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT1().getT7().orElse(null));
+
+                                // Поля планировщика задачи
+                                Double storyPoints = t.getT2().getT1().orElse(null);
+                                Instant startDate = t.getT2().getT2().orElse(null);
+                                Instant dueDate = t.getT2().getT3().orElse(null);
+                                Long originalEstimateMinutes = t.getT2().getT4().orElse(null);
+                                Long remainingEstimateMinutes = t.getT2().getT5().orElse(null);
+
+                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
+                                        requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                                return GrpcRequestValidators.validateDateRange(startDate, dueDate)
+                                        .then(Mono.defer(() -> issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority,
+                                                storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes)))
+                                        .map(issueMapper::toUpdateIssueProto);
+                            });
+                });
     }
 
     /**
      * Выполняет переход задачи по workflow.
      *
      * @param request {@link Mono} с запросом {@link TransitionIssueRequest} с данными для перехода задачи по workflow.
-     * @return        {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
+     * @return {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
      */
     @TrackMetrics(counter = "issue-service_transition-issue_grpc_counter",
             timer = "issue-service_transition-issue_grpc_timer")
@@ -428,6 +427,52 @@ public class GrpcIssueService {
                                     );
                         }))
                 .map(issueMapper::toIssueDetailsProto);
+    }
+
+    /**
+     * Удаляет задачу на основе Mono<{@link ru.taska.api.issue.v1.DeleteIssueRequest}>
+     *
+     * @param request .proto с айди задачи и инициатором удаления
+     * @return Mono<{@link DeleteIssueResponse}> с соответствующими параметрами созданного проекта
+     */
+    @TrackMetrics(counter = "issue-service_delete-issue_grpc_counter",
+            timer = "issue-service_delete-issue_grpc_timer")
+    public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteIssue")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
+
+                            log.info("[{}][{}] deleteIssue: issueId = {}, actorUserId = {}",
+                                    requestId, nodeId, issueId, actorUserId);
+
+                            return issueService.deleteIssue(
+                                    requestId,
+                                    nodeId,
+                                    issueId,
+                                    actorUserId
+                            );
+                        })
+                        .map(issueMapper::toDeleteIssueProto));
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {

@@ -27,6 +27,16 @@ public class PayloadSerializer {
     private static final String NEW_DESCRIPTION = "newDescription";
     private static final String OLD_PRIORITY = "oldPriority";
     private static final String NEW_PRIORITY = "newPriority";
+    private static final String OLD_STORY_POINTS = "oldStoryPoints";
+    private static final String NEW_STORY_POINTS = "newStoryPoints";
+    private static final String OLD_START_DATE = "oldStartDate";
+    private static final String NEW_START_DATE = "newStartDate";
+    private static final String OLD_DUE_DATE = "oldDueDate";
+    private static final String NEW_DUE_DATE = "newDueDate";
+    private static final String NEW_ORIGINAL_ESTIMATED = "oldOriginalEstimateMinutes";
+    private static final String OLD_ORIGINAL_ESTIMATED = "newOriginalEstimateMinutes";
+    private static final String OLD_REMAINING_ESTIMATED = "oldRemainingEstimateMinutes";
+    private static final String NEW_REMAINING_ESTIMATED  = "newRemainingEstimateMinutes";
     private static final String FROM_STATUS = "fromStatus";
     private static final String TO_STATUS = "toStatus";
     private static final String TRANSITIONED_ID = "transitionId";
@@ -82,14 +92,9 @@ public class PayloadSerializer {
      * @param newPriority    новый приоритет задачи.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription, IssuePriority newPriority) {
-        if (newSummary.equals(issue.getSummary()) &&
-                newDescription.equals(issue.getDescription()) &&
-                newPriority.equals(issue.getPriority())) {
-
-            return objectMapper.createObjectNode();
-        }
-
+    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription,
+                                              IssuePriority newPriority, Double newStoryPoints, Instant newStartDate,
+                                              Instant newDueDate, Long newOriginalEstimateMinutes, Long newRemainingEstimateMinutes) {
         ObjectNode node = objectMapper.createObjectNode();
 
         if (actorUserId != null) {
@@ -104,17 +109,53 @@ public class PayloadSerializer {
             node.putNull(ASSIGNEE);
         }
 
-        if (!newSummary.equals(issue.getSummary())) {
+        boolean isChanged = false;
+
+        if (newSummary != null && !newSummary.equals(issue.getSummary())) {
             node.put(OLD_SUMMARY, issue.getSummary());
             node.put(NEW_SUMMARY, newSummary);
+            isChanged = true;
         }
-        if (!newDescription.equals(issue.getDescription())) {
+        if (newDescription != null && !newDescription.equals(issue.getDescription())) {
             node.put(OLD_DESCRIPTION, issue.getDescription());
             node.put(NEW_DESCRIPTION, newDescription);
+            isChanged = true;
         }
-        if (!newPriority.equals(issue.getPriority())) {
+        if (newPriority != null && !newPriority.equals(issue.getPriority())) {
             node.put(OLD_PRIORITY, issue.getPriority().toString());
             node.put(NEW_PRIORITY, newPriority.toString());
+            isChanged = true;
+        }
+
+        if (newStoryPoints != null && !newStoryPoints.equals(issue.getStoryPoints())) {
+            node.put(OLD_STORY_POINTS, issue.getStoryPoints());
+            node.put(NEW_STORY_POINTS, newStoryPoints);
+            isChanged = true;
+        }
+        if (newStartDate != null && !newStartDate.equals(Instant.EPOCH) && !newStartDate.equals(issue.getStartDate())) {
+            node.put(OLD_START_DATE, issue.getStartDate() != null ? issue.getStartDate().toString() : null);
+            node.put(NEW_START_DATE, newStartDate.toString());
+            isChanged = true;
+        }
+        if (newDueDate != null && !newDueDate.equals(Instant.EPOCH) && !newDueDate.equals(issue.getDueDate())) {
+            node.put(OLD_DUE_DATE, issue.getDueDate() != null ? issue.getDueDate().toString() : null);
+            node.put(NEW_DUE_DATE, newDueDate.toString());
+            isChanged = true;
+        }
+
+        if (newOriginalEstimateMinutes != null && !newOriginalEstimateMinutes.equals(issue.getOriginalEstimateMinutes())) {
+            node.put(OLD_ORIGINAL_ESTIMATED, issue.getOriginalEstimateMinutes());
+            node.put(NEW_ORIGINAL_ESTIMATED, newOriginalEstimateMinutes);
+            isChanged = true;
+        }
+        if (newRemainingEstimateMinutes != null && !newRemainingEstimateMinutes.equals(issue.getRemainingEstimateMinutes())) {
+            node.put(OLD_REMAINING_ESTIMATED, issue.getRemainingEstimateMinutes());
+            node.put(NEW_REMAINING_ESTIMATED, newRemainingEstimateMinutes);
+            isChanged = true;
+        }
+
+        if (!isChanged) {
+            return objectMapper.createObjectNode();
         }
 
         return node;

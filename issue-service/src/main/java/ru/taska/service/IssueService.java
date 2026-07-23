@@ -7,6 +7,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -23,7 +24,11 @@ public interface IssueService {
             String summary,
             String description,
             IssuePriority priority,
-            UUID reporterId
+            UUID reporterId,
+            Double storyPoints,
+            Instant startDate,
+            Instant dueDate,
+            Long originalEstimateMinutes
     );
 
     Mono<Issue> assignIssue(
@@ -90,5 +95,10 @@ public interface IssueService {
                             UUID actorUserId,
                             String summary,
                             String description,
-                            IssuePriority priority);
+                            IssuePriority priority,
+                            Double storyPoints,
+                            Instant startDate,
+                            Instant dueDate,
+                            Long originalEstimateMinutes,
+                            Long remainingEstimateMinutes);
 }

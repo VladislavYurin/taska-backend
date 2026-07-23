@@ -1,8 +1,5 @@
 package ru.taska.integration;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +26,10 @@ import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.IssueService;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 class IdempotencyKeyIT extends AbstractIT {
 
@@ -78,7 +79,8 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldSaveIdempotencyKeyAndReturnCreatedIssue() {
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        0.0, Instant.now(), Instant.now(), 0L))
                 .assertNext(result -> {
                     Assertions.assertNotNull(result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -102,7 +104,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                0.0, Instant.now(), Instant.now(), 0L).block();
         Assertions.assertNotNull(first);
 
         long issuesAfterFirst = issueRepository.count().block();
@@ -110,7 +113,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        0.0, Instant.now(), Instant.now(), 0L))
                 .assertNext(result -> {
                     Assertions.assertEquals(first.getId(), result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -125,13 +129,15 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldThrowFailedPreconditionOnSameKeyDifferentBody() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                0.0, Instant.now(), Instant.now(), 0L).block();
 
         long issuesAfterFirst = issueRepository.count().block();
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID))
+                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID,
+                        0.0, Instant.now(), Instant.now(), 0L))
                 .expectErrorSatisfies(error -> {
                     DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
                     Assertions.assertEquals(DomainStatus.FAILED_PRECONDITION, ex.getStatus());
@@ -149,7 +155,8 @@ class IdempotencyKeyIT extends AbstractIT {
                 Flux.range(0, parallelism)
                         .map(i -> issueService.createIssue(
                                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID)
+                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                                0.0, Instant.now(), Instant.now(), 0L)
                                 .map(issue -> "OK")
                                 .onErrorResume(e -> Mono.just("ERR:" + e.getClass().getSimpleName()))
                                 .subscribeOn(Schedulers.boundedElastic()))
