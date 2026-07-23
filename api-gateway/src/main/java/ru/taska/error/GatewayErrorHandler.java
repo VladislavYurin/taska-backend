@@ -14,7 +14,6 @@ import reactor.core.publisher.Mono;
 import ru.taska.domain.dto.RestErrorResponse;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor

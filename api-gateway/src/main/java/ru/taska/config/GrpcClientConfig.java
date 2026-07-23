@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
@@ -28,8 +29,23 @@ public class GrpcClientConfig {
     }
 
     @Bean
+    public ManagedChannel notificationManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.notificationService().host(),
+                        properties.notificationService().port()
+                )
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
     public ReactorAuthServiceGrpc.ReactorAuthServiceStub authServiceStub() {
         return ReactorAuthServiceGrpc.newReactorStub(authManagedChannel());
+    }
+    @Bean
+    public ReactorNotificationServiceGrpc.ReactorNotificationServiceStub notificationServiceStub() {
+        return ReactorNotificationServiceGrpc.newReactorStub(notificationManagedChannel());
     }
 
     @Bean

@@ -1,0 +1,266 @@
+syntax = "proto3";
+
+package ru.taska.profile.v1;
+
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.profile.v1";
+option java_outer_classname = "ProfileApiProto";
+
+service ProfileService {
+  rpc GetAvatarDownloadUrl(GetAvatarDownloadUrlRequest) returns (GetAvatarDownloadUrlResponse);
+  rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+  rpc CreateAvatarUploadUrl(CreateAvatarUploadUrlRequest) returns (CreateAvatarUploadUrlResponse);
+  rpc ConfirmAvatarUpload(ConfirmAvatarUploadRequest) returns (ConfirmAvatarUploadResponse);
+  rpc DeleteMyAvatar(DeleteMyAvatarRequest) returns (google.protobuf.Empty);
+}
+
+/**
+ * Запрос на удаление аватара пользователя.
+ */
+message DeleteMyAvatarRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteMyAvatarRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на удаление аватара пользователя.
+ */
+message DeleteMyAvatarRequestBody {
+  /**
+   * Идентификатор пользователя, чей аватар удаляется.
+   */
+  string actor_user_id = 1;
+}
+
+/**
+ * Запрос на подтверждение загрузки аватара.
+ * После успешного вызова старый аватар пользователя удаляется из хранилища и базы данных.
+ */
+message ConfirmAvatarUploadRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ConfirmAvatarUploadRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на подтверждение загрузки аватара.
+ */
+message ConfirmAvatarUploadRequestBody {
+  /**
+   * Ключ объекта в хранилище, полученный из CreateAvatarUploadUrlResponse.
+   */
+  string object_key = 1;
+
+  /**
+   * Оригинальное имя файла.
+   */
+  string file_name = 2;
+
+  /**
+   * MIME-тип файла (например, image/png).
+   */
+  string content_type = 3;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 4;
+
+  /**
+   * Идентификатор пользователя, для которого устанавливается аватар.
+   */
+  string actor_user_id = 5;
+}
+
+/**
+ * Ответ на подтверждение загрузки аватара.
+ */
+message ConfirmAvatarUploadResponse {
+  /**
+   * Данные о сохранённом аватаре.
+   */
+  AvatarResponse avatar = 1;
+}
+
+/**
+ * Запрос на генерацию presigned URL для загрузки аватара.
+ */
+message CreateAvatarUploadUrlRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateAvatarUploadUrlRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на генерацию presigned URL для загрузки аватара.
+ */
+message CreateAvatarUploadUrlRequestBody {
+  /**
+   * MIME-тип загружаемого файла (например, image/png).
+   */
+  string content_type = 1;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 2;
+
+  /**
+   * Идентификатор пользователя, запрашивающего загрузку аватара.
+   */
+  string actor_user_id = 3;
+}
+
+/**
+ * Ответ с presigned URL для загрузки аватара.
+ */
+message CreateAvatarUploadUrlResponse {
+  /**
+   * Presigned URL для загрузки файла напрямую в хранилище.
+   */
+  string upload_url = 1;
+
+  /**
+   * Ключ объекта в хранилище для последующего сохранения в БД.
+   */
+  string object_key = 2;
+}
+
+/**
+ * Запрос на получение ссылки для скачивания аватара.
+ */
+message GetAvatarDownloadUrlRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetAvatarDownloadUrlRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение ссылки для скачивания аватара.
+ */
+message GetAvatarDownloadUrlRequestBody {
+  /**
+   * Идентификатор пользователя.
+   */
+  string user_id = 1;
+}
+
+/**
+ * Ответ с presigned URL для скачивания аватара.
+ */
+message GetAvatarDownloadUrlResponse {
+  /**
+   * Presigned URL для скачивания аватара. Отсутствует, если у пользователя нет аватара.
+   */
+  optional string url = 1;
+}
+
+/**
+ * Запрос на получение профиля пользователя.
+ */
+message GetUserProfileRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetUserProfileRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение профиля пользователя.
+ */
+message GetUserProfileRequestBody {
+  /**
+   * Идентификатор пользователя.
+   */
+  string user_id = 1;
+}
+
+/**
+ * Ответ с профилем пользователя.
+ * В будущем может включать другие значения, связанные с профилем пользователя.
+ */
+message GetUserProfileResponse {
+  /**
+   * Данные об аватаре пользователя. Может отсутствовать, если аватар не установлен.
+   */
+  optional AvatarResponse avatar = 1;
+}
+
+/**
+ * Данные об аватаре пользователя.
+ */
+message AvatarResponse {
+  /**
+   * Идентификатор записи аватара.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор пользователя-владельца аватара.
+   */
+  string user_id = 2;
+
+  /**
+   * Ключ объекта в хранилище.
+   */
+  string object_key = 3;
+
+  /**
+   * Оригинальное имя файла.
+   */
+  string file_name = 4;
+
+  /**
+   * MIME-тип файла (например, image/png).
+   */
+  string content_type = 5;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 6;
+
+  /**
+   * Временная метка создания.
+   */
+  google.protobuf.Timestamp created_at = 7;
+
+  /**
+   * Presigned URL для скачивания аватара.
+   */
+  string download_url = 8;
+}

@@ -16,6 +16,52 @@ spring:
     user: ${ADMIN_SPRING_LIQUIBASE_USERNAME:taska}
     password: ${ADMIN_SPRING_LIQUIBASE_PASSWORD:taska}
 
+# Read-only подключения к БД других сервисов.
+# Локальные defaults используют user taska только для удобства разработки.
+# На стенде/проде должны быть отдельные RO users (только SELECT).
+admin:
+  readonly:
+    auth:
+      url: ${ADMIN_RO_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
+      username: ${ADMIN_RO_AUTH_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_AUTH_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_AUTH_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_AUTH_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_AUTH_POOL_MAX_IDLE_TIME_MINUTES:10}
+    project:
+      url: ${ADMIN_RO_PROJECT_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
+      username: ${ADMIN_RO_PROJECT_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_PROJECT_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_PROJECT_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_PROJECT_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_PROJECT_POOL_MAX_IDLE_TIME_MINUTES:10}
+    issue:
+      url: ${ADMIN_RO_ISSUE_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
+      username: ${ADMIN_RO_ISSUE_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_ISSUE_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_ISSUE_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_ISSUE_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_ISSUE_POOL_MAX_IDLE_TIME_MINUTES:10}
+    workflow:
+      url: ${ADMIN_RO_WORKFLOW_R2DBC_URL:r2dbc:postgresql://localhost:5435/workflow_db}
+      username: ${ADMIN_RO_WORKFLOW_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_WORKFLOW_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_WORKFLOW_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_WORKFLOW_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_WORKFLOW_POOL_MAX_IDLE_TIME_MINUTES:10}
+    notification:
+      url: ${ADMIN_RO_NOTIFICATION_R2DBC_URL:r2dbc:postgresql://localhost:5437/notification_db}
+      username: ${ADMIN_RO_NOTIFICATION_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_NOTIFICATION_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_NOTIFICATION_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_NOTIFICATION_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_NOTIFICATION_POOL_MAX_IDLE_TIME_MINUTES:10}
+
 management:
   endpoints:
     web:
@@ -25,6 +71,7 @@ management:
     health:
       probes:
         enabled: true
+      show-details: always
 
 logging:
   level:

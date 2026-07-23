@@ -100,6 +100,79 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/notifications:
+    get:
+      summary: Получение inbox уведомлений текущего пользователя
+      operationId: listNotifications
+      tags:
+        - notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Уведомления успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/notifications/{notificationId}/read:
+    patch:
+      summary: Отметка уведомления текущего пользователя как прочитанного
+      operationId: markNotificationAsRead
+      tags:
+        - notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Уведомление успешно отмечено как прочитанное
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects:
     post:
       summary: Создание проекта
@@ -279,7 +352,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: projectId
@@ -320,7 +393,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: projectId
@@ -373,7 +446,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -401,7 +474,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -436,7 +509,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -461,7 +534,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -497,7 +570,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -559,7 +632,7 @@ components:
   schemas:
     LoginRequestDto:
       type: object
-      required: [ email, password ]
+      required: [email, password]
       properties:
         email:
           type: string
@@ -579,7 +652,7 @@ components:
 
     RefreshRequestDto:
       type: object
-      required: [ refreshToken ]
+      required: [refreshToken]
       properties:
         refreshToken:
           type: string
@@ -597,7 +670,7 @@ components:
 
     PasswordByTokenRequestDto:
       type: object
-      required: [ token, newPassword ]
+      required: [token, newPassword]
       properties:
         token:
           type: string
@@ -620,7 +693,7 @@ components:
 
     CreateIssueRequestDto:
       type: object
-      required: [ issueType, summary, description, priority ]
+      required: [issueType, summary, description, priority]
       properties:
         issueType:
           type: string
@@ -688,7 +761,7 @@ components:
         history:
           type: array
           items:
-            $ref: '#/components/schemas/IssueHistoryResponseDto'
+           $ref: '#/components/schemas/IssueHistoryResponseDto'
 
     IssueShortResponseDto:
       type: object
@@ -751,6 +824,64 @@ components:
       properties:
         payload:
           type: object
+
+    NotificationListResponseDto:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponseDto'
+
+    NotificationResponseDto:
+      type: object
+      required:
+        - id
+        - notificationType
+        - title
+        - body
+        - createdAt
+        - sourceEventId
+      properties:
+        id:
+          type: string
+          format: uuid
+        notificationType:
+          $ref: '#/components/schemas/NotificationTypeDto'
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        sourceEventId:
+          type: string
+          format: uuid
+
+    NotificationTypeDto:
+      type: string
+      enum:
+        - ISSUE_ASSIGNED
+        - ISSUE_TRANSITIONED
+        - ISSUE_CREATED
+        - ISSUE_UPDATED
+        - ISSUE_DELETED
+        - USER_INVITED
+        - USER_ACTIVATED
+        - PROJECT_CREATED
+        - MEMBER_ADDED
+        - MEMBER_UPDATED
+        - MEMBER_REMOVED
 
     CreateProjectRequestDto:
       type: object
