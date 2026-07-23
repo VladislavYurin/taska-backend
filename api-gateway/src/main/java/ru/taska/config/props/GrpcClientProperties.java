@@ -7,8 +7,10 @@ import java.time.Duration;
 @ConfigurationProperties("grpc.client")
 public record GrpcClientProperties(
         Service authService,
-        Service issueService
+        Service issueService,
+        Service notificationService
 ) {
+
     public record Service(
             String host,
             Integer port,

@@ -39,6 +39,10 @@ grpc:
       host: ${AUTH_GRPC_HOST:localhost}
       port: ${AUTH_GRPC_PORT:9091}
       deadlineDuration: ${AUTH_GRPC_DEADLINE:3000}
+    notification-service:
+      host: ${NOTIFICATION_GRPC_HOST:localhost}
+      port: ${NOTIFICATION_GRPC_PORT:9095}
+      deadlineDuration: ${NOTIFICATION_GRPC_DEADLINE:3000}
 
     issue-service:
       host: ${ISSUE_GRPC_HOST:localhost}
