@@ -24,6 +24,8 @@ import java.util.UUID;
 @Component
 public class WorkflowMapper {
 
+    private static final String STATUS_CATEGORY_PREFIX = "STATUS_CATEGORY_";
+
     /**
      * Преобразует параметры REST-запроса и контекст шлюза
      * в gRPC-запрос получения workflow проекта.
@@ -127,12 +129,16 @@ public class WorkflowMapper {
      * @return строковое представление категории для REST контракта
      */
     public String toRestStatusCategory(StatusCategory category) {
-        return switch (category) {
-            case STATUS_CATEGORY_TODO -> "TODO";
-            case STATUS_CATEGORY_IN_PROGRESS -> "IN_PROGRESS";
-            case STATUS_CATEGORY_DONE -> "DONE";
-            default -> "UNKNOWN";
-        };
+        if (category == null
+                || category == StatusCategory.STATUS_CATEGORY_UNSPECIFIED
+                || category == StatusCategory.UNRECOGNIZED) {
+            return "UNKNOWN";
+        }
+
+        String name = category.name();
+        return name.startsWith(STATUS_CATEGORY_PREFIX)
+                ? name.substring(STATUS_CATEGORY_PREFIX.length())
+                : name;
     }
 
     /**
