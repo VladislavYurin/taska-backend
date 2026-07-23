@@ -12,7 +12,7 @@ Backend для platform admin console.
 - workflow DB
 - notification DB
 
-Своя БД `taska_admin_db` остаётся в `spring.r2dbc.*` (с Liquibase).
+Своя БД `admin_db` остаётся в `spring.r2dbc.*` (с Liquibase).
 
 Health компоненты: `authDb`, `projectDb`, `issueDb`, `workflowDb`, `notificationDb`.
 

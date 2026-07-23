@@ -121,7 +121,7 @@ Backend-слой для **platform admin console**.
 |------------|------|
 | HTTP / Actuator | `8086` |
 | gRPC | `9097` |
-| PostgreSQL (`taska_admin_db`) | `5438` |
+| PostgreSQL (`admin_db`) | `5438` |
 
 #### Запуск
 
