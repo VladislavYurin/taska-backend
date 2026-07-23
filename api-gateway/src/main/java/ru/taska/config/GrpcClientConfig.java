@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 
 @Configuration
@@ -45,5 +46,21 @@ public class GrpcClientConfig {
     @Bean
     public ReactorIssueServiceGrpc.ReactorIssueServiceStub issueServiceStub() {
         return ReactorIssueServiceGrpc.newReactorStub(issueManagedChannel());
+    }
+
+    @Bean
+    public ManagedChannel projectManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.projectService().host(),
+                        properties.projectService().port()
+                )
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
+    public ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub() {
+        return ReactorProjectServiceGrpc.newReactorStub(projectManagedChannel());
     }
 }
