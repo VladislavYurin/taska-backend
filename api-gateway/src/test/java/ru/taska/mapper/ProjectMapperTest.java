@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
@@ -231,13 +233,13 @@ public class ProjectMapperTest {
     }
 
     @Test
-    @DisplayName("Должен возвращать UNSPECIFIED для null")
-    void toGrpcProjectRole_shouldReturnUnspecified_whenNull() {
-        // when
-        var result = mapper.toGrpcProjectRole( null);
-
-        // then
-        Assertions.assertThat(result).isEqualTo(ProjectRole.PROJECT_ROLE_UNSPECIFIED);
+    @DisplayName("Должен возвращать BAD_REQUEST для null")
+    void toGrpcProjectRole_shouldThrowBadRequest_whenNull() {
+        // when & then
+        Assertions.assertThatThrownBy(()->mapper.toGrpcProjectRole( null))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test

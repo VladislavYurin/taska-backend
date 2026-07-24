@@ -91,7 +91,7 @@ public class ProjectMapper {
     /// REST строка -> ProjectRole Enum grpc
     public ProjectRole toGrpcProjectRole(String restRole) {
         if (restRole == null) {
-            return ProjectRole.PROJECT_ROLE_UNSPECIFIED;
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is required");
         }
         return switch (restRole) {
             case "ADMIN" -> ProjectRole.PROJECT_ROLE_ADMIN;
@@ -99,7 +99,7 @@ public class ProjectMapper {
             case "VIEWER" -> ProjectRole.PROJECT_ROLE_VIEWER;
             default -> throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Invalid project role: " + restRole
+                    "Invalid project role: " + restRole + ". Allowed: ADMIN, MEMBER, VIEWER"
             );
         };
     }

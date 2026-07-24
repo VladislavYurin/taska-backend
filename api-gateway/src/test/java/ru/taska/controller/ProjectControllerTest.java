@@ -396,6 +396,82 @@ public class ProjectControllerTest {
         Mockito.verify(projectClient).removeProjectMember(Mockito.eq(PROJECT_ID), Mockito.eq(MEMBER_ID), Mockito.any());
     }
 
+    // ========== ADMIN RULES ==========
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при попытке удалить последнего ADMIN")
+    void removeLastAdmin_shouldReturn400() {
+        // given
+        mockAuthenticatedUser();
+
+        // Мокаем ошибку от project-service: нельзя удалить последнего админа
+        Mockito.when(projectClient.removeProjectMember(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.error(new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Cannot remove the last admin from the project"
+                )));
+
+        // when & then
+        webTestClient.delete()
+                .uri("/api/v1/projects/{projectId}/members/{userId}", PROJECT_ID, MEMBER_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists()
+                .jsonPath("$.message").isEqualTo("Cannot remove the last admin from the project");
+
+        Mockito.verify(projectClient).removeProjectMember(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(MEMBER_ID),
+                Mockito.any()
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при попытке понизить последнего ADMIN")
+    void changeLastAdminRole_shouldReturn400() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new ChangeProjectMemberRoleRequestDto();
+        request.setRole(ChangeProjectMemberRoleRequestDto.RoleEnum.MEMBER);
+
+        Mockito.when(projectClient.changeProjectMemberRole(
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any())
+                )
+                .thenReturn(Mono.error(new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Can't modify last admin: " + MEMBER_ID + " in project: " + PROJECT_ID))
+                );
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}/members/{userId}", PROJECT_ID, MEMBER_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists()
+                .jsonPath("$.message").isEqualTo("Can't modify last admin: " + MEMBER_ID + " in project: " + PROJECT_ID);
+
+        Mockito.verify(projectClient).changeProjectMemberRole(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(MEMBER_ID),
+                Mockito.any(),
+                Mockito.any()
+        );
+    }
+
     // ========== AUTHENTICATION ==========
 
     @Test
