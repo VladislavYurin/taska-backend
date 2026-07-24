@@ -18,6 +18,7 @@ import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -105,6 +106,12 @@ class CommentServiceImplTest {
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
                 // listIssueRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
+                // createIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
+                // deleteIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
+                // listIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
                 // commentRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
                 // createAttachmentRoles
@@ -178,10 +185,10 @@ class CommentServiceImplTest {
         when(commentRepository.save(any(IssueComment.class)))
                 .thenReturn(Mono.just(comment));
 
-        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(Issue.class), any(UUID.class), any(IssueEventType.class), any()))
+        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(UUID.class), any(UUID.class), any(IssueEventType.class), any()))
                 .thenReturn(Mono.just(issueHistory));
 
-        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(), any(EventType.class), any()))
+        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
 
         ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();
@@ -267,10 +274,10 @@ class CommentServiceImplTest {
                 eq(commentId), eq(newBody), eq(1), eq(actorUserId)))
                 .thenReturn(Mono.just(updatedComment));
 
-        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(Issue.class), any(UUID.class), any(IssueEventType.class), any()))
+        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(UUID.class), any(UUID.class), any(IssueEventType.class), any()))
                 .thenReturn(Mono.just(issueHistory));
 
-        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(), any(EventType.class), any()))
+        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
 
         ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();
@@ -401,10 +408,10 @@ class CommentServiceImplTest {
         when(commentRepository.softDeleteWithVersionCheck(eq(commentId), eq(1)))
                 .thenReturn(Mono.just(deletedComment));
 
-        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(Issue.class), any(UUID.class), any(IssueEventType.class), any()))
+        when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(UUID.class), any(UUID.class), any(IssueEventType.class), any()))
                 .thenReturn(Mono.just(issueHistory));
 
-        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(), any(EventType.class), any()))
+        when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
 
         ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();

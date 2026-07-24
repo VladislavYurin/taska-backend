@@ -3,9 +3,6 @@ package ru.taska.transport.grpc;
 import exception.GrpcExceptionHandler;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,16 +11,22 @@ import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AddIssueCommentRequest;
 import ru.taska.api.issue.v1.AddIssueCommentResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
 import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssueLinksRequest;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssueCommentsRequest;
 import ru.taska.api.issue.v1.ListIssueCommentsResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
@@ -33,13 +36,19 @@ import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
 import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.IssueLinkType;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.CommentMapper;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.CommentService;
 import ru.taska.service.IssueService;
-import ru.taska.service.transition.IssueTransitionProcessor;
+import ru.taska.service.link.IssueLinkService;
+import ru.taska.service.transition.IssueTransitionService;
 import validator.GrpcRequestValidators;
+
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 @Slf4j
 @Service
@@ -47,7 +56,8 @@ import validator.GrpcRequestValidators;
 public class GrpcIssueService {
 
     private final IssueService issueService;
-    private final IssueTransitionProcessor issueTransitionProcessor;
+    private final IssueLinkService issueLinkService;
+    private final IssueTransitionService issueTransitionService;
     private final IssueMapper issueMapper;
     private final CommentService commentService;
     private final CommentMapper commentMapper;
@@ -380,7 +390,7 @@ public class GrpcIssueService {
      * Выполняет переход задачи по workflow.
      *
      * @param request {@link Mono} с запросом {@link TransitionIssueRequest} с данными для перехода задачи по workflow.
-     * @return        {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
+     * @return {@link Mono} с ответом {@link IssueWithHistoryResponse}, включающим обновленные данные задачи с историей изменений.
      */
     @TrackMetrics(counter = "issue-service_transition-issue_grpc_counter",
             timer = "issue-service_transition-issue_grpc_timer")
@@ -421,7 +431,7 @@ public class GrpcIssueService {
                             log.info("[{}][{}] transitionIssue: issueId={}, transitionId={}, actorUserId={}",
                                     requestId, nodeId, issueId, transitionId, actorUserId);
 
-                            return issueTransitionProcessor.transitionIssue(
+                            return issueTransitionService.transitionIssue(
                                             requestId,
                                             nodeId,
                                             issueId,
@@ -441,6 +451,146 @@ public class GrpcIssueService {
                                     );
                         }))
                 .map(issueMapper::toIssueDetailsProto);
+    }
+
+    @TrackMetrics(counter = "issue-service_list-issue-links_grpc_counter",
+            timer = "issue-service_list-issue-links_grpc_timer")
+    public Mono<ListIssueLinksResponse> listIssueLinks(Mono<ListIssueLinksRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logOnError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssueLinks"))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
+
+                            log.info("[{}][{}] listIssueLinks: issueId={}, actorUserId={}", requestId, nodeId, issueId, actorUserId);
+
+                            return issueLinkService.listIssueLinks(requestId, nodeId, issueId, actorUserId)
+                                    .map(link -> issueMapper.toIssueLinkProto(link, issueId))
+                                    .collectList()
+                                    .map(links ->
+                                            ListIssueLinksResponse.newBuilder()
+                                                    .addAllIssueLinks(links)
+                                                    .build()
+                                    )
+                                    .doOnNext(response ->
+                                            log.info("[{}][{}] listIssueLinks: successfully found {} links for issue, issueId={}",
+                                                    requestId, nodeId, response.getIssueLinksCount(), issueId)
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "listIssueLinks")
+                                    );
+                        })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_create-issue-link_grpc_counter",
+            timer = "issue-service_create-issue-link_grpc_timer")
+    public Mono<IssueLinkResponse> createIssueLink(Mono<CreateIssueLinkRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getSourceIssueId(), "body.sourceIssueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getTargetIssueId(), "body.targetIssueId"
+                                ),
+                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                        req.getBody().getLinkType(), "body.linkType"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logOnError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssueLink"))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID sourceIssueId = t.getT3();
+                            UUID targetIssueId = t.getT4();
+                            IssueLinkType linkType = issueMapper.toDomainIssueLinkType(t.getT5());
+                            UUID actorUserId = t.getT6();
+
+                            log.info("[{}][{}] createIssueLink: sourceIssueId={}, targetIssueId={}, linkType={}, actorUserId={}",
+                                    requestId, nodeId, sourceIssueId, targetIssueId, linkType, actorUserId);
+
+                            return issueLinkService.createIssueLink(requestId, nodeId, sourceIssueId, targetIssueId, linkType, actorUserId)
+                                    .doOnNext(issueLink ->
+                                            log.info("[{}][{}] createIssueLink: successfully created, id={}",
+                                                    requestId, nodeId, issueLink.getId())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "createIssueLink")
+                                    );
+                        })
+                )
+                .map(link -> issueMapper.toIssueLinkProto(link, link.getSourceIssueId()));
+    }
+
+    @TrackMetrics(counter = "issue-service_delete-issue-link_grpc_counter",
+            timer = "issue-service_delete-issue-link_grpc_timer")
+    public Mono<DeleteIssueLinkResponse> deleteIssueLink(Mono<DeleteIssueLinkRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getIssueId(), "body.issueId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getLinkId(), "body.linkId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                logOnError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteIssueLink"))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID issueId = t.getT3();
+                            UUID linkId = t.getT4();
+                            UUID actorUserId = t.getT5();
+
+                            log.info("[{}][{}] deleteIssueLink: issueId={}, linkId={}, actorUserId={}",
+                                    requestId, nodeId, issueId, linkId, actorUserId);
+
+                            return issueLinkService.deleteIssueLink(requestId, nodeId, issueId, linkId, actorUserId)
+                                    .doOnNext(issueLink ->
+                                            log.info("[{}][{}] deleteIssueLink: successfully deleted, id={}",
+                                                    requestId, nodeId, issueLink.getId())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "deleteIssueLink")
+                                    );
+                        })
+                )
+                .map(issueMapper::toDeleteIssueLinkProto);
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {

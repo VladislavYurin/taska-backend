@@ -86,7 +86,7 @@ paths:
       tags:
         - auth
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
       responses:
         '200':
           description: Данные успешно получены
@@ -107,7 +107,7 @@ paths:
       tags:
         - notifications
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
       parameters:
         - name: unreadOnly
           in: query
@@ -152,7 +152,7 @@ paths:
       tags:
         - notifications
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
       parameters:
         - name: notificationId
           in: path
@@ -352,7 +352,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: projectId
@@ -393,7 +393,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: projectId
@@ -439,6 +439,101 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/issues/{issueId}/links:
+    get:
+      summary: Возвращает список связей для задачи
+      operationId: listIssueLinks
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Список связей задачи успешно найден
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueLinksResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Устанавливает новую связь для задачи
+      operationId: createIssueLink
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueLinkRequestDto'
+
+      responses:
+        '201':
+          description: Связь между задачами успешно создана
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueLinkResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/{issueId}/links/{linkId}:
+    delete:
+      summary: Выполняет мягкое удаление связи между задачами
+      operationId: deleteIssueLink
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '204':
+          description: Связь между задачами успешно удалена (No Content)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/issues/{issueId}:
     get:
       summary: Возвращает задачу с историей
@@ -446,7 +541,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: issueId
@@ -474,7 +569,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: issueId
@@ -509,7 +604,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: issueId
@@ -534,7 +629,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: issueId
@@ -570,7 +665,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: []
+        - bearerAuth: [ ]
 
       parameters:
         - name: issueId
@@ -967,7 +1062,7 @@ components:
   schemas:
     LoginRequestDto:
       type: object
-      required: [email, password]
+      required: [ email, password ]
       properties:
         email:
           type: string
@@ -987,7 +1082,7 @@ components:
 
     RefreshRequestDto:
       type: object
-      required: [refreshToken]
+      required: [ refreshToken ]
       properties:
         refreshToken:
           type: string
@@ -1005,7 +1100,7 @@ components:
 
     PasswordByTokenRequestDto:
       type: object
-      required: [token, newPassword]
+      required: [ token, newPassword ]
       properties:
         token:
           type: string
@@ -1028,7 +1123,7 @@ components:
 
     CreateIssueRequestDto:
       type: object
-      required: [issueType, summary, description, priority]
+      required: [ issueType, summary, description, priority ]
       properties:
         issueType:
           type: string
@@ -1126,7 +1221,7 @@ components:
 
     UpdateIssueRequestDto:
       type: object
-      required: [summary, description, priority]
+      required: [ summary, description, priority ]
       properties:
         summary:
           type: string
@@ -1149,7 +1244,7 @@ components:
 
     AssignIssueRequestDto:
       type: object
-      required: [assigneeId]
+      required: [ assigneeId ]
       properties:
         assigneeId:
           type: string
@@ -1159,6 +1254,42 @@ components:
       properties:
         payload:
           type: object
+
+    CreateIssueLinkRequestDto:
+      type: object
+      required: [ targetIssueId, linkType ]
+      properties:
+        targetIssueId:
+          type: string
+        linkType:
+          $ref: '#/components/schemas/IssueLinkTypeDto'
+
+    ListIssueLinksResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLinkResponseDto'
+
+    IssueLinkResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        sourceIssueId:
+          type: string
+        targetIssueId:
+          type: string
+        viewLinkType:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     NotificationListResponseDto:
       type: object
@@ -1383,7 +1514,7 @@ components:
 
     RestErrorResponse:
       type: object
-      required: [code, message]
+      required: [ code, message ]
       properties:
         code:
           type: string
@@ -1396,6 +1527,13 @@ components:
         - TASK
         - BUG
         - STORY
+
+    IssueLinkTypeDto:
+      type: string
+      enum:
+        - BLOCKS
+        - RELATES_TO
+        - DUPLICATES
 
     # ==================== КОММЕНТАРИИ к issue ====================
     CommentRequestDto:

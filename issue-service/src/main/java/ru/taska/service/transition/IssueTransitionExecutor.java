@@ -10,6 +10,7 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueWithHistory;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -75,8 +76,8 @@ public class IssueTransitionExecutor {
                             .flatMap(savedIssue -> {
                                 JsonNode payload = payloadSerializer.createTransitionedPayload(sourceStatusKey, targetStatusKey, transitionId, actorUserId, issue.getAssigneeId());
 
-                                return issueHistoryService.saveIssueHistory(requestId, nodeId, issue, actorUserId, IssueEventType.TRANSITIONED, payload)
-                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue.getId(), EventType.ISSUE_TRANSITIONED, payload))
+                                return issueHistoryService.saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, IssueEventType.TRANSITIONED, payload)
+                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue.getId(), EventType.ISSUE_TRANSITIONED, payload))
                                         .thenReturn(savedIssue);
                             })
                             .flatMap(this::loadIssueWithHistory);

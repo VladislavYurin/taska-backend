@@ -27,9 +27,13 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AssignIssueRequestDto;
+import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueLinkResponseDto;
+import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -59,6 +63,7 @@ import java.util.stream.Stream;
 })
 class IssueControllerTest {
 
+    public static final String VIEW_LINK_TYPE = "ISSUE_LINK_VIEW_TYPE_RELATES_TO";
     private static final String LOGIN = "test-login";
     private static final String EMAIL = "test@example.com";
     private static final String DISPLAY_NAME = "Ivan Ivanov";
@@ -68,7 +73,9 @@ class IssueControllerTest {
     private static final String ASSIGNEE_ID = "00000000-0000-0000-0000-000000000002";
     private static final String ISSUE_ID = "00000000-0000-0000-0000-000000000003";
     private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000004";
-    private static final String TRANSITION_ID = "00000000-0000-0000-0000-000000000004";
+    private static final String TRANSITION_ID = "00000000-0000-0000-0000-000000000005";
+    private static final String TARGET_ISSUE_ID = "00000000-0000-0000-0000-000000000006";
+    private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
     private static final String SUMMARY = "Summary-1";
     private static final String DESCRIPTION = "Description-1";
     private static final String STATUS_TODO = "TODO";
@@ -595,6 +602,98 @@ class IssueControllerTest {
                 .expectBody().isEmpty();
 
         Mockito.verify(issueClient).deleteIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+    }
+
+    @Test
+    @DisplayName("Должен вернуть ответ с телом IssueLinkResponseDto и статусом 201")
+    void createIssueLink_shouldReturnsResponseAndStatus201() {
+        mockAuthenticatedUser();
+
+        var request = new CreateIssueLinkRequestDto(TARGET_ISSUE_ID, IssueLinkTypeDto.RELATES_TO);
+
+        var response = new IssueLinkResponseDto();
+        response.setId(LINK_ID);
+        response.setSourceIssueId(ISSUE_ID);
+        response.setTargetIssueId(TARGET_ISSUE_ID);
+        response.setViewLinkType(VIEW_LINK_TYPE);
+
+        Mockito.when(issueClient.createIssueLink(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.post()
+                .uri("/api/v1/issues/{issueId}/links", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(IssueLinkResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).createIssueLink(
+                Mockito.eq(ISSUE_ID),
+                Mockito.any(Mono.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть ответ без тела со статусом 204")
+    void deleteIssueLink_shouldReturnsNoContentAndStatus204() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.deleteIssueLink(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(LINK_ID),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.empty());
+
+        webTestClient.delete()
+                .uri("/api/v1/issues/{issueId}/links/{linkId}", ISSUE_ID, LINK_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isNoContent()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody().isEmpty();
+
+        Mockito.verify(issueClient).deleteIssueLink(
+                Mockito.eq(ISSUE_ID),
+                Mockito.eq(LINK_ID),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть ответ с телом ListIssueLinksResponseDto и статусом 200")
+    void listIssueLinks_shouldReturnsResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new ListIssueLinksResponseDto();
+
+        Mockito.when(issueClient.listIssueLinks(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/api/v1/issues/{issueId}/links", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(ListIssueLinksResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).listIssueLinks(
+                Mockito.eq(ISSUE_ID),
+                Mockito.any(GatewayContext.class)
+        );
     }
 
     private static Stream<Arguments> listIssuesArguments() {

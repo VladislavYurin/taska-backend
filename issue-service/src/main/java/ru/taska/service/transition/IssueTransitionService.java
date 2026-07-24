@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Сервис для управления переходом задачи по workflow.
  */
-public interface IssueTransitionProcessor {
+public interface IssueTransitionService {
 
     /**
      * Выполняет переход задачи по workflow.

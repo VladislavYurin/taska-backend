@@ -12,6 +12,8 @@ import ru.taska.event.payload.issueService.CommentUpdatedPayload;
 import ru.taska.event.payload.issueService.IssueAssignedPayload;
 import ru.taska.event.payload.issueService.IssueCreatedPayload;
 import ru.taska.event.payload.issueService.IssueDeletedPayload;
+import ru.taska.event.payload.issueService.IssueLinkCreatedPayload;
+import ru.taska.event.payload.issueService.IssueLinkDeletedPayload;
 import ru.taska.event.payload.issueService.IssueTransitionedPayload;
 import ru.taska.event.payload.issueService.IssueUpdatedPayload;
 import tools.jackson.databind.JsonNode;
@@ -25,6 +27,11 @@ public class OutboxEventMapper {
 
     private static final String REPORTER = "reporterId";
     private static final String ASSIGNEE = "assigneeId";
+    private static final String CREATED_BY = "createdBy";
+    private static final String DELETED_BY = "deletedBy";
+    private static final String SOURCE_ISSUE_ID = "sourceIssueId";
+    private static final String TARGET_ISSUE_ID = "targetIssueId";
+    private static final String LINK_TYPE = "linkType";
     private static final String SCHEMA_VERSION = "v1";
 
     private static final String COMMENT_ID = "commentId";
@@ -86,6 +93,20 @@ public class OutboxEventMapper {
                     getUuid(sourcePayload, ASSIGNEE)
             ));
 
+            case ISSUE_LINK_CREATED -> objectMapper.valueToTree(new IssueLinkCreatedPayload(
+                    getUuid(sourcePayload, CREATED_BY),
+                    getUuid(sourcePayload, SOURCE_ISSUE_ID),
+                    getUuid(sourcePayload, TARGET_ISSUE_ID),
+                    getString(sourcePayload, LINK_TYPE)
+            ));
+
+            case ISSUE_LINK_DELETED -> objectMapper.valueToTree(new IssueLinkDeletedPayload(
+                    getUuid(sourcePayload, DELETED_BY),
+                    getUuid(sourcePayload, SOURCE_ISSUE_ID),
+                    getUuid(sourcePayload, TARGET_ISSUE_ID),
+                    getString(sourcePayload, LINK_TYPE)
+            ));
+
             case COMMENT_CREATED -> objectMapper.valueToTree(new CommentCreatedPayload(
                     getUuid(sourcePayload, "commentId"),
                     getUuid(sourcePayload, "authorUserId"),
@@ -121,5 +142,19 @@ public class OutboxEventMapper {
         }
 
         return UUID.fromString(value);
+    }
+
+    private String getString(JsonNode node, String field) {
+        if (node == null) {
+            return null;
+        }
+
+        var value = node.path(field).asString();
+
+        if (value.isEmpty()) {
+            return null;
+        }
+
+        return value;
     }
 }

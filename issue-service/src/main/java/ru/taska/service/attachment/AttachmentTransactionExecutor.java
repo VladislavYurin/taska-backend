@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.service.IssueHistoryService;
@@ -48,8 +49,8 @@ public class AttachmentTransactionExecutor {
                     var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment);
                     return issueHistoryService.saveIssueHistory(requestId, nodeId, issueId, actorUserId,
                                     IssueEventType.ATTACHMENT_UPLOADED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issueId,
-                                    EventType.ATTACHMENT_ADDED, payload))
+                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
+                                    issueId, EventType.ATTACHMENT_ADDED, payload))
                             .thenReturn(savedAttachment);
                 });
     }
@@ -66,8 +67,8 @@ public class AttachmentTransactionExecutor {
                     var payload = payloadSerializer.createAttachmentDeletedPayload(deleted, actorUserId);
                     return issueHistoryService.saveIssueHistory(requestId, nodeId, deleted.getIssueId(),
                                     actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, deleted.getIssueId(),
-                                    EventType.ATTACHMENT_DELETED, payload));
+                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
+                                    deleted.getIssueId(), EventType.ATTACHMENT_DELETED, payload));
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Attachment already deleted (race condition): attachmentId={}",

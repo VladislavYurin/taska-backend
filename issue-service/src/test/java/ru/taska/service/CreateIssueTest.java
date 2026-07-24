@@ -13,6 +13,7 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.util.RequestHasher;
 
 import java.time.Duration;
@@ -58,7 +59,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(issueHistoryService.saveIssueCreateHistory(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
                 .thenReturn(Mono.empty());
-        Mockito.lenient().when(outboxEventService.saveOutboxEvent(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
+        Mockito.lenient().when(outboxEventService.saveOutboxEvent(Mockito.anyString(), Mockito.anyString(), Mockito.any(AggregateType.class), Mockito.any(Issue.class)))
                 .thenReturn(Mono.empty());
 
         IdempotencyKey mockedKey = new IdempotencyKey();
@@ -149,7 +150,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         ).block();
 
         Mockito.verify(outboxEventService, Mockito.times(1))
-                .saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class));
+                .saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class), Mockito.any(Issue.class));
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
         Mockito.verify(projectRoleChecker).checkProjectRole(

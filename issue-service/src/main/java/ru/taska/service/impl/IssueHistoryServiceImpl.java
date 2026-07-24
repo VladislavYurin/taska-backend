@@ -42,26 +42,7 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
 
     @Transactional
     @Override
-    public Mono<IssueHistory> saveIssueHistory(
-            String requestId,
-            String nodeId,
-            Issue issue,
-            UUID actorUserId,
-            IssueEventType type,
-            JsonNode payload) {
-
-        return saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, type, payload);
-    }
-
-    @Transactional
-    @Override
-    public Mono<IssueHistory> saveIssueHistory(String requestId,
-                                               String nodeId,
-                                               UUID issueId,
-                                               UUID actorUserId,
-                                               IssueEventType type,
-                                               JsonNode payload) {
-
+    public Mono<IssueHistory> saveIssueHistory(String requestId, String nodeId, UUID issueId, UUID actorUserId, IssueEventType type, JsonNode payload) {
         IssueHistory issueHistory = IssueHistory.builder()
                 .issueId(issueId)
                 .eventType(type)

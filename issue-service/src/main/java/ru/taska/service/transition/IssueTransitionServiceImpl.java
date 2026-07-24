@@ -18,12 +18,12 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Процессор-оркестратор, реализующий {@link IssueTransitionExecutor}.
+ * Оркестратор, реализующий {@link IssueTransitionExecutor}.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class IssueTransitionProcessorImpl implements IssueTransitionProcessor {
+public class IssueTransitionServiceImpl implements IssueTransitionService {
 
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
@@ -69,13 +69,13 @@ public class IssueTransitionProcessorImpl implements IssueTransitionProcessor {
                                         issueTransitionExecutor.executeTransition(requestId, nodeId, issueId, targetStatus, transitionId, actorUserId)
                                 )
                                 .retryWhen(Retry.backoff(issueProperties.retry().maxAttempts(), issueProperties.retry().minBackoff())
-                                        .filter(this::isOptimisticLockException)
+                                        .filter(this::isRetryable)
                                         .onRetryExhaustedThrow((spec, signal) -> signal.failure())
                                 )
                 );
     }
 
-    private boolean isOptimisticLockException(Throwable t) {
+    private boolean isRetryable(Throwable t) {
         return t instanceof DomainException ex && ex.getStatus() == DomainStatus.ABORTED;
     }
 

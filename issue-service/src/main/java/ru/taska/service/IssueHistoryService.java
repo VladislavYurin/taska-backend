@@ -28,21 +28,8 @@ public interface IssueHistoryService {
      *
      * @param requestId айди запроса
      * @param nodeId    айди узла
-     * @param issue     измененная задача
+     * @param issueId   измененная задача
      * @param payload   фактические изменения
-     * @return Mono<{@link IssueHistory}> исторические данные
-     */
-    Mono<IssueHistory> saveIssueHistory(String requestId, String nodeId, Issue issue, UUID actorUserId, IssueEventType type, JsonNode payload);
-
-    /**
-     * Создает {@link IssueHistory} и сохраняет в БД исторические данные по идентификатору задачи.
-     *
-     * @param requestId   айди запроса
-     * @param nodeId      айди узла
-     * @param issueId     идентификатор задачи
-     * @param actorUserId айди актора
-     * @param type        тип события
-     * @param payload     фактические изменения
      * @return Mono<{@link IssueHistory}> исторические данные
      */
     Mono<IssueHistory> saveIssueHistory(String requestId, String nodeId, UUID issueId, UUID actorUserId, IssueEventType type, JsonNode payload);

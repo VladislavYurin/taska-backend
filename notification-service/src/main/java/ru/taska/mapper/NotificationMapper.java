@@ -70,6 +70,44 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toIssueLinkCreated(
+            TaskaEvent event,
+            UUID userId,
+            UUID sourceIssueId,
+            UUID targetIssueId,
+            String linkType,
+            UUID linkId
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_LINK_CREATED)
+                .title("Для задачи установлена новая связь")
+                .body("Установлена новая связь %s (%s) для задачи %s с задачей %s."
+                        .formatted(linkId, linkType, sourceIssueId, targetIssueId))
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toIssueLinkDeleted(
+            TaskaEvent event,
+            UUID userId,
+            UUID sourceIssueId,
+            UUID targetIssueId,
+            String linkType,
+            UUID linkId
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_LINK_DELETED)
+                .title("Связь удалена из задачи")
+                .body("Была удалена связь %s (%s) между задачами %s и %s."
+                        .formatted(linkId, linkType, sourceIssueId, targetIssueId))
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toUserInvited(TaskaEvent event) {
         return Notification.builder()
                 .userId(event.aggregateId())
@@ -174,6 +212,8 @@ public class NotificationMapper {
             case MEMBER_UPDATED -> NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED;
             case MEMBER_REMOVED -> NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED;
             case USER_ACTIVATED -> NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED;
+            case ISSUE_LINK_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_LINK_CREATED;
+            case ISSUE_LINK_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_LINK_DELETED;
         };
     }
 

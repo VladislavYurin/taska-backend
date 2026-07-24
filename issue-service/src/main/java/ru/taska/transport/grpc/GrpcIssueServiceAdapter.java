@@ -5,12 +5,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssueLinksRequest;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
@@ -71,6 +77,23 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
         return grpcIssueService.transitionIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
+    }
+
+    @Override
+    public Mono<ListIssueLinksResponse> listIssueLinks(Mono<ListIssueLinksRequest> request) {
+        return grpcIssueService.listIssueLinks(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssueLinks"));    }
+
+    @Override
+    public Mono<IssueLinkResponse> createIssueLink(Mono<CreateIssueLinkRequest> request) {
+        return grpcIssueService.createIssueLink(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createIssueLink"));
+    }
+
+    @Override
+    public Mono<DeleteIssueLinkResponse> deleteIssueLink(Mono<DeleteIssueLinkRequest> request) {
+        return grpcIssueService.deleteIssueLink(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueLink"));
     }
     // --------------------------------- Методы для комментариев к issue --------------------
     /**

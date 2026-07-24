@@ -13,14 +13,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.IssueLinkType;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssueLinksRequest;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
@@ -31,9 +38,13 @@ import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
+import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueLinkResponseDto;
+import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -54,6 +65,7 @@ class GrpcIssueServiceClientTest {
     private static final String ASSIGNEE_ID = "00000000-0000-0000-0000-000000000004";
     private static final String IDEMPOTENCY_KEY = "00000000-0000-0000-0000-000000000005";
     private static final String TRANSITION_ID = "00000000-0000-0000-0000-000000000006";
+    private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
     public static final String SUMMARY = "Summary-1";
     public static final String DESCRIPTION = "Description-1";
     public static final String STATUS_KEY = "TODO";
@@ -450,6 +462,96 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
         Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
         Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
+        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC listIssueLinks и вернуть ответ")
+    void listIssueLinks_shouldCallStubAndReturnMappedResponse() {
+        var grpcResponse = ListIssueLinksResponse.getDefaultInstance();
+        var restResponse = new ListIssueLinksResponseDto();
+
+        Mockito.when(stub.listIssueLinks(Mockito.any(ListIssueLinksRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(issueMapper.toRestListIssueLinkResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        StepVerifier.create(client.listIssueLinks(ISSUE_ID, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(ListIssueLinksRequest.class);
+
+        Mockito.verify(stub).listIssueLinks(captor.capture());
+
+        var request = captor.getValue();
+
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
+        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
+
+        Mockito.verify(issueMapper).toRestListIssueLinkResponse(grpcResponse);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC createIssueLink и вернуть ответ")
+    void createIssueLink_shouldCallStubAndReturnMappedResponse() {
+        var restRequest = new CreateIssueLinkRequestDto("00000000-0000-0000-0000-000000000006", IssueLinkTypeDto.RELATES_TO);
+        var grpcResponse = IssueLinkResponse.getDefaultInstance();
+        var restResponse = new IssueLinkResponseDto();
+
+        Mockito.when(stub.createIssueLink(Mockito.any(CreateIssueLinkRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(issueMapper.toGrpcIssueLinkType(Mockito.any(IssueLinkTypeDto.class)))
+                .thenReturn(IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO);
+
+        Mockito.when(issueMapper.toRestIssueLinkResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        StepVerifier.create(client.createIssueLink(ISSUE_ID, Mono.just(restRequest), context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(CreateIssueLinkRequest.class);
+
+        Mockito.verify(stub).createIssueLink(captor.capture());
+
+        var request = captor.getValue();
+
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getSourceIssueId()).isEqualTo(ISSUE_ID);
+        Assertions.assertThat(request.getBody().getTargetIssueId()).isEqualTo("00000000-0000-0000-0000-000000000006");
+        Assertions.assertThat(request.getBody().getLinkType()).isEqualTo(IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO);
+        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
+
+        Mockito.verify(issueMapper).toRestIssueLinkResponse(grpcResponse);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC deleteIssueLink и вернуть ответ")
+    void deleteIssueLink_shouldCallStubAndReturnMappedResponse() {
+        var grpcResponse = DeleteIssueLinkResponse.getDefaultInstance();
+
+        Mockito.when(stub.deleteIssueLink(Mockito.any(DeleteIssueLinkRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        StepVerifier.create(client.deleteIssueLink(ISSUE_ID, LINK_ID, context))
+                .verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(DeleteIssueLinkRequest.class);
+
+        Mockito.verify(stub).deleteIssueLink(captor.capture());
+
+        var request = captor.getValue();
+
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
+        Assertions.assertThat(request.getBody().getLinkId()).isEqualTo(LINK_ID);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
     }
 }

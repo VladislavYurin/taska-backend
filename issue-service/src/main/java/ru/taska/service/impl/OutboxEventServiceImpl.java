@@ -26,10 +26,10 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     @Override
     @Transactional
-    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, Issue issue) {
+    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, AggregateType aggregateType, Issue issue) {
         return outboxEventRepository.save(
                 OutboxEvent.builder()
-                        .aggregateType(AggregateType.ISSUE.getValue())
+                        .aggregateType(aggregateType.getValue())
                         .aggregateId(issue.getId())
                         .eventType(EventType.ISSUE_CREATED.getValue())
                         .payload(payloadSerializer.createIssueCreatedPayload(issue))
@@ -39,11 +39,18 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     @Override
     @Transactional
-    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, UUID issueId, EventType type, JsonNode payload) {
+    public Mono<OutboxEvent> saveOutboxEvent(
+            String requestId,
+            String nodeId,
+            AggregateType aggregateType,
+            UUID aggregateId,
+            EventType type,
+            JsonNode payload
+    ) {
         return outboxEventRepository.save(
                 OutboxEvent.builder()
-                        .aggregateType(AggregateType.ISSUE.getValue())
-                        .aggregateId(issueId)
+                        .aggregateType(aggregateType.getValue())
+                        .aggregateId(aggregateId)
                         .eventType(type.getValue())
                         .payload(payload)
                         .requestId(requestId)
