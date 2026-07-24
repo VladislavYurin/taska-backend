@@ -889,8 +889,11 @@ components:
       properties:
         projectKey:
           type: string
+          minLength: 1
+          pattern: '^[\x21-\x7E]+$'
         name:
           type: string
+          minLength: 1
 
     ProjectResponseDto:
       type: object

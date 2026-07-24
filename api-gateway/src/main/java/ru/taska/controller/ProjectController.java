@@ -1,11 +1,9 @@
 package ru.taska.controller;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.ProjectApi;
@@ -37,29 +35,15 @@ public class ProjectController implements ProjectApi {
      */
     @Override
     public Mono<ResponseEntity<ProjectResponseDto>> createProject(
-            @Valid Mono<CreateProjectRequestDto> createProjectRequestDto,
+            Mono<CreateProjectRequestDto> createProjectRequestDto,
             ServerWebExchange exchange
     ) {
-
         return createProjectRequestDto.flatMap(request -> {
-                    // Ручная валидация - мб надо будет сделать общую валидацию
-                    if (request.getProjectKey() == null || request.getProjectKey().trim().isEmpty()) {
-                        return Mono.error(new ResponseStatusException(
-                                HttpStatus.BAD_REQUEST,
-                                "projectKey must not be empty"
-                        ));
-                    }
-                    if (request.getName() == null || request.getName().trim().isEmpty()) {
-                        return Mono.error(new ResponseStatusException(
-                                HttpStatus.BAD_REQUEST,
-                                "name must not be empty"
-                        ));
-                    }
                     return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                                    projectClient.createProject(createProjectRequestDto, context))
+                        projectClient.createProject(Mono.just(request), context))
                             .map(responseBody -> ResponseEntity.status(HttpStatus.CREATED).body(responseBody));
 
-        });
+       });
     }
 
     /**
