@@ -2,7 +2,13 @@ package ru.taska.mapper;
 
 import org.springframework.stereotype.Component;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.workflow.v1.*;
+import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
+import ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody;
+import ru.taska.api.workflow.v1.IssueType;
+import ru.taska.api.workflow.v1.StatusCategory;
+import ru.taska.api.workflow.v1.WorkflowResponse;
+import ru.taska.api.workflow.v1.WorkflowStatus;
+import ru.taska.api.workflow.v1.WorkflowTransition;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowResponseDto;

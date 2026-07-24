@@ -17,7 +17,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
-import ru.taska.domain.*;
+import ru.taska.domain.GatewayContext;
+import ru.taska.domain.GatewayUserContext;
+import ru.taska.domain.GatewayUserStatus;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
@@ -35,7 +38,6 @@ import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 import java.util.List;
 import java.util.UUID;
 
-import static io.grpc.Status.*;
 
 @WebFluxTest(controllers = WorkflowController.class)
 @Import({
@@ -206,7 +208,7 @@ class WorkflowControllerTest {
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(PERMISSION_DENIED.asRuntimeException()));
+                .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
 
 
         webTestClient.get()
@@ -235,7 +237,7 @@ class WorkflowControllerTest {
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(NOT_FOUND.asRuntimeException()));
+                .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
 
 
         webTestClient.get()
@@ -264,7 +266,7 @@ class WorkflowControllerTest {
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(UNAVAILABLE.asRuntimeException()));
+                .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
 
 
         webTestClient.get()
@@ -293,7 +295,7 @@ class WorkflowControllerTest {
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(DEADLINE_EXCEEDED.asRuntimeException()));
+                .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.asRuntimeException()));
 
 
         webTestClient.get()

@@ -6,14 +6,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.WorkflowApi;
+import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 
 import java.util.UUID;
-
-import static ru.taska.domain.EndpointSecurity.PROTECTED;
 
 /**
  * REST-контроллер API Gateway для получения информации о workflow проектов.
@@ -48,7 +47,7 @@ public class WorkflowController implements WorkflowApi {
             ServerWebExchange exchange)
     {
 
-        return executor.execute(exchange, PROTECTED, context ->
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 grpcWorkflowServiceClient.getWorkflowForProject(projectId, issueType, context)
                         .map(ResponseEntity::ok));
     }

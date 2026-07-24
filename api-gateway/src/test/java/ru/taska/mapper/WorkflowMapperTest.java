@@ -1,11 +1,16 @@
 package ru.taska.mapper;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import ru.taska.api.workflow.v1.*;
+import ru.taska.api.workflow.v1.IssueType;
+import ru.taska.api.workflow.v1.StatusCategory;
+import ru.taska.api.workflow.v1.WorkflowResponse;
+import ru.taska.api.workflow.v1.WorkflowTransition;
+import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
@@ -14,8 +19,6 @@ import ru.taska.domain.dto.IssueTypeDto;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class WorkflowMapperTest {
 
@@ -52,11 +55,11 @@ class WorkflowMapperTest {
 
         var request = mapper.toGetWorkflowGrpcRequest(PROJECT_ID,ISSUE_TYPE_DTO,gatewayContext);
 
-        assertThat(request.getHeader().getRequestId()).isEqualTo(gatewayContext.requestId());
-        assertThat(request.getHeader().getNodeId()).isEqualTo(gatewayContext.nodeId());
-        assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT_ID.toString());
-        assertThat(request.getBody().getActorUserId()).isEqualTo(userContext.userId());
-        assertThat(request.getBody().getIssueType()).isEqualTo(IssueType.ISSUE_TYPE_BUG);
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(gatewayContext.requestId());
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(gatewayContext.nodeId());
+        Assertions.assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT_ID.toString());
+        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(userContext.userId());
+        Assertions.assertThat(request.getBody().getIssueType()).isEqualTo(IssueType.ISSUE_TYPE_BUG);
     }
 
     @ParameterizedTest
@@ -66,9 +69,9 @@ class WorkflowMapperTest {
         var grpcType = mapper.toGrpcIssueType(issueTypeDto);
 
         switch (issueTypeDto) {
-            case TASK -> assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_TASK);
-            case BUG -> assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_BUG);
-            case STORY -> assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_STORY);
+            case TASK -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_TASK);
+            case BUG -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_BUG);
+            case STORY -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_STORY);
         }
     }
 
@@ -108,32 +111,32 @@ class WorkflowMapperTest {
 
         var dto = mapper.toWorkflowResponseRestDto(grpcResponse);
 
-        assertThat(dto.getId()).isEqualTo(PROJECT_ID);
-        assertThat(dto.getName()).isEqualTo("Default Workflow");
-        assertThat(dto.getVersion()).isEqualTo(1);
-        assertThat(dto.getCreatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
-        assertThat(dto.getUpdatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
+        Assertions.assertThat(dto.getId()).isEqualTo(PROJECT_ID);
+        Assertions.assertThat(dto.getName()).isEqualTo("Default Workflow");
+        Assertions.assertThat(dto.getVersion()).isEqualTo(1);
+        Assertions.assertThat(dto.getCreatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
+        Assertions.assertThat(dto.getUpdatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
 
-        assertThat(dto.getStatuses()).hasSize(1);
+        Assertions.assertThat(dto.getStatuses()).hasSize(1);
         var statusDto = dto.getStatuses().get(0);
-        assertThat(statusDto.getId()).isEqualTo(STATUS_ID);
-        assertThat(statusDto.getStatusKey()).isEqualTo("TODO");
-        assertThat(statusDto.getCategory()).isEqualTo("TODO");
-        assertThat(statusDto.getSortOrder()).isEqualTo(10);
+        Assertions.assertThat(statusDto.getId()).isEqualTo(STATUS_ID);
+        Assertions.assertThat(statusDto.getStatusKey()).isEqualTo("TODO");
+        Assertions.assertThat(statusDto.getCategory()).isEqualTo("TODO");
+        Assertions.assertThat(statusDto.getSortOrder()).isEqualTo(10);
 
-        assertThat(dto.getTransitions()).hasSize(1);
+        Assertions.assertThat(dto.getTransitions()).hasSize(1);
         var transitionDto = dto.getTransitions().get(0);
-        assertThat(transitionDto.getId()).isEqualTo(TRANSITION_ID);
-        assertThat(transitionDto.getName()).isEqualTo("Start Progress");
+        Assertions.assertThat(transitionDto.getId()).isEqualTo(TRANSITION_ID);
+        Assertions.assertThat(transitionDto.getName()).isEqualTo("Start Progress");
     }
 
     @Test
     @DisplayName("Должен очищать системные префиксы категорий статусов (STATUS_CATEGORY_*) в REST-строку")
     void shouldMapStatusCategoryCorrectly() {
-        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_TODO)).isEqualTo("TODO");
-        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
-        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
-        assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
+        Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_TODO)).isEqualTo("TODO");
+        Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
+        Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
+        Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
     }
 
 }
