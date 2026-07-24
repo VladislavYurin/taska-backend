@@ -433,6 +433,49 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/workflow:
+    get:
+      summary: Получение workflow проекта и типа задачи
+      operationId: getWorkflowForProject
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: issueType
+          in: query
+          required: true
+          description: Тип задачи, для которой запрашивается workflow
+          schema:
+            $ref: '#/components/schemas/IssueTypeDto'
+      responses:
+        '200':
+          description: Workflow успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -719,3 +762,88 @@ components:
           type: string
         message:
           type: string
+
+    IssueTypeDto:
+      type: string
+      enum:
+        - TASK
+        - BUG
+        - STORY
+
+    WorkflowResponseDto:
+      type: object
+      required: [ id, name, version, createdAt, updatedAt, statuses, transitions ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowStatusDto'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTransitionDto'
+
+    WorkflowStatusDto:
+      type: object
+      required: [ id, statusKey, name, category, sortOrder, createdAt, updatedAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        statusKey:
+          type: string
+          description: Уникальный строковый ключ статуса (например, TODO, IN_PROGRESS)
+        name:
+          type: string
+          description: Отображаемое имя статуса для UI
+        category:
+          type: string
+          description: Категория жизненного цикла статуса (без жесткого ограничения enum в схеме для расширяемости)
+        sortOrder:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WorkflowTransitionDto:
+      type: object
+      required: [ id, fromStatusId, toStatusId, name, sortOrder, createdAt, updatedAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fromStatusId:
+          type: string
+          format: uuid
+        toStatusId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sortOrder:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

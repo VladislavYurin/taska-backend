@@ -67,6 +67,11 @@ message GetWorkflowForProjectRequestBody {
    * Тип задачи (например: TASK / BUG / STORY).
    */
   IssueType issue_type = 2;
+
+  /**
+   * Идентификатор текущего пользователя
+   */
+  string actor_user_id = 3;
 }
 
 /**
