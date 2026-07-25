@@ -1,5 +1,6 @@
 package ru.taska.transport.grpc;
 
+import com.google.protobuf.util.Timestamps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,7 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -52,7 +54,6 @@ public class GrpcIssueServiceClient {
      *
      * @param issueId идентификатор задачи
      * @param context контекст запроса
-     *
      * @return задача с историей изменений
      */
     public Mono<IssueWithHistoryResponseDto> getIssue(
@@ -84,7 +85,6 @@ public class GrpcIssueServiceClient {
      * @param page       номер страницы (необязательное поле)
      * @param pageSize   размер страницы (необязательное поле)
      * @param context    контекст запроса
-     *
      * @return список задач
      */
     public Mono<ListIssuesResponseDto> listIssues(
@@ -133,7 +133,6 @@ public class GrpcIssueServiceClient {
      * @param idempotencyKey ключ идемпотентности
      * @param request        параметры создаваемой задачи
      * @param context        контекст запроса
-     *
      * @return созданная задача
      */
     public Mono<IssueResponseDto> createIssue(
@@ -144,24 +143,32 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling createIssue", context.requestId());
 
-        return request.flatMap(requestDto ->
-                        dynamicStub().createIssue(
-                                CreateIssueRequest.newBuilder()
-                                        .setHeader(buildGrpcHeader(context))
-                                        .setBody(
-                                                CreateIssueRequestBody.newBuilder()
-                                                        .setIdempotencyKey(idempotencyKey)
-                                                        .setProjectId(projectId)
-                                                        .setIssueType(issueMapper.toGrpcIssueType(requestDto.getIssueType()))
-                                                        .setSummary(requestDto.getSummary())
-                                                        .setDescription(requestDto.getDescription())
-                                                        .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()))
-                                                        .setReporterId(context.userContext().userId())
-                                                        .build()
-                                        )
-                                        .build())
-                )
-                .map(issueMapper::toRestIssueResponse);
+        return request.flatMap(requestDto -> {
+            CreateIssueRequestBody.Builder bodyBuilder = CreateIssueRequestBody.newBuilder()
+                    .setIdempotencyKey(idempotencyKey)
+                    .setProjectId(projectId)
+                    .setIssueType(issueMapper.toGrpcIssueType(requestDto.getIssueType()))
+                    .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()))
+                    .setSummary(requestDto.getSummary())
+                    .setReporterId(context.userContext().userId());
+
+            Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
+            Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
+            Optional.ofNullable(requestDto.getStartDate())
+                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
+                    .ifPresent(bodyBuilder::setStartDate);
+            Optional.ofNullable(requestDto.getDueDate())
+                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
+                    .ifPresent(bodyBuilder::setDueDate);
+            Optional.ofNullable(requestDto.getOriginalEstimateMinutes()).ifPresent(bodyBuilder::setOriginalEstimateMinutes);
+
+            return dynamicStub().createIssue(
+                            CreateIssueRequest.newBuilder()
+                                    .setHeader(buildGrpcHeader(context))
+                                    .setBody(bodyBuilder.build())
+                                    .build())
+                    .map(issueMapper::toRestIssueResponse);
+        });
     }
 
     /**
@@ -170,7 +177,6 @@ public class GrpcIssueServiceClient {
      * @param issueId идентификатор задачи
      * @param request данные о назначаемом исполнителе
      * @param context контекст запроса
-     *
      * @return обновлённая задача
      */
     public Mono<IssueResponseDto> assignIssue(
@@ -203,7 +209,6 @@ public class GrpcIssueServiceClient {
      * @param issueId идентификатор задачи
      * @param request новые данные задачи
      * @param context контекст запроса
-     *
      * @return обновленные данные задачи
      */
     public Mono<UpdateIssueResponseDto> updateIssue(
@@ -213,23 +218,31 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling updateIssue", context.requestId());
 
-        return request.flatMap(requestDto ->
-                        dynamicStub().updateIssue(
-                                UpdateIssueRequest.newBuilder()
-                                        .setHeader(buildGrpcHeader(context))
-                                        .setBody(
-                                                UpdateIssueRequestBody.newBuilder()
-                                                        .setIssueId(issueId)
-                                                        .setActorUserId(context.userContext().userId())
-                                                        .setSummary(requestDto.getSummary())
-                                                        .setDescription(requestDto.getDescription())
-                                                        .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()))
-                                                        .build()
-                                        )
-                                        .build()
-                        )
-                )
-                .map(issueMapper::toRestUpdateResponse);
+        return request.flatMap(requestDto -> {
+            UpdateIssueRequestBody.Builder bodyBuilder = UpdateIssueRequestBody.newBuilder()
+                    .setIssueId(issueId)
+                    .setActorUserId(context.userContext().userId())
+                    .setSummary(requestDto.getSummary())
+                    .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()));
+
+            Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
+            Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
+            Optional.ofNullable(requestDto.getStartDate())
+                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
+                    .ifPresent(bodyBuilder::setStartDate);
+            Optional.ofNullable(requestDto.getDueDate())
+                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
+                    .ifPresent(bodyBuilder::setDueDate);
+            Optional.ofNullable(requestDto.getOriginalEstimateMinutes()).ifPresent(bodyBuilder::setOriginalEstimateMinutes);
+            Optional.ofNullable(requestDto.getRemainingEstimateMinutes()).ifPresent(bodyBuilder::setRemainingEstimateMinutes);
+
+            return dynamicStub().updateIssue(
+                            UpdateIssueRequest.newBuilder()
+                                    .setHeader(buildGrpcHeader(context))
+                                    .setBody(bodyBuilder)
+                                    .build())
+                    .map(issueMapper::toRestUpdateResponse);
+        });
     }
 
     /**
@@ -239,7 +252,6 @@ public class GrpcIssueServiceClient {
      * @param transitionId идентификатор перехода
      * @param request      дополнительные данные перехода(необязательное поле)
      * @param context      контекст запроса
-     *
      * @return задача с обновлённой историей
      */
     public Mono<IssueWithHistoryResponseDto> transitionIssue(
@@ -278,7 +290,6 @@ public class GrpcIssueServiceClient {
      *
      * @param issueId идентификатор задачи
      * @param context контекст запроса
-     *
      * @return сигнал об успешном завершении операции
      */
     public Mono<Void> deleteIssue(

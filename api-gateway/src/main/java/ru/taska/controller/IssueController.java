@@ -32,6 +32,24 @@ public class IssueController implements IssueApi {
     private final GrpcIssueServiceClient issueClient;
 
     /**
+     * Создаёт новую задачу в указанном проекте.
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> createIssue(
+            String projectId,
+            String idempotencyKey,
+            Mono<CreateIssueRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.createIssue(projectId, idempotencyKey, request, context)
+                        .map(responseBody ->
+                                ResponseEntity.status(HttpStatus.CREATED).body(responseBody)
+                        )
+        );
+    }
+
+    /**
      * Возвращает задачу вместе с историей изменений.
      */
     @Override
@@ -60,24 +78,6 @@ public class IssueController implements IssueApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 issueClient.listIssues(projectId, status, assigneeId, page, pageSize, context)
                         .map(ResponseEntity::ok)
-        );
-    }
-
-    /**
-     * Создаёт новую задачу в указанном проекте.
-     */
-    @Override
-    public Mono<ResponseEntity<IssueResponseDto>> createIssue(
-            String projectId,
-            String idempotencyKey,
-            Mono<CreateIssueRequestDto> request,
-            ServerWebExchange exchange
-    ) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.createIssue(projectId, idempotencyKey, request, context)
-                        .map(responseBody ->
-                                ResponseEntity.status(HttpStatus.CREATED).body(responseBody)
-                        )
         );
     }
 

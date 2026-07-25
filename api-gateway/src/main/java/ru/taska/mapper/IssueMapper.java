@@ -35,7 +35,6 @@ public class IssueMapper {
 
     private final ObjectMapper objectMapper;
 
-    //TODO разобраться с новыми полями ишью в гейтвее.
     public IssueResponseDto toRestIssueResponse(IssueResponse protoDto) {
         var restDto = new IssueResponseDto();
         restDto.setId(protoDto.getId());
@@ -52,6 +51,10 @@ public class IssueMapper {
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         restDto.setVersion(protoDto.getVersion());
+        restDto.setStoryPoints(protoDto.getStoryPoints());
+        restDto.setStartDate(toOffsetDateTime(protoDto.getStartDate()));
+        restDto.setDueDate(toOffsetDateTime(protoDto.getDueDate()));
+        restDto.setOriginalEstimateMinutes(protoDto.getOriginalEstimateMinutes());
 
         return restDto;
     }

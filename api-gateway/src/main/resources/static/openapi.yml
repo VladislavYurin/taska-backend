@@ -736,7 +736,7 @@ components:
 
     CreateIssueRequestDto:
       type: object
-      required: [issueType, summary, description, priority]
+      required: [issueType, summary, priority]
       properties:
         issueType:
           type: string
@@ -746,6 +746,18 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        originalEstimateMinutes:
+          type: integer
+          format: int64
 
     IssueResponseDto:
       type: object
@@ -780,6 +792,21 @@ components:
           format: date-time
         version:
           type: integer
+        storyPoints:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        originalEstimateMinutes:
+          type: integer
+          format: int64
+        remainingEstimateMinutes:
+          type: integer
+          format: int64
 
     IssueHistoryResponseDto:
       type: object
@@ -821,6 +848,21 @@ components:
           type: string
         assigneeId:
           type: string
+        storyPoints:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        originalEstimateMinutes:
+          type: integer
+          format: int64
+        remainingEstimateMinutes:
+          type: integer
+          format: int64
 
     ListIssuesResponseDto:
       type: object
@@ -834,7 +876,7 @@ components:
 
     UpdateIssueRequestDto:
       type: object
-      required: [summary, description, priority]
+      required: [summary, priority]
       properties:
         summary:
           type: string
@@ -842,6 +884,21 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        originalEstimateMinutes:
+          type: integer
+          format: int64
+        remainingEstimateMinutes:
+          type: integer
+          format: int64
 
     UpdateIssueResponseDto:
       type: object
@@ -854,6 +911,21 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+        startDate:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+        originalEstimateMinutes:
+          type: integer
+          format: int64
+        remainingEstimateMinutes:
+          type: integer
+          format: int64
 
     AssignIssueRequestDto:
       type: object
