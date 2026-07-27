@@ -13,6 +13,7 @@ import ru.taska.config.props.ReadonlyDatasourcesProperties;
 import ru.taska.config.props.ReadonlyDatasourcesProperties.DatasourceProperties;
 
 import java.time.Duration;
+import java.util.Map;
 
 import static io.r2dbc.spi.ConnectionFactoryOptions.PASSWORD;
 import static io.r2dbc.spi.ConnectionFactoryOptions.USER;
@@ -50,6 +51,11 @@ public class ReadonlyR2dbcConfig {
         return createPooledConnectionFactory(properties.notification());
     }
 
+    @Bean(name = "adminReadonlyConnectionFactory")
+    ConnectionFactory adminReadonlyConnectionFactory(ReadonlyDatasourcesProperties properties) {
+        return createPooledConnectionFactory(properties.admin());
+    }
+
     @Bean(name = "authReadonlyDatabaseClient")
     DatabaseClient authReadonlyDatabaseClient(
             @Qualifier("authReadonlyConnectionFactory") ConnectionFactory connectionFactory
@@ -83,6 +89,36 @@ public class ReadonlyR2dbcConfig {
             @Qualifier("notificationReadonlyConnectionFactory") ConnectionFactory connectionFactory
     ) {
         return DatabaseClient.create(connectionFactory);
+    }
+
+    @Bean(name = "adminReadonlyDatabaseClient")
+    DatabaseClient adminReadonlyDatabaseClient(
+            @Qualifier("adminReadonlyConnectionFactory") ConnectionFactory connectionFactory
+    ) {
+        return DatabaseClient.create(connectionFactory);
+    }
+
+    /**
+     * Ключи совпадают с {@code admin.metadata.services.*} в application.yml
+     * (auth, project, issue, workflow, notification, admin).
+     */
+    @Bean
+    Map<String, DatabaseClient> readonlyDatabaseClients(
+            @Qualifier("authReadonlyDatabaseClient") DatabaseClient auth,
+            @Qualifier("projectReadonlyDatabaseClient") DatabaseClient project,
+            @Qualifier("issueReadonlyDatabaseClient") DatabaseClient issue,
+            @Qualifier("workflowReadonlyDatabaseClient") DatabaseClient workflow,
+            @Qualifier("notificationReadonlyDatabaseClient") DatabaseClient notification,
+            @Qualifier("adminReadonlyDatabaseClient") DatabaseClient admin
+    ) {
+        return Map.of(
+                "auth", auth,
+                "project", project,
+                "issue", issue,
+                "workflow", workflow,
+                "notification", notification,
+                "admin", admin
+        );
     }
 
     private static ConnectionFactory createPooledConnectionFactory(DatasourceProperties properties) {

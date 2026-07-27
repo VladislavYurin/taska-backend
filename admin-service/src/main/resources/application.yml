@@ -61,6 +61,77 @@ admin:
         initial-size: ${ADMIN_RO_NOTIFICATION_POOL_INITIAL_SIZE:2}
         max-size: ${ADMIN_RO_NOTIFICATION_POOL_MAX_SIZE:10}
         max-idle-time-minutes: ${ADMIN_RO_NOTIFICATION_POOL_MAX_IDLE_TIME_MINUTES:10}
+    # admin (self): read-only подключение к собственной БД admin-service.
+    admin:
+      url: ${ADMIN_RO_ADMIN_R2DBC_URL:r2dbc:postgresql://localhost:5438/taska_admin_db}
+      username: ${ADMIN_RO_ADMIN_R2DBC_USERNAME:taska}
+      password: ${ADMIN_RO_ADMIN_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_RO_ADMIN_POOL_INITIAL_SIZE:2}
+        max-size: ${ADMIN_RO_ADMIN_POOL_MAX_SIZE:10}
+        max-idle-time-minutes: ${ADMIN_RO_ADMIN_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+  # Metadata catalog: правила для каждого сервиса.
+  # allow — если список непустой, в каталог попадают только эти таблицы;
+  #         пустой список означает «разрешены все».
+  # deny — таблицы, которые не возвращаются в каталоге (приоритет над allow).
+  # sensitive-columns — колонки, которые помечаются как секретные (флаг в ответе).
+  # Менять без правки кода — только этот файл или env.
+  metadata:
+    services:
+      auth:
+        alias: auth
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns:
+            - password_hash
+            - token_hash
+            - secret_hash
+            - refresh_token
+            - access_token
+      project:
+        alias: project
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns: []
+      issue:
+        alias: issue
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns: []
+      workflow:
+        alias: workflow
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns: []
+      notification:
+        alias: notification
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns: []
+      admin:
+        alias: admin
+        tables:
+          allow: []
+          deny:
+            - databasechangelog
+            - databasechangeloglock
+          sensitive-columns: []
 
 management:
   endpoints:
