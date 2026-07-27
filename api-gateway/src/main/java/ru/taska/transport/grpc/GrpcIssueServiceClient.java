@@ -221,10 +221,12 @@ public class GrpcIssueServiceClient {
         return request.flatMap(requestDto -> {
             UpdateIssueRequestBody.Builder bodyBuilder = UpdateIssueRequestBody.newBuilder()
                     .setIssueId(issueId)
-                    .setActorUserId(context.userContext().userId())
-                    .setSummary(requestDto.getSummary())
-                    .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()));
+                    .setActorUserId(context.userContext().userId());
 
+            Optional.ofNullable(requestDto.getSummary()).ifPresent(bodyBuilder::setSummary);
+            Optional.ofNullable(requestDto.getPriority())
+                    .map(issueMapper::toGrpcIssuePriority)
+                    .ifPresent(bodyBuilder::setPriority);
             Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
             Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
             Optional.ofNullable(requestDto.getStartDate())

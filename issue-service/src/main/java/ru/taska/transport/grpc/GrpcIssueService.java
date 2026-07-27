@@ -352,8 +352,10 @@ public class GrpcIssueService {
                                 Long originalEstimateMinutes = t.getT2().getT4().orElse(null);
                                 Long remainingEstimateMinutes = t.getT2().getT5().orElse(null);
 
-                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
-                                        requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}, " +
+                                                "storyPoints ={}, startDate ={}, dueDate ={}, originalEstimateMinutes ={}, remainingEstimateMinutes ={}",
+                                        requestId, nodeId, issueId, actorUserId, summary, description, priority, storyPoints, startDate, dueDate,
+                                        originalEstimateMinutes, remainingEstimateMinutes);
                                 return GrpcRequestValidators.validateDateRange(startDate, dueDate)
                                         .then(Mono.defer(() -> issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority,
                                                 storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes)))

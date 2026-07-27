@@ -113,7 +113,12 @@ public class IssueMapper {
         restDto.setId(protoDto.getUpdatedIssueId());
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
-        restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+        restDto.setPriority(toRestIssuePriority(protoDto.getPriority()));
+        restDto.setStoryPoints(protoDto.getStoryPoints());
+        restDto.setStartDate(toOffsetDateTime(protoDto.getStartDate()));
+        restDto.setDueDate(toOffsetDateTime(protoDto.getDueDate()));
+        restDto.setOriginalEstimateMinutes(protoDto.getOriginalEstimateMinutes());
+        restDto.setRemainingEstimateMinutes(protoDto.getRemainingEstimateMinutes());
 
         return restDto;
     }
@@ -123,7 +128,10 @@ public class IssueMapper {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> IssueType.ISSUE_TYPE_BUG;
             case "STORY" -> IssueType.ISSUE_TYPE_STORY;
-            default -> IssueType.ISSUE_TYPE_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unknown issue type: " + restIssueType
+            );
         };
     }
 
@@ -144,7 +152,10 @@ public class IssueMapper {
             case "LOW" -> IssuePriority.ISSUE_PRIORITY_LOW;
             case "MEDIUM" -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case "HIGH" -> IssuePriority.ISSUE_PRIORITY_HIGH;
-            default -> IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unknown issue priority: " + restIssuePriority
+            );
         };
     }
 

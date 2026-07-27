@@ -876,7 +876,6 @@ components:
 
     UpdateIssueRequestDto:
       type: object
-      required: [summary, priority]
       properties:
         summary:
           type: string
