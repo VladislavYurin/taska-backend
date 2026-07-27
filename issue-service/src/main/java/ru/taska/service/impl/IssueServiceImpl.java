@@ -112,7 +112,7 @@ public class IssueServiceImpl implements IssueService {
                                 .flatMap(issue -> {
                                     IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash,
                                             issue, issueProperties.idempotencyKeyTtl().ttl());
-                                    return issueHistoryService.saveIssueHistory(requestId, nodeId, issue)
+                                    return issueHistoryService.saveIssueCreateHistory(requestId, nodeId, issue)
                                             .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue))
                                             .then(idempotencyKeyRepository.save(keyEntity))
                                             .thenReturn(issue)

@@ -48,8 +48,10 @@ public interface StorageClient {
      * Проверяет размер загруженного объекта.
      * Вызывается после того как фронтенд загрузил файл напрямую в хранилище по presigned URL.
      * Если размер превышает допустимый — удаляет объект и бросает исключение.
+     *
+     * @return Mono с контрольной суммой (ETag) объекта.
      */
-    Mono<Void> validateObjectSizeAndDeleteIfTooLarge(String objectKey);
+    Mono<String> validateObjectSizeAndDeleteIfTooLargeAndReturnETag(String objectKey);
 
     /**
      * Проверяет существование объекта в хранилище.

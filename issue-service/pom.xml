@@ -135,6 +135,13 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Storage -->
+        <dependency>
+            <groupId>ru.taska</groupId>
+            <artifactId>storage-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
     </dependencies>
 
     <build>

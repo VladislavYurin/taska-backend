@@ -1,0 +1,295 @@
+syntax = "proto3";
+
+package ru.taska.issue.attachment.v1;
+
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.issue.attachment.v1";
+option java_outer_classname = "IssueAttachmentApiProto";
+
+service IssueAttachmentService {
+  rpc CreateAttachmentUploadUrl(CreateAttachmentUploadUrlRequest) returns (CreateAttachmentUploadUrlResponse);
+  rpc ConfirmAttachmentUpload(ConfirmAttachmentUploadRequest) returns (AttachmentResponse);
+  rpc ListAttachments(ListAttachmentsRequest) returns (ListAttachmentsResponse);
+  rpc GetAttachmentDownloadUrl(GetAttachmentDownloadUrlRequest) returns (GetAttachmentDownloadUrlResponse);
+  rpc DeleteAttachment(DeleteAttachmentRequest) returns (google.protobuf.Empty);
+}
+
+/**
+ * Данные о вложении задачи.
+ */
+message AttachmentResponse {
+  /**
+   * Идентификатор вложения.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор задачи, к которой прикреплено вложение.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор пользователя, загрузившего файл.
+   */
+  string uploaded_by = 3;
+
+  /**
+   * Ключ объекта в файловом хранилище.
+   */
+  string object_key = 4;
+
+  /**
+   * Оригинальное имя файла.
+   */
+  string file_name = 5;
+
+  /**
+   * MIME-тип содержимого файла.
+   */
+  string content_type = 6;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 7;
+
+  /**
+   * Контрольная сумма файла.
+   */
+  string checksum = 8;
+
+  /**
+   * Временная метка создания записи.
+   */
+  google.protobuf.Timestamp created_at = 9;
+
+  /**
+   * Presigned URL для скачивания вложения.
+   */
+  string url = 10;
+}
+
+/**
+ * Запрос на генерацию presigned URL для загрузки вложения.
+ */
+message CreateAttachmentUploadUrlRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateAttachmentUploadUrlRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на генерацию presigned URL для загрузки вложения.
+ */
+message CreateAttachmentUploadUrlRequestBody {
+  /**
+   * MIME-тип загружаемого файла.
+   */
+  string content_type = 1;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 2;
+
+  /**
+   * Идентификатор пользователя, выполняющего загрузку.
+   */
+  string actor_user_id = 3;
+
+  /**
+   * Идентификатор задачи, к которой прикрепляется вложение.
+   */
+  string issue_id = 4;
+}
+
+/**
+ * Запрос на подтверждение загрузки вложения.
+ * После успешного вызова метаданные файла сохраняются в БД.
+ */
+message ConfirmAttachmentUploadRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ConfirmAttachmentUploadRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на подтверждение загрузки вложения.
+ */
+message ConfirmAttachmentUploadRequestBody {
+  /**
+   * Ключ объекта в хранилище, полученный из CreateAttachmentUploadUrlResponse.
+   */
+  string object_key = 1;
+
+  /**
+   * Оригинальное имя файла.
+   */
+  string file_name = 2;
+
+  /**
+   * MIME-тип файла.
+   */
+  string content_type = 3;
+
+  /**
+   * Размер файла в байтах.
+   */
+  int64 size_bytes = 4;
+
+  /**
+   * Идентификатор пользователя, выполняющего загрузку.
+   */
+  string actor_user_id = 5;
+
+  /**
+   * Идентификатор задачи, к которой прикрепляется вложение.
+   */
+  string issue_id = 6;
+}
+
+/**
+ * Запрос на получение списка вложений задачи.
+ */
+message ListAttachmentsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListAttachmentsRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка вложений задачи.
+ */
+message ListAttachmentsRequestBody {
+  /**
+   * Идентификатор пользователя, запрашивающего список.
+   */
+  string actor_user_id = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+}
+
+/**
+ * Ответ со списком вложений задачи.
+ */
+message ListAttachmentsResponse {
+  /**
+   * Список вложений.
+   */
+  repeated AttachmentResponse attachments = 1;
+}
+
+/**
+ * Запрос на получение presigned URL для скачивания вложения.
+ */
+message GetAttachmentDownloadUrlRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetAttachmentDownloadUrlRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение presigned URL для скачивания вложения.
+ */
+message GetAttachmentDownloadUrlRequestBody {
+  /**
+   * Идентификатор пользователя, запрашивающего скачивание.
+   */
+  string actor_user_id = 1;
+
+  /**
+   * Идентификатор вложения.
+   */
+  string attachment_id = 2;
+}
+
+/**
+ * Ответ с presigned URL для скачивания вложения.
+ */
+message GetAttachmentDownloadUrlResponse {
+  /**
+   * Presigned URL для скачивания вложения.
+   */
+  string url = 1;
+
+  /**
+   * Контрольная сумма объекта.
+   */
+  string checksum = 2;
+}
+
+/**
+ * Ответ с presigned URL для загрузки вложения.
+ */
+message CreateAttachmentUploadUrlResponse {
+  /**
+   * Presigned URL для загрузки файла напрямую в хранилище.
+   */
+  string upload_url = 1;
+
+  /**
+   * Ключ объекта в хранилище для последующего сохранения в БД.
+   */
+  string object_key = 2;
+}
+
+/**
+ * Запрос на удаление вложения (мягкое удаление).
+ */
+message DeleteAttachmentRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteAttachmentRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на удаление вложения.
+ */
+message DeleteAttachmentRequestBody {
+  /**
+   * Идентификатор пользователя, выполняющего удаление.
+   */
+  string actor_user_id = 1;
+
+  /**
+   * Идентификатор вложения.
+   */
+  string attachment_id = 2;
+}

@@ -78,7 +78,7 @@ public class ProfileServiceImpl implements ProfileService {
                     }
                     return Mono.empty();
                 })
-                .then(Mono.defer(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(objectKey)))
+                .then(Mono.defer(() -> storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(objectKey)))
                 .then(Mono.defer(() -> replaceAvatarInDb(actorUserId, objectKey, fileName, contentType, sizeBytes)))
                 .flatMap(savedAvatar -> {
                     String oldKey = savedAvatar.oldObjectKey();
