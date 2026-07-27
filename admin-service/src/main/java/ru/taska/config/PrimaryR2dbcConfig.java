@@ -1,8 +1,11 @@
 package ru.taska.config;
 
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
+import io.r2dbc.spi.ConnectionFactories;
 import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.ConnectionFactoryOptions;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.r2dbc.ConnectionFactoryBuilder;
 import org.springframework.boot.r2dbc.autoconfigure.R2dbcProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,10 +38,23 @@ public class PrimaryR2dbcConfig {
     @Bean
     @Primary
     public ConnectionFactory connectionFactory(R2dbcProperties properties) {
-        return ConnectionFactoryBuilder.withUrl(properties.getUrl())
-                .username(properties.getUsername())
-                .password(properties.getPassword())
+        ConnectionFactoryOptions baseOptions = ConnectionFactoryOptions.parse(properties.getUrl());
+        ConnectionFactoryOptions options = ConnectionFactoryOptions.builder()
+                .from(baseOptions)
+                .option(ConnectionFactoryOptions.USER, properties.getUsername())
+                .option(ConnectionFactoryOptions.PASSWORD, properties.getPassword())
                 .build();
+
+        ConnectionFactory raw = ConnectionFactories.get(options);
+
+        ConnectionPoolConfiguration poolConfig = ConnectionPoolConfiguration.builder(raw)
+                .name("admin-primary")
+                .initialSize(properties.getPool().getInitialSize())
+                .maxSize(properties.getPool().getMaxSize())
+                .maxIdleTime(properties.getPool().getMaxIdleTime())
+                .build();
+
+        return new ConnectionPool(poolConfig);
     }
 
     @Bean

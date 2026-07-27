@@ -1,5 +1,7 @@
 package ru.taska.service.impl;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,9 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.AuditLogMapper;
 import ru.taska.repository.AuditLogRepository;
 import ru.taska.service.AuditService;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Реализация сервиса аудита.
@@ -24,15 +29,19 @@ public class AuditServiceImpl implements AuditService {
 
     private final AuditLogMapper auditLogMapper;
     private final AuditLogRepository auditLogRepository;
+    private final Validator validator;
 
     @Override
     public Mono<Void> logAudit(AuditEventDto dto) {
-        if (dto.getReason() == null || dto.getReason().isBlank()    ) {
-            log.warn("[{}] Audit record creation failed: reason is missing. Action: {}, Target: {}",
-                    dto.getRequestId(), dto.getAction(), dto.getTargetService());
+        Set<ConstraintViolation<AuditEventDto>> violations = validator.validate(dto);
+        if (!violations.isEmpty()) {
+            String message = violations.stream()
+                            .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                                    .collect(Collectors.joining("; "));
+            log.warn("[{}] Audit validation failed: {}", dto.getRequestId(), message);
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "Reason is required"));
+                    message));
         }
 
         AuditLog auditLog = auditLogMapper.toAuditLog(dto);

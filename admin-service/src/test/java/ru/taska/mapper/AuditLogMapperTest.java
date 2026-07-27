@@ -12,7 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
-public class AuditLogMapperTest {
+class AuditLogMapperTest {
 
     private final AuditLogMapper mapper = new AuditLogMapper();
     private final ObjectMapper objectMapper = new ObjectMapper();

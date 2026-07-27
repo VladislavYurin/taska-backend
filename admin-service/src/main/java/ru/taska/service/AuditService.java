@@ -13,8 +13,9 @@ public interface AuditService {
      * Валидирует и сохраняет событие аудита.
      *
      * @param dto DTO события аудита, содержащее контекст выполнения действия
-     * @return {@link Mono}, завершающийся успешно после сохранения записи аудита
-     * @throws ru.taska.exception.DomainException если обязательные поля (reason) не заполнены
+     * @return {@link Mono}, завершающийся успешно после сохранения записи аудита,
+     *         либо завершающийся ошибкой {@link ru.taska.exception.DomainException},
+     *         если не заполнены обязательные поля (reason)
      */
     Mono<Void> logAudit(AuditEventDto dto);
 
