@@ -1,8 +1,7 @@
 package ru.taska.service;
 
 import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.r2dbc.core.DatabaseClient;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -15,6 +14,7 @@ import ru.taska.dto.CatalogDto;
 import ru.taska.dto.ColumnDto;
 import ru.taska.dto.ServiceDto;
 import ru.taska.dto.TableDto;
+import ru.taska.repository.MetadataSchemaRepository;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,18 +24,11 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class MetadataService {
 
     private final MetadataCatalogProperties properties;
-    private final Map<String, DatabaseClient> clients;
-
-    public MetadataService(
-            MetadataCatalogProperties properties,
-            @Qualifier("readonlyDatabaseClients") Map<String, DatabaseClient> clients
-    ) {
-        this.properties = properties;
-        this.clients = clients;
-    }
+    private final MetadataSchemaRepository schemaRepository;
 
     /**
      * Fail-fast: набор клиентов статичен и известен на старте, поэтому проверяем
@@ -44,14 +37,16 @@ public class MetadataService {
      */
     @PostConstruct
     void validateClientsConfigured() {
+        Set<String> registered = schemaRepository.registeredServiceKeys();
+
         Set<String> missing = properties.services().keySet().stream()
-                .filter(serviceKey -> !clients.containsKey(serviceKey))
+                .filter(serviceKey -> !registered.contains(serviceKey))
                 .collect(Collectors.toCollection(TreeSet::new));
 
         if (!missing.isEmpty()) {
             throw new IllegalStateException(
                     "No readonly DatabaseClient registered for service keys: " + missing
-                            + ". Available clients: " + new TreeSet<>(clients.keySet())
+                            + ". Available clients: " + new TreeSet<>(registered)
             );
         }
     }
@@ -73,55 +68,17 @@ public class MetadataService {
             String serviceKey,
             ServiceProperties props
     ) {
-        /**
-         * Наличие клиента гарантировано fail-fast проверкой в validateClientsConfigured().
-         */
-        DatabaseClient client = clients.get(serviceKey);
         String schema = props.schema();
         TableProperties tableProps = props.tables();
 
-        return fetchColumns(client, schema)
+        return schemaRepository.findColumns(serviceKey, schema)
                 .collectList()
                 .flatMap(columns ->
-                        fetchPrimaryKeys(client, schema)
+                        schemaRepository.findPrimaryKeys(serviceKey, schema)
                                 .collectList()
                                 .map(pks -> buildTables(columns, pks, tableProps))
                 )
                 .map(tables -> new ServiceDto(serviceKey, props.alias(), tables));
-    }
-
-    private Flux<ColumnMetadata> fetchColumns(DatabaseClient client, String schema) {
-        return client.sql("""
-                SELECT table_name, column_name, data_type
-                FROM information_schema.columns
-                WHERE table_schema = :schema
-                ORDER BY table_name, ordinal_position
-                """)
-                .bind("schema", schema)
-                .map((row, rowMetadata) -> new ColumnMetadata(
-                        row.get("table_name", String.class),
-                        row.get("column_name", String.class),
-                        row.get("data_type", String.class)
-                ))
-                .all();
-    }
-
-    private Flux<PrimaryKeyMetadata> fetchPrimaryKeys(DatabaseClient client, String schema) {
-        return client.sql("""
-                SELECT kcu.table_name, kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                  ON tc.constraint_name = kcu.constraint_name
-                 AND tc.table_schema = kcu.table_schema
-                WHERE tc.constraint_type = 'PRIMARY KEY'
-                  AND tc.table_schema = :schema
-                """)
-                .bind("schema", schema)
-                .map((row, rowMetadata) -> new PrimaryKeyMetadata(
-                        row.get("table_name", String.class),
-                        row.get("column_name", String.class)
-                ))
-                .all();
     }
 
     /**

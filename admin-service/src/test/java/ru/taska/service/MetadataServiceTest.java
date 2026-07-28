@@ -3,8 +3,6 @@ package ru.taska.service;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
-import org.springframework.r2dbc.core.DatabaseClient;
-import org.springframework.r2dbc.core.RowsFetchSpec;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.MetadataCatalogProperties;
@@ -15,11 +13,11 @@ import ru.taska.domain.PrimaryKeyMetadata;
 import ru.taska.dto.ColumnDto;
 import ru.taska.dto.ServiceDto;
 import ru.taska.dto.TableDto;
+import ru.taska.repository.MetadataSchemaRepository;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -155,15 +153,15 @@ class MetadataServiceTest {
 
     @Test
     void getCatalog_returnsServiceWithTablesAndColumnTypes() {
-        MetadataService service = serviceWith(
-                mockClient(
-                        List.of(
-                                new ColumnMetadata("users", "id", "uuid"),
-                                new ColumnMetadata("users", "login", "character varying")
-                        ),
-                        List.of()
-                ),
-                allTables()
+        MetadataSchemaRepository repository = repositoryWith(Set.of("auth"));
+        Mockito.when(repository.findColumns("auth", "taska")).thenReturn(Flux.just(
+                col("users", "id", "uuid"),
+                col("users", "login", "character varying")
+        ));
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", allTables()))),
+                repository
         );
 
         StepVerifier.create(service.getCatalog())
@@ -185,16 +183,40 @@ class MetadataServiceTest {
     }
 
     @Test
+    void getCatalog_queriesSchemaConfiguredForService() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("auth"));
+        Mockito.when(repository.findColumns("auth", "custom_schema"))
+                .thenReturn(Flux.just(col("users", "id", "uuid")));
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(Map.of(
+                        "auth", new ServiceProperties("auth-db", "custom_schema", allTables())
+                )),
+                repository
+        );
+
+        StepVerifier.create(service.getCatalog())
+                .assertNext(catalog -> assertThat(catalog.services()).hasSize(1))
+                .verifyComplete();
+
+        Mockito.verify(repository).findColumns("auth", "custom_schema");
+        Mockito.verify(repository).findPrimaryKeys("auth", "custom_schema");
+    }
+
+    @Test
     void getCatalog_returnsEveryConfiguredService() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("auth", "issue"));
+        Mockito.when(repository.findColumns("auth", "taska"))
+                .thenReturn(Flux.just(col("users", "id", "uuid")));
+        Mockito.when(repository.findColumns("issue", "taska"))
+                .thenReturn(Flux.just(col("issues", "id", "uuid")));
+
         MetadataService service = new MetadataService(
                 new MetadataCatalogProperties(Map.of(
                         "auth", serviceProps("auth-db", allTables()),
                         "issue", serviceProps("issue-db", allTables())
                 )),
-                Map.of(
-                        "auth", mockClient(List.of(new ColumnMetadata("users", "id", "uuid")), List.of()),
-                        "issue", mockClient(List.of(new ColumnMetadata("issues", "id", "uuid")), List.of())
-                )
+                repository
         );
 
         StepVerifier.create(service.getCatalog())
@@ -211,7 +233,7 @@ class MetadataServiceTest {
                         "auth", serviceProps("auth-db", allTables()),
                         "issue", serviceProps("issue-db", allTables())
                 )),
-                Map.of("auth", Mockito.mock(DatabaseClient.class))
+                repositoryWith(Set.of("auth"))
         );
 
         assertThatThrownBy(service::validateClientsConfigured)
@@ -221,16 +243,26 @@ class MetadataServiceTest {
 
     @Test
     void validateClientsConfigured_passesWhenEveryServiceHasClient() {
-        MetadataService service = serviceWith(Mockito.mock(DatabaseClient.class), allTables());
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", allTables()))),
+                repositoryWith(Set.of("auth"))
+        );
 
         assertThatCode(service::validateClientsConfigured).doesNotThrowAnyException();
     }
 
-    private static MetadataService serviceWith(DatabaseClient client, TableProperties tables) {
-        return new MetadataService(
-                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", tables))),
-                Map.of("auth", client)
-        );
+    /**
+     * Репозиторий с указанными зарегистрированными сервисами; по умолчанию
+     * запросы возвращают пустой результат, тесты доопределяют нужное.
+     */
+    private static MetadataSchemaRepository repositoryWith(Set<String> serviceKeys) {
+        MetadataSchemaRepository repository = Mockito.mock(MetadataSchemaRepository.class);
+        Mockito.lenient().when(repository.registeredServiceKeys()).thenReturn(serviceKeys);
+        Mockito.lenient().when(repository.findColumns(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(Flux.empty());
+        Mockito.lenient().when(repository.findPrimaryKeys(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenReturn(Flux.empty());
+        return repository;
     }
 
     private static ServiceProperties serviceProps(String alias, TableProperties tables) {
@@ -264,38 +296,5 @@ class MetadataServiceTest {
                 .filter(col -> col.name().equals(columnName))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Column not found: " + tableName + "." + columnName));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static DatabaseClient mockClient(
-            List<ColumnMetadata> columns,
-            List<PrimaryKeyMetadata> primaryKeys
-    ) {
-        DatabaseClient client = Mockito.mock(DatabaseClient.class);
-
-        DatabaseClient.GenericExecuteSpec columnsSpec = Mockito.mock(DatabaseClient.GenericExecuteSpec.class);
-        DatabaseClient.GenericExecuteSpec primaryKeysSpec = Mockito.mock(DatabaseClient.GenericExecuteSpec.class);
-        RowsFetchSpec<ColumnMetadata> columnsFetch = Mockito.mock(RowsFetchSpec.class);
-        RowsFetchSpec<PrimaryKeyMetadata> primaryKeysFetch = Mockito.mock(RowsFetchSpec.class);
-
-        Mockito.when(client.sql(ArgumentMatchers.anyString())).thenAnswer(invocation -> {
-            String sql = invocation.getArgument(0);
-            if (sql.contains("information_schema.columns")) {
-                return columnsSpec;
-            }
-            if (sql.contains("table_constraints")) {
-                return primaryKeysSpec;
-            }
-            throw new AssertionError("Unexpected SQL: " + sql);
-        });
-
-        Mockito.doReturn(columnsFetch).when(columnsSpec).map(ArgumentMatchers.any(BiFunction.class));
-        Mockito.doReturn(primaryKeysFetch).when(primaryKeysSpec).map(ArgumentMatchers.any(BiFunction.class));
-        Mockito.when(columnsSpec.bind(ArgumentMatchers.eq("schema"), ArgumentMatchers.any())).thenReturn(columnsSpec);
-        Mockito.when(primaryKeysSpec.bind(ArgumentMatchers.eq("schema"), ArgumentMatchers.any())).thenReturn(primaryKeysSpec);
-        Mockito.when(columnsFetch.all()).thenReturn(Flux.fromIterable(columns));
-        Mockito.when(primaryKeysFetch.all()).thenReturn(Flux.fromIterable(primaryKeys));
-
-        return client;
     }
 }
