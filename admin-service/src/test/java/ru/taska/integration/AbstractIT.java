@@ -36,6 +36,7 @@ public abstract class AbstractIT {
         registerReadonly(registry, "issue");
         registerReadonly(registry, "workflow");
         registerReadonly(registry, "notification");
+        registerReadonly(registry, "admin");
     }
 
     private static void registerReadonly(DynamicPropertyRegistry registry, String dbKey) {

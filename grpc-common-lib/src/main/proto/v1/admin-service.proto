@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package ru.taska.admin.v1;
+
+import "v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.admin.v1";
+option java_outer_classname = "AdminApiProto";
+
+/**
+ * gRPC API admin-service: metadata catalog подключённых БД.
+ */
+service AdminService {
+  /**
+   * Возвращает полный metadata catalog всех подключённых БД
+   * с учётом denylist таблиц и флагов sensitive у колонок.
+   */
+  rpc GetCatalog(GetCatalogRequest) returns (GetCatalogResponse);
+}
+
+message GetCatalogRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetCatalogRequestBody body = 2;
+}
+
+/**
+ * Пока пустое: каталог всегда полный.
+ */
+message GetCatalogRequestBody {
+}
+
+message GetCatalogResponse {
+  Catalog catalog = 1;
+}
+
+message Catalog {
+  repeated ServiceMetadata services = 1;
+}
+
+message ServiceMetadata {
+  /**
+   * Ключ сервиса из конфига:
+   * auth, project, issue, workflow, notification, admin.
+   */
+  string service_key = 1;
+
+  /**
+   * Человекочитаемый alias из admin.metadata.services.*.alias.
+   */
+  string alias = 2;
+
+  repeated TableMetadata tables = 3;
+}
+
+message TableMetadata {
+  string name = 1;
+  repeated ColumnMetadata columns = 2;
+}
+
+message ColumnMetadata {
+  string name = 1;
+  /**
+   * Тип из information_schema.columns.data_type.
+   */
+  string type = 2;
+  bool primary_key = 3;
+  /**
+   * true, если колонка указана в sensitive-columns конфига.
+   */
+  bool sensitive = 4;
+}
