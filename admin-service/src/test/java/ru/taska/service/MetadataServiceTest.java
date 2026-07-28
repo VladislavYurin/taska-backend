@@ -188,8 +188,8 @@ class MetadataServiceTest {
     void getCatalog_returnsEveryConfiguredService() {
         MetadataService service = new MetadataService(
                 new MetadataCatalogProperties(Map.of(
-                        "auth", new ServiceProperties("auth-db", allTables()),
-                        "issue", new ServiceProperties("issue-db", allTables())
+                        "auth", serviceProps("auth-db", allTables()),
+                        "issue", serviceProps("issue-db", allTables())
                 )),
                 Map.of(
                         "auth", mockClient(List.of(new ColumnMetadata("users", "id", "uuid")), List.of()),
@@ -208,8 +208,8 @@ class MetadataServiceTest {
     void validateClientsConfigured_failsWhenClientIsMissing() {
         MetadataService service = new MetadataService(
                 new MetadataCatalogProperties(Map.of(
-                        "auth", new ServiceProperties("auth-db", allTables()),
-                        "issue", new ServiceProperties("issue-db", allTables())
+                        "auth", serviceProps("auth-db", allTables()),
+                        "issue", serviceProps("issue-db", allTables())
                 )),
                 Map.of("auth", Mockito.mock(DatabaseClient.class))
         );
@@ -228,9 +228,13 @@ class MetadataServiceTest {
 
     private static MetadataService serviceWith(DatabaseClient client, TableProperties tables) {
         return new MetadataService(
-                new MetadataCatalogProperties(Map.of("auth", new ServiceProperties("auth-db", tables))),
+                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", tables))),
                 Map.of("auth", client)
         );
+    }
+
+    private static ServiceProperties serviceProps(String alias, TableProperties tables) {
+        return new ServiceProperties(alias, "taska", tables);
     }
 
     private static ColumnMetadata col(String table, String column, String type) {
@@ -287,6 +291,8 @@ class MetadataServiceTest {
 
         Mockito.doReturn(columnsFetch).when(columnsSpec).map(ArgumentMatchers.any(BiFunction.class));
         Mockito.doReturn(primaryKeysFetch).when(primaryKeysSpec).map(ArgumentMatchers.any(BiFunction.class));
+        Mockito.when(columnsSpec.bind(ArgumentMatchers.eq("schema"), ArgumentMatchers.any())).thenReturn(columnsSpec);
+        Mockito.when(primaryKeysSpec.bind(ArgumentMatchers.eq("schema"), ArgumentMatchers.any())).thenReturn(primaryKeysSpec);
         Mockito.when(columnsFetch.all()).thenReturn(Flux.fromIterable(columns));
         Mockito.when(primaryKeysFetch.all()).thenReturn(Flux.fromIterable(primaryKeys));
 

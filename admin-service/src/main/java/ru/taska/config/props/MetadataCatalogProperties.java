@@ -19,6 +19,7 @@ public record MetadataCatalogProperties(
      */
     public record ServiceProperties(
             String alias,
+            @DefaultValue("taska") String schema,
             @DefaultValue TableProperties tables
     ) {
     }

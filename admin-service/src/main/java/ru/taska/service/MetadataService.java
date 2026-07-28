@@ -77,25 +77,27 @@ public class MetadataService {
          * Наличие клиента гарантировано fail-fast проверкой в validateClientsConfigured().
          */
         DatabaseClient client = clients.get(serviceKey);
+        String schema = props.schema();
         TableProperties tableProps = props.tables();
 
-        return fetchColumns(client)
+        return fetchColumns(client, schema)
                 .collectList()
                 .flatMap(columns ->
-                        fetchPrimaryKeys(client)
+                        fetchPrimaryKeys(client, schema)
                                 .collectList()
                                 .map(pks -> buildTables(columns, pks, tableProps))
                 )
                 .map(tables -> new ServiceDto(serviceKey, props.alias(), tables));
     }
 
-    private Flux<ColumnMetadata> fetchColumns(DatabaseClient client) {
+    private Flux<ColumnMetadata> fetchColumns(DatabaseClient client, String schema) {
         return client.sql("""
                 SELECT table_name, column_name, data_type
                 FROM information_schema.columns
-                WHERE table_schema = 'taska'
+                WHERE table_schema = :schema
                 ORDER BY table_name, ordinal_position
                 """)
+                .bind("schema", schema)
                 .map((row, rowMetadata) -> new ColumnMetadata(
                         row.get("table_name", String.class),
                         row.get("column_name", String.class),
@@ -104,7 +106,7 @@ public class MetadataService {
                 .all();
     }
 
-    private Flux<PrimaryKeyMetadata> fetchPrimaryKeys(DatabaseClient client) {
+    private Flux<PrimaryKeyMetadata> fetchPrimaryKeys(DatabaseClient client, String schema) {
         return client.sql("""
                 SELECT kcu.table_name, kcu.column_name
                 FROM information_schema.table_constraints tc
@@ -112,8 +114,9 @@ public class MetadataService {
                   ON tc.constraint_name = kcu.constraint_name
                  AND tc.table_schema = kcu.table_schema
                 WHERE tc.constraint_type = 'PRIMARY KEY'
-                  AND tc.table_schema = 'taska'
+                  AND tc.table_schema = :schema
                 """)
+                .bind("schema", schema)
                 .map((row, rowMetadata) -> new PrimaryKeyMetadata(
                         row.get("table_name", String.class),
                         row.get("column_name", String.class)

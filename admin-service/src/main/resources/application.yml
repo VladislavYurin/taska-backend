@@ -81,6 +81,7 @@ admin:
     services:
       auth:
         alias: auth
+        schema: taska
         tables:
           allow: []
           deny:
@@ -94,6 +95,7 @@ admin:
             - users.access_token
       project:
         alias: project
+        schema: taska
         tables:
           allow: []
           deny:
@@ -102,6 +104,7 @@ admin:
           sensitive-columns: []
       issue:
         alias: issue
+        schema: taska
         tables:
           allow: []
           deny:
@@ -110,6 +113,7 @@ admin:
           sensitive-columns: []
       workflow:
         alias: workflow
+        schema: taska
         tables:
           allow: []
           deny:
@@ -118,6 +122,7 @@ admin:
           sensitive-columns: []
       notification:
         alias: notification
+        schema: taska
         tables:
           allow: []
           deny:
@@ -126,6 +131,7 @@ admin:
           sensitive-columns: []
       admin:
         alias: admin
+        schema: taska
         tables:
           allow: []
           deny:
