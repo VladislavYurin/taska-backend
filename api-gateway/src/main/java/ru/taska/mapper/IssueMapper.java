@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
+import ru.taska.api.issue.v1.BoardIssue;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssuePriority;
@@ -14,6 +15,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.dto.BoardIssueDto;
+import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueShortResponseDto;
@@ -28,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -110,6 +114,35 @@ public class IssueMapper {
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+
+        return restDto;
+    }
+
+    /**
+     * Преобразует задачу из gRPC-ответа (BoardIssue) в DTO для REST-ответа (BoardIssueDto).
+     */
+    public BoardIssueDto toRestBoardIssue(BoardIssue protoDto) {
+        var restDto = new BoardIssueDto();
+
+        // Преобразуем String из gRPC в UUID для REST DTO
+        restDto.setId(UUID.fromString(protoDto.getId()));
+
+        restDto.setIssueKey(protoDto.getIssueKey());
+        restDto.setSummary(protoDto.getSummary());
+        restDto.setStoryPoints(protoDto.getStoryPoints());
+        restDto.setStatusKey(protoDto.getStatusKey());
+
+        if (protoDto.hasAssignee()) {
+            var userDto = new BoardUserDto();
+            // Здесь также преобразуем строковый ID исполнителя в UUID
+            userDto.setId(UUID.fromString(protoDto.getAssignee().getId()));
+            userDto.setDisplayName(protoDto.getAssignee().getDisplayName());
+            restDto.setAssignee(userDto);
+        }
+
+        if (protoDto.getLabelsList() != null) {
+            restDto.setLabels(new ArrayList<>(protoDto.getLabelsList()));
+        }
 
         return restDto;
     }

@@ -74,6 +74,12 @@ service IssueService {
    */
   rpc TransitionIssue(TransitionIssueRequest)
       returns (IssueWithHistoryResponse);
+
+  /**
+   * Возвращает список задач для доски (Board API).
+   */
+  rpc ListIssuesForBoard(ListIssuesForBoardRequest)
+      returns (ListIssuesForBoardResponse);
 }
 
 message AssignIssueRequest {
@@ -521,4 +527,103 @@ message IssueWithHistoryResponse {
    * История изменений задачи.
    */
   repeated IssueHistoryResponse history = 2;
+}
+message ListIssuesForBoardRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssuesForBoardRequestBody body = 2;
+}
+
+message ListIssuesForBoardRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Тип задачи (TASK, BUG, STORY).
+   */
+  IssueType issue_type = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
+
+  /**
+   * Фильтр по идентификатору исполнителя (опционально).
+   */
+  optional string assignee_id = 4;
+
+  /**
+   * Фильтр по метке (опционально).
+   */
+  optional string label_id = 5;
+
+  /**
+   * Включать ли завершенные задачи (опционально).
+   */
+  optional bool include_done = 6;
+}
+
+message ListIssuesForBoardResponse {
+  /**
+   * Список задач для доски.
+   */
+  repeated BoardIssue issues = 1;
+}
+
+message BoardIssue {
+  /**
+   * Идентификатор задачи.
+   */
+  string id = 1;
+
+  /**
+   * Денормализованный ключ задачи (например, ABC-123).
+   */
+  string issue_key = 2;
+
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Стори поинты (оценка сложности).
+   */
+  int32 story_points = 4;
+
+  /**
+   * Текущий статус задачи (для группировки по колонкам).
+   */
+  string status_key = 5;
+
+  /**
+   * Исполнитель задачи (опционально).
+   */
+  BoardUser assignee = 6;
+
+  /**
+   * Список меток (labels).
+   */
+  repeated string labels = 7;
+}
+
+message BoardUser {
+  /**
+   * Идентификатор пользователя.
+   */
+  string id = 1;
+
+  /**
+   * Отображаемое имя пользователя.
+   */
+  string display_name = 2;
 }
