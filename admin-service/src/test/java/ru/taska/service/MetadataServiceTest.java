@@ -73,14 +73,16 @@ class MetadataServiceTest {
         List<TableDto> tables = buildTables(
                 List.of(
                         col("users", "login", "character varying"),
-                        col("users", "password_hash", "character varying")
+                        col("users", "password_hash", "character varying"),
+                        col("audit", "password_hash", "character varying")
                 ),
                 List.of(),
-                sensitive("password_hash")
+                sensitive("users.password_hash")
         );
 
         assertThat(column(tables, "users", "password_hash").sensitive()).isTrue();
         assertThat(column(tables, "users", "login").sensitive()).isFalse();
+        assertThat(column(tables, "audit", "password_hash").sensitive()).isFalse();
     }
 
     @Test

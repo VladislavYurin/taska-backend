@@ -154,7 +154,7 @@ public class MetadataService {
                                     c.columnName(),
                                     c.dataType(),
                                     pkKeys.contains(table + "." + c.columnName()),
-                                    sensitiveColumns.contains(c.columnName())
+                                    sensitiveColumns.contains(table + "." + c.columnName())
                             ))
                             .toList();
                     return new TableDto(table, cols);

@@ -75,7 +75,7 @@ admin:
   # allow — если список непустой, в каталог попадают только эти таблицы;
   #         пустой список означает «разрешены все».
   # deny — таблицы, которые не возвращаются в каталоге (приоритет над allow).
-  # sensitive-columns — колонки, которые помечаются как секретные (флаг в ответе).
+  # sensitive-columns — колонки в формате table.column, помечаемые как секретные (флаг в ответе).
   # Менять без правки кода — только этот файл или env.
   metadata:
     services:
@@ -87,11 +87,11 @@ admin:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
-            - password_hash
-            - token_hash
-            - secret_hash
-            - refresh_token
-            - access_token
+            - users.password_hash
+            - users.token_hash
+            - users.secret_hash
+            - users.refresh_token
+            - users.access_token
       project:
         alias: project
         tables:
