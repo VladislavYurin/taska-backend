@@ -43,18 +43,22 @@ public class IssueMapper {
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
         restDto.setSummary(protoDto.getSummary());
-        restDto.setDescription(protoDto.getDescription());
         restDto.setStatus(protoDto.getStatusKey());
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
-        restDto.setAssigneeId(protoDto.getAssigneeId());
         restDto.setReporterId(protoDto.getReporterId());
+        restDto.setVersion(protoDto.getVersion());
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
-        restDto.setVersion(protoDto.getVersion());
-        restDto.setStoryPoints(protoDto.getStoryPoints());
-        restDto.setStartDate(toOffsetDateTime(protoDto.getStartDate()));
-        restDto.setDueDate(toOffsetDateTime(protoDto.getDueDate()));
-        restDto.setOriginalEstimateMinutes(protoDto.getOriginalEstimateMinutes());
+
+        restDto.setAssigneeId(protoDto.hasAssigneeId() && !protoDto.getAssigneeId().isBlank() ? protoDto.getAssigneeId() : null);
+        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().isBlank() ? protoDto.getDescription() : null);
+
+        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints() : null);
+        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes() : null);
+        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes() : null);
+
+        restDto.setStartDate(protoDto.hasStartDate() ? toOffsetDateTime(protoDto.getStartDate()) : null);
+        restDto.setDueDate(protoDto.hasDueDate() ? toOffsetDateTime(protoDto.getDueDate()) : null);
 
         return restDto;
     }
@@ -111,14 +115,14 @@ public class IssueMapper {
     public UpdateIssueResponseDto toRestUpdateResponse(UpdateIssueResponse protoDto) {
         var restDto = new UpdateIssueResponseDto();
         restDto.setId(protoDto.getUpdatedIssueId());
-        restDto.setSummary(protoDto.getSummary());
-        restDto.setDescription(protoDto.getDescription());
-        restDto.setPriority(toRestIssuePriority(protoDto.getPriority()));
-        restDto.setStoryPoints(protoDto.getStoryPoints());
-        restDto.setStartDate(toOffsetDateTime(protoDto.getStartDate()));
-        restDto.setDueDate(toOffsetDateTime(protoDto.getDueDate()));
-        restDto.setOriginalEstimateMinutes(protoDto.getOriginalEstimateMinutes());
-        restDto.setRemainingEstimateMinutes(protoDto.getRemainingEstimateMinutes());
+        restDto.setSummary(protoDto.hasSummary() ? protoDto.getSummary() : null);
+        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().isBlank() ? protoDto.getDescription() : null);
+        restDto.setPriority(protoDto.hasPriority() ? toRestIssuePriority(protoDto.getPriority()) : null);
+        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints() : null);
+        restDto.setStartDate(protoDto.hasStartDate() ? toOffsetDateTime(protoDto.getStartDate()) : null);
+        restDto.setDueDate(protoDto.hasDueDate() ? toOffsetDateTime(protoDto.getDueDate()) : null);
+        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes() : null);
+        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes() : null);
 
         return restDto;
     }

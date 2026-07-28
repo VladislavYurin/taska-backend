@@ -119,7 +119,7 @@ public final class GrpcRequestValidators {
      * @param value     числовое значение поля
      * @param fieldName имя поля (используется в сообщении об ошибке)
      * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT}
-     *         если значение меньше или равно нулю
+     * если значение меньше или равно нулю
      */
     public static Mono<Long> requirePositiveOrInvalidArgument(long value, String fieldName) {
         if (value <= 0) {
@@ -148,21 +148,6 @@ public final class GrpcRequestValidators {
     }
 
     /**
-     * Валидирует story_points. Может быть null. Если задан, должен быть >= 0.
-     */
-    public static Mono<Optional<Double>> validateOptionalStoryPoints(boolean hasField, Double rawValue, String fieldName) {
-        if (!hasField) {
-            return Mono.just(Optional.empty());
-        }
-        if (rawValue < 0) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be >= 0")
-                    .asRuntimeException());
-        }
-        return Mono.just(Optional.of(rawValue));
-    }
-
-    /**
      * Парсит строку из gRPC в Instant. Если строка пустая/отсутствует — возвращает empty.
      */
     public static Mono<Optional<Instant>> parseOptionalInstant(boolean hasField, Timestamp rawDate, String fieldName) {
@@ -176,27 +161,8 @@ public final class GrpcRequestValidators {
     }
 
     /**
-     * Валидирует originalEstimateMinutes или remainingEstimateMinutes. Должен быть больше нуля
+     * Валидирует любые опциональные данные.
      */
-    public static Mono<Optional<Long>> validateOptionalEstimateMinutes(boolean hasFields, Long rawValue, String fieldName) {
-        if (!hasFields) {
-            return Mono.just(Optional.empty());
-        }
-        if (rawValue < 0) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be >= 0")
-                    .asRuntimeException());
-        }
-        return Mono.just(Optional.of(rawValue));
-    }
-
-    public static <T> Mono<Optional<T>> validateOptional(boolean hasField, T raw, String fieldName) {
-        if (!hasField) {
-            return Mono.just(Optional.empty());
-        }
-        return Mono.just(Optional.of(raw));
-    }
-
     public static Mono<Void> validateDateRange(Instant startDate, Instant dueDate) {
         if (startDate != null && dueDate != null && startDate.isAfter(dueDate)) {
             return Mono.error(Status.INVALID_ARGUMENT
@@ -204,5 +170,46 @@ public final class GrpcRequestValidators {
                     .asRuntimeException());
         }
         return Mono.empty();
+    }
+
+    /**
+     * Валидирует любые опциональные числовые данные. Должен быть больше нуля
+     */
+    public static <T extends Number> Mono<Optional<T>> validateOptionalNumbers(boolean hasField, T rawValue, String fieldName) {
+        if (!hasField) {
+            return Mono.just(Optional.empty());
+        }
+        if (rawValue.doubleValue() < 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be >= 0")
+                    .asRuntimeException());
+        }
+        return Mono.just(Optional.of(rawValue));
+    }
+
+    /**
+     * Валидирует любые опциональные данные.
+     */
+    public static <T> Mono<Optional<T>> validateAnyOptional(boolean hasField, T raw, String fieldName) {
+        if (!hasField) {
+            return Mono.just(Optional.empty());
+        }
+        return Mono.just(Optional.of(raw));
+    }
+
+    /**
+     * Парсит опциональный String в UUID. Допускает null.
+     */
+    public static Mono<Optional<UUID>> parseOptionalStringToUUID(boolean hasField, String raw, String fieldName) {
+        if (!hasField || raw == null || raw.isBlank()) {
+            return Mono.just(Optional.empty());
+        }
+        try {
+            return Mono.just(Optional.of(UUID.fromString(raw)));
+        } catch (IllegalArgumentException ex) {
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be a valid UUID")
+                    .asRuntimeException());
+        }
     }
 }

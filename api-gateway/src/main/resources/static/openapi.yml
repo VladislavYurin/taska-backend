@@ -746,6 +746,8 @@ components:
           type: string
         priority:
           type: string
+        assigneeId:
+          type: string
         storyPoints:
           type: number
           format: double

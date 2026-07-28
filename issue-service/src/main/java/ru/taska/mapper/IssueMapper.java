@@ -69,6 +69,9 @@ public class IssueMapper {
         if (issue.getOriginalEstimateMinutes() != null) {
             builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
         }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
         if (issue.getStartDate() != null) {
             builder.setStartDate(Timestamp.newBuilder()
                     .setSeconds(issue.getStartDate().getEpochSecond())

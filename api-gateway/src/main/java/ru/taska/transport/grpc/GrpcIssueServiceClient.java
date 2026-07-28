@@ -152,6 +152,7 @@ public class GrpcIssueServiceClient {
                     .setSummary(requestDto.getSummary())
                     .setReporterId(context.userContext().userId());
 
+            Optional.ofNullable(requestDto.getAssigneeId()).ifPresent(bodyBuilder::setAssigneeId);
             Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
             Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
             Optional.ofNullable(requestDto.getStartDate())

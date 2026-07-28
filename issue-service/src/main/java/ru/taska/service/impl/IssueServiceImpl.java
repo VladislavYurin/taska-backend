@@ -62,7 +62,7 @@ public class IssueServiceImpl implements IssueService {
     @Override
     @Transactional
     public Mono<Issue> createIssue(String requestId, String nodeId, String idempotencyKey, UUID projectId, IssueType issueType,
-                                   String summary, String description, IssuePriority priority, UUID reporterId, Double storyPoints,
+                                   String summary, String description, UUID assigneeId, IssuePriority priority, UUID reporterId, Double storyPoints,
                                    Instant startDate, Instant dueDate, Long originalEstimateMinutes
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
@@ -96,6 +96,7 @@ public class IssueServiceImpl implements IssueService {
                                             .summary(summary)
                                             .description(description)
                                             .priority(priority)
+                                            .assigneeId(assigneeId)
                                             .reporterId(reporterId)
                                             .statusKey(INIT_STATUS)
                                             .version(INIT_VERSION)
@@ -207,11 +208,13 @@ public class IssueServiceImpl implements IssueService {
                     if (storyPoints != null) updatingIssue.setStoryPoints(storyPoints);
                     if (startDate != null) updatingIssue.setStartDate(startDate);
                     if (dueDate != null) updatingIssue.setDueDate(dueDate);
-                    if (originalEstimateMinutes != null) updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
+                    if (originalEstimateMinutes != null)
+                        updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
                     if (remainingEstimateMinutes != null && remainingEstimateMinutes > updatingIssue.getOriginalEstimateMinutes()) {
                         updatingIssue.setRemainingEstimateMinutes(0L);
                     }
-                    if (remainingEstimateMinutes != null) updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
+                    if (remainingEstimateMinutes != null)
+                        updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
                     updatingIssue.setUpdatedAt(Instant.now());
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
 

@@ -82,7 +82,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                "Тестовая задача", null, null, IssuePriority.MEDIUM, REPORTER_ID,
                 null, null, null, null
         ).block();
 
@@ -102,7 +102,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue result = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.BUG,
-                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID,
+                "Ошибка", "Описание", ASSIGNEE_ID, IssuePriority.HIGH, REPORTER_ID,
                 null, null, null, null
         ).block();
 
@@ -124,12 +124,12 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Задача 1", null, IssuePriority.LOW, REPORTER_ID,
+                "Задача 1", null, null, IssuePriority.LOW, REPORTER_ID,
                 null, null, null, null
         ).block();
         Issue second = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_2, PROJECT_ID, IssueType.TASK,
-                "Задача 2", null, IssuePriority.LOW, REPORTER_ID,
+                "Задача 2", null, null, IssuePriority.LOW, REPORTER_ID,
                 null, null, null, null
         ).block();
 
@@ -150,7 +150,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                "Тестовая задача", null, null, IssuePriority.MEDIUM, REPORTER_ID,
                 null, null, null, null
         ).block();
 
@@ -168,7 +168,7 @@ class CreateIssueTest extends IssueServiceImplTest {
     void createIssueWithoutPlanningFields() {
         Issue result = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Задача без планирования", null, IssuePriority.MEDIUM, REPORTER_ID,
+                "Задача без планирования", null, null, IssuePriority.MEDIUM, REPORTER_ID,
                 null, null, null, null
         ).block();
 
@@ -189,7 +189,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue result = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Задача с планированием", null, IssuePriority.MEDIUM, REPORTER_ID,
+                "Задача с планированием", null, null, IssuePriority.MEDIUM, REPORTER_ID,
                 storyPoints, startDate, dueDate, originalEstimate
         ).block();
 

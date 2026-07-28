@@ -79,7 +79,7 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldSaveIdempotencyKeyAndReturnCreatedIssue() {
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        SUMMARY, null, null, IssuePriority.MEDIUM, REPORTER_ID,
                         0.0, Instant.now(), Instant.now(), 0L))
                 .assertNext(result -> {
                     Assertions.assertNotNull(result.getId());
@@ -104,7 +104,7 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                SUMMARY, null, null, IssuePriority.MEDIUM, REPORTER_ID,
                 0.0, Instant.now(), Instant.now(), 0L).block();
         Assertions.assertNotNull(first);
 
@@ -113,7 +113,7 @@ class IdempotencyKeyIT extends AbstractIT {
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        SUMMARY, null, null, IssuePriority.MEDIUM, REPORTER_ID,
                         0.0, Instant.now(), Instant.now(), 0L))
                 .assertNext(result -> {
                     Assertions.assertEquals(first.getId(), result.getId());
@@ -129,14 +129,15 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldThrowFailedPreconditionOnSameKeyDifferentBody() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                SUMMARY, null, null,  IssuePriority.MEDIUM, REPORTER_ID,
                 0.0, Instant.now(), Instant.now(), 0L).block();
 
         long issuesAfterFirst = issueRepository.count().block();
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID,
+                        "Другое описание из-за которого вернёт ошибку", null,
+                        null, IssuePriority.MEDIUM, REPORTER_ID,
                         0.0, Instant.now(), Instant.now(), 0L))
                 .expectErrorSatisfies(error -> {
                     DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
@@ -155,7 +156,7 @@ class IdempotencyKeyIT extends AbstractIT {
                 Flux.range(0, parallelism)
                         .map(i -> issueService.createIssue(
                                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                                        SUMMARY, null, null, IssuePriority.MEDIUM, REPORTER_ID,
                                 0.0, Instant.now(), Instant.now(), 0L)
                                 .map(issue -> "OK")
                                 .onErrorResume(e -> Mono.just("ERR:" + e.getClass().getSimpleName()))
