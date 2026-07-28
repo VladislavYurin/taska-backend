@@ -80,8 +80,8 @@ public class ProjectController implements ProjectApi {
             Mono<AddProjectMemberRequestDto> addProjectMemberRequestDto,
             ServerWebExchange exchange
     ) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, gatewayContext ->
-                projectClient.addProjectMember(projectId,addProjectMemberRequestDto,gatewayContext))
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                projectClient.addProjectMember(projectId,addProjectMemberRequestDto,context))
                         .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response));
     }
 
@@ -96,8 +96,8 @@ public class ProjectController implements ProjectApi {
             Mono<ChangeProjectMemberRoleRequestDto> changeProjectMemberRoleRequestDto,
             ServerWebExchange exchange
     ) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED,gatewayContext ->
-                projectClient.changeProjectMemberRole(projectId,userId,changeProjectMemberRoleRequestDto,gatewayContext))
+        return executor.execute(exchange, EndpointSecurity.PROTECTED,context ->
+                projectClient.changeProjectMemberRole(projectId,userId,changeProjectMemberRoleRequestDto,context))
                         .map(ResponseEntity::ok);
     }
 
