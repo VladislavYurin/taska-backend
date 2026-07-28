@@ -330,16 +330,7 @@ class IssueMapperTest {
     @ParameterizedTest
     @MethodSource("restIssuePriorityArguments")
     @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
-    void toRestIssuePriority_shouldCorrectMapsAllFields(IssuePriority source, String expected) {
-        var result = mapper.toRestIssuePriority(source);
-
-        Assertions.assertEquals(expected, result);
-    }
-
-    @ParameterizedTest
-    @MethodSource("restIssuePriorityArguments")
-    @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
-    void toRestIssuePriority_shouldThrowIllegalArgumentException() {
+    void toRestIssuePriority_shouldResponseStatusException() {
         IssuePriority priority = IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
 
         Assertions.assertThrows(ResponseStatusException.class, () -> mapper.toRestIssuePriority(priority));
