@@ -172,6 +172,11 @@ message CreateIssueRequestBody {
 * Изначальное количество времени выделенное на выполнение задачи
 */
   optional int64 original_estimate_minutes = 11;
+
+  /**
+ * Идентификатор исполнителя задачи.
+ */
+  optional string assignee_id = 12;
 }
 
 message GetIssueRequest {

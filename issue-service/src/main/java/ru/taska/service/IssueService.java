@@ -23,6 +23,7 @@ public interface IssueService {
             IssueType issueType,
             String summary,
             String description,
+            UUID assigneeId,
             IssuePriority priority,
             UUID reporterId,
             Double storyPoints,

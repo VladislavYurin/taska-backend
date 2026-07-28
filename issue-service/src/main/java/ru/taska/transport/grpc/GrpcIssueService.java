@@ -65,17 +65,19 @@ public class GrpcIssueService {
                                     req.getBody().getPriority(), "body.priority"),
                             GrpcRequestValidators.parseUuidOrInvalidArgument(
                                     req.getBody().getReporterId(), "body.reporterId"),
-                            GrpcRequestValidators.validateOptional(
-                                    req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"));
+                            GrpcRequestValidators.validateAnyOptional(
+                                    req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
+                            GrpcRequestValidators.parseOptionalStringToUUID(
+                                    req.getBody().hasAssigneeId(), req.getBody().getAssigneeId(), "body.assigneeId"));
 
                     var planningFields = Mono.zip(
-                            GrpcRequestValidators.validateOptionalStoryPoints(req.getBody().hasStoryPoints(),
+                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasStoryPoints(),
                                     req.getBody().getStoryPoints(), "story_points"),
                             GrpcRequestValidators.parseOptionalInstant(req.getBody().hasStartDate(),
                                     req.getBody().getStartDate(), "body.startDate"),
                             GrpcRequestValidators.parseOptionalInstant(req.getBody().hasDueDate(),
                                     req.getBody().getDueDate(), "body.dueDate"),
-                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasOriginalEstimateMinutes(),
+                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasOriginalEstimateMinutes(),
                                     req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"));
 
                     return Mono.zip(traceId, coreIssueMono, planningFields)
@@ -96,6 +98,8 @@ public class GrpcIssueService {
                                 IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT2().getT5());
                                 UUID reporterId = t.getT2().getT6();
                                 String description = t.getT2().getT7().orElse(null);
+                                UUID assigneeId = t.getT2().getT8().orElse(null);
+
 
                                 // Поля планировщика задачи
                                 Double storyPoints = t.getT3().getT1().orElse(null);
@@ -103,12 +107,14 @@ public class GrpcIssueService {
                                 Instant dueDate = t.getT3().getT3().orElse(null);
                                 Long originalEstimateMinutes = t.getT3().getT4().orElse(null);
 
-                                log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, description={}, priority={}, reporterId={}",
-                                        requestId, nodeId, idempotencyKey, projectId, issueType, summary, description, priority, reporterId);
+                                log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, description={}," +
+                                                "assigneeId={}  priority={}, reporterId={}, storyPoints={}, startDate={}, dueDate={}, originalEstimateMinutes ={}",
+                                        requestId, nodeId, idempotencyKey, projectId, issueType, summary, description, assigneeId, priority, reporterId,
+                                        storyPoints, startDate, dueDate, originalEstimateMinutes);
 
                                 return issueService.createIssue(requestId, nodeId, idempotencyKey, projectId,
                                                 issueType, summary, description,
-                                                priority, reporterId,
+                                                assigneeId, priority, reporterId,
                                                 storyPoints, startDate, dueDate, originalEstimateMinutes)
                                         .doOnNext(issue ->
                                                 log.info("[{}][{}] createIssue: successfully created, issueId={}",
@@ -313,21 +319,21 @@ public class GrpcIssueService {
                             GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                             GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
                             GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
-                            GrpcRequestValidators.validateOptional(req.getBody().hasSummary(), req.getBody().getSummary(), "body.summary"),
-                            GrpcRequestValidators.validateOptional(req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
-                            GrpcRequestValidators.validateOptional(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"));
+                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasSummary(), req.getBody().getSummary(), "body.summary"),
+                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
+                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"));
 
                     // Поля планировщика задачи
                     var planningFields = Mono.zip(
-                            GrpcRequestValidators.validateOptionalStoryPoints(
+                            GrpcRequestValidators.validateOptionalNumbers(
                                     req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "story_points"),
                             GrpcRequestValidators.parseOptionalInstant(
                                     req.getBody().hasStartDate(), req.getBody().getStartDate(), "body.startDate"),
                             GrpcRequestValidators.parseOptionalInstant(
                                     req.getBody().hasDueDate(), req.getBody().getDueDate(), "body.dueDate"),
-                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasOriginalEstimateMinutes(),
+                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasOriginalEstimateMinutes(),
                                     req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"),
-                            GrpcRequestValidators.validateOptionalEstimateMinutes(req.getBody().hasRemainingEstimateMinutes(),
+                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasRemainingEstimateMinutes(),
                                     req.getBody().getRemainingEstimateMinutes(), "body.RemainingEstimateMinutes"));
                     return Mono.zip(specificationFields, planningFields)
                             .doOnError(StatusRuntimeException.class, logValidationError(
@@ -352,8 +358,10 @@ public class GrpcIssueService {
                                 Long originalEstimateMinutes = t.getT2().getT4().orElse(null);
                                 Long remainingEstimateMinutes = t.getT2().getT5().orElse(null);
 
-                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
-                                        requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}, " +
+                                                "storyPoints ={}, startDate ={}, dueDate ={}, originalEstimateMinutes ={}, remainingEstimateMinutes ={}",
+                                        requestId, nodeId, issueId, actorUserId, summary, description, priority, storyPoints, startDate, dueDate,
+                                        originalEstimateMinutes, remainingEstimateMinutes);
                                 return GrpcRequestValidators.validateDateRange(startDate, dueDate)
                                         .then(Mono.defer(() -> issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority,
                                                 storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes)))

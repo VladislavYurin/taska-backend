@@ -100,7 +100,7 @@ class IssueControllerTest {
     void createIssue_shouldReturnsResponseAndStatus201() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, ISSUE_PRIORITY_MEDIUM);
 
         var response = new IssueResponseDto();
         response.setId(ISSUE_ID);
@@ -140,7 +140,7 @@ class IssueControllerTest {
     void createIssue_shouldReturnsSameResponse_whenSameIdempotencyKeyAndPayload() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, ISSUE_PRIORITY_MEDIUM);
 
         var response = new IssueResponseDto();
         response.setId(ISSUE_ID);
@@ -187,7 +187,7 @@ class IssueControllerTest {
     void createIssue_shouldThrowsExceptionAndStatus409_whenSameIdempotencyKeyAndDifferentPayload() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, ISSUE_PRIORITY_MEDIUM);
 
         Mockito.when(issueClient.createIssue(
                         Mockito.eq(PROJECT_ID),
@@ -223,7 +223,7 @@ class IssueControllerTest {
     void createIssue_shouldThrowsExceptionAndStatus400_whenIdempotenceKeyIsMissing() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, ISSUE_PRIORITY_MEDIUM);
 
         webTestClient.post()
                 .uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
@@ -450,7 +450,10 @@ class IssueControllerTest {
     void updateIssue_shouldReturnsResponseAndStatus200() {
         mockAuthenticatedUser();
 
-        var request = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        var request = new UpdateIssueRequestDto();
+        request.setSummary(SUMMARY);
+        request.setDescription(DESCRIPTION);
+        request.setPriority(ISSUE_PRIORITY_MEDIUM);
 
         var response = new UpdateIssueResponseDto();
         response.setId(ISSUE_ID);

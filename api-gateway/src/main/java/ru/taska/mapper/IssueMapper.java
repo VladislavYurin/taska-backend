@@ -44,14 +44,22 @@ public class IssueMapper {
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
         restDto.setSummary(protoDto.getSummary());
-        restDto.setDescription(protoDto.getDescription());
         restDto.setStatus(protoDto.getStatusKey());
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
-        restDto.setAssigneeId(protoDto.getAssigneeId());
         restDto.setReporterId(protoDto.getReporterId());
+        restDto.setVersion(protoDto.getVersion());
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
-        restDto.setVersion(protoDto.getVersion());
+
+        restDto.setAssigneeId(protoDto.hasAssigneeId() && !protoDto.getAssigneeId().isBlank() ? protoDto.getAssigneeId() : null);
+        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().isBlank() ? protoDto.getDescription() : null);
+
+        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints() : null);
+        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes() : null);
+        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes() : null);
+
+        restDto.setStartDate(protoDto.hasStartDate() ? toOffsetDateTime(protoDto.getStartDate()) : null);
+        restDto.setDueDate(protoDto.hasDueDate() ? toOffsetDateTime(protoDto.getDueDate()) : null);
 
         return restDto;
     }
@@ -108,9 +116,14 @@ public class IssueMapper {
     public UpdateIssueResponseDto toRestUpdateResponse(UpdateIssueResponse protoDto) {
         var restDto = new UpdateIssueResponseDto();
         restDto.setId(protoDto.getUpdatedIssueId());
-        restDto.setSummary(protoDto.getSummary());
-        restDto.setDescription(protoDto.getDescription());
-        restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+        restDto.setSummary(protoDto.hasSummary() ? protoDto.getSummary() : null);
+        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().isBlank() ? protoDto.getDescription() : null);
+        restDto.setPriority(protoDto.hasPriority() ? toRestIssuePriority(protoDto.getPriority()) : null);
+        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints() : null);
+        restDto.setStartDate(protoDto.hasStartDate() ? toOffsetDateTime(protoDto.getStartDate()) : null);
+        restDto.setDueDate(protoDto.hasDueDate() ? toOffsetDateTime(protoDto.getDueDate()) : null);
+        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes() : null);
+        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes() : null);
 
         return restDto;
     }
@@ -120,7 +133,10 @@ public class IssueMapper {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> IssueType.ISSUE_TYPE_BUG;
             case "STORY" -> IssueType.ISSUE_TYPE_STORY;
-            default -> IssueType.ISSUE_TYPE_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unknown issue type: " + restIssueType
+            );
         };
     }
 
@@ -141,7 +157,10 @@ public class IssueMapper {
             case "LOW" -> IssuePriority.ISSUE_PRIORITY_LOW;
             case "MEDIUM" -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case "HIGH" -> IssuePriority.ISSUE_PRIORITY_HIGH;
-            default -> IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unknown issue priority: " + restIssuePriority
+            );
         };
     }
 

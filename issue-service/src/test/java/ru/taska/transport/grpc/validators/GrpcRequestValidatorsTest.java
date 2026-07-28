@@ -15,7 +15,7 @@ class GrpcRequestValidatorsTest {
     @Test
     @DisplayName("Должен выбросить INVALID_ARGUMENT если storyPoints отрицательный")
     void rejectNegativeStoryPoints() {
-        var result = GrpcRequestValidators.validateOptionalStoryPoints(true, -1.5, "story_points");
+        var result = GrpcRequestValidators.validateOptionalNumbers(true, -1.5, "story_points");
 
         StepVerifier.create(result)
                 .expectErrorSatisfies(throwable -> {
@@ -29,7 +29,7 @@ class GrpcRequestValidatorsTest {
     @Test
     @DisplayName("Должен выбросить INVALID_ARGUMENT если оценка времени отрицательная")
     void rejectNegativeEstimates() {
-        var result = GrpcRequestValidators.validateOptionalEstimateMinutes(true, -60L, "body.originalEstimateMinutes");
+        var result = GrpcRequestValidators.validateOptionalNumbers(true, -60L, "body.originalEstimateMinutes");
 
         StepVerifier.create(result)
                 .expectErrorSatisfies(throwable -> {

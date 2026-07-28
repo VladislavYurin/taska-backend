@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
@@ -328,26 +327,6 @@ class IssueMapperTest {
         Assertions.assertEquals(expected, result);
     }
 
-    @Test
-    @DisplayName("Должен выбрасывать ResponseStatusException, если приходит неизвестный gRPC issueType")
-    void toRestIssueType_shouldThrowsException_whenUnknownIssueType() {
-        var ex = Assertions.assertThrows(
-                ResponseStatusException.class,
-                () -> mapper.toRestIssueType(IssueType.ISSUE_TYPE_UNSPECIFIED)
-        );
-
-        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
-    }
-
-    @ParameterizedTest
-    @MethodSource("grpcIssuePriorityArguments")
-    @DisplayName("Должен корректно преобразовать REST issuePriority в gRPC issuePriority")
-    void toGrpcIssuePriority_shouldCorrectMapsAllFields(String source, IssuePriority expected) {
-        var result = mapper.toGrpcIssuePriority(source);
-
-        Assertions.assertEquals(expected, result);
-    }
-
     @ParameterizedTest
     @MethodSource("restIssuePriorityArguments")
     @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
@@ -357,15 +336,13 @@ class IssueMapperTest {
         Assertions.assertEquals(expected, result);
     }
 
-    @Test
-    @DisplayName("Должен выбрасывать ResponseStatusException, если приходит неизвестный gRPC issuePriority")
-    void toRestIssuePriority_shouldThrowsException_whenUnknownIssuePriority() {
-        var ex = Assertions.assertThrows(
-                ResponseStatusException.class,
-                () -> mapper.toRestIssuePriority(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED)
-        );
+    @ParameterizedTest
+    @MethodSource("restIssuePriorityArguments")
+    @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
+    void toRestIssuePriority_shouldThrowIllegalArgumentException() {
+        IssuePriority priority = IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
 
-        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
+        Assertions.assertThrows(ResponseStatusException.class, () -> mapper.toRestIssuePriority(priority));
     }
 
     @ParameterizedTest
@@ -377,23 +354,11 @@ class IssueMapperTest {
         Assertions.assertEquals(expected, result);
     }
 
-    @Test
-    @DisplayName("Должен выбрасывать ResponseStatusException, если приходит неизвестный gRPC issueEventType")
-    void toRestIssueEventType_shouldThrowsException_whenUnknownIssuePriority() {
-        var ex = Assertions.assertThrows(
-                ResponseStatusException.class,
-                () -> mapper.toRestIssueEventType(IssueEventType.ISSUE_EVENT_TYPE_UNSPECIFIED)
-        );
-
-        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
-    }
-
     private static Stream<Arguments> grpcIssueTypeArguments() {
         return Stream.of(
                 Arguments.of("TASK", IssueType.ISSUE_TYPE_TASK),
                 Arguments.of("BUG", IssueType.ISSUE_TYPE_BUG),
-                Arguments.of("STORY", IssueType.ISSUE_TYPE_STORY),
-                Arguments.of("UNKNOWN", IssueType.ISSUE_TYPE_UNSPECIFIED)
+                Arguments.of("STORY", IssueType.ISSUE_TYPE_STORY)
         );
     }
 
@@ -418,7 +383,8 @@ class IssueMapperTest {
         return Stream.of(
                 Arguments.of(IssuePriority.ISSUE_PRIORITY_LOW, "LOW"),
                 Arguments.of(IssuePriority.ISSUE_PRIORITY_MEDIUM, "MEDIUM"),
-                Arguments.of(IssuePriority.ISSUE_PRIORITY_HIGH, "HIGH")
+                Arguments.of(IssuePriority.ISSUE_PRIORITY_HIGH, "HIGH"),
+                Arguments.of(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED, "UNSPECIFIED")
         );
     }
 

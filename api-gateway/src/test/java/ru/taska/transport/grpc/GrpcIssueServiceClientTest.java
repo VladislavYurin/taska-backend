@@ -202,7 +202,7 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC createIssue и вернуть ответ")
     void createIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, "MEDIUM");
+        var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, "MEDIUM");
         var grpcResponse = IssueResponse.getDefaultInstance();
         var restResponse = new IssueResponseDto();
 
@@ -234,7 +234,6 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT_ID);
         Assertions.assertThat(request.getBody().getIssueType()).isEqualTo(IssueType.ISSUE_TYPE_TASK);
         Assertions.assertThat(request.getBody().getSummary()).isEqualTo(SUMMARY);
-        Assertions.assertThat(request.getBody().getDescription()).isEqualTo(DESCRIPTION);
         Assertions.assertThat(request.getBody().getPriority()).isEqualTo(IssuePriority.ISSUE_PRIORITY_MEDIUM);
         Assertions.assertThat(request.getBody().getReporterId()).isEqualTo(USER_ID);
 
@@ -278,7 +277,10 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC updateIssue и вернуть ответ")
     void updateIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, "MEDIUM");
+        var restRequest = new UpdateIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
+        restRequest.setDescription(DESCRIPTION);
+        restRequest.setPriority("MEDIUM");
         var grpcResponse = UpdateIssueResponse.getDefaultInstance();
         var restResponse = new UpdateIssueResponseDto();
 
