@@ -8,8 +8,9 @@ import java.time.Duration;
 public record GrpcClientProperties(
         Service authService,
         Service issueService,
-        Service notificationService,
         Service projectService
+        Service workflowService,
+        Service notificationService
 ) {
     public record Service(
             String host,

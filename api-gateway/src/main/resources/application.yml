@@ -38,16 +38,20 @@ grpc:
     auth-service:
       host: ${AUTH_GRPC_HOST:localhost}
       port: ${AUTH_GRPC_PORT:9091}
-      deadlineDuration: ${AUTH_GRPC_DEADLINE:3000}
-    notification-service:
-      host: ${NOTIFICATION_GRPC_HOST:localhost}
-      port: ${NOTIFICATION_GRPC_PORT:9095}
-      deadlineDuration: ${NOTIFICATION_GRPC_DEADLINE:3000}
-
+      deadlineDuration: ${AUTH_GRPC_DEADLINE:3000ms}
+    workflow-service:
+      host: ${WORKFLOW_GRPC_HOST:localhost}
+      port: ${WORKFLOW_GRPC_PORT:9093}
+      deadlineDuration: ${WORKFLOW_GRPC_DEADLINE:3000ms}
     issue-service:
       host: ${ISSUE_GRPC_HOST:localhost}
       port: ${ISSUE_GRPC_PORT:9094}
-      deadlineDuration: ${ISSUE_GRPC_DEADLINE:3000}
+      deadlineDuration: ${ISSUE_GRPC_DEADLINE:3000ms}
+    notification-service:
+      host: ${NOTIFICATION_GRPC_HOST:localhost}
+      port: ${NOTIFICATION_GRPC_PORT:9095}
+      deadlineDuration: ${NOTIFICATION_GRPC_DEADLINE:3000ms}
+
 
     project-service:
       host: ${PROJECT_GRPC_HOST:localhost}

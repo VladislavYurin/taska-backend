@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
@@ -40,12 +41,14 @@ public class GrpcClientConfig {
     }
 
     @Bean
-    public ReactorAuthServiceGrpc.ReactorAuthServiceStub authServiceStub() {
-        return ReactorAuthServiceGrpc.newReactorStub(authManagedChannel());
-    }
-    @Bean
-    public ReactorNotificationServiceGrpc.ReactorNotificationServiceStub notificationServiceStub() {
-        return ReactorNotificationServiceGrpc.newReactorStub(notificationManagedChannel());
+    public ManagedChannel workflowManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.workflowService().host(),
+                        properties.workflowService().port()
+                )
+                .usePlaintext()
+                .build();
     }
 
     @Bean
@@ -57,6 +60,21 @@ public class GrpcClientConfig {
                 )
                 .usePlaintext()
                 .build();
+    }
+
+    @Bean
+    public ReactorNotificationServiceGrpc.ReactorNotificationServiceStub notificationServiceStub() {
+        return ReactorNotificationServiceGrpc.newReactorStub(notificationManagedChannel());
+    }
+
+    @Bean
+    public ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowServiceStub() {
+        return ReactorWorkflowServiceGrpc.newReactorStub(workflowManagedChannel());
+    }
+
+    @Bean
+    public ReactorAuthServiceGrpc.ReactorAuthServiceStub authServiceStub() {
+        return ReactorAuthServiceGrpc.newReactorStub(authManagedChannel());
     }
 
     @Bean
