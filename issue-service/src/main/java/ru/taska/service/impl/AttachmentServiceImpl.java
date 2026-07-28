@@ -67,16 +67,15 @@ public class AttachmentServiceImpl implements AttachmentService {
             UUID actorUserId,
             String objectKey,
             String fileName,
-            String contentType,
-            long sizeBytes
+            String contentType
     ) {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
                 .then(checkObjectExistsInStorage(requestId, nodeId, objectKey))
-                .then(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(objectKey))
-                .flatMap(checksum -> issueAttachmentRepository.save(
+                .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
+                .flatMap(metadata -> issueAttachmentRepository.save(
                         IssueAttachment.createNewAttachment(issueId, actorUserId, objectKey, fileName,
-                                contentType, sizeBytes, checksum)
+                                contentType, metadata.sizeBytes(), metadata.checksum())
                 ))
                 .flatMap(savedAttachment -> {
                     var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment);
@@ -129,13 +128,12 @@ public class AttachmentServiceImpl implements AttachmentService {
     ) {
         return issueAttachmentRepository.findByIdAndDeletedAtIsNull(attachmentId)
                 .flatMap(attachment -> {
-                    if (attachment.getUploadedBy().equals(actorUserId)) {
-                        return Mono.just(attachment);
-                    }
+                    var roles = attachment.getUploadedBy().equals(actorUserId)
+                            ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
+                            : issueProperties.allowedRoles().deleteAttachmentRoles();
                     return findActiveIssue(requestId, nodeId, attachment.getIssueId())
                             .flatMap(issue -> projectRoleChecker.checkProjectRole(
-                                    requestId, nodeId, issue.getProjectId(), actorUserId,
-                                    issueProperties.allowedRoles().deleteAttachmentRoles()
+                                    requestId, nodeId, issue.getProjectId(), actorUserId, roles
                             ))
                             .thenReturn(attachment);
                 })

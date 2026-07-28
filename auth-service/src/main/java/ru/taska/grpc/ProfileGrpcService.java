@@ -45,9 +45,7 @@ public class ProfileGrpcService {
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getFileName(), "body.file_name"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getContentType(), "body.content_type"),
-                        GrpcRequestValidators.requirePositiveOrInvalidArgument(
-                                req.getBody().getSizeBytes(), "body.size_bytes")
+                                req.getBody().getContentType(), "body.content_type")
                 ))
                 .flatMap(t -> {
                     String requestId = t.getT1();
@@ -56,12 +54,11 @@ public class ProfileGrpcService {
                     String objectKey = t.getT4();
                     String fileName = t.getT5();
                     String contentType = t.getT6();
-                    long sizeBytes = t.getT7();
 
-                    log.info("[{}][{}] ConfirmAvatarUpload request: actorUserId={}, objectKey={}, contentType={}, sizeBytes={}",
-                            requestId, nodeId, actorUserId, objectKey, contentType, sizeBytes);
+                    log.info("[{}][{}] ConfirmAvatarUpload request: actorUserId={}, objectKey={}, contentType={}",
+                            requestId, nodeId, actorUserId, objectKey, contentType);
 
-                    return profileService.confirmAvatarUpload(actorUserId, objectKey, fileName, contentType, sizeBytes)
+                    return profileService.confirmAvatarUpload(actorUserId, objectKey, fileName, contentType)
                             .doOnSuccess(result -> log.debug("[{}][{}] ConfirmAvatarUpload success: avatarId={}",
                                     requestId, nodeId, result.getId()))
                             .doOnError(error -> log.warn("[{}][{}] ConfirmAvatarUpload failed for actorUserId={}: {}",

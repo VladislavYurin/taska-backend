@@ -13,6 +13,7 @@ import reactor.test.StepVerifier;
 import ru.taska.dto.AvatarDto;
 import ru.taska.entity.User;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 import ru.taska.entity.UserAvatar;
 import ru.taska.entity.UserStatus;
 import ru.taska.exception.DomainException;
@@ -271,7 +272,7 @@ class ProfileServiceImplTest {
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.NOT_FOUND
@@ -279,7 +280,7 @@ class ProfileServiceImplTest {
                     .verify();
 
             Mockito.verify(userRepository).findById(testUserId);
-            Mockito.verify(storageClient, Mockito.never()).validateObjectSizeAndDeleteIfTooLargeAndReturnETag(Mockito.any());
+            Mockito.verify(storageClient, Mockito.never()).validateAndGetUploadedObjectMetadata(Mockito.any());
         }
 
         @Test
@@ -287,13 +288,13 @@ class ProfileServiceImplTest {
         void shouldSaveNewAvatarWhenNoOldAvatar() {
             // Given
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(NEW_OBJECT_KEY)).thenReturn(Mono.empty());
+            Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(NEW_OBJECT_KEY)).thenReturn(Mono.just(new StoredObjectMetadata("checksum", SIZE_BYTES)));
             Mockito.when(userAvatarRepository.findByUserId(testUserId)).thenReturn(Mono.empty());
             Mockito.when(userAvatarRepository.save(Mockito.any(UserAvatar.class))).thenReturn(Mono.just(savedAvatar));
             Mockito.when(storageClient.createPresignedDownloadUrl(NEW_OBJECT_KEY)).thenReturn(Mono.just(URL));
 
             // When & Then
-            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                     .expectNextMatches(avatarDto ->
                             avatarDto.getObjectKey().equals(NEW_OBJECT_KEY) &&
                                     avatarDto.getDownloadUrl().equals(URL) &&
@@ -310,7 +311,7 @@ class ProfileServiceImplTest {
             String oldObjectKey = testAvatar.getObjectKey();
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(NEW_OBJECT_KEY)).thenReturn(Mono.empty());
+            Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(NEW_OBJECT_KEY)).thenReturn(Mono.just(new StoredObjectMetadata("checksum", SIZE_BYTES)));
             Mockito.when(userAvatarRepository.findByUserId(testUserId)).thenReturn(Mono.just(testAvatar));
             Mockito.when(userAvatarRepository.delete(testAvatar)).thenReturn(Mono.empty());
             Mockito.when(userAvatarRepository.save(Mockito.any(UserAvatar.class))).thenReturn(Mono.just(savedAvatar));
@@ -318,7 +319,7 @@ class ProfileServiceImplTest {
             Mockito.when(storageClient.createPresignedDownloadUrl(NEW_OBJECT_KEY)).thenReturn(Mono.just(URL));
 
             // When & Then
-            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                     .expectNextMatches(avatarDto ->
                             avatarDto.getObjectKey().equals(NEW_OBJECT_KEY) &&
                                     avatarDto.getDownloadUrl().equals(URL))
@@ -335,7 +336,7 @@ class ProfileServiceImplTest {
             String oldObjectKey = testAvatar.getObjectKey();
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(NEW_OBJECT_KEY)).thenReturn(Mono.empty());
+            Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(NEW_OBJECT_KEY)).thenReturn(Mono.just(new StoredObjectMetadata("checksum", SIZE_BYTES)));
             Mockito.when(userAvatarRepository.findByUserId(testUserId)).thenReturn(Mono.just(testAvatar));
             Mockito.when(userAvatarRepository.delete(testAvatar)).thenReturn(Mono.empty());
             Mockito.when(userAvatarRepository.save(Mockito.any(UserAvatar.class))).thenReturn(Mono.just(savedAvatar));
@@ -343,7 +344,7 @@ class ProfileServiceImplTest {
             Mockito.when(storageClient.createPresignedDownloadUrl(NEW_OBJECT_KEY)).thenReturn(Mono.just(URL));
 
             // When & Then
-            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                     .expectNextMatches(avatarDto ->
                             avatarDto.getObjectKey().equals(NEW_OBJECT_KEY) &&
                                     avatarDto.getDownloadUrl().equals(URL))
@@ -353,17 +354,17 @@ class ProfileServiceImplTest {
         }
 
         @Test
-        @DisplayName("Should propagate error when validateObjectSizeAndDeleteIfTooLarge fails")
+        @DisplayName("Should propagate error when validateAndGetUploadedObjectMetadata fails")
         void shouldPropagateValidationError() {
             // Given
             DomainException validationError = new DomainException(DomainStatus.OUT_OF_RANGE, "File too large");
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(NEW_OBJECT_KEY))
+            Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(NEW_OBJECT_KEY))
                     .thenReturn(Mono.error(validationError));
 
             // When & Then
-            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, NEW_OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
                                     ((DomainException) error).getStatus() == DomainStatus.OUT_OF_RANGE

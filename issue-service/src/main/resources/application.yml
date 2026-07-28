@@ -47,6 +47,7 @@ issue:
     list-issue-roles: ${ISSUE_LIST_ROLES:ADMIN,MEMBER,VIEWER}
     upload-attachment-roles: ${ISSUE_UPLOAD_ATTACHMENT_ROLES:ADMIN,MEMBER}
     view-attachment-roles: ${ISSUE_VIEW_ATTACHMENT_ROLES:ADMIN,MEMBER,VIEWER}
+    delete-own-attachment-roles: ${ISSUE_DELETE_OWN_ATTACHMENT_ROLES:ADMIN,MEMBER}
     delete-attachment-roles: ${ISSUE_DELETE_ATTACHMENT_ROLES:ADMIN}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}

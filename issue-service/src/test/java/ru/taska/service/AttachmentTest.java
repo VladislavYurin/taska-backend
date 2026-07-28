@@ -26,6 +26,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.service.impl.AttachmentServiceImpl;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -104,7 +105,7 @@ public class AttachmentTest {
                 .thenReturn(Mono.empty());
 
         Mockito.lenient()
-                .when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(Mockito.anyString()))
+                .when(storageClient.validateAndGetUploadedObjectMetadata(Mockito.anyString()))
                 .thenReturn(Mono.empty());
     }
 
@@ -190,8 +191,8 @@ public class AttachmentTest {
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
-        Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(OBJECT_KEY))
-                .thenReturn(Mono.just(CHECKSUM));
+        Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(OBJECT_KEY))
+                .thenReturn(Mono.just(new StoredObjectMetadata(CHECKSUM, SIZE_BYTES)));
         Mockito.when(issueAttachmentRepository.save(Mockito.any(IssueAttachment.class)))
                 .thenReturn(Mono.just(savedAttachment));
         Mockito.when(payloadSerializer.createAttachmentUploadedPayload(savedAttachment))
@@ -205,7 +206,7 @@ public class AttachmentTest {
                 .thenReturn(Mono.just(DOWNLOAD_URL));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .assertNext(result -> {
                     Assertions.assertEquals(savedAttachment, result.issueAttachment());
                     Assertions.assertEquals(DOWNLOAD_URL, result.url());
@@ -217,7 +218,7 @@ public class AttachmentTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles);
         Mockito.verify(storageClient).objectExists(OBJECT_KEY);
-        Mockito.verify(storageClient).validateObjectSizeAndDeleteIfTooLargeAndReturnETag(OBJECT_KEY);
+        Mockito.verify(storageClient).validateAndGetUploadedObjectMetadata(OBJECT_KEY);
         Mockito.verify(issueAttachmentRepository).save(Mockito.any(IssueAttachment.class));
         Mockito.verify(issueHistoryService).saveIssueHistory(
                 REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_UPLOADED, payload);
@@ -234,7 +235,7 @@ public class AttachmentTest {
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(false));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertInstanceOf(DomainException.class, throwable);
                     DomainException exception = (DomainException) throwable;
@@ -254,11 +255,11 @@ public class AttachmentTest {
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
-        Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(OBJECT_KEY))
+        Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(OBJECT_KEY))
                 .thenReturn(Mono.error(validationError));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertInstanceOf(DomainException.class, throwable);
                     DomainException exception = (DomainException) throwable;
@@ -268,7 +269,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(storageClient).objectExists(OBJECT_KEY);
-        Mockito.verify(storageClient).validateObjectSizeAndDeleteIfTooLargeAndReturnETag(OBJECT_KEY);
+        Mockito.verify(storageClient).validateAndGetUploadedObjectMetadata(OBJECT_KEY);
         Mockito.verifyNoInteractions(issueAttachmentRepository);
     }
 
@@ -278,7 +279,7 @@ public class AttachmentTest {
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertInstanceOf(DomainException.class, throwable);
                     DomainException exception = (DomainException) throwable;
@@ -299,7 +300,7 @@ public class AttachmentTest {
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertInstanceOf(DomainException.class, throwable);
                     DomainException exception = (DomainException) throwable;
@@ -487,6 +488,9 @@ public class AttachmentTest {
 
     @Test
     void testDeleteAttachment_ByAuthor() {
+        Set<ProjectRole> deleteOwnRoles = Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER);
+        Mockito.when(issueProperties.allowedRoles().deleteOwnAttachmentRoles()).thenReturn(deleteOwnRoles);
+
         IssueAttachment attachment = IssueAttachment.createNewAttachment(
                 ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
         attachment.setId(ATTACHMENT_ID);
@@ -496,6 +500,9 @@ public class AttachmentTest {
 
         Mockito.when(issueAttachmentRepository.findByIdAndDeletedAtIsNull(ATTACHMENT_ID))
                 .thenReturn(Mono.just(attachment));
+        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
+                .thenReturn(Mono.empty());
         Mockito.when(issueAttachmentRepository.save(Mockito.any(IssueAttachment.class)))
                 .thenReturn(Mono.just(attachment));
         Mockito.when(payloadSerializer.createAttachmentDeletedPayload(attachment, ACTOR_USER_ID))
@@ -512,9 +519,9 @@ public class AttachmentTest {
 
         ArgumentCaptor<IssueAttachment> captor = ArgumentCaptor.forClass(IssueAttachment.class);
         Mockito.verify(issueAttachmentRepository).findByIdAndDeletedAtIsNull(ATTACHMENT_ID);
+        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles);
         Mockito.verify(issueAttachmentRepository).save(captor.capture());
         Assertions.assertNotNull(captor.getValue().getDeletedAt());
-        Mockito.verifyNoInteractions(projectRoleChecker);
     }
 
     @Test

@@ -110,9 +110,6 @@ public class GrpcAttachmentService {
                                 ),
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                         req.getBody().getContentType(), "body.contentType"
-                                ),
-                                GrpcRequestValidators.requirePositiveOrInvalidArgument(
-                                        req.getBody().getSizeBytes(), "body.sizeBytes"
                                 )
                         )
                         .doOnError(StatusRuntimeException.class,
@@ -125,13 +122,12 @@ public class GrpcAttachmentService {
                             String objectKey = t.getT5();
                             String fileName = t.getT6();
                             String contentType = t.getT7();
-                            long sizeBytes = t.getT8();
 
                             log.info("[{}][{}] confirmAttachmentUpload: issueId={}, actorUserId={}, objectKey={}, fileName={}",
                                     requestId, nodeId, issueId, actorUserId, objectKey, fileName);
 
                             return attachmentService.confirmUpload(requestId, nodeId, issueId, actorUserId,
-                                            objectKey, fileName, contentType, sizeBytes)
+                                            objectKey, fileName, contentType)
                                     .doOnNext(attachment ->
                                             log.info("[{}][{}] confirmAttachmentUpload: successfully confirmed, attachmentId={}",
                                                     requestId, nodeId, attachment.issueAttachment().getId())

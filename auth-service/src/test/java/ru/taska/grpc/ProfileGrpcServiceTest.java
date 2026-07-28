@@ -87,7 +87,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("avatar.png")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -111,8 +110,7 @@ class ProfileGrpcServiceTest {
                     ArgumentMatchers.eq(USER_ID),
                     ArgumentMatchers.eq("avatars/test-key.png"),
                     ArgumentMatchers.eq("avatar.png"),
-                    ArgumentMatchers.eq("image/png"),
-                    ArgumentMatchers.eq(1024L)
+                    ArgumentMatchers.eq("image/png")
             )).thenReturn(Mono.just(avatarDto));
 
             var expectedResponse = ru.taska.api.auth.profile.v1.ConfirmAvatarUploadResponse.getDefaultInstance();
@@ -125,7 +123,7 @@ class ProfileGrpcServiceTest {
                     .verifyComplete();
 
             Mockito.verify(profileService).confirmAvatarUpload(
-                    USER_ID, "avatars/test-key.png", "avatar.png", "image/png", 1024L);
+                    USER_ID, "avatars/test-key.png", "avatar.png", "image/png");
         }
 
         @Test
@@ -136,8 +134,7 @@ class ProfileGrpcServiceTest {
                     ArgumentMatchers.any(UUID.class),
                     ArgumentMatchers.anyString(),
                     ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyLong()
+                    ArgumentMatchers.anyString()
             )).thenReturn(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Avatar not found")));
 
             // When & Then
@@ -160,7 +157,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("avatar.png")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -174,7 +170,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
 
         @Test
@@ -188,7 +184,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("avatar.png")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -202,7 +197,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
 
         @Test
@@ -216,7 +211,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("")
                             .setFileName("avatar.png")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -230,7 +224,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
 
         @Test
@@ -244,7 +238,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -258,7 +251,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
 
         @Test
@@ -272,7 +265,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("avatar.png")
                             .setContentType("")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -286,35 +278,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
-        }
-
-        @Test
-        @DisplayName("Should return INVALID_ARGUMENT when size_bytes is zero")
-        void shouldReturnInvalidArgumentWhenSizeBytesIsZero() {
-            // Given
-            ConfirmAvatarUploadRequest invalidRequest = ConfirmAvatarUploadRequest.newBuilder()
-                    .setHeader(validHeader)
-                    .setBody(ConfirmAvatarUploadRequestBody.newBuilder()
-                            .setActorUserId(USER_ID_STR)
-                            .setObjectKey("avatars/test-key.png")
-                            .setFileName("avatar.png")
-                            .setContentType("image/png")
-                            .setSizeBytes(0L)
-                            .build())
-                    .build();
-
-            // When & Then
-            StepVerifier.create(profileGrpcService.confirmAvatarUpload(Mono.just(invalidRequest)))
-                    .expectErrorMatches(error ->
-                            error instanceof StatusRuntimeException &&
-                                    error.getMessage().contains("INVALID_ARGUMENT")
-                    )
-                    .verify();
-
-            Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
-                    ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
 
         @Test
@@ -331,7 +295,6 @@ class ProfileGrpcServiceTest {
                             .setObjectKey("avatars/test-key.png")
                             .setFileName("avatar.png")
                             .setContentType("image/png")
-                            .setSizeBytes(1024L)
                             .build())
                     .build();
 
@@ -345,7 +308,7 @@ class ProfileGrpcServiceTest {
 
             Mockito.verify(profileService, Mockito.never()).confirmAvatarUpload(
                     ArgumentMatchers.any(), ArgumentMatchers.anyString(),
-                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyLong());
+                    ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
         }
     }
 

@@ -22,6 +22,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.AttachmentService;
 import ru.taska.storage.client.StorageClient;
+import ru.taska.storage.dto.StoredObjectMetadata;
 
 import java.time.Instant;
 import java.util.List;
@@ -147,13 +148,13 @@ class AttachmentIT extends AbstractIT {
     @Test
     void confirmUpload_shouldSaveAttachmentAndHistoryAndOutboxEvent() {
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
-        Mockito.when(storageClient.validateObjectSizeAndDeleteIfTooLargeAndReturnETag(OBJECT_KEY))
-                .thenReturn(Mono.just(CHECKSUM));
+        Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(OBJECT_KEY))
+                .thenReturn(Mono.just(new StoredObjectMetadata(CHECKSUM, SIZE_BYTES)));
         Mockito.when(storageClient.createPresignedDownloadUrl(OBJECT_KEY))
                 .thenReturn(Mono.just(DOWNLOAD_URL));
 
         StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, issueId, USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES))
+                        REQUEST_ID, NODE_ID, issueId, USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
                 .assertNext(result -> {
                     Assertions.assertEquals(FILE_NAME, result.issueAttachment().getFileName());
                     Assertions.assertEquals(OBJECT_KEY, result.issueAttachment().getObjectKey());

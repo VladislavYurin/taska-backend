@@ -79,11 +79,6 @@ message ConfirmAvatarUploadRequestBody {
   string content_type = 3;
 
   /**
-   * Размер файла в байтах.
-   */
-  int64 size_bytes = 4;
-
-  /**
    * Идентификатор пользователя, для которого устанавливается аватар.
    */
   string actor_user_id = 5;

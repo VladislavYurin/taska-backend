@@ -9,6 +9,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.config.StorageProperties;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 import software.amazon.awssdk.core.BytesWrapper;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
@@ -127,7 +128,7 @@ public class S3StorageClient implements StorageClient {
     }
 
     @Override
-    public Mono<String> validateObjectSizeAndDeleteIfTooLargeAndReturnETag(String objectKey) {
+    public Mono<StoredObjectMetadata> validateAndGetUploadedObjectMetadata(String objectKey) {
         String bucket = properties.getBucket();
         long maxFileSize = properties.getMaxFileSizeBytes();
 
@@ -150,14 +151,14 @@ public class S3StorageClient implements StorageClient {
                                     log.error("Failed to delete oversized object: bucket={}, objectKey={}: {}", bucket, objectKey, e.getMessage());
                                     return Mono.empty();
                                 })
-                                .then(Mono.<String>error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + size +
+                                .then(Mono.error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + size +
                                         " bytes exceeds maximum allowed size of " + maxFileSize + " bytes")));
                     }
                     String checksum = response.eTag().replace("\"", "");
-                    return Mono.just(checksum);
+                    return Mono.just(new StoredObjectMetadata(checksum, size));
                 })
                 .transform(S3ExceptionHandler.withErrorHandling(
-                        "validateObjectSizeAndDeleteIfTooLarge[" + bucket + "/" + objectKey + "]"));
+                        "validateAndGetUploadedObjectMetadata[" + bucket + "/" + objectKey + "]"));
     }
 
     /**

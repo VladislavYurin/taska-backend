@@ -43,7 +43,6 @@ public interface AttachmentService {
      * @param objectKey   ключ объекта в хранилище.
      * @param fileName    оригинальное имя файла.
      * @param contentType MIME-тип файла.
-     * @param sizeBytes   размер файла в байтах.
      * @return Mono с сохранённым вложением.
      */
     Mono<AttachmentDto> confirmUpload(
@@ -53,8 +52,7 @@ public interface AttachmentService {
             UUID actorUserId,
             String objectKey,
             String fileName,
-            String contentType,
-            long sizeBytes
+            String contentType
     );
 
     /**

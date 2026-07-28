@@ -149,11 +149,6 @@ message ConfirmAttachmentUploadRequestBody {
   string content_type = 3;
 
   /**
-   * Размер файла в байтах.
-   */
-  int64 size_bytes = 4;
-
-  /**
    * Идентификатор пользователя, выполняющего загрузку.
    */
   string actor_user_id = 5;
