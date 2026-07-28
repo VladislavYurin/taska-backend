@@ -72,6 +72,7 @@ message GetProjectRequest {
 
 message GetProjectRequestBody {
   string project_id = 1;
+  string actor_user_id=2;
 }
 
 message ListMyProjectsRequest {

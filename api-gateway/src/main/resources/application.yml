@@ -53,6 +53,11 @@ grpc:
       deadlineDuration: ${NOTIFICATION_GRPC_DEADLINE:3000ms}
 
 
+    project-service:
+      host: ${PROJECT_GRPC_HOST:localhost}
+      port: ${PROJECT_GRPC_PORT:9096}
+      deadlineDuration: ${PROJECT_GRPC_DEADLINE:3000}
+
 logging:
   level:
     ru.taska: ${GATEWAY_LOG_LEVEL_ROOT:INFO}

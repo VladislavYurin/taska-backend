@@ -36,7 +36,7 @@ public class GatewayErrorHandler {
             message = grpcStatus.getDescription() != null ? grpcStatus.getDescription() : code;
             httpStatus = restErrorMapper.mapGrpcCodeToHttpStatus(grpcStatus.getCode());
             log.warn("[{}] gRPC error: {} - {}", requestId, code, message);
-            // http ошибка из BearerTokenExtractor
+        // http ошибка из BearerTokenExtractor
         } else if (error instanceof ResponseStatusException rse) {
             httpStatus = HttpStatus.resolve(rse.getStatusCode().value());
             if (httpStatus == null) {
@@ -45,7 +45,7 @@ public class GatewayErrorHandler {
             code = httpStatus.name();
             message = rse.getReason() != null ? rse.getReason() : httpStatus.getReasonPhrase();
             log.warn("[{}] Request error: {} - {}", requestId, code, message);
-            // непредвиденная ошибка
+        // непредвиденная ошибка
         } else {
             httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
             code = "INTERNAL";
