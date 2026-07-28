@@ -22,7 +22,16 @@ public final class GrpcExceptionHandler {
 
     public static <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
         return mono -> mono
-                .doOnError(e -> log.error("{}: ERROR TYPE: {}", operationName, e.getClass().getName(), e))
+                // 0. DomainException
+                .doOnError(DomainException.class, e ->
+                        log.warn("{}: Domain error: status={}, message={}",
+                                operationName, e.getStatus(), e.getMessage())
+                )
+                .doOnError(e -> {
+                    if (!(e instanceof DomainException)) {
+                        log.error("{}: ERROR TYPE: {}", operationName, e.getClass().getName(), e);
+                    }
+                })
                 // 1. Database ошибки → UNAVAILABLE
                 .onErrorMap(e -> e instanceof R2dbcException || e instanceof TransactionException,
                         e -> {
