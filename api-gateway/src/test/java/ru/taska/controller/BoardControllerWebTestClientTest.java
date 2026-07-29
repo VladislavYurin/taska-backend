@@ -104,16 +104,16 @@ class BoardControllerWebTestClientTest {
 
         // 2. Мокаем Issue Service (возвращаем 1 задачу в статусе TODO)
         var issue = new BoardIssueDto();
-        issue.setId(UUID.randomUUID()); // Зависит от того, как OpenAPI сгенерировал поле id (String или UUID)
+        issue.setId(UUID.randomUUID());
         issue.setIssueKey("TAS-1");
         issue.setStatusKey("TODO");
 
         Mockito.when(issueClient.listIssuesForBoard(
                         Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_TYPE.name()),
-                        Mockito.isNull(),
-                        Mockito.isNull(),
-                        Mockito.isNull(),
+                        Mockito.any(), // assigneeId
+                        Mockito.any(), // labelId
+                        Mockito.any(), // includeDone
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(List.of(issue)));
 
@@ -141,7 +141,14 @@ class BoardControllerWebTestClientTest {
                 .jsonPath("$.columns[1].issues.length()").isEqualTo(0);
 
         Mockito.verify(workflowClient).getWorkflowForProject(Mockito.eq(PROJECT_ID), Mockito.eq(ISSUE_TYPE), Mockito.any());
-        Mockito.verify(issueClient).listIssuesForBoard(Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_TYPE.name()), Mockito.isNull(), Mockito.isNull(), Mockito.isNull(), Mockito.any());
+
+        Mockito.verify(issueClient).listIssuesForBoard(
+                Mockito.eq(PROJECT_ID.toString()),
+                Mockito.eq(ISSUE_TYPE.name()),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any());
     }
 
     @Test
@@ -172,9 +179,9 @@ class BoardControllerWebTestClientTest {
         Mockito.when(issueClient.listIssuesForBoard(
                         Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_TYPE.name()),
-                        Mockito.isNull(),
-                        Mockito.isNull(),
-                        Mockito.isNull(),
+                        Mockito.any(), // assigneeId
+                        Mockito.any(), // labelId
+                        Mockito.any(), // includeDone
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(List.of(issue)));
 
