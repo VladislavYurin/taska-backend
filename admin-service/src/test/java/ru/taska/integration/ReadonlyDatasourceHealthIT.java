@@ -7,9 +7,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.ReactiveHealthIndicator;
 import org.springframework.boot.health.contributor.Status;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class ReadonlyDatasourceHealthIT extends AbstractIT {
 
     @Autowired

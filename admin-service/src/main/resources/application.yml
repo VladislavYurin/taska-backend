@@ -6,13 +6,17 @@ spring:
     server:
       port: ${ADMIN_GRPC_SERVER_PORT:9097}
   r2dbc:
-    url: ${ADMIN_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5438/taska_admin_db}
+    url: ${ADMIN_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5438/admin_db}
     username: ${ADMIN_SPRING_R2DBC_USERNAME:taska}
     password: ${ADMIN_SPRING_R2DBC_PASSWORD:taska}
+    pool:
+      initial-size: ${ADMIN_R2DBC_POOL_INITIAL_SIZE:2}
+      max-size: ${ADMIN_R2DBC_POOL_MAX_SIZE:10}
+      max-idle-time: ${ADMIN_R2DBC_POOL_MAX_IDLE_TIME:10m}
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
-    url: ${ADMIN_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5438/taska_admin_db}
+    url: ${ADMIN_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5438/admin_db}
     user: ${ADMIN_SPRING_LIQUIBASE_USERNAME:taska}
     password: ${ADMIN_SPRING_LIQUIBASE_PASSWORD:taska}
 
