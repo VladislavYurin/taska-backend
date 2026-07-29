@@ -24,7 +24,15 @@ import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
-import ru.taska.domain.dto.*;
+import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueResponseDto;
+import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.AssignIssueRequestDto;
+import ru.taska.domain.dto.UpdateIssueResponseDto;
+import ru.taska.domain.dto.UpdateIssueRequestDto;
+import ru.taska.domain.dto.TransitionIssueRequestDto;
+import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.mapper.IssueMapper;
 
 import java.util.List;
