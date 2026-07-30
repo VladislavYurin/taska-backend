@@ -67,7 +67,7 @@ admin:
         max-idle-time-minutes: ${ADMIN_RO_NOTIFICATION_POOL_MAX_IDLE_TIME_MINUTES:10}
     # admin (self): read-only подключение к собственной БД admin-service.
     admin:
-      url: ${ADMIN_RO_ADMIN_R2DBC_URL:r2dbc:postgresql://localhost:5438/taska_admin_db}
+      url: ${ADMIN_RO_ADMIN_R2DBC_URL:r2dbc:postgresql://localhost:5438/admin_db}
       username: ${ADMIN_RO_ADMIN_R2DBC_USERNAME:taska}
       password: ${ADMIN_RO_ADMIN_R2DBC_PASSWORD:taska}
       pool:
