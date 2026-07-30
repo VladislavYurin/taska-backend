@@ -14,7 +14,6 @@ import ru.taska.service.OutboxEventService;
 import ru.taska.storage.dto.StoredObjectMetadata;
 import ru.taska.util.PayloadSerializer;
 
-import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -62,21 +61,19 @@ public class AttachmentTransactionExecutor {
             UUID actorUserId,
             IssueAttachment attachment
     ) {
-        var deletedAt = Instant.now();
-        return issueAttachmentRepository.softDelete(attachment.getId(), deletedAt)
-                .flatMap(rowsUpdated -> {
-                    if (rowsUpdated == 0) {
-                        log.warn("[{}][{}] Attachment already deleted: attachmentId={}",
-                                requestId, nodeId, attachment.getId());
-                        return Mono.empty();
-                    }
-                    attachment.setDeletedAt(deletedAt);
-                    var payload = payloadSerializer.createAttachmentDeletedPayload(attachment, actorUserId);
-                    return issueHistoryService.saveIssueHistory(requestId, nodeId, attachment.getIssueId(),
+        return issueAttachmentRepository.softDelete(attachment.getId())
+                .flatMap(deleted -> {
+                    var payload = payloadSerializer.createAttachmentDeletedPayload(deleted, actorUserId);
+                    return issueHistoryService.saveIssueHistory(requestId, nodeId, deleted.getIssueId(),
                                     actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, attachment.getIssueId(),
+                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, deleted.getIssueId(),
                                     EventType.ATTACHMENT_DELETED, payload));
                 })
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[{}][{}] Attachment already deleted (race condition): attachmentId={}",
+                            requestId, nodeId, attachment.getId());
+                    return Mono.empty();
+                }))
                 .then();
     }
 }

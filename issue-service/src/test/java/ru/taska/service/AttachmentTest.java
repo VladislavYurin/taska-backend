@@ -507,9 +507,14 @@ public class AttachmentTest {
         Mockito.when(issueRepository.findProjectIdByActiveIssueId(ISSUE_ID)).thenReturn(Mono.just(PROJECT_ID));
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
                 .thenReturn(Mono.empty());
-        Mockito.when(issueAttachmentRepository.softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class)))
-                .thenReturn(Mono.just(1L));
-        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(attachment), Mockito.eq(ACTOR_USER_ID)))
+        IssueAttachment deletedAttachment = IssueAttachment.createNewAttachment(
+                ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
+        deletedAttachment.setId(ATTACHMENT_ID);
+        deletedAttachment.setDeletedAt(Instant.now());
+
+        Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
+                .thenReturn(Mono.just(deletedAttachment));
+        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID)))
                 .thenReturn(payload);
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
@@ -523,8 +528,7 @@ public class AttachmentTest {
 
         Mockito.verify(issueAttachmentRepository).findByIdAndDeletedAtIsNull(ATTACHMENT_ID);
         Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles);
-        Mockito.verify(issueAttachmentRepository).softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class));
-        Assertions.assertNotNull(attachment.getDeletedAt());
+        Mockito.verify(issueAttachmentRepository).softDelete(ATTACHMENT_ID);
     }
 
     @Test
@@ -544,9 +548,14 @@ public class AttachmentTest {
         Mockito.when(issueRepository.findProjectIdByActiveIssueId(ISSUE_ID)).thenReturn(Mono.just(PROJECT_ID));
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles))
                 .thenReturn(Mono.empty());
-        Mockito.when(issueAttachmentRepository.softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class)))
-                .thenReturn(Mono.just(1L));
-        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(attachment), Mockito.eq(ACTOR_USER_ID)))
+        IssueAttachment deletedAttachment = IssueAttachment.createNewAttachment(
+                ISSUE_ID, OTHER_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
+        deletedAttachment.setId(ATTACHMENT_ID);
+        deletedAttachment.setDeletedAt(Instant.now());
+
+        Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
+                .thenReturn(Mono.just(deletedAttachment));
+        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID)))
                 .thenReturn(payload);
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
@@ -559,8 +568,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
-        Mockito.verify(issueAttachmentRepository).softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class));
-        Assertions.assertNotNull(attachment.getDeletedAt());
+        Mockito.verify(issueAttachmentRepository).softDelete(ATTACHMENT_ID);
     }
 
     @Test
@@ -588,7 +596,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
-        Mockito.verify(issueAttachmentRepository, Mockito.never()).softDelete(Mockito.any(), Mockito.any());
+        Mockito.verify(issueAttachmentRepository, Mockito.never()).softDelete(Mockito.any());
     }
 
     @Test
@@ -606,13 +614,13 @@ public class AttachmentTest {
         Mockito.when(issueRepository.findProjectIdByActiveIssueId(ISSUE_ID)).thenReturn(Mono.just(PROJECT_ID));
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
                 .thenReturn(Mono.empty());
-        Mockito.when(issueAttachmentRepository.softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class)))
-                .thenReturn(Mono.just(0L));
+        Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))
                 .verifyComplete();
 
-        Mockito.verify(issueAttachmentRepository).softDelete(Mockito.eq(ATTACHMENT_ID), Mockito.any(Instant.class));
+        Mockito.verify(issueAttachmentRepository).softDelete(ATTACHMENT_ID);
         Mockito.verifyNoInteractions(issueHistoryService, outboxEventService);
     }
 

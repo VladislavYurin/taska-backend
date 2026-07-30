@@ -6,7 +6,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueAttachment;
 
-import java.time.Instant;
 import java.util.UUID;
 
 public interface IssueAttachmentRepository extends ReactiveCrudRepository<IssueAttachment, UUID> {
@@ -19,11 +18,11 @@ public interface IssueAttachmentRepository extends ReactiveCrudRepository<IssueA
      * Атомарно выполняет мягкое удаление вложения.
      * Устанавливает deleted_at только если запись ещё не удалена.
      *
-     * @param id        идентификатор вложения.
-     * @param deletedAt временная метка удаления.
-     * @return Mono с количеством обновлённых строк (1 — удалено, 0 — уже было удалено).
+     * @param id идентификатор вложения.
+     * @return Mono с обновлённой сущностью или пустой Mono, если запись уже была удалена.
      */
-    @Query("UPDATE taska.issue_attachments SET deleted_at = :deletedAt " +
-            "WHERE id = :id AND deleted_at IS NULL")
-    Mono<Long> softDelete(UUID id, Instant deletedAt);
+    @Query("UPDATE taska.issue_attachments SET deleted_at = NOW() " +
+            "WHERE id = :id AND deleted_at IS NULL " +
+            "RETURNING *")
+    Mono<IssueAttachment> softDelete(UUID id);
 }
