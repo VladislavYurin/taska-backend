@@ -39,12 +39,6 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     @Override
     @Transactional
-    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, Issue issue, EventType type, JsonNode payload) {
-        return saveOutboxEvent(requestId, nodeId, issue.getId(), type, payload);
-    }
-
-    @Override
-    @Transactional
     public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, UUID issueId, EventType type, JsonNode payload) {
         return outboxEventRepository.save(
                 OutboxEvent.builder()

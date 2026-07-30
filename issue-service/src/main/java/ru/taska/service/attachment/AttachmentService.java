@@ -1,4 +1,4 @@
-package ru.taska.service;
+package ru.taska.service.attachment;
 
 import reactor.core.publisher.Mono;
 import ru.taska.domain.AttachmentDownloadUrlDto;

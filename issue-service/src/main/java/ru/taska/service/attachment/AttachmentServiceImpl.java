@@ -1,31 +1,22 @@
-package ru.taska.service.impl;
+package ru.taska.service.attachment;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.AttachmentDownloadUrlDto;
 import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.Issue;
 import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
-import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.repository.IssueRepository;
-import ru.taska.service.AttachmentService;
-import ru.taska.service.IssueHistoryService;
-import ru.taska.service.OutboxEventService;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
-import ru.taska.util.PayloadSerializer;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -40,9 +31,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     private final IssueAttachmentRepository issueAttachmentRepository;
     private final ProjectRoleChecker projectRoleChecker;
     private final StorageClient storageClient;
-    private final IssueHistoryService issueHistoryService;
-    private final OutboxEventService outboxEventService;
-    private final PayloadSerializer payloadSerializer;
+    private final AttachmentTransactionExecutor transactionExecutor;
 
     @Override
     public Mono<PresignedUploadResult> createUploadUrl(
@@ -59,7 +48,6 @@ public class AttachmentServiceImpl implements AttachmentService {
     }
 
     @Override
-    @Transactional
     public Mono<AttachmentDto> confirmUpload(
             String requestId,
             String nodeId,
@@ -73,19 +61,10 @@ public class AttachmentServiceImpl implements AttachmentService {
                 issueProperties.allowedRoles().uploadAttachmentRoles())
                 .then(checkObjectExistsInStorage(requestId, nodeId, objectKey))
                 .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
-                .flatMap(metadata -> issueAttachmentRepository.save(
-                        IssueAttachment.createNewAttachment(issueId, actorUserId, objectKey, fileName,
-                                contentType, metadata.sizeBytes(), metadata.checksum())
-                ))
-                .flatMap(savedAttachment -> {
-                    var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment);
-                    return issueHistoryService.saveIssueHistory(requestId, nodeId, issueId, actorUserId,
-                                    IssueEventType.ATTACHMENT_UPLOADED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issueId,
-                                    EventType.ATTACHMENT_ADDED, payload))
-                            .then(storageClient.createPresignedDownloadUrl(savedAttachment.getObjectKey())
-                                    .map(url -> new AttachmentDto(savedAttachment, url)));
-                });
+                .flatMap(metadata -> transactionExecutor.saveAttachment(
+                        requestId, nodeId, issueId, actorUserId, objectKey, fileName, contentType, metadata))
+                .flatMap(savedAttachment -> storageClient.createPresignedDownloadUrl(savedAttachment.getObjectKey())
+                        .map(url -> new AttachmentDto(savedAttachment, url)));
     }
 
     @Override
@@ -97,7 +76,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     ) {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().viewAttachmentRoles())
-                .then(issueAttachmentRepository.findByIssueIdAndDeletedAtIsNull(issueId)
+                .then(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
                         .flatMap(attachment ->
                                 storageClient.createPresignedDownloadUrl(attachment.getObjectKey())
                                         .map(url -> new AttachmentDto(attachment, url)))
@@ -119,7 +98,6 @@ public class AttachmentServiceImpl implements AttachmentService {
     }
 
     @Override
-    @Transactional
     public Mono<Void> deleteAttachment(
             String requestId,
             String nodeId,
@@ -131,20 +109,14 @@ public class AttachmentServiceImpl implements AttachmentService {
                     var roles = attachment.getUploadedBy().equals(actorUserId)
                             ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
                             : issueProperties.allowedRoles().deleteAttachmentRoles();
-                    return findActiveIssue(requestId, nodeId, attachment.getIssueId())
-                            .flatMap(issue -> projectRoleChecker.checkProjectRole(
-                                    requestId, nodeId, issue.getProjectId(), actorUserId, roles
+                    return findActiveIssueProjectId(requestId, nodeId, attachment.getIssueId())
+                            .flatMap(projectId -> projectRoleChecker.checkProjectRole(
+                                    requestId, nodeId, projectId, actorUserId, roles
                             ))
                             .thenReturn(attachment);
                 })
-                .flatMap(attachment -> softDelete(attachment)
-                        .then(Mono.defer(() -> {
-                            var payload = payloadSerializer.createAttachmentDeletedPayload(attachment, actorUserId);
-                            return issueHistoryService.saveIssueHistory(requestId, nodeId, attachment.getIssueId(),
-                                            actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
-                                    .then(outboxEventService.saveOutboxEvent(requestId, nodeId, attachment.getIssueId(),
-                                            EventType.ATTACHMENT_DELETED, payload));
-                        })).then());
+                .flatMap(attachment -> transactionExecutor.deleteAttachment(
+                        requestId, nodeId, actorUserId, attachment));
     }
 
     /**
@@ -161,19 +133,6 @@ public class AttachmentServiceImpl implements AttachmentService {
                     log.warn("[{}][{}] Attachment not found: attachmentId={}", requestId, nodeId, attachmentId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Attachment not found"));
                 }));
-    }
-
-    /**
-     * Выполняет мягкое удаление вложения.
-     *
-     * @param attachment вложение для удаления.
-     * @return Mono<Void> сигнализирующий о завершении операции.
-     */
-    private Mono<Void> softDelete(IssueAttachment attachment) {
-        return Mono.defer(() -> {
-            attachment.setDeletedAt(Instant.now());
-            return issueAttachmentRepository.save(attachment).then();
-        });
     }
 
     /**
@@ -208,24 +167,24 @@ public class AttachmentServiceImpl implements AttachmentService {
     private Mono<Void> checkUserHasRoleForIssue(
             String requestId, String nodeId, UUID issueId, UUID actorUserId,
             Set<ProjectRole> allowedRoles) {
-        return findActiveIssue(requestId, nodeId, issueId)
-                .flatMap(issue -> projectRoleChecker.checkProjectRole(
-                        requestId, nodeId, issue.getProjectId(), actorUserId,
+        return findActiveIssueProjectId(requestId, nodeId, issueId)
+                .flatMap(projectId -> projectRoleChecker.checkProjectRole(
+                        requestId, nodeId, projectId, actorUserId,
                         allowedRoles
                 ))
                 .then();
     }
 
     /**
-     * Находит активную задачу по идентификатору.
+     * Находит projectId активной задачи по идентификатору.
      *
      * @param requestId идентификатор запроса.
      * @param nodeId    идентификатор узла.
      * @param issueId   идентификатор задачи.
-     * @return Mono с найденной задачей или ошибка NOT_FOUND.
+     * @return Mono с projectId найденной задачи или ошибка NOT_FOUND.
      */
-    private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {
-        return issueRepository.findActiveById(issueId)
+    private Mono<UUID> findActiveIssueProjectId(String requestId, String nodeId, UUID issueId) {
+        return issueRepository.findProjectIdByActiveIssueId(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue not found: issueId={}", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));

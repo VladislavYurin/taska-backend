@@ -169,7 +169,7 @@ public class IssueServiceImpl implements IssueService {
                                 return issueHistoryService.saveIssueHistory(
                                                 requestId, nodeId, assignedIssue, actorUserId, IssueEventType.ASSIGNED, payload)
                                         .then(outboxEventService.saveOutboxEvent(
-                                                requestId, nodeId, assignedIssue, EventType.ISSUE_ASSIGNED, payload))
+                                                requestId, nodeId, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
                                         .then(Mono.fromRunnable(() ->
                                                 log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
                                                         requestId, nodeId, assigneeId, issueId)))
@@ -209,7 +209,7 @@ public class IssueServiceImpl implements IssueService {
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
 
                     return issueRepository.save(updatingIssue)
-                            .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, savedIssue,
+                            .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, savedIssue.getId(),
                                             EventType.ISSUE_UPDATED, payload)
                                     .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue, actorUserId, IssueEventType.UPDATED, payload))
                                     .then(Mono.fromRunnable(() ->
@@ -242,7 +242,7 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(deletedIssue -> {
                     JsonNode payload = payloadSerializer.createIssueDeletedPayload(IssueEventType.DELETED, deletedIssue.getDeletedAt(), actorUserId, deletedIssue.getAssigneeId());
                     return issueHistoryService.saveIssueHistory(requestId, nodeId, deletedIssue, actorUserId, IssueEventType.DELETED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, deletedIssue,
+                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, deletedIssue.getId(),
                                     EventType.ISSUE_DELETED, payload))
                             .then(Mono.fromRunnable(() ->
                                     log.debug("[{}][{}] Issue with id: {} successfully soft-deleted by user with id: {}",

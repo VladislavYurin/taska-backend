@@ -20,7 +20,7 @@ import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
-import ru.taska.service.AttachmentService;
+import ru.taska.service.attachment.AttachmentService;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.StoredObjectMetadata;
 
@@ -135,7 +135,7 @@ class AttachmentIT extends AbstractIT {
         attachmentRepository.save(deleted).block();
 
         List<IssueAttachment> result = attachmentRepository
-                .findByIssueIdAndDeletedAtIsNull(issueId)
+                .findAllByIssueIdAndDeletedAtIsNull(issueId)
                 .collectList()
                 .block();
 
@@ -165,7 +165,7 @@ class AttachmentIT extends AbstractIT {
                 .verifyComplete();
 
         List<IssueAttachment> attachments = attachmentRepository
-                .findByIssueIdAndDeletedAtIsNull(issueId).collectList().block();
+                .findAllByIssueIdAndDeletedAtIsNull(issueId).collectList().block();
         Assertions.assertEquals(1, attachments.size());
         Assertions.assertEquals(FILE_NAME, attachments.get(0).getFileName());
 
@@ -183,7 +183,7 @@ class AttachmentIT extends AbstractIT {
                 .verifyComplete();
 
         List<IssueAttachment> active = attachmentRepository
-                .findByIssueIdAndDeletedAtIsNull(issueId).collectList().block();
+                .findAllByIssueIdAndDeletedAtIsNull(issueId).collectList().block();
         Assertions.assertTrue(active.isEmpty());
 
         IssueAttachment softDeleted = attachmentRepository.findById(attachmentId).block();

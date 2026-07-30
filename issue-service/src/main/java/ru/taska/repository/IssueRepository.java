@@ -13,6 +13,9 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
     @Query("SELECT * FROM taska.issues WHERE id = :id AND deleted_at IS NULL")
     Mono<Issue> findActiveById(@Param("id") UUID id);
 
+    @Query("SELECT project_id FROM taska.issues WHERE id = :id AND deleted_at IS NULL")
+    Mono<UUID> findProjectIdByActiveIssueId(@Param("id") UUID id);
+
     /**
      * * Находит только активные задачи по айди и блокирует задачу до сохранения.
      *

@@ -20,7 +20,7 @@ import ru.taska.api.issue.attachment.v1.ListAttachmentsRequest;
 import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.AttachmentMapper;
-import ru.taska.service.AttachmentService;
+import ru.taska.service.attachment.AttachmentService;
 import validator.GrpcRequestValidators;
 
 import java.util.UUID;

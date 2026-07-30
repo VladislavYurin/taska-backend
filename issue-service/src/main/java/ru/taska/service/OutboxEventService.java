@@ -22,17 +22,6 @@ public interface OutboxEventService {
     Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, Issue issue);
 
     /**
-     * Создает {@link OutboxEvent} и сохраняет в outbox сообщение при изменении или удалении задачи.
-     *
-     * @param requestId айди запроса
-     * @param nodeId    айди узла
-     * @param issue     измененная задача
-     * @param payload   изменившиеся данные в формате {@link JsonNode}
-     * @return Mono<{@link OutboxEvent}> сохраненное событие
-     */
-    Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, Issue issue, EventType type, JsonNode payload);
-
-    /**
      * Создает {@link OutboxEvent} и сохраняет в outbox сообщение по идентификатору задачи.
      *
      * @param requestId айди запроса
