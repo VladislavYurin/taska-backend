@@ -116,7 +116,7 @@ class ProfileServiceImplIT extends AbstractIT {
         // Given: загружаем первый файл в S3 и подтверждаем аватар
         String oldObjectKey = uploadFileToS3(FILE_CONTENT);
         AvatarDto firstAvatar = profileService.confirmAvatarUpload(
-                userId, oldObjectKey, "old-avatar.png", CONTENT_TYPE, FILE_CONTENT.length
+                userId, oldObjectKey, "old-avatar.png", CONTENT_TYPE
         ).block();
 
         assertThat(firstAvatar).isNotNull();
@@ -128,7 +128,7 @@ class ProfileServiceImplIT extends AbstractIT {
 
         // When: подтверждаем новый аватар (замена)
         AvatarDto replacedAvatar = profileService.confirmAvatarUpload(
-                userId, newObjectKey, "new-avatar.png", CONTENT_TYPE, newContent.length
+                userId, newObjectKey, "new-avatar.png", CONTENT_TYPE
         ).block();
 
         // Then: новый аватар сохранён в БД
@@ -164,7 +164,7 @@ class ProfileServiceImplIT extends AbstractIT {
 
         // 2. Подтверждаем загрузку
         AvatarDto confirmed = profileService.confirmAvatarUpload(
-                userId, uploadResult.objectKey(), FILE_NAME, CONTENT_TYPE, FILE_CONTENT.length
+                userId, uploadResult.objectKey(), FILE_NAME, CONTENT_TYPE
         ).block();
 
         assertThat(confirmed).isNotNull();
@@ -206,7 +206,7 @@ class ProfileServiceImplIT extends AbstractIT {
 
         // When & Then: подтверждение должно вернуть ошибку OUT_OF_RANGE
         StepVerifier.create(profileService.confirmAvatarUpload(
-                        userId, objectKey, "big-avatar.png", CONTENT_TYPE, oversizedContent.length))
+                        userId, objectKey, "big-avatar.png", CONTENT_TYPE))
                 .expectErrorSatisfies(error -> {
                     assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
@@ -229,7 +229,7 @@ class ProfileServiceImplIT extends AbstractIT {
 
         // When & Then: подтверждение должно вернуть ошибку
         StepVerifier.create(profileService.confirmAvatarUpload(
-                        userId, nonExistentKey, "ghost.png", CONTENT_TYPE, FILE_CONTENT.length))
+                        userId, nonExistentKey, "ghost.png", CONTENT_TYPE))
                 .expectError()
                 .verify();
 

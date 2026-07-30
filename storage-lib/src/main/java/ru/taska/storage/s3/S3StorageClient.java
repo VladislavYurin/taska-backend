@@ -9,6 +9,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.config.StorageProperties;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 import software.amazon.awssdk.core.BytesWrapper;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
@@ -35,14 +36,7 @@ public class S3StorageClient implements StorageClient {
 
     @Override
     public Mono<String> putObject(InputStream data, String contentType, long contentLength) {
-        if (!properties.getAllowedContentTypes().contains(contentType)) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Content type not allowed: " + contentType));
-        }
-
-        if (contentLength > properties.getMaxFileSizeBytes()) {
-            return Mono.error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + contentLength +
-                    " bytes exceeds maximum allowed size of " + properties.getMaxFileSizeBytes() + " bytes"));
-        }
+        validateFileParams(contentType, contentLength);
 
         String bucket = properties.getBucket();
         String objectKey = UUID.randomUUID().toString();
@@ -92,14 +86,7 @@ public class S3StorageClient implements StorageClient {
 
     @Override
     public Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes) {
-        if (!properties.getAllowedContentTypes().contains(contentType)) {
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Content type not allowed: " + contentType));
-        }
-
-        if (sizeBytes > properties.getMaxFileSizeBytes()) {
-            return Mono.error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + sizeBytes +
-                    " bytes exceeds maximum allowed size of " + properties.getMaxFileSizeBytes() + " bytes"));
-        }
+        validateFileParams(contentType, sizeBytes);
 
         String bucket = properties.getBucket();
         String objectKey = UUID.randomUUID().toString();
@@ -141,7 +128,7 @@ public class S3StorageClient implements StorageClient {
     }
 
     @Override
-    public Mono<Void> validateObjectSizeAndDeleteIfTooLarge(String objectKey) {
+    public Mono<StoredObjectMetadata> validateAndGetUploadedObjectMetadata(String objectKey) {
         String bucket = properties.getBucket();
         long maxFileSize = properties.getMaxFileSizeBytes();
 
@@ -164,13 +151,32 @@ public class S3StorageClient implements StorageClient {
                                     log.error("Failed to delete oversized object: bucket={}, objectKey={}: {}", bucket, objectKey, e.getMessage());
                                     return Mono.empty();
                                 })
-                                .then(Mono.<Void>error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + size +
+                                .then(Mono.error(new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + size +
                                         " bytes exceeds maximum allowed size of " + maxFileSize + " bytes")));
                     }
-                    return Mono.empty();
+                    String checksum = response.eTag().replace("\"", "");
+                    return Mono.just(new StoredObjectMetadata(checksum, size));
                 })
                 .transform(S3ExceptionHandler.withErrorHandling(
-                        "validateObjectSizeAndDeleteIfTooLarge[" + bucket + "/" + objectKey + "]"));
+                        "validateAndGetUploadedObjectMetadata[" + bucket + "/" + objectKey + "]"));
+    }
+
+    /**
+     * Валидирует MIME-тип и размер файла.
+     *
+     * @throws DomainException если тип не разрешён или размер вне допустимого диапазона.
+     */
+    private void validateFileParams(String contentType, long sizeBytes) {
+        if (!properties.getAllowedContentTypes().contains(contentType)) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Content type not allowed: " + contentType);
+        }
+        if (sizeBytes <= 0) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "File size must be positive, got: " + sizeBytes);
+        }
+        if (sizeBytes > properties.getMaxFileSizeBytes()) {
+            throw new DomainException(DomainStatus.OUT_OF_RANGE, "File size " + sizeBytes +
+                    " bytes exceeds maximum allowed size of " + properties.getMaxFileSizeBytes() + " bytes");
+        }
     }
 
     private Mono<Void> deleteObjectRaw(String objectKey, String bucket) {

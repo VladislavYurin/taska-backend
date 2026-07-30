@@ -8,5 +8,7 @@ public enum IssueEventType {
     UPDATED,
     ASSIGNED,
     TRANSITIONED,
-    DELETED
+    DELETED,
+    ATTACHMENT_UPLOADED,
+    ATTACHMENT_DELETED
 }

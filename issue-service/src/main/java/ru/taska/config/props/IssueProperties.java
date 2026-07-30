@@ -22,7 +22,11 @@ public record IssueProperties(
             Set<ProjectRole> deleteIssueRoles,
             Set<ProjectRole> issueTransitionRoles,
             Set<ProjectRole> getIssueRoles,
-            Set<ProjectRole> listIssueRoles
+            Set<ProjectRole> listIssueRoles,
+            Set<ProjectRole> uploadAttachmentRoles,
+            Set<ProjectRole> viewAttachmentRoles,
+            Set<ProjectRole> deleteOwnAttachmentRoles,
+            Set<ProjectRole> deleteAttachmentRoles
     ) {
     }
 

@@ -45,6 +45,10 @@ issue:
     issue-transition-roles: ${ISSUE_TRANSITION_ROLES:ADMIN,MEMBER}
     get-issue-roles: ${ISSUE_GET_ROLES:ADMIN,MEMBER,VIEWER}
     list-issue-roles: ${ISSUE_LIST_ROLES:ADMIN,MEMBER,VIEWER}
+    upload-attachment-roles: ${ISSUE_UPLOAD_ATTACHMENT_ROLES:ADMIN,MEMBER}
+    view-attachment-roles: ${ISSUE_VIEW_ATTACHMENT_ROLES:ADMIN,MEMBER,VIEWER}
+    delete-own-attachment-roles: ${ISSUE_DELETE_OWN_ATTACHMENT_ROLES:ADMIN,MEMBER}
+    delete-attachment-roles: ${ISSUE_DELETE_ATTACHMENT_ROLES:ADMIN}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
   retry:
@@ -85,3 +89,27 @@ logging:
     ru.taska: ${ISSUE_LOG_LEVEL_ROOT:INFO}
     liquibase: ${ISSUE_LOG_LEVEL_LIQUIBASE:INFO}
     org.apache.kafka: ${ISSUE_LOG_LEVEL_KAFKA:WARN}
+
+storage:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  public-url: ${MINIO_PUBLIC_URL:http://127.0.0.1:9000}
+  access-key: ${MINIO_ROOT_USER:minioadmin}
+  secret-key: ${MINIO_ROOT_PASSWORD:minioadmin}
+  region: ${MINIO_REGION:us-east-1}
+  bucket: ${MINIO_BUCKET_ATTACHMENTS:taska-attachments}
+  presigned-url-ttl: ${MINIO_PRESIGNED_URL_TTL:15m}
+  max-file-size-bytes: 2097152 # 2 MB
+  allowed-content-types:
+    - image/jpeg
+    - image/png
+    - image/webp
+    - application/pdf
+    - text/plain
+    - text/csv
+    - text/markdown
+    - text/html
+    - application/json
+    - application/xml
+    - text/xml
+    - application/x-yaml
+    - application/zip

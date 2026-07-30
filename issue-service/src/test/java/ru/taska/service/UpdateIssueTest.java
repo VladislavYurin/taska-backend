@@ -59,7 +59,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.when(issueRepository.save(Mockito.any(Issue.class))).thenAnswer(inv -> Mono.just((Issue) inv.getArgument(0)));
 
         Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
-                        Mockito.any(Issue.class), Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class)))
+                        Mockito.eq(ISSUE_ID), Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class)))
                 .thenReturn(Mono.empty());
         Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
                         Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.UPDATED), Mockito.any(JsonNode.class)))
@@ -82,7 +82,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID),
                 Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority));
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
-        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(ISSUE_ID),
                 Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class));
         Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.UPDATED), Mockito.any(JsonNode.class));

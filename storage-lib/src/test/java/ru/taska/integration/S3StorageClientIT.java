@@ -46,7 +46,7 @@ class S3StorageClientIT extends AbstractIT {
         ).join();
 
         assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(objectKey).block())
+                .isThrownBy(() -> storageClient.validateAndGetUploadedObjectMetadata(objectKey).block())
                 .satisfies(ex -> assertThat(ex.getStatus()).isEqualTo(DomainStatus.OUT_OF_RANGE));
 
         assertThat(storageClient.objectExists(objectKey).block()).isFalse();
@@ -59,13 +59,13 @@ class S3StorageClientIT extends AbstractIT {
                 new ByteArrayInputStream(content), "image/jpeg", content.length).block();
 
         assertThatNoException()
-                .isThrownBy(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(objectKey).block());
+                .isThrownBy(() -> storageClient.validateAndGetUploadedObjectMetadata(objectKey).block());
 
         assertThat(storageClient.objectExists(objectKey).block()).isTrue();
     }
 
     @Test
-    void validateObjectSizeAndDeleteIfTooLarge_throwsOutOfRangeWhenDeletionFails() {
+    void validateObjectSizeAndDeleteIfTooLarge_AndReturnETag_throwsOutOfRangeWhenDeletionFails() {
         String objectKey = UUID.randomUUID().toString();
         byte[] content = new byte[120]; // превышает лимит в 100 байт
 
@@ -83,7 +83,7 @@ class S3StorageClientIT extends AbstractIT {
                 .when(s3AsyncClient).deleteObject(any(DeleteObjectRequest.class));
 
         assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(objectKey).block())
+                .isThrownBy(() -> storageClient.validateAndGetUploadedObjectMetadata(objectKey).block())
                 .satisfies(ex -> assertThat(ex.getStatus()).isEqualTo(DomainStatus.OUT_OF_RANGE));
     }
 
@@ -101,7 +101,7 @@ class S3StorageClientIT extends AbstractIT {
     @Test
     void validateObjectSizeAndDeleteIfNeeded_throwsNotFoundForMissingObject() {
         assertThatExceptionOfType(DomainException.class)
-                .isThrownBy(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(UUID.randomUUID().toString()).block())
+                .isThrownBy(() -> storageClient.validateAndGetUploadedObjectMetadata(UUID.randomUUID().toString()).block())
                 .satisfies(ex -> assertThat(ex.getStatus()).isEqualTo(DomainStatus.NOT_FOUND));
     }
 
