@@ -16,6 +16,11 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_ASSIGNED = 3;
   ISSUE_EVENT_TYPE_TRANSITIONED = 4;
   ISSUE_EVENT_TYPE_DELETED = 5;
+  ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED = 6;
+  ISSUE_EVENT_TYPE_ATTACHMENT_DELETED = 7;
+  ISSUE_EVENT_TYPE_COMMENT_CREATED = 8;
+  ISSUE_EVENT_TYPE_COMMENT_UPDATED = 9;
+  ISSUE_EVENT_TYPE_COMMENT_DELETED = 10;
 }
 
 enum IssueType {
@@ -80,6 +85,30 @@ service IssueService {
    */
   rpc ListIssuesForBoard(ListIssuesForBoardRequest)
       returns (ListIssuesForBoardResponse);
+
+  /**
+   * Добавляет комментарий к задаче.
+   */
+  rpc AddIssueComment(AddIssueCommentRequest)
+      returns (AddIssueCommentResponse);
+
+  /**
+   * Обновляет комментарий к задаче.
+   */
+  rpc UpdateIssueComment(UpdateIssueCommentRequest)
+      returns (UpdateIssueCommentResponse);
+
+  /**
+   * Удаляет комментарий к задаче (мягкое удаление).
+   */
+  rpc DeleteIssueComment(DeleteIssueCommentRequest)
+      returns (DeleteIssueCommentResponse);
+
+  /**
+   * Возвращает список комментариев к задаче.
+   */
+  rpc ListIssueComments(ListIssueCommentsRequest)
+      returns (ListIssueCommentsResponse);
 }
 
 message AssignIssueRequest {
@@ -292,7 +321,6 @@ message ListIssuesRequestBody {
 }
 
 message TransitionIssueRequest {
-
   /**
    * Заголовок запроса.
    */
@@ -305,7 +333,6 @@ message TransitionIssueRequest {
 }
 
 message TransitionIssueRequestBody {
-
   /**
    * Идентификатор задачи.
    */
@@ -528,6 +555,7 @@ message IssueWithHistoryResponse {
    */
   repeated IssueHistoryResponse history = 2;
 }
+
 message ListIssuesForBoardRequest {
   /**
    * Заголовок запроса.
@@ -626,4 +654,245 @@ message BoardUser {
    * Отображаемое имя пользователя.
    */
   string display_name = 2;
+}
+
+// ===== Comment messages =====
+/**
+ * Комментарий к задаче.
+ */
+message IssueCommentResponse {
+  /**
+   * Идентификатор комментария.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 3;
+
+  /**
+   * Идентификатор автора комментария.
+   */
+  string author_user_id = 4;
+
+  /**
+   * Текст комментария.
+   */
+  string body = 5;
+
+  /**
+   * Временная метка создания.
+   */
+  google.protobuf.Timestamp created_at = 6;
+
+  /**
+   * Временная метка последнего изменения.
+   */
+  google.protobuf.Timestamp updated_at = 7;
+
+  /**
+   * Версия комментария.
+   */
+  int32 version = 8;
+}
+
+/**
+ * Запрос на добавление комментария.
+ */
+message AddIssueCommentRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddIssueCommentRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на добавление комментария.
+ */
+message AddIssueCommentRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор автора комментария.
+   */
+  string author_user_id = 3;
+
+  /**
+   * Текст комментария.
+   */
+  string body = 4;
+}
+
+/**
+ * Ответ на добавление комментария.
+ */
+message AddIssueCommentResponse {
+  /**
+   * Созданный комментарий.
+   */
+  IssueCommentResponse comment = 1;
+}
+
+/**
+ * Запрос на обновление комментария.
+ */
+message UpdateIssueCommentRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UpdateIssueCommentRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на обновление комментария.
+ */
+message UpdateIssueCommentRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор комментария.
+   */
+  string comment_id = 3;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 4;
+
+  /**
+   * Новый текст комментария.
+   */
+  string body = 5;
+}
+
+/**
+ * Ответ на обновление комментария.
+ */
+message UpdateIssueCommentResponse {
+  /**
+   * Обновлённый комментарий.
+   */
+  IssueCommentResponse comment = 1;
+}
+
+/**
+ * Запрос на удаление комментария.
+ */
+message DeleteIssueCommentRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteIssueCommentRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на удаление комментария.
+ */
+message DeleteIssueCommentRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор комментария.
+   */
+  string comment_id = 3;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 4;
+}
+
+/**
+ * Ответ на удаление комментария.
+ */
+message DeleteIssueCommentResponse {
+  /**
+   * Идентификатор удалённого комментария.
+   */
+  string comment_id = 1;
+}
+
+/**
+ * Запрос на получение списка комментариев.
+ */
+message ListIssueCommentsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueCommentsRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка комментариев.
+ */
+message ListIssueCommentsRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
+
+  /**
+   * Размер страницы (опционально).
+   */
+  optional int32 page_size = 4;
+
+  /**
+   * Номер страницы, начиная с 0 (опционально).
+   */
+  optional int32 page = 5;
+}
+
+/**
+ * Ответ на получение списка комментариев.
+ */
+message ListIssueCommentsResponse {
+  /**
+   * Список комментариев.
+   */
+  repeated IssueCommentResponse comments = 1;
+
+  /**
+   * Общее количество комментариев.
+   */
+  int32 total_count = 2;
 }

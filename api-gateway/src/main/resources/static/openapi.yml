@@ -173,6 +173,178 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects:
+    post:
+      summary: Создание проекта
+      operationId: createProject
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequestDto'
+      responses:
+        '201':
+          description: Проект успешно создан
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    get:
+      summary: Возвращает проекты текущего пользователя
+      operationId: listMyProjects
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список проектов успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMyProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}:
+    get:
+      summary: Возвращает проект по идентификатору
+      operationId: getProject
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Проект успешно найден
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/members:
+    post:
+      summary: Добавляет участника в проект
+      operationId: addProjectMember
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddProjectMemberRequestDto'
+      responses:
+        '201':
+          description: Участник успешно добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/members/{userId}:
+    patch:
+      summary: Меняет роль участника
+      operationId: changeProjectMemberRole
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeProjectMemberRoleRequestDto'
+      responses:
+        '200':
+          description: Роль участника успешно изменена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMemberResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаляет участника из проекта
+      operationId: removeProjectMember
+      tags:
+        - project
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Участник успешно удален
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues:
     post:
       summary: Создание задачи
@@ -481,6 +653,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BoardResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/comments:
+    get:
+      summary: Получение списка комментариев к задаче
+      operationId: listComments
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Список комментариев успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentsListResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление комментария к задаче
+      operationId: addComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequestDto'
+      responses:
+        '200':
+          description: Комментарий успешно добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/comments/{commentId}:
+    put:
+      summary: Обновление комментария
+      operationId: updateComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequestDto'
+      responses:
+        '200':
+          description: Комментарий успешно обновлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление комментария
+      operationId: deleteComment
+      tags:
+        - comments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Комментарий успешно удален
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -805,6 +1146,76 @@ components:
         - MEMBER_UPDATED
         - MEMBER_REMOVED
 
+    CreateProjectRequestDto:
+      type: object
+      required: [projectKey,name]
+      properties:
+        projectKey:
+          type: string
+          minLength: 1
+          pattern: '^[\x21-\x7E]+$'
+        name:
+          type: string
+          minLength: 1
+
+    ProjectResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+        projectKey:
+          type: string
+        name:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ListMyProjectResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectResponseDto'
+
+    AddProjectMemberRequestDto:
+      type: object
+      required: [userId,role]
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, MEMBER, VIEWER]
+
+    ChangeProjectMemberRoleRequestDto:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [ ADMIN, MEMBER, VIEWER ]
+
+    ProjectMemberResponseDto:
+      type: object
+      properties:
+        projectId:
+          type: string
+        userId:
+          type: string
+        role:
+          type: string
+
     RestErrorResponse:
       type: object
       required: [code, message]
@@ -820,6 +1231,68 @@ components:
         - TASK
         - BUG
         - STORY
+
+    CommentRequestDto:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          description: Содержимое комментария
+          minLength: 1
+          maxLength: 10000
+          example: "Это комментарий к задаче"
+
+    CommentResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор комментария
+        issueId:
+          type: string
+          format: uuid
+          description: Идентификатор задачи
+        projectId:
+          type: string
+          format: uuid
+          description: Идентификатор проекта
+        authorUserId:
+          type: string
+          format: uuid
+          description: Идентификатор автора комментария
+        body:
+          type: string
+          description: Текст комментария
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время последнего обновления
+        version:
+          type: integer
+          description: Версия комментария (для оптимистической блокировки)
+
+    CommentsListResponseDto:
+      type: object
+      required:
+        - items
+        - totalCount
+      properties:
+        items:
+          type: array
+          description: Список комментариев
+          items:
+            $ref: '#/components/schemas/CommentResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество комментариев (без учёта пагинации)
 
     WorkflowResponseDto:
       type: object
