@@ -656,6 +656,7 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  ########################## API для issue комментариев ##################
   /api/v1/projects/{projectId}/issues/{issueId}/comments:
     get:
       summary: Получение списка комментариев к задаче
@@ -743,6 +744,7 @@ paths:
                 $ref: '#/components/schemas/CommentResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
+    ########################## Окончание API для issue комментариев ##################
 
   /api/v1/projects/{projectId}/issues/{issueId}/comments/{commentId}:
     put:
@@ -1024,7 +1026,7 @@ components:
         history:
           type: array
           items:
-            $ref: '#/components/schemas/IssueHistoryResponseDto'
+           $ref: '#/components/schemas/IssueHistoryResponseDto'
 
     IssueShortResponseDto:
       type: object
@@ -1232,6 +1234,7 @@ components:
         - BUG
         - STORY
 
+    # ==================== КОММЕНТАРИИ к issue ====================
     CommentRequestDto:
       type: object
       required:
@@ -1293,6 +1296,7 @@ components:
         totalCount:
           type: integer
           description: Общее количество комментариев (без учёта пагинации)
+    # ==================== Окончание КОММЕНТАРИИ к issue ====================
 
     WorkflowResponseDto:
       type: object

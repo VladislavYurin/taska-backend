@@ -14,6 +14,8 @@ import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
+import java.util.UUID;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -37,11 +39,11 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     @Override
     @Transactional
-    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, Issue issue, EventType type, JsonNode payload) {
+    public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, UUID issueId, EventType type, JsonNode payload) {
         return outboxEventRepository.save(
                 OutboxEvent.builder()
                         .aggregateType(AggregateType.ISSUE.getValue())
-                        .aggregateId(issue.getId())
+                        .aggregateId(issueId)
                         .eventType(type.getValue())
                         .payload(payload)
                         .requestId(requestId)

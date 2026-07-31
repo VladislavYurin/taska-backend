@@ -13,9 +13,13 @@ public record ReadonlyDatasourcesProperties(
         DatasourceProperties project,
         DatasourceProperties issue,
         DatasourceProperties workflow,
-        DatasourceProperties notification
+        DatasourceProperties notification,
+        DatasourceProperties admin
 ) {
 
+    /**
+     * Настройки одного read-only datasource.
+     */
     public record DatasourceProperties(
             String url,
             String username,
@@ -24,6 +28,9 @@ public record ReadonlyDatasourcesProperties(
     ) {
     }
 
+    /**
+     * Параметры пула R2DBC для read-only подключения.
+     */
     public record PoolProperties(
             @DefaultValue("2") int initialSize,
             @DefaultValue("10") int maxSize,

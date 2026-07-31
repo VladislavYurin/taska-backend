@@ -2,6 +2,7 @@ package ru.taska.storage.client;
 
 import reactor.core.publisher.Mono;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 
 import java.io.InputStream;
 
@@ -45,11 +46,13 @@ public interface StorageClient {
     Mono<String> createPresignedDownloadUrl(String objectKey);
 
     /**
-     * Проверяет размер загруженного объекта.
+     * Валидирует размер загруженного объекта и возвращает его метаданные.
      * Вызывается после того как фронтенд загрузил файл напрямую в хранилище по presigned URL.
      * Если размер превышает допустимый — удаляет объект и бросает исключение.
+     *
+     * @return Mono с метаданными объекта (контрольная сумма и фактический размер).
      */
-    Mono<Void> validateObjectSizeAndDeleteIfTooLarge(String objectKey);
+    Mono<StoredObjectMetadata> validateAndGetUploadedObjectMetadata(String objectKey);
 
     /**
      * Проверяет существование объекта в хранилище.

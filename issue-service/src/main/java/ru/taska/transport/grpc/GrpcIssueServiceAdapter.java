@@ -17,6 +17,14 @@ import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.issue.v1.AddIssueCommentRequest;
+import ru.taska.api.issue.v1.AddIssueCommentResponse;
+import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
+import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
+import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
+import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
+import ru.taska.api.issue.v1.ListIssueCommentsRequest;
+import ru.taska.api.issue.v1.ListIssueCommentsResponse;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -63,5 +71,53 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
         return grpcIssueService.transitionIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
+    }
+    // --------------------------------- Методы для комментариев к issue --------------------
+    /**
+     * Добавляет комментарий к задаче.
+     *
+     * @param request Mono с запросом {@link AddIssueCommentRequest}
+     * @return Mono с ответом {@link AddIssueCommentResponse}
+     */
+    @Override
+    public Mono<AddIssueCommentResponse> addIssueComment(Mono<AddIssueCommentRequest> request) {
+        return grpcIssueService.addIssueComment(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addIssueComment"));
+    }
+
+    /**
+     * Обновляет комментарий к задаче.
+     *
+     * @param request Mono с запросом {@link UpdateIssueCommentRequest}
+     * @return Mono с ответом {@link UpdateIssueCommentResponse}
+     */
+    @Override
+    public Mono<UpdateIssueCommentResponse> updateIssueComment(Mono<UpdateIssueCommentRequest> request) {
+        return grpcIssueService.updateIssueComment(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateIssueComment"));
+    }
+
+    /**
+     * Удаляет комментарий к задаче (мягкое удаление).
+     *
+     * @param request Mono с запросом {@link DeleteIssueCommentRequest}
+     * @return Mono с ответом {@link DeleteIssueCommentResponse}
+     */
+    @Override
+    public Mono<DeleteIssueCommentResponse> deleteIssueComment(Mono<DeleteIssueCommentRequest> request) {
+        return grpcIssueService.deleteIssueComment(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueComment"));
+    }
+
+    /**
+     * Возвращает список комментариев к задаче.
+     *
+     * @param request Mono с запросом {@link ListIssueCommentsRequest}
+     * @return Mono с ответом {@link ListIssueCommentsResponse}
+     */
+    @Override
+    public Mono<ListIssueCommentsResponse> listIssueComments(Mono<ListIssueCommentsRequest> request) {
+        return grpcIssueService.listIssueComments(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssueComments"));
     }
 }

@@ -45,10 +45,9 @@ public interface ProfileService {
      * @param objectKey   ключ объекта в хранилище
      * @param fileName    оригинальное имя файла
      * @param contentType MIME-тип файла
-     * @param sizeBytes   размер файла в байтах
      * @return данные о сохранённом аватаре
      */
-    Mono<AvatarDto> confirmAvatarUpload(UUID actorUserId, String objectKey, String fileName, String contentType, long sizeBytes);
+    Mono<AvatarDto> confirmAvatarUpload(UUID actorUserId, String objectKey, String fileName, String contentType);
 
     /**
      * Удаляет аватар пользователя из базы данных и хранилища.

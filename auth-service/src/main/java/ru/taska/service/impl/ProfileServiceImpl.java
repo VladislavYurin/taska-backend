@@ -67,8 +67,7 @@ public class ProfileServiceImpl implements ProfileService {
             UUID actorUserId,
             String objectKey,
             String fileName,
-            String contentType,
-            long sizeBytes) {
+            String contentType) {
         return verifyUserExists(actorUserId)
                 .then(Mono.defer(() -> storageClient.objectExists(objectKey)))
                 .flatMap(exists -> {
@@ -78,8 +77,8 @@ public class ProfileServiceImpl implements ProfileService {
                     }
                     return Mono.empty();
                 })
-                .then(Mono.defer(() -> storageClient.validateObjectSizeAndDeleteIfTooLarge(objectKey)))
-                .then(Mono.defer(() -> replaceAvatarInDb(actorUserId, objectKey, fileName, contentType, sizeBytes)))
+                .then(Mono.defer(() -> storageClient.validateAndGetUploadedObjectMetadata(objectKey)))
+                .flatMap(metadata -> replaceAvatarInDb(actorUserId, objectKey, fileName, contentType, metadata.sizeBytes()))
                 .flatMap(savedAvatar -> {
                     String oldKey = savedAvatar.oldObjectKey();
                     Mono<Void> deleteOldFile = oldKey != null

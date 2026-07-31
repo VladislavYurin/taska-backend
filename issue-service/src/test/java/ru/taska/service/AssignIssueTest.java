@@ -62,7 +62,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
                         Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload)))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(ISSUE_ID),
                         Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload)))
                 .thenReturn(Mono.empty());
 
@@ -89,7 +89,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload));
         Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
-                Mockito.any(Issue.class), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
+                Mockito.eq(ISSUE_ID), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, payloadSerializer);
     }

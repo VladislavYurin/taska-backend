@@ -3,6 +3,7 @@ package ru.taska.util;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssuePriority;
 import tools.jackson.databind.JsonNode;
@@ -32,6 +33,14 @@ public class PayloadSerializer {
     private static final String TRANSITIONED_ID = "transitionId";
     private static final String ISSUE_TYPE = "issueType";
     private static final String DELETED_AT = "deletedAt";
+    private static final String ATTACHMENT_ID = "attachmentId";
+    private static final String ISSUE_ID = "issueId";
+    private static final String UPLOADED_BY = "uploadedBy";
+    private static final String DELETED_BY = "deletedBy";
+    private static final String FILE_NAME = "fileName";
+    private static final String CONTENT_TYPE = "contentType";
+    private static final String SIZE_BYTES = "sizeBytes";
+    private static final String CREATED_AT = "createdAt";
 
     private final ObjectMapper objectMapper;
 
@@ -174,6 +183,45 @@ public class PayloadSerializer {
 
         node.put(ISSUE_TYPE, type != null ? type.toString() : "");
         node.put(DELETED_AT, deletedAt != null ? deletedAt.toString() : Instant.now().toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о загруженном вложении.
+     *
+     * @param attachment сохранённое вложение.
+     * @return {@link JsonNode} с метаданными загрузки.
+     */
+    public JsonNode createAttachmentUploadedPayload(IssueAttachment attachment) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ATTACHMENT_ID, attachment.getId().toString());
+        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        node.put(UPLOADED_BY, attachment.getUploadedBy().toString());
+        node.put(FILE_NAME, attachment.getFileName());
+        node.put(CONTENT_TYPE, attachment.getContentType());
+        node.put(SIZE_BYTES, attachment.getSizeBytes());
+        node.put(CREATED_AT, attachment.getCreatedAt().toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об удалённом вложении.
+     *
+     * @param attachment  удалённое вложение.
+     * @param deletedByUserId идентификатор пользователя, выполнившего удаление.
+     * @return {@link JsonNode} с метаданными удаления.
+     */
+    public JsonNode createAttachmentDeletedPayload(IssueAttachment attachment, UUID deletedByUserId) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ATTACHMENT_ID, attachment.getId().toString());
+        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        node.put(DELETED_BY, deletedByUserId.toString());
+        node.put(FILE_NAME, attachment.getFileName());
+        node.put(DELETED_AT, attachment.getDeletedAt().toString());
 
         return node;
     }

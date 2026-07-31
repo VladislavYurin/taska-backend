@@ -56,7 +56,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                     return Mono.just(issue.toBuilder().id(UUID.randomUUID()).build());
                 });
 
-        Mockito.lenient().when(issueHistoryService.saveIssueHistory(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
+        Mockito.lenient().when(issueHistoryService.saveIssueCreateHistory(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
                 .thenReturn(Mono.empty());
         Mockito.lenient().when(outboxEventService.saveOutboxEvent(Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
                 .thenReturn(Mono.empty());

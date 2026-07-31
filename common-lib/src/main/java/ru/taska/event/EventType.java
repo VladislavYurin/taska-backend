@@ -16,13 +16,18 @@ public enum EventType {
     ISSUE_TRANSITIONED("IssueTransitioned"),
     ISSUE_UPDATED("IssueUpdated"),
     ISSUE_DELETED("IssueDeleted"),
+    ATTACHMENT_ADDED("AttachmentAdded"),
+    ATTACHMENT_DELETED("AttachmentDeleted"),
     USER_INVITED("UserInvited"),
     PROJECT_CREATED("ProjectCreated"),
     MEMBER_ADDED("MemberAdded"),
     MEMBER_REMOVED("MemberRemoved"),
     MEMBER_UPDATED("MemberUpdated"),
     USER_ACTIVATED("UserActivated"),
-    UNSUPPORTED("Unsupported");
+    UNSUPPORTED("Unsupported"),
+    COMMENT_CREATED("CommentCreated"),
+    COMMENT_UPDATED("CommentUpdated"),
+    COMMENT_DELETED("CommentDeleted");
 
     private final String value;
 

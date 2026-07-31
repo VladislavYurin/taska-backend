@@ -150,6 +150,12 @@ public class IssueMapper {
             case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
             case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
             case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
+            case ATTACHMENT_UPLOADED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED;
+            case ATTACHMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_DELETED;
+
+            case COMMENT_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_CREATED;
+            case COMMENT_UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_UPDATED;
+            case COMMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_DELETED;
         };
     }
 

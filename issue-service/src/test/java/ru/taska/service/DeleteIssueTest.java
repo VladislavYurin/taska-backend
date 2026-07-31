@@ -72,7 +72,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         Mockito.when(issueHistoryService.saveIssueHistory(localRequestId, localNodeId, mockIssue, localActorUserId, IssueEventType.DELETED, payload))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(outboxEventService.saveOutboxEvent(localRequestId, localNodeId, mockIssue, EventType.ISSUE_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(localRequestId, localNodeId, mockIssue.getId(), EventType.ISSUE_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         Mono<Issue> resultMono = issueService.deleteIssue(localRequestId, localNodeId, localIssueId, localActorUserId);
@@ -92,7 +92,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
         Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
         Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue, localActorUserId, IssueEventType.DELETED, payload);
-        Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, mockIssue, EventType.ISSUE_DELETED, payload);
+        Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker, payloadSerializer);
     }
 

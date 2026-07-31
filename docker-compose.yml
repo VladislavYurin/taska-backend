@@ -373,6 +373,16 @@ services:
     depends_on:
       admin-db:
         condition: service_healthy
+      auth-db:
+        condition: service_healthy
+      project-db:
+        condition: service_healthy
+      issue-db:
+        condition: service_healthy
+      workflow-db:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
 
   api-gateway:
     <<: *app-defaults

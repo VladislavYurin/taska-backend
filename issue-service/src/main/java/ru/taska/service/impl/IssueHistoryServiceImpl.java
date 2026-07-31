@@ -26,7 +26,8 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
 
     @Override
     @Transactional
-    public Mono<IssueHistory> saveIssueHistory(String requestId, String nodeId, Issue issue) {
+    public Mono<IssueHistory> saveIssueCreateHistory(String requestId, String nodeId, Issue issue) {
+
         IssueHistory issueHistory = IssueHistory.builder()
                 .issueId(issue.getId())
                 .eventType(IssueEventType.CREATED)
@@ -41,16 +42,35 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
 
     @Transactional
     @Override
-    public Mono<IssueHistory> saveIssueHistory(String requestId, String nodeId, Issue issue, UUID actorUserId, IssueEventType type, JsonNode payload) {
+    public Mono<IssueHistory> saveIssueHistory(
+            String requestId,
+            String nodeId,
+            Issue issue,
+            UUID actorUserId,
+            IssueEventType type,
+            JsonNode payload) {
+
+        return saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, type, payload);
+    }
+
+    @Transactional
+    @Override
+    public Mono<IssueHistory> saveIssueHistory(String requestId,
+                                               String nodeId,
+                                               UUID issueId,
+                                               UUID actorUserId,
+                                               IssueEventType type,
+                                               JsonNode payload) {
+
         IssueHistory issueHistory = IssueHistory.builder()
-                .issueId(issue.getId())
+                .issueId(issueId)
                 .eventType(type)
                 .actorUserId(actorUserId)
                 .occurredAt(Instant.now())
                 .payload(payload)
                 .build();
 
-        log.debug("[{}][{}] Save modified history for issue: {}", requestId, nodeId, issue.getId());
+        log.debug("[{}][{}] Save modified history for issue: {}", requestId, nodeId, issueId);
         return issueHistoryRepository.save(issueHistory);
     }
 }

@@ -76,7 +76,7 @@ public class IssueTransitionExecutor {
                                 JsonNode payload = payloadSerializer.createTransitionedPayload(sourceStatusKey, targetStatusKey, transitionId, actorUserId, issue.getAssigneeId());
 
                                 return issueHistoryService.saveIssueHistory(requestId, nodeId, issue, actorUserId, IssueEventType.TRANSITIONED, payload)
-                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue, EventType.ISSUE_TRANSITIONED, payload))
+                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue.getId(), EventType.ISSUE_TRANSITIONED, payload))
                                         .thenReturn(savedIssue);
                             })
                             .flatMap(this::loadIssueWithHistory);

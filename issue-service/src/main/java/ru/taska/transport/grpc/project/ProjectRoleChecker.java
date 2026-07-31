@@ -21,6 +21,17 @@ public class ProjectRoleChecker {
     private final GrpcProjectServiceClient client;
     private final IssueMapper issueMapper;
 
+    /**
+     * Проверяет, что пользователь является участником проекта и его роль входит в список допустимых.
+     *
+     * <p>Завершается пустым {@link Mono} при успешной проверке.
+     * В случае ошибки бросает {@link DomainException}:</p>
+     * <ul>
+     *   <li>{@link DomainStatus#NOT_FOUND} — проект не найден;</li>
+     *   <li>{@link DomainStatus#PERMISSION_DENIED} — пользователь не является участником проекта
+     *       или его роль не входит в {@code allowedRoles}.</li>
+     * </ul>
+     */
     public Mono<Void> checkProjectRole(
             String requestId,
             String nodeId,
