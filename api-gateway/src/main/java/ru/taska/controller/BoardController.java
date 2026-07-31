@@ -11,11 +11,11 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.BoardApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.BoardColumnDto;
-import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.filter.GatewayRequestExecutor;
+import ru.taska.mapper.IssueMapper; // <-- Добавлен импорт
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 
@@ -34,6 +34,7 @@ public class BoardController implements BoardApi {
     private final GatewayRequestExecutor executor;
     private final GrpcWorkflowServiceClient workflowClient;
     private final GrpcIssueServiceClient issueClient;
+    private final IssueMapper issueMapper; // <-- Добавлен маппер
 
     @Override
     public Mono<ResponseEntity<BoardResponseDto>> getBoard(
@@ -61,9 +62,11 @@ public class BoardController implements BoardApi {
                 var workflow = tuple.getT1();
                 var issues = tuple.getT2();
 
-                Map<String, List<BoardIssueDto>> issuesByStatus = issues.stream()
-                        .collect(Collectors.groupingBy(BoardIssueDto::getStatusKey));
+                // 1. Группируем сырые gRPC объекты по статусу
+                Map<String, List<ru.taska.api.issue.v1.BoardIssue>> issuesByStatus = issues.stream()
+                        .collect(Collectors.groupingBy(ru.taska.api.issue.v1.BoardIssue::getStatusKey));
 
+                // 2. Формируем колонки и конвертируем задачи в REST DTO
                 List<BoardColumnDto> columns = workflow.getStatuses().stream()
                         .sorted(Comparator.comparingInt(WorkflowStatusDto::getSortOrder))
                         .map(status -> {
@@ -73,7 +76,12 @@ public class BoardController implements BoardApi {
                             column.setCategory(status.getCategory());
                             column.setSortOrder(status.getSortOrder());
 
-                            column.setIssues(issuesByStatus.getOrDefault(status.getStatusKey(), new ArrayList<>()));
+                            // Достаем задачи для колонки и маппим их в REST DTO
+                            var grpcIssuesForColumn = issuesByStatus.getOrDefault(status.getStatusKey(), new ArrayList<>());
+                            column.setIssues(grpcIssuesForColumn.stream()
+                                    .map(issueMapper::toRestBoardIssue)
+                                    .toList());
+
                             issuesByStatus.remove(status.getStatusKey());
 
                             return column;

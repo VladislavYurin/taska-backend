@@ -322,7 +322,7 @@ public class GrpcIssueServiceClient {
     /**
      * Получает список задач для доски с учетом фильтров.
      */
-    public Mono<List<BoardIssueDto>> listIssuesForBoard(
+    public Mono<List<ru.taska.api.issue.v1.BoardIssue>> listIssuesForBoard(
             String projectId,
             String issueType,
             String assigneeId,
@@ -347,9 +347,6 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(response -> response.getIssuesList().stream()
-                        .map(issueMapper::toRestBoardIssue)
-                        .toList()
-                );
+                .map(ru.taska.api.issue.v1.ListIssuesForBoardResponse::getIssuesList); // <-- Возвращаем сырой gRPC список
     }
 }

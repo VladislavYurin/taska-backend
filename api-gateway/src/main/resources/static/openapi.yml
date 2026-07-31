@@ -933,7 +933,7 @@ components:
 
     BoardIssueDto:
       type: object
-      required: [ id, issueKey, summary, statusKey ]
+      required: [ id, issueKey, summary ]
       properties:
         id:
           type: string
@@ -945,9 +945,6 @@ components:
         storyPoints:
           type: integer
           format: int32
-        statusKey:
-          type: string
-          description: "Служебное поле для группировки задач по колонкам"
         assignee:
           $ref: '#/components/schemas/BoardUserDto'
         labels:

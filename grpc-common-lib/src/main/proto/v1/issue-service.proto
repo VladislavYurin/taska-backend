@@ -598,7 +598,7 @@ message BoardIssue {
   /**
    * Стори поинты (оценка сложности).
    */
-  int32 story_points = 4;
+  optional int32 story_points = 4;
 
   /**
    * Текущий статус задачи (для группировки по колонкам).

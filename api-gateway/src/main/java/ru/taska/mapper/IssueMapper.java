@@ -130,7 +130,6 @@ public class IssueMapper {
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setSummary(protoDto.getSummary());
         restDto.setStoryPoints(protoDto.getStoryPoints());
-        restDto.setStatusKey(protoDto.getStatusKey());
 
         if (protoDto.hasAssignee()) {
             var userDto = new BoardUserDto();

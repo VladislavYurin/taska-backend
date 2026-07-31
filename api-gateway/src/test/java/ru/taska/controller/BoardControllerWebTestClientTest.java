@@ -30,6 +30,7 @@ import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
+import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
@@ -72,6 +73,9 @@ class BoardControllerWebTestClientTest {
     @MockitoBean
     private ContextMapper contextMapper;
 
+    @MockitoBean
+    private IssueMapper issueMapper; // <-- Добавили мок для маппера
+
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
@@ -82,15 +86,15 @@ class BoardControllerWebTestClientTest {
     void getBoard_shouldReturn200_andGroupedBoard() {
         mockAuthenticatedUser();
 
-        // 1. Мокаем Workflow (одна колонка TODO, вторая DONE)
+        // 1. Мокаем Workflow (возвращаем статус колонкам!)
         var statusTodo = new WorkflowStatusDto();
         statusTodo.setId(UUID.randomUUID());
-        statusTodo.setStatusKey("TODO");
+        statusTodo.setStatusKey("TODO"); // <-- Вернули
         statusTodo.setSortOrder(1);
 
         var statusDone = new WorkflowStatusDto();
         statusDone.setId(UUID.randomUUID());
-        statusDone.setStatusKey("DONE");
+        statusDone.setStatusKey("DONE"); // <-- Вернули
         statusDone.setSortOrder(2);
 
         var workflowResponse = new WorkflowResponseDto();
@@ -102,11 +106,19 @@ class BoardControllerWebTestClientTest {
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(workflowResponse));
 
-        // 2. Мокаем Issue Service (возвращаем 1 задачу в статусе TODO)
-        var issue = new BoardIssueDto();
-        issue.setId(UUID.randomUUID());
-        issue.setIssueKey("TAS-1");
-        issue.setStatusKey("TODO");
+        // 2. Мокаем Issue Service (возвращаем gRPC объект)
+        var grpcIssueId = UUID.randomUUID();
+        var grpcIssue = ru.taska.api.issue.v1.BoardIssue.newBuilder()
+                .setId(grpcIssueId.toString())
+                .setIssueKey("TAS-1")
+                .setStatusKey("TODO")
+                .build();
+
+        var restIssue = new BoardIssueDto();
+        restIssue.setId(grpcIssueId);
+        restIssue.setIssueKey("TAS-1");
+
+        Mockito.when(issueMapper.toRestBoardIssue(Mockito.any())).thenReturn(restIssue);
 
         Mockito.when(issueClient.listIssuesForBoard(
                         Mockito.eq(PROJECT_ID.toString()),
@@ -115,7 +127,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.any(), // labelId
                         Mockito.any(), // includeDone
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(List.of(issue)));
+                .thenReturn(Mono.just(List.of(grpcIssue)));
 
         // 3. Вызываем API и проверяем результат
         webTestClient.get()
@@ -132,23 +144,14 @@ class BoardControllerWebTestClientTest {
                 .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE.name())
                 .jsonPath("$.columns").isArray()
                 .jsonPath("$.columns.length()").isEqualTo(2)
-                // Проверяем, что задача попала в первую колонку
                 .jsonPath("$.columns[0].statusKey").isEqualTo("TODO")
                 .jsonPath("$.columns[0].issues.length()").isEqualTo(1)
                 .jsonPath("$.columns[0].issues[0].issueKey").isEqualTo("TAS-1")
-                // Проверяем, что вторая колонка пустая
                 .jsonPath("$.columns[1].statusKey").isEqualTo("DONE")
                 .jsonPath("$.columns[1].issues.length()").isEqualTo(0);
 
         Mockito.verify(workflowClient).getWorkflowForProject(Mockito.eq(PROJECT_ID), Mockito.eq(ISSUE_TYPE), Mockito.any());
-
-        Mockito.verify(issueClient).listIssuesForBoard(
-                Mockito.eq(PROJECT_ID.toString()),
-                Mockito.eq(ISSUE_TYPE.name()),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any());
+        Mockito.verify(issueClient).listIssuesForBoard(Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_TYPE.name()), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -158,7 +161,7 @@ class BoardControllerWebTestClientTest {
 
         var statusTodo = new WorkflowStatusDto();
         statusTodo.setId(UUID.randomUUID());
-        statusTodo.setStatusKey("TODO");
+        statusTodo.setStatusKey("TODO"); // <-- Вернули
         statusTodo.setSortOrder(1);
 
         var workflowResponse = new WorkflowResponseDto();
@@ -171,10 +174,11 @@ class BoardControllerWebTestClientTest {
                 .thenReturn(Mono.just(workflowResponse));
 
         // Создаем задачу со статусом, которого нет в workflow
-        var issue = new BoardIssueDto();
-        issue.setId(UUID.randomUUID());
-        issue.setIssueKey("TAS-1");
-        issue.setStatusKey("UNKNOWN_STATUS");
+        var grpcIssue = ru.taska.api.issue.v1.BoardIssue.newBuilder()
+                .setId(UUID.randomUUID().toString())
+                .setIssueKey("TAS-1")
+                .setStatusKey("UNKNOWN_STATUS")
+                .build();
 
         Mockito.when(issueClient.listIssuesForBoard(
                         Mockito.eq(PROJECT_ID.toString()),
@@ -183,7 +187,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.any(), // labelId
                         Mockito.any(), // includeDone
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(List.of(issue)));
+                .thenReturn(Mono.just(List.of(grpcIssue)));
 
         webTestClient.get()
                 .uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
