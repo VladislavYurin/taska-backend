@@ -24,7 +24,10 @@ public enum EventType {
     MEMBER_REMOVED("MemberRemoved"),
     MEMBER_UPDATED("MemberUpdated"),
     USER_ACTIVATED("UserActivated"),
-    UNSUPPORTED("Unsupported");
+    UNSUPPORTED("Unsupported"),
+    COMMENT_CREATED("CommentCreated"),
+    COMMENT_UPDATED("CommentUpdated"),
+    COMMENT_DELETED("CommentDeleted");
 
     private final String value;
 

@@ -26,7 +26,8 @@ public record IssueProperties(
             Set<ProjectRole> uploadAttachmentRoles,
             Set<ProjectRole> viewAttachmentRoles,
             Set<ProjectRole> deleteOwnAttachmentRoles,
-            Set<ProjectRole> deleteAttachmentRoles
+            Set<ProjectRole> deleteAttachmentRoles,
+            Set<ProjectRole> commentRoles
     ) {
     }
 
