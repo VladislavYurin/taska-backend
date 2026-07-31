@@ -89,8 +89,6 @@ service IssueService {
   /**
    * Добавляет комментарий к задаче.
    */
-  * Добавляет комментарий к задаче.
-  */
   rpc AddIssueComment(AddIssueCommentRequest)
       returns (AddIssueCommentResponse);
 
@@ -898,4 +896,4 @@ message ListIssueCommentsResponse {
    */
   int32 total_count = 2;
 }
-}
+
