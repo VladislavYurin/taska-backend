@@ -2,6 +2,7 @@ package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -97,7 +98,7 @@ public class CommentController {
     }
 
     @DeleteMapping("/{commentId}")
-    public Mono<Void> deleteComment(
+    public Mono<ResponseEntity<Void>> deleteComment(
             @PathVariable UUID projectId,
             @PathVariable UUID issueId,
             @PathVariable UUID commentId,
@@ -112,7 +113,8 @@ public class CommentController {
                     requestId, projectId, issueId, commentId, userId);
 
             return commentClient.deleteComment(issueId, commentId, UUID.fromString(userId), context)
-                    .doOnSuccess(unused ->
+                    .thenReturn(ResponseEntity.noContent().<Void>build())
+                    .doOnSuccess(response ->
                             log.info("[{}] Successfully deleted comment with id {}",
                                     requestId, commentId)
                     );

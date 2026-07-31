@@ -163,6 +163,11 @@ public class IssueMapper {
             case ISSUE_EVENT_TYPE_ASSIGNED -> "ASSIGNED";
             case ISSUE_EVENT_TYPE_TRANSITIONED -> "TRANSITIONED";
             case ISSUE_EVENT_TYPE_DELETED -> "DELETED";
+            case ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED -> "ATTACHMENT_UPLOADED";
+            case ISSUE_EVENT_TYPE_ATTACHMENT_DELETED -> "ATTACHMENT_DELETED";
+            case ISSUE_EVENT_TYPE_COMMENT_CREATED -> "COMMENT_CREATED";
+            case ISSUE_EVENT_TYPE_COMMENT_UPDATED -> "COMMENT_UPDATED";
+            case ISSUE_EVENT_TYPE_COMMENT_DELETED -> "COMMENT_DELETED";
             default -> throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Unknown event type: " + grpcIssueEventType
