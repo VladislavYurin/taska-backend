@@ -98,6 +98,10 @@
           "text": ["All"],
           "value": ["$__all"]
         },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
         "definition": "label_values(service)",
         "description": "",
         "includeAll": true,
