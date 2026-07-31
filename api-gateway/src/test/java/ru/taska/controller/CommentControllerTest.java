@@ -442,7 +442,7 @@ class CommentControllerTest {
     // ========== DELETE COMMENT ==========
 
     @Test
-    @DisplayName("Должен успешно удалить комментарий с кодом 200 OK")
+    @DisplayName("Должен успешно удалить комментарий с кодом 204 No Content")
     void deleteComment_shouldReturn204NoContent() {
         // given
         mockAuthenticatedUser();
@@ -460,7 +460,7 @@ class CommentControllerTest {
                         PROJECT_ID, ISSUE_ID, COMMENT_ID)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus().isNoContent()  // ← изменено с isOk() на isNoContent()
                 .expectHeader().exists("X-Request-Id")
                 .expectBody().isEmpty();
     }
