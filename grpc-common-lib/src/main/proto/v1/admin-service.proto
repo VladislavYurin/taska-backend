@@ -17,6 +17,8 @@ service AdminService {
    * с учётом denylist таблиц и флагов sensitive у колонок.
    */
   rpc GetCatalog(GetCatalogRequest) returns (GetCatalogResponse);
+
+  rpc ListTableRows(ListTableRowsRequest) returns (ListTableRowsResponse);
 }
 
 message GetCatalogRequest {
@@ -69,4 +71,67 @@ message ColumnMetadata {
    * true, если колонка указана в sensitive-columns конфига.
    */
   bool sensitive = 4;
+}
+
+message ListTableRowsRequest {
+  ru.taska.common.v1.Header header = 1;
+  ListTableRowsRequestBody body = 2;
+}
+
+message ListTableRowsRequestBody {
+  string service_key = 1;
+  string table_name = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  string sort = 5;
+  string order = 6;
+  map<string, FilterOperators> filters = 7;
+}
+
+message FilterOperators {
+  optional string equals = 1;     // Точное совпадение: status = 'active'
+  optional string contains = 2;   // Поиск по подстроке: email LIKE '%@gmail%'
+  optional string from = 3;       // Нижняя граница: created_at >= '2026-01-01'
+  // Формат: ISO-8601 (например, "2026-01-01T00:00:00Z" или "2026-01-01T00:00Z")
+  optional string to = 4;         // Верхняя граница: created_at <= '2026-12-31'
+  // Формат: ISO-8601 (например, "2026-01-01T00:00:00Z" или "2026-01-01T00:00Z")
+
+}
+
+message ListTableRowsResponse {
+  repeated Row rows = 1;
+  PaginationInfo pagination = 2;
+  MetaInfo meta = 3;
+}
+
+message Row {
+  map<string, Value> fields = 1;
+}
+
+message Value {
+  oneof kind {
+    string string_value = 1;
+    int64 int_value = 2;
+    double double_value = 3;
+    bool bool_value = 4;
+    int64 timestamp_value = 5;
+    bool null_value = 6;
+  }
+}
+
+message PaginationInfo {
+  int32 current_page = 1;
+  int32 page_size = 2;
+  int64 total_rows = 3;
+  int32 total_pages = 4;
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+message MetaInfo {
+  string service_key = 1;
+  string table_name = 2;
+  repeated string columns = 3;
+  repeated string sortable_columns = 4;
+  repeated string filterable_columns = 5;
 }

@@ -10,7 +10,8 @@ public record GrpcClientProperties(
         Service issueService,
         Service projectService,
         Service workflowService,
-        Service notificationService
+        Service notificationService,
+        Service adminService
 ) {
     public record Service(
             String host,
