@@ -144,7 +144,7 @@ class ReadOnlyQueryBuilderTest {
 
         ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
 
-        Assertions.assertThat(sqlQuery.sql()).contains("WHERE status = $1");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"status\" = $1");
         Assertions.assertThat(sqlQuery.params()).contains("active");
     }
 
@@ -157,7 +157,7 @@ class ReadOnlyQueryBuilderTest {
 
         ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
 
-        Assertions.assertThat(sqlQuery.sql()).contains("WHERE email ILIKE $1");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"email\" ILIKE $1 ESCAPE '\\'");
         Assertions.assertThat(sqlQuery.params()).contains("%@test.com%");
     }
 
@@ -170,7 +170,7 @@ class ReadOnlyQueryBuilderTest {
 
         ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
 
-        Assertions.assertThat(sqlQuery.sql()).contains("WHERE created_at >= $1");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" >= $1::timestamptz");
         Assertions.assertThat(sqlQuery.params()).contains("2026-01-01");
     }
 
@@ -183,7 +183,7 @@ class ReadOnlyQueryBuilderTest {
 
         ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
 
-        Assertions.assertThat(sqlQuery.sql()).contains("WHERE created_at <= $1");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" <= $1::timestamptz");
         Assertions.assertThat(sqlQuery.params()).contains("2026-12-31");
     }
 
@@ -202,10 +202,10 @@ class ReadOnlyQueryBuilderTest {
 
         ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
 
-        Assertions.assertThat(sqlQuery.sql()).contains("status = $1");
-        Assertions.assertThat(sqlQuery.sql()).contains("email ILIKE $2");
-        Assertions.assertThat(sqlQuery.sql()).contains("created_at >= $3");
-        Assertions.assertThat(sqlQuery.sql()).contains("created_at <= $4");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"status\" = $1");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"email\" ILIKE $2 ESCAPE '\\'");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" >= $3::timestamptz");
+        Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" <= $4::timestamptz");
         Assertions.assertThat(sqlQuery.params()).contains("active", "%@test.com%", "2026-01-01", "2026-12-31");
     }
 
@@ -248,7 +248,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThat(countQuery.sql()).contains("SELECT COUNT(*) FROM " + TEST_TABLE);
-        Assertions.assertThat(countQuery.sql()).contains("WHERE status = $1");
+        Assertions.assertThat(countQuery.sql()).contains("\"status\" = $1");
         Assertions.assertThat(countQuery.params()).contains("active");
     }
 

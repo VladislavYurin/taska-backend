@@ -272,6 +272,7 @@ class AdminReadOnlyControllerTest {
     @MethodSource("listTableRowsArguments")
     @DisplayName("Должен корректно обрабатывать все параметры")
     void listTableRows_shouldPassAllParameters(
+            String description,
             Consumer<UriBuilder> uriConfigurer,
             Integer expectedPage,
             Integer expectedPageSize,
@@ -282,6 +283,9 @@ class AdminReadOnlyControllerTest {
 
         var response = new ReadOnlyResponseDto();
 
+        // Если фильтров нет, передаем пустую мапу
+        Map<String, String> expectedFilters = new HashMap<>();
+
         Mockito.when(adminClient.listTableRows(
                         Mockito.eq(SERVICE_KEY),
                         Mockito.eq(TABLE_NAME),
@@ -289,7 +293,7 @@ class AdminReadOnlyControllerTest {
                         Mockito.eq(expectedPageSize),
                         Mockito.eq(expectedSort),
                         Mockito.eq(expectedOrder),
-                        Mockito.any(),
+                        Mockito.eq(expectedFilters),
                         Mockito.any(GatewayContext.class)
                 ))
                 .thenReturn(Mono.just(response));
@@ -312,7 +316,7 @@ class AdminReadOnlyControllerTest {
                 Mockito.eq(expectedPageSize),
                 Mockito.eq(expectedSort),
                 Mockito.eq(expectedOrder),
-                Mockito.any(),
+                Mockito.eq(expectedFilters),
                 Mockito.any(GatewayContext.class)
         );
     }

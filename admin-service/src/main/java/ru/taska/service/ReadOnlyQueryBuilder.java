@@ -60,6 +60,13 @@ public class ReadOnlyQueryBuilder {
             throw new IllegalArgumentException("Table not accessible: " + tableName);
         }
 
+        // 5. Проверка: колонки для фильтров безопасны?
+        for (String filterKey : filters.keySet()) {
+            if (!filterKey.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+                throw new IllegalArgumentException("Invalid filter column: " + filterKey);
+            }
+        }
+
         // 6. Строим БЕЗОПАСНЫЙ SQL (с плейсхолдерами!) (filters включает equals, from/to, contains)
         String sql = buildSafeSql(tableName, page, pageSize, sort, order, filters);
         List<Object> params = buildParams(filters);
