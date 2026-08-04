@@ -883,11 +883,11 @@ paths:
             Формат: column.operator=value (точное совпадение)
             
             Примеры:
-            - ?filter[status]=active → status = 'active'
-            - ?filter[email.contains]=@gmail.com → email LIKE '%@gmail.com%'
-            - ?filter[created_at.from]=2026-01-01T00:00:00Z → created_at >= '2026-01-01T00:00:00Z'
-            - ?filter[created_at.to]=2026-12-31T23:59:59Z → created_at <= '2026-12-31T23:59:59Z'
-            - ?filter[status]=active&filter[assignee_id]=123 → комбинация фильтров
+            - ?status=active → status = 'active'
+            - ?email.contains=@gmail.com → email LIKE '%@gmail.com%'
+            - ?created_at.from=2026-01-01T00:00:00Z → created_at >= '2026-01-01T00:00:00Z'
+            - ?created_at.to=2026-12-31T23:59:59Z → created_at <= '2026-12-31T23:59:59Z'
+            - ?status=active&assignee_id=123 → комбинация фильтров
             
             Поддерживаемые операторы:
             - .eq (или без оператора) - точное совпадение column=value

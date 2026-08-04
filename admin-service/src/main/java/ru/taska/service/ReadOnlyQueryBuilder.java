@@ -2,13 +2,15 @@ package ru.taska.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.admin.v1.FilterOperators;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.config.props.MetadataCatalogProperties;
+import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Строит БЕЗОПАСНЫЕ SQL запросы с параметризацией.
@@ -29,27 +31,31 @@ import java.util.Map;
 public class ReadOnlyQueryBuilder {
 
     private final MetadataCatalogProperties properties;
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Pattern VALID_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     public record SqlQuery(
             String sql, // SQL с плейсхолдерами
             List<Object> params // значения для плейсхолдеров
     ){}
 
-    public SqlQuery buildSafeQuery(ListTableRowsRequest request) {
-        /// Извлекаем параметры
-        String serviceKey = request.getBody().getServiceKey();
-        String tableName = request.getBody().getTableName();
-        int page = request.getBody().getPage();
-        int pageSize = request.getBody().getPageSize();
-        String sort = request.getBody().getSort();
-        String order = request.getBody().getOrder();
+    public SqlQuery buildSafeQuery(
+            String serviceKey,
+            String tableName,
+            int page,
+            int pageSize,
+            String sort,
+            String order,
+            Map<String, FilterOperatorsDto> filters
+    ) {
 
-        Map<String, FilterOperators> filters = request.getBody().getFiltersMap();
+        /// Проверка: валидны ли page и pageSize
+        validatePagination(page, pageSize);
 
         /// Проверка: существует ли сервис (По идее всегда на фронте будет действительный список сервисов)
         var serviceProps = properties.services().get(serviceKey);
         if (serviceProps == null) {
-            throw new IllegalArgumentException("Service not found: " + serviceKey);
+            throw new DomainException(DomainStatus.NOT_FOUND,"Service not found: " + serviceKey);
         }
 
         /// Проверка: таблица в allowlist?
@@ -57,21 +63,46 @@ public class ReadOnlyQueryBuilder {
         boolean isAllowed = tableProps.allow().isEmpty() || tableProps.allow().contains(tableName);
         boolean isDenied = tableProps.deny().contains(tableName);
         if (!isAllowed || isDenied) {
-            throw new IllegalArgumentException("Table not accessible: " + tableName);
+            throw new DomainException(DomainStatus.PERMISSION_DENIED,"Table not accessible: " + tableName);
         }
 
-        // 5. Проверка: колонки для фильтров безопасны?
+        /// Проверка: колонки для фильтров безопасны?
         for (String filterKey : filters.keySet()) {
-            if (!filterKey.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
-                throw new IllegalArgumentException("Invalid filter column: " + filterKey);
+            if (!VALID_PATTERN.matcher(filterKey).matches()) {
+                throw new DomainException(DomainStatus.INVALID_ARGUMENT,"Invalid filter column: " + filterKey);
             }
         }
 
-        // 6. Строим БЕЗОПАСНЫЙ SQL (с плейсхолдерами!) (filters включает equals, from/to, contains)
+        /// Строим БЕЗОПАСНЫЙ SQL (с плейсхолдерами!) (filters включает equals, from/to, contains)
         String sql = buildSafeSql(tableName, page, pageSize, sort, order, filters);
         List<Object> params = buildParams(filters);
 
         return new SqlQuery(sql, params);
+    }
+
+    /**
+     * Строит COUNT запрос для подсчета общего количества записей.
+     *
+     * Используется для пагинации: totalPages, hasNext, hasPrev
+     *
+     * @param tableName имя таблицы
+     * @param filters фильтры (те же, что и в SELECT)
+     * @return SqlQuery - COUNT SQL с плейсхолдерами и параметрами
+     */
+    public SqlQuery buildSafeCountQuery(String tableName, Map<String, FilterOperatorsDto> filters) {
+        // 1. Строим COUNT SQL
+        // Пример: "SELECT COUNT(*) FROM users WHERE status = $1"
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ").append(tableName);
+
+        // 2. WHERE (с плейсхолдерами) - строим в
+        if (!filters.isEmpty()) {
+            sql.append(" WHERE ");
+            List<String> conditions = buildConditions(filters);
+            sql.append(String.join(" AND ", conditions));
+        }
+        List<Object> params = buildParams(filters);
+
+        return new SqlQuery(sql.toString(), params);
     }
 
 // Для понимания логики работы buildSafeSql
@@ -93,7 +124,7 @@ public class ReadOnlyQueryBuilder {
             int pageSize,
             String sort,
             String order,
-            Map<String, FilterOperators> filters
+            Map<String, FilterOperatorsDto> filters
     ) {
         StringBuilder sql = new StringBuilder();
         // 1. SELECT
@@ -110,8 +141,8 @@ public class ReadOnlyQueryBuilder {
 
         // 3. ORDER BY
         if (sort != null && !sort.isEmpty()) {
-            if (!sort.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
-                throw new IllegalArgumentException("Invalid sort column: " + sort);
+            if (!VALID_PATTERN.matcher(sort).matches()) {
+                throw new DomainException(DomainStatus.INVALID_ARGUMENT,"Invalid sort column: " + sort);
             }
             sql.append(" ORDER BY ").append(sort);
             if (order != null && !order.isEmpty()) {
@@ -135,62 +166,37 @@ public class ReadOnlyQueryBuilder {
     }
 
     /**
-     * Строит COUNT запрос для подсчета общего количества записей.
-     *
-     * Используется для пагинации: totalPages, hasNext, hasPrev
-     *
-     * @param tableName имя таблицы
-     * @param filters фильтры (те же, что и в SELECT)
-     * @return SqlQuery - COUNT SQL с плейсхолдерами и параметрами
-     */
-    public SqlQuery buildSafeCountQuery(String tableName, Map<String, FilterOperators> filters) {
-        // 1. Строим COUNT SQL
-        // Пример: "SELECT COUNT(*) FROM users WHERE status = $1"
-        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ").append(tableName);
-
-        // 2. WHERE (с плейсхолдерами) - строим в
-        if (!filters.isEmpty()) {
-            sql.append(" WHERE ");
-            List<String> conditions = buildConditions(filters);
-            sql.append(String.join(" AND ", conditions));
-        }
-        List<Object> params = buildParams(filters);
-
-        return new SqlQuery(sql.toString(), params);
-    }
-
-    /**
      * Строит WHERE-условия с плейсхолдерами на основе фильтров.
      * Используется в SELECT и COUNT запросах.
      *
      * @param filters фильтры с операторами
      * @return список условий (например, ["status = $1", "email ILIKE $2"])
      */
-    private List<String> buildConditions(Map<String, FilterOperators> filters) {
+    private List<String> buildConditions(Map<String, FilterOperatorsDto> filters) {
         int paramIndex = 1; // начальный индекс для плейсхолдеров
         List<String> conditions = new ArrayList<>();
 
-        for (Map.Entry<String, FilterOperators> entry : filters.entrySet()) {
+        for (var entry : filters.entrySet()) {
             String column = entry.getKey();
-            FilterOperators filter = entry.getValue();
+            FilterOperatorsDto filter = entry.getValue();
 
             // Экранируем колонку от зарезервированных слов
             String quotedColumn = "\"" + column + "\"";
 
             ///equals → column = $1
-            if (filter.hasEquals()) {
+            if (filter.equals() != null && !filter.equals().isEmpty()) {
                 conditions.add(quotedColumn + " = $" + paramIndex++);
             }
             ///contains → column ILIKE $1 (регистронезависимый)
-            if (filter.hasContains()) {
+            if (filter.contains() != null &&! filter.contains().isEmpty()) {
                 conditions.add(quotedColumn + " ILIKE $" + paramIndex++ + " ESCAPE '\\'");
             }
             ///from → column >= $1
-            if (filter.hasFrom()) {
+            if (filter.from() != null && !filter.from().isEmpty()) {
                 conditions.add(quotedColumn + " >= $" + paramIndex++ + "::timestamptz"); // CAST для timestamp with timeZone
             }
             ///to → column <= $1
-            if (filter.hasTo()) {
+            if (filter.to() != null && !filter.to().isEmpty()) {
                 conditions.add(quotedColumn + " <= $" + paramIndex++ + "::timestamptz"); // CAST для timestamp with timeZone
             }
         }
@@ -204,15 +210,15 @@ public class ReadOnlyQueryBuilder {
     *   filters = { "status": "active", "email": "john@gmail.com" }
     *   → ["active", "john@gmail.com"]
     */
-    private List<Object> buildParams(Map<String, FilterOperators> filters) {
+    private List<Object> buildParams(Map<String, FilterOperatorsDto> filters) {
         List<Object> params = new ArrayList<>();
 
-        for (FilterOperators filterOps : filters.values()) {
-            if (filterOps.hasEquals()) {
-                params.add(filterOps.getEquals());
+        for (FilterOperatorsDto filterOps : filters.values()) {
+            if (filterOps.equals() != null && !filterOps.equals().isEmpty()) {
+                params.add(filterOps.equals());
             }
-            if (filterOps.hasContains()) {
-                String value = filterOps.getContains();
+            if (filterOps.contains() != null && !filterOps.contains().isEmpty()) {
+                String value = filterOps.contains();
                 // Экранируем специальные символы LIKE
                 value = value.replace("\\", "\\\\")  // экранируем обратный слеш
                         .replace("%", "\\%")    // экранируем %
@@ -220,14 +226,31 @@ public class ReadOnlyQueryBuilder {
                 // Для contains добавляем % вокруг значения
                 params.add("%" + value + "%");
             }
-            if (filterOps.hasFrom()) {
-                params.add(filterOps.getFrom());
+            if (filterOps.from() != null && !filterOps.from().isEmpty()) {
+                params.add(filterOps.from());
             }
-            if (filterOps.hasTo()) {
-                params.add(filterOps.getTo());
+            if (filterOps.to() != null && !filterOps.to().isEmpty()) {
+                params.add(filterOps.to());
             }
         }
 
         return params;
+    }
+
+    /**
+     * Валидация входящих page и pageSize
+     * @param page
+     * @param pageSize
+     */
+    private void validatePagination(int page, int pageSize) {
+        if (page < 1) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Page must be >= 1");
+        }
+        if (pageSize < 1) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "PageSize must be >= 1");
+        }
+        if (pageSize > MAX_PAGE_SIZE) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "PageSize must be <= " + MAX_PAGE_SIZE);
+        }
     }
 }

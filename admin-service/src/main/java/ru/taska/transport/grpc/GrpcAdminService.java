@@ -1,26 +1,19 @@
 package ru.taska.transport.grpc;
 
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.api.admin.v1.FilterOperators;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.Row;
+import ru.taska.dto.ListTableRowsRequestDto;
+import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
-import ru.taska.mapper.ReadOnlyDataMapper;
-import ru.taska.repository.ReadOnlyRepository;
+import ru.taska.service.AdminService;
 import ru.taska.service.MetadataService;
-import ru.taska.service.ReadOnlyQueryBuilder;
 import validator.GrpcRequestValidators;
-
-import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -29,9 +22,8 @@ public class GrpcAdminService {
 
     private final MetadataService metadataService;
     private final MetadataCatalogMapper mapper;
-    private final ReadOnlyQueryBuilder queryBuilder;
-    private final ReadOnlyDataMapper dataMapper;
-    private final ReadOnlyRepository readOnlyRepository;
+    private final AdminService adminService;
+    private final ListTableRowsMapper listTableRowsMapper;
 
     /**
      * Обрабатывает gRPC-запрос на получение каталога метаданных.
@@ -81,45 +73,12 @@ public class GrpcAdminService {
                             req.getBody().getPageSize(),
                             req.getBody().getFiltersMap());
 
-                    String serviceKey = req.getBody().getServiceKey(); // "user-service"
-                    String tableName = req.getBody().getTableName();  // "users"
-                    Map<String, FilterOperators> filters = req.getBody().getFiltersMap();
+                    // Маппим proto → DTO
+                    ListTableRowsRequestDto requestDto = listTableRowsMapper.toRequestDto(req);
 
-                    try {
-                        /// Построение безопасного SQL запроса (с проверкой allowlist)
-                        ReadOnlyQueryBuilder.SqlQuery safeQuery = queryBuilder.buildSafeQuery(req);
-                        /// Строим COUNT запрос (для пагинации)
-                        ReadOnlyQueryBuilder.SqlQuery safeCountQuery = queryBuilder.buildSafeCountQuery(tableName, filters);
-
-                        /// Выполнение запроса к БД через DatabaseClient (параметризованный!)
-                        // ReadOnlyRepository:
-                        // - Берет DatabaseClient из ReadonlyR2dbcConfig
-                        // - Выполняет параметризованный запрос
-                        // - Возвращает Flux<Map<String, Object>> - строки таблицы
-                        return readOnlyRepository.executeQuery(serviceKey,safeQuery)
-                                .collectList()
-                                .flatMap(rows -> {
-                                    ///Считаем общее количество записей (нужно для пагинации)
-                                    return readOnlyRepository.countRows(serviceKey, safeCountQuery)
-                                            .flatMap(total->{
-                                                /// Маскировка sensitive колонок
-                                                List<Row> maskedRows = dataMapper.maskSensitiveColumns(
-                                                        rows,           // строки из БД
-                                                        serviceKey,     // "user-service"
-                                                        tableName       // "users"
-                                                );
-
-                                                return metadataService.getTableColumns(serviceKey,tableName)
-                                                        .map(allColumns-> dataMapper.buildResponse(req,maskedRows,total,allColumns));
-                                            });
-                                });
-                    }catch (IllegalArgumentException e) {
-                        /// Если что-то пошло не так (неправильная таблица, колонка и т.д.)
-                        log.warn("[{}][{}] listTableRows error: {}", requestId, nodeId, e.getMessage());
-                        return Mono.error(new StatusRuntimeException(
-                                Status.INVALID_ARGUMENT.withDescription(e.getMessage())
-                        ));
-                    }
+                    // Бизнес-логика
+                    return adminService.listTableRows(requestDto)
+                            .map(listTableRowsMapper::toListTableRowsResponse);
                 }));
     }
 }

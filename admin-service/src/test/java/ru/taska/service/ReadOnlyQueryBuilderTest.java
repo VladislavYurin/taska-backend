@@ -9,15 +9,14 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import ru.taska.api.admin.v1.FilterOperators;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsRequestBody;
-import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.MetadataCatalogProperties;
+import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 @ExtendWith(MockitoExtension.class)
 class ReadOnlyQueryBuilderTest {
@@ -68,10 +67,13 @@ class ReadOnlyQueryBuilderTest {
         // Мокаем allow для этого теста
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequest(builder -> builder.setSort(INJECTION_SORT));
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                INJECTION_SORT, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
                 .hasMessageContaining("Invalid sort column");
     }
 
@@ -79,10 +81,13 @@ class ReadOnlyQueryBuilderTest {
     void shouldPreventSqlInjectionInSortWithUnion() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequest(builder -> builder.setSort("id UNION SELECT * FROM passwords"));
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                "id UNION SELECT * FROM passwords", "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
                 .hasMessageContaining("Invalid sort column");
     }
 
@@ -90,9 +95,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldPreventSqlInjectionInFilters() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("status", INJECTION_FILTER);
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "status", new FilterOperatorsDto(INJECTION_FILTER, null, null, null)
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).doesNotContain("DROP TABLE");
         Assertions.assertThat(sqlQuery.params()).contains(INJECTION_FILTER);
@@ -102,10 +112,15 @@ class ReadOnlyQueryBuilderTest {
     void shouldPreventSqlInjectionInFilterColumnName() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter(INJECTION_COLUMN, "active");
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                INJECTION_COLUMN, new FilterOperatorsDto("active", null, null, null)
+        );
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
                 .hasMessageContaining("Invalid filter column");
     }
 
@@ -113,10 +128,13 @@ class ReadOnlyQueryBuilderTest {
     void shouldPreventSqlInjectionInTableName() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequest(builder -> builder.setTableName(INJECTION_TABLE));
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, INJECTION_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
                 .hasMessageContaining("Table not accessible");
     }
 
@@ -124,10 +142,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldPreventSqlInjectionInContains() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("email",
-                FilterOperators.newBuilder().setContains(INJECTION_FILTER).build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "email", new FilterOperatorsDto(null, INJECTION_FILTER, null, null)
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).doesNotContain("DROP TABLE");
         Assertions.assertThat(sqlQuery.params()).contains("%" + INJECTION_FILTER + "%");
@@ -139,10 +161,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithEqualsFilter() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("status",
-                FilterOperators.newBuilder().setEquals("active").build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "status", new FilterOperatorsDto("active", null, null, null)
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("\"status\" = $1");
         Assertions.assertThat(sqlQuery.params()).contains("active");
@@ -152,10 +178,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithContainsFilter() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("email",
-                FilterOperators.newBuilder().setContains("@test.com").build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "email", new FilterOperatorsDto(null, "@test.com", null, null)
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("\"email\" ILIKE $1 ESCAPE '\\'");
         Assertions.assertThat(sqlQuery.params()).contains("%@test.com%");
@@ -165,10 +195,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithFromFilter() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("created_at",
-                FilterOperators.newBuilder().setFrom("2026-01-01").build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "created_at", new FilterOperatorsDto(null, null, "2026-01-01", null)
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" >= $1::timestamptz");
         Assertions.assertThat(sqlQuery.params()).contains("2026-01-01");
@@ -178,10 +212,14 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithToFilter() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequestWithFilter("created_at",
-                FilterOperators.newBuilder().setTo("2026-12-31").build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "created_at", new FilterOperatorsDto(null, null, null, "2026-12-31")
+        );
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("\"created_at\" <= $1::timestamptz");
         Assertions.assertThat(sqlQuery.params()).contains("2026-12-31");
@@ -190,17 +228,16 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldBuildQueryWithMultipleFilters() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
-        FilterOperators dateFilter = FilterOperators.newBuilder()
-                .setFrom("2026-01-01")
-                .setTo("2026-12-31")
-                .build();
 
-        ListTableRowsRequest request = createRequest(builder -> builder
-                .putFilters("status", FilterOperators.newBuilder().setEquals("active").build())
-                .putFilters("email", FilterOperators.newBuilder().setContains("@test.com").build())
-                .putFilters("created_at", dateFilter));
+        Map<String, FilterOperatorsDto> filters = new LinkedHashMap<>();
+        filters.put("status", new FilterOperatorsDto("active", null, null, null));
+        filters.put("email", new FilterOperatorsDto(null, "@test.com", null, null));
+        filters.put("created_at", new FilterOperatorsDto(null, null, "2026-01-01", "2026-12-31"));
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("\"status\" = $1");
         Assertions.assertThat(sqlQuery.sql()).contains("\"email\" ILIKE $2 ESCAPE '\\'");
@@ -215,11 +252,12 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithPagination() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequest(builder -> builder
-                .setPage(2)
-                .setPageSize(10));
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, 2, 10,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("LIMIT 10 OFFSET 10");
     }
@@ -228,23 +266,24 @@ class ReadOnlyQueryBuilderTest {
     void shouldBuildQueryWithSorting() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
 
-        ListTableRowsRequest request = createRequest(builder -> builder
-                .setSort("created_at")
-                .setOrder("desc"));
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                "created_at", "desc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("ORDER BY created_at desc");
     }
 
     @Test
     void shouldBuildCountQuery() {
-        ListTableRowsRequest request = createRequestWithFilter("status",
-                FilterOperators.newBuilder().setEquals("active").build());
+        Map<String, FilterOperatorsDto> filters = Map.of(
+                "status", new FilterOperatorsDto("active", null, null, null)
+        );
 
         ReadOnlyQueryBuilder.SqlQuery countQuery = queryBuilder.buildSafeCountQuery(
-                TEST_TABLE,
-                request.getBody().getFiltersMap()
+                TEST_TABLE, filters
         );
 
         Assertions.assertThat(countQuery.sql()).contains("SELECT COUNT(*) FROM " + TEST_TABLE);
@@ -257,10 +296,14 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldRejectTableNotInAllowlist() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
-        ListTableRowsRequest request = createRequest(builder -> builder.setTableName("unknown_table"));
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, "unknown_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
                 .hasMessageContaining("Table not accessible");
     }
 
@@ -268,19 +311,27 @@ class ReadOnlyQueryBuilderTest {
     void shouldRejectTableInDenylist() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE, BLOCKED_TABLE));
         Mockito.when(tableProps.deny()).thenReturn(List.of(BLOCKED_TABLE));
-        ListTableRowsRequest request = createRequest(builder -> builder.setTableName(BLOCKED_TABLE));
 
-        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafeQuery(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, BLOCKED_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
                 .hasMessageContaining("Table not accessible");
     }
 
     @Test
     void shouldAllowTableInAllowlist() {
         Mockito.when(tableProps.allow()).thenReturn(List.of(TEST_TABLE, ANOTHER_TABLE));
-        ListTableRowsRequest request = createRequest(builder -> builder.setTableName(TEST_TABLE));
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("SELECT * FROM " + TEST_TABLE);
     }
@@ -288,42 +339,55 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldAllowAnyTableWhenAllowlistEmpty() {
         Mockito.when(tableProps.allow()).thenReturn(List.of());
-        ListTableRowsRequest request = createRequest(builder -> builder.setTableName("any_table"));
 
-        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(request);
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        ReadOnlyQueryBuilder.SqlQuery sqlQuery = queryBuilder.buildSafeQuery(
+                TEST_SERVICE, "any_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                null, "asc", filters
+        );
 
         Assertions.assertThat(sqlQuery.sql()).contains("SELECT * FROM any_table");
     }
 
-    // ==================== HELPER METHODS ====================
+    // ==================== 5. ТЕСТЫ ВАЛИДАЦИИ PAGE/PAGESIZE ====================
 
-    private Header buildHeader() {
-        return Header.newBuilder()
-                .setRequestId("test-req-id")
-                .setNodeId("test-node-id")
-                .build();
+    @Test
+    void shouldRejectPageLessThan1() {
+
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, 0, DEFAULT_PAGE_SIZE,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
+                .hasMessageContaining("Page must be >= 1");
     }
 
-    private ListTableRowsRequest createRequest(Consumer<ListTableRowsRequestBody.Builder> bodyConfig) {
-        ListTableRowsRequestBody.Builder bodyBuilder = ListTableRowsRequestBody.newBuilder()
-                .setServiceKey(TEST_SERVICE)
-                .setTableName(TEST_TABLE)
-                .setPage(DEFAULT_PAGE)
-                .setPageSize(DEFAULT_PAGE_SIZE);
+    @Test
+    void shouldRejectPageSizeLessThan1() {
 
-        bodyConfig.accept(bodyBuilder);
+        Map<String, FilterOperatorsDto> filters = Map.of();
 
-        return ListTableRowsRequest.newBuilder()
-                .setHeader(buildHeader())
-                .setBody(bodyBuilder.build())
-                .build();
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, 0,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
+                .hasMessageContaining("PageSize must be >= 1");
     }
 
-    private ListTableRowsRequest createRequestWithFilter(String column, FilterOperators filter) {
-        return createRequest(builder -> builder.putFilters(column, filter));
-    }
+    @Test
+    void shouldRejectPageSizeGreaterThanMax() {
 
-    private ListTableRowsRequest createRequestWithFilter(String column, String value) {
-        return createRequestWithFilter(column, FilterOperators.newBuilder().setEquals(value).build());
+        Map<String, FilterOperatorsDto> filters = Map.of();
+
+        Assertions.assertThatThrownBy(() ->
+                        queryBuilder.buildSafeQuery(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, 101,
+                                null, "asc", filters)
+                ).isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
+                .hasMessageContaining("PageSize must be <= 100");
     }
 }

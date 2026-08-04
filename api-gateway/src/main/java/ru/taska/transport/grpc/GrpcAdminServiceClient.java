@@ -53,7 +53,7 @@ public class GrpcAdminServiceClient {
             Integer pageSize,
             @Nullable String sort,
             String order,
-            @Nullable Map<String, String> filters,
+            @Nullable Map<String, String> filters, // "status.eq=ACTIVE"  -> "status.eq" , "ACTIVE"
             GatewayContext context
     ) {
         log.info("[{}] Calling listTableRows", context.requestId());
@@ -62,8 +62,8 @@ public class GrpcAdminServiceClient {
         ListTableRowsRequestBody listTableRowsRequestBody = ListTableRowsRequestBody.newBuilder()
                 .setServiceKey(service)
                 .setTableName(table)
-                .setPage(page != null ? page : 1) /// Параметры могут прийти null, обрабатываем вручную
-                .setPageSize(pageSize != null ? pageSize : 20)
+                .setPage(page != null ? page : 1) // Параметры могут прийти null, обрабатываем вручную
+                .setPageSize(pageSize != null  ? pageSize : 20) // А если придут невалидные данные - обрабатываем в квери билдере
                 .setSort(sort != null ? sort : "")
                 .setOrder(order != null ? order : "asc")
                 .putAllFilters(filters != null && !filters.isEmpty() ? filtersToFilterOperators(filters) : Collections.emptyMap())
@@ -95,16 +95,16 @@ public class GrpcAdminServiceClient {
     /**
      * Преобразует Map<String, String> в Map<String, FilterOperators>.
      *
-     * Входные данные (ключи в формате "column[operator]"):
-     *   "status[eq]" -> "active"
-     *   "email[contains]" -> "@test.com"
-     *   "created_at[from]" -> "2026-01-01T00:00:00Z"
-     *   "created_at[to]" -> "2026-12-31T23:59:59Z"
+     * Входные данные (ключи в формате "column.operator"):
+     *   "status.eq" , "active" или "status" , "active
+     *   "email.contains" , "@test.com"
+     *   "created_at.from" , "2026-01-01T00:00:00Z"
+     *   "created_at.to" , "2026-12-31T23:59:59Z"
      *
      * Выходные данные:
-     *   "status" -> FilterOperators(equals="active")
-     *   "email" -> FilterOperators(contains="@test.com")
-     *   "created_at" -> FilterOperators(from="2026-01-01T00:00:00Z", to="2026-12-31T23:59:59Z")
+     *   "status" , FilterOperators(equals="active")
+     *   "email" ,  FilterOperators(contains="@test.com")
+     *   "created_at" , FilterOperators(from="2026-01-01T00:00:00Z", to="2026-12-31T23:59:59Z")
      */
     private static final Pattern FILTER_PATTERN = Pattern.compile("^([a-zA-Z0-9_-]+)\\.([a-zA-Z0-9]+)$");
     private static final Pattern COLUMN_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
@@ -118,12 +118,12 @@ public class GrpcAdminServiceClient {
 
         Map<String, FilterOperators.Builder> buildersMap = new HashMap<>();
 
-        for (Map.Entry<String, String> entry : filters.entrySet()) {
+        for (var entry : filters.entrySet()) {
             String columnOperator = entry.getKey();
             String value = entry.getValue();
 
             // Сначала проверяем, что ключ содержит только разрешенные символы
-            //    Это защита от явных SQL инъекций
+            // Защита от явных SQL инъекций
             if (!columnOperator.matches("^[a-zA-Z0-9_.-]+$")) {
                 log.warn("Invalid filter columnOperator format '{}', skipping", columnOperator);
                 continue;
@@ -155,7 +155,6 @@ public class GrpcAdminServiceClient {
                 log.warn("Unknown operator '{}' for column '{}', skipping", operator, column);
                 continue;
             }
-
 
             FilterOperators.Builder builder = buildersMap.computeIfAbsent(column, k -> FilterOperators.newBuilder());
 
