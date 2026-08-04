@@ -9,11 +9,12 @@ import java.util.Set;
 @ConfigurationProperties(prefix = "issue")
 public record IssueProperties(
         AllowedRoles allowedRoles,
-        List list,
+        Pagination pagination,
         Card card,
         IdempotencyKeyTtl idempotencyKeyTtl,
         RetryConfig retry,
-        AutoWatch autoWatch
+        AutoWatch autoWatch,
+        Search search
 ) {
 
     public record AllowedRoles(
@@ -41,11 +42,12 @@ public record IssueProperties(
             Set<ProjectRole> listProjectLabelRoles,     // VIEWER+
             Set<ProjectRole> addIssueLabelRoles,        // MEMBER+
             Set<ProjectRole> removeIssueLabelRoles,     // MEMBER+
-            Set<ProjectRole> listIssueLabelRoles        // VIEWER+
+            Set<ProjectRole> listIssueLabelRoles,        // VIEWER+
+            Set<ProjectRole> searchIssueRoles
     ) {
     }
 
-    public record List(
+    public record Pagination(
             int defaultPageSize,
             int maxPageSize
     ) {
@@ -74,5 +76,10 @@ public record IssueProperties(
         public static AutoWatch disabled() {
             return new AutoWatch(false, false);
         }
+    }
+
+    public record Search(
+            int minQueryLength
+    ) {
     }
 }

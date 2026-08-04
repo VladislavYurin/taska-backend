@@ -11,8 +11,13 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequestBody;
 import ru.taska.api.project.v1.ProjectKeyResponse;
+import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsRequestBody;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -71,4 +76,28 @@ public class GrpcProjectServiceClient {
                 .map(ProjectKeyResponse::getProjectKey);
     }
 
+    public Mono<List<ProjectResponse>> listMyProjects(String requestId, String nodeId, UUID userId) {
+        log.info("[{}][{}] Calling listMyProjects with: userId={}", requestId, nodeId, userId);
+
+        var request = ListMyProjectsRequest.newBuilder()
+                .setHeader(
+                        Header.newBuilder()
+                                .setRequestId(requestId)
+                                .setNodeId(nodeId)
+                                .build()
+                )
+                .setBody(
+                        ListMyProjectsRequestBody.newBuilder()
+                                .setUserId(userId.toString())
+                                .build()
+                )
+                .build();
+
+        return projectServiceStub.listMyProjects(request)
+                .map(ListMyProjectsResponse::getProjectResponseList)
+                .doOnSuccess(projects -> log.info("[{}][{}] listMyProjects: found {} projects",
+                        requestId, nodeId, projects.size()))
+                .doOnError(e -> log.error("[{}][{}] listMyProjects failed: {}",
+                        requestId, nodeId, e.getMessage()));
+    }
 }

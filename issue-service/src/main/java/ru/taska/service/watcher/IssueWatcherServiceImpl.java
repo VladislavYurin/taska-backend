@@ -185,8 +185,8 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
     }
 
     private int resolvePageSize(String requestId, String nodeId, Integer pageSize) {
-        int defaultPageSize = issueProperties.list().defaultPageSize();
-        int maxPageSize = issueProperties.list().maxPageSize();
+        int defaultPageSize = issueProperties.pagination().defaultPageSize();
+        int maxPageSize = issueProperties.pagination().maxPageSize();
 
         if (pageSize == null) {
             return defaultPageSize;

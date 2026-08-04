@@ -20,6 +20,8 @@ import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
+import ru.taska.api.issue.v1.SearchIssuesResponse;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
@@ -229,5 +231,14 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<ListIssueLabelsResponse> listIssueLabels(Mono<ListIssueLabelsRequest> request) {
         return grpcIssueService.listIssueLabels(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueLabels"));
+    }
+
+    /**
+     * Поиск задач по ключу, summary и description с фильтрами
+     */
+    @Override
+    public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
+        return grpcIssueService.searchIssues(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
     }
 }

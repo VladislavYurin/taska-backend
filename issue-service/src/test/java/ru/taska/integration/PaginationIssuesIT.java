@@ -21,7 +21,7 @@ import ru.taska.service.IssueService;
 import java.util.List;
 import java.util.UUID;
 
-class ListIssuesIT extends AbstractIT {
+class PaginationIssuesIT extends AbstractIT {
 
     @MockitoBean
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;

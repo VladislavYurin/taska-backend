@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -352,20 +353,252 @@ public class IssueServiceImpl implements IssueService {
 
     private int validatePageSize(Integer pageSize) {
         if (pageSize == null) {
-            return issueProperties.list().defaultPageSize();
+            return issueProperties.pagination().defaultPageSize();
         }
         if (pageSize < 1) {
-            log.warn("Invalid pageSize value: {}, falling back to default {}", pageSize, issueProperties.list().defaultPageSize());
-            return issueProperties.list().defaultPageSize();
+            log.warn("Invalid pageSize value: {}, falling back to default {}", pageSize, issueProperties.pagination().defaultPageSize());
+            return issueProperties.pagination().defaultPageSize();
         }
-        if (pageSize > issueProperties.list().maxPageSize()) {
-            log.warn("Requested pageSize {} exceeds max {}, clamping to max", pageSize, issueProperties.list().maxPageSize());
-            return issueProperties.list().maxPageSize();
+        if (pageSize > issueProperties.pagination().maxPageSize()) {
+            log.warn("Requested pageSize {} exceeds max {}, clamping to max", pageSize, issueProperties.pagination().maxPageSize());
+            return issueProperties.pagination().maxPageSize();
         }
         return pageSize;
     }
 
     private boolean isAssigned(Issue issue, UUID assigneeId) {
         return issue.getAssigneeId() != null && issue.getAssigneeId().equals(assigneeId);
+    }
+
+  ///////////////////////////////////////   Search issues   //////////////////////////
+  @Override
+  public Mono<PageResult<Issue>> searchIssues(
+          String requestId,
+          String nodeId,
+          UUID actorUserId,
+          String query,
+          UUID projectId,
+          String statusKey,
+          UUID assigneeId,
+          UUID reporterId,
+          IssuePriority priority,
+          IssueType issueType,
+          Integer page,
+          Integer pageSize
+  ) {
+      log.info("[{}][{}] searchIssues: query={}, projectId={}, statusKey={}, assigneeId={}, reporterId={}, priority={}, issueType={}, page={}, pageSize={}",
+              requestId, nodeId, query, projectId, statusKey, assigneeId, reporterId, priority, issueType, page, pageSize);
+
+      // Валидация поискового запроса
+      if (query != null && query.length() < issueProperties.search().minQueryLength()) {
+          log.warn("[{}][{}] Search query too short: length={}, minLength={}",
+                  requestId, nodeId, query.length(), issueProperties.search().minQueryLength());
+          return Mono.error(new DomainException(
+                  DomainStatus.INVALID_ARGUMENT,
+                  "Search query must be at least " + issueProperties.search().minQueryLength() + " characters"
+          ));
+      }
+
+      int resolvedPage = validatePage(page);
+      int resolvedPageSize = validatePageSize(pageSize);
+      long offset = (long) resolvedPage * resolvedPageSize;
+
+      // Если projectId передан - проверяем доступ к конкретному проекту
+      if (projectId != null) {
+          log.debug("[{}][{}] Searching in specific project: {}", requestId, nodeId, projectId);
+          return searchInSingleProject(requestId, nodeId, actorUserId, query, projectId,
+                  statusKey, assigneeId, reporterId, priority, issueType,
+                  resolvedPageSize, offset);
+      }
+
+      // Если projectId не передан - получаем все проекты пользователя и ищем в них
+      log.info("[{}][{}] Searching in all accessible projects for user: {}", requestId, nodeId, actorUserId);
+      return searchInUserProjects(requestId, nodeId, actorUserId, query,
+              statusKey, assigneeId, reporterId, priority, issueType,
+              resolvedPageSize, offset);
+  }
+
+    /**
+     * Поиск задач в конкретном проекте с проверкой прав.
+     */
+    private Mono<PageResult<Issue>> searchInSingleProject(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            String query,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            int pageSize,
+            long offset
+    ) {
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().searchIssueRoles();
+
+        String priorityStr = priority != null ? priority.name() : null;
+        String issueTypeStr = issueType != null ? issueType.name() : null;
+
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(Mono.zip(
+                        issueRepository.countSearchIssues(
+                                projectId,
+                                statusKey,
+                                assigneeId,
+                                reporterId,
+                                priorityStr,
+                                issueTypeStr,
+                                query
+                        ),
+                        issueRepository.searchIssues(
+                                projectId,
+                                statusKey,
+                                assigneeId,
+                                reporterId,
+                                priorityStr,
+                                issueTypeStr,
+                                query,
+                                pageSize,
+                                offset
+                        ).collectList()
+                ))
+                .map(t -> {
+                    Long totalCount = t.getT1();
+                    List<Issue> issues = t.getT2();
+                    log.info("[{}][{}] Search in project {} completed: found {} issues, total={}",
+                            requestId, nodeId, projectId, issues.size(), totalCount);
+                    return new PageResult<>(issues, totalCount);
+                })
+                .doOnError(e -> log.error("[{}][{}] Search in project {} failed: {}",
+                        requestId, nodeId, projectId, e.getMessage()));
+    }
+
+    /**
+     * Поиск задач во всех проектах, доступных пользователю.
+     */
+    private Mono<PageResult<Issue>> searchInUserProjects(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            String query,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            int pageSize,
+            long offset
+    ) {
+        return getUserProjects(requestId, nodeId, actorUserId)
+                .flatMap(projectIds -> {
+                    if (projectIds.isEmpty()) {
+                        log.info("[{}][{}] User has no accessible projects",
+                                requestId, nodeId);
+
+                        return Mono.just(new PageResult<>(List.of(), 0L));
+                    }
+
+                    log.info("[{}][{}] User has {} accessible projects: {}",
+                            requestId, nodeId, projectIds.size(), projectIds);
+
+                    return searchInProjects(
+                            requestId,
+                            nodeId,
+                            actorUserId,
+                            projectIds,
+                            query,
+                            statusKey,
+                            assigneeId,
+                            reporterId,
+                            priority,
+                            issueType,
+                            pageSize,
+                            offset
+                    );
+                });
+    }
+
+    /**
+     * Получение списка проектов, доступных пользователю.
+     * Выполняет gRPC-вызов к project-service.
+     */
+    private Mono<List<UUID>> getUserProjects(
+            String requestId,
+            String nodeId,
+            UUID actorUserId
+    ) {
+        log.info("[{}][{}] Getting user projects for userId: {}",
+                requestId, nodeId, actorUserId);
+
+        return grpcProjectServiceClient.listMyProjects(requestId, nodeId, actorUserId)
+                .map(projects -> projects.stream()
+                        .map(project -> UUID.fromString(project.getId()))
+                        .toList()
+                )
+                .doOnSuccess(projects ->
+                        log.info("[{}][{}] Found {} projects for user {}",
+                                requestId, nodeId, projects.size(), actorUserId)
+                )
+                .onErrorMap(error -> {
+                    log.error("[{}][{}] Failed to get user projects for user {}",
+                            requestId, nodeId, actorUserId, error);
+
+                    return new DomainException(
+                            DomainStatus.UNAVAILABLE,
+                            "Unable to search issues because project-service is unavailable"
+                    );
+                });
+    }
+
+    /**
+     * Поиск задач в нескольких проектах.
+     */
+    private Mono<PageResult<Issue>> searchInProjects(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            List<UUID> projectIds,
+            String query,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            int pageSize,
+            long offset
+    ) {
+        String priorityStr = priority != null ? priority.name() : null;
+        String issueTypeStr = issueType != null ? issueType.name() : null;
+
+        return Mono.zip(
+                        issueRepository.countSearchIssuesInProjects(
+                                projectIds,
+                                statusKey,
+                                assigneeId,
+                                reporterId,
+                                priorityStr,
+                                issueTypeStr,
+                                query
+                        ),
+                        issueRepository.searchIssuesInProjects(
+                                projectIds,
+                                statusKey,
+                                assigneeId,
+                                reporterId,
+                                priorityStr,
+                                issueTypeStr,
+                                query,
+                                pageSize,
+                                offset
+                        ).collectList()
+                )
+                .map(t -> {
+                    Long totalCount = t.getT1();
+                    List<Issue> issues = t.getT2();
+                    log.info("[{}][{}] Search in {} projects completed: found {} issues, total={}, actor={}",
+                            requestId, nodeId, projectIds.size(), issues.size(), totalCount, actorUserId);
+                    return new PageResult<>(issues, totalCount);
+                });
     }
 }

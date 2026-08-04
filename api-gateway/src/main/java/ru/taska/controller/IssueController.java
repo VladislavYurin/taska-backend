@@ -1,6 +1,7 @@
 package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,10 +17,13 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.SearchIssuesRequestDto;
+import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
+import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
 /**
@@ -27,12 +31,14 @@ import ru.taska.transport.grpc.GrpcIssueServiceClient;
  * Делегирует обработку запросов {@link GatewayRequestExecutor}
  * и взаимодействие с issue-сервисом через {@link GrpcIssueServiceClient}.
  */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class IssueController implements IssueApi {
 
     private final GatewayRequestExecutor executor;
     private final GrpcIssueServiceClient issueClient;
+    private final IssueMapper issueMapper;
 
     /**
      * Возвращает задачу вместе с историей изменений.
@@ -145,6 +151,21 @@ public class IssueController implements IssueApi {
         );
     }
 
+
+    /**
+     * Возвращает полный список связей для задачи.
+     */
+    @Override
+    public Mono<ResponseEntity<ListIssueLinksResponseDto>> listIssueLinks(
+            String issueId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.listIssueLinks(issueId, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
     /**
      * Создает новую связь между задачами.
      */
@@ -178,17 +199,39 @@ public class IssueController implements IssueApi {
     }
 
     /**
-     * Возвращает полный список связей для задачи.
+     * Выполняет поиск задач по ключу, summary, description с фильтрами.
      */
     @Override
-    public Mono<ResponseEntity<ListIssueLinksResponseDto>> listIssueLinks(
-            String issueId,
+    public Mono<ResponseEntity<SearchIssuesResponseDto>> searchIssues(
+            String query,
+            String projectId,
+            String statusKey,
+            String assigneeId,
+            String reporterId,
+            String priority,
+            String issueType,
+            Integer page,
+            Integer pageSize,
             ServerWebExchange exchange
     ) {
+        log.info("REST: searchIssues: query={}, projectId={}, statusKey={}, assigneeId={}, reporterId={}, " +
+                        "priority={}, issueType={}, page={}, pageSize={}",
+                query, projectId, statusKey, assigneeId, reporterId, priority, issueType, page, pageSize);
+
+        SearchIssuesRequestDto request = issueMapper.toSearchRequestDto(
+                query,
+                projectId,
+                statusKey,
+                assigneeId,
+                reporterId,
+                priority,
+                issueType,
+                page,
+                pageSize);
+
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.listIssueLinks(issueId, context)
-                        .map(ResponseEntity::ok)
-        );
+                        issueClient.searchIssues(request, context)
+                                .map(ResponseEntity::ok));
     }
 }
 

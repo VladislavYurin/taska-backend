@@ -99,6 +99,12 @@ service IssueService {
    */
   rpc TransitionIssue(TransitionIssueRequest)
       returns (IssueWithHistoryResponse);
+  /**
+     * Делает поиск issue.
+     */
+  rpc SearchIssues(SearchIssuesRequest)
+      returns (SearchIssuesResponse);
+
 
   /**
    * Возвращает список связей для задачи.
@@ -1162,6 +1168,86 @@ message DeleteIssueLinkResponse {
    */
   IssueEventType event_type = 2;
 }
+
+// ===== Search issue messages =====
+message SearchIssuesRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  SearchIssuesRequestBody body = 2;
+}
+
+message SearchIssuesRequestBody {
+  /**
+   * Поисковый запрос (поиск по issue_key, summary, description).
+   * Если не указан, возвращаются все задачи с применёнными фильтрами.
+   */
+  optional string query = 1;
+
+  /**
+   * Идентификатор проекта (опционально).
+   * Если не указан, поиск выполняется по всем проектам, доступным пользователю.
+   */
+  optional string project_id = 2;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 3;
+
+  /**
+   * Фильтр по статусу задачи (опционально).
+   */
+  optional string status_key = 4;
+
+  /**
+   * Фильтр по идентификатору исполнителя (опционально).
+   */
+  optional string assignee_id = 5;
+
+  /**
+   * Фильтр по идентификатору создателя (опционально).
+   */
+  optional string reporter_id = 6;
+
+  /**
+   * Фильтр по приоритету (опционально).
+   */
+  optional IssuePriority priority = 7;
+
+  /**
+   * Фильтр по типу задачи (опционально).
+   */
+  optional IssueType issue_type = 8;
+
+  /**
+   * Размер страницы (если не указан, используется значение по умолчанию из конфига).
+   */
+  optional int32 page_size = 9;
+
+  /**
+   * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
+   */
+  optional int32 page = 10;
+}
+
+message SearchIssuesResponse {
+  /**
+   * Список найденных задач.
+   */
+  repeated IssueShortResponse issues = 1;
+
+  /**
+   * Общее количество задач, соответствующих фильтру.
+   */
+  int32 total_count = 2;
+}
+
 // ===== Comment messages =====
 /**
  * Комментарий к задаче.
