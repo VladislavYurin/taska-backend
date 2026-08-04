@@ -819,6 +819,127 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/readonly/{service}/{table}:
+    get:
+      summary: Получение строк таблицы из сервисной БД (только для GLOBAL_ADMIN)
+      operationId: listTableRows
+      tags:
+        - readonly
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Имя сервиса (auth, project, issue, workflow, notification, admin) Актуальный список возвращается через GET /api/v1/readonly/metadata. Валидация происходит на бэкенде через metadata catalog.
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/metadata. Валидация происходит на бэкенде через metadata catalog.
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Колонка для сортировки
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ asc, desc ]
+            default: asc
+        - name: filter
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+          description: |
+            Фильтры по колонкам таблицы. Имя динамического свойства — это название колонки.
+            
+            Формат: column.operator=value (точное совпадение)
+            
+            Примеры:
+            - ?status=active → status = 'active'
+            - ?email.contains=@gmail.com → email LIKE '%@gmail.com%'
+            - ?created_at.from=2026-01-01T00:00:00Z → created_at >= '2026-01-01T00:00:00Z'
+            - ?created_at.to=2026-12-31T23:59:59Z → created_at <= '2026-12-31T23:59:59Z'
+            - ?status=active&assignee_id=123 → комбинация фильтров
+            
+            Поддерживаемые операторы:
+            - .eq (или без оператора) - точное совпадение column=value
+            - .contains - поиск по подстроке (column LIKE '%value%')
+            - .from - нижняя граница для timestamp (column >= value)
+            - .to - верхняя граница для timestamp (column <= value)
+      responses:
+        '200':
+          description: Данные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadOnlyResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/readonly/metadata:
+    get:
+      summary: Получение каталога доступных сервисов и таблиц (только для GLOBAL_ADMIN)
+      operationId: getMetadata
+      tags:
+        - readonly
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: Метаданные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1096,6 +1217,99 @@ components:
         - MEMBER_ADDED
         - MEMBER_UPDATED
         - MEMBER_REMOVED
+
+    ReadOnlyResponseDto:
+      type: object
+      properties:
+        data:
+          type: array
+          description: Массив строк таблиц
+          items:
+            type: object
+            additionalProperties: true
+        pagination:
+          $ref: '#/components/schemas/PaginationInfoDto'
+        meta:
+          $ref: '#/components/schemas/MetaInfoDto'
+
+    PaginationInfoDto:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+        pageSize:
+          type: integer
+        totalRows:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    MetaInfoDto:
+      type: object
+      properties:
+        service:
+          type: string
+        table:
+          type: string
+        columns:
+          type: array
+          items:
+            type: string
+        sortableColumns:
+          type: array
+          items:
+            type: string
+        filterableColumns:
+          type: array
+          items:
+            type: string
+
+    MetadataResponse:
+      type: object
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceMetadataDto'
+
+    ServiceMetadataDto:
+      type: object
+      properties:
+        name:
+          type: string
+        databaseAlias:
+          type: string
+        tables:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableMetadataDto'
+
+    TableMetadataDto:
+      type: object
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnMetadataDto'
+        primaryKey:
+          type: string
+
+    ColumnMetadataDto:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        sensitive:
+          type: boolean
 
     CreateProjectRequestDto:
       type: object

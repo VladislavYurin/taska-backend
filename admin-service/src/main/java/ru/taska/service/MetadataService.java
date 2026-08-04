@@ -123,6 +123,28 @@ public class MetadataService {
     }
 
     /**
+     * Возвращает список названий колонок для конкретной таблицы.
+     * Используется в ListTableRows для заполнения MetaInfo.columns.
+     *
+     * @param serviceKey ключ сервиса (например, "auth")
+     * @param tableName  имя таблицы (например, "users")
+     * @return список названий колонок
+     */
+    public Mono<List<String>> getTableColumns(String serviceKey, String tableName) {
+        var serviceProps = properties.services().get(serviceKey);
+        if (serviceProps == null) {
+            return Mono.error(new IllegalArgumentException("Service not found: " + serviceKey));
+        }
+
+        String schema = serviceProps.schema();
+
+        return schemaRepository.findColumns(serviceKey, schema)
+                .filter(column -> column.tableName().equals(tableName))
+                .map(ColumnMetadata::columnName)
+                .collectList();
+    }
+
+    /**
      * Пустой allowlist означает «разрешены все таблицы».
      * Denylist имеет приоритет над allowlist.
      */
