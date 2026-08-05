@@ -106,6 +106,7 @@ class ProjectServiceImplTest {
     @Test
     void getProject_Success() {
         Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(true));
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectNext(mockProject)
@@ -117,17 +118,37 @@ class ProjectServiceImplTest {
     @Test
     void getProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
         Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.empty());
+        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(false));
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
                     Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    Assertions.assertEquals("Project with projectId " + projectId + " was not found or you don't have access to it", exception.getMessage());
+                    Assertions.assertEquals("Project not found", exception.getMessage());
                 })
                 .verify();
 
         Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
+        Mockito.verify(projectRepository).existsById(projectId);
+    }
+
+    @Test
+    void getProject_ThrowsNotFoundException_WhenUserIsNotMember() {
+        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.empty());
+        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(true));
+
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertTrue(throwable instanceof DomainException);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, exception.getStatus());
+                    Assertions.assertEquals("You don't have access to this project", exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId, actorUserId);
+        Mockito.verify(projectRepository).existsById(projectId);
     }
 
     @Test
@@ -144,17 +165,12 @@ class ProjectServiceImplTest {
     }
 
     @Test
-    void listMyProjects_ThrowsNotFoundException_WhenNoProjectsFound() {
+    void listMyProjects_Success_EmptyList() {
         Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.empty());
 
         StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
-                .expectErrorSatisfies(throwable -> {
-                    Assertions.assertTrue(throwable instanceof DomainException);
-                    DomainException exception = (DomainException) throwable;
-                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    Assertions.assertEquals("Not found projects for user with id: " + userId, exception.getMessage());
-                })
-                .verify();
+                .expectNextCount(0)
+                .verifyComplete();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
     }

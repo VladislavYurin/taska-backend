@@ -69,7 +69,27 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
         return projectRepository.findByProjectIdAndUserId(projectId,actorUserId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found or you don't have access to it")))
+                .switchIfEmpty(
+                        //Если ничего не вернулось - делаем доп запрос для разделения ошибок
+                        projectRepository.existsById(projectId)
+                                .flatMap(exist->{
+                                    //если проект найден -> ошибка доступа
+                                    if(exist){
+                                        log.warn("[{}][{}] User {} is not a member of project {}",
+                                                requestId, nodeId, actorUserId, projectId);
+                                        return Mono.error(new DomainException(
+                                                DomainStatus.PERMISSION_DENIED,
+                                                "You don't have access to this project"));
+                                    }
+                                    //проект не найден
+                                    else{
+                                        log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                                        return Mono.error(new DomainException(
+                                                DomainStatus.NOT_FOUND,
+                                                "Project not found"));
+                                    }
+                                })
+                )
                 .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
     }
 
@@ -77,7 +97,6 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId) {
         return projectRepository.findAllByMemberUserId(userId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Not found projects for user with id: " + userId)))
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
