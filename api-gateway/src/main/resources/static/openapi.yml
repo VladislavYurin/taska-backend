@@ -1025,6 +1025,9 @@ components:
           type: string
         status:
           type: string
+        globalRole:
+          type: string
+          enum: [GLOBAL_ADMIN, USER, UNSPECIFIED]
 
     CreateIssueRequestDto:
       type: object

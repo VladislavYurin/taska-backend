@@ -134,6 +134,11 @@ public class AuthMapper {
         dto.setEmail(userContext.email());
         dto.setDisplayName(userContext.displayName());
         dto.setStatus(userContext.status() != null ? userContext.status().name() : null);
+        dto.setGlobalRole(
+                ValidateAccessTokenResponseDto.GlobalRoleEnum.valueOf(
+                        userContext.globalRole()!=null ? userContext.globalRole().name() : "UNSPECIFIED"
+                )
+        );
         return dto;
     }
 
