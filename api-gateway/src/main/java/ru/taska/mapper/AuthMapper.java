@@ -136,7 +136,7 @@ public class AuthMapper {
         dto.setStatus(userContext.status() != null ? userContext.status().name() : null);
         dto.setGlobalRole(
                 ValidateAccessTokenResponseDto.GlobalRoleEnum.valueOf(
-                        userContext.globalRole()!=null ? userContext.globalRole().name() : "UNSPECIFIED"
+                        userContext.globalRole()!=null ? userContext.globalRole().name() : ValidateAccessTokenResponseDto.GlobalRoleEnum.UNSPECIFIED.name()
                 )
         );
         return dto;
