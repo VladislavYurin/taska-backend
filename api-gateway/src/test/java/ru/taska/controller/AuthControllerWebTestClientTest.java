@@ -24,6 +24,7 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.LoginResponseDto;
 import ru.taska.domain.dto.RefreshResponseDto;
+import ru.taska.domain.dto.ValidateAccessTokenResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -292,6 +293,7 @@ class AuthControllerWebTestClientTest {
         restResponseDto.setEmail("anna@example.com");
         restResponseDto.setDisplayName("Anna Ivanova");
         restResponseDto.setStatus("ACTIVE");
+        restResponseDto.setGlobalRole(ValidateAccessTokenResponseDto.GlobalRoleEnum.valueOf("USER"));
 
         Mockito.when(grpcAuthServiceClient.validateAccessToken(ArgumentMatchers.eq(
                 "req-me-success"), ArgumentMatchers.any(), ArgumentMatchers.eq(token)))
@@ -312,7 +314,8 @@ class AuthControllerWebTestClientTest {
                 .jsonPath("$.login").isEqualTo("anna")
                 .jsonPath("$.email").isEqualTo("anna@example.com")
                 .jsonPath("$.displayName").isEqualTo("Anna Ivanova")
-                .jsonPath("$.status").isEqualTo("ACTIVE");
+                .jsonPath("$.status").isEqualTo("ACTIVE")
+                .jsonPath("$.globalRole").isEqualTo("USER");
     }
 }
 
