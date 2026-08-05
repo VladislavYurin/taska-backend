@@ -1,10 +1,10 @@
 package ru.taska.domain;
 
 /**
- * Тип связи между задачами.
+ * Направленный тип связи между задачами, хранящийся в БД.
  */
 public enum IssueLinkType {
     BLOCKS,
-    RELATES,
+    RELATES_TO,
     DUPLICATES
 }

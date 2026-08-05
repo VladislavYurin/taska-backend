@@ -10,6 +10,7 @@ import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -17,6 +18,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.util.Set;
+import java.util.UUID;
 
 public class AssignIssueTest extends IssueServiceImplTest {
 
@@ -59,11 +61,11 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.when(payloadSerializer.createIssueAssignedPayload(Mockito.any(), Mockito.eq(ASSIGNEE_ID)))
                 .thenReturn(payload);
-        Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+        Mockito.when(issueHistoryService.saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(UUID.class),
                         Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload)))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(ISSUE_ID),
-                        Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload)))
+        Mockito.when(outboxEventService.saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class),
+                        Mockito.any(UUID.class), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload)))
                 .thenReturn(Mono.empty());
 
         existingIssue.setAssigneeId(null);
@@ -86,10 +88,10 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
 
         Mockito.verify(payloadSerializer).createIssueAssignedPayload(Mockito.any(), Mockito.eq(ASSIGNEE_ID));
-        Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class),
+        Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(UUID.class),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload));
-        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
-                Mockito.eq(ISSUE_ID), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
+        Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class),
+                Mockito.any(UUID.class), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, payloadSerializer);
     }

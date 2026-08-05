@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.IssuePriority;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -33,10 +34,14 @@ public class PayloadSerializer {
     private static final String TRANSITIONED_ID = "transitionId";
     private static final String ISSUE_TYPE = "issueType";
     private static final String DELETED_AT = "deletedAt";
+    private static final String SOURCE_ISSUE_ID = "sourceIssueId";
+    private static final String TARGET_ISSUE_ID = "targetIssueId";
+    private static final String LINK_TYPE = "linkType";
+    private static final String CREATED_BY = "createdBy";
+    private static final String DELETED_BY = "deletedBy";
     private static final String ATTACHMENT_ID = "attachmentId";
     private static final String ISSUE_ID = "issueId";
     private static final String UPLOADED_BY = "uploadedBy";
-    private static final String DELETED_BY = "deletedBy";
     private static final String FILE_NAME = "fileName";
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
@@ -183,6 +188,84 @@ public class PayloadSerializer {
 
         node.put(ISSUE_TYPE, type != null ? type.toString() : "");
         node.put(DELETED_AT, deletedAt != null ? deletedAt.toString() : Instant.now().toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о созданной связи между задачами.
+     *
+     * @param sourceIssueId идентификатор исходной задачи.
+     * @param targetIssueId идентификатор целевой задачи.
+     * @param linkType      тип создаваемой связи.
+     * @param actorUserId   идентификатор пользователя, создавшего связь.
+     * @return исторические данные.
+     */
+    public JsonNode createIssueLinkCreatedPayload(UUID sourceIssueId, UUID targetIssueId, IssueLinkType linkType, UUID actorUserId) {
+        var node = objectMapper.createObjectNode();
+
+        if (sourceIssueId != null) {
+            node.put(SOURCE_ISSUE_ID, sourceIssueId.toString());
+        } else {
+            node.putNull(SOURCE_ISSUE_ID);
+        }
+
+        if (targetIssueId != null) {
+            node.put(TARGET_ISSUE_ID, targetIssueId.toString());
+        } else {
+            node.putNull(TARGET_ISSUE_ID);
+        }
+
+        if (linkType != null) {
+            node.put(LINK_TYPE, linkType.name());
+        } else {
+            node.putNull(LINK_TYPE);
+        }
+
+        if (actorUserId != null) {
+            node.put(CREATED_BY, actorUserId.toString());
+        } else {
+            node.putNull(CREATED_BY);
+        }
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об удаленной связи между задачами.
+     *
+     * @param sourceIssueId идентификатор исходной задачи.
+     * @param targetIssueId идентификатор целевой задачи.
+     * @param linkType      тип удаляемой связи.
+     * @param actorUserId   идентификатор пользователя, удаляющего связь.
+     * @return исторические данные.
+     */
+    public JsonNode createIssueLinkDeletedPayload(UUID sourceIssueId, UUID targetIssueId, IssueLinkType linkType, UUID actorUserId) {
+        var node = objectMapper.createObjectNode();
+
+        if (sourceIssueId != null) {
+            node.put(SOURCE_ISSUE_ID, sourceIssueId.toString());
+        } else {
+            node.putNull(SOURCE_ISSUE_ID);
+        }
+
+        if (targetIssueId != null) {
+            node.put(TARGET_ISSUE_ID, targetIssueId.toString());
+        } else {
+            node.putNull(TARGET_ISSUE_ID);
+        }
+
+        if (linkType != null) {
+            node.put(LINK_TYPE, linkType.name());
+        } else {
+            node.putNull(LINK_TYPE);
+        }
+
+        if (actorUserId != null) {
+            node.put(DELETED_BY, actorUserId.toString());
+        } else {
+            node.putNull(DELETED_BY);
+        }
 
         return node;
     }

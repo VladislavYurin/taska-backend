@@ -30,6 +30,8 @@ public class NotificationFactory {
             case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
             case ISSUE_UPDATED -> buildIssueUpdated(event, payload, eventId);
             case ISSUE_DELETED -> buildIssueDeleted(event, payload, eventId);
+            case ISSUE_LINK_CREATED -> buildIssueLinkCreated(event, payload, eventId);
+            case ISSUE_LINK_DELETED -> buildIssueLinkDeleted(event, payload, eventId);
             case USER_INVITED -> buildUserInvited(event, eventId);
             case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
             case MEMBER_ADDED -> buildMemberAdded(event, payload, eventId);
@@ -121,22 +123,52 @@ public class NotificationFactory {
         UUID reporterId = extractUuid(payload, "reporterId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
-            if (reporterId == null && assigneeId == null) {
-                log.warn("IssueDeleted event without reporterId/assigneeId, eventId={}", eventId);
-                return List.of();
-            }
+        if (reporterId == null && assigneeId == null) {
+            log.warn("IssueDeleted event without reporterId/assigneeId, eventId={}", eventId);
+            return List.of();
+        }
 
-            List<Notification> notifications = new ArrayList<>();
+        List<Notification> notifications = new ArrayList<>();
 
-            if (reporterId != null) {
-                notifications.add(notificationMapper.toIssueDeleted(event, reporterId));
-            }
+        if (reporterId != null) {
+            notifications.add(notificationMapper.toIssueDeleted(event, reporterId));
+        }
 
-            if (assigneeId != null && !assigneeId.equals(reporterId)) {
-                notifications.add(notificationMapper.toIssueDeleted(event, assigneeId));
-            }
+        if (assigneeId != null && !assigneeId.equals(reporterId)) {
+            notifications.add(notificationMapper.toIssueDeleted(event, assigneeId));
+        }
 
-            return notifications;
+        return notifications;
+    }
+
+    private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "createdBy");
+        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
+        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String linkType = extractString(payload, "linkType");
+        UUID linkId = event.aggregateId();
+
+        if (userId == null) {
+            log.warn("IssueLinkCreated event without reporterId, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toIssueLinkCreated(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
+    }
+
+    private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "deletedBy");
+        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
+        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String linkType = extractString(payload, "linkType");
+        UUID linkId = event.aggregateId();
+
+        if (userId == null) {
+            log.warn("IssueLinkDeleted event without reporterId, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toIssueLinkDeleted(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
     }
 
     private List<Notification> buildUserInvited(TaskaEvent event, UUID eventId) {
@@ -201,6 +233,18 @@ public class NotificationFactory {
             return UUID.fromString(payload.get(fieldName).asText());
         } catch (IllegalArgumentException e) {
             log.warn("Invalid UUID in payload field={} value={}", fieldName, payload.get(fieldName), e);
+            return null;
+        }
+    }
+
+    private String extractString(JsonNode payload, String fieldName) {
+        if (payload == null || !payload.hasNonNull(fieldName)) {
+            return null;
+        }
+        try {
+            return payload.get(fieldName).asText();
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid String in payload field={} value={}", fieldName, payload.get(fieldName), e);
             return null;
         }
     }

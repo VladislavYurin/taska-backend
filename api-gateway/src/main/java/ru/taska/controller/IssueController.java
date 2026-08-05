@@ -9,9 +9,12 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.IssueApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.AssignIssueRequestDto;
+import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -141,5 +144,50 @@ public class IssueController implements IssueApi {
         );
     }
 
+    /**
+     * Создает новую связь между задачами.
+     */
+    @Override
+    public Mono<ResponseEntity<IssueLinkResponseDto>> createIssueLink(
+            String issueId,
+            Mono<CreateIssueLinkRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.createIssueLink(issueId, request, context)
+                        .map(responseBody ->
+                                ResponseEntity.status(HttpStatus.CREATED).body(responseBody)
+                        )
+        );
+    }
+
+    /**
+     * Удаляет связь между задачами.
+     */
+    @Override
+    public Mono<ResponseEntity<Void>> deleteIssueLink(
+            String issueId,
+            String linkId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.deleteIssueLink(issueId, linkId, context)
+                        .thenReturn(ResponseEntity.noContent().build())
+        );
+    }
+
+    /**
+     * Возвращает полный список связей для задачи.
+     */
+    @Override
+    public Mono<ResponseEntity<ListIssueLinksResponseDto>> listIssueLinks(
+            String issueId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.listIssueLinks(issueId, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
 }
 

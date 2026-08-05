@@ -3,8 +3,10 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
@@ -14,6 +16,9 @@ import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
+import ru.taska.domain.IssueLink;
+import ru.taska.domain.IssueLinkType;
+import ru.taska.domain.IssueLinkViewType;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
@@ -107,6 +112,31 @@ public class IssueMapper {
                 .build();
     }
 
+    public IssueLinkResponse toIssueLinkProto(IssueLink link, UUID issueId) {
+        var issueLinkBuilder = IssueLinkResponse.newBuilder();
+
+        if (link.getDeletedAt() != null) {
+            issueLinkBuilder.setDeletedAt(toTimestamp(link.getDeletedAt()));
+        }
+
+        return issueLinkBuilder
+                .setId(link.getId().toString())
+                .setProjectId(link.getProjectId().toString())
+                .setSourceIssueId(link.getSourceIssueId().toString())
+                .setTargetIssueId(link.getTargetIssueId().toString())
+                .setViewLinkType(toProtoIssueLinkViewType(resolveViewType(link, issueId)))
+                .setCreatedBy(link.getCreatedBy().toString())
+                .setCreatedAt(toTimestamp(link.getCreatedAt()))
+                .build();
+    }
+
+    public DeleteIssueLinkResponse toDeleteIssueLinkProto(IssueLink link) {
+        return DeleteIssueLinkResponse.newBuilder()
+                .setLinkId(link.getId().toString())
+                .setEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED)
+                .build();
+    }
+
     public ProjectRole toDomainRole(ru.taska.api.project.v1.ProjectRole protoRole) {
         return switch (protoRole) {
             case PROJECT_ROLE_ADMIN -> ProjectRole.ADMIN;
@@ -143,6 +173,15 @@ public class IssueMapper {
         };
     }
 
+    public IssueLinkType toDomainIssueLinkType(ru.taska.api.issue.v1.IssueLinkType proto) {
+        return switch (proto) {
+            case ISSUE_LINK_TYPE_BLOCKS -> IssueLinkType.BLOCKS;
+            case ISSUE_LINK_TYPE_RELATES_TO -> IssueLinkType.RELATES_TO;
+            case ISSUE_LINK_TYPE_DUPLICATES -> IssueLinkType.DUPLICATES;
+            default -> throw new IllegalArgumentException("Unknown IssueLinkType: " + proto);
+        };
+    }
+
     private ru.taska.api.issue.v1.IssueEventType toProtoIssueEventType(IssueEventType domain) {
         return switch (domain) {
             case CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_CREATED;
@@ -150,6 +189,8 @@ public class IssueMapper {
             case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
             case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
             case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
+            case LINK_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_CREATED;
+            case LINK_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED;
             case ATTACHMENT_UPLOADED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED;
             case ATTACHMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_DELETED;
 
@@ -183,7 +224,31 @@ public class IssueMapper {
         };
     }
 
+    private ru.taska.api.issue.v1.IssueLinkViewType toProtoIssueLinkViewType(IssueLinkViewType domain) {
+        return switch (domain) {
+            case RELATES_TO -> ru.taska.api.issue.v1.IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_RELATES_TO;
+            case BLOCKS -> ru.taska.api.issue.v1.IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_BLOCKS;
+            case IS_BLOCKED_BY -> ru.taska.api.issue.v1.IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY;
+            case DUPLICATES -> ru.taska.api.issue.v1.IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_DUPLICATES;
+            case IS_DUPLICATED_BY -> ru.taska.api.issue.v1.IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_IS_DUPLICATED_BY;
+        };
+    }
+
+    private IssueLinkViewType resolveViewType(IssueLink link, UUID issueId) {
+        var isSourceIssue = link.getSourceIssueId().equals(issueId);
+
+        return switch (link.getLinkType()) {
+            case RELATES_TO -> IssueLinkViewType.RELATES_TO;
+            case BLOCKS -> isSourceIssue ? IssueLinkViewType.BLOCKS : IssueLinkViewType.IS_BLOCKED_BY;
+            case DUPLICATES -> isSourceIssue ? IssueLinkViewType.DUPLICATES : IssueLinkViewType.IS_DUPLICATED_BY;
+        };
+    }
+
     private Timestamp toTimestamp(java.time.Instant instant) {
+        if (instant == null) {
+            return null;
+        }
+
         return Timestamp.newBuilder()
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())

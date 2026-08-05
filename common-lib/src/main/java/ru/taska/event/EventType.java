@@ -16,6 +16,8 @@ public enum EventType {
     ISSUE_TRANSITIONED("IssueTransitioned"),
     ISSUE_UPDATED("IssueUpdated"),
     ISSUE_DELETED("IssueDeleted"),
+    ISSUE_LINK_CREATED("IssueLinkCreated"),
+    ISSUE_LINK_DELETED("IssueLinkDeleted"),
     ATTACHMENT_ADDED("AttachmentAdded"),
     ATTACHMENT_DELETED("AttachmentDeleted"),
     USER_INVITED("UserInvited"),

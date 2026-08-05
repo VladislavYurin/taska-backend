@@ -32,6 +32,12 @@ public class IssueLink {
     private UUID id;
 
     /**
+     * Идентификатор проекта
+     */
+    @Column("project_id")
+    private UUID projectId;
+
+    /**
      * Идентификатор исходной задачи (источник связи).
      */
     @Column("source_issue_id")
@@ -61,4 +67,10 @@ public class IssueLink {
     @CreatedDate
     @Column("created_at")
     private Instant createdAt;
+
+    /**
+     * Временная метка мягкого удаления (null — запись активна).
+     */
+    @Column("deleted_at")
+    private Instant deletedAt;
 }

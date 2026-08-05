@@ -10,6 +10,7 @@ import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -69,10 +70,10 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         Mockito.when(payloadSerializer.createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID)))
                 .thenReturn(payload);
 
-        Mockito.when(issueHistoryService.saveIssueHistory(localRequestId, localNodeId, mockIssue, localActorUserId, IssueEventType.DELETED, payload))
+        Mockito.when(issueHistoryService.saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(outboxEventService.saveOutboxEvent(localRequestId, localNodeId, mockIssue.getId(), EventType.ISSUE_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(localRequestId, localNodeId, AggregateType.ISSUE, mockIssue.getId(), EventType.ISSUE_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         Mono<Issue> resultMono = issueService.deleteIssue(localRequestId, localNodeId, localIssueId, localActorUserId);
@@ -91,8 +92,8 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         );
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
         Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
-        Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue, localActorUserId, IssueEventType.DELETED, payload);
-        Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
+        Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload);
+        Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, AggregateType.ISSUE, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker, payloadSerializer);
     }
 
