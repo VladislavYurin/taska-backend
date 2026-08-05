@@ -12,14 +12,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -38,7 +36,6 @@ class ProjectServiceImplTest {
     @Mock private ProjectSettingRepository projectSettingRepository;
     @Mock private OutboxEventService outboxEventService;
     @Mock private ObjectMapper objectMapper;
-    @Mock private ProjectMapper projectMapper;
 
     @InjectMocks private ProjectServiceImpl projectService;
 
@@ -48,9 +45,9 @@ class ProjectServiceImplTest {
     private final String projectName = "New Project";
     private final UUID userId = UUID.randomUUID();
     private final UUID projectId = UUID.randomUUID();
+    private final UUID actorUserId = UUID.randomUUID();
 
     private Project mockProject;
-    private ProjectResponse mockResponse;
 
     @BeforeEach
     void setUp() {
@@ -108,29 +105,29 @@ class ProjectServiceImplTest {
 
     @Test
     void getProject_Success() {
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.just(mockProject));
 
-        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectNext(mockProject)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
     }
 
     @Test
     void getProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.empty());
+        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId))
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
                     Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    Assertions.assertEquals("Project with projectId " + projectId + " was not found ", exception.getMessage());
+                    Assertions.assertEquals("Project with projectId " + projectId + " was not found or you don't have access to it", exception.getMessage());
                 })
                 .verify();
 
-        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
     }
 
     @Test

@@ -67,9 +67,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
-    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId) {
-        return projectRepository.findById(projectId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found ")))
+    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
+        return projectRepository.findByProjectIdAndUserId(projectId,actorUserId)
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found or you don't have access to it")))
                 .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
     }
 
