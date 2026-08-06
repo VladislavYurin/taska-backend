@@ -12,6 +12,7 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -34,6 +35,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
+    private final ProjectMapper projectMapper;
 
     @Override
     @Transactional
@@ -69,28 +71,27 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
         return projectRepository.findByProjectIdAndUserId(projectId,actorUserId)
+                // Поскольку в запросе приходит ProjectCheckMembershipDto
+                // - если ответу пуст -> проект не найден
                 .switchIfEmpty(
-                        //Если ничего не вернулось - делаем доп запрос для разделения ошибок
-                        projectRepository.existsById(projectId)
-                                .flatMap(exist->{
-                                    //если проект найден -> ошибка доступа
-                                    if(exist){
-                                        log.warn("[{}][{}] User {} is not a member of project {}",
-                                                requestId, nodeId, actorUserId, projectId);
-                                        return Mono.error(new DomainException(
-                                                DomainStatus.PERMISSION_DENIED,
-                                                "You don't have access to this project"));
-                                    }
-                                    //проект не найден
-                                    else{
-                                        log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
-                                        return Mono.error(new DomainException(
-                                                DomainStatus.NOT_FOUND,
-                                                "Project not found"));
-                                    }
-                                })
+                        Mono.defer(() -> {
+                            log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                        })
                 )
-                .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
+                // - если ответ не пустой - проверяем memberId из ProjectCheckMembershipDto
+                .flatMap(dto->{
+
+                    log.info("Получен DTO из БД: {}", dto);
+
+                    // если memberId пустой -> ошибка доступа
+                    if(dto.user_id()==null){
+                        log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
+                        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
+                    }
+                    //если actorUserId есть -> мапим DTO в Project
+                    return Mono.just(projectMapper.toProject(dto));
+                });
     }
 
     @Override

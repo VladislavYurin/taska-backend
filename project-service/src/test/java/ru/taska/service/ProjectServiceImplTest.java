@@ -16,8 +16,10 @@ import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectSetting;
+import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -36,6 +38,7 @@ class ProjectServiceImplTest {
     @Mock private ProjectSettingRepository projectSettingRepository;
     @Mock private OutboxEventService outboxEventService;
     @Mock private ObjectMapper objectMapper;
+    @Mock private ProjectMapper projectMapper;
 
     @InjectMocks private ProjectServiceImpl projectService;
 
@@ -105,20 +108,34 @@ class ProjectServiceImplTest {
 
     @Test
     void getProject_Success() {
-        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(true));
+        ProjectCheckMembershipDto dto =ProjectCheckMembershipDto.builder()
+                .id(projectId)
+                .project_key(projectKey)
+                .name(projectName)
+                .created_by(userId)
+                .created_at(null)
+                .updated_at(null)
+                .archived_at(null)
+                .user_id(actorUserId)
+                .build();
+
+        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId))
+                .thenReturn(Mono.just(dto)
+        );
+        Mockito.when(projectMapper.toProject(dto))
+                .thenReturn(mockProject);
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectNext(mockProject)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
+        Mockito.verify(projectMapper).toProject(dto);
     }
 
     @Test
     void getProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
         Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.empty());
-        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(false));
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
                 .expectErrorSatisfies(throwable -> {
@@ -130,13 +147,23 @@ class ProjectServiceImplTest {
                 .verify();
 
         Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
-        Mockito.verify(projectRepository).existsById(projectId);
+        Mockito.verify(projectMapper, Mockito.never()).toProject(ArgumentMatchers.any());
     }
 
     @Test
-    void getProject_ThrowsNotFoundException_WhenUserIsNotMember() {
-        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.empty());
-        Mockito.when(projectRepository.existsById(projectId)).thenReturn(Mono.just(true));
+    void getProject_ThrowsPermissionDenied_WhenUserIsNotMember() {
+        ProjectCheckMembershipDto dto =ProjectCheckMembershipDto.builder()
+                .id(projectId)
+                .project_key(projectKey)
+                .name(projectName)
+                .created_by(userId)
+                .created_at(null)
+                .updated_at(null)
+                .archived_at(null)
+                .user_id(null)
+                .build();
+
+        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.just(dto));
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
                 .expectErrorSatisfies(throwable -> {
@@ -148,7 +175,7 @@ class ProjectServiceImplTest {
                 .verify();
 
         Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId, actorUserId);
-        Mockito.verify(projectRepository).existsById(projectId);
+        Mockito.verify(projectMapper, Mockito.never()).toProject(ArgumentMatchers.any());
     }
 
     @Test
