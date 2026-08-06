@@ -79,17 +79,14 @@ public class ProjectServiceImpl implements ProjectService {
                             return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
                         })
                 )
-                // - если ответ не пустой - проверяем memberId из ProjectCheckMembershipDto
+                // - если ответ не пустой - проверяем user_id из ProjectCheckMembershipDto
                 .flatMap(dto->{
-
-                    log.info("Получен DTO из БД: {}", dto);
-
-                    // если memberId пустой -> ошибка доступа
+                    // если user_id пустой -> ошибка доступа
                     if(dto.user_id()==null){
                         log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
                     }
-                    //если actorUserId есть -> мапим DTO в Project
+                    //если user_id есть -> мапим DTO в Project
                     return Mono.just(projectMapper.toProject(dto));
                 });
     }
