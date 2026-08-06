@@ -87,6 +87,7 @@ public class ProjectServiceImpl implements ProjectService {
                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
                     }
                     //если user_id есть -> мапим DTO в Project
+                    log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId);
                     return Mono.just(projectMapper.toProject(dto));
                 });
     }
