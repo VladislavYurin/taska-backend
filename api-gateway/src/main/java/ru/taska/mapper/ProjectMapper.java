@@ -3,6 +3,7 @@ package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
+import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -41,7 +42,7 @@ public class ProjectMapper {
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         if (protoDto.hasArchivedAt()){
-            restDto.setArchivedAt(toOffsetDateTime(protoDto.getArchivedAt()));
+            restDto.setArchivedAt(JsonNullable.of(toOffsetDateTime(protoDto.getArchivedAt())));
         }
         return restDto;
     }

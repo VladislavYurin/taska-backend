@@ -4,6 +4,7 @@ package ru.taska.issue.v1;
 
 import "v1/common.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.issue.v1";
@@ -109,7 +110,7 @@ message AssignIssueRequestBody {
   /**
    * Идентификатор исполнителя.
    */
-  optional string assignee_id = 3;
+  string assignee_id = 3;
 
   /**
    * Идентификатор пользователя, кем заасайнена задача.
@@ -141,7 +142,7 @@ message CreateIssueRequestBody {
   /**
    * Подробное описание задачи.
    */
-  optional string description = 5;
+  optional google.protobuf.StringValue description = 5;
 
   /**
    * Приоритет задачи.
@@ -156,7 +157,7 @@ message CreateIssueRequestBody {
   /**
  * Количество сторипоинтов выделенных на задачу
  */
-  optional double story_points = 8;
+  optional google.protobuf.DoubleValue story_points = 8;
 
   /**
 * Время начала выполнения задачи
@@ -171,12 +172,12 @@ message CreateIssueRequestBody {
   /**
 * Изначальное количество времени выделенное на выполнение задачи
 */
-  optional int64 original_estimate_minutes = 11;
+  optional google.protobuf.Int64Value original_estimate_minutes = 11;
 
   /**
  * Идентификатор исполнителя задачи.
  */
-  optional string assignee_id = 12;
+  optional google.protobuf.StringValue assignee_id = 12;
 }
 
 message GetIssueRequest {
@@ -253,12 +254,12 @@ message UpdateIssueRequestBody {
   /**
    * Краткое описание задачи.
    */
-  optional string summary = 4;
+  optional google.protobuf.StringValue summary = 4;
 
   /**
    * Подробное описание задачи.
    */
-  optional string description = 5;
+  optional google.protobuf.StringValue description = 5;
 
   /**
    * Приоритет задачи.
@@ -268,7 +269,7 @@ message UpdateIssueRequestBody {
   /**
  * Количество сторипоинтов выделенных на задачу
  */
-  optional double story_points = 8;
+  optional google.protobuf.DoubleValue story_points = 8;
 
   /**
 * Время начала выполнения задачи
@@ -283,12 +284,12 @@ message UpdateIssueRequestBody {
   /**
 * Изначальное количество времени выделенное на выполнение задачи
 */
-  optional int64 original_estimate_minutes = 11;
+  optional google.protobuf.Int64Value original_estimate_minutes = 11;
 
   /**
 * Оставшееся времени на выполнение задачи
 */
-  optional int64 remaining_estimate_minutes = 12;
+  optional google.protobuf.Int64Value remaining_estimate_minutes = 12;
 }
 
 message ListIssuesRequest {
@@ -392,12 +393,12 @@ message UpdateIssueResponse {
   /**
    * Краткое описание задачи.
    */
-  optional string summary = 2;
+  optional google.protobuf.StringValue summary = 2;
 
   /**
    * Подробное описание задачи.
    */
-  optional string description = 3;
+  optional google.protobuf.StringValue description = 3;
 
   /**
    * Приоритет задачи.
@@ -407,7 +408,7 @@ message UpdateIssueResponse {
   /**
  * Количество стори поинтов на задачу
  */
-  optional double story_points = 16;
+  optional google.protobuf.DoubleValue story_points = 16;
 
   /**
 * Время начала выполнения задачи
@@ -422,12 +423,12 @@ message UpdateIssueResponse {
   /**
 * Изначальное количество времени выделенное на выполнение задачи
 */
-  optional int64 original_estimate_minutes = 19;
+  optional google.protobuf.Int64Value original_estimate_minutes = 19;
 
   /**
 * Оставшееся количество времени на выполнение задачи
 */
-  optional int64 remaining_estimate_minutes = 20;
+  optional google.protobuf.Int64Value remaining_estimate_minutes = 20;
 }
 
 message ListIssuesResponse {

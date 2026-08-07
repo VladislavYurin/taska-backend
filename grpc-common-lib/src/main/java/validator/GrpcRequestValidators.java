@@ -1,13 +1,16 @@
 package validator;
 
+import com.google.protobuf.GeneratedMessage;
 import com.google.protobuf.ProtocolMessageEnum;
 import com.google.protobuf.Timestamp;
 import io.grpc.Status;
 import reactor.core.publisher.Mono;
+import ru.taska.domain.UpdateField;
 
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -148,16 +151,101 @@ public final class GrpcRequestValidators {
     }
 
     /**
-     * Парсит строку из gRPC в Instant. Если строка пустая/отсутствует — возвращает empty.
+     * Валидация для Protobuf-обёрток (StringValue, DoubleValue, Int64Value).
+     * Если hasField == true, но обертка пустая (default instance) — это команда на зануление (UpdateField.of(null)).
      */
+    public static <V extends GeneratedMessage, T> Mono<UpdateField<T>> validateOptionalWrapper(
+            boolean hasField,
+            V wrapper,
+            Function<V, T> extractor,
+            String fieldName) {
+
+        if (!hasField) {
+            return Mono.just(UpdateField.undefined());
+        }
+
+        // Если пришел дефолтный инстанс обертки (Gateway прислал Signal "стереть")
+        // Для StringValue это getValue().isEmpty(), для чисел - проверка полей через сериализацию
+        if (wrapper == null || wrapper.equals(wrapper.getDefaultInstanceForType())) {
+            return Mono.just(UpdateField.of(null));
+        }
+
+        try {
+            T value = extractor.apply(wrapper);
+            // Дополнительная бизнес-валидация для чисел (если передано отрицательное значение)
+            if (value instanceof Number && ((Number) value).doubleValue() < 0) {
+                return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                        .withDescription(fieldName + " must be >= 0")
+                        .asRuntimeException());
+            }
+            return Mono.just(UpdateField.of(value));
+        } catch (Exception ex) {
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                    .withDescription("Invalid wrapper data for field: " + fieldName)
+                    .asRuntimeException());
+        }
+    }
+
+    /**
+     * Парсит опциональный энум.
+     * Если hasField == true, но пришел UNSPECIFIED — это команда на зануление приоритета.
+     */
+    public static <E extends Enum<E>> Mono<UpdateField<E>> parseOptionalEnum(
+            boolean hasField,
+            E enumValue,
+            E unspecifiedValue,
+            String fieldName) {
+
+        if (!hasField) {
+            return Mono.just(UpdateField.undefined());
+        }
+
+        if (enumValue == null || enumValue == unspecifiedValue) {
+            return Mono.just(UpdateField.of(null));
+        }
+
+        return Mono.just(UpdateField.of(enumValue));
+    }
+
+    /**
+     * Парсит опциональный Timestamp.
+     * Если hasField == true, но секунды и наносекунды равны 0 (default instance) — это команда на удаление даты.
+     */
+    public static Mono<UpdateField<java.time.Instant>> parseOptionalTimestamp(
+            boolean hasField,
+            com.google.protobuf.Timestamp timestamp,
+            String fieldName) {
+
+        if (!hasField) {
+            return Mono.just(UpdateField.undefined());
+        }
+
+        if (timestamp == null || (timestamp.getSeconds() == 0 && timestamp.getNanos() == 0)) {
+            return Mono.just(UpdateField.of(null));
+        }
+
+        try {
+            return Mono.just(UpdateField.of(java.time.Instant.ofEpochSecond(
+                    timestamp.getSeconds(),
+                    timestamp.getNanos()
+            )));
+        } catch (Exception ex) {
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " has invalid timestamp format")
+                    .asRuntimeException());
+        }
+    }
+    /**
+     * Парсит строку из gRPC в Instant. Если строка пустая/отсутствует — возвращает empty.
+     * */
     public static Mono<Optional<Instant>> parseOptionalInstant(boolean hasField, Timestamp rawDate, String fieldName) {
         if (!hasField) {
             return Mono.just(Optional.empty());
         }
         if (rawDate == null || (rawDate.getSeconds() == 0 && rawDate.getNanos() == 0)) {
-            return Mono.just(Optional.ofNullable(Instant.MIN));
+            return Mono.just(Optional.ofNullable(java.time.Instant.MIN));
         }
-        return Mono.just(Optional.of(Instant.ofEpochSecond(rawDate.getSeconds(), rawDate.getNanos())));
+        return Mono.just(Optional.of(java.time.Instant.ofEpochSecond(rawDate.getSeconds(), rawDate.getNanos())));
     }
 
     /**

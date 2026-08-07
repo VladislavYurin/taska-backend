@@ -6,6 +6,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
+import ru.taska.domain.UpdateField;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -90,16 +91,13 @@ public interface IssueService {
      * @param priority    обновленный приоритет задачи
      * @return Mono<{@link Issue}> с соответствующими параметрами обновленного проекта
      */
-    Mono<Issue> updateIssue(String requestId,
-                            String nodeId,
-                            UUID issueId,
-                            UUID actorUserId,
-                            String summary,
-                            String description,
-                            IssuePriority priority,
-                            Double storyPoints,
-                            Instant startDate,
-                            Instant dueDate,
-                            Long originalEstimateMinutes,
-                            Long remainingEstimateMinutes);
+    Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
+                            UpdateField<String> summary,
+                            UpdateField<String> description,
+                            UpdateField<IssuePriority> priority,
+                            UpdateField<Double> storyPoints,
+                            UpdateField<Instant> startDate,
+                            UpdateField<Instant> dueDate,
+                            UpdateField<Long> originalEstimateMinutes,
+                            UpdateField<Long> remainingEstimateMinutes);
 }

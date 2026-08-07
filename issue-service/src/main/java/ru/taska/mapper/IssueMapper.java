@@ -1,5 +1,8 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.DoubleValue;
+import com.google.protobuf.Int64Value;
+import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -149,41 +152,66 @@ public DeleteIssueResponse toDeleteIssueProto(Issue issue) {
             .build();
 }
 
-public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
-    UpdateIssueResponse.Builder builder = UpdateIssueResponse.newBuilder()
-            .setUpdatedIssueId(issue.getId().toString());
-    if (issue.getSummary() != null) {
-        builder.setSummary(issue.getSummary());
+    public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
+        UpdateIssueResponse.Builder builder = UpdateIssueResponse.newBuilder()
+                .setUpdatedIssueId(issue.getId().toString());
+
+        if (issue.getSummary() != null) {
+            builder.setSummary(StringValue.of(issue.getSummary()));
+        } else {
+            builder.clearSummary();
+        }
+
+        if (issue.getDescription() != null) {
+            builder.setDescription(StringValue.of(issue.getDescription()));
+        } else {
+            builder.clearDescription();
+        }
+
+        if (issue.getPriority() != null) {
+            builder.setPriority(toProtoIssuePriority(issue.getPriority()));
+        } else {
+            builder.clearPriority();
+        }
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(DoubleValue.of(issue.getStoryPoints()));
+        } else {
+            builder.clearStoryPoints();
+        }
+
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(com.google.protobuf.Timestamp.newBuilder()
+                    .setSeconds(issue.getStartDate().getEpochSecond())
+                    .setNanos(issue.getStartDate().getNano())
+                    .build());
+        } else {
+            builder.clearStartDate();
+        }
+
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(com.google.protobuf.Timestamp.newBuilder()
+                    .setSeconds(issue.getDueDate().getEpochSecond())
+                    .setNanos(issue.getDueDate().getNano())
+                    .build());
+        } else {
+            builder.clearDueDate();
+        }
+
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(Int64Value.of(issue.getOriginalEstimateMinutes()));
+        } else {
+            builder.clearOriginalEstimateMinutes();
+        }
+
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(Int64Value.of(issue.getRemainingEstimateMinutes()));
+        } else {
+            builder.clearRemainingEstimateMinutes();
+        }
+
+        return builder.build();
     }
-    if (issue.getDescription() != null) {
-        builder.setDescription(issue.getDescription());
-    }
-    if (issue.getPriority() != null) {
-        builder.setPriority(toProtoIssuePriority(issue.getPriority()));
-    }
-    if (issue.getStoryPoints() != null) {
-        builder.setStoryPoints(issue.getStoryPoints());
-    }
-    if (issue.getStartDate() != null) {
-        builder.setStartDate(com.google.protobuf.Timestamp.newBuilder()
-                .setSeconds(issue.getStartDate().getEpochSecond())
-                .setNanos(issue.getStartDate().getNano())
-                .build());
-    }
-    if (issue.getDueDate() != null) {
-        builder.setDueDate(com.google.protobuf.Timestamp.newBuilder()
-                .setSeconds(issue.getDueDate().getEpochSecond())
-                .setNanos(issue.getDueDate().getNano())
-                .build());
-    }
-    if (issue.getOriginalEstimateMinutes() != null) {
-        builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
-    }
-    if (issue.getRemainingEstimateMinutes() != null) {
-        builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
-    }
-    return builder.build();
-}
 
 public ProjectRole toDomainRole(ru.taska.api.project.v1.ProjectRole protoRole) {
     return switch (protoRole) {
@@ -255,6 +283,7 @@ private ru.taska.api.issue.v1.IssuePriority toProtoIssuePriority(IssuePriority d
         case LOW -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW;
         case MEDIUM -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM;
         case HIGH -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH;
+        case UNSPECIFIED -> ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
     };
 }
 

@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -64,9 +65,9 @@ public class NotificationMapper {
         dto.setNotificationType(toRestNotificationType(source.getNotificationType()));
         dto.setTitle(source.getTitle());
         dto.setBody(source.getBody());
-        dto.setLink(source.getLink());
+        dto.setLink(JsonNullable.of(source.getLink()));
         dto.setCreatedAt(toOffsetDateTime(source.getCreatedAt()));
-        dto.setReadAt(source.hasReadAt() ? toOffsetDateTime(source.getReadAt()) : null);
+        dto.setReadAt(source.hasReadAt() ? JsonNullable.of(toOffsetDateTime(source.getReadAt())) : null);
         dto.setSourceEventId(parseUuid(source.getSourceEventId(), "sourceEventId"));
 
         return dto;

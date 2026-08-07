@@ -15,6 +15,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.UpdateField;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -179,43 +180,74 @@ public class IssueServiceImpl implements IssueService {
     @Override
     @Transactional
     public Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
-                                   String summary, String description, IssuePriority priority, Double storyPoints,
-                                   Instant startDate, Instant dueDate, Long originalEstimateMinutes, Long remainingEstimateMinutes) {
+                                   UpdateField<String> summary,
+                                   UpdateField<String> description,
+                                   UpdateField<ru.taska.domain.IssuePriority> priority, // Поменяли тип на доменный
+                                   UpdateField<Double> storyPoints,
+                                   UpdateField<java.time.Instant> startDate,
+                                   UpdateField<java.time.Instant> dueDate,
+                                   UpdateField<Long> originalEstimateMinutes,
+                                   UpdateField<Long> remainingEstimateMinutes) {
+
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    log.info("[{}][{}] Issue with id: {} was not found", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                             "Issue with id: " + issueId + " was not found"));
                 }))
                 .flatMap(issue -> {
-                    Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
+                    java.util.Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
 
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(issue);
                 })
                 .flatMap(updatingIssue -> {
-                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority,
-                            storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
+                    // Рассчитываем финальные даты с учетом того, что значение может быть намеренно стерто (null)
+                    java.time.Instant finalStart = startDate.isPresent() ? startDate.value() : updatingIssue.getStartDate();
+                    java.time.Instant finalDue = dueDate.isPresent() ? dueDate.value() : updatingIssue.getDueDate();
+
+                    // Если обе даты присутствуют после обновления, проверяем их корректность
+                    if (finalStart != null && finalDue != null && finalStart.isAfter(finalDue)) {
+                        return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                                .withDescription("Start date must be less than or equal to due date")
+                                .asRuntimeException());
+                    }
+
+                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(
+                            updatingIssue, actorUserId,
+                            summary, description, priority, storyPoints,
+                            startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes
+                    );
+
                     if (payload.isEmpty()) {
                         log.info("[{}][{}] Issue with id: {} equals updating Issue by user with id: {}",
                                 requestId, nodeId, issueId, actorUserId);
                         return Mono.just(updatingIssue);
                     }
 
-                    if (summary != null) updatingIssue.setSummary(summary);
-                    if (description != null) updatingIssue.setDescription(description);
-                    if (priority != null) updatingIssue.setPriority(priority);
-                    if (storyPoints != null) updatingIssue.setStoryPoints(storyPoints);
-                    if (startDate != null) updatingIssue.setStartDate(startDate);
-                    if (dueDate != null) updatingIssue.setDueDate(dueDate);
-                    if (originalEstimateMinutes != null)
-                        updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
-                    if (remainingEstimateMinutes != null && remainingEstimateMinutes > updatingIssue.getOriginalEstimateMinutes()) {
-                        updatingIssue.setRemainingEstimateMinutes(0L);
-                    }
-                    if (remainingEstimateMinutes != null)
-                        updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
-                    updatingIssue.setUpdatedAt(Instant.now());
+                    // Применяем изменения через ifPresent (поддерживает null-значения внутри UpdateField)
+                    summary.ifPresent(updatingIssue::setSummary);
+                    description.ifPresent(updatingIssue::setDescription);
+                    priority.ifPresent(updatingIssue::setPriority);
+                    storyPoints.ifPresent(updatingIssue::setStoryPoints);
+                    startDate.ifPresent(updatingIssue::setStartDate);
+                    dueDate.ifPresent(updatingIssue::setDueDate);
+                    originalEstimateMinutes.ifPresent(updatingIssue::setOriginalEstimateMinutes);
+
+                    // Бизнес-логика для оставшегося времени
+                    remainingEstimateMinutes.ifPresent(remVal -> {
+                        Long currentOriginal = originalEstimateMinutes.isPresent()
+                                ? originalEstimateMinutes.value()
+                                : updatingIssue.getOriginalEstimateMinutes();
+
+                        if (remVal != null && currentOriginal != null && remVal > currentOriginal) {
+                            updatingIssue.setRemainingEstimateMinutes(0L);
+                        } else {
+                            updatingIssue.setRemainingEstimateMinutes(remVal);
+                        }
+                    });
+
+                    updatingIssue.setUpdatedAt(java.time.Instant.now());
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
 
                     return issueRepository.save(updatingIssue)

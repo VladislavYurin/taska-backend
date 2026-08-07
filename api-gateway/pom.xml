@@ -39,6 +39,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- validator -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <!-- gRPC + Reactor gRPC -->
         <dependency>
             <groupId>io.grpc</groupId>
@@ -85,6 +91,8 @@
             <version>2.2.52</version>
             <scope>compile</scope>
         </dependency>
+
+        <!-- open api -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
@@ -92,8 +100,9 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
+            <groupId>org.openapitools</groupId>
+            <artifactId>jackson-databind-nullable</artifactId>
+            <version>0.2.6</version>
         </dependency>
 
         <!-- tests -->
@@ -152,7 +161,7 @@
                                 <interfaceOnly>true</interfaceOnly>
                                 <reactive>true</reactive>
                                 <useSpringBoot3>true</useSpringBoot3>
-                                <openApiNullable>false</openApiNullable>
+                                <openApiNullable>true</openApiNullable>
                                 <useValidation>true</useValidation>
                                 <useTags>true</useTags>
                             </configOptions>

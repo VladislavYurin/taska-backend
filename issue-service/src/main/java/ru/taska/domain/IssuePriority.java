@@ -1,5 +1,5 @@
 package ru.taska.domain;
 
 public enum IssuePriority {
-    LOW, MEDIUM, HIGH
+    LOW, MEDIUM, HIGH, UNSPECIFIED
 }

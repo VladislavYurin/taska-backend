@@ -748,18 +748,23 @@ components:
           type: string
         assigneeId:
           type: string
+          nullable: true
         storyPoints:
           type: number
           format: double
+          nullable: true
         startDate:
           type: string
           format: date-time
+          nullable: true
         dueDate:
           type: string
           format: date-time
+          nullable: true
         originalEstimateMinutes:
           type: integer
           format: int64
+          nullable: true
 
     IssueResponseDto:
       type: object
@@ -881,25 +886,33 @@ components:
       properties:
         summary:
           type: string
+          nullable: true
         description:
           type: string
+          nullable: true
         priority:
           type: string
+          nullable: true
         storyPoints:
           type: number
           format: double
+          nullable: true
         startDate:
           type: string
           format: date-time
+          nullable: true
         dueDate:
           type: string
           format: date-time
+          nullable: true
         originalEstimateMinutes:
           type: integer
           format: int64
+          nullable: true
         remainingEstimateMinutes:
           type: integer
           format: int64
+          nullable: true
 
     UpdateIssueResponseDto:
       type: object

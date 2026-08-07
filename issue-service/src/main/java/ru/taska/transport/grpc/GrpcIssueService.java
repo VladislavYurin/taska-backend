@@ -1,5 +1,8 @@
 package ru.taska.transport.grpc;
 
+import com.google.protobuf.DoubleValue;
+import com.google.protobuf.Int64Value;
+import com.google.protobuf.StringValue;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +15,7 @@ import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
@@ -19,8 +23,8 @@ import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
-import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.UpdateField;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
@@ -46,47 +50,52 @@ public class GrpcIssueService {
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
                 .flatMap(req -> {
+                    var body = req.getBody();
+                    var header = req.getHeader();
+
                     var traceId = Mono.zip(
                             GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                    req.getHeader().getRequestId(), "header.requestId"),
+                                    header.getRequestId(), "header.requestId"),
                             GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                    req.getHeader().getNodeId(), "header.nodeId")
+                                    header.getNodeId(), "header.nodeId")
                     );
+
                     var coreIssueMono = Mono.zip(
                             GrpcRequestValidators.validateIdempotencyKey(
-                                    req.getBody().getIdempotencyKey(), "body.idempotencyKey"),
+                                    body.getIdempotencyKey(), "body.idempotencyKey"),
                             GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                    req.getBody().getProjectId(), "body.projectId"),
+                                    body.getProjectId(), "body.projectId"),
                             GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                    req.getBody().getIssueType(), "body.issueType"),
+                                    body.getIssueType(), "body.issueType"),
                             GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                    req.getBody().getSummary(), "body.summary"),
+                                    body.getSummary(), "body.summary"),
                             GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                    req.getBody().getPriority(), "body.priority"),
+                                    body.getPriority(), "body.priority"),
                             GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                    req.getBody().getReporterId(), "body.reporterId"),
+                                    body.getReporterId(), "body.reporterId"),
                             GrpcRequestValidators.validateAnyOptional(
-                                    req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
-                            GrpcRequestValidators.parseOptionalStringToUUID(
-                                    req.getBody().hasAssigneeId(), req.getBody().getAssigneeId(), "body.assigneeId"));
+                                    body.hasDescription(), body.getDescription().getValue(), "body.description"),
+                            GrpcRequestValidators.validateAnyOptional(
+                                    body.hasAssigneeId(), body.getAssigneeId().getValue(), "body.assigneeId")
+                    );
 
                     var planningFields = Mono.zip(
-                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasStoryPoints(),
-                                    req.getBody().getStoryPoints(), "story_points"),
-                            GrpcRequestValidators.parseOptionalInstant(req.getBody().hasStartDate(),
-                                    req.getBody().getStartDate(), "body.startDate"),
-                            GrpcRequestValidators.parseOptionalInstant(req.getBody().hasDueDate(),
-                                    req.getBody().getDueDate(), "body.dueDate"),
-                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasOriginalEstimateMinutes(),
-                                    req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"));
+                            GrpcRequestValidators.validateOptionalNumbers(
+                                    body.hasStoryPoints(), body.getStoryPoints().getValue(), "body.story_points"),
+                            GrpcRequestValidators.parseOptionalInstant(
+                                    body.hasStartDate(), body.getStartDate(), "body.startDate"),
+                            GrpcRequestValidators.parseOptionalInstant(
+                                    body.hasDueDate(), body.getDueDate(), "body.dueDate"),
+                            GrpcRequestValidators.validateOptionalNumbers(
+                                    body.hasOriginalEstimateMinutes(), body.getOriginalEstimateMinutes().getValue(), "body.originalEstimateMinutes")
+                    );
 
                     return Mono.zip(traceId, coreIssueMono, planningFields)
                             .doOnError(StatusRuntimeException.class, logValidationError(
                                     req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
                             ))
                             .flatMap(t -> {
-
-                                //Trace id
+                                // Trace id
                                 String requestId = t.getT1().getT1();
                                 String nodeId = t.getT1().getT2();
 
@@ -95,20 +104,27 @@ public class GrpcIssueService {
                                 UUID projectId = t.getT2().getT2();
                                 IssueType issueType = issueMapper.toDomainIssueType(t.getT2().getT3());
                                 String summary = t.getT2().getT4();
-                                IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT2().getT5());
+                                ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT2().getT5());
                                 UUID reporterId = t.getT2().getT6();
-                                String description = t.getT2().getT7().orElse(null);
-                                UUID assigneeId = t.getT2().getT8().orElse(null);
 
+                                // Извлекаем чистые значения из Optional (если пусто — будет null)
+                                String description = t.getT2().getT7().orElse(null);
+
+                                String assigneeStr = t.getT2().getT8().orElse(null);
+                                UUID assigneeId = (assigneeStr != null && !assigneeStr.isBlank())
+                                        ? UUID.fromString(assigneeStr)
+                                        : null;
 
                                 // Поля планировщика задачи
                                 Double storyPoints = t.getT3().getT1().orElse(null);
-                                Instant startDate = t.getT3().getT2().orElse(null);
-                                Instant dueDate = t.getT3().getT3().orElse(null);
+
+                                Instant startDate = t.getT3().getT2().filter(i -> !i.equals(Instant.MIN)).orElse(null);
+                                Instant dueDate = t.getT3().getT3().filter(i -> !i.equals(Instant.MIN)).orElse(null);
+
                                 Long originalEstimateMinutes = t.getT3().getT4().orElse(null);
 
                                 log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, description={}," +
-                                                "assigneeId={}  priority={}, reporterId={}, storyPoints={}, startDate={}, dueDate={}, originalEstimateMinutes ={}",
+                                                " assigneeId={}, priority={}, reporterId={}, storyPoints={}, startDate={}, dueDate={}, originalEstimateMinutes={}",
                                         requestId, nodeId, idempotencyKey, projectId, issueType, summary, description, assigneeId, priority, reporterId,
                                         storyPoints, startDate, dueDate, originalEstimateMinutes);
 
@@ -313,59 +329,71 @@ public class GrpcIssueService {
     public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
         return request
                 .flatMap(req -> {
+                    var body = req.getBody();
+                    var header = req.getHeader();
 
-                    //Поля описания и приоритета задачи
-                    var specificationFields = Mono.zip(GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
-                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
-                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasSummary(), req.getBody().getSummary(), "body.summary"),
-                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasDescription(), req.getBody().getDescription(), "body.description"),
-                            GrpcRequestValidators.validateAnyOptional(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"));
+                    var specificationFields = Mono.zip(
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(header.getRequestId(), "header.requestId"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(header.getNodeId(), "header.nodeId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(body.getIssueId(), "body.issueId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(body.getActorUserId(), "body.actorUserId")
+                    );
 
-                    // Поля планировщика задачи
                     var planningFields = Mono.zip(
-                            GrpcRequestValidators.validateOptionalNumbers(
-                                    req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "story_points"),
-                            GrpcRequestValidators.parseOptionalInstant(
-                                    req.getBody().hasStartDate(), req.getBody().getStartDate(), "body.startDate"),
-                            GrpcRequestValidators.parseOptionalInstant(
-                                    req.getBody().hasDueDate(), req.getBody().getDueDate(), "body.dueDate"),
-                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasOriginalEstimateMinutes(),
-                                    req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"),
-                            GrpcRequestValidators.validateOptionalNumbers(req.getBody().hasRemainingEstimateMinutes(),
-                                    req.getBody().getRemainingEstimateMinutes(), "body.RemainingEstimateMinutes"));
+                            GrpcRequestValidators.validateOptionalWrapper(
+                                    body.hasSummary(), body.getSummary(), StringValue::getValue, "body.summary"),
+                            GrpcRequestValidators.validateOptionalWrapper(
+                                    body.hasDescription(), body.getDescription(), StringValue::getValue, "body.description"),
+                            GrpcRequestValidators.parseOptionalEnum(
+                                    body.hasPriority(), body.getPriority(), IssuePriority.ISSUE_PRIORITY_UNSPECIFIED, "body.priority"),
+                            GrpcRequestValidators.validateOptionalWrapper(
+                                    body.hasStoryPoints(), body.getStoryPoints(), DoubleValue::getValue, "body.story_points"),
+                            GrpcRequestValidators.parseOptionalTimestamp(body.hasStartDate(), body.getStartDate(), "body.startDate"),
+                            GrpcRequestValidators.parseOptionalTimestamp(body.hasDueDate(), body.getDueDate(), "body.dueDate"),
+                            GrpcRequestValidators.validateOptionalWrapper(
+                                    body.hasOriginalEstimateMinutes(), body.getOriginalEstimateMinutes(), Int64Value::getValue, "body.originalEstimateMinutes"),
+                            GrpcRequestValidators.validateOptionalWrapper(
+                                    body.hasRemainingEstimateMinutes(), body.getRemainingEstimateMinutes(), Int64Value::getValue, "body.remainingEstimateMinutes")
+                    );
+
                     return Mono.zip(specificationFields, planningFields)
-                            .doOnError(StatusRuntimeException.class, logValidationError(
-                                    req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
+                            .doOnError(io.grpc.StatusRuntimeException.class, logValidationError(
+                                    header.getRequestId(), header.getNodeId(), "updateIssue"
                             ))
                             .flatMap(t -> {
-
                                 String requestId = t.getT1().getT1();
                                 String nodeId = t.getT1().getT2();
-
-                                // Основные данные по задаче
                                 UUID issueId = t.getT1().getT3();
                                 UUID actorUserId = t.getT1().getT4();
-                                String summary = t.getT1().getT5().orElse(null);
-                                String description = t.getT1().getT6().orElse(null);
-                                IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT1().getT7().orElse(null));
 
-                                // Поля планировщика задачи
-                                Double storyPoints = t.getT2().getT1().orElse(null);
-                                Instant startDate = t.getT2().getT2().orElse(null);
-                                Instant dueDate = t.getT2().getT3().orElse(null);
-                                Long originalEstimateMinutes = t.getT2().getT4().orElse(null);
-                                Long remainingEstimateMinutes = t.getT2().getT5().orElse(null);
+                                UpdateField<String> summary = t.getT2().getT1();
+                                UpdateField<String> description = t.getT2().getT2();
 
-                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}, " +
-                                                "storyPoints ={}, startDate ={}, dueDate ={}, originalEstimateMinutes ={}, remainingEstimateMinutes ={}",
-                                        requestId, nodeId, issueId, actorUserId, summary, description, priority, storyPoints, startDate, dueDate,
-                                        originalEstimateMinutes, remainingEstimateMinutes);
-                                return GrpcRequestValidators.validateDateRange(startDate, dueDate)
-                                        .then(Mono.defer(() -> issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority,
-                                                storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes)))
-                                        .map(issueMapper::toUpdateIssueProto);
+                                UpdateField<IssuePriority> grpcPriority = t.getT2().getT3();
+                                UpdateField<ru.taska.domain.IssuePriority> priority;
+
+                                if (!grpcPriority.isPresent()) {
+                                    priority = UpdateField.undefined();
+                                } else if (grpcPriority.value() == null) {
+                                    priority = UpdateField.of(null);
+                                } else {
+                                    priority = UpdateField.of(issueMapper.toDomainIssuePriority(grpcPriority.value()));
+                                }
+
+                                UpdateField<Double> storyPoints = t.getT2().getT4();
+                                UpdateField<java.time.Instant> startDate = t.getT2().getT5();
+                                UpdateField<java.time.Instant> dueDate = t.getT2().getT6();
+                                UpdateField<Long> originalEstimateMinutes = t.getT2().getT7();
+                                UpdateField<Long> remainingEstimateMinutes = t.getT2().getT8();
+
+                                log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summaryPresent = {}, descriptionPresent = {}, priorityPresent = {}",
+                                        requestId, nodeId, issueId, actorUserId, summary.isPresent(), description.isPresent(), priority.isPresent());
+
+                                return issueService.updateIssue(
+                                        requestId, nodeId, issueId, actorUserId,
+                                        summary, description, priority, storyPoints,
+                                        startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes
+                                ).map(issueMapper::toUpdateIssueProto);
                             });
                 });
     }

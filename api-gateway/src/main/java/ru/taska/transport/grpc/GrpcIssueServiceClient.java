@@ -1,6 +1,5 @@
 package ru.taska.transport.grpc;
 
-import com.google.protobuf.util.Timestamps;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,6 +13,7 @@ import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequestBody;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.GetIssueRequestBody;
+import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesRequestBody;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
@@ -33,7 +33,6 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -152,16 +151,35 @@ public class GrpcIssueServiceClient {
                     .setSummary(requestDto.getSummary())
                     .setReporterId(context.userContext().userId());
 
-            Optional.ofNullable(requestDto.getAssigneeId()).ifPresent(bodyBuilder::setAssigneeId);
-            Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
-            Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
-            Optional.ofNullable(requestDto.getStartDate())
-                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
-                    .ifPresent(bodyBuilder::setStartDate);
-            Optional.ofNullable(requestDto.getDueDate())
-                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
-                    .ifPresent(bodyBuilder::setDueDate);
-            Optional.ofNullable(requestDto.getOriginalEstimateMinutes()).ifPresent(bodyBuilder::setOriginalEstimateMinutes);
+            if(requestDto.getAssigneeId().isPresent())  {
+               String assigneeIdVal = requestDto.getAssigneeId().get();
+               bodyBuilder.setAssigneeId(assigneeIdVal != null ?
+                       com.google.protobuf.StringValue.of(assigneeIdVal) : null);
+            }
+
+            if (requestDto.getStoryPoints().isPresent()) {
+                Double spVal = requestDto.getStoryPoints().get();
+                bodyBuilder.setStoryPoints(spVal != null ?
+                        com.google.protobuf.DoubleValue.of(spVal) : com.google.protobuf.DoubleValue.getDefaultInstance());
+            }
+
+            if (requestDto.getOriginalEstimateMinutes().isPresent()) {
+                Long origVal = requestDto.getOriginalEstimateMinutes().get();
+                bodyBuilder.setOriginalEstimateMinutes(origVal != null ?
+                        com.google.protobuf.Int64Value.of(origVal) : com.google.protobuf.Int64Value.getDefaultInstance());
+            }
+
+            if (requestDto.getStartDate().isPresent()) {
+                java.time.OffsetDateTime startDateVal = requestDto.getStartDate().get();
+                bodyBuilder.setStartDate(startDateVal != null ?
+                        com.google.protobuf.util.Timestamps.fromMillis(startDateVal.toInstant().toEpochMilli()) : com.google.protobuf.Timestamp.getDefaultInstance());
+            }
+
+            if (requestDto.getDueDate().isPresent()) {
+                java.time.OffsetDateTime dueDateVal = requestDto.getDueDate().get();
+                bodyBuilder.setDueDate(dueDateVal != null ?
+                        com.google.protobuf.util.Timestamps.fromMillis(dueDateVal.toInstant().toEpochMilli()) : com.google.protobuf.Timestamp.getDefaultInstance());
+            }
 
             return dynamicStub().createIssue(
                             CreateIssueRequest.newBuilder()
@@ -224,20 +242,53 @@ public class GrpcIssueServiceClient {
                     .setIssueId(issueId)
                     .setActorUserId(context.userContext().userId());
 
-            Optional.ofNullable(requestDto.getSummary()).ifPresent(bodyBuilder::setSummary);
-            Optional.ofNullable(requestDto.getPriority())
-                    .map(issueMapper::toGrpcIssuePriority)
-                    .ifPresent(bodyBuilder::setPriority);
-            Optional.ofNullable(requestDto.getDescription()).ifPresent(bodyBuilder::setDescription);
-            Optional.ofNullable(requestDto.getStoryPoints()).ifPresent(bodyBuilder::setStoryPoints);
-            Optional.ofNullable(requestDto.getStartDate())
-                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
-                    .ifPresent(bodyBuilder::setStartDate);
-            Optional.ofNullable(requestDto.getDueDate())
-                    .map(date -> Timestamps.fromMillis(date.toInstant().toEpochMilli()))
-                    .ifPresent(bodyBuilder::setDueDate);
-            Optional.ofNullable(requestDto.getOriginalEstimateMinutes()).ifPresent(bodyBuilder::setOriginalEstimateMinutes);
-            Optional.ofNullable(requestDto.getRemainingEstimateMinutes()).ifPresent(bodyBuilder::setRemainingEstimateMinutes);
+            if (requestDto.getSummary().isPresent()) {
+                String summaryVal = requestDto.getSummary().get();
+                bodyBuilder.setSummary(summaryVal != null ?
+                        com.google.protobuf.StringValue.of(summaryVal) : com.google.protobuf.StringValue.getDefaultInstance());
+            }
+
+            if (requestDto.getDescription().isPresent()) {
+                String descVal = requestDto.getDescription().get();
+                bodyBuilder.setDescription(descVal != null ?
+                        com.google.protobuf.StringValue.of(descVal) : com.google.protobuf.StringValue.getDefaultInstance());
+            }
+
+            if (requestDto.getPriority().isPresent()) {
+                String priorityVal = requestDto.getPriority().get();
+                bodyBuilder.setPriority(priorityVal != null ?
+                        issueMapper.toGrpcIssuePriority(priorityVal) : IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+            }
+
+            if (requestDto.getStoryPoints().isPresent()) {
+                Double spVal = requestDto.getStoryPoints().get();
+                bodyBuilder.setStoryPoints(spVal != null ?
+                        com.google.protobuf.DoubleValue.of(spVal) : com.google.protobuf.DoubleValue.getDefaultInstance());
+            }
+
+            if (requestDto.getOriginalEstimateMinutes().isPresent()) {
+                Long origVal = requestDto.getOriginalEstimateMinutes().get();
+                bodyBuilder.setOriginalEstimateMinutes(origVal != null ?
+                        com.google.protobuf.Int64Value.of(origVal) : com.google.protobuf.Int64Value.getDefaultInstance());
+            }
+
+            if (requestDto.getRemainingEstimateMinutes().isPresent()) {
+                Long remVal = requestDto.getRemainingEstimateMinutes().get();
+                bodyBuilder.setRemainingEstimateMinutes(remVal != null ?
+                        com.google.protobuf.Int64Value.of(remVal) : com.google.protobuf.Int64Value.getDefaultInstance());
+            }
+
+            if (requestDto.getStartDate().isPresent()) {
+                java.time.OffsetDateTime startDateVal = requestDto.getStartDate().get();
+                bodyBuilder.setStartDate(startDateVal != null ?
+                        com.google.protobuf.util.Timestamps.fromMillis(startDateVal.toInstant().toEpochMilli()) : com.google.protobuf.Timestamp.getDefaultInstance());
+            }
+
+            if (requestDto.getDueDate().isPresent()) {
+                java.time.OffsetDateTime dueDateVal = requestDto.getDueDate().get();
+                bodyBuilder.setDueDate(dueDateVal != null ?
+                        com.google.protobuf.util.Timestamps.fromMillis(dueDateVal.toInstant().toEpochMilli()) : com.google.protobuf.Timestamp.getDefaultInstance());
+            }
 
             return dynamicStub().updateIssue(
                             UpdateIssueRequest.newBuilder()

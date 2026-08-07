@@ -35,7 +35,6 @@ public class IssueMapper {
 
     private final ObjectMapper objectMapper;
 
-    //TODO разобраться с новыми полями ишью в гейтвее.
     public IssueResponseDto toRestIssueResponse(IssueResponse protoDto) {
         var restDto = new IssueResponseDto();
         restDto.setId(protoDto.getId());
@@ -116,14 +115,35 @@ public class IssueMapper {
     public UpdateIssueResponseDto toRestUpdateResponse(UpdateIssueResponse protoDto) {
         var restDto = new UpdateIssueResponseDto();
         restDto.setId(protoDto.getUpdatedIssueId());
-        restDto.setSummary(protoDto.hasSummary() ? protoDto.getSummary() : null);
-        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().isBlank() ? protoDto.getDescription() : null);
-        restDto.setPriority(protoDto.hasPriority() ? toRestIssuePriority(protoDto.getPriority()) : null);
-        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints() : null);
-        restDto.setStartDate(protoDto.hasStartDate() ? toOffsetDateTime(protoDto.getStartDate()) : null);
-        restDto.setDueDate(protoDto.hasDueDate() ? toOffsetDateTime(protoDto.getDueDate()) : null);
-        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes() : null);
-        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes() : null);
+
+        // Для StringValue проверяем наличие и вытаскиваем значение через .getValue()
+        restDto.setSummary(protoDto.hasSummary() ? protoDto.getSummary().getValue() : null);
+
+        // Проверяем StringValue на пустоту/пробелы безопасным образом
+        restDto.setDescription(protoDto.hasDescription() && !protoDto.getDescription().getValue().isBlank()
+                ? protoDto.getDescription().getValue()
+                : null);
+
+        // Проверяем Enum на UNSPECIFIED
+        restDto.setPriority(protoDto.hasPriority() && protoDto.getPriority() != IssuePriority.ISSUE_PRIORITY_UNSPECIFIED
+                ? toRestIssuePriority(protoDto.getPriority())
+                : null);
+
+        // Для DoubleValue
+        restDto.setStoryPoints(protoDto.hasStoryPoints() ? protoDto.getStoryPoints().getValue() : null);
+
+        // Для Timestamp по-прежнему проверяем секунды
+        restDto.setStartDate(protoDto.hasStartDate() && protoDto.getStartDate().getSeconds() != 0
+                ? toOffsetDateTime(protoDto.getStartDate())
+                : null);
+
+        restDto.setDueDate(protoDto.hasDueDate() && protoDto.getDueDate().getSeconds() != 0
+                ? toOffsetDateTime(protoDto.getDueDate())
+                : null);
+
+        // Для Int64Value
+        restDto.setOriginalEstimateMinutes(protoDto.hasOriginalEstimateMinutes() ? protoDto.getOriginalEstimateMinutes().getValue() : null);
+        restDto.setRemainingEstimateMinutes(protoDto.hasRemainingEstimateMinutes() ? protoDto.getRemainingEstimateMinutes().getValue() : null);
 
         return restDto;
     }

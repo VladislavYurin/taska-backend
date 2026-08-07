@@ -5,11 +5,13 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssuePriority;
+import ru.taska.domain.UpdateField;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -92,74 +94,94 @@ public class PayloadSerializer {
      * @param newPriority    новый приоритет задачи.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription,
-                                              IssuePriority newPriority, Double newStoryPoints, Instant newStartDate,
-                                              Instant newDueDate, Long newOriginalEstimateMinutes, Long newRemainingEstimateMinutes) {
+    public JsonNode createIssueUpdatedPayload(Issue originalIssue, UUID actorUserId,
+                                              UpdateField<String> summary,
+                                              UpdateField<String> description,
+                                              UpdateField<IssuePriority> priority,
+                                              UpdateField<Double> storyPoints,
+                                              UpdateField<Instant> startDate,
+                                              UpdateField<Instant> dueDate,
+                                              UpdateField<Long> originalEstimateMinutes,
+                                              UpdateField<Long> remainingEstimateMinutes) {
+
         ObjectNode node = objectMapper.createObjectNode();
 
+        // Системные поля логов (кто и на ком выполнял)
         if (actorUserId != null) {
             node.put(REPORTER, actorUserId.toString());
         } else {
             node.putNull(REPORTER);
         }
 
-        if (issue.getAssigneeId() != null) {
-            node.put(ASSIGNEE, issue.getAssigneeId().toString());
+        if (originalIssue.getAssigneeId() != null) {
+            node.put(ASSIGNEE, originalIssue.getAssigneeId().toString());
         } else {
             node.putNull(ASSIGNEE);
         }
 
         boolean isChanged = false;
 
-        if (newSummary != null && !newSummary.equals(issue.getSummary())) {
-            node.put(OLD_SUMMARY, issue.getSummary());
-            node.put(NEW_SUMMARY, newSummary);
-            isChanged = true;
-        }
-        if (newDescription != null && !newDescription.equals(issue.getDescription())) {
-            node.put(OLD_DESCRIPTION, issue.getDescription());
-            node.put(NEW_DESCRIPTION, newDescription);
-            isChanged = true;
-        }
-        if (newPriority != null && !newPriority.equals(issue.getPriority())) {
-            node.put(OLD_PRIORITY, issue.getPriority().toString());
-            node.put(NEW_PRIORITY, newPriority.toString());
+        // --- 1. Строковые поля ---
+        if (summary.isPresent() && !Objects.equals(summary.value(), originalIssue.getSummary())) {
+            node.put(OLD_SUMMARY, originalIssue.getSummary());
+            if (summary.value() != null) node.put(NEW_SUMMARY, summary.value()); else node.putNull(NEW_SUMMARY);
             isChanged = true;
         }
 
-        if (newStoryPoints != null && !newStoryPoints.equals(issue.getStoryPoints())) {
-            node.put(OLD_STORY_POINTS, issue.getStoryPoints());
-            node.put(NEW_STORY_POINTS, newStoryPoints);
-            isChanged = true;
-        }
-        if (newStartDate != null && !newStartDate.equals(Instant.EPOCH) && !newStartDate.equals(issue.getStartDate())) {
-            node.put(OLD_START_DATE, issue.getStartDate() != null ? issue.getStartDate().toString() : null);
-            node.put(NEW_START_DATE, newStartDate.toString());
-            isChanged = true;
-        }
-        if (newDueDate != null && !newDueDate.equals(Instant.EPOCH) && !newDueDate.equals(issue.getDueDate())) {
-            node.put(OLD_DUE_DATE, issue.getDueDate() != null ? issue.getDueDate().toString() : null);
-            node.put(NEW_DUE_DATE, newDueDate.toString());
+        if (description.isPresent() && !Objects.equals(description.value(), originalIssue.getDescription())) {
+            node.put(OLD_DESCRIPTION, originalIssue.getDescription());
+            if (description.value() != null) node.put(NEW_DESCRIPTION, description.value()); else node.putNull(NEW_DESCRIPTION);
             isChanged = true;
         }
 
-        if (newOriginalEstimateMinutes != null && !newOriginalEstimateMinutes.equals(issue.getOriginalEstimateMinutes())) {
-            node.put(OLD_ORIGINAL_ESTIMATED, issue.getOriginalEstimateMinutes());
-            node.put(NEW_ORIGINAL_ESTIMATED, newOriginalEstimateMinutes);
-            isChanged = true;
-        }
-        if (newRemainingEstimateMinutes != null && !newRemainingEstimateMinutes.equals(issue.getRemainingEstimateMinutes())) {
-            node.put(OLD_REMAINING_ESTIMATED, issue.getRemainingEstimateMinutes());
-            node.put(NEW_REMAINING_ESTIMATED, newRemainingEstimateMinutes);
+        // --- 2. Энумы ---
+        if (priority.isPresent() && !Objects.equals(priority.value(), originalIssue.getPriority())) {
+            node.put(OLD_PRIORITY, originalIssue.getPriority() != null ? originalIssue.getPriority().toString() : null);
+            if (priority.value() != null) node.put(NEW_PRIORITY, priority.value().toString()); else node.putNull(NEW_PRIORITY);
             isChanged = true;
         }
 
+        // --- 3. Числа ---
+        if (storyPoints.isPresent() && !Objects.equals(storyPoints.value(), originalIssue.getStoryPoints())) {
+            node.put(OLD_STORY_POINTS, originalIssue.getStoryPoints());
+            if (storyPoints.value() != null) node.put(NEW_STORY_POINTS, storyPoints.value()); else node.putNull(NEW_STORY_POINTS);
+            isChanged = true;
+        }
+
+        // --- 4. Даты (Убрали костыли с Instant.EPOCH) ---
+        if (startDate.isPresent() && !Objects.equals(startDate.value(), originalIssue.getStartDate())) {
+            node.put(OLD_START_DATE, originalIssue.getStartDate() != null ? originalIssue.getStartDate().toString() : null);
+            if (startDate.value() != null) node.put(NEW_START_DATE, startDate.value().toString()); else node.putNull(NEW_START_DATE);
+            isChanged = true;
+        }
+
+        if (dueDate.isPresent() && !Objects.equals(dueDate.value(), originalIssue.getDueDate())) {
+            node.put(OLD_DUE_DATE, originalIssue.getDueDate() != null ? originalIssue.getDueDate().toString() : null);
+            if (dueDate.value() != null) node.put(NEW_DUE_DATE, dueDate.value().toString()); else node.putNull(NEW_DUE_DATE);
+            isChanged = true;
+        }
+
+        // --- 5. Тайм-трекинг ---
+        if (originalEstimateMinutes.isPresent() && !Objects.equals(originalEstimateMinutes.value(), originalIssue.getOriginalEstimateMinutes())) {
+            node.put(OLD_ORIGINAL_ESTIMATED, originalIssue.getOriginalEstimateMinutes());
+            if (originalEstimateMinutes.value() != null) node.put(NEW_ORIGINAL_ESTIMATED, originalEstimateMinutes.value()); else node.putNull(NEW_ORIGINAL_ESTIMATED);
+            isChanged = true;
+        }
+
+        if (remainingEstimateMinutes.isPresent() && !Objects.equals(remainingEstimateMinutes.value(), originalIssue.getRemainingEstimateMinutes())) {
+            node.put(OLD_REMAINING_ESTIMATED, originalIssue.getRemainingEstimateMinutes());
+            if (remainingEstimateMinutes.value() != null) node.put(NEW_REMAINING_ESTIMATED, remainingEstimateMinutes.value()); else node.putNull(NEW_REMAINING_ESTIMATED);
+            isChanged = true;
+        }
+
+        // Если реально ничего не поменялось (прислали те же значения, что уже были в базе)
         if (!isChanged) {
             return objectMapper.createObjectNode();
         }
 
         return node;
     }
+
 
     /**
      * Создает {@link JsonNode} с измененными данными при изменении статуса задачи.
