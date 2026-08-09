@@ -11,6 +11,7 @@ import ru.taska.domain.IssueComment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -23,7 +24,6 @@ import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -324,12 +324,12 @@ public class CommentServiceImpl implements CommentService {
     private Mono<Void> saveHistoryAndOutbox(String requestId, String nodeId, Issue issue,
                                             UUID actorUserId, IssueEventType issueEventType,
                                             EventType outboxEventType, ObjectNode payload) {
-        return issueHistoryService.saveIssueHistory(requestId, nodeId, issue, actorUserId, issueEventType, payload)
+        return issueHistoryService.saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, issueEventType, payload)
                 .doOnSuccess(h -> {
                     assert h != null;
                     log.debug("[{}][{}] History saved: {}", requestId, nodeId, h.getId());
                 })
-                .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue.getId(), outboxEventType, payload))
+                .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue.getId(), outboxEventType, payload))
                 .doOnSuccess(e -> {
                     assert e != null;
                     log.debug("[{}][{}] Outbox saved: {}", requestId, nodeId, e.getId());

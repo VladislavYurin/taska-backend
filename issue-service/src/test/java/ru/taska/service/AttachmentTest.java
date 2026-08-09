@@ -16,6 +16,7 @@ import ru.taska.domain.Issue;
 import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -204,7 +205,7 @@ public class AttachmentTest {
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_UPLOADED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.createPresignedDownloadUrl(OBJECT_KEY))
                 .thenReturn(Mono.just(DOWNLOAD_URL));
@@ -227,7 +228,7 @@ public class AttachmentTest {
         Mockito.verify(issueHistoryService).saveIssueHistory(
                 REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_UPLOADED, payload);
         Mockito.verify(outboxEventService).saveOutboxEvent(
-                REQUEST_ID, NODE_ID, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload);
+                REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload);
         Mockito.verify(storageClient).createPresignedDownloadUrl(OBJECT_KEY);
     }
 
@@ -519,7 +520,7 @@ public class AttachmentTest {
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))
@@ -560,7 +561,7 @@ public class AttachmentTest {
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))

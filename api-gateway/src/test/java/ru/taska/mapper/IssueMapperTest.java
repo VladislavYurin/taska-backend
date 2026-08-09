@@ -11,13 +11,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.IssueLinkType;
+import ru.taska.api.issue.v1.IssueLinkViewType;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.dto.IssueLinkTypeDto;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -32,6 +37,8 @@ class IssueMapperTest {
     private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000003";
     private static final String ASSIGNEE_ID = "00000000-0000-0000-0000-000000000004";
     private static final String HISTORY_ID = "00000000-0000-0000-0000-000000000005";
+    private static final String TARGET_ISSUE_ID = "00000000-0000-0000-0000-000000000006";
+    private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
     private static final String ISSUE_KEY = "TAS-15";
     private static final String SUMMARY = "Summary-1";
     private static final String DESCRIPTION = "Description-1";
@@ -228,6 +235,58 @@ class IssueMapperTest {
     }
 
     @Test
+    @DisplayName("Должен корректно преобразовать IssueLinkResponse(gRPC DTO) в IssueLinkResponseDto(REST DTO)")
+    void toRestIssueLinkResponse_shouldCorrectMapsAllFields() {
+        var createdAt = Timestamp.newBuilder()
+                .setSeconds(1)
+                .build();
+
+        var expectedCreatedAt = OffsetDateTime.parse("1970-01-01T00:00:01Z");
+
+        var source = IssueLinkResponse.newBuilder()
+                .setId(LINK_ID)
+                .setProjectId(PROJECT_ID)
+                .setSourceIssueId(ISSUE_ID)
+                .setTargetIssueId(TARGET_ISSUE_ID)
+                .setViewLinkType(IssueLinkViewType.ISSUE_LINK_VIEW_TYPE_BLOCKS)
+                .setCreatedBy(USER_ID)
+                .setCreatedAt(createdAt)
+                .build();
+
+        var result = mapper.toRestIssueLinkResponse(source);
+
+        Assertions.assertEquals(LINK_ID, result.getId());
+        Assertions.assertEquals(PROJECT_ID, result.getProjectId());
+        Assertions.assertEquals(ISSUE_ID, result.getSourceIssueId());
+        Assertions.assertEquals(TARGET_ISSUE_ID, result.getTargetIssueId());
+        Assertions.assertEquals("ISSUE_LINK_VIEW_TYPE_BLOCKS", result.getViewLinkType());
+        Assertions.assertEquals(USER_ID, result.getCreatedBy());
+        Assertions.assertEquals(expectedCreatedAt, result.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("Должен корректно преобразовать ListIssueLinksResponse(gRPC DTO) в ListIssueLinksResponseDto(REST DTO)")
+    void toRestListIssueLinkResponse_shouldCorrectMapsAllFields() {
+        var firstLink = IssueLinkResponse.newBuilder()
+                .setId(LINK_ID)
+                .build();
+
+        var secondLink = IssueLinkResponse.newBuilder()
+                .setId("00000000-0000-0000-0000-000000000008")
+                .build();
+
+        var source = ListIssueLinksResponse.newBuilder()
+                .addAllIssueLinks(List.of(firstLink, secondLink))
+                .build();
+
+        var result = mapper.toRestListIssueLinkResponse(source);
+
+        Assertions.assertEquals(2, result.getItems().size());
+        Assertions.assertEquals(LINK_ID, result.getItems().getFirst().getId());
+        Assertions.assertEquals("00000000-0000-0000-0000-000000000008", result.getItems().get(1).getId());
+    }
+
+    @Test
     @DisplayName("Должен корректно преобразовывать Timestamp(protobuf) в OffsetDataTime")
     void toOffsetDateTime_shouldCorrectConvertTimestamp() {
         var source = Timestamp.newBuilder()
@@ -388,6 +447,15 @@ class IssueMapperTest {
         Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
     }
 
+    @ParameterizedTest
+    @MethodSource("grpcIssueLinkTypeArguments")
+    @DisplayName("Должен корректно преобразовать REST IssueLinkTypeDto в gRPC IssueLinkType")
+    void toGrpcIssueLinkType_(IssueLinkTypeDto source, IssueLinkType expected) {
+        var result = mapper.toGrpcIssueLinkType(source);
+
+        Assertions.assertEquals(expected, result);
+    }
+
     private static Stream<Arguments> grpcIssueTypeArguments() {
         return Stream.of(
                 Arguments.of("TASK", IssueType.ISSUE_TYPE_TASK),
@@ -429,6 +497,14 @@ class IssueMapperTest {
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED, "ASSIGNED"),
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED, "TRANSITIONED"),
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_DELETED, "DELETED")
+        );
+    }
+
+    private static Stream<Arguments> grpcIssueLinkTypeArguments() {
+        return Stream.of(
+                Arguments.of(IssueLinkTypeDto.RELATES_TO, IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO),
+                Arguments.of(IssueLinkTypeDto.BLOCKS, IssueLinkType.ISSUE_LINK_TYPE_BLOCKS),
+                Arguments.of(IssueLinkTypeDto.DUPLICATES, IssueLinkType.ISSUE_LINK_TYPE_DUPLICATES)
         );
     }
 }

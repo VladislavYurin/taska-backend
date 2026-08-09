@@ -13,6 +13,7 @@ import java.util.Arrays;
 public enum AggregateType {
     USER("user"),
     ISSUE("issue"),
+    ISSUE_LINK("issueLink"),
     PROJECT("project");
 
     private final String value;

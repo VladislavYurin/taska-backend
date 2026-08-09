@@ -5,12 +5,37 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.AssignIssueRequestBody;
+import ru.taska.api.issue.v1.CreateIssueLinkRequest;
+import ru.taska.api.issue.v1.CreateIssueLinkRequestBody;
+import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueRequestBody;
+import ru.taska.api.issue.v1.DeleteIssueLinkBody;
+import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
+import ru.taska.api.issue.v1.DeleteIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueRequestBody;
+import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.GetIssueRequestBody;
+import ru.taska.api.issue.v1.ListIssueLinksRequest;
+import ru.taska.api.issue.v1.ListIssueLinksRequestBody;
+import ru.taska.api.issue.v1.ListIssuesRequest;
+import ru.taska.api.issue.v1.ListIssuesRequestBody;
+import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
+import ru.taska.api.issue.v1.TransitionIssueRequestBody;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueRequestBody;
 import ru.taska.api.issue.v1.*;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.AssignIssueRequestDto;
+import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
@@ -40,7 +65,6 @@ public class GrpcIssueServiceClient {
      *
      * @param issueId идентификатор задачи
      * @param context контекст запроса
-     *
      * @return задача с историей изменений
      */
     public Mono<IssueWithHistoryResponseDto> getIssue(
@@ -72,7 +96,6 @@ public class GrpcIssueServiceClient {
      * @param page       номер страницы (необязательное поле)
      * @param pageSize   размер страницы (необязательное поле)
      * @param context    контекст запроса
-     *
      * @return список задач
      */
     public Mono<ListIssuesResponseDto> listIssues(
@@ -121,7 +144,6 @@ public class GrpcIssueServiceClient {
      * @param idempotencyKey ключ идемпотентности
      * @param request        параметры создаваемой задачи
      * @param context        контекст запроса
-     *
      * @return созданная задача
      */
     public Mono<IssueResponseDto> createIssue(
@@ -158,7 +180,6 @@ public class GrpcIssueServiceClient {
      * @param issueId идентификатор задачи
      * @param request данные о назначаемом исполнителе
      * @param context контекст запроса
-     *
      * @return обновлённая задача
      */
     public Mono<IssueResponseDto> assignIssue(
@@ -191,7 +212,6 @@ public class GrpcIssueServiceClient {
      * @param issueId идентификатор задачи
      * @param request новые данные задачи
      * @param context контекст запроса
-     *
      * @return обновленные данные задачи
      */
     public Mono<UpdateIssueResponseDto> updateIssue(
@@ -227,7 +247,6 @@ public class GrpcIssueServiceClient {
      * @param transitionId идентификатор перехода
      * @param request      дополнительные данные перехода(необязательное поле)
      * @param context      контекст запроса
-     *
      * @return задача с обновлённой историей
      */
     public Mono<IssueWithHistoryResponseDto> transitionIssue(
@@ -266,7 +285,6 @@ public class GrpcIssueServiceClient {
      *
      * @param issueId идентификатор задачи
      * @param context контекст запроса
-     *
      * @return сигнал об успешном завершении операции
      */
     public Mono<Void> deleteIssue(
@@ -281,6 +299,96 @@ public class GrpcIssueServiceClient {
                                 .setBody(
                                         DeleteIssueRequestBody.newBuilder()
                                                 .setIssueId(issueId)
+                                                .setActorUserId(context.userContext().userId())
+                                                .build()
+                                )
+                                .build()
+                )
+                .then();
+    }
+
+    /**
+     * Получает полный список связей для задачи.
+     *
+     * @param issueId идентификатор задачи
+     * @param context контекст запроса
+     * @return список задач
+     */
+    public Mono<ListIssueLinksResponseDto> listIssueLinks(
+            String issueId,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling listIssueLinks", context.requestId());
+
+        return dynamicStub().listIssueLinks(
+                        ListIssueLinksRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(
+                                        ListIssueLinksRequestBody.newBuilder()
+                                                .setIssueId(issueId)
+                                                .setActorUserId(context.userContext().userId())
+                                                .build()
+                                )
+                                .build()
+                )
+                .map(issueMapper::toRestListIssueLinkResponse);
+    }
+
+    /**
+     * Создает связь между задачами.
+     *
+     * @param issueId идентификатор задачи
+     * @param request запрос с параметрами устанавливаемой связи
+     * @param context контекст запроса
+     * @return ответ с данными установленной связи
+     */
+    public Mono<IssueLinkResponseDto> createIssueLink(
+            String issueId,
+            Mono<CreateIssueLinkRequestDto> request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling createIssueLink", context.requestId());
+
+        return request
+                .flatMap(requestDto ->
+                        dynamicStub().createIssueLink(
+                                CreateIssueLinkRequest.newBuilder()
+                                        .setHeader(buildGrpcHeader(context))
+                                        .setBody(
+                                                CreateIssueLinkRequestBody.newBuilder()
+                                                        .setSourceIssueId(issueId)
+                                                        .setTargetIssueId(requestDto.getTargetIssueId())
+                                                        .setLinkType(issueMapper.toGrpcIssueLinkType(requestDto.getLinkType()))
+                                                        .setActorUserId(context.userContext().userId())
+                                                        .build()
+                                        )
+                                        .build())
+                )
+                .map(issueMapper::toRestIssueLinkResponse);
+    }
+
+    /**
+     * Выполняет мягкое удаление связи.
+     *
+     * @param issueId идентификатор задачи
+     * @param linkId  идентификатор связи
+     * @param context контекст запроса
+     * @return сигнал об успешном завершении операции
+     */
+    public Mono<Void> deleteIssueLink(
+            String issueId,
+            String linkId,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling deleteIssueLink", context.requestId());
+
+        return dynamicStub().deleteIssueLink(
+                        DeleteIssueLinkRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(
+                                        DeleteIssueLinkBody.newBuilder()
+                                                .setIssueId(issueId)
+                                                .setLinkId(linkId)
                                                 .setActorUserId(context.userContext().userId())
                                                 .build()
                                 )

@@ -6,6 +6,8 @@ import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.ListTableRowsRequest;
+import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 
 /**
@@ -21,5 +23,11 @@ public class GrpcAdminServiceAdapter extends ReactorAdminServiceGrpc.AdminServic
     public Mono<GetCatalogResponse> getCatalog(Mono<GetCatalogRequest> request) {
         return grpcAdminService.getCatalog(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getCatalog"));
+    }
+
+    @Override
+    public Mono<ListTableRowsResponse> listTableRows(Mono<ListTableRowsRequest> request) {
+        return grpcAdminService.listTableRows(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listTableRows"));
     }
 }

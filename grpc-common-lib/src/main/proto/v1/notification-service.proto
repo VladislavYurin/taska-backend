@@ -101,6 +101,16 @@ enum NotificationKind {
    * Уведомление об удалении участника из проекта.
    */
   NOTIFICATION_KIND_MEMBER_REMOVED = 11;
+
+  /**
+   * Уведомление о создании связи между двумя задачами.
+   */
+  NOTIFICATION_KIND_ISSUE_LINK_CREATED = 12;
+
+  /**
+   * Уведомление об удалении связи между двумя задачами.
+   */
+  NOTIFICATION_KIND_ISSUE_LINK_DELETED = 13;
 }
 
 /**

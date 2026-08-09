@@ -16,11 +16,13 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_ASSIGNED = 3;
   ISSUE_EVENT_TYPE_TRANSITIONED = 4;
   ISSUE_EVENT_TYPE_DELETED = 5;
-  ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED = 6;
-  ISSUE_EVENT_TYPE_ATTACHMENT_DELETED = 7;
-  ISSUE_EVENT_TYPE_COMMENT_CREATED = 8;
-  ISSUE_EVENT_TYPE_COMMENT_UPDATED = 9;
-  ISSUE_EVENT_TYPE_COMMENT_DELETED = 10;
+  ISSUE_LINK_EVENT_TYPE_CREATED = 6;
+  ISSUE_LINK_EVENT_TYPE_DELETED = 7;
+  ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED = 8;
+  ISSUE_EVENT_TYPE_ATTACHMENT_DELETED = 9;
+  ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
+  ISSUE_EVENT_TYPE_COMMENT_UPDATED = 11;
+  ISSUE_EVENT_TYPE_COMMENT_DELETED = 12;
 }
 
 enum IssueType {
@@ -35,6 +37,22 @@ enum IssuePriority {
   ISSUE_PRIORITY_LOW = 1;
   ISSUE_PRIORITY_MEDIUM = 2;
   ISSUE_PRIORITY_HIGH = 3;
+}
+
+enum IssueLinkType {
+  ISSUE_LINK_TYPE_UNSPECIFIED = 0;
+  ISSUE_LINK_TYPE_BLOCKS = 1;
+  ISSUE_LINK_TYPE_RELATES_TO = 2;
+  ISSUE_LINK_TYPE_DUPLICATES = 3;
+}
+
+enum IssueLinkViewType {
+  ISSUE_LINK_VIEW_TYPE_UNSPECIFIED = 0;
+  ISSUE_LINK_VIEW_TYPE_RELATES_TO = 1;
+  ISSUE_LINK_VIEW_TYPE_BLOCKS = 2;
+  ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY = 3;
+  ISSUE_LINK_VIEW_TYPE_DUPLICATES = 4;
+  ISSUE_LINK_VIEW_TYPE_IS_DUPLICATED_BY = 5;
 }
 
 service IssueService {
@@ -79,6 +97,24 @@ service IssueService {
    */
   rpc TransitionIssue(TransitionIssueRequest)
       returns (IssueWithHistoryResponse);
+
+  /**
+   * Возвращает список связей для задачи.
+   */
+  rpc ListIssueLinks(ListIssueLinksRequest)
+      returns (ListIssueLinksResponse);
+
+  /**
+   * Создаёт связь между задачами.
+   */
+  rpc CreateIssueLink(CreateIssueLinkRequest)
+      returns (IssueLinkResponse);
+
+  /**
+   * Удаляет связь между задачами.
+   */
+  rpc DeleteIssueLink(DeleteIssueLinkRequest)
+      returns (DeleteIssueLinkResponse);
 
   /**
    * Возвращает список задач для доски (Board API).
@@ -321,6 +357,7 @@ message ListIssuesRequestBody {
 }
 
 message TransitionIssueRequest {
+
   /**
    * Заголовок запроса.
    */
@@ -333,6 +370,7 @@ message TransitionIssueRequest {
 }
 
 message TransitionIssueRequestBody {
+
   /**
    * Идентификатор задачи.
    */
@@ -352,6 +390,93 @@ message TransitionIssueRequestBody {
    * Дополнительные данные для перехода.
    */
   string payload = 4;
+}
+
+message ListIssueLinksRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueLinksRequestBody body = 2;
+}
+
+message ListIssueLinksRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+}
+
+message CreateIssueLinkRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateIssueLinkRequestBody body = 2;
+}
+
+message CreateIssueLinkRequestBody {
+  /**
+   * Идентификатор исходной задачи.
+   */
+  string source_issue_id = 1;
+
+  /**
+   * Идентификатор целевой задачи.
+   */
+  string target_issue_id = 2;
+
+  /**
+   * Тип связи между задачами.
+   */
+  IssueLinkType link_type = 3;
+
+  /**
+   * Идентификатор пользователя, создающего связь.
+   */
+  string actor_user_id = 4;
+}
+
+message DeleteIssueLinkRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteIssueLinkBody body = 2;
+}
+
+message DeleteIssueLinkBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор удаляемой связи.
+   */
+  string link_id = 2;
+
+  /**
+   * Идентификатор пользователя, удаляющего связь.
+   */
+  string actor_user_id = 3;
 }
 
 message DeleteIssueResponse {
@@ -556,6 +681,66 @@ message IssueWithHistoryResponse {
   repeated IssueHistoryResponse history = 2;
 }
 
+message ListIssueLinksResponse {
+  /**
+   * Список связей задачи.
+   */
+  repeated IssueLinkResponse issue_links = 1;
+}
+
+message IssueLinkResponse {
+  /**
+   * Идентификатор связи.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Идентификатор исходной задачи.
+   */
+  string source_issue_id = 3;
+
+  /**
+   * Идентификатор целевой задачи.
+   */
+  string target_issue_id = 4;
+
+  /**
+   * Тип связи между задачами.
+   */
+  IssueLinkViewType view_link_type = 5;
+
+  /**
+   * Идентификатор пользователя, создавшего связь.
+   */
+  string created_by = 6;
+
+  /**
+   * Временная метка создания записи (аудит).
+   */
+  google.protobuf.Timestamp created_at = 7;
+
+  /**
+   * Временная метка мягкого удаления (null — запись активна).
+   */
+  google.protobuf.Timestamp deleted_at = 8;
+}
+
+message DeleteIssueLinkResponse {
+  /**
+   * Идентификатор удаленной связи.
+   */
+  string link_id = 1;
+
+  /**
+   * Тип события.
+   */
+  IssueEventType event_type = 2;
+}
 message ListIssuesForBoardRequest {
   /**
    * Заголовок запроса.
@@ -896,4 +1081,3 @@ message ListIssueCommentsResponse {
    */
   int32 total_count = 2;
 }
-

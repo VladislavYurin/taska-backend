@@ -8,19 +8,25 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.issue.v1.BoardIssue;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.IssueLinkType;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
+import ru.taska.domain.dto.IssueLinkResponseDto;
+import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueShortResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
+import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
@@ -146,6 +152,31 @@ public class IssueMapper {
         return restDto;
     }
 
+    public IssueLinkResponseDto toRestIssueLinkResponse(IssueLinkResponse protoDto) {
+        var restDto = new IssueLinkResponseDto();
+        restDto.setId(protoDto.getId());
+        restDto.setProjectId(protoDto.getProjectId());
+        restDto.setSourceIssueId(protoDto.getSourceIssueId());
+        restDto.setTargetIssueId(protoDto.getTargetIssueId());
+        restDto.setViewLinkType(protoDto.getViewLinkType().name());
+        restDto.setCreatedBy(protoDto.getCreatedBy());
+        restDto.setCreatedAt(this.toOffsetDateTime(protoDto.getCreatedAt()));
+
+        return restDto;
+    }
+
+    public ListIssueLinksResponseDto toRestListIssueLinkResponse(ListIssueLinksResponse protoDto) {
+        var restDto = new ListIssueLinksResponseDto();
+
+        restDto.setItems(
+                protoDto.getIssueLinksList().stream()
+                        .map(this::toRestIssueLinkResponse)
+                        .toList()
+        );
+
+        return restDto;
+    }
+
     public IssueType toGrpcIssueType(String restIssueType) {
         return switch (restIssueType) {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
@@ -195,10 +226,25 @@ public class IssueMapper {
             case ISSUE_EVENT_TYPE_ASSIGNED -> "ASSIGNED";
             case ISSUE_EVENT_TYPE_TRANSITIONED -> "TRANSITIONED";
             case ISSUE_EVENT_TYPE_DELETED -> "DELETED";
+            case ISSUE_LINK_EVENT_TYPE_CREATED -> "LINK_CREATED";
+            case ISSUE_LINK_EVENT_TYPE_DELETED -> "LINK_DELETED";
+            case ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED -> "ATTACHMENT_UPLOADED";
+            case ISSUE_EVENT_TYPE_ATTACHMENT_DELETED -> "ATTACHMENT_DELETED";
+            case ISSUE_EVENT_TYPE_COMMENT_CREATED -> "COMMENT_CREATED";
+            case ISSUE_EVENT_TYPE_COMMENT_UPDATED -> "COMMENT_UPDATED";
+            case ISSUE_EVENT_TYPE_COMMENT_DELETED -> "COMMENT_DELETED";
             default -> throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Unknown event type: " + grpcIssueEventType
             );
+        };
+    }
+
+    public IssueLinkType toGrpcIssueLinkType(IssueLinkTypeDto restType) {
+        return switch (restType) {
+            case RELATES_TO -> IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO;
+            case BLOCKS -> IssueLinkType.ISSUE_LINK_TYPE_BLOCKS;
+            case DUPLICATES -> IssueLinkType.ISSUE_LINK_TYPE_DUPLICATES;
         };
     }
 

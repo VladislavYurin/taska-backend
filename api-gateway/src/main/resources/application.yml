@@ -55,6 +55,10 @@ grpc:
       host: ${PROJECT_GRPC_HOST:localhost}
       port: ${PROJECT_GRPC_PORT:9096}
       deadlineDuration: ${PROJECT_GRPC_DEADLINE:3000}
+    admin-service:
+      host: ${ADMIN_GRPC_HOST:localhost}
+      port: ${ADMIN_GRPC_PORT:9097}
+      deadlineDuration: ${ADMIN_GRPC_DEADLINE:3000ms}
 
 logging:
   level:

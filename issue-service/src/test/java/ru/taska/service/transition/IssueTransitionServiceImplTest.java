@@ -27,7 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
-class IssueTransitionProcessorImplTest {
+class IssueTransitionServiceImplTest {
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private IssueProperties issueProperties;
@@ -45,7 +45,7 @@ class IssueTransitionProcessorImplTest {
     private IssueTransitionExecutor executor;
 
     @InjectMocks
-    private IssueTransitionProcessorImpl processor;
+    private IssueTransitionServiceImpl processor;
 
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID ISSUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");

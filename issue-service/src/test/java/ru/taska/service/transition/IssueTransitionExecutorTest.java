@@ -17,6 +17,7 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -101,10 +102,10 @@ class IssueTransitionExecutorTest {
         Mockito.when(payloadSerializer.createTransitionedPayload(SOURCE_STATUS_KEY, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null))
                 .thenReturn(payload);
 
-        Mockito.when(issueHistoryService.saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue, ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload))
+        Mockito.when(issueHistoryService.saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue.getId(), ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, sourceIssue.getId(), EventType.ISSUE_TRANSITIONED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, sourceIssue.getId(), EventType.ISSUE_TRANSITIONED, payload))
                 .thenReturn(Mono.empty());
 
         Mockito.when(issueProperties.card().maxHistorySize())
@@ -132,8 +133,8 @@ class IssueTransitionExecutorTest {
         Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.times(1)).changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
         Mockito.verify(payloadSerializer, Mockito.times(1)).createTransitionedPayload(SOURCE_STATUS_KEY, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null);
-        Mockito.verify(issueHistoryService, Mockito.times(1)).saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue, ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload);
-        Mockito.verify(outboxEventService, Mockito.times(1)).saveOutboxEvent(REQUEST_ID, NODE_ID, sourceIssue.getId(), EventType.ISSUE_TRANSITIONED, payload);
+        Mockito.verify(issueHistoryService, Mockito.times(1)).saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue.getId(), ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload);
+        Mockito.verify(outboxEventService, Mockito.times(1)).saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, sourceIssue.getId(), EventType.ISSUE_TRANSITIONED, payload);
         Mockito.verify(historyRepository, Mockito.times(1)).findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.eq(Limit.of(10)));
     }
 

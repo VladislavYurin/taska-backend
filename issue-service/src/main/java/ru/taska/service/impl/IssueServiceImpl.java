@@ -15,6 +15,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -113,7 +114,7 @@ public class IssueServiceImpl implements IssueService {
                                     IdempotencyKey keyEntity = issueMapper.buildIdempotencyKey(idempotencyKey, reporterId, currentRequestHash,
                                             issue, issueProperties.idempotencyKeyTtl().ttl());
                                     return issueHistoryService.saveIssueCreateHistory(requestId, nodeId, issue)
-                                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, issue))
+                                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue))
                                             .then(idempotencyKeyRepository.save(keyEntity))
                                             .thenReturn(issue)
                                             .doOnSuccess(savedIssue ->
@@ -167,9 +168,9 @@ public class IssueServiceImpl implements IssueService {
                     return issueRepository.save(assignedIssue)
                             .flatMap(savedIssue -> {
                                 return issueHistoryService.saveIssueHistory(
-                                                requestId, nodeId, assignedIssue, actorUserId, IssueEventType.ASSIGNED, payload)
+                                                requestId, nodeId, assignedIssue.getId(), actorUserId, IssueEventType.ASSIGNED, payload)
                                         .then(outboxEventService.saveOutboxEvent(
-                                                requestId, nodeId, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
+                                                requestId, nodeId, AggregateType.ISSUE, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
                                         .then(Mono.fromRunnable(() ->
                                                 log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
                                                         requestId, nodeId, assigneeId, issueId)))
@@ -209,9 +210,9 @@ public class IssueServiceImpl implements IssueService {
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
 
                     return issueRepository.save(updatingIssue)
-                            .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, savedIssue.getId(),
+                            .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, savedIssue.getId(),
                                             EventType.ISSUE_UPDATED, payload)
-                                    .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue, actorUserId, IssueEventType.UPDATED, payload))
+                                    .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue.getId(), actorUserId, IssueEventType.UPDATED, payload))
                                     .then(Mono.fromRunnable(() ->
                                             log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
                                                     requestId, nodeId, issueId, actorUserId)))
@@ -241,9 +242,9 @@ public class IssueServiceImpl implements IssueService {
                 })
                 .flatMap(deletedIssue -> {
                     JsonNode payload = payloadSerializer.createIssueDeletedPayload(IssueEventType.DELETED, deletedIssue.getDeletedAt(), actorUserId, deletedIssue.getAssigneeId());
-                    return issueHistoryService.saveIssueHistory(requestId, nodeId, deletedIssue, actorUserId, IssueEventType.DELETED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, deletedIssue.getId(),
-                                    EventType.ISSUE_DELETED, payload))
+                    return issueHistoryService.saveIssueHistory(requestId, nodeId, deletedIssue.getId(), actorUserId, IssueEventType.DELETED, payload)
+                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
+                                    deletedIssue.getId(), EventType.ISSUE_DELETED, payload))
                             .then(Mono.fromRunnable(() ->
                                     log.debug("[{}][{}] Issue with id: {} successfully soft-deleted by user with id: {}",
                                             requestId, nodeId, issueId, actorUserId)))
