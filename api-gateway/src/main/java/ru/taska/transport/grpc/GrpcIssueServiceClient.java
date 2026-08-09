@@ -5,23 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.GetIssueRequestBody;
-import ru.taska.api.issue.v1.ListIssuesRequestBody;
-import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
-import ru.taska.api.issue.v1.ListIssuesRequest;
-import ru.taska.api.issue.v1.CreateIssueRequest;
-import ru.taska.api.issue.v1.CreateIssueRequestBody;
-import ru.taska.api.issue.v1.AssignIssueRequest;
-import ru.taska.api.issue.v1.AssignIssueRequestBody;
-import ru.taska.api.issue.v1.UpdateIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueRequestBody;
-import ru.taska.api.issue.v1.TransitionIssueRequestBody;
-import ru.taska.api.issue.v1.TransitionIssueRequest;
-import ru.taska.api.issue.v1.DeleteIssueRequest;
-import ru.taska.api.issue.v1.DeleteIssueRequestBody;
-import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
-import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.*;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.CreateIssueRequestDto;
@@ -320,9 +304,9 @@ public class GrpcIssueServiceClient {
     }
 
     /**
-     * Получает список задач для доски с учетом фильтров.
+     * Получает список задач для доски с учетом фильтров и маппит их в REST DTO.
      */
-    public Mono<List<ru.taska.api.issue.v1.BoardIssue>> listIssuesForBoard(
+    public Mono<List<BoardIssue>> listIssuesForBoard(
             String projectId,
             String issueType,
             String assigneeId,
@@ -337,9 +321,17 @@ public class GrpcIssueServiceClient {
                 .setIssueType(issueMapper.toGrpcIssueType(issueType))
                 .setActorUserId(context.userContext().userId());
 
-        if (assigneeId != null) requestBodyBuilder.setAssigneeId(assigneeId);
-        if (labelId != null) requestBodyBuilder.setLabelId(labelId);
-        if (includeDone != null) requestBodyBuilder.setIncludeDone(includeDone);
+        if (assigneeId != null) {
+            requestBodyBuilder.setAssigneeId(assigneeId);
+        }
+
+        if (labelId != null) {
+            requestBodyBuilder.setLabelId(labelId);
+        }
+
+        if (includeDone != null) {
+            requestBodyBuilder.setIncludeDone(includeDone);
+        }
 
         return dynamicStub().listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
@@ -347,6 +339,6 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(ru.taska.api.issue.v1.ListIssuesForBoardResponse::getIssuesList); // <-- Возвращаем сырой gRPC список
+                .map(response -> response.getIssuesList());
     }
 }

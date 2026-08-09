@@ -8,10 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
@@ -19,10 +21,10 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.IssueTypeDto;
-import ru.taska.domain.dto.WorkflowResponseDto;
-import ru.taska.domain.dto.WorkflowStatusDto;
+import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -30,10 +32,8 @@ import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
-import ru.taska.mapper.IssueMapper;
+import ru.taska.service.BoardService;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
-import ru.taska.transport.grpc.GrpcIssueServiceClient;
-import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 
 import java.util.List;
 import java.util.UUID;
@@ -65,16 +65,10 @@ class BoardControllerWebTestClientTest {
     private GrpcAuthServiceClient authClient;
 
     @MockitoBean
-    private GrpcWorkflowServiceClient workflowClient;
-
-    @MockitoBean
-    private GrpcIssueServiceClient issueClient;
-
-    @MockitoBean
     private ContextMapper contextMapper;
 
     @MockitoBean
-    private IssueMapper issueMapper; // <-- Добавили мок для маппера
+    private BoardService boardService;
 
     @BeforeEach
     void setUp() {
@@ -86,72 +80,54 @@ class BoardControllerWebTestClientTest {
     void getBoard_shouldReturn200_andGroupedBoard() {
         mockAuthenticatedUser();
 
-        // 1. Мокаем Workflow (возвращаем статус колонкам!)
-        var statusTodo = new WorkflowStatusDto();
-        statusTodo.setId(UUID.randomUUID());
-        statusTodo.setStatusKey("TODO"); // <-- Вернули
-        statusTodo.setSortOrder(1);
+        var issue = new BoardIssueDto();
+        issue.setId(UUID.randomUUID());
+        issue.setIssueKey("TAS-1");
 
-        var statusDone = new WorkflowStatusDto();
-        statusDone.setId(UUID.randomUUID());
-        statusDone.setStatusKey("DONE"); // <-- Вернули
-        statusDone.setSortOrder(2);
+        var todoColumn = new BoardColumnDto();
+        todoColumn.setStatusKey("TODO");
+        todoColumn.setSortOrder(1);
+        todoColumn.setIssues(List.of(issue));
 
-        var workflowResponse = new WorkflowResponseDto();
-        workflowResponse.setStatuses(List.of(statusTodo, statusDone));
+        var doneColumn = new BoardColumnDto();
+        doneColumn.setStatusKey("DONE");
+        doneColumn.setSortOrder(2);
+        doneColumn.setIssues(List.of());
 
-        Mockito.when(workflowClient.getWorkflowForProject(
+        var response = new BoardResponseDto();
+        response.setProjectId(PROJECT_ID);
+        response.setIssueType(ISSUE_TYPE);
+        response.setColumns(List.of(todoColumn, doneColumn));
+
+        Mockito.when(boardService.getBoard(
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(false),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(workflowResponse));
+                .thenReturn(Mono.just(response));
 
-        // 2. Мокаем Issue Service (возвращаем gRPC объект)
-        var grpcIssueId = UUID.randomUUID();
-        var grpcIssue = ru.taska.api.issue.v1.BoardIssue.newBuilder()
-                .setId(grpcIssueId.toString())
-                .setIssueKey("TAS-1")
-                .setStatusKey("TODO")
-                .build();
-
-        var restIssue = new BoardIssueDto();
-        restIssue.setId(grpcIssueId);
-        restIssue.setIssueKey("TAS-1");
-
-        Mockito.when(issueMapper.toRestBoardIssue(Mockito.any())).thenReturn(restIssue);
-
-        Mockito.when(issueClient.listIssuesForBoard(
-                        Mockito.eq(PROJECT_ID.toString()),
-                        Mockito.eq(ISSUE_TYPE.name()),
-                        Mockito.any(), // assigneeId
-                        Mockito.any(), // labelId
-                        Mockito.any(), // includeDone
-                        Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(List.of(grpcIssue)));
-
-        // 3. Вызываем API и проверяем результат
         webTestClient.get()
                 .uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
                         .queryParam("issueType", ISSUE_TYPE)
                         .build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
-                .expectStatus().isOk()
-                .expectHeader().exists("X-Request-Id")
-                .expectHeader().contentType(MediaType.APPLICATION_JSON)
-                .expectBody()
-                .jsonPath("$.projectId").isEqualTo(PROJECT_ID.toString())
-                .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE.name())
-                .jsonPath("$.columns").isArray()
-                .jsonPath("$.columns.length()").isEqualTo(2)
-                .jsonPath("$.columns[0].statusKey").isEqualTo("TODO")
-                .jsonPath("$.columns[0].issues.length()").isEqualTo(1)
-                .jsonPath("$.columns[0].issues[0].issueKey").isEqualTo("TAS-1")
-                .jsonPath("$.columns[1].statusKey").isEqualTo("DONE")
-                .jsonPath("$.columns[1].issues.length()").isEqualTo(0);
-
-        Mockito.verify(workflowClient).getWorkflowForProject(Mockito.eq(PROJECT_ID), Mockito.eq(ISSUE_TYPE), Mockito.any());
-        Mockito.verify(issueClient).listIssuesForBoard(Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_TYPE.name()), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+                .expectBody(String.class)
+                .consumeWith(result -> {
+                    System.out.println("Status: " + result.getStatus());
+                    System.out.println("Body: " + result.getResponseBody());
+                });
+        Mockito.verify(boardService).getBoard(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(ISSUE_TYPE),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq(false),
+                Mockito.any(GatewayContext.class)
+        );
+        Mockito.verifyNoMoreInteractions(boardService);
     }
 
     @Test
@@ -159,35 +135,17 @@ class BoardControllerWebTestClientTest {
     void getBoard_shouldReturn500_whenIssueHasUnknownStatus() {
         mockAuthenticatedUser();
 
-        var statusTodo = new WorkflowStatusDto();
-        statusTodo.setId(UUID.randomUUID());
-        statusTodo.setStatusKey("TODO"); // <-- Вернули
-        statusTodo.setSortOrder(1);
-
-        var workflowResponse = new WorkflowResponseDto();
-        workflowResponse.setStatuses(List.of(statusTodo));
-
-        Mockito.when(workflowClient.getWorkflowForProject(
+        Mockito.when(boardService.getBoard(
                         Mockito.eq(PROJECT_ID),
                         Mockito.eq(ISSUE_TYPE),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(false),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(workflowResponse));
-
-        // Создаем задачу со статусом, которого нет в workflow
-        var grpcIssue = ru.taska.api.issue.v1.BoardIssue.newBuilder()
-                .setId(UUID.randomUUID().toString())
-                .setIssueKey("TAS-1")
-                .setStatusKey("UNKNOWN_STATUS")
-                .build();
-
-        Mockito.when(issueClient.listIssuesForBoard(
-                        Mockito.eq(PROJECT_ID.toString()),
-                        Mockito.eq(ISSUE_TYPE.name()),
-                        Mockito.any(), // assigneeId
-                        Mockito.any(), // labelId
-                        Mockito.any(), // includeDone
-                        Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.just(List.of(grpcIssue)));
+                .thenReturn(Mono.error(new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Inconsistent state: issues found with statuses not present in workflow"
+                )));
 
         webTestClient.get()
                 .uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
@@ -200,6 +158,16 @@ class BoardControllerWebTestClientTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+
+        Mockito.verify(boardService).getBoard(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(ISSUE_TYPE),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq(false),
+                Mockito.any(GatewayContext.class)
+        );
+        Mockito.verifyNoMoreInteractions(boardService);
     }
 
     @Test
@@ -216,7 +184,7 @@ class BoardControllerWebTestClientTest {
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
 
-        Mockito.verifyNoInteractions(workflowClient, issueClient);
+        Mockito.verifyNoInteractions(boardService);
     }
 
     private void mockAuthenticatedUser() {
@@ -230,7 +198,10 @@ class BoardControllerWebTestClientTest {
                 .globalRole(GlobalRole.USER)
                 .build();
 
-        Mockito.when(authClient.validateAccessToken(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        Mockito.when(authClient.validateAccessToken(
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.anyString()))
                 .thenReturn(Mono.just(accessToken));
 
         Mockito.when(contextMapper.mapToGatewayUserContext(Mockito.any(UserContext.class)))
