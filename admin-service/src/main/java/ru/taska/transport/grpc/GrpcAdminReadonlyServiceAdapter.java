@@ -13,29 +13,29 @@ import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 
 /**
- * gRPC-адаптер, который публикует {@link GrpcAdminService} как protobuf endpoint.
+ * gRPC-адаптер, который публикует {@link GrpcAdminReadonlyService} как protobuf endpoint.
  */
 @GrpcService
 @RequiredArgsConstructor
-public class GrpcAdminServiceAdapter extends ReactorAdminServiceGrpc.AdminServiceImplBase {
+public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminServiceGrpc.AdminServiceImplBase {
 
-    private final GrpcAdminService grpcAdminService;
+    private final GrpcAdminReadonlyService grpcAdminReadonlyService;
 
     @Override
     public Mono<GetCatalogResponse> getCatalog(Mono<GetCatalogRequest> request) {
-        return grpcAdminService.getCatalog(request)
+        return grpcAdminReadonlyService.getCatalog(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getCatalog"));
     }
 
     @Override
     public Mono<ListTableRowsResponse> listTableRows(Mono<ListTableRowsRequest> request) {
-        return grpcAdminService.listTableRows(request)
+        return grpcAdminReadonlyService.listTableRows(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listTableRows"));
     }
 
     @Override
     public Mono<GetTableRowByIdResponse> getTableRowById(Mono<GetTableRowByIdRequest> request) {
-        return grpcAdminService.getTableRowById(request)
+        return grpcAdminReadonlyService.getTableRowById(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getTableRowById"));
     }
 }

@@ -10,7 +10,7 @@ import ru.taska.dto.ServiceDto;
 import ru.taska.dto.TableDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.service.AdminService;
+import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 
 import java.util.Map;
@@ -25,7 +25,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
     private MetadataService metadataService;
 
     @Autowired
-    private AdminService adminService;
+    private AdminReadonlyService adminReadonlyService;
 
     @Test
     void getCatalog_includesFixtureTableFromInformationSchema() {
@@ -65,7 +65,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 Map.of()
         );
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminReadonlyService.listTableRows(request))
                 .assertNext(response -> {
                     Assertions.assertThat(response.total()).isEqualTo(2L);
                     Assertions.assertThat(response.maskedRows()).hasSize(2);
@@ -88,7 +88,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 Map.of("login.equals", FIXTURE_USER_LOGIN)
         );
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminReadonlyService.listTableRows(request))
                 .assertNext(response -> {
                     Assertions.assertThat(response.total()).isEqualTo(1L);
                     Assertions.assertThat(response.maskedRows()).hasSize(1);
@@ -108,7 +108,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 FIXTURE_USER_ID
         );
 
-        StepVerifier.create(adminService.getTableRowById(request))
+        StepVerifier.create(adminReadonlyService.getTableRowById(request))
                 .assertNext(response -> {
                     Assertions.assertThat(response.row().get("id").toString()).isEqualTo(FIXTURE_USER_ID);
                     Assertions.assertThat(response.row().get("login")).isEqualTo(FIXTURE_USER_LOGIN);
@@ -125,7 +125,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 "00000000-0000-0000-0000-000000000000"
         );
 
-        StepVerifier.create(adminService.getTableRowById(request))
+        StepVerifier.create(adminReadonlyService.getTableRowById(request))
                 .expectErrorMatches(e -> e instanceof DomainException de
                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();

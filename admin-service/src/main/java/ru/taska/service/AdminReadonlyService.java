@@ -6,7 +6,7 @@ import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
 
-public interface AdminService {
+public interface AdminReadonlyService {
 
     Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto);
 

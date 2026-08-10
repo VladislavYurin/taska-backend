@@ -1,4 +1,4 @@
-package ru.taska.service.impl;
+package ru.taska.service.readonly;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,12 +14,8 @@ import ru.taska.dto.ListTableRowsResponseDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ReadOnlyRepository;
-import ru.taska.service.AdminService;
-import ru.taska.service.readonly.FilterParser;
+import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
-import ru.taska.service.readonly.PageableListQueries;
-import ru.taska.service.readonly.ReadOnlyQueryBuilder;
-import ru.taska.service.readonly.SqlQuery;
 import ru.taska.service.SensitiveColumnMaskService;
 
 import java.util.List;
@@ -28,7 +24,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AdminServiceImpl implements AdminService {
+public class AdminReadonlyServiceImpl implements AdminReadonlyService {
 
     private final MetadataCatalogProperties catalogProperties;
     private final SensitiveColumnMaskService maskService;

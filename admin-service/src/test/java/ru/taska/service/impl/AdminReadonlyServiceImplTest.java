@@ -15,14 +15,13 @@ import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.dto.FilterOperatorsDto;
 import ru.taska.dto.GetTableRowByIdRequestDto;
-import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
-import ru.taska.dto.ListTableRowsResponseDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.MetadataService;
 import ru.taska.service.SensitiveColumnMaskService;
+import ru.taska.service.readonly.AdminReadonlyServiceImpl;
 import ru.taska.service.readonly.FilterParser;
 import ru.taska.service.readonly.PageableListQueries;
 import ru.taska.service.readonly.ReadOnlyQueryBuilder;
@@ -33,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
-class AdminServiceImplTest {
+class AdminReadonlyServiceImplTest {
 
     private static final String TEST_SERVICE = "auth";
     private static final String TEST_TABLE = "users";
@@ -58,7 +57,7 @@ class AdminServiceImplTest {
     @Mock
     private ReadOnlyRepository readOnlyRepository;
 
-    private AdminServiceImpl adminService;
+    private AdminReadonlyServiceImpl adminService;
 
     private PageableListQueries pageableListQueries;
     private Map<String, FilterOperatorsDto> parsedFilters;
@@ -73,7 +72,7 @@ class AdminServiceImplTest {
                 new MetadataCatalogProperties.PaginationProperties(DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         MetadataCatalogProperties catalogProperties =
                 new MetadataCatalogProperties(pagination, Map.of());
-        adminService = new AdminServiceImpl(
+        adminService = new AdminReadonlyServiceImpl(
                 catalogProperties, maskService, metadataService,
                 readOnlyRepository, queryBuilder, filterParser
         );

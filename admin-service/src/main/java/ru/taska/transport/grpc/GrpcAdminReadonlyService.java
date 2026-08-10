@@ -10,22 +10,21 @@ import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
-import ru.taska.service.AdminService;
+import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 import validator.GrpcRequestValidators;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GrpcAdminService {
+public class GrpcAdminReadonlyService {
 
     private final MetadataService metadataService;
     private final MetadataCatalogMapper mapper;
-    private final AdminService adminService;
+    private final AdminReadonlyService adminReadonlyService;
     private final ListTableRowsMapper listTableRowsMapper;
 
     /**
@@ -80,7 +79,7 @@ public class GrpcAdminService {
                     ListTableRowsRequestDto requestDto = listTableRowsMapper.toRequestDto(req);
 
                     // Бизнес-логика
-                    return adminService.listTableRows(requestDto)
+                    return adminReadonlyService.listTableRows(requestDto)
                             .map(listTableRowsMapper::toListTableRowsResponse);
                 }));
     }
@@ -105,7 +104,7 @@ public class GrpcAdminService {
                             req.getBody().getTableName(),
                             req.getBody().getId());
 
-                    return adminService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req))
+                    return adminReadonlyService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req))
                             .map(listTableRowsMapper::toGetTableRowByIdResponse);
                 }));
     }

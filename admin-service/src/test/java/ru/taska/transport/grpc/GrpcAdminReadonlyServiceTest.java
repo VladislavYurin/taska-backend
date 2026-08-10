@@ -25,14 +25,14 @@ import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
 import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
-import ru.taska.service.AdminService;
+import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 
 import java.util.List;
 import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
-class GrpcAdminServiceTest {
+class GrpcAdminReadonlyServiceTest {
 
     private static final String REQUEST_ID = "req-1";
     private static final String NODE_ID = "node-1";
@@ -44,13 +44,13 @@ class GrpcAdminServiceTest {
     private MetadataCatalogMapper metadataCatalogMapper;
 
     @Mock
-    private AdminService adminService;
+    private AdminReadonlyService adminReadonlyService;
 
     @Mock
     private ListTableRowsMapper listTableRowsMapper;
 
     @InjectMocks
-    private GrpcAdminService grpcAdminService;
+    private GrpcAdminReadonlyService grpcAdminReadonlyService;
 
     @Test
     void getCatalog_blankRequestId_fails() {
@@ -58,7 +58,7 @@ class GrpcAdminServiceTest {
                 .setHeader(Header.newBuilder().setRequestId("").setNodeId(NODE_ID).build())
                 .build();
 
-        StepVerifier.create(grpcAdminService.getCatalog(Mono.just(request)))
+        StepVerifier.create(grpcAdminReadonlyService.getCatalog(Mono.just(request)))
                 .expectError(StatusRuntimeException.class)
                 .verify();
     }
@@ -69,7 +69,7 @@ class GrpcAdminServiceTest {
                 .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(" ").build())
                 .build();
 
-        StepVerifier.create(grpcAdminService.getCatalog(Mono.just(request)))
+        StepVerifier.create(grpcAdminReadonlyService.getCatalog(Mono.just(request)))
                 .expectError(StatusRuntimeException.class)
                 .verify();
     }
@@ -86,7 +86,7 @@ class GrpcAdminServiceTest {
                 .setHeader(validHeader())
                 .build();
 
-        StepVerifier.create(grpcAdminService.getCatalog(Mono.just(request)))
+        StepVerifier.create(grpcAdminReadonlyService.getCatalog(Mono.just(request)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
     }
@@ -110,14 +110,14 @@ class GrpcAdminServiceTest {
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
 
         Mockito.when(listTableRowsMapper.toRequestDto(grpcRequest)).thenReturn(requestDto);
-        Mockito.when(adminService.listTableRows(requestDto)).thenReturn(Mono.just(responseDto));
+        Mockito.when(adminReadonlyService.listTableRows(requestDto)).thenReturn(Mono.just(responseDto));
         Mockito.when(listTableRowsMapper.toListTableRowsResponse(responseDto)).thenReturn(grpcResponse);
 
-        StepVerifier.create(grpcAdminService.listTableRows(Mono.just(grpcRequest)))
+        StepVerifier.create(grpcAdminReadonlyService.listTableRows(Mono.just(grpcRequest)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
 
-        Mockito.verify(adminService).listTableRows(requestDto);
+        Mockito.verify(adminReadonlyService).listTableRows(requestDto);
     }
 
     @Test
@@ -136,14 +136,14 @@ class GrpcAdminServiceTest {
         GetTableRowByIdResponse grpcResponse = GetTableRowByIdResponse.newBuilder().build();
 
         Mockito.when(listTableRowsMapper.toGetByIdRequestDto(grpcRequest)).thenReturn(requestDto);
-        Mockito.when(adminService.getTableRowById(requestDto)).thenReturn(Mono.just(responseDto));
+        Mockito.when(adminReadonlyService.getTableRowById(requestDto)).thenReturn(Mono.just(responseDto));
         Mockito.when(listTableRowsMapper.toGetTableRowByIdResponse(responseDto)).thenReturn(grpcResponse);
 
-        StepVerifier.create(grpcAdminService.getTableRowById(Mono.just(grpcRequest)))
+        StepVerifier.create(grpcAdminReadonlyService.getTableRowById(Mono.just(grpcRequest)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
 
-        Mockito.verify(adminService).getTableRowById(requestDto);
+        Mockito.verify(adminReadonlyService).getTableRowById(requestDto);
     }
 
     private static Header validHeader() {
