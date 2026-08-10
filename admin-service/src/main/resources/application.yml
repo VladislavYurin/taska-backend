@@ -82,6 +82,10 @@ admin:
   # sensitive-columns — колонки в формате table.column, помечаемые как секретные (флаг в ответе).
   # Менять без правки кода — только этот файл или env.
   metadata:
+    pagination:
+      default-page: ${ADMIN_PAGINATION_DEFAULT_PAGE:0}
+      default-page-size: ${ADMIN_PAGINATION_DEFAULT_PAGE_SIZE:20}
+      max-page-size: ${ADMIN_PAGINATION_MAX_PAGE_SIZE:100}
     services:
       auth:
         alias: auth

@@ -160,7 +160,7 @@ class AdminDataMapperTest {
     // ==================== ТЕСТЫ LIST TABLE ROWS ====================
 
     @Test
-    @DisplayName("Должен корректно преобразовать ListTableRowsResponse в ReadOnlyResponseDto")
+    @DisplayName("Должен корректно преобразовать ListTableRowsResponse в ReadOnlyTableRowsResponseDto")
     void toRestListTableRowsResponse_shouldCorrectMapsAllFields() {
         // given
         var source = ListTableRowsResponse.newBuilder()

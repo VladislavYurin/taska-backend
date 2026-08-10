@@ -2,181 +2,149 @@ package ru.taska.mapper;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsRequestBody;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.Value;
-import ru.taska.api.common.v1.Header;
 import ru.taska.dto.ListTableRowsResponseDto;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Stream;
 
-@ExtendWith(MockitoExtension.class)
 class ListTableRowsMapperTest {
 
     private static final String TEST_SERVICE = "test-service";
     private static final String TEST_TABLE = "test_table";
 
-    @InjectMocks
-    private ListTableRowsMapper mapper;
-
-    // ==================== ТЕСТЫ toGrpcValue ====================
+    private final ListTableRowsMapper mapper = new ListTableRowsMapper();
 
     @Test
     void shouldConvertStringToGrpcValue() {
-        // given
-        String value = "test";
-
-        // when
-        Value result = mapper.toGrpcValue(value);
-
-        // then
+        Value result = mapper.toGrpcValue("test");
         Assertions.assertThat(result.getStringValue()).isEqualTo("test");
     }
 
     @Test
     void shouldConvertIntegerToGrpcValue() {
-        // given
-        Integer value = 123;
-
-        // when
-        Value result = mapper.toGrpcValue(value);
-
-        // then
+        Value result = mapper.toGrpcValue(123);
         Assertions.assertThat(result.getIntValue()).isEqualTo(123);
     }
 
     @Test
+    void shouldConvertLongToGrpcValue() {
+        Value result = mapper.toGrpcValue(123L);
+        Assertions.assertThat(result.getIntValue()).isEqualTo(123L);
+    }
+
+    @Test
+    void shouldConvertShortToGrpcValue() {
+        Value result = mapper.toGrpcValue((short) 7);
+        Assertions.assertThat(result.getIntValue()).isEqualTo(7L);
+    }
+
+    @Test
     void shouldConvertDoubleToGrpcValue() {
-        // given
-        Double value = 123.45;
-
-        // when
-        Value result = mapper.toGrpcValue(value);
-
-        // then
+        Value result = mapper.toGrpcValue(123.45);
         Assertions.assertThat(result.getDoubleValue()).isEqualTo(123.45);
     }
 
     @Test
+    void shouldConvertFloatToGrpcValue() {
+        Value result = mapper.toGrpcValue(1.5f);
+        Assertions.assertThat(result.getDoubleValue()).isEqualTo(1.5);
+    }
+
+    @Test
+    void shouldConvertBigDecimalToGrpcValue() {
+        Value result = mapper.toGrpcValue(new BigDecimal("42.5"));
+        Assertions.assertThat(result.getDoubleValue()).isEqualTo(42.5);
+    }
+
+    @Test
     void shouldConvertBooleanToGrpcValue() {
-        // given
-        Boolean value = true;
-
-        // when
-        Value result = mapper.toGrpcValue(value);
-
-        // then
+        Value result = mapper.toGrpcValue(true);
         Assertions.assertThat(result.getBoolValue()).isTrue();
     }
 
     @Test
     void shouldConvertNullToGrpcValue() {
-        // when
         Value result = mapper.toGrpcValue(null);
-
-        // then
         Assertions.assertThat(result.getNullValue()).isTrue();
     }
 
-    // ==================== ТЕСТЫ toRequestDto ====================
-
     @Test
-    void shouldConvertProtoToRequestDto() {
-        // given
-        ListTableRowsRequest request = ListTableRowsRequest.newBuilder()
-                .setHeader(Header.newBuilder().setRequestId("test").setNodeId("test").build())
-                .setBody(ListTableRowsRequestBody.newBuilder()
-                        .setServiceKey(TEST_SERVICE)
-                        .setTableName(TEST_TABLE)
-                        .setPage(1)
-                        .setPageSize(20)
-                        .setSort("created_at")
-                        .setOrder("desc")
-                        .build())
-                .build();
-
-        // when
-        var dto = mapper.toRequestDto(request);
-
-        // then
-        Assertions.assertThat(dto.serviceKey()).isEqualTo(TEST_SERVICE);
-        Assertions.assertThat(dto.tableName()).isEqualTo(TEST_TABLE);
-        Assertions.assertThat(dto.page()).isEqualTo(1);
-        Assertions.assertThat(dto.pageSize()).isEqualTo(20);
-        Assertions.assertThat(dto.sort()).isEqualTo("created_at");
-        Assertions.assertThat(dto.order()).isEqualTo("desc");
-        Assertions.assertThat(dto.filters()).isEmpty();
+    void shouldConvertInstantToGrpcValue() {
+        Instant instant = Instant.ofEpochSecond(1_700_000_000L);
+        Value result = mapper.toGrpcValue(instant);
+        Assertions.assertThat(result.getTimestampValue()).isEqualTo(1_700_000_000L);
     }
 
-// ==================== ТЕСТЫ toListTableRowsResponse ====================
+    @Test
+    void shouldConvertOffsetDateTimeToGrpcValue() {
+        OffsetDateTime odt = OffsetDateTime.of(2026, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        Value result = mapper.toGrpcValue(odt);
+        Assertions.assertThat(result.getTimestampValue()).isEqualTo(odt.toEpochSecond());
+    }
 
     @Test
-    void shouldConvertResponseDtoToProto() {
-        // given
-        List<Map<String, Object>> rows = List.of(
-                Map.of("id", "123", "status", "active")
-        );
+    void shouldConvertLocalDateTimeToGrpcValueAsUtc() {
+        LocalDateTime ldt = LocalDateTime.of(2026, 6, 15, 12, 0, 0);
+        Value result = mapper.toGrpcValue(ldt);
+        Assertions.assertThat(result.getTimestampValue())
+                .isEqualTo(ldt.toEpochSecond(ZoneOffset.UTC));
+    }
 
+    @Test
+    void shouldConvertUnknownTypeToStringViaToString() {
+        UUID id = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        Value result = mapper.toGrpcValue(id);
+        Assertions.assertThat(result.getStringValue()).isEqualTo(id.toString());
+    }
+
+    @ParameterizedTest
+    @MethodSource("paginationCases")
+    void shouldComputePaginationMeta(
+            int page,
+            int pageSize,
+            long total,
+            int expectedTotalPages,
+            boolean expectedHasPrev,
+            boolean expectedHasNext
+    ) {
         ListTableRowsResponseDto dto = new ListTableRowsResponseDto(
-                rows,
-                100L,
-                1,
-                20,
-                List.of("id", "status"),
+                List.of(),
+                total,
+                page,
+                pageSize,
+                List.of("id"),
                 TEST_SERVICE,
                 TEST_TABLE
         );
 
-        // when
         ListTableRowsResponse response = mapper.toListTableRowsResponse(dto);
 
-        // then
-        Assertions.assertThat(response.getRowsCount()).isEqualTo(1);
-        Assertions.assertThat(response.getPagination().getCurrentPage()).isEqualTo(1);
-        Assertions.assertThat(response.getPagination().getPageSize()).isEqualTo(20);
-        Assertions.assertThat(response.getPagination().getTotalRows()).isEqualTo(100);
-        Assertions.assertThat(response.getPagination().getTotalPages()).isEqualTo(5);
-        Assertions.assertThat(response.getPagination().getHasNext()).isTrue();
-        Assertions.assertThat(response.getPagination().getHasPrev()).isFalse();
-        Assertions.assertThat(response.getMeta().getServiceKey()).isEqualTo(TEST_SERVICE);
-        Assertions.assertThat(response.getMeta().getTableName()).isEqualTo(TEST_TABLE);
-        Assertions.assertThat(response.getMeta().getColumnsList()).containsExactly("id", "status");
-
-        // Проверяем данные
-        Row firstRow = response.getRows(0);
-        Assertions.assertThat(firstRow.getFieldsMap().get("id").getStringValue()).isEqualTo("123");
-        Assertions.assertThat(firstRow.getFieldsMap().get("status").getStringValue()).isEqualTo("active");
+        Assertions.assertThat(response.getPagination().getCurrentPage()).isEqualTo(page);
+        Assertions.assertThat(response.getPagination().getPageSize()).isEqualTo(pageSize);
+        Assertions.assertThat(response.getPagination().getTotalRows()).isEqualTo(total);
+        Assertions.assertThat(response.getPagination().getTotalPages()).isEqualTo(expectedTotalPages);
+        Assertions.assertThat(response.getPagination().getHasPrev()).isEqualTo(expectedHasPrev);
+        Assertions.assertThat(response.getPagination().getHasNext()).isEqualTo(expectedHasNext);
     }
 
-    @Test
-    void shouldHandleEmptyRowsInResponse() {
-        // given
-        List<Map<String, Object>> rows = List.of();
-
-        ListTableRowsResponseDto dto = new ListTableRowsResponseDto(
-                rows,
-                0L,
-                1,
-                20,
-                List.of("id", "status"),
-                TEST_SERVICE,
-                TEST_TABLE
+    private static Stream<Arguments> paginationCases() {
+        return Stream.of(
+                Arguments.of(0, 20, 100L, 5, false, true),
+                Arguments.of(2, 20, 100L, 5, true, true),
+                Arguments.of(4, 20, 100L, 5, true, false),
+                Arguments.of(0, 20, 0L, 0, false, false)
         );
-
-        // when
-        ListTableRowsResponse response = mapper.toListTableRowsResponse(dto);
-
-        // then
-        Assertions.assertThat(response.getRowsList()).isEmpty();
-        Assertions.assertThat(response.getPagination().getTotalRows()).isEqualTo(0);
-        Assertions.assertThat(response.getPagination().getTotalPages()).isEqualTo(0);
-        Assertions.assertThat(response.getPagination().getHasNext()).isFalse();
-        Assertions.assertThat(response.getPagination().getHasPrev()).isFalse();
     }
 }

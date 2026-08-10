@@ -148,4 +148,17 @@ class SensitiveColumnMaskServiceTest {
         Assertions.assertThat(row.get("id")).isEqualTo("123");
         Assertions.assertThat(row.get("status")).isEqualTo("active");
     }
+
+    @Test
+    void shouldNotMaskColumnSensitiveOnOtherTable() {
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(List.of("other_table.email"));
+
+        List<Map<String, Object>> rows = List.of(
+                Map.of("id", "123", "email", "test@example.com")
+        );
+
+        List<Map<String, Object>> maskedRows = maskService.maskSensitiveColumns(rows, TEST_SERVICE, TEST_TABLE);
+
+        Assertions.assertThat(maskedRows.getFirst().get("email")).isEqualTo("test@example.com");
+    }
 }

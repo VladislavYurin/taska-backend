@@ -6,8 +6,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetTableRowByIdRequest;
+import ru.taska.api.admin.v1.GetTableRowByIdResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
@@ -65,12 +68,12 @@ public class GrpcAdminService {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
 
-                    log.info("[{}][{}] listTableRows: service={}, table={}, page={}, pageSize={},filters={}",
+                    log.info("[{}][{}] listTableRows: service={}, table={}, page={}, pageSize={}, filters={}",
                             requestId, nodeId,
                             req.getBody().getServiceKey(),
                             req.getBody().getTableName(),
-                            req.getBody().getPage(),
-                            req.getBody().getPageSize(),
+                            req.getBody().hasPage() ? req.getBody().getPage() : null,
+                            req.getBody().hasPageSize() ? req.getBody().getPageSize() : null,
                             req.getBody().getFiltersMap());
 
                     // Маппим proto → DTO
@@ -79,6 +82,31 @@ public class GrpcAdminService {
                     // Бизнес-логика
                     return adminService.listTableRows(requestDto)
                             .map(listTableRowsMapper::toListTableRowsResponse);
+                }));
+    }
+
+    /**
+     * Обрабатывает gRPC-запрос на получение одной строки таблицы по ID.
+     */
+    public Mono<GetTableRowByIdResponse> getTableRowById(Mono<GetTableRowByIdRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId")
+                ).flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+
+                    log.info("[{}][{}] getTableRowById: service={}, table={}, id={}",
+                            requestId, nodeId,
+                            req.getBody().getServiceKey(),
+                            req.getBody().getTableName(),
+                            req.getBody().getId());
+
+                    return adminService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req))
+                            .map(listTableRowsMapper::toGetTableRowByIdResponse);
                 }));
     }
 }

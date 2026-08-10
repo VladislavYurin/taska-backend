@@ -4,13 +4,22 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.taska.config.props.MetadataCatalogProperties;
+import ru.taska.domain.DbColumnType;
 import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.AdminService;
+import ru.taska.service.readonly.FilterParser;
 import ru.taska.service.MetadataService;
-import ru.taska.service.ReadOnlyQueryBuilder;
+import ru.taska.service.readonly.PageableListQueries;
+import ru.taska.service.readonly.ReadOnlyQueryBuilder;
+import ru.taska.service.readonly.SqlQuery;
 import ru.taska.service.SensitiveColumnMaskService;
 
 import java.util.List;
@@ -21,64 +30,113 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
-    private final ReadOnlyQueryBuilder queryBuilder;
+    private final MetadataCatalogProperties catalogProperties;
     private final SensitiveColumnMaskService maskService;
     private final MetadataService metadataService;
     private final ReadOnlyRepository readOnlyRepository;
+    private final ReadOnlyQueryBuilder queryBuilder;
+    private final FilterParser filterParser;
 
     @Override
     public Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto) {
         return Mono.defer(() -> {
-            String serviceKey = requestDto.serviceKey(); // "auth"
-            String tableName = requestDto.tableName();  // "users/..."
-            int page = requestDto.page();
-            int pageSize = requestDto.pageSize();
+            log.debug("listTableRows request: service='{}', table='{}', page={}, pageSize={}, sort='{}', order='{}'",
+                    requestDto.serviceKey(), requestDto.tableName(), requestDto.page(),
+                    requestDto.pageSize(), requestDto.sort(), requestDto.order());
+
+            String serviceKey = requestDto.serviceKey();
+            String tableName = requestDto.tableName();
+
+            int page = normalizePage(requestDto.page());
+            int pageSize = normalizePageSize(requestDto.pageSize());
             String sort = requestDto.sort();
             String order = requestDto.order();
-            Map<String, FilterOperatorsDto> filters = requestDto.filters();
+            Map<String, FilterOperatorsDto> filters = filterParser.parse(requestDto.filters());
 
-            /// Построение безопасного SQL запроса (с проверкой allowlist)
-            ReadOnlyQueryBuilder.SqlQuery safeQuery = queryBuilder.buildSafeQuery(
-                    serviceKey, tableName, page, pageSize, sort, order, filters
-            );
-            /// Строим COUNT запрос (для пагинации) (allowlist для таблицы всегда проверяется в buildSafeQuery)
-            ReadOnlyQueryBuilder.SqlQuery safeCountQuery = queryBuilder.buildSafeCountQuery(tableName, filters
-            );
+            return Mono.zip(
+                    metadataService.getTableColumns(serviceKey, tableName),
+                    metadataService.getPrimaryKeyColumn(serviceKey, tableName)
+            ).flatMap(tuple -> {
+                        Map<String, DbColumnType> columnTypes = tuple.getT1();
+                        String primaryKeyColumn = tuple.getT2();
 
-            /// Выполнение запроса к БД через DatabaseClient (параметризованный!)
-            // ReadOnlyRepository:
-            // - Берет DatabaseClient из ReadonlyR2dbcConfig
-            // - Выполняет параметризованный запрос
-            // - Возвращает Flux<Map<String, Object>> - строки таблицы
-            return readOnlyRepository.executeQuery(serviceKey,safeQuery)
-                    .collectList()
-                    .flatMap(rows -> {
-                        ///Считаем общее количество записей (нужно для пагинации)
-                        return readOnlyRepository.countRows(serviceKey, safeCountQuery)
-                                .flatMap(total->{
-                                    /// Маскировка sensitive колонок
-                                    List<Map<String, Object>> maskedRows = maskService.maskSensitiveColumns(
-                                            rows,           // строки из БД
-                                            serviceKey,     // "user-service"
-                                            tableName       // "users"
-                                    );
+                        PageableListQueries safeQuery = queryBuilder.buildSafePageableListQueries(
+                                serviceKey, tableName, page, pageSize, sort, order, filters, columnTypes, primaryKeyColumn
+                        );
 
-                                    /// Получаем список колонок и создаем
-                                    return metadataService.getTableColumns(serviceKey,tableName)
-                                            .map(allColumns->
-                                                    new ListTableRowsResponseDto(
-                                                            maskedRows,
-                                                            total,
-                                                            page,
-                                                            pageSize,
-                                                            allColumns,
-                                                            serviceKey,
-                                                            tableName
-                                                    )
-                                            );
+                        List<String> columnNames = List.copyOf(columnTypes.keySet());
+
+                        return readOnlyRepository.executeQuery(serviceKey, safeQuery.selectQuery().parameterizedQuery(), safeQuery.selectQuery().params())
+                                .collectList()
+                                .flatMap(rows ->
+                                    readOnlyRepository.countRows(serviceKey, safeQuery.countQuery().parameterizedQuery(), safeQuery.countQuery().params())
+                                            .map(total -> {
+                                                List<Map<String, Object>> maskedRows = maskService.maskSensitiveColumns(
+                                                        rows, serviceKey, tableName
+                                                );
+                                                return new ListTableRowsResponseDto(
+                                                        maskedRows, total, page, pageSize,
+                                                        columnNames, serviceKey, tableName
+                                                );
+                                            })
+                                );
+                    });
+        });
+    }
+
+    @Override
+    public Mono<GetTableRowByIdResponseDto> getTableRowById(GetTableRowByIdRequestDto requestDto) {
+        return Mono.defer(() -> {
+            String serviceKey = requestDto.serviceKey();
+            String tableName = requestDto.tableName();
+            String id = requestDto.id();
+
+            log.debug("getTableRowById request: service='{}', table='{}', id='{}'", serviceKey, tableName, id);
+
+            return metadataService.getPrimaryKeyColumn(serviceKey, tableName)
+                    .flatMap(pkColumn -> {
+                        SqlQuery safeQuery = queryBuilder.buildSafeGetByIdQuery(
+                                serviceKey, tableName, pkColumn, id
+                        );
+
+                        return readOnlyRepository.executeQuery(serviceKey, safeQuery.parameterizedQuery(), safeQuery.params())
+                                .next()
+                                .switchIfEmpty(Mono.defer(() -> {
+                                    log.warn("Row not found: {}.{} = {}", tableName, pkColumn, id);
+                                    return Mono.error(new DomainException(
+                                            DomainStatus.NOT_FOUND,
+                                            "Row not found: " + tableName + "." + pkColumn + " = " + id));
+                                }))
+                                .map(row -> {
+                                    Map<String, Object> maskedRow = maskService.maskSensitiveColumns(
+                                            List.of(row), serviceKey, tableName
+                                    ).getFirst();
+                                    return new GetTableRowByIdResponseDto(maskedRow);
                                 });
                     });
         });
     }
 
+    private int normalizePage(Integer page) {
+        int defaultPage = catalogProperties.pagination().defaultPage();
+        if (page != null && page < 0) {
+            log.warn("Invalid page value: {}. Falling back to default: {}", page, defaultPage);
+            return defaultPage;
+        }
+        return (page == null) ? defaultPage : page;
+    }
+
+    private int normalizePageSize(Integer pageSize) {
+        int defaultPageSize = catalogProperties.pagination().defaultPageSize();
+        int maxPageSize = catalogProperties.pagination().maxPageSize();
+        if (pageSize != null && pageSize < 1) {
+            log.warn("Invalid pageSize value: {}. Falling back to default: {}", pageSize, defaultPageSize);
+            return defaultPageSize;
+        }
+        if (pageSize != null && pageSize > maxPageSize) {
+            log.warn("Requested pageSize {} exceeds maximum {}. Clamping to max", pageSize, maxPageSize);
+            return maxPageSize;
+        }
+        return (pageSize == null) ? defaultPageSize : pageSize;
+    }
 }

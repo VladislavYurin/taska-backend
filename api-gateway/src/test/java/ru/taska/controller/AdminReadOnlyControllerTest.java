@@ -27,7 +27,8 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.MetadataResponse;
-import ru.taska.domain.dto.ReadOnlyResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -40,6 +41,7 @@ import ru.taska.transport.grpc.GrpcAuthServiceClient;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -61,6 +63,7 @@ class AdminReadOnlyControllerTest {
     private static final String USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String SERVICE_KEY = "test-service";
     private static final String TABLE_NAME = "test_table";
+    private static final UUID ROW_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
     @Autowired
     private WebTestClient webTestClient;
@@ -80,14 +83,13 @@ class AdminReadOnlyControllerTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
-        mockAuthenticatedUser();
     }
 
-    // ==================== ТЕСТЫ getMetadata ====================
+    // ==================== ТЕСТЫ getCatalog ====================
 
     @Test
-    @DisplayName("Должен вернуть ответ с телом MetadataResponse и статусом 200")
-    void getMetadata_shouldReturnsResponseAndStatus200() {
+    @DisplayName("getCatalog: должен вернуть MetadataResponse и статус 200")
+    void getCatalog_shouldReturnResponseAndStatus200() {
         mockAuthenticatedUser();
 
         var response = new MetadataResponse();
@@ -96,7 +98,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.just(response));
 
         webTestClient.get()
-                .uri("/api/v1/readonly/metadata")
+                .uri("/api/v1/admin/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isOk()
@@ -107,27 +109,172 @@ class AdminReadOnlyControllerTest {
         Mockito.verify(adminClient).getCatalog(Mockito.any(GatewayContext.class));
     }
 
+    // ==================== ТЕСТЫ listTableRows ====================
+
     @Test
-    @DisplayName("Должен выбросить исключение со статусом 503 Unavailable если downstream недоступен")
-    void getMetadata_shouldThrowsExceptionAndStatus503_whenDownstreamUnavailable() {
+    @DisplayName("listTableRows: должен вернуть ReadOnlyTableRowsResponseDto и статус 200")
+    void listTableRows_shouldReturnResponseAndStatus200() {
         mockAuthenticatedUser();
 
-        Mockito.when(adminClient.getCatalog(Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+        var response = new ReadOnlyTableRowsResponseDto();
+
+        Mockito.when(adminClient.listTableRows(
+                        Mockito.eq(SERVICE_KEY),
+                        Mockito.eq(TABLE_NAME),
+                        Mockito.eq(1),
+                        Mockito.eq(20),
+                        Mockito.eq("created_at"),
+                        Mockito.eq("desc"),
+                        Mockito.anyMap(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
 
         webTestClient.get()
-                .uri("/api/v1/readonly/metadata")
+                .uri(builder -> builder
+                        .path("/api/v1/admin/{service}/{table}")
+                        .queryParam("page", 1)
+                        .queryParam("pageSize", 20)
+                        .queryParam("sort", "created_at")
+                        .queryParam("order", "desc")
+                        .build(SERVICE_KEY, TABLE_NAME))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
-                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(ReadOnlyTableRowsResponseDto.class).isEqualTo(response);
+    }
+
+    @ParameterizedTest
+    @MethodSource("listTableRowsArguments")
+    @DisplayName("listTableRows: должен корректно обрабатывать все параметры")
+    void listTableRows_shouldPassAllParameters(
+            String description,
+            Consumer<UriBuilder> uriConfigurer,
+            Integer expectedPage,
+            Integer expectedPageSize,
+            String expectedSort,
+            String expectedOrder
+    ) {
+        mockAuthenticatedUser();
+
+        var response = new ReadOnlyTableRowsResponseDto();
+
+        Mockito.when(adminClient.listTableRows(
+                        Mockito.eq(SERVICE_KEY),
+                        Mockito.eq(TABLE_NAME),
+                        Mockito.eq(expectedPage),
+                        Mockito.eq(expectedPageSize),
+                        Mockito.eq(expectedSort),
+                        Mockito.eq(expectedOrder),
+                        Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> {
+                    builder.path("/api/v1/admin/{service}/{table}");
+                    uriConfigurer.accept(builder);
+                    return builder.build(SERVICE_KEY, TABLE_NAME);
+                })
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
                 .expectHeader().exists("X-Request-Id");
     }
 
     @Test
-    @DisplayName("Должен выбросить исключение со статусом 401 Unauthorized если нет токена")
-    void getMetadata_shouldThrowsExceptionAndStatus401_whenJwtTokenMissing() {
+    @DisplayName("listTableRows: должен вернуть 404 при ошибке gRPC NOT_FOUND")
+    void listTableRows_shouldReturn404_whenGrpcReturnsNotFound() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.listTableRows(
+                        Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found")));
+
         webTestClient.get()
-                .uri("/api/v1/readonly/metadata")
+                .uri("/api/v1/admin/{service}/{table}", SERVICE_KEY, TABLE_NAME)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    // ==================== ТЕСТЫ getTableRowById ====================
+
+    @Test
+    @DisplayName("getTableRowById: должен вернуть ReadOnlySingleRowResponseDto и статус 200")
+    void getTableRowById_shouldReturnResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new ReadOnlySingleRowResponseDto();
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", ROW_ID.toString());
+        data.put("name", "test");
+        response.setData(data);
+
+        Mockito.when(adminClient.getTableRowById(
+                        Mockito.eq(SERVICE_KEY),
+                        Mockito.eq(TABLE_NAME),
+                        Mockito.eq(ROW_ID),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/api/v1/admin/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(ReadOnlySingleRowResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(adminClient).getTableRowById(
+                Mockito.eq(SERVICE_KEY),
+                Mockito.eq(TABLE_NAME),
+                Mockito.eq(ROW_ID),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("getTableRowById: должен вернуть 404 если строка не найдена")
+    void getTableRowById_shouldReturn404_whenRowNotFound() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.getTableRowById(
+                        Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Row not found")));
+
+        webTestClient.get()
+                .uri("/api/v1/admin/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    // ==================== ОБЩИЕ ТЕСТЫ (authentication, downstream errors) ====================
+
+    @Test
+    @DisplayName("Должен вернуть 401 Unauthorized без Bearer токена")
+    void shouldReturn401_whenNoBearerToken() {
+        webTestClient.get()
+                .uri("/api/v1/admin/catalog")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectHeader().exists("X-Request-Id")
@@ -140,245 +287,16 @@ class AdminReadOnlyControllerTest {
                 .getCatalog(Mockito.any());
     }
 
-    // ==================== ТЕСТЫ listTableRows ====================
-
     @Test
-    @DisplayName("Должен вернуть ответ с телом ReadOnlyResponseDto и статусом 200")
-    void listTableRows_shouldReturnsResponseAndStatus200() {
-        var response = new ReadOnlyResponseDto();
-
-        Map<String, String> filters = new HashMap<>();
-        filters.put("status", "active");
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.eq(SERVICE_KEY),
-                        Mockito.eq(TABLE_NAME),
-                        Mockito.eq(1),
-                        Mockito.eq(20),
-                        Mockito.eq("created_at"),
-                        Mockito.eq("desc"),
-                        Mockito.eq(filters),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.just(response));
-
-        webTestClient.get()
-                .uri(builder -> builder
-                        .path("/api/v1/readonly/{service}/{table}")
-                        .queryParam("page", 1)
-                        .queryParam("pageSize", 20)
-                        .queryParam("sort", "created_at")
-                        .queryParam("order", "desc")
-                        .queryParam("status", "active")
-                        .build(SERVICE_KEY, TABLE_NAME))
-                .header(HttpHeaders.AUTHORIZATION, TOKEN)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().exists("X-Request-Id")
-                .expectHeader().contentType(MediaType.APPLICATION_JSON)
-                .expectBody(ReadOnlyResponseDto.class).isEqualTo(response);
-
-        Mockito.verify(adminClient).listTableRows(
-                Mockito.eq(SERVICE_KEY),
-                Mockito.eq(TABLE_NAME),
-                Mockito.eq(1),
-                Mockito.eq(20),
-                Mockito.eq("created_at"),
-                Mockito.eq("desc"),
-                Mockito.eq(filters),
-                Mockito.any(GatewayContext.class)
-        );
-    }
-
-    @Test
-    @DisplayName("Должен вернуть ответ с фильтром contains")
-    void listTableRows_shouldHandleContainsFilter() {
-        var response = new ReadOnlyResponseDto();
-
-        Map<String, Map<String, String>> filters = new HashMap<>();
-        Map<String, String> operators = new HashMap<>();
-        operators.put("contains", "@test.com");
-        filters.put("email", operators);
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.anyString(),
-                        Mockito.anyString(),
-                        Mockito.anyInt(),
-                        Mockito.anyInt(),
-                        Mockito.any(),
-                        Mockito.anyString(),
-                        Mockito.anyMap(),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.just(response));
-
-        webTestClient.get()
-                .uri(builder -> builder
-                        .path("/api/v1/readonly/{service}/{table}")
-                        .queryParam("filters[email][contains]", "@test.com")
-                        .build(SERVICE_KEY, TABLE_NAME))
-                .header(HttpHeaders.AUTHORIZATION, TOKEN)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().exists("X-Request-Id");
-    }
-
-    @Test
-    @DisplayName("Должен вернуть ответ с диапазоном дат from и to")
-    void listTableRows_shouldHandleDateRangeFilters() {
-
-        var response = new ReadOnlyResponseDto();
-
-        Map<String, String> filters = new HashMap<>();
-        filters.put("created_at.from", "2026-01-01T00:00:00Z");
-        filters.put("created_at.to", "2026-12-31T23:59:59Z");
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.eq(SERVICE_KEY),
-                        Mockito.eq(TABLE_NAME),
-                        Mockito.eq(1),
-                        Mockito.eq(20),
-                        Mockito.isNull(),
-                        Mockito.eq("asc"),
-                        Mockito.eq(filters),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.just(response));
-
-        webTestClient.get()
-                .uri(builder -> builder
-                        .path("/api/v1/readonly/{service}/{table}")
-                        .queryParam("created_at.from", "2026-01-01T00:00:00Z")
-                        .queryParam("created_at.to", "2026-12-31T23:59:59Z")
-                        .build(SERVICE_KEY, TABLE_NAME))
-                .header(HttpHeaders.AUTHORIZATION, TOKEN)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().exists("X-Request-Id");
-
-        Mockito.verify(adminClient).listTableRows(
-                Mockito.eq(SERVICE_KEY),
-                Mockito.eq(TABLE_NAME),
-                Mockito.eq(1),
-                Mockito.eq(20),
-                Mockito.isNull(),
-                Mockito.eq("asc"),
-                Mockito.eq(filters),
-                Mockito.any(GatewayContext.class)
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("listTableRowsArguments")
-    @DisplayName("Должен корректно обрабатывать все параметры")
-    void listTableRows_shouldPassAllParameters(
-            String description,
-            Consumer<UriBuilder> uriConfigurer,
-            Integer expectedPage,
-            Integer expectedPageSize,
-            String expectedSort,
-            String expectedOrder
-    ) {
+    @DisplayName("Должен вернуть 403 Forbidden при ошибке gRPC PERMISSION_DENIED")
+    void shouldReturn403_whenPermissionDenied() {
         mockAuthenticatedUser();
 
-        var response = new ReadOnlyResponseDto();
-
-        // Если фильтров нет, передаем пустую мапу
-        Map<String, String> expectedFilters = new HashMap<>();
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.eq(SERVICE_KEY),
-                        Mockito.eq(TABLE_NAME),
-                        Mockito.eq(expectedPage),
-                        Mockito.eq(expectedPageSize),
-                        Mockito.eq(expectedSort),
-                        Mockito.eq(expectedOrder),
-                        Mockito.eq(expectedFilters),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.just(response));
+        Mockito.when(adminClient.getCatalog(Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(Status.PERMISSION_DENIED.withDescription("Access Denied").asRuntimeException()));
 
         webTestClient.get()
-                .uri(builder -> {
-                    builder.path("/api/v1/readonly/{service}/{table}");
-                    uriConfigurer.accept(builder);
-                    return builder.build(SERVICE_KEY, TABLE_NAME);
-                })
-                .header(HttpHeaders.AUTHORIZATION, TOKEN)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().exists("X-Request-Id");
-
-        Mockito.verify(adminClient).listTableRows(
-                Mockito.eq(SERVICE_KEY),
-                Mockito.eq(TABLE_NAME),
-                Mockito.eq(expectedPage),
-                Mockito.eq(expectedPageSize),
-                Mockito.eq(expectedSort),
-                Mockito.eq(expectedOrder),
-                Mockito.eq(expectedFilters),
-                Mockito.any(GatewayContext.class)
-        );
-    }
-
-    @Test
-    @DisplayName("Должен выбросить исключение со статусом 404 NotFound при ошибке в gRPC")
-    void listTableRows_shouldThrowsExceptionAndStatus404_whenGrpcReturnsNotFound() {
-        mockAuthenticatedUser();
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found")));
-
-        webTestClient.get()
-                .uri("/api/v1/readonly/{service}/{table}", SERVICE_KEY, TABLE_NAME)
-                .header(HttpHeaders.AUTHORIZATION, TOKEN)
-                .exchange()
-                .expectStatus().isNotFound()
-                .expectHeader().exists("X-Request-Id")
-                .expectBody()
-                .jsonPath("$.code").exists()
-                .jsonPath("$.message").exists();
-
-        Mockito.verify(adminClient).listTableRows(
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(GatewayContext.class)
-        );
-    }
-
-    @Test
-    @DisplayName("Должен выбросить исключение со статусом 403 Forbidden при недостатке прав")
-    void listTableRows_shouldThrowsExceptionAndStatus403_whenPermissionDenied() {
-        mockAuthenticatedUser();
-
-        Mockito.when(adminClient.listTableRows(
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any(GatewayContext.class)
-                ))
-                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied")));
-
-        webTestClient.get()
-                .uri("/api/v1/readonly/{service}/{table}", SERVICE_KEY, TABLE_NAME)
+                .uri("/api/v1/admin/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isForbidden()
@@ -386,36 +304,38 @@ class AdminReadOnlyControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
-
-        Mockito.verify(adminClient).listTableRows(
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(),
-                Mockito.any(GatewayContext.class)
-        );
     }
 
     @Test
-    @DisplayName("Должен выбросить исключение со статусом 401 Unauthorized если нет токена")
-    void listTableRows_shouldThrowsExceptionAndStatus401_whenJwtTokenMissing() {
-        webTestClient.get()
-                .uri("/api/v1/readonly/{service}/{table}", SERVICE_KEY, TABLE_NAME)
-                .exchange()
-                .expectStatus().isUnauthorized()
-                .expectHeader().exists("X-Request-Id")
-                .expectHeader().contentType(MediaType.APPLICATION_JSON)
-                .expectBody()
-                .jsonPath("$.code").exists()
-                .jsonPath("$.message").exists();
+    @DisplayName("Должен вернуть 503 Service Unavailable при недоступном downstream")
+    void shouldReturn503_whenDownstreamUnavailable() {
+        mockAuthenticatedUser();
 
-        Mockito.verify(adminClient, Mockito.never())
-                .listTableRows(Mockito.any(), Mockito.any(), Mockito.any(),
-                        Mockito.any(), Mockito.any(), Mockito.any(),
-                        Mockito.any(), Mockito.any());
+        Mockito.when(adminClient.getCatalog(Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/admin/catalog")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 504 Gateway Timeout при превышении deadline")
+    void shouldReturn504_whenDeadlineExceeded() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.getCatalog(Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/admin/catalog")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT)
+                .expectHeader().exists("X-Request-Id");
     }
 
     // ==================== HELPER METHODS ====================
@@ -425,7 +345,7 @@ class AdminReadOnlyControllerTest {
                 Arguments.of(
                         "с параметрами по умолчанию",
                         (Consumer<UriBuilder>) builder -> {},
-                        1,
+                        0,
                         20,
                         null,
                         "asc"
@@ -445,7 +365,7 @@ class AdminReadOnlyControllerTest {
                         (Consumer<UriBuilder>) builder -> builder
                                 .queryParam("sort", "created_at")
                                 .queryParam("order", "desc"),
-                        1,
+                        0,
                         20,
                         "created_at",
                         "desc"

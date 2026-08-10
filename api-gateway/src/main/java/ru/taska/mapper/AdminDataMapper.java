@@ -9,11 +9,12 @@ import ru.taska.api.admin.v1.ServiceMetadata;
 import ru.taska.api.admin.v1.TableMetadata;
 import ru.taska.api.admin.v1.Value;
 import ru.taska.domain.dto.ColumnMetadataDto;
-import ru.taska.domain.dto.MetaInfoDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.PaginationInfoDto;
-import ru.taska.domain.dto.ReadOnlyResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.domain.dto.ServiceMetadataDto;
+import ru.taska.domain.dto.TableCapabilitiesDto;
 import ru.taska.domain.dto.TableMetadataDto;
 
 import java.time.Instant;
@@ -24,15 +25,13 @@ import java.util.stream.Collectors;
 
 /**
  * Основные методы-маперы toRestGetCatalogResponse и toRestListTableRowsResponse
- * Catalog включает в себя Service
- * Service включает Table
+ * Catalog включает в себя Service.
+ * Service включает Table.
  * Table включает Column
  */
 
 @Component
 public class AdminDataMapper {
-
-    /// GET CATALOG
 
     /**
      * Преобразует gRPC GetCatalogResponse → REST MetadataResponse
@@ -100,22 +99,18 @@ public class AdminDataMapper {
         return dto;
     }
 
-    /// LIST TABLE ROWS
-
     /**
-     * Преобразует gRPC ListTableRowsResponse → REST ReadOnlyResponseDto
+     * Преобразует gRPC ListTableRowsResponse → REST ReadOnlyTableRowsResponseDto
      */
-    public ReadOnlyResponseDto toRestListTableRowsResponse(ListTableRowsResponse grpcResponse) {
-        ReadOnlyResponseDto dto = new ReadOnlyResponseDto();
+    public ReadOnlyTableRowsResponseDto toRestListTableRowsResponse(ListTableRowsResponse grpcResponse) {
+        ReadOnlyTableRowsResponseDto dto = new ReadOnlyTableRowsResponseDto();
 
-        // 1. Данные (rows)
         List<Map<String, Object>> data = grpcResponse.getRowsList()
                 .stream()
                 .map(this::rowToMap)
                 .collect(Collectors.toList());
         dto.setData(data);
 
-        // 2. Пагинация
         PaginationInfoDto pagination = new PaginationInfoDto();
         pagination.setCurrentPage(grpcResponse.getPagination().getCurrentPage());
         pagination.setPageSize(grpcResponse.getPagination().getPageSize());
@@ -123,19 +118,28 @@ public class AdminDataMapper {
         pagination.setTotalPages(grpcResponse.getPagination().getTotalPages());
         pagination.setHasNext(grpcResponse.getPagination().getHasNext());
         pagination.setHasPrev(grpcResponse.getPagination().getHasPrev());
-
         dto.setPagination(pagination);
 
-        // 3. Метаданные
-        MetaInfoDto meta = new MetaInfoDto();
+        TableCapabilitiesDto meta = new TableCapabilitiesDto();
         meta.setService(grpcResponse.getMeta().getServiceKey());
         meta.setTable(grpcResponse.getMeta().getTableName());
         meta.setColumns(grpcResponse.getMeta().getColumnsList());
         meta.setSortableColumns(grpcResponse.getMeta().getSortableColumnsList());
         meta.setFilterableColumns(grpcResponse.getMeta().getFilterableColumnsList());
-
         dto.setMeta(meta);
 
+        return dto;
+    }
+
+    /**
+     * Преобразует gRPC GetTableRowByIdResponse → REST ReadOnlySingleRowResponseDto
+     */
+    public ReadOnlySingleRowResponseDto toRestGetTableRowByIdResponse(
+            ru.taska.api.admin.v1.GetTableRowByIdResponse grpcResponse) {
+        ReadOnlySingleRowResponseDto dto = new ReadOnlySingleRowResponseDto();
+        if (grpcResponse.hasRow()) {
+            dto.setData(rowToMap(grpcResponse.getRow()));
+        }
         return dto;
     }
 
@@ -163,7 +167,4 @@ public class AdminDataMapper {
             default -> null;
         };
     }
-
-
-    
 }
