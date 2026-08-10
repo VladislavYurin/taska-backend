@@ -21,6 +21,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Реализация сервиса {@link BoardService} для получения данных доски задач.
+ * <p>
+ * Выполняет параллельные gRPC-вызовы к {@code workflow-service} и {@code issue-service},
+ * после чего объединяет полученные статусы и задачи в единую структуру доски.
+ */
 @RequiredArgsConstructor
 @Service
 @Slf4j
@@ -31,6 +37,26 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final IssueMapper issueMapper;
 
+    /**
+     * Агрегирует workflow статусы и задачи для формирования доски проекта.
+     * <p>
+     * Алгоритм работы:
+     * 1. Запрашивает workflow (статусы) для заданного типа задач в проекте из {@code workflow-service}.
+     * 2. Запрашивает список задач по переданным фильтрам из {@code issue-service}.
+     * 3. Группирует полученные задачи по ключу статуса ({@code statusKey}).
+     * 4. Создает колонки доски на основе workflow статусов, сохраняя их порядок сортировки ({@code sortOrder}).
+     * 5. Наполняет колонки соответствующими задачами. Если для статуса нет задач, возвращает пустую колонку.
+     * 6. Выполняет валидацию: если найдены задачи со статусами, отсутствующими в workflow, выбрасывает {@link ResponseStatusException} с кодом 500 (INTERNAL_SERVER_ERROR).
+     *
+     * @param projectId   уникальный идентификатор проекта
+     * @param issueType   тип задач для запроса workflow и задач
+     * @param assigneeId  (опционально) идентификатор исполнителя
+     * @param labelId     (опционально) идентификатор метки
+     * @param includeDone флаг включения завершенных задач
+     * @param context     сквозной контекст выполнения запроса, содержащий requestId и данные пользователя
+     * @return {@link Mono} с REST DTO {@link BoardResponseDto}, представляющим структуру доски
+     * @throws ResponseStatusException если после распределения задач остались задачи с неизвестными статусами
+     */
     @Override
     public Mono<BoardResponseDto> getBoard(
             UUID projectId,
