@@ -1,14 +1,16 @@
 package ru.taska.mapper;
 
 import org.springframework.stereotype.Component;
-import ru.taska.api.admin.v1.FilterOperators;
+import ru.taska.api.admin.v1.GetTableRowByIdRequest;
+import ru.taska.api.admin.v1.GetTableRowByIdResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.MetaInfo;
 import ru.taska.api.admin.v1.PaginationInfo;
 import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.Value;
-import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
 
@@ -18,7 +20,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 
 /**
@@ -63,33 +64,39 @@ public class ListTableRowsMapper {
         return builder.build();
     }
 
+    /// proto -> DTO (GetTableRowById)
+    public GetTableRowByIdRequestDto toGetByIdRequestDto(GetTableRowByIdRequest req) {
+        var body = req.getBody();
+        return new GetTableRowByIdRequestDto(
+                body.getServiceKey(),
+                body.getTableName(),
+                body.getId()
+        );
+    }
+
+    /// DTO -> proto (GetTableRowById)
+    public GetTableRowByIdResponse toGetTableRowByIdResponse(GetTableRowByIdResponseDto dto) {
+        Row.Builder rowBuilder = Row.newBuilder();
+        dto.row().forEach((key, value) ->
+                rowBuilder.putFields(key, toGrpcValue(value))
+        );
+        return GetTableRowByIdResponse.newBuilder()
+                .setRow(rowBuilder.build())
+                .build();
+    }
+
     /// proto -> DTO
     public ListTableRowsRequestDto toRequestDto(ListTableRowsRequest req) {
         var body = req.getBody();
 
-        //Преобразуем фильтры из FilterOperators (proto) в FilterOperatorsDto
-        Map<String, FilterOperatorsDto> filters = req.getBody().getFiltersMap().entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey, e->toFilterOperatorsDto(e.getValue())
-                ));
-
         return new ListTableRowsRequestDto(
                 body.getServiceKey(),
                 body.getTableName(),
-                body.getPage(),
-                body.getPageSize(),
-                body.getSort(),
-                body.getOrder(),
-                filters
-        );
-    }
-
-    private FilterOperatorsDto toFilterOperatorsDto(FilterOperators protoOperator) {
-        return new FilterOperatorsDto(
-                protoOperator.hasEquals() ? protoOperator.getEquals() : null,
-                protoOperator.hasContains() ? protoOperator.getContains() : null,
-                protoOperator.hasFrom() ? protoOperator.getFrom() : null,
-                protoOperator.hasTo() ? protoOperator.getTo() : null
+                body.hasPage() ? body.getPage() : null,
+                body.hasPageSize() ? body.getPageSize() : null,
+                body.hasSort() ? body.getSort() : null,
+                body.hasOrder() ? body.getOrder() : null,
+                body.getFiltersMap()
         );
     }
 
@@ -111,8 +118,8 @@ public class ListTableRowsMapper {
                 .setPageSize(dto.pageSize())
                 .setTotalRows(dto.total())
                 .setTotalPages(totalPages)
-                .setHasPrev(dto.page()>1)
-                .setHasNext(dto.page()<totalPages)
+                .setHasPrev(dto.page() > 0)
+                .setHasNext(dto.page() < totalPages - 1)
                 .build();
         MetaInfo metaInfo = MetaInfo.newBuilder()
                 .setServiceKey(dto.serviceKey())

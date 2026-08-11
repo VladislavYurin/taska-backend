@@ -11,8 +11,19 @@ import java.util.Map;
  */
 @ConfigurationProperties(prefix = "admin.metadata")
 public record MetadataCatalogProperties(
+        PaginationProperties pagination,
         Map<String, ServiceProperties> services
 ) {
+
+    /**
+     * Настройки пагинации для read-only API.
+     */
+    public record PaginationProperties(
+            int defaultPage,
+            int defaultPageSize,
+            int maxPageSize
+    ) {
+    }
 
     /**
      * Настройки отображения каталога для одного сервиса.

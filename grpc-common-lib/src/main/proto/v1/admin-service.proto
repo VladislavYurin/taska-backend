@@ -19,6 +19,8 @@ service AdminService {
   rpc GetCatalog(GetCatalogRequest) returns (GetCatalogResponse);
 
   rpc ListTableRows(ListTableRowsRequest) returns (ListTableRowsResponse);
+
+  rpc GetTableRowById(GetTableRowByIdRequest) returns (GetTableRowByIdResponse);
 }
 
 message GetCatalogRequest {
@@ -81,21 +83,11 @@ message ListTableRowsRequest {
 message ListTableRowsRequestBody {
   string service_key = 1;
   string table_name = 2;
-  int32 page = 3;
-  int32 page_size = 4;
-  string sort = 5;
-  string order = 6;
-  map<string, FilterOperators> filters = 7;
-}
-
-message FilterOperators {
-  optional string equals = 1;     // Точное совпадение: status = 'active'
-  optional string contains = 2;   // Поиск по подстроке: email LIKE '%@gmail%'
-  optional string from = 3;       // Нижняя граница: created_at >= '2026-01-01'
-  // Формат: ISO-8601 (например, "2026-01-01T00:00:00Z" или "2026-01-01T00:00Z")
-  optional string to = 4;         // Верхняя граница: created_at <= '2026-12-31'
-  // Формат: ISO-8601 (например, "2026-01-01T00:00:00Z" или "2026-01-01T00:00Z")
-
+  optional int32 page = 3;
+  optional int32 page_size = 4;
+  optional string sort = 5;
+  optional string order = 6;
+  map<string, string> filters = 7;
 }
 
 message ListTableRowsResponse {
@@ -126,6 +118,21 @@ message PaginationInfo {
   int32 total_pages = 4;
   bool has_next = 5;
   bool has_prev = 6;
+}
+
+message GetTableRowByIdRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetTableRowByIdRequestBody body = 2;
+}
+
+message GetTableRowByIdRequestBody {
+  string service_key = 1;
+  string table_name = 2;
+  string id = 3;
+}
+
+message GetTableRowByIdResponse {
+  Row row = 1;
 }
 
 message MetaInfo {
