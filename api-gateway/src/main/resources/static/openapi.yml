@@ -914,7 +914,7 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-  /api/v1/admin/{service}/{table}:
+  /api/v1/readonly/{service}/{table}:
     get:
       summary: Получение строк таблицы из сервисной БД (только для GLOBAL_ADMIN)
       operationId: listTableRows
@@ -928,13 +928,13 @@ paths:
           required: true
           schema:
             type: string
-          description: Имя сервиса (auth, project, issue, workflow, notification, admin). Актуальный список возвращается через GET /api/v1/admin/catalog.
+          description: Имя сервиса (auth, project, issue, workflow, notification, admin). Актуальный список возвращается через GET /api/v1/readonly/catalog.
         - name: table
           in: path
           required: true
           schema:
             type: string
-          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/admin/catalog.
+          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/catalog.
         - name: page
           in: query
           required: false
@@ -1010,7 +1010,7 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-  /api/v1/admin/{service}/{table}/{id}:
+  /api/v1/readonly/{service}/{table}/{id}:
     get:
       summary: Получение одной строки таблицы по ID (только для GLOBAL_ADMIN)
       operationId: getTableRowById
@@ -1024,13 +1024,13 @@ paths:
           required: true
           schema:
             type: string
-          description: Имя сервиса. Актуальный список возвращается через GET /api/v1/admin/catalog.
+          description: Имя сервиса. Актуальный список возвращается через GET /api/v1/readonly/catalog.
         - name: table
           in: path
           required: true
           schema:
             type: string
-          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/admin/catalog.
+          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/catalog.
         - name: id
           in: path
           required: true
@@ -1059,7 +1059,7 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-  /api/v1/admin/catalog:
+  /api/v1/readonly/catalog:
     get:
       summary: Получение каталога доступных сервисов и таблиц (только для GLOBAL_ADMIN)
       operationId: getCatalog

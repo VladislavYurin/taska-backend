@@ -24,7 +24,7 @@ public class AdminReadOnlyController implements AdminApi {
     private final GrpcAdminServiceClient adminServiceClient;
 
     /**
-     * GET /api/v1/admin/catalog
+     * GET /api/v1/readonly/catalog
      * Возвращает каталог доступных сервисов и таблиц.
      */
     @Override
@@ -35,7 +35,7 @@ public class AdminReadOnlyController implements AdminApi {
     }
 
     /**
-     * GET /api/v1/admin/{service}/{table}
+     * GET /api/v1/readonly/{service}/{table}
      * Возвращает строки таблицы с пагинацией, сортировкой и фильтрами.
      */
     @Override
@@ -56,7 +56,7 @@ public class AdminReadOnlyController implements AdminApi {
     }
 
     /**
-     * GET /api/v1/admin/{service}/{table}/{id}
+     * GET /api/v1/readonly/{service}/{table}/{id}
      * Возвращает одну строку таблицы по ID.
      */
     @Override

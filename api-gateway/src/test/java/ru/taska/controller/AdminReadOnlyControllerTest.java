@@ -98,7 +98,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.just(response));
 
         webTestClient.get()
-                .uri("/api/v1/admin/catalog")
+                .uri("/api/v1/readonly/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isOk()
@@ -132,7 +132,7 @@ class AdminReadOnlyControllerTest {
 
         webTestClient.get()
                 .uri(builder -> builder
-                        .path("/api/v1/admin/{service}/{table}")
+                        .path("/api/v1/readonly/{service}/{table}")
                         .queryParam("page", 1)
                         .queryParam("pageSize", 20)
                         .queryParam("sort", "created_at")
@@ -175,7 +175,7 @@ class AdminReadOnlyControllerTest {
 
         webTestClient.get()
                 .uri(builder -> {
-                    builder.path("/api/v1/admin/{service}/{table}");
+                    builder.path("/api/v1/readonly/{service}/{table}");
                     uriConfigurer.accept(builder);
                     return builder.build(SERVICE_KEY, TABLE_NAME);
                 })
@@ -198,7 +198,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found")));
 
         webTestClient.get()
-                .uri("/api/v1/admin/{service}/{table}", SERVICE_KEY, TABLE_NAME)
+                .uri("/api/v1/readonly/{service}/{table}", SERVICE_KEY, TABLE_NAME)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isNotFound()
@@ -230,7 +230,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.just(response));
 
         webTestClient.get()
-                .uri("/api/v1/admin/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
+                .uri("/api/v1/readonly/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isOk()
@@ -258,7 +258,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Row not found")));
 
         webTestClient.get()
-                .uri("/api/v1/admin/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
+                .uri("/api/v1/readonly/{service}/{table}/{id}", SERVICE_KEY, TABLE_NAME, ROW_ID)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isNotFound()
@@ -274,7 +274,7 @@ class AdminReadOnlyControllerTest {
     @DisplayName("Должен вернуть 401 Unauthorized без Bearer токена")
     void shouldReturn401_whenNoBearerToken() {
         webTestClient.get()
-                .uri("/api/v1/admin/catalog")
+                .uri("/api/v1/readonly/catalog")
                 .exchange()
                 .expectStatus().isUnauthorized()
                 .expectHeader().exists("X-Request-Id")
@@ -296,7 +296,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.withDescription("Access Denied").asRuntimeException()));
 
         webTestClient.get()
-                .uri("/api/v1/admin/catalog")
+                .uri("/api/v1/readonly/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isForbidden()
@@ -315,7 +315,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
 
         webTestClient.get()
-                .uri("/api/v1/admin/catalog")
+                .uri("/api/v1/readonly/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
@@ -331,7 +331,7 @@ class AdminReadOnlyControllerTest {
                 .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
 
         webTestClient.get()
-                .uri("/api/v1/admin/catalog")
+                .uri("/api/v1/readonly/catalog")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT)
