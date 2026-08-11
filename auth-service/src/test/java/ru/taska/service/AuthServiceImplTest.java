@@ -341,6 +341,9 @@ class AuthServiceImplTest {
             Mockito.when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
             Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
 
+            Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
+                    .thenReturn(Mono.just(testUser));
+
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectErrorMatches(error ->
