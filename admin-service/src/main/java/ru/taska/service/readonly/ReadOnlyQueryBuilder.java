@@ -50,6 +50,7 @@ public class ReadOnlyQueryBuilder {
 
     public PageableListQueries buildSafePageableListQueries(
             String serviceKey,
+            String schema,
             String tableName,
             int page,
             int pageSize,
@@ -80,8 +81,9 @@ public class ReadOnlyQueryBuilder {
                 : " WHERE " + String.join(" AND ", conditionsAndParams.conditions());
         List<Object> params = conditionsAndParams.params();
 
-        String selectSql = buildSelectSql(tableName, whereClause, page, pageSize, sort, order, primaryKeyColumn);
-        String countSql = "SELECT COUNT(*) FROM \"" + tableName + "\"" + whereClause;
+        String qualifiedTable = qualifyTable(schema, tableName);
+        String selectSql = buildSelectSql(qualifiedTable, whereClause, page, pageSize, sort, order, primaryKeyColumn);
+        String countSql = "SELECT COUNT(*) FROM " + qualifiedTable + whereClause;
 
         log.debug("Built SELECT query: {}", selectSql);
         log.debug("Built COUNT query: {}", countSql);
@@ -103,6 +105,7 @@ public class ReadOnlyQueryBuilder {
      */
     public SqlQuery buildSafeGetByIdQuery(
             String serviceKey,
+            String schema,
             String tableName,
             String pkColumn,
             String id
@@ -113,7 +116,7 @@ public class ReadOnlyQueryBuilder {
         validator.validateServiceAndTable(serviceKey, tableName);
         validator.checkThatStringIsSqlSafe(pkColumn);
 
-        String selectSql = "SELECT * FROM \"" + tableName + "\" WHERE \"" + pkColumn + "\"::text = $1";
+        String selectSql = "SELECT * FROM " + qualifyTable(schema, tableName) + " WHERE \"" + pkColumn + "\"::text = $1";
 
         log.debug("Built getById query: {}", selectSql);
 
@@ -121,7 +124,7 @@ public class ReadOnlyQueryBuilder {
     }
 
     private String buildSelectSql(
-            String tableName,
+            String qualifiedTable,
             String whereClause,
             int page,
             int pageSize,
@@ -131,7 +134,7 @@ public class ReadOnlyQueryBuilder {
     ) {
         StringBuilder sql = new StringBuilder();
         // 1. SELECT + WHERE
-        sql.append("SELECT * FROM \"").append(tableName).append("\"").append(whereClause);
+        sql.append("SELECT * FROM ").append(qualifiedTable).append(whereClause);
 
         // 2. ORDER BY
         if (sort != null && !sort.isEmpty()) {
@@ -269,6 +272,10 @@ public class ReadOnlyQueryBuilder {
             throw new DomainException(DomainStatus.INVALID_ARGUMENT,
                     "Invalid numeric value for column '" + column + "': got '" + value + "'");
         }
+    }
+
+    private String qualifyTable(String schema, String tableName) {
+        return "\"" + schema + "\".\"" + tableName + "\"";
     }
 
     private Boolean parseBooleanValue(String column, String value) {

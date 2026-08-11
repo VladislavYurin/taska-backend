@@ -35,6 +35,7 @@ import java.util.Map;
 class AdminReadonlyServiceImplTest {
 
     private static final String TEST_SERVICE = "auth";
+    private static final String TEST_SCHEMA = "taska";
     private static final String TEST_TABLE = "users";
     private static final int PAGE = 0;
     private static final int PAGE_SIZE = 20;
@@ -71,7 +72,10 @@ class AdminReadonlyServiceImplTest {
         MetadataCatalogProperties.PaginationProperties pagination =
                 new MetadataCatalogProperties.PaginationProperties(DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         MetadataCatalogProperties catalogProperties =
-                new MetadataCatalogProperties(pagination, Map.of());
+                new MetadataCatalogProperties(pagination, Map.of(
+                        TEST_SERVICE, new MetadataCatalogProperties.ServiceProperties(
+                                TEST_SERVICE, TEST_SCHEMA, new MetadataCatalogProperties.TableProperties(List.of(), List.of(), List.of()))
+                ));
         adminService = new AdminReadonlyServiceImpl(
                 catalogProperties, maskService, metadataService,
                 readOnlyRepository, queryBuilder, filterParser
@@ -127,7 +131,7 @@ class AdminReadonlyServiceImplTest {
     void shouldReturnEmptyResponseWhenNoData() {
         Mockito.when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
                         Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenReturn(pageableListQueries);
         Mockito.when(readOnlyRepository.executeQuery(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
@@ -149,7 +153,7 @@ class AdminReadonlyServiceImplTest {
     void shouldPropagateErrorFromQueryBuilder() {
         Mockito.when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
                         Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenThrow(new DomainException(DomainStatus.PERMISSION_DENIED, "Table not accessible: " + TEST_TABLE));
 
@@ -240,7 +244,7 @@ class AdminReadonlyServiceImplTest {
 
         Mockito.when(metadataService.getPrimaryKeyColumn(TEST_SERVICE, TEST_TABLE))
                 .thenReturn(Mono.just("id"));
-        Mockito.when(queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_TABLE, "id", testId))
+        Mockito.when(queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, "id", testId))
                 .thenReturn(byIdQuery);
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.just(row));
@@ -266,7 +270,7 @@ class AdminReadonlyServiceImplTest {
 
         Mockito.when(metadataService.getPrimaryKeyColumn(TEST_SERVICE, TEST_TABLE))
                 .thenReturn(Mono.just("id"));
-        Mockito.when(queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_TABLE, "id", testId))
+        Mockito.when(queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, "id", testId))
                 .thenReturn(byIdQuery);
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.empty());
@@ -306,7 +310,7 @@ class AdminReadonlyServiceImplTest {
     private void stubListSuccessPath() {
         Mockito.when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        Mockito.when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
                         Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenReturn(pageableListQueries);
         Mockito.when(readOnlyRepository.executeQuery(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
@@ -322,6 +326,7 @@ class AdminReadonlyServiceImplTest {
         ArgumentCaptor<Integer> pageSizeCaptor = ArgumentCaptor.forClass(Integer.class);
         Mockito.verify(queryBuilder).buildSafePageableListQueries(
                 Mockito.eq(TEST_SERVICE),
+                Mockito.eq(TEST_SCHEMA),
                 Mockito.eq(TEST_TABLE),
                 pageCaptor.capture(),
                 pageSizeCaptor.capture(),

@@ -30,6 +30,7 @@ class ReadOnlyQueryBuilderTest {
     // ==================== ГЛОБАЛЬНЫЕ КОНСТАНТЫ ====================
 
     private static final String TEST_SERVICE = "test-service";
+    private static final String TEST_SCHEMA = "taska";
     private static final String TEST_TABLE = "test_table";
     private static final String ANOTHER_TABLE = "another_table";
     private static final String BLOCKED_TABLE = "blocked_table";
@@ -84,7 +85,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 INJECTION_SORT, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT);
@@ -95,7 +96,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 "id UNION SELECT * FROM passwords", "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT);
@@ -108,7 +109,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -123,7 +124,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT);
@@ -134,7 +135,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, INJECTION_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, INJECTION_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -148,7 +149,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -165,7 +166,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -180,7 +181,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -196,7 +197,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -212,7 +213,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -230,7 +231,7 @@ class ReadOnlyQueryBuilderTest {
         filters.put("created_at", new FilterOperatorsDto(null, null, fromValue, toValue));
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -250,7 +251,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, 2, 10,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, 2, 10,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -262,7 +263,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 "created_at", "desc", filters, TEST_COLUMNS, "id"
         );
 
@@ -276,11 +277,11 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
-        Assertions.assertThat(pageableListQueries.countQuery().parameterizedQuery()).contains("SELECT COUNT(*) FROM \"" + TEST_TABLE + "\"");
+        Assertions.assertThat(pageableListQueries.countQuery().parameterizedQuery()).contains("SELECT COUNT(*) FROM \"taska\".\"" + TEST_TABLE + "\"");
         Assertions.assertThat(pageableListQueries.countQuery().parameterizedQuery()).contains("\"status\" = $1");
         Assertions.assertThat(pageableListQueries.selectQuery().params()).contains("active");
     }
@@ -292,7 +293,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, "unknown_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, "unknown_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
@@ -307,7 +308,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, BLOCKED_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, BLOCKED_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
@@ -319,11 +320,11 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
-        Assertions.assertThat(pageableListQueries.selectQuery().parameterizedQuery()).contains("SELECT * FROM \"" + TEST_TABLE + "\"");
+        Assertions.assertThat(pageableListQueries.selectQuery().parameterizedQuery()).contains("SELECT * FROM \"taska\".\"" + TEST_TABLE + "\"");
     }
 
     @Test
@@ -333,11 +334,11 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         PageableListQueries pageableListQueries = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, "any_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, "any_table", DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
-        Assertions.assertThat(pageableListQueries.selectQuery().parameterizedQuery()).contains("SELECT * FROM \"any_table\"");
+        Assertions.assertThat(pageableListQueries.selectQuery().parameterizedQuery()).contains("SELECT * FROM \"taska\".\"any_table\"");
     }
 
     // ==================== 5. ВАЛИДАЦИЯ СУЩЕСТВОВАНИЯ КОЛОНОК ====================
@@ -347,7 +348,7 @@ class ReadOnlyQueryBuilderTest {
         Map<String, FilterOperatorsDto> filters = Map.of();
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 "nonexistent_column", "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -359,17 +360,17 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldBuildGetByIdQuery() {
         SqlQuery query = queryBuilder.buildSafeGetByIdQuery(
-                TEST_SERVICE, TEST_TABLE, "id", "some-uuid"
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, "id", "some-uuid"
         );
 
-        Assertions.assertThat(query.parameterizedQuery()).isEqualTo("SELECT * FROM \"test_table\" WHERE \"id\"::text = $1");
+        Assertions.assertThat(query.parameterizedQuery()).isEqualTo("SELECT * FROM \"taska\".\"test_table\" WHERE \"id\"::text = $1");
         Assertions.assertThat(query.params()).containsExactly("some-uuid");
     }
 
     @Test
     void shouldRejectInvalidTableNameInGetById() {
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, INJECTION_TABLE, "id", "some-uuid")
+                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, INJECTION_TABLE, "id", "some-uuid")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
                 .hasMessageContaining("Invalid identifier");
@@ -378,7 +379,7 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldRejectInvalidPkColumnInGetById() {
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_TABLE, "id; DROP TABLE users", "some-uuid")
+                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, "id; DROP TABLE users", "some-uuid")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
                 .hasMessageContaining("Invalid identifier");
@@ -390,7 +391,7 @@ class ReadOnlyQueryBuilderTest {
         Mockito.when(tableProps.deny()).thenReturn(List.of(BLOCKED_TABLE));
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, BLOCKED_TABLE, "id", "some-uuid")
+                        queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, BLOCKED_TABLE, "id", "some-uuid")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.PERMISSION_DENIED)
                 .hasMessageContaining("Table not accessible");
@@ -403,7 +404,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -420,7 +421,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -436,7 +437,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -452,7 +453,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -468,7 +469,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -484,7 +485,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, columns, "id"
         );
 
@@ -501,7 +502,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -516,7 +517,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -532,7 +533,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -547,7 +548,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -563,7 +564,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -593,7 +594,7 @@ class ReadOnlyQueryBuilderTest {
             );
 
             PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                    TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                    TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                     null, "asc", filters, columns, "id"
             );
 
@@ -610,7 +611,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, columns, "id"
         );
 
@@ -625,7 +626,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -641,7 +642,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, columns, "id"
         );
 
@@ -656,7 +657,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", filters, columns, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -669,7 +670,7 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldOrderByPrimaryKeyAscWhenSortIsNull() {
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", Map.of(), TEST_COLUMNS, "id"
         );
 
@@ -680,11 +681,11 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldDefaultToAscWhenOrderIsNullOrBlank() {
         PageableListQueries withNullOrder = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 "created_at", null, Map.of(), TEST_COLUMNS, "id"
         );
         PageableListQueries withBlankOrder = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 "created_at", "  ", Map.of(), TEST_COLUMNS, "id"
         );
 
@@ -697,7 +698,7 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldRejectInvalidOrderDirection() {
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 "created_at", "sideways", Map.of(), TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
@@ -712,7 +713,7 @@ class ReadOnlyQueryBuilderTest {
         );
 
         PageableListQueries result = queryBuilder.buildSafePageableListQueries(
-                TEST_SERVICE, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                 null, "asc", filters, TEST_COLUMNS, "id"
         );
 
@@ -725,7 +726,7 @@ class ReadOnlyQueryBuilderTest {
     @Test
     void shouldRejectUnknownService() {
         Assertions.assertThatThrownBy(() ->
-                        queryBuilder.buildSafePageableListQueries("unknown-service", TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
+                        queryBuilder.buildSafePageableListQueries("unknown-service", TEST_SCHEMA, TEST_TABLE, DEFAULT_PAGE, DEFAULT_PAGE_SIZE,
                                 null, "asc", Map.of(), TEST_COLUMNS, "id")
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.NOT_FOUND)

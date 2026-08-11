@@ -42,6 +42,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
 
             String serviceKey = requestDto.serviceKey();
             String tableName = requestDto.tableName();
+            String schema = resolveSchema(serviceKey);
 
             int page = normalizePage(requestDto.page());
             int pageSize = normalizePageSize(requestDto.pageSize());
@@ -57,7 +58,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                         String primaryKeyColumn = tuple.getT2();
 
                         PageableListQueries safeQuery = queryBuilder.buildSafePageableListQueries(
-                                serviceKey, tableName, page, pageSize, sort, order, filters, columnTypes, primaryKeyColumn
+                                serviceKey, schema, tableName, page, pageSize, sort, order, filters, columnTypes, primaryKeyColumn
                         );
 
                         List<String> columnNames = List.copyOf(columnTypes.keySet());
@@ -85,6 +86,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         return Mono.defer(() -> {
             String serviceKey = requestDto.serviceKey();
             String tableName = requestDto.tableName();
+            String schema = resolveSchema(serviceKey);
             String id = requestDto.id();
 
             log.debug("getTableRowById request: service='{}', table='{}', id='{}'", serviceKey, tableName, id);
@@ -92,7 +94,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
             return metadataService.getPrimaryKeyColumn(serviceKey, tableName)
                     .flatMap(pkColumn -> {
                         SqlQuery safeQuery = queryBuilder.buildSafeGetByIdQuery(
-                                serviceKey, tableName, pkColumn, id
+                                serviceKey, schema, tableName, pkColumn, id
                         );
 
                         return readOnlyRepository.executeQuery(serviceKey, safeQuery.parameterizedQuery(), safeQuery.params())
@@ -134,5 +136,13 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
             return maxPageSize;
         }
         return (pageSize == null) ? defaultPageSize : pageSize;
+    }
+
+    private String resolveSchema(String serviceKey) {
+        MetadataCatalogProperties.ServiceProperties serviceProps = catalogProperties.services().get(serviceKey);
+        if (serviceProps == null) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Unknown service: " + serviceKey);
+        }
+        return serviceProps.schema();
     }
 }
