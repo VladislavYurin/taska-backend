@@ -81,6 +81,32 @@ class FilterParserTest {
     }
 
     @Test
+    void parse_reservedPaginationParams_areIgnored() {
+        Map<String, String> raw = new LinkedHashMap<>();
+        raw.put("page", "0");
+        raw.put("pageSize", "20");
+        raw.put("sort", "created_at");
+        raw.put("order", "asc");
+        raw.put("status.equals", "active");
+
+        Map<String, FilterOperatorsDto> result = parser.parse(raw);
+
+        Assertions.assertThat(result).containsOnlyKeys("status");
+        Assertions.assertThat(result.get("status").equals()).isEqualTo("active");
+    }
+
+    @Test
+    void parse_onlyReservedParams_returnsEmptyMap() {
+        Map<String, FilterOperatorsDto> result = parser.parse(Map.of(
+                "page", "0",
+                "pageSize", "20",
+                "order", "asc"
+        ));
+
+        Assertions.assertThat(result).isEmpty();
+    }
+
+    @Test
     void parse_unknownOperator_throwsInvalidArgument() {
         Assertions.assertThatThrownBy(() -> parser.parse(Map.of("status.neq", "active")))
                 .isInstanceOf(DomainException.class)

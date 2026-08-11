@@ -10,6 +10,7 @@ import ru.taska.exception.DomainStatus;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Парсит сырые фильтры из query params в структурированные FilterOperatorsDto.
@@ -29,6 +30,8 @@ import java.util.Map;
 @Component
 public class FilterParser {
 
+    private static final Set<String> NOT_FILTER_QUERY_PARAMS = Set.of("page", "pageSize", "sort", "order");
+
     /**
      * Парсит сырую map фильтров в структурированную map с FilterOperatorsDto.
      */
@@ -45,6 +48,11 @@ public class FilterParser {
         for (var entry : rawFilters.entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue();
+
+            if (key != null && NOT_FILTER_QUERY_PARAMS.contains(key)) {
+                log.debug("Skipping reserved query param in filters map: {}", key);
+                continue;
+            }
 
             if (value == null || value.isBlank()) {
                 log.warn("Filter value is empty for key: {}", key);
