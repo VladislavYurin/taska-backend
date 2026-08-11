@@ -52,7 +52,7 @@ public interface ProjectMapper {
                 .build();
     }
 
-    @Mapping(target = "id", source = "id")
+    @Mapping(target = "id", source = "project_id")
     @Mapping(target = "projectKey", source = "project_key")
     @Mapping(target = "name", source = "name")
     @Mapping(target = "createdBy", source = "created_by")

@@ -33,14 +33,26 @@ import java.util.UUID;
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceImplTest {
 
-    @Mock private ProjectRepository projectRepository;
-    @Mock private ProjectMemberRepository projectMemberRepository;
-    @Mock private ProjectSettingRepository projectSettingRepository;
-    @Mock private OutboxEventService outboxEventService;
-    @Mock private ObjectMapper objectMapper;
-    @Mock private ProjectMapper projectMapper;
+    @Mock
+    private ProjectRepository projectRepository;
 
-    @InjectMocks private ProjectServiceImpl projectService;
+    @Mock
+    private ProjectMemberRepository projectMemberRepository;
+
+    @Mock
+    private ProjectSettingRepository projectSettingRepository;
+
+    @Mock
+    private OutboxEventService outboxEventService;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
+    @Mock
+    private ProjectMapper projectMapper;
+
+    @InjectMocks
+    private ProjectServiceImpl projectService;
 
     private final String requestId = "req-123";
     private final String nodeId = "node-1";
@@ -108,8 +120,8 @@ class ProjectServiceImplTest {
 
     @Test
     void getProject_Success() {
-        ProjectCheckMembershipDto dto =ProjectCheckMembershipDto.builder()
-                .id(projectId)
+        ProjectCheckMembershipDto dto = ProjectCheckMembershipDto.builder()
+                .project_id(projectId)
                 .project_key(projectKey)
                 .name(projectName)
                 .created_by(userId)
@@ -119,25 +131,25 @@ class ProjectServiceImplTest {
                 .user_id(actorUserId)
                 .build();
 
-        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId))
+        Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                 .thenReturn(Mono.just(dto)
-        );
+                );
         Mockito.when(projectMapper.toProject(dto))
                 .thenReturn(mockProject);
 
-        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
                 .expectNext(mockProject)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
+        Mockito.verify(projectRepository).findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId);
         Mockito.verify(projectMapper).toProject(dto);
     }
 
     @Test
     void getProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
-        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId,actorUserId)).thenReturn(Mono.empty());
+        Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.empty());
 
-        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId,actorUserId))
+        StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
@@ -146,14 +158,14 @@ class ProjectServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId,actorUserId);
+        Mockito.verify(projectRepository).findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId);
         Mockito.verify(projectMapper, Mockito.never()).toProject(ArgumentMatchers.any());
     }
 
     @Test
     void getProject_ThrowsPermissionDenied_WhenUserIsNotMember() {
-        ProjectCheckMembershipDto dto =ProjectCheckMembershipDto.builder()
-                .id(projectId)
+        ProjectCheckMembershipDto dto = ProjectCheckMembershipDto.builder()
+                .project_id(projectId)
                 .project_key(projectKey)
                 .name(projectName)
                 .created_by(userId)
@@ -163,7 +175,7 @@ class ProjectServiceImplTest {
                 .user_id(null)
                 .build();
 
-        Mockito.when(projectRepository.findByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.just(dto));
+        Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId)).thenReturn(Mono.just(dto));
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
                 .expectErrorSatisfies(throwable -> {
@@ -174,7 +186,7 @@ class ProjectServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(projectRepository).findByProjectIdAndUserId(projectId, actorUserId);
+        Mockito.verify(projectRepository).findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId);
         Mockito.verify(projectMapper, Mockito.never()).toProject(ArgumentMatchers.any());
     }
 

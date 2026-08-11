@@ -68,32 +68,25 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
-        return projectRepository.findByProjectIdAndUserId(projectId,actorUserId)
-                // Поскольку в запросе приходит ProjectCheckMembershipDto
-                // - если ответу пуст -> проект не найден
+        return projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId,actorUserId)
                 .switchIfEmpty(
                         Mono.defer(() -> {
                             log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
                             return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
                         })
                 )
-                // - если ответ не пустой - проверяем user_id из ProjectCheckMembershipDto
                 .flatMap(dto->{
-                    // если user_id пустой -> ошибка доступа
                     if(dto.user_id()==null){
                         log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
                     }
-                    //если user_id есть -> мапим DTO в Project
                     log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId);
                     return Mono.just(projectMapper.toProject(dto));
                 });
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId) {
         return projectRepository.findAllByMemberUserId(userId)
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
