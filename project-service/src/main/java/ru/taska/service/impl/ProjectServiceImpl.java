@@ -12,6 +12,7 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -34,6 +35,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
+    private final ProjectMapper projectMapper;
 
     @Override
     @Transactional
@@ -66,18 +68,27 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId) {
-        return projectRepository.findById(projectId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project with projectId " + projectId + " was not found ")))
-                .doOnSuccess(p -> log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId));
+    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
+        return projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId,actorUserId)
+                .switchIfEmpty(
+                        Mono.defer(() -> {
+                            log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                        })
+                )
+                .flatMap(dto->{
+                    if(dto.user_id()==null){
+                        log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
+                        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
+                    }
+                    log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId);
+                    return Mono.just(projectMapper.toProject(dto));
+                });
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId) {
         return projectRepository.findAllByMemberUserId(userId)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Not found projects for user with id: " + userId)))
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
