@@ -219,6 +219,36 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toUserBlocked(
+            TaskaEvent event,
+            UUID userId,
+            String reason
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.USER_BLOCKED)
+                .title("Account Blocked")
+                .body(String.format("Your account has been blocked. Reason: %s", reason))
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toUserUnblocked(
+            TaskaEvent event,
+            UUID userId,
+            String reason
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.USER_UNBLOCKED)
+                .title("Account Unblocked")
+                .body(String.format("Your account has been unblocked. Reason: %s", reason))
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     private NotificationKind toProtoNotificationKind(NotificationType domain) {
         if (domain == null) {
             return NotificationKind.NOTIFICATION_KIND_UNSPECIFIED;
@@ -240,6 +270,8 @@ public class NotificationMapper {
             case ISSUE_LINK_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_LINK_DELETED;
             case LABEL_ADDED -> NotificationKind.NOTIFICATION_KIND_LABEL_ADDED;
             case LABEL_REMOVED -> NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED;
+            case USER_BLOCKED-> NotificationKind.NOTIFICATION_KIND_USER_BLOCKED;
+            case USER_UNBLOCKED -> NotificationKind.NOTIFICATION_KIND_USER_UNBLOCKED;
         };
     }
 

@@ -121,6 +121,16 @@ enum NotificationKind {
    * Уведомление об удалении связи между двумя задачами.
    */
   NOTIFICATION_KIND_LABEL_REMOVED = 15;
+
+  /**
+   * Уведомление о блокировке пользователя
+   */
+  NOTIFICATION_KIND_USER_BLOCKED = 16;
+
+  /**
+   * Уведомление о разблокировке пользователя
+   */
+  NOTIFICATION_KIND_USER_UNBLOCKED = 17;
 }
 
 /**

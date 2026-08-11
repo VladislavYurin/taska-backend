@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package ru.taska.admin_user_management.v1;
+
+import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.admin.management.v1";
+option java_outer_classname = "AdminUserManagementApiProto";
+
+service AdminUserManagementService {
+
+  /**
+  * Блокирует пользователя (админ-операция)
+  */
+  rpc BlockUser(BlockUserRequest) returns (UserStatusAuthResponse);
+
+  /**
+   * Снимает блокировку с пользователя (админ-операция)
+   */
+  rpc UnblockUser(UnblockUserRequest) returns (UserStatusAuthResponse);
+
+  /**
+   * Сбрасывает блокировку после неудачных попыток входа
+   */
+  rpc ResetCredentialLockout(ResetCredentialLockoutAuthRequest) returns (UserStatusAuthResponse);
+}
+
+/**
+ * Запрос на блокировку пользователя.
+ */
+message BlockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  BlockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса блокировки пользователя.
+ */
+message BlockUserRequestBody {
+  string target_user_id = 1;
+  string actor_user_id = 2;
+  string reason = 3;
+}
+
+/**
+ * Запрос на разблокировку пользователя.
+ */
+message UnblockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  UnblockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса разблокировки пользователя.
+ */
+message UnblockUserRequestBody {
+  string target_user_id = 1;
+  string actor_user_id = 2;
+  string reason = 3;
+}
+
+/**
+ * Ответ на запрос(ы) изменений статуса пользователя.
+ */
+message UserStatusAuthResponse {
+  /**
+   *
+   */
+  string user_id = 1;
+  /**
+   *
+   */
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  /**
+   *
+   */
+  ru.taska.common.v1.UserStatus current_status = 3;
+  /**
+   *
+   */
+  google.protobuf.Timestamp changed_at = 4;
+}
+
+/**
+ * Запрос на сброс блокировки пользователя после неудачных попыток входа.
+ */
+message ResetCredentialLockoutAuthRequest {
+  ru.taska.common.v1.Header header = 1;
+  ResetCredentialLockoutAuthRequestBody body = 2;
+}
+
+message ResetCredentialLockoutAuthRequestBody {
+  /**
+   *
+   */
+  string target_user_id = 1;
+  /**
+   *
+   */
+  string actor_user_id = 2;
+  /**
+   *
+   */
+  string reason = 3;
+}
