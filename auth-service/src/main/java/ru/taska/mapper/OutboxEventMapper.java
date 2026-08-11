@@ -1,6 +1,11 @@
 package ru.taska.mapper;
 
 
+import ru.taska.dto.UserBlockedPayload;
+import ru.taska.dto.UserUnblockedPayload;
+import ru.taska.entity.User;
+import ru.taska.entity.UserStatus;
+import ru.taska.event.OutboxEventStatus;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +17,7 @@ import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
 import ru.taska.event.payload.UserActivatedPayload;
 import ru.taska.event.payload.UserInvitedPayload;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.UUID;
 
@@ -53,6 +59,44 @@ public class OutboxEventMapper {
         }
     }
 
+    public OutboxEvent buildUserBlockedOutboxEvent(User user, UserStatus oldStatus, String reason, UUID actorId, UUID requestId) {
+        ObjectNode payload = objectMapper.createObjectNode()
+                .put("userId", user.getId().toString())
+                .put("oldStatus", oldStatus.name())
+                .put("newStatus", user.getStatus().name())
+                .put("reason", reason)
+                .put("actorUserId", actorId.toString());
+
+        return OutboxEvent.builder()
+                .aggregateType("USER")
+                .aggregateId(user.getId())
+                .eventType(EventType.USER_BLOCKED.getValue())
+                .status(OutboxEventStatus.NEW)
+                .payload(payload)
+                .attempts(0)
+                .requestId(requestId.toString())
+                .build();
+    }
+
+    public OutboxEvent buildUserUnblockedOutboxEvent(User user, UserStatus oldStatus, String reason, UUID actorId, UUID requestId) {
+        ObjectNode payload = objectMapper.createObjectNode()
+                .put("userId", user.getId().toString())
+                .put("oldStatus", oldStatus.name())
+                .put("newStatus", user.getStatus().name())
+                .put("reason", reason)
+                .put("actorUserId", actorId.toString());
+
+        return OutboxEvent.builder()
+                .aggregateType("USER")
+                .aggregateId(user.getId())
+                .eventType(EventType.USER_UNBLOCKED.getValue())
+                .status(OutboxEventStatus.NEW)
+                .payload(payload)
+                .attempts(0)
+                .requestId(requestId.toString())
+                .build();
+    }
+
     private JsonNode buildPayload(OutboxEvent event) {
         JsonNode sourcePayload = event.getPayload();
         EventType eventType = EventType.fromValue(event.getEventType());
@@ -67,6 +111,22 @@ public class OutboxEventMapper {
             case USER_ACTIVATED -> objectMapper.valueToTree(new UserActivatedPayload(
                     getUuid(sourcePayload, USER_ID),
                     getString(sourcePayload, EMAIL)
+            ));
+
+            case USER_BLOCKED -> objectMapper.valueToTree(new UserBlockedPayload(
+                    getUuid(sourcePayload, "userId"),
+                    getString(sourcePayload, "oldStatus"),
+                    getString(sourcePayload, "newStatus"),
+                    getString(sourcePayload, "reason"),
+                    getUuid(sourcePayload, "actorUserId")
+            ));
+
+            case USER_UNBLOCKED -> objectMapper.valueToTree(new UserUnblockedPayload(
+                    getUuid(sourcePayload, "userId"),
+                    getString(sourcePayload, "oldStatus"),
+                    getString(sourcePayload, "newStatus"),
+                    getString(sourcePayload, "reason"),
+                    getUuid(sourcePayload, "actorUserId")
             ));
 
             default -> {

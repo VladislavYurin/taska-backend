@@ -4,22 +4,29 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.admin.v1.GetCatalogRequest;
-import ru.taska.api.admin.v1.GetCatalogResponse;
-import ru.taska.api.admin.v1.GetTableRowByIdRequest;
-import ru.taska.api.admin.v1.GetTableRowByIdResponse;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.*;
 
 /**
  * gRPC-адаптер, который публикует {@link GrpcAdminReadonlyService} как protobuf endpoint.
  */
 @GrpcService
 @RequiredArgsConstructor
-public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminServiceGrpc.AdminServiceImplBase {
+public class GrpcAdminServiceAdapter extends ReactorAdminServiceGrpc.AdminServiceImplBase {
 
     private final GrpcAdminReadonlyService grpcAdminReadonlyService;
+    private final GrpcAdminUserManagementService grpcAdminUserManagementService;
+
+    @Override
+    public Mono<BlockUserResponse> blockUser(Mono<BlockUserRequest> request) {
+        return grpcAdminUserManagementService.blockUser(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("blockUser"));
+    }
+
+    @Override
+    public Mono<UnblockUserResponse> unblockUser(Mono<UnblockUserRequest> request) {
+        return grpcAdminUserManagementService.unblockUser(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("unblockUser"));
+    }
 
     @Override
     public Mono<GetCatalogResponse> getCatalog(Mono<GetCatalogRequest> request) {
