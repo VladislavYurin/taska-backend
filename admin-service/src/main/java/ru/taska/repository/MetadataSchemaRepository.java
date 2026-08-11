@@ -27,14 +27,16 @@ public class MetadataSchemaRepository {
             """;
 
     private static final String PRIMARY_KEYS_SQL = """
-            SELECT kcu.table_name, kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name
-             AND tc.table_schema = kcu.table_schema
-             AND tc.table_name = kcu.table_name
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-              AND tc.table_schema = :schema
+            SELECT c.relname  AS table_name,
+                   a.attname  AS column_name
+            FROM pg_index i
+            JOIN pg_class c     ON c.oid = i.indrelid
+            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE i.indisprimary
+              AND n.nspname = :schema
+              AND a.attnum > 0
+              AND NOT a.attisdropped
             """;
 
     private final Map<String, DatabaseClient> clients;

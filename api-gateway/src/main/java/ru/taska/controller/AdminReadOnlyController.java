@@ -14,11 +14,15 @@ import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
 public class AdminReadOnlyController implements AdminApi {
+
+    private static final Set<String> NOT_FILTER_QUERY_PARAMS = Set.of("page", "pageSize", "sort", "order");
 
     private final GatewayRequestExecutor executor;
     private final GrpcAdminServiceClient adminServiceClient;
@@ -46,11 +50,13 @@ public class AdminReadOnlyController implements AdminApi {
             Integer pageSize,
             String sort,
             String order,
-            Map<String, String> filter,
+            Map<String, String> ignoredFilters,
             ServerWebExchange exchange) {
 
+        Map<String, String> filters = extractColumnFilters(exchange);
+
         return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
-                adminServiceClient.listTableRows(service, table, page, pageSize, sort, order, filter, context)
+                adminServiceClient.listTableRows(service, table, page, pageSize, sort, order, filters, context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -70,5 +76,17 @@ public class AdminReadOnlyController implements AdminApi {
                 adminServiceClient.getTableRowById(service, table, id, context)
                         .map(ResponseEntity::ok)
         );
+    }
+
+    /**
+     * Все query-параметры URL, кроме page/pageSize/sort/order.
+     * <p>
+     * {@code toSingleValueMap()}: при дублях (?status.equals=a&status.equals=b) берётся одно значение.
+     */
+    static Map<String, String> extractColumnFilters(ServerWebExchange exchange) {
+        Map<String, String> allParams = exchange.getRequest().getQueryParams().toSingleValueMap();
+        return allParams.entrySet().stream()
+                .filter(entry -> !NOT_FILTER_QUERY_PARAMS.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

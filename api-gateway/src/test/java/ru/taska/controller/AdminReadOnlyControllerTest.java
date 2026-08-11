@@ -1,12 +1,14 @@
 package ru.taska.controller;
 
 import io.grpc.Status;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -183,6 +185,50 @@ class AdminReadOnlyControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("listTableRows: из exchange оставляет только column filters, без page/pageSize/sort/order")
+    void listTableRows_shouldExtractColumnFiltersFromExchange() {
+        mockAuthenticatedUser();
+
+        var response = new ReadOnlyTableRowsResponseDto();
+
+        Mockito.when(adminClient.listTableRows(
+                        Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/readonly/{service}/{table}")
+                        .queryParam("page", 0)
+                        .queryParam("pageSize", 20)
+                        .queryParam("order", "asc")
+                        .queryParam("status.equals", "active")
+                        .build(SERVICE_KEY, TABLE_NAME))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk();
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> filterCaptor = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(adminClient).listTableRows(
+                Mockito.eq(SERVICE_KEY),
+                Mockito.eq(TABLE_NAME),
+                Mockito.eq(0),
+                Mockito.eq(20),
+                Mockito.isNull(),
+                Mockito.eq("asc"),
+                filterCaptor.capture(),
+                Mockito.any(GatewayContext.class)
+        );
+
+        Assertions.assertThat(filterCaptor.getValue())
+                .doesNotContainKeys("page", "pageSize", "sort", "order")
+                .containsEntry("status.equals", "active");
     }
 
     @Test
