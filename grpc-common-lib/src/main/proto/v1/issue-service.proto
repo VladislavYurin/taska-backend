@@ -212,6 +212,12 @@ service IssueService {
    * Возвращает список всех меток, привязанных к задаче.
    */
   rpc ListIssueLabels(ListIssueLabelsRequest) returns (ListIssueLabelsResponse);
+
+  /**
+   * Возвращает список задач для доски.
+   */
+  rpc ListIssuesForBoard(ListIssuesForBoardRequest)
+      returns (ListIssuesForBoardResponse);
 }
 
 message AssignIssueRequest {
@@ -1724,4 +1730,77 @@ message GetIssueWatchStateResponse {
    * Количество подписчиков задачи.
    */
   int32 watchers_count = 2;
+}
+
+/**
+ * Запрос на получение спика задач для доски.
+ */
+message ListIssuesForBoardRequest{
+  /**
+   * Загловок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssuesForBoardRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка задач для доски.
+ */
+message ListIssuesForBoardRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Фильтр по типу задачи (опционально)
+   */
+  optional IssueType issue_type = 3;
+
+  /**
+   * Фильтр по идентификатору исполнителя (опционально).
+   */
+  optional string assignee_id = 4;
+
+  /**
+   * Фильтр по статусу задачи (опционально).
+   */
+  optional string status_key = 5;
+
+  /**
+   * Включать ли задачи в финальном статусе Done.
+   */
+  bool include_done = 6;
+
+  /**
+   * Размер страницы на одну колонку доски (опционально).
+   */
+  optional int32 page_size_per_column = 7;
+}
+
+/**
+ * Ответ список задач для доски.
+ */
+message IssueBoardResponse{
+  string id = 1;
+  string issue_key = 2;
+  string summary = 3;
+  IssueType issue_type = 4;
+  string status_key = 5;
+  string assignee_id = 6;
+  string reporter_id = 7;
+  IssuePriority priority = 8;
+}
+
+message ListIssuesForBoardResponse {
+  repeated IssueBoardResponse issues = 1;
 }
