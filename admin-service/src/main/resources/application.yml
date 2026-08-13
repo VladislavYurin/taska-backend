@@ -98,16 +98,11 @@ admin:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
-            credentials.provider:
-            credentials.failed_attempts:
-            credentials.subject: MASK_PARTIAL
-            credentials.algo: MASK_PARTIAL
-            credentials.meta: MASK_FULL
-            credentials.id: MASK_FULL
-            credentials.locked_until: HIDE
             credentials.secret_hash: HIDE
-            refresh_tokens.token_hash:
-            invite_tokens.token_hash:
+            credentials.algo:
+            credentials.meta:
+            refresh_tokens.token_hash: HIDE
+            invite_tokens.token_hash: HIDE
       project:
         alias: project
         schema: taska
