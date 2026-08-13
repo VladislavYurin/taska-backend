@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueType;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.criteria.SearchCriteria;
 import ru.taska.repository.builder.SearchQueryBuilder;
@@ -189,4 +190,42 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     }
 
     // ==================== Окончание поиска issues с фильтрами ====================
+
+    @Override
+    public Flux<Issue> findForBoard(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            Integer pageSizePerColumn
+    ) {
+        Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
+        Query query = Query.query(criteria)
+                .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
+        if (pageSizePerColumn != null) {
+            query = query.limit(pageSizePerColumn);
+        }
+
+        return r2dbcEntityTemplate.select(query, Issue.class);
+
+    }
+
+    private Criteria buildBoardCriteria(UUID projectId, IssueType issueType, UUID assigneeId, String statusKey, boolean includeDone) {
+        Criteria criteria = Criteria.where("project_id").is(projectId)
+                .and("deleted_at").isNull();
+        if (issueType != null) {
+            criteria = criteria.and("issue_type").is(issueType.name());
+        }
+        if (assigneeId != null) {
+            criteria = criteria.and("assignee_id").is(assigneeId);
+        }
+        if (statusKey != null) {
+            criteria = criteria.and("status_key").is(statusKey);
+        }
+        if (!includeDone) {
+            criteria = criteria.and("status_key").not("DONE");
+        }
+        return criteria;
+    }
 }

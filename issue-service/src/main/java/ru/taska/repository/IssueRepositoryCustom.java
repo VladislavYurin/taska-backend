@@ -81,4 +81,13 @@ public interface IssueRepositoryCustom {
             String issueType,
             String searchQuery
     );
+
+    Flux<Issue> findForBoard(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            Integer pageSizePerColumn
+    );
 }
