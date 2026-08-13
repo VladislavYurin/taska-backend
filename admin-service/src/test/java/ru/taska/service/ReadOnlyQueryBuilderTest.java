@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import ru.taska.config.props.MaskType;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.dto.FilterOperatorsDto;
 import ru.taska.exception.DomainException;
@@ -64,6 +65,7 @@ class ReadOnlyQueryBuilderTest {
     void setUp() {
         properties = new MetadataCatalogProperties(
                 new MetadataCatalogProperties.PaginationProperties(0, 20, 100),
+                MaskType.MASK_FULL,
                 Map.of(TEST_SERVICE, new MetadataCatalogProperties.ServiceProperties(
                         "test-alias",
                         "taska",
