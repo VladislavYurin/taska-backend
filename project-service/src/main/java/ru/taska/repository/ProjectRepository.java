@@ -18,6 +18,10 @@ public interface ProjectRepository extends R2dbcRepository<Project, UUID> {
 
     Mono<Project> findByProjectKey(String projectKey);
 
-    @Query("SELECT p.*, pm.user_id as user_id FROM taska.projects p LEFT JOIN taska.project_members pm ON p.id = pm.project_id AND pm.user_id = :userId WHERE p.id = :projectId")
+    @Query("SELECT p.id as project_id, p.project_key as project_key, p.name, " +
+            "p.created_by as created_by, p.created_at as created_at, " +
+            "p.updated_at as updated_at, p.archived_at as archived_at, " +
+            "pm.user_id as user_id " +
+            "FROM taska.projects p LEFT JOIN taska.project_members pm ON p.id = pm.project_id AND pm.user_id = :userId WHERE p.id = :projectId")
     Mono<ProjectCheckMembershipDto> findProjectMemberShipDtoByProjectIdAndUserId(UUID projectId, UUID userId);
 }
