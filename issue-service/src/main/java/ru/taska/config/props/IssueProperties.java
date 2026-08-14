@@ -30,7 +30,14 @@ public record IssueProperties(
             Set<ProjectRole> viewAttachmentRoles,
             Set<ProjectRole> deleteOwnAttachmentRoles,
             Set<ProjectRole> deleteAttachmentRoles,
-            Set<ProjectRole> commentRoles
+            Set<ProjectRole> commentRoles,
+            Set<ProjectRole> createProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> updateProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> deleteProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> listProjectLabelRoles,     // VIEWER+
+            Set<ProjectRole> addIssueLabelRoles,        // MEMBER+
+            Set<ProjectRole> removeIssueLabelRoles,     // MEMBER+
+            Set<ProjectRole> listIssueLabelRoles        // VIEWER+
     ) {
     }
 

@@ -7,11 +7,14 @@ import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.IssuePriority;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -46,6 +49,9 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
+    private static final String LABEL_ID = "labelId";
+    private static final String LABEL_NAME = "labelName";
+    private static final String LABEL_COLOR = "labelColor";
 
     private final ObjectMapper objectMapper;
 
@@ -306,6 +312,35 @@ public class PayloadSerializer {
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());
 
+        return node;
+    }
+
+    //  Методы для работы с метками
+    /**
+     * Создает {@link JsonNode} с данными о добавленной метке к задаче.
+     *
+     * @param label добавленная метка
+     * @return {@link JsonNode} с метаданными метки
+     */
+    public JsonNode createLabelAddedPayload(ProjectLabels label) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(LABEL_ID, label.getId().toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(LABEL_COLOR, label.getColor());
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об удаленной метке с задачи.
+     *
+     * @param label удаленная метка
+     * @return {@link JsonNode} с метаданными метки
+     */
+    public JsonNode createLabelRemovedPayload(ProjectLabels label) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(LABEL_ID, label.getId().toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(LABEL_COLOR, label.getColor());
         return node;
     }
 }

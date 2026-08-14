@@ -66,7 +66,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        "TODO", ASSIGNEE_ID, 0, 10)
+                        "TODO", ASSIGNEE_ID, null, 0, 10)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
@@ -91,7 +91,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 0, 10)
+                        null, null, null, 0, 10)
                 )
                 .assertNext(result -> Assertions.assertThat(result.items()).containsExactly(issue))
                 .verifyComplete();
@@ -114,7 +114,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 0, 10)
+                        null, null, null, 0, 10)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isZero();
@@ -140,7 +140,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        "TODO", null, 0, 10)
+                        "TODO", null, null, 0, 10)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
@@ -164,7 +164,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 0, 10)
+                        null, null, null, 0, 10)
                 )
                 .expectErrorMatches(ex -> ex instanceof RuntimeException
                         && ex.getMessage().equals("DB error"))
@@ -186,7 +186,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 2, 5)
+                        null, null, null, 2, 5)
                 )
                 .assertNext(result -> Assertions.assertThat(result.totalCount()).isEqualTo(10))
                 .verifyComplete();
@@ -208,7 +208,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, -1, 10)
+                        null, null, null, -1, 10)
                 )
                 .assertNext(result ->
                         Assertions.assertThat(result.items()).isEmpty())
@@ -231,7 +231,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 0, 0)
+                        null, null, null, 0, 0)
                 )
                 .assertNext(result -> Assertions.assertThat(result.items()).isEmpty())
                 .verifyComplete();
@@ -253,7 +253,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, 0, Integer.MAX_VALUE)
+                        null, null, null, 0, Integer.MAX_VALUE)
                 )
                 .assertNext(result -> Assertions.assertThat(result.items()).isEmpty())
                 .verifyComplete();
@@ -276,7 +276,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, null, null, null)
+                        null, null, null, null, null)
                 )
                 .assertNext(result -> Assertions.assertThat(result.items()).isEmpty())
                 .verifyComplete();
@@ -316,7 +316,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        null, ASSIGNEE_ID, 0, 10
+                        null, ASSIGNEE_ID, null, 0, 10
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(3);
@@ -369,7 +369,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        "IN_REVIEW", ASSIGNEE_ID, 0, 10
+                        "IN_REVIEW", ASSIGNEE_ID, null, 0, 10
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
@@ -422,7 +422,7 @@ class ListIssuesTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID,
-                        unknownStatusKey, ASSIGNEE_ID, 0, 10
+                        unknownStatusKey, ASSIGNEE_ID, null, 0, 10
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isZero();

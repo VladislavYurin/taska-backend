@@ -23,6 +23,8 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
   ISSUE_EVENT_TYPE_COMMENT_UPDATED = 11;
   ISSUE_EVENT_TYPE_COMMENT_DELETED = 12;
+  ISSUE_EVENT_TYPE_LABEL_ADDED = 13;
+  ISSUE_EVENT_TYPE_LABEL_REMOVED = 14;
 }
 
 enum IssueType {
@@ -139,6 +141,23 @@ service IssueService {
    */
   rpc ListIssueComments(ListIssueCommentsRequest)
       returns (ListIssueCommentsResponse);
+
+  // Управление метками проекта (только ADMIN)
+
+  rpc CreateProjectLabel(CreateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  rpc UpdateProjectLabel(UpdateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  rpc DeleteProjectLabel(DeleteProjectLabelRequest) returns (DeleteProjectLabelResponse);
+
+  rpc ListProjectLabels(ListProjectLabelsRequest) returns (ListProjectLabelsResponse);
+
+  // Управление метками задачи (MEMBER/ADMIN)
+  rpc AddIssueLabel(AddIssueLabelRequest) returns (AddIssueLabelResponse);
+
+  rpc RemoveIssueLabel(RemoveIssueLabelRequest) returns (RemoveIssueLabelResponse);
+
+  rpc ListIssueLabels(ListIssueLabelsRequest) returns (ListIssueLabelsResponse);
 }
 
 message AssignIssueRequest {
@@ -348,6 +367,11 @@ message ListIssuesRequestBody {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 6;
+
+  /**
+   * Фильтр по идентификатору метки (опционально).
+   */
+  optional string label_id = 7;
 }
 
 message TransitionIssueRequest {
@@ -626,6 +650,134 @@ message IssueResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 15;
+
+  /**
+   * Идентификатор лейбла.
+   */
+  repeated ProjectLabelResponse labels = 16;
+}
+
+// Метка проекта
+message ProjectLabelResponse {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  string color = 4;
+  string created_by = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp deleted_at = 7;
+}
+
+// Запрос на создание метки проекта
+message CreateProjectLabelRequest {
+  ru.taska.common.v1.Header header = 1;
+  CreateProjectLabelRequestBody body = 2;
+}
+
+message CreateProjectLabelRequestBody {
+  string project_id = 1;
+  string name = 2;
+  string color = 3;
+  string created_by = 4;  // только ADMIN
+}
+
+// Запрос на обновление метки проекта
+message UpdateProjectLabelRequest {
+  ru.taska.common.v1.Header header = 1;
+  UpdateProjectLabelRequestBody body = 2;
+}
+
+message UpdateProjectLabelRequestBody {
+  string label_id = 1;
+  string project_id = 2;
+  string name = 3;
+  string color = 4;
+  string actor_user_id = 5;  // ADMIN
+}
+
+// Запрос на удаление метки проекта
+message DeleteProjectLabelRequest {
+  ru.taska.common.v1.Header header = 1;
+  DeleteProjectLabelRequestBody body = 2;
+}
+
+message DeleteProjectLabelRequestBody {
+  string label_id = 1;
+  string project_id = 2;
+  string actor_user_id = 3;  // ADMIN
+}
+
+message DeleteProjectLabelResponse {
+  string label_id = 1;
+  string project_id = 2;
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
+// Запрос на получение списка меток проекта
+message ListProjectLabelsRequest {
+  ru.taska.common.v1.Header header = 1;
+  ListProjectLabelsRequestBody body = 2;
+}
+
+message ListProjectLabelsRequestBody {
+  string project_id = 1;
+  string actor_user_id = 2;  // VIEWER+
+}
+
+message ListProjectLabelsResponse {
+  repeated ProjectLabelResponse labels = 1;
+  int32 total_count = 2;
+}
+
+// Запрос на добавление метки к задаче
+message AddIssueLabelRequest {
+  ru.taska.common.v1.Header header = 1;
+  AddIssueLabelRequestBody body = 2;
+}
+
+message AddIssueLabelRequestBody {
+  string issue_id = 1;
+  string label_id = 2;
+  string actor_user_id = 3;  //(он же created_by) MEMBER+
+}
+
+message AddIssueLabelResponse {
+  string issue_id = 1;
+  string label_id = 2;
+  string created_by = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// Запрос на удаление метки с задачи
+message RemoveIssueLabelRequest {
+  ru.taska.common.v1.Header header = 1;
+  RemoveIssueLabelRequestBody body = 2;
+}
+
+message RemoveIssueLabelRequestBody {
+  string issue_id = 1;
+  string label_id = 2;
+  string actor_user_id = 3;  // MEMBER+
+}
+
+message RemoveIssueLabelResponse {
+  string issue_id = 1;
+  string label_id = 2;
+}
+
+// Запрос на получение меток задачи
+message ListIssueLabelsRequest {
+  ru.taska.common.v1.Header header = 1;
+  ListIssueLabelsRequestBody body = 2;
+}
+
+message ListIssueLabelsRequestBody {
+  string issue_id = 1;
+  string actor_user_id = 2; // VIEWER+
+}
+
+message ListIssueLabelsResponse {
+  repeated ProjectLabelResponse labels = 1;
 }
 
 message IssueHistoryResponse {

@@ -10,11 +10,13 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.labels.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -24,6 +26,7 @@ import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.ProjectCounterRepository;
+import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.IssueService;
 import ru.taska.service.OutboxEventService;
@@ -36,6 +39,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -60,6 +64,7 @@ public class IssueServiceImpl implements IssueService {
     private final ProjectRoleChecker projectRoleChecker;
     private final ObjectMapper objectMapper;
     private final IssueHistoryRepository issueHistoryRepository;
+    private final IssueLabelsRepository issueLabelsRepository;
 
     @Override
     @Transactional
@@ -252,6 +257,9 @@ public class IssueServiceImpl implements IssueService {
                 });
     }
 
+    /**
+     * Возвращает IssueWithHistory с лейблами
+     */
     @Override
     public Mono<IssueWithHistory> getIssue(
             String requestId,
@@ -270,14 +278,25 @@ public class IssueServiceImpl implements IssueService {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().getIssueRoles();
 
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue)
-
-                            .flatMap(gettingIssue -> issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
-                                    .collectList()
-                                    .map(history -> new IssueWithHistory(issue, history)));
-                });
+                            .thenReturn(issue);
+                })
+                .flatMap(issue ->
+                        issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
+                        .collectList()
+                        .zipWith(issueLabelsRepository.findLabelsByIssueId(issueId)
+                                .collectList()
+                        )
+                        .map(tuple->{
+                            List<IssueHistory> history = tuple.getT1();
+                            List<ProjectLabels> labels = tuple.getT2();
+                            return new IssueWithHistory(issue, history, labels);
+                        })
+                );
     }
 
+    /**
+     * Возвращает listIssues
+     */
     @Override
     public Mono<PageResult<Issue>> listIssues(
             String requestId,
@@ -286,6 +305,7 @@ public class IssueServiceImpl implements IssueService {
             UUID actorUserId,
             String statusKey,
             UUID assigneeId,
+            UUID labelId,
             Integer page,
             Integer pageSize
     ) {
@@ -298,10 +318,17 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(Mono.zip(
-                        issueRepository.countByFilter(projectId, statusKey, assigneeId),
-                        issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset)
-                                .collectList()
-                ).map(t -> new PageResult<>(t.getT2(), t.getT1())));
+                        //Если будет lable не будет указан в query (null) - разделение логики
+                        labelId != null
+                                ? issueRepository.countByLabelIdWithFilters(projectId, labelId, statusKey, assigneeId)
+                                : issueRepository.countByFilter(projectId, statusKey, assigneeId)
+                        ,
+                        labelId != null
+                                ? issueRepository.findByLabelIdWithFilters(projectId, labelId, statusKey, assigneeId, resolvedPageSize, offset).collectList()
+                                : issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset).collectList()
+                        )
+                )
+                .map(t -> new PageResult<>(t.getT2(), t.getT1()));
     }
 
     private int validatePage(Integer page) {
