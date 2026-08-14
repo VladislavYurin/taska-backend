@@ -49,9 +49,11 @@ public class SensitiveColumnMaskService {
     ) {
         Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey, tableName);
 
-        if (!sensitiveColumns.isEmpty()) {
-            log.info("[{}][{}] Masking sensitive columns {} for table {}.{}", requestId, nodeId, sensitiveColumns, serviceKey, tableName);
+        if (sensitiveColumns.isEmpty()) {
+            return rows;
         }
+
+        log.info("[{}][{}] Masking sensitive columns {} for table {}.{}", requestId, nodeId, sensitiveColumns.keySet(), serviceKey, tableName);
 
         return rows.stream()
                 .map(row -> maskRow(row, sensitiveColumns))
@@ -96,14 +98,13 @@ public class SensitiveColumnMaskService {
             return Collections.emptyMap();
         }
 
-        MaskType defaultMaskType = properties.defaultMaskType();
         String prefix = tableName + ".";
 
         Map<String, MaskType> result = new HashMap<>();
         for (var entry : serviceProps.tables().sensitiveColumns().entrySet()) {
             if (entry.getKey().startsWith(prefix)) {
                 String columnName = entry.getKey().substring(prefix.length());
-                MaskType maskType = parseMaskType(entry.getValue(), defaultMaskType);
+                MaskType maskType = parseMaskType(entry.getValue());
                 result.put(columnName, maskType);
             }
         }
@@ -114,9 +115,9 @@ public class SensitiveColumnMaskService {
      * Конвертирует строковое значение типа маскировки в {@link MaskType}.
      * Если значение null или пустое — возвращает дефолтный тип.
      */
-    private MaskType parseMaskType(String value, MaskType defaultMaskType) {
+    private MaskType parseMaskType(String value) {
         if (value == null || value.isBlank()) {
-            return defaultMaskType;
+            return properties.defaultMaskType();
         }
         return MaskType.valueOf(value);
     }
