@@ -8,7 +8,7 @@ import ru.taska.dto.ListTableRowsResponseDto;
 
 public interface AdminReadonlyService {
 
-    Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto);
+    Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto, String requestId, String nodeId);
 
-    Mono<GetTableRowByIdResponseDto> getTableRowById(GetTableRowByIdRequestDto requestDto);
+    Mono<GetTableRowByIdResponseDto> getTableRowById(GetTableRowByIdRequestDto requestDto, String requestId, String nodeId);
 }

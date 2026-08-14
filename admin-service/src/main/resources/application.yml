@@ -79,9 +79,11 @@ admin:
   # allow — если список непустой, в каталог попадают только эти таблицы;
   #         пустой список означает «разрешены все».
   # deny — таблицы, которые не возвращаются в каталоге (приоритет над allow).
-  # sensitive-columns — колонки в формате table.column, помечаемые как секретные (флаг в ответе).
+  # sensitive-columns — колонки в формате table.column → тип маскировки (MASK_FULL, MASK_PARTIAL, HIDE).
+  #                     Если тип не указан — используется default-mask-type.
   # Менять без правки кода — только этот файл или env.
   metadata:
+    default-mask-type: MASK_FULL
     pagination:
       default-page: ${ADMIN_PAGINATION_DEFAULT_PAGE:0}
       default-page-size: ${ADMIN_PAGINATION_DEFAULT_PAGE_SIZE:20}
@@ -96,11 +98,11 @@ admin:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
-            - users.password_hash
-            - users.token_hash
-            - users.secret_hash
-            - users.refresh_token
-            - users.access_token
+            credentials.secret_hash: HIDE
+            credentials.algo:
+            credentials.meta:
+            refresh_tokens.token_hash: HIDE
+            invite_tokens.token_hash: HIDE
       project:
         alias: project
         schema: taska
@@ -109,7 +111,7 @@ admin:
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: {}
       issue:
         alias: issue
         schema: taska
@@ -118,7 +120,8 @@ admin:
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns:
+            idempotency_keys.request_hash:
       workflow:
         alias: workflow
         schema: taska
@@ -127,7 +130,7 @@ admin:
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: {}
       notification:
         alias: notification
         schema: taska
@@ -136,7 +139,9 @@ admin:
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns:
+            notification_preferences.email: MASK_PARTIAL
+            email_delivery_attempts.to_email: MASK_PARTIAL
       admin:
         alias: admin
         schema: taska
@@ -145,7 +150,7 @@ admin:
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: {}
 
 management:
   endpoints:

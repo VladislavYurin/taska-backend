@@ -97,7 +97,9 @@ public class MetadataService {
     ) {
         Set<String> allow = Set.copyOf(tableProps.allow());
         Set<String> deny = Set.copyOf(tableProps.deny());
-        Set<String> sensitiveColumns = Set.copyOf(tableProps.sensitiveColumns());
+        Set<String> sensitiveColumns = tableProps.sensitiveColumns() != null
+                ? tableProps.sensitiveColumns().keySet()
+                : Set.of();
 
         Set<String> pkKeys = primaryKeys.stream()
                 .map(pk -> pk.tableName() + "." + pk.columnName())

@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.config.props.MaskType;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.dto.FilterOperatorsDto;
@@ -72,9 +73,9 @@ class AdminReadonlyServiceImplTest {
         MetadataCatalogProperties.PaginationProperties pagination =
                 new MetadataCatalogProperties.PaginationProperties(DEFAULT_PAGE, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         MetadataCatalogProperties catalogProperties =
-                new MetadataCatalogProperties(pagination, Map.of(
+                new MetadataCatalogProperties(pagination, MaskType.MASK_FULL, Map.of(
                         TEST_SERVICE, new MetadataCatalogProperties.ServiceProperties(
-                                TEST_SERVICE, TEST_SCHEMA, new MetadataCatalogProperties.TableProperties(List.of(), List.of(), List.of()))
+                                TEST_SERVICE, TEST_SCHEMA, new MetadataCatalogProperties.TableProperties(List.of(), List.of(), Map.of()))
                 ));
         adminService = new AdminReadonlyServiceImpl(
                 catalogProperties, maskService, metadataService,
@@ -114,7 +115,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto requestDto = listRequest(PAGE, PAGE_SIZE);
 
-        StepVerifier.create(adminService.listTableRows(requestDto))
+        StepVerifier.create(adminService.listTableRows(requestDto, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.maskedRows()).hasSize(1);
                     Assertions.assertThat(response.total()).isEqualTo(1L);
@@ -138,10 +139,10 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(Flux.empty());
         Mockito.when(readOnlyRepository.countRows(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString()))
+        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(List.of());
 
-        StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE)))
+        StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE), "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.maskedRows()).isEmpty();
                     Assertions.assertThat(response.total()).isEqualTo(0L);
@@ -157,7 +158,7 @@ class AdminReadonlyServiceImplTest {
                         Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenThrow(new DomainException(DomainStatus.PERMISSION_DENIED, "Table not accessible: " + TEST_TABLE));
 
-        StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE)))
+        StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE), "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
                         && de.getStatus() == DomainStatus.PERMISSION_DENIED)
                 .verify();
@@ -168,7 +169,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto request = listRequest(-1, PAGE_SIZE);
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> Assertions.assertThat(response.page()).isEqualTo(DEFAULT_PAGE))
                 .verifyComplete();
 
@@ -180,7 +181,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto request = listRequest(PAGE, 0);
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> Assertions.assertThat(response.pageSize()).isEqualTo(DEFAULT_PAGE_SIZE))
                 .verifyComplete();
 
@@ -192,7 +193,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto request = listRequest(PAGE, MAX_PAGE_SIZE + 1);
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> Assertions.assertThat(response.pageSize()).isEqualTo(MAX_PAGE_SIZE))
                 .verifyComplete();
 
@@ -204,7 +205,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto request = listRequest(null, PAGE_SIZE);
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> Assertions.assertThat(response.page()).isEqualTo(DEFAULT_PAGE))
                 .verifyComplete();
 
@@ -216,7 +217,7 @@ class AdminReadonlyServiceImplTest {
         stubListSuccessPath();
         ListTableRowsRequestDto request = listRequest(PAGE, null);
 
-        StepVerifier.create(adminService.listTableRows(request))
+        StepVerifier.create(adminService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> Assertions.assertThat(response.pageSize()).isEqualTo(DEFAULT_PAGE_SIZE))
                 .verifyComplete();
 
@@ -248,10 +249,10 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(byIdQuery);
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.just(row));
-        Mockito.when(maskService.maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE))
+        Mockito.when(maskService.maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
                 .thenReturn(List.of(maskedRow));
 
-        StepVerifier.create(adminService.getTableRowById(request))
+        StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.row()).containsEntry("id", testId);
                     Assertions.assertThat(response.row()).containsEntry("email", "***");
@@ -275,10 +276,48 @@ class AdminReadonlyServiceImplTest {
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.empty());
 
-        StepVerifier.create(adminService.getTableRowById(request))
+        StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
+    }
+
+    @Test
+    void listTableRows_shouldCallMaskService() {
+        stubListSuccessPath();
+
+        StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE), "test-request-id", "test-node-id"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        Mockito.verify(maskService).maskSensitiveColumns(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
+    }
+
+    @Test
+    void getTableRowById_shouldCallMaskService() {
+        String testId = "550e8400-e29b-41d4-a716-446655440000";
+        GetTableRowByIdRequestDto request = new GetTableRowByIdRequestDto(TEST_SERVICE, TEST_TABLE, testId);
+
+        SqlQuery byIdQuery = new SqlQuery(
+                "SELECT * FROM users WHERE \"id\" = $1", List.of(testId)
+        );
+
+        Map<String, Object> row = Map.of("id", testId, "email", "test@example.com");
+
+        Mockito.when(metadataService.getPrimaryKeyColumn(TEST_SERVICE, TEST_TABLE))
+                .thenReturn(Mono.just("id"));
+        Mockito.when(queryBuilder.buildSafeGetByIdQuery(TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, "id", testId))
+                .thenReturn(byIdQuery);
+        Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
+                .thenReturn(Flux.just(row));
+        Mockito.when(maskService.maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
+                .thenReturn(List.of(row));
+
+        StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        Mockito.verify(maskService).maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
     }
 
     @Test
@@ -289,7 +328,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                         "No primary key found for table: " + TEST_TABLE)));
 
-        StepVerifier.create(adminService.getTableRowById(request))
+        StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
@@ -317,7 +356,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(Flux.fromIterable(rows));
         Mockito.when(readOnlyRepository.countRows(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
                 .thenReturn(Mono.just(1L));
-        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString()))
+        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(maskedRows);
     }
 

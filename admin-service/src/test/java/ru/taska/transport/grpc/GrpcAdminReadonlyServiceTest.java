@@ -110,14 +110,14 @@ class GrpcAdminReadonlyServiceTest {
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
 
         Mockito.when(listTableRowsMapper.toRequestDto(grpcRequest)).thenReturn(requestDto);
-        Mockito.when(adminReadonlyService.listTableRows(requestDto)).thenReturn(Mono.just(responseDto));
+        Mockito.when(adminReadonlyService.listTableRows(requestDto, REQUEST_ID, NODE_ID)).thenReturn(Mono.just(responseDto));
         Mockito.when(listTableRowsMapper.toListTableRowsResponse(responseDto)).thenReturn(grpcResponse);
 
         StepVerifier.create(grpcAdminReadonlyService.listTableRows(Mono.just(grpcRequest)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
 
-        Mockito.verify(adminReadonlyService).listTableRows(requestDto);
+        Mockito.verify(adminReadonlyService).listTableRows(requestDto, REQUEST_ID, NODE_ID);
     }
 
     @Test
@@ -136,14 +136,14 @@ class GrpcAdminReadonlyServiceTest {
         GetTableRowByIdResponse grpcResponse = GetTableRowByIdResponse.newBuilder().build();
 
         Mockito.when(listTableRowsMapper.toGetByIdRequestDto(grpcRequest)).thenReturn(requestDto);
-        Mockito.when(adminReadonlyService.getTableRowById(requestDto)).thenReturn(Mono.just(responseDto));
+        Mockito.when(adminReadonlyService.getTableRowById(requestDto, REQUEST_ID, NODE_ID)).thenReturn(Mono.just(responseDto));
         Mockito.when(listTableRowsMapper.toGetTableRowByIdResponse(responseDto)).thenReturn(grpcResponse);
 
         StepVerifier.create(grpcAdminReadonlyService.getTableRowById(Mono.just(grpcRequest)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
 
-        Mockito.verify(adminReadonlyService).getTableRowById(requestDto);
+        Mockito.verify(adminReadonlyService).getTableRowById(requestDto, REQUEST_ID, NODE_ID);
     }
 
     private static Header validHeader() {

@@ -79,7 +79,7 @@ public class GrpcAdminReadonlyService {
                     ListTableRowsRequestDto requestDto = listTableRowsMapper.toRequestDto(req);
 
                     // Бизнес-логика
-                    return adminReadonlyService.listTableRows(requestDto)
+                    return adminReadonlyService.listTableRows(requestDto, requestId, nodeId)
                             .map(listTableRowsMapper::toListTableRowsResponse);
                 }));
     }
@@ -104,7 +104,7 @@ public class GrpcAdminReadonlyService {
                             req.getBody().getTableName(),
                             req.getBody().getId());
 
-                    return adminReadonlyService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req))
+                    return adminReadonlyService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req), requestId, nodeId)
                             .map(listTableRowsMapper::toGetTableRowByIdResponse);
                 }));
     }

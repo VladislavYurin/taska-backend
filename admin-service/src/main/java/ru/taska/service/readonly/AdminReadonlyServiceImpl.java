@@ -34,7 +34,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
     private final FilterParser filterParser;
 
     @Override
-    public Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto) {
+    public Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto, String requestId, String nodeId) {
         return Mono.defer(() -> {
             log.debug("listTableRows request: service='{}', table='{}', page={}, pageSize={}, sort='{}', order='{}'",
                     requestDto.serviceKey(), requestDto.tableName(), requestDto.page(),
@@ -69,7 +69,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                                     readOnlyRepository.countRows(serviceKey, safeQuery.countQuery().parameterizedQuery(), safeQuery.countQuery().params())
                                             .map(total -> {
                                                 List<Map<String, Object>> maskedRows = maskService.maskSensitiveColumns(
-                                                        rows, serviceKey, tableName
+                                                        rows, serviceKey, tableName, requestId, nodeId
                                                 );
                                                 return new ListTableRowsResponseDto(
                                                         maskedRows, total, page, pageSize,
@@ -82,7 +82,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
     }
 
     @Override
-    public Mono<GetTableRowByIdResponseDto> getTableRowById(GetTableRowByIdRequestDto requestDto) {
+    public Mono<GetTableRowByIdResponseDto> getTableRowById(GetTableRowByIdRequestDto requestDto, String requestId, String nodeId) {
         return Mono.defer(() -> {
             String serviceKey = requestDto.serviceKey();
             String tableName = requestDto.tableName();
@@ -107,7 +107,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                                 }))
                                 .map(row -> {
                                     Map<String, Object> maskedRow = maskService.maskSensitiveColumns(
-                                            List.of(row), serviceKey, tableName
+                                            List.of(row), serviceKey, tableName, requestId, nodeId
                                     ).getFirst();
                                     return new GetTableRowByIdResponseDto(maskedRow);
                                 });

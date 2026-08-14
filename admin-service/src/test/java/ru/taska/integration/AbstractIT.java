@@ -57,8 +57,8 @@ public abstract class AbstractIT {
         registerReadonly(registry, "admin");
 
         // Sensitive column for mask wiring check in AdminReadOnlyServiceIT (unit covers mask rules).
-        registry.add("admin.metadata.services.admin.tables.sensitive-columns[0]",
-                () -> FIXTURE_TABLE + ".email");
+        registry.add("admin.metadata.services.admin.tables.sensitive-columns." + FIXTURE_TABLE + ".email",
+                () -> "MASK_FULL");
     }
 
     private static void registerReadonly(DynamicPropertyRegistry registry, String dbKey) {

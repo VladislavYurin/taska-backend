@@ -65,7 +65,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 Map.of()
         );
 
-        StepVerifier.create(adminReadonlyService.listTableRows(request))
+        StepVerifier.create(adminReadonlyService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.total()).isEqualTo(2L);
                     Assertions.assertThat(response.maskedRows()).hasSize(2);
@@ -88,7 +88,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 Map.of("login.equals", FIXTURE_USER_LOGIN)
         );
 
-        StepVerifier.create(adminReadonlyService.listTableRows(request))
+        StepVerifier.create(adminReadonlyService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.total()).isEqualTo(1L);
                     Assertions.assertThat(response.maskedRows()).hasSize(1);
@@ -108,7 +108,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 FIXTURE_USER_ID
         );
 
-        StepVerifier.create(adminReadonlyService.getTableRowById(request))
+        StepVerifier.create(adminReadonlyService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.row().get("id").toString()).isEqualTo(FIXTURE_USER_ID);
                     Assertions.assertThat(response.row().get("login")).isEqualTo(FIXTURE_USER_LOGIN);
@@ -125,7 +125,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 "00000000-0000-0000-0000-000000000000"
         );
 
-        StepVerifier.create(adminReadonlyService.getTableRowById(request))
+        StepVerifier.create(adminReadonlyService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
