@@ -23,11 +23,10 @@ public interface ProjectService {
     /**
      * Возвращает проект из БД по Id
      *
-     * @param projectId   айди проекта
-     * @param actorUserId aйди актора, для проверки доступа (вхождения) в проект
+     * @param projectId айди проекта
      * @return Mono<{@link Project}> проект из БД по запросу
      */
-    Mono<Project> getProject(String requestId, String nodeId, UUID projectId, UUID actorUserId);
+    Mono<Project> getProject(String requestId, String nodeId, UUID projectId);
 
     /**
      * Возвращает список всех проектов пользователя по его Id

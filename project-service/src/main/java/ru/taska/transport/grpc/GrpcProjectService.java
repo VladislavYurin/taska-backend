@@ -67,17 +67,15 @@ public class GrpcProjectService  {
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(),"body.actorUserId")))
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")))
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
-                    UUID actorUserId = t.getT4();
-                    //Получаем actorUserId и передаем его в projectService для проверки membership
-                    log.info("[{}][{}] Received request to getProject: projectId={}, from user={}", requestId, nodeId, projectId,actorUserId);
 
-                    return projectService.getProject(requestId, nodeId, projectId,actorUserId);
+                    log.info("[{}][{}] Received request to getProject: projectId={}", requestId, nodeId, projectId);
+
+                    return projectService.getProject(requestId, nodeId, projectId);
                 })
                 .map(projectMapper::toProjectResponse);
     }
