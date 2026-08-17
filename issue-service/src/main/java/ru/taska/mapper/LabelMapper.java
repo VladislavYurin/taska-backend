@@ -110,6 +110,9 @@ public class LabelMapper {
     }
 
     public LabelResponses.ListProjectLabelResponseDto toListProjectLabelResponseDto(List<ProjectLabels> labels) {
+        if (labels == null || labels.isEmpty()) {
+            return LabelResponses.ListProjectLabelResponseDto.of(List.of());
+        }
         var infos = labels.stream()
                 .map(this::toProjectLabelInfo)
                 .toList();
@@ -117,6 +120,9 @@ public class LabelMapper {
     }
 
     public LabelResponses.ListIssueLabelResponseDto toListIssueLabelResponseDto(List<ProjectLabels> labels) {
+        if (labels == null || labels.isEmpty()) {
+            return LabelResponses.ListIssueLabelResponseDto.of(List.of());
+        }
         var infos = labels.stream()
                 .map(this::toProjectLabelInfo)
                 .toList();
@@ -202,7 +208,7 @@ public class LabelMapper {
     }
 
     /// ===== Взаимодействие меток с ISSUE =====
-    ///
+
     public AddIssueLabelResponse toAddIssueLabelProtoResponse(LabelResponses.AddIssueLabelResponseDto responseDto) {
         var builder = AddIssueLabelResponse.newBuilder()
                 .setIssueId(responseDto.issueId().toString())

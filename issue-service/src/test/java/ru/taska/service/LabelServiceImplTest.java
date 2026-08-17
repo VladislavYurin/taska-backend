@@ -27,14 +27,13 @@ import ru.taska.mapper.LabelMapper;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.repository.labels.ProjectLabelsRepository;
-import ru.taska.service.IssueHistoryService;
-import ru.taska.service.OutboxEventService;
 import ru.taska.service.impl.LabelServiceImpl;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -384,8 +383,8 @@ class LabelServiceImplTest {
     }
 
     @Test
-    @DisplayName("listProjectLabels: должен выбросить NOT_FOUND если меток нет")
-    void shouldThrowNotFoundWhenNoLabels() {
+    @DisplayName("listProjectLabels: должен вернуть пустой список если меток нет")
+    void shouldReturnEmptyListWhenNoLabels() {
         // Arrange
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listProjectLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
@@ -396,17 +395,17 @@ class LabelServiceImplTest {
         Mockito.when(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(any()))
                 .thenReturn(Flux.empty());
 
+        Mockito.when(mapper.toListProjectLabelResponseDto(anyList()))
+                .thenReturn(LabelResponses.ListProjectLabelResponseDto.of(List.of()));
+
         var listRequestDto = new LabelCommands.ListProjectLabelsRequestDto(PROJECT_ID, ADMIN_ID);
 
         // Act & Assert
         StepVerifier.create(labelService.listProjectLabels(REQUEST_ID, NODE_ID, listRequestDto))
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertThat(error).isInstanceOf(DomainException.class);
-                    DomainException ex = (DomainException) error;
-                    Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.NOT_FOUND);
-                    Assertions.assertThat(ex.getMessage()).contains("No labels for project");
+                .assertNext(dto -> {
+                    Assertions.assertThat(dto.labels()).isEmpty();
                 })
-                .verify();
+                .verifyComplete();
     }
 
     // ===== REMOVE ISSUE LABEL TESTS =====
@@ -538,8 +537,8 @@ class LabelServiceImplTest {
     }
 
     @Test
-    @DisplayName("listIssueLabels: должен выбросить NOT_FOUND если у задачи нет меток")
-    void shouldThrowNotFoundWhenIssueHasNoLabels() {
+    @DisplayName("listIssueLabels: должен вернут пустой список если у задачи нет меток")
+    void shouldReturnEmptyWhenIssueHasNoLabels() {
         // Arrange
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listIssueLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
@@ -554,17 +553,17 @@ class LabelServiceImplTest {
         Mockito.when(issueLabelsRepository.findLabelsByIssueId(any()))
                 .thenReturn(Flux.empty());
 
+        Mockito.when(mapper.toListIssueLabelResponseDto(anyList()))
+                .thenReturn(LabelResponses.ListIssueLabelResponseDto.of(List.of()));
+
         var listRequestDto = new LabelCommands.ListIssueLabelsRequestDto(ISSUE_ID, MEMBER_ID);
 
         // Act & Assert
         StepVerifier.create(labelService.listIssueLabels(REQUEST_ID, NODE_ID, listRequestDto))
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertThat(error).isInstanceOf(DomainException.class);
-                    DomainException ex = (DomainException) error;
-                    Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.NOT_FOUND);
-                    Assertions.assertThat(ex.getMessage()).contains("No labels for issue");
+                .assertNext(dto -> {
+                    Assertions.assertThat(dto.labels()).isEmpty();
                 })
-                .verify();
+                .verifyComplete();
     }
 
     // ===== UPDATE PROJECT LABEL TESTS =====

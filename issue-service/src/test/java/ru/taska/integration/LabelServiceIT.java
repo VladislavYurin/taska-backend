@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
@@ -19,7 +18,6 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.LabelCommands;
 import ru.taska.domain.dto.LabelResponses;
-import ru.taska.domain.labels.IssueLabels;
 import ru.taska.domain.labels.ProjectLabels;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -699,8 +697,8 @@ class LabelServiceIT extends AbstractIT {
 
 
     @Test
-    @DisplayName("listProjectLabels: проект без меток должен вернуть NOT_FOUND")
-    void projectWithoutLabelsShouldReturnNotFound() {
+    @DisplayName("listProjectLabels: проект без меток должен вернуть пустой список")
+    void projectWithoutLabelsShouldEmptyList() {
         // Arrange
         mockProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
 
@@ -715,12 +713,10 @@ class LabelServiceIT extends AbstractIT {
 
         // Assert
         StepVerifier.create(result)
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertThat(error).isInstanceOf(DomainException.class);
-                    DomainException ex = (DomainException) error;
-                    Assertions.assertThat(ex.getMessage()).contains("No labels for project");
+                .assertNext(dto -> {
+                    Assertions.assertThat(dto.labels()).isEmpty();
                 })
-                .verify();
+                .verifyComplete();
     }
 
     @Test
@@ -792,8 +788,8 @@ class LabelServiceIT extends AbstractIT {
     }
 
     @Test
-    @DisplayName("listIssueLabels: задача без меток должна вернуть NOT_FOUND")
-    void issueWithoutLabelsShouldReturnNotFound() {
+    @DisplayName("listIssueLabels: задача без меток должна вернуть пустой список")
+    void issueWithoutLabelsShouldReturnEmptyList() {
         // Arrange
         mockProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
 
@@ -808,12 +804,10 @@ class LabelServiceIT extends AbstractIT {
 
         // Assert
         StepVerifier.create(result)
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertThat(error).isInstanceOf(DomainException.class);
-                    DomainException ex = (DomainException) error;
-                    Assertions.assertThat(ex.getMessage()).contains("No labels for issue");
+                .assertNext(dto -> {
+                    Assertions.assertThat(dto.labels()).isEmpty();
                 })
-                .verify();
+                .verifyComplete();
     }
 
     @Test

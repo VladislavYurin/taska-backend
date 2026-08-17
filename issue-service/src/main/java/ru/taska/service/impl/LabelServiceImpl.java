@@ -47,10 +47,6 @@ public class LabelServiceImpl implements LabelService {
 
     //ADMIN - управление метками проекта
 
-    /**
-     * @param requestDto -
-     * @return LabelResponses.ProjectLabelInfo - response DTO
-     */
     @Override
     @Transactional
     public Mono<LabelResponses.ProjectLabelInfo> createProjectLabel(
@@ -93,19 +89,16 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
                 )))
                 .flatMap(label -> {
-                    // Если у полученного ProjectLabels getProjectId не соответствует переданному projectId
                     if (!label.getProjectId().equals(requestDto.projectId())) {
                         return Mono.error(new DomainException(
                                 DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project"
                         ));
                     }
-                    // проверяем, что название метки соответствует переданному labelId
                     return validateLabelNameUniquenessForUpdate(requestDto.projectId(), requestDto.name(), requestDto.labelId())
                             .then(Mono.fromCallable(() -> {
                                 mapper.updateEntity(label, requestDto);
                                 return label;
                             }))
-                            // сохраняем обновленную метку
                             .flatMap(projectLabelsRepository::save);
                 })
                 .map(mapper::toProjectLabelInfo)
@@ -180,7 +173,6 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().addIssueLabelRoles();
 
-        //проверка, что issue существует
         return issueRepository.findActiveById(requestDto.issueId())
                 .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
@@ -192,13 +184,11 @@ public class LabelServiceImpl implements LabelService {
                                                 DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
                                         )))
                                         .flatMap(label -> {
-                                            //Проверка, что метка принадлежит проекту
                                             if (!label.getProjectId().equals(issue.getProjectId())) {
                                                 return Mono.error(new DomainException(
                                                         DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
                                                 ));
                                             }
-                                            // Проверяем, что метка еще не добавлена к задаче
                                             return issueLabelsRepository.existsByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
                                                     .flatMap(exists -> {
                                                         if (exists) {
@@ -300,14 +290,7 @@ public class LabelServiceImpl implements LabelService {
                                         requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
                                 .then(issueLabelsRepository.findLabelsByIssueId(requestDto.issueId())
                                         .collectList()
-                                        .flatMap(listLabels -> {
-                                            if (listLabels.isEmpty()) {
-                                                return Mono.error(new DomainException(
-                                                        DomainStatus.NOT_FOUND, "No labels for issue" + requestDto.issueId()
-                                                ));
-                                            }
-                                            return Mono.just(mapper.toListIssueLabelResponseDto(listLabels));
-                                        })
+                                        .map(mapper::toListIssueLabelResponseDto)
                                 )
                 )
                 .doOnSuccess(dto ->
@@ -318,7 +301,7 @@ public class LabelServiceImpl implements LabelService {
     /**
      * Проверка перед созданием метки (новая метка должна быть с уникальным именем)
      *
-     * @param projectId
+     * @param projectId - Id проекта
      * @param name      - название метки
      * @return Mono.empty() в случае успешной проверки, иначе DomainStatus.ALREADY_EXISTS
      */
@@ -352,9 +335,9 @@ public class LabelServiceImpl implements LabelService {
     /**
      * Проверка перед обновлением метки (обновляемая метка должна иметь незанятое название -> id обновляемой метки должно совпадать с id метки, найденному по переданному имени)
      *
-     * @param projectId
-     * @param name           - название метки
-     * @param excludeLabelId
+     * @param projectId - Id проекта
+     * @param name - название метки
+     * @param excludeLabelId - Id метки
      * @return Mono.empty() в случае успешной проверки, иначе DomainStatus.ALREADY_EXISTS
      */
     private Mono<Void> validateLabelNameUniquenessForUpdate(UUID projectId, String name, UUID excludeLabelId) {
