@@ -71,6 +71,8 @@ class GetIssueTest extends IssueServiceImplTest {
         Issue issue = buildIssue();
         IssueHistory history = buildHistory();
 
+        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
         Mockito.when(projectRoleChecker.checkProjectRole(
@@ -102,6 +104,8 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory first = buildHistory();
         IssueHistory second = buildHistory();
         IssueHistory third = buildHistory();
+
+        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
@@ -148,6 +152,8 @@ class GetIssueTest extends IssueServiceImplTest {
     @DisplayName("Должен пробрасывать ошибку из репозитория истории наверх по потоку")
     void shouldPropagateErrorFromHistoryRepository() {
         Issue issue = buildIssue();
+
+        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 

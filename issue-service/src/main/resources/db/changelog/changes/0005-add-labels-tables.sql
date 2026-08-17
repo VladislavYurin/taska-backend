@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_project_labels_project_id
     ON taska.project_labels (project_id);
 
 -- Таблица связей меток с задачами (Many-to-Many)
-CREATE TABLE taska.issue_labels
+CREATE TABLE IF NOT EXISTS taska.issue_labels
 (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     issue_id uuid NOT NULL REFERENCES taska.issues(id) ON DELETE CASCADE,

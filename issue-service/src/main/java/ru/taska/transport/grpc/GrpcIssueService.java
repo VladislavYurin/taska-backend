@@ -869,7 +869,7 @@ public class GrpcIssueService {
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getProjectId(), "body.projectId"
                                 ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                         req.getBody().getName(), "body.name"
                                 ),
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -920,7 +920,7 @@ public class GrpcIssueService {
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                         req.getBody().getColor(), "body.color"
                                 ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ))
                         .doOnError(StatusRuntimeException.class,

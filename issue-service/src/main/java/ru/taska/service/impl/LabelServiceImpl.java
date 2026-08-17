@@ -161,14 +161,7 @@ public class LabelServiceImpl implements LabelService {
                         requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
                 .then(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(requestDto.projectId())
                         .collectList()
-                        .flatMap(listLabels -> {
-                            if (listLabels.isEmpty()) {
-                                return Mono.error(new DomainException(
-                                        DomainStatus.NOT_FOUND, "No labels for project" + requestDto.projectId())
-                                );
-                            }
-                            return Mono.just(mapper.toListProjectLabelResponseDto(listLabels));
-                        })
+                        .map(mapper::toListProjectLabelResponseDto)
                 )
                 .doOnSuccess(dto ->
                         log.info("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())

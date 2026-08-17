@@ -127,7 +127,6 @@ public class LabelMapper {
 
     public ProjectLabels toEntity(LabelCommands.CreateProjectLabelRequestDto requestDto) {
         return ProjectLabels.builder()
-                .id(UUID.randomUUID())
                 .projectId(requestDto.projectId())
                 .name(requestDto.name().trim())
                 .color(requestDto.color().toUpperCase())
@@ -138,7 +137,6 @@ public class LabelMapper {
 
     public IssueLabels toEntity(LabelCommands.AddIssueLabelRequestDto requestDto) {
         return IssueLabels.builder()
-                .id(UUID.randomUUID())
                 .issueId(requestDto.issueId())
                 .labelId(requestDto.labelId())
                 .createdBy(requestDto.actorUserId())
