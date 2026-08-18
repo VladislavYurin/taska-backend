@@ -272,7 +272,7 @@ class LabelServiceIT extends AbstractIT {
                                             .zipWith(issueLabelsRepository.existsByIssueIdAndLabelId(
                                                     addRequestDto.issueId(), addRequestDto.labelId()
                                             ))
-                                            .zipWith(issueLabelsRepository.findLabelsByIssueId(addRequestDto.issueId())
+                                            .zipWith(issueLabelsRepository.findActiveLabelsByIssueId(addRequestDto.issueId())
                                                     .count()
                                             )
                                             .doOnNext(tuple -> {

@@ -53,13 +53,13 @@ issue:
     delete-own-attachment-roles: ${ISSUE_DELETE_OWN_ATTACHMENT_ROLES:ADMIN,MEMBER}
     delete-attachment-roles: ${ISSUE_DELETE_ATTACHMENT_ROLES:ADMIN}
     comment-roles: ${ISSUE_COMMENT_ROLES:ADMIN,MEMBER}
-    createProjectLabelRoles: ${ISSUE_CREATE_PROJECT_LABEL_ROLES:ADMIN}
-    updateProjectLabelRoles: ${ISSUE_UPDATE_PROJECT_LABEL_ROLES:ADMIN}
-    deleteProjectLabelRoles: ${ISSUE_DELETE_PROJECT_LABEL_ROLES:ADMIN}
-    listProjectLabelRoles: ${ISSUE_LIST_PROJECT_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
-    addIssueLabelRoles: ${ISSUE_ADD_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
-    removeIssueLabelRoles: ${ISSUE_REMOVE_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
-    listIssueLabelRoles: ${ISSUE_LIST_ISSUE_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
+    create-project-label-roles: ${ISSUE_CREATE_PROJECT_LABEL_ROLES:ADMIN}
+    update-project-label-roles: ${ISSUE_UPDATE_PROJECT_LABEL_ROLES:ADMIN}
+    delete-project-label-roles: ${ISSUE_DELETE_PROJECT_LABEL_ROLES:ADMIN}
+    list-project-label-roles: ${ISSUE_LIST_PROJECT_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
+    add-issue-label-roles: ${ISSUE_ADD_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
+    remove-issue-label-roles: ${ISSUE_REMOVE_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
+    list-issue-label-roles: ${ISSUE_LIST_ISSUE_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
   retry:

@@ -134,7 +134,7 @@ public class LabelMapper {
     public ProjectLabels toEntity(LabelCommands.CreateProjectLabelRequestDto requestDto) {
         return ProjectLabels.builder()
                 .projectId(requestDto.projectId())
-                .name(requestDto.name().trim())
+                .name(requestDto.name().trim().toLowerCase())
                 .color(requestDto.color().toUpperCase())
                 .createdBy(requestDto.actorUserId())
                 .createdAt(Instant.now())
@@ -151,7 +151,7 @@ public class LabelMapper {
     }
 
     public void updateEntity(ProjectLabels label, LabelCommands.UpdateProjectLabelRequestDto requestDto) {
-        label.setName(requestDto.name().trim());
+        label.setName(requestDto.name().trim().toLowerCase());
         label.setColor(requestDto.color().toUpperCase());
     }
 
@@ -163,8 +163,6 @@ public class LabelMapper {
      * Используется для CreateProjectLabel и UpdateProjectLabel
      */
     public ProjectLabelResponse toProjectLabelProtoResponse(LabelResponses.ProjectLabelInfo info) {
-        if (info == null) return ProjectLabelResponse.getDefaultInstance();
-
         var builder = ProjectLabelResponse.newBuilder()
                 .setId(info.id().toString())
                 .setProjectId(info.projectId().toString())

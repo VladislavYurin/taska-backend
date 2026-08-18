@@ -283,7 +283,7 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issue ->
                         issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
                         .collectList()
-                        .zipWith(issueLabelsRepository.findLabelsByIssueId(issueId)
+                        .zipWith(issueLabelsRepository.findActiveLabelsByIssueId(issueId)
                                 .collectList()
                         )
                         .map(tuple->{
@@ -318,7 +318,6 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(Mono.zip(
-                        //Если будет lable не будет указан в query (null) - разделение логики
                         labelId != null
                                 ? issueRepository.countByLabelIdWithFilters(projectId, labelId, statusKey, assigneeId)
                                 : issueRepository.countByFilter(projectId, statusKey, assigneeId)
@@ -328,7 +327,11 @@ public class IssueServiceImpl implements IssueService {
                                 : issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset).collectList()
                         )
                 )
-                .map(t -> new PageResult<>(t.getT2(), t.getT1()));
+                .map(t ->{
+                    List<Issue> listIssue = t.getT2();
+                    Long count = t.getT1();
+                    return new PageResult<>(listIssue, count);
+                });
     }
 
     private int validatePage(Integer page) {

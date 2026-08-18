@@ -13,5 +13,7 @@ public enum NotificationType {
     PROJECT_CREATED,
     MEMBER_ADDED,
     MEMBER_UPDATED,
-    MEMBER_REMOVED
+    MEMBER_REMOVED,
+    LABEL_ADDED,
+    LABEL_REMOVED
 }

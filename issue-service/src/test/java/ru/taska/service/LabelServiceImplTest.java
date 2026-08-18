@@ -153,7 +153,7 @@ class LabelServiceImplTest {
                 })
                 .verifyComplete();
 
-        verify(projectLabelsRepository).existsActiveByName(PROJECT_ID, LABEL_NAME);
+        verify(projectLabelsRepository).existsActiveByName(PROJECT_ID, LABEL_NAME.toLowerCase());
         verify(projectLabelsRepository).save(any(ProjectLabels.class));
     }
 
@@ -231,7 +231,9 @@ class LabelServiceImplTest {
         Mockito.when(mapper.toEntity(any(LabelCommands.AddIssueLabelRequestDto.class))).thenReturn(issueLabel);
         Mockito.when(issueLabelsRepository.save(any(IssueLabels.class))).thenReturn(Mono.just(issueLabel));
 
-        Mockito.when(payloadSerializer.createLabelAddedPayload(any(ProjectLabels.class))).thenReturn(mockPayload);
+        Mockito.when(payloadSerializer.createLabelAddedPayload(any(ProjectLabels.class),any(UUID.class), any(UUID.class)))
+                .thenReturn(mockPayload);
+
         Mockito.when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(), any(), any(), any()))
                 .thenReturn(Mono.empty());
         Mockito.when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(), any(), any(), any()))
@@ -433,7 +435,8 @@ class LabelServiceImplTest {
         Mockito.when(issueLabelsRepository.deleteByIssueIdAndLabelId(any(), any()))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(payloadSerializer.createLabelRemovedPayload(any(ProjectLabels.class))).thenReturn(mockPayload);
+        Mockito.when(payloadSerializer.createLabelRemovedPayload(any(ProjectLabels.class),any(UUID.class), any(UUID.class)))
+                .thenReturn(mockPayload);
         Mockito.when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(), any(), any(), any()))
                 .thenReturn(Mono.empty());
         Mockito.when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(), any(), any(), any()))
@@ -508,7 +511,7 @@ class LabelServiceImplTest {
         Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(issueLabelsRepository.findLabelsByIssueId(any()))
+        Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(any()))
                 .thenReturn(Flux.just(projectLabel));
 
         Mockito.when(mapper.toListIssueLabelResponseDto(anyList())).thenReturn(
@@ -533,7 +536,7 @@ class LabelServiceImplTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(issueLabelsRepository).findLabelsByIssueId(ISSUE_ID);
+        Mockito.verify(issueLabelsRepository).findActiveLabelsByIssueId(ISSUE_ID);
     }
 
     @Test
@@ -550,7 +553,7 @@ class LabelServiceImplTest {
         Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(issueLabelsRepository.findLabelsByIssueId(any()))
+        Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(any()))
                 .thenReturn(Flux.empty());
 
         Mockito.when(mapper.toListIssueLabelResponseDto(anyList()))

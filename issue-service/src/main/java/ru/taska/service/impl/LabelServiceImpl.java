@@ -45,8 +45,9 @@ public class LabelServiceImpl implements LabelService {
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
 
-    //ADMIN - управление метками проекта
-
+    /**
+     * Возвращает DTO createProjectLabel
+     */
     @Override
     @Transactional
     public Mono<LabelResponses.ProjectLabelInfo> createProjectLabel(
@@ -67,12 +68,14 @@ public class LabelServiceImpl implements LabelService {
 
                 .map(mapper::toProjectLabelInfo)
                 .doOnSuccess(LabelInfo ->
-                        log.info("Created project label: id={}, projectId={}, name={}",
-                                LabelInfo.id(), LabelInfo.projectId(), LabelInfo.name())
+                        log.debug("Created project label: id={}, projectId={}, name={}", LabelInfo.id(), LabelInfo.projectId(), LabelInfo.name())
                 );
 
     }
 
+    /**
+     * Возвращает DTO updateProjectLabel
+     */
     @Override
     @Transactional
     public Mono<LabelResponses.ProjectLabelInfo> updateProjectLabel(
@@ -103,10 +106,13 @@ public class LabelServiceImpl implements LabelService {
                 })
                 .map(mapper::toProjectLabelInfo)
                 .doOnSuccess(LabelInfo ->
-                        log.info("Updated project label: id={}, name={}", LabelInfo.id(), LabelInfo.name())
+                        log.debug("Updated project label: id={}, name={}", LabelInfo.id(), LabelInfo.name())
                 );
     }
 
+    /**
+     * Возвращает DTO deleteProjectLabel
+     */
     @Override
     @Transactional
     public Mono<LabelResponses.DeleteProjectLabelResponseDto> deleteProjectLabel(
@@ -136,11 +142,13 @@ public class LabelServiceImpl implements LabelService {
                         })
                 )
                 .doOnSuccess(dto ->
-                        log.info("Deleted project label: id={}, projectId={}", dto.labelId(), dto.projectId())
+                        log.debug("Deleted project label: id={}, projectId={}", dto.labelId(), dto.projectId())
                 );
     }
 
-    //VIEWER+ - просмотр меток проекта
+    /**
+     * Возвращает DTO listProjectLabels
+     */
     @Override
     public Mono<LabelResponses.ListProjectLabelResponseDto> listProjectLabels(
             String requestId,
@@ -157,12 +165,14 @@ public class LabelServiceImpl implements LabelService {
                         .map(mapper::toListProjectLabelResponseDto)
                 )
                 .doOnSuccess(dto ->
-                        log.info("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
+                        log.debug("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
                 );
 
     }
 
-    //MEMBER+ - управление метками issue
+    /**
+     * Возвращает DTO addIssueLabel
+     */
     @Override
     @Transactional
     public Mono<LabelResponses.AddIssueLabelResponseDto> addIssueLabel(
@@ -199,7 +209,7 @@ public class LabelServiceImpl implements LabelService {
                                                         IssueLabels issueLabels = mapper.toEntity(requestDto);
                                                         return issueLabelsRepository.save(issueLabels)
                                                                 .then(Mono.defer(() -> {
-                                                                    JsonNode payload = payloadSerializer.createLabelAddedPayload(label);
+                                                                    JsonNode payload = payloadSerializer.createLabelAddedPayload(label, requestDto.issueId(),requestDto.actorUserId());
                                                                     return issueHistoryService.saveIssueHistory(
                                                                                     requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_ADDED, payload)
                                                                             .then(outboxEventService.saveOutboxEvent(
@@ -215,10 +225,13 @@ public class LabelServiceImpl implements LabelService {
                                 )
                 )
                 .doOnSuccess(dto ->
-                        log.info("Added label {} to issue {}", dto.labelId(), dto.issueId())
+                        log.debug("Added label {} to issue {}", dto.labelId(), dto.issueId())
                 );
     }
 
+    /**
+     * Возвращает DTO removeIssueLabel
+     */
     @Override
     @Transactional
     public Mono<LabelResponses.RemoveIssueLabelResponseDto> removeIssueLabel(
@@ -254,7 +267,7 @@ public class LabelServiceImpl implements LabelService {
                                                 }
                                                 return issueLabelsRepository.deleteByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
                                                         .then(Mono.defer(() -> {
-                                                            JsonNode payload = payloadSerializer.createLabelRemovedPayload(label);
+                                                            JsonNode payload = payloadSerializer.createLabelRemovedPayload(label, requestDto.issueId(),requestDto.actorUserId());
                                                             return issueHistoryService.saveIssueHistory(
                                                                             requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_REMOVED, payload)
                                                                     .then(outboxEventService.saveOutboxEvent(
@@ -267,11 +280,13 @@ public class LabelServiceImpl implements LabelService {
                                 })
                 )
                 .doOnSuccess(dto ->
-                        log.info("Removed label {} from issue {}", dto.labelId(), dto.issueId())
+                        log.debug("Removed label {} from issue {}", dto.labelId(), dto.issueId())
                 );
     }
 
-    //VIEWER+ - просмотр меток issue
+    /**
+     * Возвращает DTO listIssueLabels
+     */
     @Override
     public Mono<LabelResponses.ListIssueLabelResponseDto> listIssueLabels(
             String requestId,
@@ -288,13 +303,13 @@ public class LabelServiceImpl implements LabelService {
                 .flatMap(issue ->
                         projectRoleChecker.checkProjectRole(
                                         requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(issueLabelsRepository.findLabelsByIssueId(requestDto.issueId())
+                                .then(issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
                                         .collectList()
                                         .map(mapper::toListIssueLabelResponseDto)
                                 )
                 )
                 .doOnSuccess(dto ->
-                        log.info("Found {} labels for issue: {}", dto.labels().size(), requestDto.issueId())
+                        log.debug("Found {} labels for issue: {}", dto.labels().size(), requestDto.issueId())
                 );
     }
 
@@ -306,19 +321,9 @@ public class LabelServiceImpl implements LabelService {
      * @return Mono.empty() в случае успешной проверки, иначе DomainStatus.ALREADY_EXISTS
      */
     private Mono<Void> validateLabelNameUniqueness(UUID projectId, String name) {
-        String trimmedName = name.trim();
+        String trimmedLoweredName = name.trim().toLowerCase();
 
-        return projectLabelsRepository.existsActiveByName(projectId, trimmedName)
-
-
-                .doOnNext(exists ->
-                        log.info(
-                                "CHECK LABEL UNIQUENESS: projectId={}, name='{}', exists={}",
-                                projectId,
-                                trimmedName,
-                                exists
-                        )
-                )
+        return projectLabelsRepository.existsActiveByName(projectId, trimmedLoweredName)
 
                 .flatMap(exists -> {
                     if (exists) {
@@ -327,7 +332,6 @@ public class LabelServiceImpl implements LabelService {
                                 "Label with name '" + name + "' already exists in this project"
                         ));
                     }
-                    log.info("Label name '{}' is unique in project {}", name, projectId); //
                     return Mono.empty();
                 });
     }
@@ -341,10 +345,9 @@ public class LabelServiceImpl implements LabelService {
      * @return Mono.empty() в случае успешной проверки, иначе DomainStatus.ALREADY_EXISTS
      */
     private Mono<Void> validateLabelNameUniquenessForUpdate(UUID projectId, String name, UUID excludeLabelId) {
-        String trimmedName = name.trim();
-        return projectLabelsRepository.findActiveByName(projectId, trimmedName)
+        String trimmedLoweredName = name.trim().toLowerCase();
+        return projectLabelsRepository.findActiveByName(projectId, trimmedLoweredName)
                 .flatMap(existing -> {
-                    // если id метки на обновление, не совпадает с id метки, которую нашли по имени,
                     if (!existing.getId().equals(excludeLabelId)) {
                         return Mono.error(new DomainException(
                                 DomainStatus.ALREADY_EXISTS,

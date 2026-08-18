@@ -13,8 +13,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -315,18 +313,19 @@ public class PayloadSerializer {
         return node;
     }
 
-    //  Методы для работы с метками
     /**
      * Создает {@link JsonNode} с данными о добавленной метке к задаче.
      *
      * @param label добавленная метка
+     * @param issueId идентификатор задачи (для консистентности с другими payload'ами)
+     * @param addedBy пользователь, добавивший метку
      * @return {@link JsonNode} с метаданными метки
      */
-    public JsonNode createLabelAddedPayload(ProjectLabels label) {
+    public JsonNode createLabelAddedPayload(ProjectLabels label, UUID issueId, UUID addedBy) {
         ObjectNode node = objectMapper.createObjectNode();
-        node.put(LABEL_ID, label.getId().toString());
+        node.put(ISSUE_ID, issueId.toString());
         node.put(LABEL_NAME, label.getName());
-        node.put(LABEL_COLOR, label.getColor());
+        node.put(CREATED_BY, addedBy.toString());
         return node;
     }
 
@@ -334,13 +333,15 @@ public class PayloadSerializer {
      * Создает {@link JsonNode} с данными об удаленной метке с задачи.
      *
      * @param label удаленная метка
+     * @param issueId идентификатор задачи
+     * @param removedBy пользователь, удаливший метку
      * @return {@link JsonNode} с метаданными метки
      */
-    public JsonNode createLabelRemovedPayload(ProjectLabels label) {
+    public JsonNode createLabelRemovedPayload(ProjectLabels label, UUID issueId, UUID removedBy) {
         ObjectNode node = objectMapper.createObjectNode();
-        node.put(LABEL_ID, label.getId().toString());
+        node.put(ISSUE_ID, issueId.toString());
         node.put(LABEL_NAME, label.getName());
-        node.put(LABEL_COLOR, label.getColor());
+        node.put(DELETED_BY, removedBy.toString());
         return node;
     }
 }

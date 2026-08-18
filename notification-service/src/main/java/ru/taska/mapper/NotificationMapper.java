@@ -195,6 +195,30 @@ public class NotificationMapper {
         return builder.build();
     }
 
+    public Notification toLabelAdded(TaskaEvent event, UUID issueId, UUID userId, String labelName) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.LABEL_ADDED)
+                .title("Метка добавлена к задаче")
+                .body("К задаче " + issueId + " добавлена метка \"" + labelName + "\"")
+                .link("/issues/" + issueId)
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toLabelRemoved(TaskaEvent event, UUID issueId, UUID userId, String labelName) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.LABEL_REMOVED)
+                .title("Метка удалена из задачи")
+                .body("Из задачи " + issueId + " удалена метка \"" + labelName + "\"")
+                .link("/issues/" + issueId)
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     private NotificationKind toProtoNotificationKind(NotificationType domain) {
         if (domain == null) {
             return NotificationKind.NOTIFICATION_KIND_UNSPECIFIED;
@@ -214,6 +238,8 @@ public class NotificationMapper {
             case USER_ACTIVATED -> NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED;
             case ISSUE_LINK_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_LINK_CREATED;
             case ISSUE_LINK_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_LINK_DELETED;
+            case LABEL_ADDED -> NotificationKind.NOTIFICATION_KIND_LABEL_ADDED;
+            case LABEL_REMOVED -> NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED;
         };
     }
 

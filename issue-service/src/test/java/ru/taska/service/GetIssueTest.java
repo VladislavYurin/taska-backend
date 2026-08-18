@@ -71,7 +71,7 @@ class GetIssueTest extends IssueServiceImplTest {
         Issue issue = buildIssue();
         IssueHistory history = buildHistory();
 
-        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+        Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
@@ -105,7 +105,7 @@ class GetIssueTest extends IssueServiceImplTest {
         IssueHistory second = buildHistory();
         IssueHistory third = buildHistory();
 
-        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+        Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
@@ -153,7 +153,7 @@ class GetIssueTest extends IssueServiceImplTest {
     void shouldPropagateErrorFromHistoryRepository() {
         Issue issue = buildIssue();
 
-        Mockito.when(issueLabelsRepository.findLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+        Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
