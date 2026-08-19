@@ -6,6 +6,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
@@ -636,5 +637,26 @@ public class IssueServiceImpl implements IssueService {
                             requestId, nodeId, projectIds.size(), issues.size(), totalCount, actorUserId);
                     return new PageResult<>(issues, totalCount);
                 });
+    }
+
+    @Override
+    public Mono<List<IssueBoardResponse>> listIssueBoard(String requestId,
+                                                  String nodeId,
+                                                  UUID projectId,
+                                                  UUID actorUserId,
+                                                  IssueType issueType,
+                                                  UUID assigneeId,
+                                                  String statusKey,
+                                                  boolean includeDone,
+                                                  Integer pageSizePerColumn
+    ) {
+        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
+
+        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                .then(
+                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, pageSizePerColumn)
+                                .map(issueMapper::toIssueBoardProto)
+                                .collectList()
+                );
     }
 }

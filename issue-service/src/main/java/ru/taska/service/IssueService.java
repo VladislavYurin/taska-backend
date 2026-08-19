@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
@@ -8,6 +9,7 @@ import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -108,5 +110,17 @@ public interface IssueService {
             IssueType issueType,
             Integer page,
             Integer pageSize
+    );
+
+    Mono<List<IssueBoardResponse>> listIssueBoard(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId,
+            IssueType issuetype,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            Integer pageSizePerColumn
     );
 }
