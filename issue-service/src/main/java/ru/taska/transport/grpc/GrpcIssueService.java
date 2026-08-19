@@ -231,7 +231,7 @@ public class GrpcIssueService {
                                     UUID projectId = t.getT3();
                                     UUID actorUserId = t.getT4();
                                     UUID assigneeId = t.getT5().orElse(null);
-                                    UUID labeldId = t.getT6().orElse(null);
+                                    UUID labelId = t.getT6().orElse(null);
                                     String statusKey = req.getBody().hasStatusKey()
                                             ? req.getBody().getStatusKey()
                                             : null;
@@ -250,7 +250,7 @@ public class GrpcIssueService {
                                             assigneeId,
                                             page,
                                             pageSize,
-                                            labeldId
+                                            labelId
                                     );
 
                                     return issueService.listIssues(
@@ -260,7 +260,7 @@ public class GrpcIssueService {
                                                     actorUserId,
                                                     statusKey,
                                                     assigneeId,
-                                                    labeldId,
+                                                    labelId,
                                                     page,
                                                     pageSize
                                             )
