@@ -13,6 +13,7 @@ import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
+import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.service.impl.IssueServiceImpl;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
@@ -51,6 +52,9 @@ public class IssueServiceImplTest {
 
     @Mock
     protected ProjectRoleChecker projectRoleChecker;
+
+    @Mock
+    protected IssueLabelsRepository issueLabelsRepository;
 
     @Mock
     protected IssueTransitionValidator validator;

@@ -49,6 +49,7 @@ public interface IssueService {
             UUID actorUserId,
             String status,
             UUID assigneeId,
+            UUID labelId,
             Integer page,
             Integer pageSize
     );
@@ -90,5 +91,6 @@ public interface IssueService {
                             UUID actorUserId,
                             String summary,
                             String description,
-                            IssuePriority priority);
+                            IssuePriority priority
+    );
 }

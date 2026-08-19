@@ -41,6 +41,10 @@ public class IssueHistory {
 
     /**
      * Тип события (CREATED, UPDATED, ASSIGNED, TRANSITIONED, DELETED).
+     * Связи (LINK_CREATED, LINK_DELETED)
+     * Вложения(ATTACHMENT_UPLOADED, ATTACHMENT_DELETED)
+     * Комментарии (COMMENT_CREATED, COMMENT_UPDATED, COMMENT_DELETED)
+     * Метки-лейблы (LABEL_ADDED, LABEL_REMOVED)
      */
     @Column("event_type")
     private IssueEventType eventType;

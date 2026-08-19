@@ -7,6 +7,7 @@ import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.IssuePriority;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -46,6 +47,7 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
+    private static final String LABEL_NAME = "labelName";
 
     private final ObjectMapper objectMapper;
 
@@ -306,6 +308,38 @@ public class PayloadSerializer {
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());
 
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о добавленной метке к задаче.
+     *
+     * @param label добавленная метка
+     * @param issueId идентификатор задачи (для консистентности с другими payload'ами)
+     * @param addedBy пользователь, добавивший метку
+     * @return {@link JsonNode} с метаданными метки
+     */
+    public JsonNode createLabelAddedPayload(ProjectLabels label, UUID issueId, UUID addedBy) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(CREATED_BY, addedBy.toString());
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об удаленной метке с задачи.
+     *
+     * @param label удаленная метка
+     * @param issueId идентификатор задачи
+     * @param removedBy пользователь, удаливший метку
+     * @return {@link JsonNode} с метаданными метки
+     */
+    public JsonNode createLabelRemovedPayload(ProjectLabels label, UUID issueId, UUID removedBy) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(DELETED_BY, removedBy.toString());
         return node;
     }
 }

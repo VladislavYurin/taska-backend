@@ -90,7 +90,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProject() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        null, null, 0, 50)
+                        null, null, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
@@ -104,7 +104,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProjectAndAssignee() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        null, ASSIGNEE_ID_1, 0, 50)
+                        null, ASSIGNEE_ID_1, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
@@ -118,7 +118,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProjectAndStatus() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        ISSUE_STATUS_KEY_TODO, null, 0, 50)
+                        ISSUE_STATUS_KEY_TODO, null, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
@@ -132,7 +132,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnIssuesFromGivenProjectAndStatusAndAssignee() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, 0, 50)
+                        ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
@@ -146,7 +146,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnEmptyPageIfNothingMatches() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        ISSUE_STATUS_KEY_IN_PROGRESS, ASSIGNEE_ID_1, 0, 50)
+                        ISSUE_STATUS_KEY_IN_PROGRESS, ASSIGNEE_ID_1, null, 0, 50)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isZero();
@@ -159,7 +159,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnFirstPageWhenPaginationApplied() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        null, null, 0, 2)
+                        null, null, null, 0, 2)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
@@ -172,7 +172,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnSecondPageWhenPaginationApplied() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        null, null, 1, 2)
+                        null, null, null, 1, 2)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
@@ -185,7 +185,7 @@ class ListIssuesIT extends AbstractIT {
     void shouldReturnEmptyPageBeyondLastPage() {
         StepVerifier.create(issueService.listIssues(
                         REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                        null, null, 2, 2)
+                        null, null, null, 2, 2)
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);

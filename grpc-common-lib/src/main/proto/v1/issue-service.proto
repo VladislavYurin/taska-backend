@@ -23,6 +23,8 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
   ISSUE_EVENT_TYPE_COMMENT_UPDATED = 11;
   ISSUE_EVENT_TYPE_COMMENT_DELETED = 12;
+  ISSUE_EVENT_TYPE_LABEL_ADDED = 13;
+  ISSUE_EVENT_TYPE_LABEL_REMOVED = 14;
 }
 
 enum IssueType {
@@ -139,6 +141,45 @@ service IssueService {
    */
   rpc ListIssueComments(ListIssueCommentsRequest)
       returns (ListIssueCommentsResponse);
+
+  // ============ Управление метками проекта (только ADMIN) ============
+
+  /**
+   * Создаёт новую метку в проекте.
+   */
+  rpc CreateProjectLabel(CreateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  /**
+   * Обновляет существующую метку проекта.
+   */
+  rpc UpdateProjectLabel(UpdateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  /**
+   * Удаляет метку проекта (soft-delete).
+   */
+  rpc DeleteProjectLabel(DeleteProjectLabelRequest) returns (DeleteProjectLabelResponse);
+
+  /**
+   * Возвращает список всех активных меток проекта.
+   */
+  rpc ListProjectLabels(ListProjectLabelsRequest) returns (ListProjectLabelsResponse);
+
+  // ============ Управление метками задачи (MEMBER/ADMIN) ============
+
+  /**
+   * Добавляет существующую метку проекта к задаче.
+   */
+  rpc AddIssueLabel(AddIssueLabelRequest) returns (AddIssueLabelResponse);
+
+  /**
+   * Удаляет метку с задачи.
+   */
+  rpc RemoveIssueLabel(RemoveIssueLabelRequest) returns (RemoveIssueLabelResponse);
+
+  /**
+   * Возвращает список всех меток, привязанных к задаче.
+   */
+  rpc ListIssueLabels(ListIssueLabelsRequest) returns (ListIssueLabelsResponse);
 }
 
 message AssignIssueRequest {
@@ -348,6 +389,11 @@ message ListIssuesRequestBody {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 6;
+
+  /**
+   * Фильтр по идентификатору метки (опционально).
+   */
+  optional string label_id = 7;
 }
 
 message TransitionIssueRequest {
@@ -626,6 +672,351 @@ message IssueResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 15;
+
+  /**
+   * Идентификатор лейбла.
+   */
+  repeated ProjectLabelResponse labels = 16;
+}
+
+// ============ Метки проекта =================
+
+message ProjectLabelResponse {
+  /**
+   * Идентификатор метки.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта, к которому относится метка.
+   */
+  string project_id = 2;
+
+  /**
+   * Название метки (уникально в рамках проекта, регистронезависимо).
+   */
+  string name = 3;
+
+  /**
+   * Цвет метки в формате HEX (например, #0052CC).
+   */
+  string color = 4;
+
+  /**
+   * Идентификатор пользователя, создавшего метку.
+   */
+  string created_by = 5;
+
+  /**
+   * Временная метка создания метки.
+   */
+  google.protobuf.Timestamp created_at = 6;
+
+  /**
+   * Временная метка мягкого удаления (null — метка активна).
+   */
+  google.protobuf.Timestamp deleted_at = 7;
+}
+
+/**
+ *  Запрос на создание метки проекта
+ */
+message CreateProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateProjectLabelRequestBody body = 2;
+}
+
+message CreateProjectLabelRequestBody {
+  /**
+   * Идентификатор проекта, в котором создаётся метка.
+   */
+  string project_id = 1;
+
+  /**
+   * Название метки.
+   */
+  string name = 2;
+
+  /**
+   * Цвет метки в формате HEX.
+   */
+  string color = 3;
+
+  /**
+   * Идентификатор пользователя, создающего метку (только ADMIN).
+   */
+  string created_by = 4;
+}
+
+/**
+ *  Запрос на обновление метки проекта
+ */
+message UpdateProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UpdateProjectLabelRequestBody body = 2;
+}
+
+message UpdateProjectLabelRequestBody {
+  /**
+   * Идентификатор обновляемой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Новое название метки (опционально).
+   */
+  string name = 3;
+
+  /**
+   * Новый цвет метки в формате HEX (опционально).
+   */
+  string color = 4;
+
+  /**
+   * Идентификатор пользователя, обновляющего метку (только ADMIN).
+   */
+  string actor_user_id = 5;
+}
+
+/**
+ *  Запрос на удаление метки проекта
+ */
+message DeleteProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteProjectLabelRequestBody body = 2;
+}
+
+message DeleteProjectLabelRequestBody {
+  /**
+   * Идентификатор удаляемой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Идентификатор пользователя, удаляющего метку (только ADMIN).
+   */
+  string actor_user_id = 3;
+}
+
+message DeleteProjectLabelResponse {
+  /**
+   * Идентификатор удалённой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Временная метка удаления.
+   */
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
+/**
+ *  Запрос на получение списка меток проекта
+ */
+message ListProjectLabelsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListProjectLabelsRequestBody body = 2;
+}
+
+message ListProjectLabelsRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, запрашивающего список (VIEWER+).
+   */
+  string actor_user_id = 2;
+}
+
+message ListProjectLabelsResponse {
+  /**
+   * Список меток проекта.
+   */
+  repeated ProjectLabelResponse labels = 1;
+
+  /**
+   * Общее количество меток в проекте.
+   */
+  int32 total_count = 2;
+}
+
+// ============ Метки задачи =================
+
+/**
+ *  Запрос на добавление метки к задаче
+ */
+message AddIssueLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddIssueLabelRequestBody body = 2;
+}
+
+message AddIssueLabelRequestBody {
+  /**
+   * Идентификатор задачи, к которой добавляется метка.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор добавляемой метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, добавляющего метку (MEMBER+).
+   */
+  string actor_user_id = 3;
+}
+
+message AddIssueLabelResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор добавленной метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, добавившего метку.
+   */
+  string created_by = 3;
+
+  /**
+   * Временная метка добавления метки.
+   */
+  google.protobuf.Timestamp created_at = 4;
+}
+
+/**
+ *  Запрос на удаление метки с задачи
+ */
+message RemoveIssueLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  RemoveIssueLabelRequestBody body = 2;
+}
+
+message RemoveIssueLabelRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор удаляемой метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, удаляющего метку (MEMBER+).
+   */
+  string actor_user_id = 3;
+}
+
+message RemoveIssueLabelResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор удалённой метки.
+   */
+  string label_id = 2;
+}
+
+/**
+ *  Запрос на получение меток задачи
+ */
+message ListIssueLabelsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueLabelsRequestBody body = 2;
+}
+
+message ListIssueLabelsRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, запрашивающего список (VIEWER+).
+   */
+  string actor_user_id = 2;
+}
+
+message ListIssueLabelsResponse {
+  /**
+   * Список меток, привязанных к задаче.
+   */
+  repeated ProjectLabelResponse labels = 1;
 }
 
 message IssueHistoryResponse {
