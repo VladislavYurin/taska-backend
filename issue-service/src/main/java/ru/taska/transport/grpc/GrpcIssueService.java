@@ -23,6 +23,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLabelsRequest;
 import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
@@ -911,5 +913,42 @@ public class GrpcIssueService {
                                 })
                 )
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
+    }
+    @TrackMetrics(counter = "issue-service_list-issue-board_grpc_counter",
+    timer = "issue-service_list-issues-board_grpc_timer")
+    public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"
+                        ),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getProjectId(), "body.projectId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getActorUserId(), "body.actorUserId"
+                        )
+                )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID projectId = t.getT3();
+                            UUID actorUserId = t.getT4();
+
+                            return issueService.listIssueBoard(
+                                    requestId, nodeId, projectId, actorUserId,
+                                    null, //issueType
+                                    null, //assigneekey
+                                    null, //statuskey
+                                    req.getBody().getIncludeDone(),
+                                    null //pageSizePerColumn
+                            )
+                                    .map(issues -> ListIssuesForBoardResponse.newBuilder()
+                                            .addAllIssues(issues)
+                                            .build());
+                        }));
     }
 }

@@ -4,56 +4,7 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
-import ru.taska.api.issue.v1.AssignIssueRequest;
-import ru.taska.api.issue.v1.CreateIssueLinkRequest;
-import ru.taska.api.issue.v1.CreateIssueRequest;
-import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
-import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
-import ru.taska.api.issue.v1.DeleteIssueRequest;
-import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.GetIssueRequest;
-import ru.taska.api.issue.v1.IssueLinkResponse;
-import ru.taska.api.issue.v1.IssueResponse;
-import ru.taska.api.issue.v1.IssueWithHistoryResponse;
-import ru.taska.api.issue.v1.ListIssueLinksRequest;
-import ru.taska.api.issue.v1.ListIssueLinksResponse;
-import ru.taska.api.issue.v1.ListIssuesRequest;
-import ru.taska.api.issue.v1.ListIssuesResponse;
-import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
-import ru.taska.api.issue.v1.SearchIssuesRequest;
-import ru.taska.api.issue.v1.SearchIssuesResponse;
-import ru.taska.api.issue.v1.TransitionIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueResponse;
-import ru.taska.api.issue.v1.AddIssueCommentRequest;
-import ru.taska.api.issue.v1.AddIssueCommentResponse;
-import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
-import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
-import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
-import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
-import ru.taska.api.issue.v1.ListIssueCommentsRequest;
-import ru.taska.api.issue.v1.ListIssueCommentsResponse;
-import ru.taska.api.issue.v1.GetIssueWatchStateRequest;
-import ru.taska.api.issue.v1.GetIssueWatchStateResponse;
-import ru.taska.api.issue.v1.ListIssueWatchersRequest;
-import ru.taska.api.issue.v1.ListIssueWatchersResponse;
-import ru.taska.api.issue.v1.UnwatchIssueRequest;
-import ru.taska.api.issue.v1.UnwatchIssueResponse;
-import ru.taska.api.issue.v1.WatchIssueRequest;
-import ru.taska.api.issue.v1.WatchIssueResponse;
-import ru.taska.api.issue.v1.AddIssueLabelRequest;
-import ru.taska.api.issue.v1.AddIssueLabelResponse;
-import ru.taska.api.issue.v1.CreateProjectLabelRequest;
-import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
-import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
-import ru.taska.api.issue.v1.ListIssueLabelsRequest;
-import ru.taska.api.issue.v1.ListIssueLabelsResponse;
-import ru.taska.api.issue.v1.ListProjectLabelsRequest;
-import ru.taska.api.issue.v1.ListProjectLabelsResponse;
-import ru.taska.api.issue.v1.ProjectLabelResponse;
-import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
-import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
-import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
+import ru.taska.api.issue.v1.*;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -240,5 +191,11 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
         return grpcIssueService.searchIssues(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
+    }
+
+    @Override
+    public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
+        return grpcIssueService.listIssuesForBoard(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("ListIssuesForBoard"));
     }
 }
