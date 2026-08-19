@@ -24,6 +24,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -98,9 +99,7 @@ public class IssueMapper {
     }
 
     //  domain ProjectLabels → proto ProjectLabelResponse
-    private ProjectLabelResponse toProjectLabelProto(ru.taska.domain.labels.ProjectLabels label) {
-        if (label == null) return ProjectLabelResponse.getDefaultInstance();
-
+    private ProjectLabelResponse toProjectLabelProto(ProjectLabels label) {
         var builder = ProjectLabelResponse.newBuilder()
                 .setId(label.getId().toString())
                 .setProjectId(label.getProjectId().toString())

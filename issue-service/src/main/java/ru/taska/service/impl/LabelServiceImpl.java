@@ -67,8 +67,8 @@ public class LabelServiceImpl implements LabelService {
                 }))
 
                 .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(LabelInfo ->
-                        log.debug("Created project label: id={}, projectId={}, name={}", LabelInfo.id(), LabelInfo.projectId(), LabelInfo.name())
+                .doOnSuccess(labelInfo ->
+                        log.debug("Created project label: id={}, projectId={}, name={}", labelInfo.id(), labelInfo.projectId(), labelInfo.name())
                 );
 
     }
@@ -105,8 +105,8 @@ public class LabelServiceImpl implements LabelService {
                             .flatMap(projectLabelsRepository::save);
                 })
                 .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(LabelInfo ->
-                        log.debug("Updated project label: id={}, name={}", LabelInfo.id(), LabelInfo.name())
+                .doOnSuccess(labelInfo ->
+                        log.debug("Updated project label: id={}, name={}", labelInfo.id(), labelInfo.name())
                 );
     }
 

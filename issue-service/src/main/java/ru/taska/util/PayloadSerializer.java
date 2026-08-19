@@ -47,9 +47,7 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
-    private static final String LABEL_ID = "labelId";
     private static final String LABEL_NAME = "labelName";
-    private static final String LABEL_COLOR = "labelColor";
 
     private final ObjectMapper objectMapper;
 

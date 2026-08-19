@@ -260,7 +260,7 @@ public class GrpcIssueService {
                                                     actorUserId,
                                                     statusKey,
                                                     assigneeId,
-                                                    req.getBody().hasLabelId() ? UUID.fromString(req.getBody().getLabelId()) : null,
+                                                    labeldId,
                                                     page,
                                                     pageSize
                                             )
@@ -380,7 +380,7 @@ public class GrpcIssueService {
                                             actorUserId
                                     )
                                     .doOnSuccess(result ->
-                                            log.info("[{}][{}] deleteIssue: successfully deleted {} issues",
+                                            log.info("[{}][{}] deleteIssue: successfully deleted issue={}",
                                                     requestId, nodeId, issueId)
                                     )
                                     .doOnError(DomainException.class,
