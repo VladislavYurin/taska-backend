@@ -225,19 +225,19 @@ public class GrpcProjectService {
                 .map(projectMemberMapper::toCheckProjectRoleResponse);
     }
 
-    @TrackMetrics(counter = "project-get-projectKeyInternal_grpc_counter",
-            timer = "project-service_check-projectKeyInternal_grpc_timer")
+    @TrackMetrics(counter = "project-service_get-projectKeyInternal_grpc_counter",
+            timer = "project-service_get-projectKeyInternal_grpc_timer")
     public Mono<ProjectKeyResponse> getProjectKeyInternal(Mono<GetProjectKeyInternalRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId")
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"
+                        ),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getProjectId(), "body.projectId")
                 ))
                 .flatMap(t -> {
                     String requestId = t.getT1();
