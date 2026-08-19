@@ -92,6 +92,18 @@ public class ProjectServiceImpl implements ProjectService {
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
+    @Override
+    public Mono<String> getProjectKeyByIdInternal(UUID projectId) {
+        return projectRepository.findProjectKeyById(projectId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("Project not found: {}", projectId);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                }))
+                .doOnSuccess(key ->
+                        log.debug("Successfully getting project key: {} for projectId: {}", key, projectId)
+                );
+    }
+
     private ProjectSetting createDefaultProjectSettings(Project project) {
         ObjectNode defaultSettingsJson = objectMapper.createObjectNode();
         ArrayNode allowedTypes = defaultSettingsJson.putArray("allowedIssueTypes");

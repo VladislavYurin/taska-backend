@@ -52,6 +52,12 @@ service ProjectService {
    * Проверяет роль пользователя в проекте.
    */
   rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
+
+  /**
+   * Внутренний метод. Возвращает ключ проекта по ID без проверки прав.
+   * Используется только сервисами, которые уже проверили права.
+   */
+  rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
 }
 
 message CreateProjectRequest {
@@ -198,4 +204,21 @@ message CheckProjectMemberRoleResponse {
    * Существует ли проект.
    */
   bool project_exists = 3;
+}
+
+/**
+ * Запрос получения projectKey.
+ */
+message GetProjectKeyInternalRequest {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+}
+
+message ProjectKeyResponse {
+  /**
+   * Ключ-название проекта
+   */
+  string project_key = 1;
 }

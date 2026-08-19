@@ -37,4 +37,11 @@ public interface ProjectService {
      */
     Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId);
 
+    /**
+     * Возвращает ключ проекта по Id (без проверки прав).
+     * Используется ТОЛЬКО для внутренних вызовов из других сервисов, которые уже проверили права доступа.
+     * @param projectId айди проекта
+     * @return Mono с ключом проекта
+     */
+    Mono<String> getProjectKeyByIdInternal(UUID projectId);
 }

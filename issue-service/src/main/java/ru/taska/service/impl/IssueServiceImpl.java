@@ -99,7 +99,7 @@ public class IssueServiceImpl implements IssueService {
                                     .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
 
                         }))
-                .switchIfEmpty(grpcProjectServiceClient.getProjectKey(requestId, nodeId, projectId)
+                .switchIfEmpty(grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)
                         .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                                 .flatMap(number -> {
                                     return issueRepository.save(Issue.builder()
@@ -190,7 +190,7 @@ public class IssueServiceImpl implements IssueService {
                                    String summary, String description, IssuePriority priority) {
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.info("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    log.debug("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                             "Issue with id: " + issueId + " was not found"));
                 }))
@@ -219,7 +219,7 @@ public class IssueServiceImpl implements IssueService {
                                             EventType.ISSUE_UPDATED, payload)
                                     .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue.getId(), actorUserId, IssueEventType.UPDATED, payload))
                                     .then(Mono.fromRunnable(() ->
-                                            log.info("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
+                                            log.debug("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
                                                     requestId, nodeId, issueId, actorUserId)))
                                     .thenReturn(savedIssue)
                             );

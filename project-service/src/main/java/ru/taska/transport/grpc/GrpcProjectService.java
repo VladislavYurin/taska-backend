@@ -13,8 +13,10 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
@@ -220,5 +222,20 @@ public class GrpcProjectService  {
                     return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
                 })
                 .map(projectMemberMapper::toCheckProjectRoleResponse);
+    }
+
+    public Mono<ProjectKeyResponse> getProjectKeyInternal(Mono<GetProjectKeyInternalRequest> request) {
+        return request
+                .flatMap(req ->
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                        req.getProjectId(), "body.projectId"
+                ))
+                .flatMap(projectService::getProjectKeyByIdInternal
+                )
+                .map(key ->
+                        ProjectKeyResponse.newBuilder()
+                                .setProjectKey(key)
+                                .build()
+                );
     }
 }
