@@ -213,4 +213,34 @@ class ProjectServiceImplTest {
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
     }
+
+    @Test
+    void getProjectKeyByIdInternal_Success() {
+        String expectedProjectKey = "TEST";
+        Mockito.when(projectRepository.findProjectKeyById(projectId))
+                .thenReturn(Mono.just(expectedProjectKey));
+
+        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
+                .expectNext(expectedProjectKey)
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
+
+    @Test
+    void getProjectKeyByIdInternal_ThrowsNotFoundException_WhenProjectDoesNotExist() {
+        Mockito.when(projectRepository.findProjectKeyById(projectId))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertInstanceOf(DomainException.class, throwable);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                    Assertions.assertEquals("Project not found", exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
 }
