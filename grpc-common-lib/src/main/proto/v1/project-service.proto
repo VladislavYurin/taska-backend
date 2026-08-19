@@ -210,6 +210,11 @@ message CheckProjectMemberRoleResponse {
  * Запрос получения projectKey.
  */
 message GetProjectKeyInternalRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectKeyInternalRequestBody body = 2;
+}
+
+message GetProjectKeyInternalRequestBody {
   /**
    * Идентификатор проекта.
    */

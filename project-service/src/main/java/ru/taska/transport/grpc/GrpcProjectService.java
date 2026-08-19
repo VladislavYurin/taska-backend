@@ -1,6 +1,7 @@
 package ru.taska.transport.grpc;
 
 import java.util.UUID;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,14 +32,14 @@ import validator.GrpcRequestValidators;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GrpcProjectService  {
+public class GrpcProjectService {
     private final ProjectService projectService;
     private final ProjectMemberService projectMemberService;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
 
     @TrackMetrics(counter = "project-service_create-project_grpc_counter",
-                    timer = "project-service_create-project_grpc_timer")
+            timer = "project-service_create-project_grpc_timer")
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -63,29 +64,29 @@ public class GrpcProjectService  {
     }
 
     @TrackMetrics(counter = "project-service_get-project_grpc_counter",
-                    timer = "project-service_get-project_grpc_timer")
+            timer = "project-service_get-project_grpc_timer")
     public Mono<ProjectResponse> getProject(Mono<GetProjectRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(),"body.actorUserId")))
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")))
                 .flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     UUID projectId = t.getT3();
                     UUID actorUserId = t.getT4();
                     //Получаем actorUserId и передаем его в projectService для проверки membership
-                    log.info("[{}][{}] Received request to getProject: projectId={}, from user={}", requestId, nodeId, projectId,actorUserId);
+                    log.info("[{}][{}] Received request to getProject: projectId={}, from user={}", requestId, nodeId, projectId, actorUserId);
 
-                    return projectService.getProject(requestId, nodeId, projectId,actorUserId);
+                    return projectService.getProject(requestId, nodeId, projectId, actorUserId);
                 })
                 .map(projectMapper::toProjectResponse);
     }
 
     @TrackMetrics(counter = "project-service_list-myProjects_grpc_counter",
-                    timer = "project-service_list-myProjects_grpc_timer")
+            timer = "project-service_list-myProjects_grpc_timer")
     public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -224,14 +225,30 @@ public class GrpcProjectService  {
                 .map(projectMemberMapper::toCheckProjectRoleResponse);
     }
 
+    @TrackMetrics(counter = "project-get-projectKeyInternal_grpc_counter",
+            timer = "project-service_check-projectKeyInternal_grpc_timer")
     public Mono<ProjectKeyResponse> getProjectKeyInternal(Mono<GetProjectKeyInternalRequest> request) {
         return request
-                .flatMap(req ->
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                        req.getProjectId(), "body.projectId"
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId")
                 ))
-                .flatMap(projectService::getProjectKeyByIdInternal
-                )
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID projectId = t.getT3();
+
+                    log.info("[{}][{}] Received getProjectKeyInternal request: projectId={}",
+                            requestId, nodeId, projectId);
+
+                    return projectService.getProjectKeyByIdInternal(projectId);
+                })
                 .map(key ->
                         ProjectKeyResponse.newBuilder()
                                 .setProjectKey(key)

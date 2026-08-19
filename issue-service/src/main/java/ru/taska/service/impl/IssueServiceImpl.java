@@ -190,7 +190,7 @@ public class IssueServiceImpl implements IssueService {
                                    String summary, String description, IssuePriority priority) {
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.debug("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                    log.warn("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                             "Issue with id: " + issueId + " was not found"));
                 }))

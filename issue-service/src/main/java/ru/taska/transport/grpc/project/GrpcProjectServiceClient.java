@@ -9,6 +9,7 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequestBody;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 
@@ -50,7 +51,17 @@ public class GrpcProjectServiceClient {
 
     public Mono<String> getProjectKeyInternal(String requestId, String nodeId, UUID projectId) {
         GetProjectKeyInternalRequest request = GetProjectKeyInternalRequest.newBuilder()
-                .setProjectId(projectId.toString())
+                .setHeader(
+                        Header.newBuilder()
+                                .setRequestId(requestId)
+                                .setNodeId(nodeId)
+                                .build()
+                )
+                .setBody(
+                        GetProjectKeyInternalRequestBody.newBuilder()
+                                .setProjectId(projectId.toString())
+                                .build()
+                )
                 .build();
 
         log.info("[{}][{}] Calling getProjectKeyInternal for projectId: {}",
