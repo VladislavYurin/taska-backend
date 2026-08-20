@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
+import ru.taska.domain.AutoWatchRole;
 import ru.taska.domain.Issue;
 
 import java.util.UUID;
@@ -35,7 +36,7 @@ public class IssueAutoWatchService {
                 issue,
                 issue.getReporterId(),
                 issue.getReporterId(),
-                "reporter"
+                AutoWatchRole.REPORTER
         );
     }
 
@@ -55,7 +56,7 @@ public class IssueAutoWatchService {
                 issue,
                 issue.getAssigneeId(),
                 actorUserId,
-                "assignee"
+                AutoWatchRole.ASSIGNEE
         );
     }
 
@@ -66,7 +67,7 @@ public class IssueAutoWatchService {
             Issue issue,
             UUID watcherUserId,
             UUID actorUserId,
-            String role
+            AutoWatchRole role
     ) {
         if (!enabled || watcherUserId == null) {
             return Mono.empty();

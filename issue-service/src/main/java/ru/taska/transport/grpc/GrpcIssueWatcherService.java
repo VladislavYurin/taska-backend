@@ -33,8 +33,8 @@ public class GrpcIssueWatcherService {
     private final IssueWatcherService issueWatcherService;
     private final IssueWatcherMapper issueWatcherMapper;
 
-    @TrackMetrics(counter = "issue-service_watch-issue_grpc_counter",
-            timer = "issue-service_watch-issue_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.WATCH_ISSUE_COUNTER,
+            timer = IssueGrpcMetrics.WATCH_ISSUE_TIMER)
     public Mono<WatchIssueResponse> watchIssue(Mono<WatchIssueRequest> request) {
         return request
                 .flatMap(req -> validateIssueActorTarget(
@@ -68,8 +68,8 @@ public class GrpcIssueWatcherService {
                 .transform(GrpcExceptionHandler.withErrorHandling("watchIssue"));
     }
 
-    @TrackMetrics(counter = "issue-service_unwatch-issue_grpc_counter",
-            timer = "issue-service_unwatch-issue_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.UNWATCH_ISSUE_COUNTER,
+            timer = IssueGrpcMetrics.UNWATCH_ISSUE_TIMER)
     public Mono<UnwatchIssueResponse> unwatchIssue(Mono<UnwatchIssueRequest> request) {
         return request
                 .flatMap(req -> validateIssueActorTarget(
@@ -104,8 +104,8 @@ public class GrpcIssueWatcherService {
                 .transform(GrpcExceptionHandler.withErrorHandling("unwatchIssue"));
     }
 
-    @TrackMetrics(counter = "issue-service_list-issue-watchers_grpc_counter",
-            timer = "issue-service_list-issue-watchers_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.LIST_ISSUE_WATCHERS_COUNTER,
+            timer = IssueGrpcMetrics.LIST_ISSUE_WATCHERS_TIMER)
     public Mono<ListIssueWatchersResponse> listIssueWatchers(Mono<ListIssueWatchersRequest> request) {
         return request
                 .flatMap(req -> validateIssueActor(
@@ -140,8 +140,8 @@ public class GrpcIssueWatcherService {
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueWatchers"));
     }
 
-    @TrackMetrics(counter = "issue-service_get-issue-watch-state_grpc_counter",
-            timer = "issue-service_get-issue-watch-state_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.GET_ISSUE_WATCH_STATE_COUNTER,
+            timer = IssueGrpcMetrics.GET_ISSUE_WATCH_STATE_TIMER)
     public Mono<GetIssueWatchStateResponse> getIssueWatchState(Mono<GetIssueWatchStateRequest> request) {
         return request
                 .flatMap(req -> validateIssueActor(
@@ -180,8 +180,8 @@ public class GrpcIssueWatcherService {
             String operation
     ) {
         return Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(requestId, "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(nodeId, "header.nodeId"),
+                        GrpcRequestValidators.requireHeaderRequestId(requestId),
+                        GrpcRequestValidators.requireHeaderNodeId(nodeId),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(issueId, "body.issueId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(actorUserId, "body.actorUserId")
                 )
@@ -203,8 +203,8 @@ public class GrpcIssueWatcherService {
                 : GrpcRequestValidators.parseUuidOrInvalidArgument(targetUserId, "body.targetUserId").map(Optional::of);
 
         return Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(requestId, "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(nodeId, "header.nodeId"),
+                        GrpcRequestValidators.requireHeaderRequestId(requestId),
+                        GrpcRequestValidators.requireHeaderNodeId(nodeId),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(issueId, "body.issueId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(actorUserId, "body.actorUserId"),
                         targetUserIdMono

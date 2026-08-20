@@ -31,17 +31,13 @@ public class GrpcIssueCommentService {
     private final CommentService commentService;
     private final CommentMapper commentMapper;
 
-    @TrackMetrics(counter = "issue-service_add-issue-comment_grpc_counter",
-            timer = "issue-service_add-issue-comment_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.ADD_ISSUE_COMMENT_COUNTER,
+            timer = IssueGrpcMetrics.ADD_ISSUE_COMMENT_TIMER)
     public Mono<AddIssueCommentResponse> addIssueComment(Mono<AddIssueCommentRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
+                                GrpcRequestValidators.requireHeaderRequestId(req.getHeader().getRequestId()),
+                                GrpcRequestValidators.requireHeaderNodeId(req.getHeader().getNodeId()),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
@@ -80,17 +76,13 @@ public class GrpcIssueCommentService {
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueComment"));
     }
 
-    @TrackMetrics(counter = "issue-service_update-issue-comment_grpc_counter",
-            timer = "issue-service_update-issue-comment_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.UPDATE_ISSUE_COMMENT_COUNTER,
+            timer = IssueGrpcMetrics.UPDATE_ISSUE_COMMENT_TIMER)
     public Mono<UpdateIssueCommentResponse> updateIssueComment(Mono<UpdateIssueCommentRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
+                                GrpcRequestValidators.requireHeaderRequestId(req.getHeader().getRequestId()),
+                                GrpcRequestValidators.requireHeaderNodeId(req.getHeader().getNodeId()),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
@@ -135,17 +127,13 @@ public class GrpcIssueCommentService {
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssueComment"));
     }
 
-    @TrackMetrics(counter = "issue-service_delete-issue-comment_grpc_counter",
-            timer = "issue-service_delete-issue-comment_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.DELETE_ISSUE_COMMENT_COUNTER,
+            timer = IssueGrpcMetrics.DELETE_ISSUE_COMMENT_TIMER)
     public Mono<DeleteIssueCommentResponse> deleteIssueComment(Mono<DeleteIssueCommentRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
+                                GrpcRequestValidators.requireHeaderRequestId(req.getHeader().getRequestId()),
+                                GrpcRequestValidators.requireHeaderNodeId(req.getHeader().getNodeId()),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
@@ -184,17 +172,13 @@ public class GrpcIssueCommentService {
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueComment"));
     }
 
-    @TrackMetrics(counter = "issue-service_list-issue-comments_grpc_counter",
-            timer = "issue-service_list-issue-comments_grpc_timer")
+    @TrackMetrics(counter = IssueGrpcMetrics.LIST_ISSUE_COMMENTS_COUNTER,
+            timer = IssueGrpcMetrics.LIST_ISSUE_COMMENTS_TIMER)
     public Mono<ListIssueCommentsResponse> listIssueComments(Mono<ListIssueCommentsRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
+                                GrpcRequestValidators.requireHeaderRequestId(req.getHeader().getRequestId()),
+                                GrpcRequestValidators.requireHeaderNodeId(req.getHeader().getNodeId()),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),

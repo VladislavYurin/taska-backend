@@ -18,7 +18,24 @@ public final class GrpcRequestValidators {
     private static final int MAX_LEN = 255;
     private static final Pattern KEY_PATTERN = Pattern.compile("^[\\x21-\\x7E]{1,255}$");
 
+    private static final String HEADER_REQUEST_ID = "header.requestId";
+    private static final String HEADER_NODE_ID = "header.nodeId";
+
     private GrpcRequestValidators() {
+    }
+
+    /**
+     * Проверяет {@code header.requestId}: не пустой.
+     */
+    public static Mono<String> requireHeaderRequestId(String raw) {
+        return requireNonBlank(raw, HEADER_REQUEST_ID);
+    }
+
+    /**
+     * Проверяет {@code header.nodeId}: не пустой.
+     */
+    public static Mono<String> requireHeaderNodeId(String raw) {
+        return requireNonBlank(raw, HEADER_NODE_ID);
     }
 
     /**
