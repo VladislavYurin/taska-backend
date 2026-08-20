@@ -2,6 +2,7 @@ package ru.taska.service;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -9,11 +10,14 @@ import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.config.props.MetadataCatalogProperties.ServiceProperties;
 import ru.taska.config.props.MetadataCatalogProperties.TableProperties;
 import ru.taska.domain.ColumnMetadata;
+import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PrimaryKeyMetadata;
 import ru.taska.dto.CatalogDto;
 import ru.taska.dto.ColumnDto;
 import ru.taska.dto.ServiceDto;
 import ru.taska.dto.TableDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.MetadataSchemaRepository;
 
 import java.util.LinkedHashMap;
@@ -23,6 +27,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MetadataService {
@@ -92,7 +97,9 @@ public class MetadataService {
     ) {
         Set<String> allow = Set.copyOf(tableProps.allow());
         Set<String> deny = Set.copyOf(tableProps.deny());
-        Set<String> sensitiveColumns = Set.copyOf(tableProps.sensitiveColumns());
+        Set<String> sensitiveColumns = tableProps.sensitiveColumns() != null
+                ? tableProps.sensitiveColumns().keySet()
+                : Set.of();
 
         Set<String> pkKeys = primaryKeys.stream()
                 .map(pk -> pk.tableName() + "." + pk.columnName())
@@ -123,25 +130,78 @@ public class MetadataService {
     }
 
     /**
-     * Возвращает список названий колонок для конкретной таблицы.
-     * Используется в ListTableRows для заполнения MetaInfo.columns.
+     * Возвращает имя primary key колонки для конкретной таблицы.
      *
      * @param serviceKey ключ сервиса (например, "auth")
      * @param tableName  имя таблицы (например, "users")
-     * @return список названий колонок
+     * @return имя PK колонки
      */
-    public Mono<List<String>> getTableColumns(String serviceKey, String tableName) {
+    public Mono<String> getPrimaryKeyColumn(String serviceKey, String tableName) {
         var serviceProps = properties.services().get(serviceKey);
         if (serviceProps == null) {
-            return Mono.error(new IllegalArgumentException("Service not found: " + serviceKey));
+            log.warn("Service not found: {}", serviceKey);
+            return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                    "Service not found: " + serviceKey));
+        }
+
+        String schema = serviceProps.schema();
+
+        return schemaRepository.findPrimaryKeys(serviceKey, schema)
+                .filter(pk -> pk.tableName().equals(tableName))
+                .map(PrimaryKeyMetadata::columnName)
+                .next()
+                .switchIfEmpty(Mono.defer(() -> resolveMissingPrimaryKey(serviceKey, schema, tableName)));
+    }
+
+    /**
+     * Если PK не найден: либо таблицы нет в схеме, либо у неё нет primary key.
+     * Различаем эти случаи, чтобы клиент получал осмысленную ошибку.
+     */
+    private Mono<String> resolveMissingPrimaryKey(String serviceKey, String schema, String tableName) {
+        return tableExists(serviceKey, schema, tableName)
+                .flatMap(exists -> {
+                    if (!exists) {
+                        log.warn("Table not found: '{}' in service '{}'", tableName, serviceKey);
+                        return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                                "Table not found: " + tableName));
+                    }
+                    log.warn("No primary key found for table '{}' in service '{}'", tableName, serviceKey);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                            "No primary key found for table: " + tableName));
+                });
+    }
+
+    private Mono<Boolean> tableExists(String serviceKey, String schema, String tableName) {
+        return schemaRepository.findColumns(serviceKey, schema)
+                .filter(column -> column.tableName().equals(tableName))
+                .hasElements();
+    }
+
+    /**
+     * Возвращает колонки таблицы с их типами.
+     *
+     * @param serviceKey ключ сервиса (например, "auth")
+     * @param tableName  имя таблицы (например, "users")
+     * @return map: имя колонки → тип
+     */
+    public Mono<Map<String, DbColumnType>> getTableColumns(String serviceKey, String tableName) {
+        var serviceProps = properties.services().get(serviceKey);
+        if (serviceProps == null) {
+            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Service not found: " + serviceKey));
         }
 
         String schema = serviceProps.schema();
 
         return schemaRepository.findColumns(serviceKey, schema)
                 .filter(column -> column.tableName().equals(tableName))
-                .map(ColumnMetadata::columnName)
-                .collectList();
+                .collectList()
+                .map(columns -> columns.stream()
+                        .collect(Collectors.toMap(
+                                ColumnMetadata::columnName,
+                                c -> DbColumnType.fromPgType(c.dataType()),
+                                (a, b) -> a,
+                                LinkedHashMap::new
+                        )));
     }
 
     /**

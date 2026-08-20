@@ -31,8 +31,9 @@ public enum EventType {
     COMMENT_UPDATED("CommentUpdated"),
     COMMENT_DELETED("CommentDeleted"),
     ISSUE_WATCHED("IssueWatched"),
-    ISSUE_UNWATCHED("IssueUnwatched");
-
+    ISSUE_UNWATCHED("IssueUnwatched"),
+    ISSUE_LABEL_ADDED("LabelAdded"),
+    ISSUE_LABEL_REMOVED("LabelRemoved");
 
     private final String value;
 

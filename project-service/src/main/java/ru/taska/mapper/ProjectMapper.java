@@ -9,6 +9,7 @@ import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ReportingPolicy;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.domain.Project;
+import ru.taska.domain.dto.ProjectCheckMembershipDto;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -50,4 +51,13 @@ public interface ProjectMapper {
                 .setNanos(instant.getNano())
                 .build();
     }
+
+    @Mapping(target = "id", source = "project_id")
+    @Mapping(target = "projectKey", source = "project_key")
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "createdBy", source = "created_by")
+    @Mapping(target = "createdAt", source = "created_at")
+    @Mapping(target = "updatedAt", source = "updated_at")
+    @Mapping(target = "archivedAt", source = "archived_at")
+    Project toProject(ProjectCheckMembershipDto dto);
 }

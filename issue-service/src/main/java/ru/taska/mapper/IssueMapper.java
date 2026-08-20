@@ -10,6 +10,7 @@ import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
 import ru.taska.domain.IdempotencyKey;
@@ -24,6 +25,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.IssueWatchStateDto;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -87,8 +89,19 @@ public class IssueMapper {
         var historyProto = issueWithHistory.getHistory().stream()
                 .map(this::toIssueHistoryProto)
                 .toList();
+        var issueProto = toIssueProto(issueWithHistory.getIssue());
+
+        // Добавление меток в issueHistory
+        var issueWithLabels = issueProto.toBuilder()
+                .addAllLabels(
+                        issueWithHistory.getLabels().stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
+                .build();
+
         return IssueWithHistoryResponse.newBuilder()
-                .setIssue(toIssueProto(issueWithHistory.getIssue()))
+                .setIssue(issueWithLabels)
                 .addAllHistory(historyProto)
                 .build();
     }
@@ -100,10 +113,39 @@ public class IssueMapper {
         var historyProto = issueWithHistory.getHistory().stream()
                 .map(this::toIssueHistoryProto)
                 .toList();
+
+        var issueProto = toIssueProto(issueWithHistory.getIssue(), watchState).toBuilder()
+                .addAllLabels(
+                        issueWithHistory.getLabels().stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
+                .build();
+
         return IssueWithHistoryResponse.newBuilder()
-                .setIssue(toIssueProto(issueWithHistory.getIssue(), watchState))
+                .setIssue(issueProto)
                 .addAllHistory(historyProto)
                 .build();
+    }
+
+    //  domain ProjectLabels → proto ProjectLabelResponse
+    private ProjectLabelResponse toProjectLabelProto(ProjectLabels label) {
+        var builder = ProjectLabelResponse.newBuilder()
+                .setId(label.getId().toString())
+                .setProjectId(label.getProjectId().toString())
+                .setName(label.getName())
+                .setColor(label.getColor())
+                .setCreatedBy(label.getCreatedBy().toString());
+
+        if (label.getCreatedAt() != null) {
+            builder.setCreatedAt(toTimestamp(label.getCreatedAt()));
+        }
+
+        if (label.getDeletedAt() != null) {
+            builder.setDeletedAt(toTimestamp(label.getDeletedAt()));
+        }
+
+        return builder.build();
     }
 
     public IssueShortResponse toIssueShortProto(Issue issue) {
@@ -218,6 +260,8 @@ public class IssueMapper {
             case COMMENT_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_CREATED;
             case COMMENT_UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_UPDATED;
             case COMMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_DELETED;
+            case LABEL_ADDED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_ADDED;
+            case LABEL_REMOVED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_REMOVED;
         };
     }
 

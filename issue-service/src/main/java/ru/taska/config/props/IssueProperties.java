@@ -34,8 +34,14 @@ public record IssueProperties(
             Set<ProjectRole> commentRoles,
             Set<ProjectRole> watchIssueRoles,
             Set<ProjectRole> listWatchersRoles,
-            Set<ProjectRole> manageWatchersRoles
-
+            Set<ProjectRole> manageWatchersRoles,
+            Set<ProjectRole> createProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> updateProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> deleteProjectLabelRoles,   // ADMIN
+            Set<ProjectRole> listProjectLabelRoles,     // VIEWER+
+            Set<ProjectRole> addIssueLabelRoles,        // MEMBER+
+            Set<ProjectRole> removeIssueLabelRoles,     // MEMBER+
+            Set<ProjectRole> listIssueLabelRoles        // VIEWER+
     ) {
     }
 

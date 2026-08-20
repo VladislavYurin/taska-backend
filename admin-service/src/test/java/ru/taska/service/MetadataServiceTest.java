@@ -5,16 +5,21 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
+import ru.taska.config.props.MaskType;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.config.props.MetadataCatalogProperties.ServiceProperties;
 import ru.taska.config.props.MetadataCatalogProperties.TableProperties;
 import ru.taska.domain.ColumnMetadata;
+import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PrimaryKeyMetadata;
 import ru.taska.dto.ColumnDto;
 import ru.taska.dto.ServiceDto;
 import ru.taska.dto.TableDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.MetadataSchemaRepository;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -128,7 +133,7 @@ class MetadataServiceTest {
         List<TableDto> tables = buildTables(
                 List.of(col("users", "id", "uuid"), col("sessions", "id", "uuid")),
                 List.of(),
-                new TableProperties(List.of("users", "sessions"), List.of("sessions"), List.of())
+                new TableProperties(List.of("users", "sessions"), List.of("sessions"), Map.of())
         );
 
         assertThat(tables).extracting(TableDto::name).containsExactly("users");
@@ -160,7 +165,7 @@ class MetadataServiceTest {
         ));
 
         MetadataService service = new MetadataService(
-                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", allTables()))),
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("auth", serviceProps("auth-db", allTables()))),
                 repository
         );
 
@@ -189,7 +194,7 @@ class MetadataServiceTest {
                 .thenReturn(Flux.just(col("users", "id", "uuid")));
 
         MetadataService service = new MetadataService(
-                new MetadataCatalogProperties(Map.of(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of(
                         "auth", new ServiceProperties("auth-db", "custom_schema", allTables())
                 )),
                 repository
@@ -212,7 +217,7 @@ class MetadataServiceTest {
                 .thenReturn(Flux.just(col("issues", "id", "uuid")));
 
         MetadataService service = new MetadataService(
-                new MetadataCatalogProperties(Map.of(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of(
                         "auth", serviceProps("auth-db", allTables()),
                         "issue", serviceProps("issue-db", allTables())
                 )),
@@ -227,9 +232,128 @@ class MetadataServiceTest {
     }
 
     @Test
+    void getPrimaryKeyColumn_returnsPkWhenPresent() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("issue"));
+        Mockito.when(repository.findPrimaryKeys("issue", "taska"))
+                .thenReturn(Flux.just(new PrimaryKeyMetadata("issues", "id")));
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repository
+        );
+
+        StepVerifier.create(service.getPrimaryKeyColumn("issue", "issues"))
+                .expectNext("id")
+                .verifyComplete();
+    }
+
+    @Test
+    void getPrimaryKeyColumn_returnsNotFoundWhenServiceUnknown() {
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repositoryWith(Set.of("issue"))
+        );
+
+        StepVerifier.create(service.getPrimaryKeyColumn("unknown", "issues"))
+                .expectErrorMatches(e -> e instanceof DomainException de
+                        && de.getStatus() == DomainStatus.NOT_FOUND
+                        && de.getMessage().equals("Service not found: unknown"))
+                .verify();
+    }
+
+    @Test
+    void getTableColumns_returnsNotFoundWhenServiceUnknown() {
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repositoryWith(Set.of("issue"))
+        );
+
+        StepVerifier.create(service.getTableColumns("unknown", "issues"))
+                .expectErrorMatches(e -> e instanceof DomainException de
+                        && de.getStatus() == DomainStatus.NOT_FOUND
+                        && de.getMessage().equals("Service not found: unknown"))
+                .verify();
+    }
+
+    @Test
+    void getPrimaryKeyColumn_returnsTableNotFoundWhenTableMissing() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("issue"));
+        // no PKs, no columns → table does not exist
+        Mockito.when(repository.findPrimaryKeys("issue", "taska")).thenReturn(Flux.empty());
+        Mockito.when(repository.findColumns("issue", "taska")).thenReturn(Flux.empty());
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repository
+        );
+
+        StepVerifier.create(service.getPrimaryKeyColumn("issue", "issues1"))
+                .expectErrorMatches(e -> e instanceof DomainException de
+                        && de.getStatus() == DomainStatus.NOT_FOUND
+                        && de.getMessage().equals("Table not found: issues1"))
+                .verify();
+    }
+
+    @Test
+    void getPrimaryKeyColumn_returnsNoPrimaryKeyWhenTableExistsWithoutPk() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("issue"));
+        Mockito.when(repository.findPrimaryKeys("issue", "taska")).thenReturn(Flux.empty());
+        Mockito.when(repository.findColumns("issue", "taska"))
+                .thenReturn(Flux.just(col("orphan_table", "payload", "jsonb")));
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repository
+        );
+
+        StepVerifier.create(service.getPrimaryKeyColumn("issue", "orphan_table"))
+                .expectErrorMatches(e -> e instanceof DomainException de
+                        && de.getStatus() == DomainStatus.NOT_FOUND
+                        && de.getMessage().equals("No primary key found for table: orphan_table"))
+                .verify();
+    }
+
+    @Test
+    void getTableColumns_returnsEmptyMapWhenTableHasNoColumns() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("issue"));
+        Mockito.when(repository.findColumns("issue", "taska")).thenReturn(Flux.empty());
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repository
+        );
+
+        StepVerifier.create(service.getTableColumns("issue", "issues1"))
+                .assertNext(columns -> assertThat(columns).isEmpty())
+                .verifyComplete();
+    }
+
+    @Test
+    void getTableColumns_returnsColumnsWhenTableExists() {
+        MetadataSchemaRepository repository = repositoryWith(Set.of("issue"));
+        Mockito.when(repository.findColumns("issue", "taska")).thenReturn(Flux.just(
+                col("issues", "id", "uuid"),
+                col("issues", "title", "character varying")
+        ));
+
+        MetadataService service = new MetadataService(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("issue", serviceProps("issue-db", allTables()))),
+                repository
+        );
+
+        StepVerifier.create(service.getTableColumns("issue", "issues"))
+                .assertNext(columns -> assertThat(columns)
+                        .containsExactly(
+                                Map.entry("id", DbColumnType.OTHER),
+                                Map.entry("title", DbColumnType.TEXT)
+                        ))
+                .verifyComplete();
+    }
+
+    @Test
     void validateClientsConfigured_failsWhenClientIsMissing() {
         MetadataService service = new MetadataService(
-                new MetadataCatalogProperties(Map.of(
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of(
                         "auth", serviceProps("auth-db", allTables()),
                         "issue", serviceProps("issue-db", allTables())
                 )),
@@ -244,7 +368,7 @@ class MetadataServiceTest {
     @Test
     void validateClientsConfigured_passesWhenEveryServiceHasClient() {
         MetadataService service = new MetadataService(
-                new MetadataCatalogProperties(Map.of("auth", serviceProps("auth-db", allTables()))),
+                new MetadataCatalogProperties(null, MaskType.MASK_FULL, Map.of("auth", serviceProps("auth-db", allTables()))),
                 repositoryWith(Set.of("auth"))
         );
 
@@ -274,19 +398,23 @@ class MetadataServiceTest {
     }
 
     private static TableProperties allTables() {
-        return new TableProperties(List.of(), List.of(), List.of());
+        return new TableProperties(List.of(), List.of(), Map.of());
     }
 
     private static TableProperties allowOnly(String... tables) {
-        return new TableProperties(List.of(tables), List.of(), List.of());
+        return new TableProperties(List.of(tables), List.of(), Map.of());
     }
 
     private static TableProperties denied(String... tables) {
-        return new TableProperties(List.of(), List.of(tables), List.of());
+        return new TableProperties(List.of(), List.of(tables), Map.of());
     }
 
     private static TableProperties sensitive(String... columns) {
-        return new TableProperties(List.of(), List.of(), List.of(columns));
+        Map<String, String> map = new HashMap<>();
+        for (String column : columns) {
+            map.put(column, "MASK_FULL");
+        }
+        return new TableProperties(List.of(), List.of(), map);
     }
 
     private static ColumnDto column(List<TableDto> tables, String tableName, String columnName) {

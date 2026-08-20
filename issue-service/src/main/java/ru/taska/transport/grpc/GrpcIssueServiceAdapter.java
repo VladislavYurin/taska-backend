@@ -39,6 +39,19 @@ import ru.taska.api.issue.v1.UnwatchIssueRequest;
 import ru.taska.api.issue.v1.UnwatchIssueResponse;
 import ru.taska.api.issue.v1.WatchIssueRequest;
 import ru.taska.api.issue.v1.WatchIssueResponse;
+import ru.taska.api.issue.v1.AddIssueLabelRequest;
+import ru.taska.api.issue.v1.AddIssueLabelResponse;
+import ru.taska.api.issue.v1.CreateProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.ListIssueLabelsRequest;
+import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListProjectLabelsRequest;
+import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
+import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
+import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
+import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -173,5 +186,48 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     @Override
     public Mono<GetIssueWatchStateResponse> getIssueWatchState(Mono<GetIssueWatchStateRequest> request) {
         return grpcIssueWatcherService.getIssueWatchState(request);
+    }
+
+    public Mono<ProjectLabelResponse> createProjectLabel(Mono<CreateProjectLabelRequest> request) {
+        return grpcIssueService.createProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProjectLabel"));
+    }
+
+    @Override
+    public Mono<ProjectLabelResponse> updateProjectLabel(Mono<UpdateProjectLabelRequest> request) {
+        return grpcIssueService.updateProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProjectLabel"));
+    }
+
+    @Override
+    public Mono<DeleteProjectLabelResponse> deleteProjectLabel(Mono<DeleteProjectLabelRequest> request) {
+        return grpcIssueService.deleteProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectLabel"));
+    }
+
+    @Override
+    public Mono<ListProjectLabelsResponse> listProjectLabels(Mono<ListProjectLabelsRequest> request) {
+        return grpcIssueService.listProjectLabels(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectLabels"));
+    }
+
+    // ===== Методы для управления метками задачи (MEMBER) =====
+
+    @Override
+    public Mono<AddIssueLabelResponse> addIssueLabel(Mono<AddIssueLabelRequest> request) {
+        return grpcIssueService.addIssueLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addIssueLabel"));
+    }
+
+    @Override
+    public Mono<RemoveIssueLabelResponse> removeIssueLabel(Mono<RemoveIssueLabelRequest> request) {
+        return grpcIssueService.removeIssueLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("removeIssueLabel"));
+    }
+
+    @Override
+    public Mono<ListIssueLabelsResponse> listIssueLabels(Mono<ListIssueLabelsRequest> request) {
+        return grpcIssueService.listIssueLabels(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssueLabels"));
     }
 }

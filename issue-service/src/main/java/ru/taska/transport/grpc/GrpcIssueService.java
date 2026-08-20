@@ -24,6 +24,22 @@ import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
+import ru.taska.api.issue.v1.AddIssueLabelRequest;
+import ru.taska.api.issue.v1.AddIssueLabelResponse;
+import ru.taska.api.issue.v1.CreateProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.ListIssueLabelsRequest;
+import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListProjectLabelsRequest;
+import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
+import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
+import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
+import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
+import ru.taska.domain.dto.LabelCommands;
+import ru.taska.mapper.LabelMapper;
+import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.logging.GrpcIssueLogging;
 import validator.GrpcRequestValidators;
@@ -40,6 +56,8 @@ public class GrpcIssueService {
     private final IssueWatcherService issueWatcherService;
     private final IssueTransitionService issueTransitionService;
     private final IssueMapper issueMapper;
+    private final LabelService labelService;
+    private final LabelMapper labelMapper;
 
     @TrackMetrics(counter = "issue-service_create-issue_grpc_counter",
             timer = "issue-service_create-issue_grpc_timer")
@@ -165,73 +183,86 @@ public class GrpcIssueService {
     public Mono<ListIssuesResponse> listIssues(Mono<ListIssuesRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getActorUserId(), "body.actorUserId"
-                                ),
-                                req.getBody().hasAssigneeId()
-                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
-                                        : Mono.just(Optional.<UUID>empty())
-                        )
-                        .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(
-                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssues")
-                        )
-                        .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID actorUserId = t.getT4();
-                            UUID assigneeId = t.getT5().orElse(null);
-                            String statusKey = req.getBody().hasStatusKey()
-                                    ? req.getBody().getStatusKey()
-                                    : null;
-                            Integer pageSize = req.getBody().hasPageSize()
-                                    ? req.getBody().getPageSize()
-                                    : null;
-                            Integer page = req.getBody().hasPage()
-                                    ? req.getBody().getPage()
-                                    : null;
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"
+                                        ),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"
+                                        ),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getProjectId(), "body.projectId"
+                                        ),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId"
+                                        ),
+                                        req.getBody().hasAssigneeId()
+                                                ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
+                                                : Mono.just(Optional.<UUID>empty()),
+                                        req.getBody().hasLabelId()
+                                                ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getLabelId(), "body.labelId").map(Optional::of)
+                                                : Mono.just(Optional.<UUID>empty())
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(
+                                                req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssues")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+                                    UUID projectId = t.getT3();
+                                    UUID actorUserId = t.getT4();
+                                    UUID assigneeId = t.getT5().orElse(null);
+                                    UUID labelId = t.getT6().orElse(null);
+                                    String statusKey = req.getBody().hasStatusKey()
+                                            ? req.getBody().getStatusKey()
+                                            : null;
+                                    Integer pageSize = req.getBody().hasPageSize()
+                                            ? req.getBody().getPageSize()
+                                            : null;
+                                    Integer page = req.getBody().hasPage()
+                                            ? req.getBody().getPage()
+                                            : null;
 
-                            log.info("[{}][{}] listIssues: projectId={}, actorUserId={}, status={}, assigneeId={}, " +
-                                            "page={}, pageSize={}",
-                                    requestId, nodeId, projectId, actorUserId, statusKey, assigneeId, page, pageSize);
-
-                            return issueService.listIssues(
-                                            requestId,
-                                            nodeId,
+                                    log.info("[{}][{}] listIssues: projectId={}, actorUserId={}, status={}, assigneeId={}, page={}, pageSize={}, labelId={}",
+                                            requestId, nodeId,
                                             projectId,
                                             actorUserId,
                                             statusKey,
                                             assigneeId,
                                             page,
-                                            pageSize
-                                    )
-                                    .map(result -> ListIssuesResponse.newBuilder()
-                                            .addAllIssues(
-                                                    result.items().stream()
-                                                            .map(issueMapper::toIssueShortProto)
-                                                            .toList()
-                                            )
-                                            .setTotalCount((int) result.totalCount())
-                                            .build()
-                                    )
-                                    .doOnNext(result ->
-                                            log.info("[{}][{}] listIssues: successfully found {} issues",
-                                                    requestId, nodeId, result.getTotalCount())
-                                    )
-                                    .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "listIssues")
+                                            pageSize,
+                                            labelId
                                     );
-                        }));
+
+                                    return issueService.listIssues(
+                                                    requestId,
+                                                    nodeId,
+                                                    projectId,
+                                                    actorUserId,
+                                                    statusKey,
+                                                    assigneeId,
+                                                    labelId,
+                                                    page,
+                                                    pageSize
+                                            )
+                                            .map(result -> ListIssuesResponse.newBuilder()
+                                                    .addAllIssues(
+                                                            result.items().stream()
+                                                                    .map(issueMapper::toIssueShortProto)
+                                                                    .toList()
+                                                    )
+                                                    .setTotalCount((int) result.totalCount())
+                                                    .build()
+                                            )
+                                            .doOnNext(result ->
+                                                    log.info("[{}][{}] listIssues: successfully found {} issues",
+                                                            requestId, nodeId, result.getTotalCount())
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listIssues")
+                                            );
+                                })
+                );
     }
 
     @TrackMetrics(counter = "issue-service_assign-issue_grpc_counter",
@@ -435,4 +466,330 @@ public class GrpcIssueService {
                 .map(issueMapper::toIssueDetailsProto);
     }
 
+
+@TrackMetrics(counter = "issue-service_create-project-label_grpc_counter",
+            timer = "issue-service_create-project-label_grpc_timer")
+    public Mono<ProjectLabelResponse> createProjectLabel(Mono<CreateProjectLabelRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getName(), "body.name"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getColor(), "body.color"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createProjectLabel")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+
+                            log.info("[{}][{}] createProjectLabel: projectId={}, name={}, color={}",
+                                    requestId, nodeId,
+                                    req.getBody().getProjectId(),
+                                    req.getBody().getName(),
+                                    req.getBody().getColor()
+                            );
+
+                            LabelCommands.CreateProjectLabelRequestDto requestDto = labelMapper.toCreateProjectLabelRequestDto(req);
+
+                            return labelService.createProjectLabel(requestId, nodeId, requestDto)
+                                    .map(labelMapper::toProjectLabelProtoResponse)
+                                    .doOnSuccess(result ->
+                                            log.info("[{}][{}] createProjectLabel: successfully created, labelId={}",
+                                                    requestId, nodeId, result.getId())
+                                    )
+                                    .doOnError(DomainException.class,
+                                            GrpcIssueLogging.logOnError(requestId, nodeId, "createProjectLabel")
+                                    );
+                        })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_create-project-label_grpc_counter",
+            timer = "issue-service_create-project-label_grpc_timer")
+    public Mono<ProjectLabelResponse> updateProjectLabel(Mono<UpdateProjectLabelRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getLabelId(), "body.labelId"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getProjectId(), "body.projectId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getName(), "body.name"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getColor(), "body.color"
+                                ),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                        req.getBody().getActorUserId(), "body.actorUserId"
+                                ))
+                        .doOnError(StatusRuntimeException.class,
+                                GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "updateProjectLabel")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID labelId = t.getT3();
+
+
+                            log.info("[{}][{}] updateProjectLabel: labelId={},projectId={}, name={}, color={}",
+                                    requestId, nodeId,
+                                    labelId,
+                                    req.getBody().getProjectId(),
+                                    req.getBody().getName(),
+                                    req.getBody().getColor()
+                            );
+
+                            LabelCommands.UpdateProjectLabelRequestDto requestDto = labelMapper.toUpdateProjectLabelRequestDto(req);
+
+                            return labelService.updateProjectLabel(requestId, nodeId, requestDto)
+                                    .map(labelMapper::toProjectLabelProtoResponse)
+                                    .doOnSuccess(result ->
+                                            log.info("[{}][{}] updateProjectLabel: successfully updated, labelId={}",
+                                                    requestId, nodeId, labelId)
+                                    )
+                                    .doOnError(DomainException.class,
+                                            GrpcIssueLogging.logOnError(requestId, nodeId, "updateProjectLabel")
+                                    );
+                        })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_delete-project-label_grpc_counter",
+            timer = "issue-service_delete-project-label_grpc_timer")
+    public Mono<DeleteProjectLabelResponse> deleteProjectLabel(Mono<DeleteProjectLabelRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getLabelId(), "body.labelId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getProjectId(), "body.projectId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId")
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteProjectLabel")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+                                    UUID labelId = t.getT3();
+
+                                    log.info("[{}][{}] deleteProjectLabel: labelId={}, projectId={}",
+                                            requestId, nodeId,
+                                            labelId,
+                                            req.getBody().getProjectId()
+                                    );
+
+                                    LabelCommands.DeleteProjectLabelRequestDto requestDto = labelMapper.toDeleteProjectLabelRequestDto(req);
+
+                                    return labelService.deleteProjectLabel(requestId, nodeId, requestDto)
+                                            .map(labelMapper::toDeleteProjectLabelProtoResponse)
+                                            .doOnSuccess(result ->
+                                                    log.info("[{}][{}] deleteProjectLabel: successfully deleted, labelId={}",
+                                                            requestId, nodeId, labelId)
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "deleteProjectLabel")
+                                            );
+                                })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_list-project-labels_grpc_counter",
+            timer = "issue-service_list-project-labels_grpc_timer")
+    public Mono<ListProjectLabelsResponse> listProjectLabels(Mono<ListProjectLabelsRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getProjectId(), "body.projectId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId")
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listProjectLabels")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+
+                                    log.info("[{}][{}] listProjectLabels: projectId={}",
+                                            requestId, nodeId,
+                                            req.getBody().getProjectId()
+                                    );
+
+                                    LabelCommands.ListProjectLabelsRequestDto requestDto = labelMapper.toListProjectLabelsRequestDto(req);
+
+                                    return labelService.listProjectLabels(requestId, nodeId, requestDto)
+                                            .map(labelMapper::toListProjectLabelsProtoResponse)
+                                            .doOnSuccess(result ->
+                                                    log.info("[{}][{}] listProjectLabels: successfully found {} labels",
+                                                            requestId, nodeId, result.getTotalCount())
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listProjectLabels")
+                                            );
+                                })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_add-issue-label_grpc_counter",
+            timer = "issue-service_add-issue-label_grpc_timer")
+    public Mono<AddIssueLabelResponse> addIssueLabel(Mono<AddIssueLabelRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getIssueId(), "body.issueId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getLabelId(), "body.labelId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId")
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "addIssueLabel")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+                                    String issueId = t.getT2();
+                                    UUID labelId = t.getT4();
+
+                                    log.info("[{}][{}] addIssueLabel: issueId={}, labelId={}",
+                                            requestId, nodeId,
+                                            issueId,
+                                            labelId
+                                    );
+
+                                    LabelCommands.AddIssueLabelRequestDto requestDto = labelMapper.toAddIssueLabelRequestDto(req);
+
+                                    return labelService.addIssueLabel(requestId, nodeId, requestDto)
+                                            .map(labelMapper::toAddIssueLabelProtoResponse)
+                                            .doOnSuccess(result ->
+                                                    log.info("[{}][{}] addIssueLabel: successfully added label={}",
+                                                            requestId, nodeId, labelId)
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "addIssueLabel")
+                                            );
+                                })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_remove-issue-label_grpc_counter",
+            timer = "issue-service_remove-issue-label_grpc_timer")
+    public Mono<RemoveIssueLabelResponse> removeIssueLabel(Mono<RemoveIssueLabelRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getIssueId(), "body.issueId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getLabelId(), "body.labelId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId")
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "removeIssueLabel")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+                                    UUID issueId = t.getT3();
+                                    UUID labelId = t.getT4();
+
+                                    log.info("[{}][{}] removeIssueLabel: issueId={}, labelId={}",
+                                            requestId, nodeId,
+                                            issueId,
+                                            labelId
+                                    );
+
+                                    LabelCommands.RemoveIssueLabelRequestDto requestDto = labelMapper.toRemoveIssueLabelRequestDto(req);
+
+                                    return labelService.removeIssueLabel(requestId, nodeId, requestDto)
+                                            .map(labelMapper::toRemoveIssueLabelProtoResponse)
+                                            .doOnSuccess(result ->
+                                                    log.info("[{}][{}] removeIssueLabel: successfully removed label={}",
+                                                            requestId, nodeId, labelId)
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "removeIssueLabel")
+                                            );
+                                })
+                );
+    }
+
+    @TrackMetrics(counter = "issue-service_list-issue-labels_grpc_counter",
+            timer = "issue-service_list-issue-labels_grpc_timer")
+    public Mono<ListIssueLabelsResponse> listIssueLabels(Mono<ListIssueLabelsRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getIssueId(), "body.issueId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId")
+                                )
+                                .doOnError(StatusRuntimeException.class,
+                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssueLabels")
+                                )
+                                .flatMap(t -> {
+                                    String requestId = t.getT1();
+                                    String nodeId = t.getT2();
+
+                                    log.info("[{}][{}] listIssueLabels: issueId={}",
+                                            requestId, nodeId,
+                                            req.getBody().getIssueId()
+                                    );
+
+                                    LabelCommands.ListIssueLabelsRequestDto requestDto = labelMapper.toListIssueLabelsRequestDto(req);
+
+                                    return labelService.listIssueLabels(requestId, nodeId, requestDto)
+                                            .map(labelMapper::toListIssueLabelsProtoResponse)
+                                            .doOnSuccess(result ->
+                                                    log.info("[{}][{}] listIssueLabels: successfully found labels",
+                                                            requestId, nodeId)
+                                            )
+                                            .doOnError(DomainException.class,
+                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listIssueLabels")
+                                            );
+                                })
+                );
+    }
 }

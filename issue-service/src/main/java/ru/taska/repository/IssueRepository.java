@@ -73,4 +73,54 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
                 AND deleted_at IS NULL
             """)
     Flux<IssueLinkInfoDto> findIssueLinkInfo(UUID sourceIssueId, UUID targetIssueId);
+
+    /**
+     * Находит задачи по проекту, метке, статусу и исполнителю (с JOIN с issue_labels)
+     * @param projectId
+     * @param labelId
+     * @param limit
+     * @param offset
+     * @return
+     */
+    @Query("""
+        SELECT i.* FROM taska.issues i
+        JOIN taska.issue_labels il ON il.issue_id = i.id
+        WHERE i.project_id = :projectId
+        AND i.deleted_at IS NULL
+        AND il.label_id = :labelId
+        AND (:statusKey IS NULL OR i.status_key = :statusKey)
+        AND (:assigneeId IS NULL OR i.assignee_id = :assigneeId)
+        ORDER BY i.created_at DESC
+        LIMIT :limit OFFSET :offset
+        """)
+    Flux<Issue> findByLabelIdWithFilters(
+            UUID projectId,
+            UUID labelId,
+            String statusKey,
+            UUID assigneeId,
+            int limit,
+            long offset
+    );
+
+    /**
+     * Считает задачи по проекту, метке, статусу и исполнителю (с JOIN с issue_labels)
+     * @param projectId
+     * @param labelId
+     * @return
+     */
+    @Query("""
+    SELECT COUNT(*) FROM taska.issues i
+    JOIN taska.issue_labels il ON il.issue_id = i.id
+    WHERE i.project_id = :projectId
+    AND i.deleted_at IS NULL
+    AND il.label_id = :labelId
+    AND (:statusKey IS NULL OR i.status_key = :statusKey)
+    AND (:assigneeId IS NULL OR i.assignee_id = :assigneeId)
+""")
+    Mono<Long> countByLabelIdWithFilters(
+            UUID projectId,
+            UUID labelId,
+            String statusKey,
+            UUID assigneeId
+    );
 }
