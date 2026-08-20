@@ -46,6 +46,9 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
+    private static final String PROJECT_ID = "projectId";
+    private static final String WATCHER_USER_ID = "watcherUserId";
+    private static final String ACTOR_USER_ID = "actorUserId";
 
     private final ObjectMapper objectMapper;
 
@@ -305,6 +308,43 @@ public class PayloadSerializer {
         node.put(DELETED_BY, deletedByUserId.toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о подписке на задачу.
+     *
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор подписчика.
+     * @param actorUserId   идентификатор пользователя, оформившего подписку.
+     * @return данные события подписки.
+     */
+    public JsonNode createIssueWatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об отписке от задачи.
+     *
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор отписанного пользователя.
+     * @param actorUserId   идентификатор пользователя, выполнившего отписку.
+     * @return данные события отписки.
+     */
+    public JsonNode createIssueUnwatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
+    private ObjectNode createWatcherPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(PROJECT_ID, projectId.toString());
+        node.put(WATCHER_USER_ID, watcherUserId.toString());
+        node.put(ACTOR_USER_ID, actorUserId.toString());
 
         return node;
     }

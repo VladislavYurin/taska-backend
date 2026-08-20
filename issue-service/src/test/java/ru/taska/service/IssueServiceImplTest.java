@@ -55,6 +55,9 @@ public class IssueServiceImplTest {
     @Mock
     protected IssueTransitionValidator validator;
 
+    @Mock
+    protected ru.taska.service.watcher.IssueAutoWatchService issueAutoWatchService;
+
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     protected IssueProperties issueProperties;
 

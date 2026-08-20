@@ -27,6 +27,7 @@ import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.IssueService;
 import ru.taska.service.OutboxEventService;
+import ru.taska.service.watcher.IssueAutoWatchService;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.util.PayloadSerializer;
@@ -60,6 +61,7 @@ public class IssueServiceImpl implements IssueService {
     private final ProjectRoleChecker projectRoleChecker;
     private final ObjectMapper objectMapper;
     private final IssueHistoryRepository issueHistoryRepository;
+    private final IssueAutoWatchService issueAutoWatchService;
 
     @Override
     @Transactional
@@ -116,6 +118,7 @@ public class IssueServiceImpl implements IssueService {
                                     return issueHistoryService.saveIssueCreateHistory(requestId, nodeId, issue)
                                             .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue))
                                             .then(idempotencyKeyRepository.save(keyEntity))
+                                            .then(issueAutoWatchService.watchReporterOnCreate(requestId, nodeId, issue))
                                             .thenReturn(issue)
                                             .doOnSuccess(savedIssue ->
                                                     log.info("[{}][{}] Issue successfully created by user with id: {}",
@@ -171,6 +174,8 @@ public class IssueServiceImpl implements IssueService {
                                                 requestId, nodeId, assignedIssue.getId(), actorUserId, IssueEventType.ASSIGNED, payload)
                                         .then(outboxEventService.saveOutboxEvent(
                                                 requestId, nodeId, AggregateType.ISSUE, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
+                                        .then(issueAutoWatchService.watchAssigneeOnAssign(
+                                                requestId, nodeId, savedIssue, actorUserId))
                                         .then(Mono.fromRunnable(() ->
                                                 log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
                                                         requestId, nodeId, assigneeId, issueId)))

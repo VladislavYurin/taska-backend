@@ -12,7 +12,8 @@ public record IssueProperties(
         List list,
         Card card,
         IdempotencyKeyTtl idempotencyKeyTtl,
-        RetryConfig retry
+        RetryConfig retry,
+        AutoWatch autoWatch
 ) {
 
     public record AllowedRoles(
@@ -30,7 +31,11 @@ public record IssueProperties(
             Set<ProjectRole> viewAttachmentRoles,
             Set<ProjectRole> deleteOwnAttachmentRoles,
             Set<ProjectRole> deleteAttachmentRoles,
-            Set<ProjectRole> commentRoles
+            Set<ProjectRole> commentRoles,
+            Set<ProjectRole> watchIssueRoles,
+            Set<ProjectRole> listWatchersRoles,
+            Set<ProjectRole> manageWatchersRoles
+
     ) {
     }
 
@@ -38,6 +43,19 @@ public record IssueProperties(
             int defaultPageSize,
             int maxPageSize
     ) {
+        public int resolvePage(Integer page) {
+            if (page == null || page < 0) {
+                return 0;
+            }
+            return page;
+        }
+
+        public int resolvePageSize(Integer pageSize) {
+            if (pageSize == null || pageSize < 1) {
+                return defaultPageSize;
+            }
+            return Math.min(pageSize, maxPageSize);
+        }
     }
 
     public record Card(int maxHistorySize) {
@@ -50,5 +68,18 @@ public record IssueProperties(
             int maxAttempts,
             Duration minBackoff
     ) {
+    }
+
+    public record AutoWatch(
+            boolean onCreateReporter,
+            boolean onAssignAssignee
+    ) {
+        public static AutoWatch enabled() {
+            return new AutoWatch(true, true);
+        }
+
+        public static AutoWatch disabled() {
+            return new AutoWatch(false, false);
+        }
     }
 }

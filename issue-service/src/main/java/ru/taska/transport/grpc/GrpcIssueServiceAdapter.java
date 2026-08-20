@@ -31,12 +31,23 @@ import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
 import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.ListIssueCommentsRequest;
 import ru.taska.api.issue.v1.ListIssueCommentsResponse;
+import ru.taska.api.issue.v1.GetIssueWatchStateRequest;
+import ru.taska.api.issue.v1.GetIssueWatchStateResponse;
+import ru.taska.api.issue.v1.ListIssueWatchersRequest;
+import ru.taska.api.issue.v1.ListIssueWatchersResponse;
+import ru.taska.api.issue.v1.UnwatchIssueRequest;
+import ru.taska.api.issue.v1.UnwatchIssueResponse;
+import ru.taska.api.issue.v1.WatchIssueRequest;
+import ru.taska.api.issue.v1.WatchIssueResponse;
 
 @GrpcService
 @RequiredArgsConstructor
 public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServiceImplBase{
 
     private final GrpcIssueService grpcIssueService;
+    private final GrpcIssueCommentService grpcIssueCommentService;
+    private final GrpcIssueLinkService grpcIssueLinkService;
+    private final GrpcIssueWatcherService grpcIssueWatcherService;
 
     @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
@@ -81,18 +92,18 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
 
     @Override
     public Mono<ListIssueLinksResponse> listIssueLinks(Mono<ListIssueLinksRequest> request) {
-        return grpcIssueService.listIssueLinks(request)
+        return grpcIssueLinkService.listIssueLinks(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueLinks"));    }
 
     @Override
     public Mono<IssueLinkResponse> createIssueLink(Mono<CreateIssueLinkRequest> request) {
-        return grpcIssueService.createIssueLink(request)
+        return grpcIssueLinkService.createIssueLink(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssueLink"));
     }
 
     @Override
     public Mono<DeleteIssueLinkResponse> deleteIssueLink(Mono<DeleteIssueLinkRequest> request) {
-        return grpcIssueService.deleteIssueLink(request)
+        return grpcIssueLinkService.deleteIssueLink(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueLink"));
     }
     // --------------------------------- Методы для комментариев к issue --------------------
@@ -104,7 +115,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<AddIssueCommentResponse> addIssueComment(Mono<AddIssueCommentRequest> request) {
-        return grpcIssueService.addIssueComment(request)
+        return grpcIssueCommentService.addIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueComment"));
     }
 
@@ -116,7 +127,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<UpdateIssueCommentResponse> updateIssueComment(Mono<UpdateIssueCommentRequest> request) {
-        return grpcIssueService.updateIssueComment(request)
+        return grpcIssueCommentService.updateIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssueComment"));
     }
 
@@ -128,7 +139,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<DeleteIssueCommentResponse> deleteIssueComment(Mono<DeleteIssueCommentRequest> request) {
-        return grpcIssueService.deleteIssueComment(request)
+        return grpcIssueCommentService.deleteIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueComment"));
     }
 
@@ -140,7 +151,27 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<ListIssueCommentsResponse> listIssueComments(Mono<ListIssueCommentsRequest> request) {
-        return grpcIssueService.listIssueComments(request)
+        return grpcIssueCommentService.listIssueComments(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueComments"));
+    }
+
+    @Override
+    public Mono<WatchIssueResponse> watchIssue(Mono<WatchIssueRequest> request) {
+        return grpcIssueWatcherService.watchIssue(request);
+    }
+
+    @Override
+    public Mono<UnwatchIssueResponse> unwatchIssue(Mono<UnwatchIssueRequest> request) {
+        return grpcIssueWatcherService.unwatchIssue(request);
+    }
+
+    @Override
+    public Mono<ListIssueWatchersResponse> listIssueWatchers(Mono<ListIssueWatchersRequest> request) {
+        return grpcIssueWatcherService.listIssueWatchers(request);
+    }
+
+    @Override
+    public Mono<GetIssueWatchStateResponse> getIssueWatchState(Mono<GetIssueWatchStateRequest> request) {
+        return grpcIssueWatcherService.getIssueWatchState(request);
     }
 }

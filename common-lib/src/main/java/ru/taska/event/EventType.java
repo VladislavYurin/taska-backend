@@ -29,7 +29,10 @@ public enum EventType {
     UNSUPPORTED("Unsupported"),
     COMMENT_CREATED("CommentCreated"),
     COMMENT_UPDATED("CommentUpdated"),
-    COMMENT_DELETED("CommentDeleted");
+    COMMENT_DELETED("CommentDeleted"),
+    ISSUE_WATCHED("IssueWatched"),
+    ISSUE_UNWATCHED("IssueUnwatched");
+
 
     private final String value;
 
