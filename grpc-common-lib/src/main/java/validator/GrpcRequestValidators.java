@@ -18,15 +18,18 @@ public final class GrpcRequestValidators {
     private static final int MAX_LEN = 255;
     private static final Pattern KEY_PATTERN = Pattern.compile("^[\\x21-\\x7E]{1,255}$");
 
-    private static final String HEADER_REQUEST_ID = "header.requestId";
-    private static final String HEADER_NODE_ID = "header.nodeId";
+    private static final String HEADER = "header.";
+    private static final String BODY = "body.";
 
-    private static final String BODY_ISSUE_ID = "body.issueId";
-    private static final String BODY_ACTOR_USER_ID = "body.actorUserId";
-    private static final String BODY_TARGET_USER_ID = "body.targetUserId";
-    private static final String BODY_AUTHOR_USER_ID = "body.authorUserId";
-    private static final String BODY_COMMENT_ID = "body.commentId";
-    private static final String BODY_BODY = "body.body";
+    private static final String HEADER_REQUEST_ID = HEADER + "requestId";
+    private static final String HEADER_NODE_ID = HEADER + "nodeId";
+
+    private static final String BODY_ISSUE_ID = BODY + "issueId";
+    private static final String BODY_ACTOR_USER_ID = BODY + "actorUserId";
+    private static final String BODY_TARGET_USER_ID = BODY + "targetUserId";
+    private static final String BODY_AUTHOR_USER_ID = BODY + "authorUserId";
+    private static final String BODY_COMMENT_ID = BODY + "commentId";
+    private static final String BODY_BODY = BODY + "body";
 
     private GrpcRequestValidators() {
     }
