@@ -238,7 +238,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(2L));
-        Mockito.when(issueWatcherRepository.findAllByIssueId(ISSUE_ID))
+        Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 10, 0L))
                 .thenReturn(Flux.fromIterable(List.of(watcher, second)));
 
         StepVerifier.create(service.listIssueWatchers(
@@ -251,8 +251,8 @@ class IssueWatcherServiceImplTest {
     }
 
     @Test
-    @DisplayName("listIssueWatchers: page=1, size=1 возвращает только второй элемент")
-    void listIssueWatchers_shouldApplySkipAndTake() {
+    @DisplayName("listIssueWatchers: page=1, size=1 возвращает страницу из БД с LIMIT/OFFSET")
+    void listIssueWatchers_shouldApplyLimitAndOffset() {
         IssueWatcher second = watcher.toBuilder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000006"))
                 .userId(TARGET_USER_ID)
@@ -263,8 +263,8 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(2L));
-        Mockito.when(issueWatcherRepository.findAllByIssueId(ISSUE_ID))
-                .thenReturn(Flux.fromIterable(List.of(watcher, second)));
+        Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 1, 1L))
+                .thenReturn(Flux.just(second));
 
         StepVerifier.create(service.listIssueWatchers(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, 1, 1))
@@ -273,6 +273,8 @@ class IssueWatcherServiceImplTest {
                     Assertions.assertThat(page.totalCount()).isEqualTo(2L);
                 })
                 .verifyComplete();
+
+        Mockito.verify(issueWatcherRepository).findByIssueId(ISSUE_ID, 1, 1L);
     }
 
     @Test
@@ -283,7 +285,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(0L));
-        Mockito.when(issueWatcherRepository.findAllByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+        Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 10, 0L)).thenReturn(Flux.empty());
 
         StepVerifier.create(service.listIssueWatchers(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, 0, 10))
@@ -308,7 +310,8 @@ class IssueWatcherServiceImplTest {
                         && ((DomainException) e).getStatus() == DomainStatus.PERMISSION_DENIED)
                 .verify();
 
-        Mockito.verify(issueWatcherRepository, Mockito.never()).findAllByIssueId(Mockito.any());
+        Mockito.verify(issueWatcherRepository, Mockito.never())
+                .findByIssueId(Mockito.any(), Mockito.anyInt(), Mockito.anyLong());
     }
 
     @Test

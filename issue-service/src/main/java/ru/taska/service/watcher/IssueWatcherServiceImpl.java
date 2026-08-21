@@ -92,8 +92,8 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
             Integer page,
             Integer pageSize
     ) {
-        int resolvedPage = issueProperties.list().resolvePage(page);
-        int resolvedPageSize = issueProperties.list().resolvePageSize(pageSize);
+        int resolvedPage = resolvePage(requestId, nodeId, page);
+        int resolvedPageSize = resolvePageSize(requestId, nodeId, pageSize);
         long offset = (long) resolvedPage * resolvedPageSize;
 
         return findActiveIssue(requestId, nodeId, issueId)
@@ -104,9 +104,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                             .checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .then(Mono.defer(() -> Mono.zip(
                                     issueWatcherRepository.countByIssueId(issueId),
-                                    issueWatcherRepository.findAllByIssueId(issueId)
-                                            .skip(offset)
-                                            .take(resolvedPageSize)
+                                    issueWatcherRepository.findByIssueId(issueId, resolvedPageSize, offset)
                                             .collectList()
                             )));
                 })
@@ -173,5 +171,36 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
 
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
                 }));
+    }
+
+    private int resolvePage(String requestId, String nodeId, Integer page) {
+        if (page == null) {
+            return 0;
+        }
+        if (page < 0) {
+            log.warn("[{}][{}] Invalid page value: {}, falling back to 0", requestId, nodeId, page);
+            return 0;
+        }
+        return page;
+    }
+
+    private int resolvePageSize(String requestId, String nodeId, Integer pageSize) {
+        int defaultPageSize = issueProperties.list().defaultPageSize();
+        int maxPageSize = issueProperties.list().maxPageSize();
+
+        if (pageSize == null) {
+            return defaultPageSize;
+        }
+        if (pageSize < 1) {
+            log.warn("[{}][{}] Invalid pageSize value: {}, falling back to default {}",
+                    requestId, nodeId, pageSize, defaultPageSize);
+            return defaultPageSize;
+        }
+        if (pageSize > maxPageSize) {
+            log.warn("[{}][{}] Requested pageSize {} exceeds max {}, clamping to max",
+                    requestId, nodeId, pageSize, maxPageSize);
+            return maxPageSize;
+        }
+        return pageSize;
     }
 }

@@ -11,14 +11,15 @@ import java.util.UUID;
 public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatcher, UUID> {
 
     /**
-     * Возвращает подписчиков задачи, отсортированных по дате подписки (сначала новые).
+     * Возвращает страницу подписчиков задачи, отсортированных по дате подписки (сначала новые).
      */
     @Query("""
             SELECT * FROM taska.issue_watchers
             WHERE issue_id = :issueId
             ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
             """)
-    Flux<IssueWatcher> findAllByIssueId(UUID issueId);
+    Flux<IssueWatcher> findByIssueId(UUID issueId, int limit, long offset);
 
     /**
      * Проверяет, подписан ли пользователь на задачу.

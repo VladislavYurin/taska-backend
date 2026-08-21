@@ -49,19 +49,6 @@ public record IssueProperties(
             int defaultPageSize,
             int maxPageSize
     ) {
-        public int resolvePage(Integer page) {
-            if (page == null || page < 0) {
-                return 0;
-            }
-            return page;
-        }
-
-        public int resolvePageSize(Integer pageSize) {
-            if (pageSize == null || pageSize < 1) {
-                return defaultPageSize;
-            }
-            return Math.min(pageSize, maxPageSize);
-        }
     }
 
     public record Card(int maxHistorySize) {
