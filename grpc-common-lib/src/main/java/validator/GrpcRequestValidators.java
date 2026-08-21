@@ -21,6 +21,13 @@ public final class GrpcRequestValidators {
     private static final String HEADER_REQUEST_ID = "header.requestId";
     private static final String HEADER_NODE_ID = "header.nodeId";
 
+    private static final String BODY_ISSUE_ID = "body.issueId";
+    private static final String BODY_ACTOR_USER_ID = "body.actorUserId";
+    private static final String BODY_TARGET_USER_ID = "body.targetUserId";
+    private static final String BODY_AUTHOR_USER_ID = "body.authorUserId";
+    private static final String BODY_COMMENT_ID = "body.commentId";
+    private static final String BODY_BODY = "body.body";
+
     private GrpcRequestValidators() {
     }
 
@@ -36,6 +43,48 @@ public final class GrpcRequestValidators {
      */
     public static Mono<String> requireHeaderNodeId(String raw) {
         return requireNonBlank(raw, HEADER_NODE_ID);
+    }
+
+    /**
+     * Парсит {@code body.issueId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyIssueId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_ISSUE_ID);
+    }
+
+    /**
+     * Парсит {@code body.actorUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyActorUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_ACTOR_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.targetUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyTargetUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_TARGET_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.authorUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyAuthorUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_AUTHOR_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.commentId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyCommentId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_COMMENT_ID);
+    }
+
+    /**
+     * Проверяет {@code body.body}: не пустой.
+     */
+    public static Mono<String> requireBodyBody(String raw) {
+        return requireNonBlank(raw, BODY_BODY);
     }
 
     /**

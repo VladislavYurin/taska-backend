@@ -182,8 +182,8 @@ public class GrpcIssueWatcherService {
         return Mono.zip(
                         GrpcRequestValidators.requireHeaderRequestId(requestId),
                         GrpcRequestValidators.requireHeaderNodeId(nodeId),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(issueId, "body.issueId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(actorUserId, "body.actorUserId")
+                        GrpcRequestValidators.parseBodyIssueId(issueId),
+                        GrpcRequestValidators.parseBodyActorUserId(actorUserId)
                 )
                 .map(t -> new IssueActorContext(t.getT1(), t.getT2(), t.getT3(), t.getT4()))
                 .doOnError(StatusRuntimeException.class,
@@ -200,13 +200,13 @@ public class GrpcIssueWatcherService {
     ) {
         Mono<Optional<UUID>> targetUserIdMono = targetUserId == null
                 ? Mono.just(Optional.empty())
-                : GrpcRequestValidators.parseUuidOrInvalidArgument(targetUserId, "body.targetUserId").map(Optional::of);
+                : GrpcRequestValidators.parseBodyTargetUserId(targetUserId).map(Optional::of);
 
         return Mono.zip(
                         GrpcRequestValidators.requireHeaderRequestId(requestId),
                         GrpcRequestValidators.requireHeaderNodeId(nodeId),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(issueId, "body.issueId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(actorUserId, "body.actorUserId"),
+                        GrpcRequestValidators.parseBodyIssueId(issueId),
+                        GrpcRequestValidators.parseBodyActorUserId(actorUserId),
                         targetUserIdMono
                 )
                 .map(t -> new IssueActorTargetContext(
