@@ -16,7 +16,6 @@ import ru.taska.domain.dto.ListProjectLabelsResponseDto;
 import ru.taska.domain.dto.ProjectLabelResponseDto;
 import ru.taska.domain.dto.UpdateProjectLabelRequestDto;
 import ru.taska.filter.GatewayRequestExecutor;
-import ru.taska.transport.grpc.GrpcIssueServiceClient;
 import ru.taska.transport.grpc.GrpcLabelServiceClient;
 
 import java.util.UUID;
@@ -25,7 +24,7 @@ import java.util.UUID;
 /**
  * REST-контроллер для работы с метками задач и метками на проектах.
  * Делегирует обработку запросов {@link GatewayRequestExecutor}
- * и взаимодействие с issue-сервисом через {@link GrpcIssueServiceClient}.
+ * и взаимодействие с label-сервисом через {@link GrpcLabelServiceClient}.
  */
 @RestController
 @RequiredArgsConstructor

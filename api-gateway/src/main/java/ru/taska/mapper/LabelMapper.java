@@ -19,11 +19,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Маппер для преобразования Proto Response -> Rest Response
+ */
 @Component
 @RequiredArgsConstructor
 public class LabelMapper {
-
-    //============== Proto Response -> Rest Response ===============
 
     public ProjectLabelResponseDto toRestProjectLabelResponse(ProjectLabelResponse protoDto) {
         ProjectLabelResponseDto restDto = new ProjectLabelResponseDto();
@@ -33,7 +34,9 @@ public class LabelMapper {
         restDto.setColor(protoDto.getColor());
         restDto.setCreatedBy(UUID.fromString(protoDto.getCreatedBy()));
         restDto.createdAt(toOffsetDateTime(protoDto.getCreatedAt()));
-        restDto.deletedAt(toOffsetDateTime(protoDto.getDeletedAt()));
+        if (protoDto.hasDeletedAt()) {
+            restDto.setDeletedAt(toOffsetDateTime(protoDto.getDeletedAt()));
+        }
         return restDto;
     }
 
