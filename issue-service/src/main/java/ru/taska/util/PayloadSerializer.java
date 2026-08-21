@@ -47,6 +47,9 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
+    private static final String PROJECT_ID = "projectId";
+    private static final String WATCHER_USER_ID = "watcherUserId";
+    private static final String ACTOR_USER_ID = "actorUserId";
     private static final String LABEL_NAME = "labelName";
 
     private final ObjectMapper objectMapper;
@@ -312,13 +315,31 @@ public class PayloadSerializer {
     }
 
     /**
-     * Создает {@link JsonNode} с данными о добавленной метке к задаче.
+     * Создает {@link JsonNode} с данными о подписке на задачу.
      *
-     * @param label добавленная метка
-     * @param issueId идентификатор задачи (для консистентности с другими payload'ами)
-     * @param addedBy пользователь, добавивший метку
-     * @return {@link JsonNode} с метаданными метки
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор подписчика.
+     * @param actorUserId   идентификатор пользователя, оформившего подписку.
+     * @return данные события подписки.
      */
+    public JsonNode createIssueWatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об отписке от задачи.
+     *
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор отписанного пользователя.
+     * @param actorUserId   идентификатор пользователя, выполнившего отписку.
+     * @return данные события отписки.
+     */
+    public JsonNode createIssueUnwatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
     public JsonNode createLabelAddedPayload(ProjectLabels label, UUID issueId, UUID addedBy) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put(ISSUE_ID, issueId.toString());
@@ -340,6 +361,16 @@ public class PayloadSerializer {
         node.put(ISSUE_ID, issueId.toString());
         node.put(LABEL_NAME, label.getName());
         node.put(DELETED_BY, removedBy.toString());
+        return node;
+    }
+    private ObjectNode createWatcherPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(PROJECT_ID, projectId.toString());
+        node.put(WATCHER_USER_ID, watcherUserId.toString());
+        node.put(ACTOR_USER_ID, actorUserId.toString());
+
         return node;
     }
 }

@@ -90,42 +90,26 @@ class CommentServiceImplTest {
         nodeId = "node-123";
         body = "Test comment body";
 
-        // Исправленный конструктор AllowedRoles - 22 параметра
+        // AllowedRoles: полный набор ролей из IssueProperties
         IssueProperties.AllowedRoles allowedRoles = new IssueProperties.AllowedRoles(
-                /// 1-7: основные роли
-                // 1 createIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 2 assignIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 3 updateIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 4 deleteIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 5 issueTransitionRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 6 getIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // 7 listIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                /// 8-10: роли для ссылок
-                // 8 createIssueLinksRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 9 deleteIssueLinksRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 10 listIssueLinksRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                /// 11-14: роли для аттачментов
-                // 11 uploadAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 12 viewAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // 13. deleteOwnAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 14 deleteAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                /// 15: роли для комментариев
-                // 15 commentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // createIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // assignIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // updateIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // issueTransitionRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // getIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // createIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // uploadAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // viewAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteOwnAttachmentRoles
+                Set.of(ProjectRole.ADMIN), // deleteAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // commentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // watchIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listWatchersRoles
+                Set.of(ProjectRole.ADMIN), // manageWatchersRoles
                 /// 16-22: роли для labels
                 // 16 createProjectLabelRoles
                 Set.of(ProjectRole.ADMIN),

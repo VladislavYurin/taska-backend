@@ -37,6 +37,9 @@ issue:
     max-page-size: ${ISSUE_LIST_MAX_PAGE_SIZE:100}
   card:
     max-history-size: ${ISSUE_CARD_MAX_HISTORY_SIZE:50}
+  auto-watch:
+    on-create-reporter: ${ISSUE_AUTO_WATCH_ON_CREATE_REPORTER:true}
+    on-assign-assignee: ${ISSUE_AUTO_WATCH_ON_ASSIGN_ASSIGNEE:true}
   allowed-roles:
     create-issue-roles: ${ISSUE_CREATE_ROLES:ADMIN,MEMBER}
     assign-issue-roles: ${ISSUE_ASSIGN_ROLES:ADMIN,MEMBER}
@@ -53,6 +56,9 @@ issue:
     delete-own-attachment-roles: ${ISSUE_DELETE_OWN_ATTACHMENT_ROLES:ADMIN,MEMBER}
     delete-attachment-roles: ${ISSUE_DELETE_ATTACHMENT_ROLES:ADMIN}
     comment-roles: ${ISSUE_COMMENT_ROLES:ADMIN,MEMBER}
+    watch-issue-roles: ${ISSUE_WATCH_ROLES:ADMIN,MEMBER}
+    list-watchers-roles: ${ISSUE_LIST_WATCHERS_ROLES:ADMIN,MEMBER,VIEWER}
+    manage-watchers-roles: ${ISSUE_MANAGE_WATCHERS_ROLES:ADMIN}
     create-project-label-roles: ${ISSUE_CREATE_PROJECT_LABEL_ROLES:ADMIN}
     update-project-label-roles: ${ISSUE_UPDATE_PROJECT_LABEL_ROLES:ADMIN}
     delete-project-label-roles: ${ISSUE_DELETE_PROJECT_LABEL_ROLES:ADMIN}

@@ -24,6 +24,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
 
@@ -66,6 +67,13 @@ public class IssueMapper {
                 .build();
     }
 
+    public IssueResponse toIssueProto(Issue issue, IssueWatchStateDto watchState) {
+        return toIssueProto(issue).toBuilder()
+                .setWatchersCount((int) watchState.watchersCount())
+                .setWatchedByMe(watchState.watchedByMe())
+                .build();
+    }
+
     public IssueHistoryResponse toIssueHistoryProto(IssueHistory history) {
         return IssueHistoryResponse.newBuilder()
                 .setId(history.getId().toString())
@@ -94,6 +102,28 @@ public class IssueMapper {
 
         return IssueWithHistoryResponse.newBuilder()
                 .setIssue(issueWithLabels)
+                .addAllHistory(historyProto)
+                .build();
+    }
+
+    public IssueWithHistoryResponse toIssueDetailsProto(
+            IssueWithHistory issueWithHistory,
+            IssueWatchStateDto watchState
+    ) {
+        var historyProto = issueWithHistory.getHistory().stream()
+                .map(this::toIssueHistoryProto)
+                .toList();
+
+        var issueProto = toIssueProto(issueWithHistory.getIssue(), watchState).toBuilder()
+                .addAllLabels(
+                        issueWithHistory.getLabels().stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
+                .build();
+
+        return IssueWithHistoryResponse.newBuilder()
+                .setIssue(issueProto)
                 .addAllHistory(historyProto)
                 .build();
     }

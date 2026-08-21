@@ -142,6 +142,32 @@ service IssueService {
   rpc ListIssueComments(ListIssueCommentsRequest)
       returns (ListIssueCommentsResponse);
 
+
+  /**
+   * Подписывает пользователя на задачу.
+   */
+  rpc WatchIssue(WatchIssueRequest)
+      returns (WatchIssueResponse);
+
+  /**
+   * Отписывает пользователя от задачи.
+   */
+  rpc UnwatchIssue(UnwatchIssueRequest)
+      returns (UnwatchIssueResponse);
+
+  /**
+   * Возвращает список подписчиков задачи.
+   */
+  rpc ListIssueWatchers(ListIssueWatchersRequest)
+      returns (ListIssueWatchersResponse);
+
+  /**
+   * Возвращает состояние подписки задачи для пользователя.
+   */
+  rpc GetIssueWatchState(GetIssueWatchStateRequest)
+      returns (GetIssueWatchStateResponse);
+
+
   // ============ Управление метками проекта (только ADMIN) ============
 
   /**
@@ -674,9 +700,19 @@ message IssueResponse {
   google.protobuf.Timestamp deleted_at = 15;
 
   /**
-   * Идентификатор лейбла.
+   * Метки задачи.
    */
   repeated ProjectLabelResponse labels = 16;
+
+  /**
+   * Количество подписчиков задачи.
+   */
+  int32 watchers_count = 17;
+
+  /**
+   * Признак подписки текущего пользователя (если актор известен).
+   */
+  optional bool watched_by_me = 18;
 }
 
 // ============ Метки проекта =================
@@ -1365,4 +1401,241 @@ message ListIssueCommentsResponse {
    * Общее количество комментариев.
    */
   int32 total_count = 2;
+}
+
+message IssueWatcherResponse {
+  /**
+   * Идентификатор подписки.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 3;
+
+  /**
+   * Идентификатор подписанного пользователя.
+   */
+  string user_id = 4;
+
+  /**
+   * Временная метка создания подписки.
+   */
+  google.protobuf.Timestamp created_at = 5;
+
+  /**
+   * Идентификатор пользователя, создавшего подписку.
+   */
+  string created_by = 6;
+}
+
+/**
+ * Запрос на подписку на задачу.
+ */
+message WatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  WatchIssueRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на подписку на задачу.
+ */
+message WatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Идентификатор подписываемого пользователя (опционально; по умолчанию — актор).
+   */
+  optional string target_user_id = 3;
+}
+
+/**
+ * Ответ на подписку на задачу.
+ */
+message WatchIssueResponse {
+  /**
+   * Созданная либо уже существовавшая подписка.
+   */
+  IssueWatcherResponse watcher = 1;
+
+  /**
+   * Количество подписчиков задачи после операции.
+   */
+  int32 watchers_count = 2;
+}
+
+/**
+ * Запрос на отписку от задачи.
+ */
+message UnwatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UnwatchIssueRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на отписку от задачи.
+ */
+message UnwatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Идентификатор отписываемого пользователя (опционально; по умолчанию — актор).
+   */
+  optional string target_user_id = 3;
+}
+
+/**
+ * Ответ на отписку от задачи.
+ */
+message UnwatchIssueResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Признак фактического удаления подписки.
+   */
+  bool removed = 2;
+
+  /**
+   * Количество подписчиков задачи после операции.
+   */
+  int32 watchers_count = 3;
+}
+
+/**
+ * Запрос на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueWatchersRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Размер страницы (опционально).
+   */
+  optional int32 page_size = 3;
+
+  /**
+   * Номер страницы, начиная с 0 (опционально).
+   */
+  optional int32 page = 4;
+}
+
+/**
+ * Ответ на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersResponse {
+  /**
+   * Список подписчиков.
+   */
+  repeated IssueWatcherResponse watchers = 1;
+
+  /**
+   * Общее количество подписчиков.
+   */
+  int32 total_count = 2;
+}
+
+/**
+ * Запрос на получение состояния подписки.
+ */
+message GetIssueWatchStateRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetIssueWatchStateRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение состояния подписки.
+ */
+message GetIssueWatchStateRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+}
+
+/**
+ * Ответ на получение состояния подписки.
+ */
+message GetIssueWatchStateResponse {
+  /**
+   * Признак подписки текущего пользователя.
+   */
+  bool watched_by_me = 1;
+
+  /**
+   * Количество подписчиков задачи.
+   */
+  int32 watchers_count = 2;
 }

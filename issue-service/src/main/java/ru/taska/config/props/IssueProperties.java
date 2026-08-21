@@ -12,7 +12,8 @@ public record IssueProperties(
         List list,
         Card card,
         IdempotencyKeyTtl idempotencyKeyTtl,
-        RetryConfig retry
+        RetryConfig retry,
+        AutoWatch autoWatch
 ) {
 
     public record AllowedRoles(
@@ -31,6 +32,9 @@ public record IssueProperties(
             Set<ProjectRole> deleteOwnAttachmentRoles,
             Set<ProjectRole> deleteAttachmentRoles,
             Set<ProjectRole> commentRoles,
+            Set<ProjectRole> watchIssueRoles,
+            Set<ProjectRole> listWatchersRoles,
+            Set<ProjectRole> manageWatchersRoles,
             Set<ProjectRole> createProjectLabelRoles,   // ADMIN
             Set<ProjectRole> updateProjectLabelRoles,   // ADMIN
             Set<ProjectRole> deleteProjectLabelRoles,   // ADMIN
@@ -57,5 +61,18 @@ public record IssueProperties(
             int maxAttempts,
             Duration minBackoff
     ) {
+    }
+
+    public record AutoWatch(
+            boolean onCreateReporter,
+            boolean onAssignAssignee
+    ) {
+        public static AutoWatch enabled() {
+            return new AutoWatch(true, true);
+        }
+
+        public static AutoWatch disabled() {
+            return new AutoWatch(false, false);
+        }
     }
 }
