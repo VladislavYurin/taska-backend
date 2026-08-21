@@ -76,6 +76,7 @@ class IssueControllerTest {
     private static final String TRANSITION_ID = "00000000-0000-0000-0000-000000000005";
     private static final String TARGET_ISSUE_ID = "00000000-0000-0000-0000-000000000006";
     private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
+    private static final String LABEL_ID = "00000000-0000-0000-0000-000000000008";
     private static final String SUMMARY = "Summary-1";
     private static final String DESCRIPTION = "Description-1";
     private static final String STATUS_TODO = "TODO";
@@ -377,6 +378,7 @@ class IssueControllerTest {
                         Mockito.eq(ASSIGNEE_ID),
                         Mockito.eq(0),
                         Mockito.eq(5),
+                        Mockito.eq(LABEL_ID),
                         Mockito.any(GatewayContext.class)
                 ))
                 .thenReturn(Mono.just(response));
@@ -388,6 +390,7 @@ class IssueControllerTest {
                         .queryParam("assigneeId", ASSIGNEE_ID)
                         .queryParam("page", 0)
                         .queryParam("pageSize", 5)
+                        .queryParam("labelId", LABEL_ID)
                         .build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
@@ -401,6 +404,7 @@ class IssueControllerTest {
                 Mockito.eq(ASSIGNEE_ID),
                 Mockito.eq(0),
                 Mockito.eq(5),
+                Mockito.eq(LABEL_ID),
                 Mockito.any(GatewayContext.class)
         );
     }
@@ -414,7 +418,8 @@ class IssueControllerTest {
             String expectedStatus,
             String expectedAssigneeId,
             Integer expectedPage,
-            Integer expectedPageSize
+            Integer expectedPageSize,
+            String expectedLabelId
     ) {
         mockAuthenticatedUser();
 
@@ -426,6 +431,7 @@ class IssueControllerTest {
                         Mockito.eq(expectedAssigneeId),
                         Mockito.eq(expectedPage),
                         Mockito.eq(expectedPageSize),
+                        Mockito.eq(expectedLabelId),
                         Mockito.any(GatewayContext.class)
                 ))
                 .thenReturn(Mono.just(response));
@@ -448,6 +454,7 @@ class IssueControllerTest {
                 Mockito.eq(expectedAssigneeId),
                 Mockito.eq(expectedPage),
                 Mockito.eq(expectedPageSize),
+                Mockito.eq(expectedLabelId),
                 Mockito.any(GatewayContext.class)
         );
     }
@@ -705,6 +712,7 @@ class IssueControllerTest {
                         null,
                         null,
                         null,
+                        null,
                         null
                 ),
                 Arguments.of(
@@ -712,6 +720,7 @@ class IssueControllerTest {
                         (Consumer<UriBuilder>) builder -> builder
                                 .queryParam("status", STATUS_TODO),
                         STATUS_TODO,
+                        null,
                         null,
                         null,
                         null
@@ -723,6 +732,7 @@ class IssueControllerTest {
                         null,
                         ASSIGNEE_ID,
                         null,
+                        null,
                         null
                 ),
                 Arguments.of(
@@ -733,7 +743,8 @@ class IssueControllerTest {
                         null,
                         null,
                         0,
-                        5
+                        5,
+                        null
                 ),
                 Arguments.of(
                         "все фильтры",
@@ -745,8 +756,19 @@ class IssueControllerTest {
                         STATUS_TODO,
                         ASSIGNEE_ID,
                         0,
-                        5
+                        5,
+                        null
+                ),
+                Arguments.of(
+                "фильтр по labelId",
+                        (Consumer<UriBuilder>) builder -> builder.queryParam("labelId", LABEL_ID),
+                        null,
+                        null,
+                        null,
+                        null,
+                        LABEL_ID
                 )
+
         );
     }
 

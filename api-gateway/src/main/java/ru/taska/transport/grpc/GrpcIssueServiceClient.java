@@ -100,6 +100,7 @@ public class GrpcIssueServiceClient {
             String assigneeId,
             Integer page,
             Integer pageSize,
+            String labelId,
             GatewayContext context
     ) {
         log.info("[{}] Calling listIssues", context.requestId());
@@ -122,6 +123,9 @@ public class GrpcIssueServiceClient {
 
         if (pageSize != null) {
             requestBodyBuilder.setPageSize(pageSize);
+        }
+        if (labelId != null) {
+            requestBodyBuilder.setLabelId(labelId);
         }
 
         return dynamicStub().listIssues(
