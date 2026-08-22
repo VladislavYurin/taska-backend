@@ -528,6 +528,13 @@ paths:
           schema:
             type: integer
 
+        - name: labelId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по идентификатору метки (возвращает задачи, имеющие эту метку)
+
       responses:
         '200':
           description: Список задач успешно найден
@@ -1016,6 +1023,305 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  ########################## API для project/issue меток ##################
+
+  /api/v1/projects/{projectId}/labels:
+    get:
+      summary: Получение списка меток проекта
+      operationId: listProjectLabels
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список меток успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectLabelsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление метки к проекту
+      operationId: createProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectLabelRequestDto'
+      responses:
+        '201':
+          description: Метка успешно создана
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/labels/{labelId}:
+    patch:
+      summary: Обновление метки проекта
+      operationId: updateProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectLabelRequestDto'
+      responses:
+        '200':
+          description: Метка успешно обновлена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление метки проекта (soft-delete)
+      operationId: deleteProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Метка успешно удалена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/labels:
+    get:
+      summary: Получение списка меток задачи
+      operationId: listIssueLabels
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список меток задачи успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueLabelsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление метки к задаче
+      operationId: addIssueLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueLabelRequestDto'
+      responses:
+        '201':
+          description: Метка успешно добавлена к задаче
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddIssueLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/labels/{labelId}:
+    delete:
+      summary: Удаление метки у задачи
+      operationId: removeIssueLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Метка успешно удалена у задачи
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  ########################## Окончание API для project/issue меток ##################
+
   /api/v1/readonly/{service}/{table}:
     get:
       summary: Получение строк таблицы из сервисной БД (только для GLOBAL_ADMIN)
@@ -1323,6 +1629,11 @@ components:
           format: date-time
         version:
           type: integer
+        labels:
+          type: array
+          description: Метки задачи (краткая информация)
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
 
     IssueHistoryResponseDto:
       type: object
@@ -1446,6 +1757,139 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    # ==================== LABELS SCHEMAS ====================
+
+    ListProjectLabelsResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectLabelResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество меток
+
+    CreateProjectLabelRequestDto:
+      type: object
+      required:
+        - name
+        - color
+      properties:
+        name:
+          type: string
+          description: Название метки (уникально в пределах проекта)
+          minLength: 1
+          maxLength: 50
+          example: "backend"
+        color:
+          type: string
+          description: Цвет метки в HEX формате (Пример:#0052CC)
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
+
+    UpdateProjectLabelRequestDto:
+      type: object
+      required:
+        - name
+        - color
+      properties:
+        name:
+          type: string
+          description: Новое название метки
+          minLength: 1
+          maxLength: 50
+          example: "backend"
+        color:
+          type: string
+          description: Новый цвет метки в HEX формате
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
+
+    ProjectLabelResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор метки
+        projectId:
+          type: string
+          format: uuid
+          description: Идентификатор проекта
+        name:
+          type: string
+          description: Название метки
+        color:
+          type: string
+          description: Цвет метки
+        createdBy:
+          type: string
+          format: uuid
+          description: Идентификатор создателя метки
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время удаления (null если не удалена)
+
+    ListIssueLabelsResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество меток у задачи
+
+    IssueLabelResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор метки
+        name:
+          type: string
+          description: Название метки
+        color:
+          type: string
+          description: Цвет метки
+
+    AddIssueLabelRequestDto:
+      type: object
+      required:
+        - labelId
+      properties:
+        labelId:
+          type: string
+          format: uuid
+          description: Идентификатор метки для добавления к задаче
+
+    AddIssueLabelResponseDto:
+      type: object
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        labelId:
+          type: string
+          format: uuid
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== END LABELS SCHEMAS ====================
 
     NotificationListResponseDto:
       type: object

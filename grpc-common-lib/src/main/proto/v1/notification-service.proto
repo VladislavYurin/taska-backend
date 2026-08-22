@@ -111,6 +111,16 @@ enum NotificationKind {
    * Уведомление об удалении связи между двумя задачами.
    */
   NOTIFICATION_KIND_ISSUE_LINK_DELETED = 13;
+
+  /**
+   * Уведомление об удалении связи между двумя задачами.
+   */
+  NOTIFICATION_KIND_LABEL_ADDED = 14;
+
+  /**
+   * Уведомление об удалении связи между двумя задачами.
+   */
+  NOTIFICATION_KIND_LABEL_REMOVED = 15;
 }
 
 /**

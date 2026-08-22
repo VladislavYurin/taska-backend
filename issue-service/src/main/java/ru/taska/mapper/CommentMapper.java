@@ -6,9 +6,10 @@ import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.AddIssueCommentResponse;
 import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.IssueCommentResponse;
+import ru.taska.api.issue.v1.ListIssueCommentsResponse;
 import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
 import ru.taska.domain.IssueComment;
-import ru.taska.domain.IssueEventType;
+import ru.taska.domain.PageResult;
 
 import java.time.Instant;
 
@@ -44,6 +45,13 @@ public class CommentMapper {
     public DeleteIssueCommentResponse toDeleteCommentResponse(IssueComment comment) {
         return DeleteIssueCommentResponse.newBuilder()
                 .setCommentId(comment.getId().toString())
+                .build();
+    }
+
+    public ListIssueCommentsResponse toListCommentsResponse(PageResult<IssueComment> page) {
+        return ListIssueCommentsResponse.newBuilder()
+                .addAllComments(page.items().stream().map(this::toCommentProto).toList())
+                .setTotalCount((int) page.totalCount())
                 .build();
     }
 

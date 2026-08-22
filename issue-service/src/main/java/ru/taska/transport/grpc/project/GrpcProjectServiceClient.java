@@ -8,9 +8,9 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.GetProjectRequestBody;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequestBody;
+import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 
 import java.util.UUID;
@@ -49,10 +49,8 @@ public class GrpcProjectServiceClient {
         return projectServiceStub.checkProjectMemberRole(request);
     }
 
-    public Mono<String> getProjectKey(String requestId, String nodeId, UUID projectId) {
-        log.info("[{}][{}] Calling getProject with: projectId={}", requestId, nodeId, projectId);
-
-        var request = GetProjectRequest.newBuilder()
+    public Mono<String> getProjectKeyInternal(String requestId, String nodeId, UUID projectId) {
+        GetProjectKeyInternalRequest request = GetProjectKeyInternalRequest.newBuilder()
                 .setHeader(
                         Header.newBuilder()
                                 .setRequestId(requestId)
@@ -60,14 +58,17 @@ public class GrpcProjectServiceClient {
                                 .build()
                 )
                 .setBody(
-                        GetProjectRequestBody.newBuilder()
+                        GetProjectKeyInternalRequestBody.newBuilder()
                                 .setProjectId(projectId.toString())
                                 .build()
                 )
                 .build();
 
-        return projectServiceStub.getProject(request)
-                .map(ProjectResponse::getProjectKey);
+        log.info("[{}][{}] Calling getProjectKeyInternal for projectId: {}",
+                requestId, nodeId, projectId);
+
+        return projectServiceStub.getProjectKeyInternal(request)
+                .map(ProjectKeyResponse::getProjectKey);
     }
 
 }

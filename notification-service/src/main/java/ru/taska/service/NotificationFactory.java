@@ -38,6 +38,8 @@ public class NotificationFactory {
             case MEMBER_UPDATED -> buildMemberUpdated(event, payload, eventId);
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
             case USER_ACTIVATED -> buildUserActivated(event, eventId);
+            case ISSUE_LABEL_ADDED -> buildLabelAdded(event, payload, eventId);
+            case ISSUE_LABEL_REMOVED -> buildLabelRemoved(event, payload, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
@@ -141,21 +143,6 @@ public class NotificationFactory {
         return notifications;
     }
 
-    private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID userId = extractUuid(payload, "createdBy");
-        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
-        UUID targetIssueId = extractUuid(payload, "targetIssueId");
-        String linkType = extractString(payload, "linkType");
-        UUID linkId = event.aggregateId();
-
-        if (userId == null) {
-            log.warn("IssueLinkCreated event without reporterId, eventId={}", eventId);
-            return List.of();
-        }
-
-        return List.of(notificationMapper.toIssueLinkCreated(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
-    }
-
     private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID userId = extractUuid(payload, "deletedBy");
         UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
@@ -248,4 +235,48 @@ public class NotificationFactory {
             return null;
         }
     }
+
+    private List<Notification> buildLabelAdded(TaskaEvent event, JsonNode payload, UUID eventId) {
+
+        UUID issueId = extractUuid(payload, "issueId");
+        UUID addedBy = extractUuid(payload, "createdBy");
+        String labelName = extractString(payload, "labelName");
+
+        if (issueId == null || addedBy == null || labelName == null) {
+            log.warn("LabelAdded event missing required fields, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toLabelAdded(event, issueId, addedBy, labelName));
+    }
+
+    private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "createdBy");
+        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
+        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String linkType = extractString(payload, "linkType");
+        UUID linkId = event.aggregateId();
+
+        if (userId == null) {
+            log.warn("IssueLinkCreated event without reporterId, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toIssueLinkCreated(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
+    }
+
+
+    private List<Notification> buildLabelRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID issueId = extractUuid(payload, "issueId");
+        UUID removedBy = extractUuid(payload, "deletedBy");
+        String labelName = extractString(payload, "labelName");
+
+        if (issueId == null || removedBy == null || labelName == null) {
+            log.warn("LabelRemoved event missing required fields, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toLabelRemoved(event, issueId, removedBy, labelName));
+    }
+
 }

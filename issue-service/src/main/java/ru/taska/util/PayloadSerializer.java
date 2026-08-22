@@ -7,6 +7,7 @@ import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.IssuePriority;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -46,6 +47,10 @@ public class PayloadSerializer {
     private static final String CONTENT_TYPE = "contentType";
     private static final String SIZE_BYTES = "sizeBytes";
     private static final String CREATED_AT = "createdAt";
+    private static final String PROJECT_ID = "projectId";
+    private static final String WATCHER_USER_ID = "watcherUserId";
+    private static final String ACTOR_USER_ID = "actorUserId";
+    private static final String LABEL_NAME = "labelName";
 
     private final ObjectMapper objectMapper;
 
@@ -305,6 +310,66 @@ public class PayloadSerializer {
         node.put(DELETED_BY, deletedByUserId.toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о подписке на задачу.
+     *
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор подписчика.
+     * @param actorUserId   идентификатор пользователя, оформившего подписку.
+     * @return данные события подписки.
+     */
+    public JsonNode createIssueWatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об отписке от задачи.
+     *
+     * @param issueId       идентификатор задачи.
+     * @param projectId     идентификатор проекта.
+     * @param watcherUserId идентификатор отписанного пользователя.
+     * @param actorUserId   идентификатор пользователя, выполнившего отписку.
+     * @return данные события отписки.
+     */
+    public JsonNode createIssueUnwatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    }
+
+    public JsonNode createLabelAddedPayload(ProjectLabels label, UUID issueId, UUID addedBy) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(CREATED_BY, addedBy.toString());
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об удаленной метке с задачи.
+     *
+     * @param label удаленная метка
+     * @param issueId идентификатор задачи
+     * @param removedBy пользователь, удаливший метку
+     * @return {@link JsonNode} с метаданными метки
+     */
+    public JsonNode createLabelRemovedPayload(ProjectLabels label, UUID issueId, UUID removedBy) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(LABEL_NAME, label.getName());
+        node.put(DELETED_BY, removedBy.toString());
+        return node;
+    }
+    private ObjectNode createWatcherPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(PROJECT_ID, projectId.toString());
+        node.put(WATCHER_USER_ID, watcherUserId.toString());
+        node.put(ACTOR_USER_ID, actorUserId.toString());
 
         return node;
     }

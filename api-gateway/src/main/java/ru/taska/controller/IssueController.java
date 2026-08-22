@@ -58,10 +58,11 @@ public class IssueController implements IssueApi {
             String assigneeId,
             Integer page,
             Integer pageSize,
+            String labelId,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.listIssues(projectId, status, assigneeId, page, pageSize, context)
+                issueClient.listIssues(projectId, status, assigneeId, page, pageSize, labelId, context)
                         .map(ResponseEntity::ok)
         );
     }

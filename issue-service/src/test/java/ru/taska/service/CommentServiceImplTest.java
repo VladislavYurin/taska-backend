@@ -90,38 +90,41 @@ class CommentServiceImplTest {
         nodeId = "node-123";
         body = "Test comment body";
 
-        // ✅ Исправленный конструктор AllowedRoles - 12 параметров
+        // AllowedRoles: полный набор ролей из IssueProperties
         IssueProperties.AllowedRoles allowedRoles = new IssueProperties.AllowedRoles(
-                // createIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // assignIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // updateIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // deleteIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // issueTransitionRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // getIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // createIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // assignIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // updateIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // issueTransitionRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // getIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // createIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueLinksRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // uploadAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // viewAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteOwnAttachmentRoles
+                Set.of(ProjectRole.ADMIN), // deleteAttachmentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // commentRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // watchIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listWatchersRoles
+                Set.of(ProjectRole.ADMIN), // manageWatchersRoles
+                /// 16-22: роли для labels
+                // 16 createProjectLabelRoles
+                Set.of(ProjectRole.ADMIN),
+                // 17 updateProjectLabelRoles
+                Set.of(ProjectRole.ADMIN),
+                // 18 deleteProjectLabelRoles
+                Set.of(ProjectRole.ADMIN),
+                // 19 listProjectLabelRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // listIssueRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // createIssueLinksRoles
+                // 20 addIssueLabelRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // deleteIssueLinksRoles
+                // 21 removeIssueLabelRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // listIssueLinksRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // commentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // createAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // viewAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // deleteAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // uploadAttachmentRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER)
+                // 22 listIssueLabelRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER)
         );
 
         lenient().when(issueProperties.allowedRoles()).thenReturn(allowedRoles);

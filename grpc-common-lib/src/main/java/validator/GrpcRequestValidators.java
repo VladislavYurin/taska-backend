@@ -18,7 +18,76 @@ public final class GrpcRequestValidators {
     private static final int MAX_LEN = 255;
     private static final Pattern KEY_PATTERN = Pattern.compile("^[\\x21-\\x7E]{1,255}$");
 
+    private static final String HEADER = "header.";
+    private static final String BODY = "body.";
+
+    private static final String HEADER_REQUEST_ID = HEADER + "requestId";
+    private static final String HEADER_NODE_ID = HEADER + "nodeId";
+
+    private static final String BODY_ISSUE_ID = BODY + "issueId";
+    private static final String BODY_ACTOR_USER_ID = BODY + "actorUserId";
+    private static final String BODY_TARGET_USER_ID = BODY + "targetUserId";
+    private static final String BODY_AUTHOR_USER_ID = BODY + "authorUserId";
+    private static final String BODY_COMMENT_ID = BODY + "commentId";
+    private static final String BODY_BODY = BODY + "body";
+
     private GrpcRequestValidators() {
+    }
+
+    /**
+     * Проверяет {@code header.requestId}: не пустой.
+     */
+    public static Mono<String> requireHeaderRequestId(String raw) {
+        return requireNonBlank(raw, HEADER_REQUEST_ID);
+    }
+
+    /**
+     * Проверяет {@code header.nodeId}: не пустой.
+     */
+    public static Mono<String> requireHeaderNodeId(String raw) {
+        return requireNonBlank(raw, HEADER_NODE_ID);
+    }
+
+    /**
+     * Парсит {@code body.issueId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyIssueId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_ISSUE_ID);
+    }
+
+    /**
+     * Парсит {@code body.actorUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyActorUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_ACTOR_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.targetUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyTargetUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_TARGET_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.authorUserId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyAuthorUserId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_AUTHOR_USER_ID);
+    }
+
+    /**
+     * Парсит {@code body.commentId} как {@link UUID}.
+     */
+    public static Mono<UUID> parseBodyCommentId(String raw) {
+        return parseUuidOrInvalidArgument(raw, BODY_COMMENT_ID);
+    }
+
+    /**
+     * Проверяет {@code body.body}: не пустой.
+     */
+    public static Mono<String> requireBodyBody(String raw) {
+        return requireNonBlank(raw, BODY_BODY);
     }
 
     /**

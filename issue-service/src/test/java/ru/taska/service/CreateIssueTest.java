@@ -44,7 +44,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         Mockito.lenient().when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
                 .thenReturn(Mono.empty());
 
-        Mockito.lenient().when(grpcProjectServiceClient.getProjectKey(REQUEST_ID, NODE_ID, PROJECT_ID))
+        Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(REQUEST_ID, NODE_ID, PROJECT_ID))
                 .thenReturn(Mono.just("TSK"));
         Mockito.lenient().when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
@@ -68,6 +68,10 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(idempotencyKeyRepository.save(Mockito.any()))
                 .thenAnswer(invocation -> Mono.just((IdempotencyKey) invocation.getArgument(0)));
+
+        Mockito.lenient().when(issueAutoWatchService.watchReporterOnCreate(
+                        Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class)))
+                .thenReturn(Mono.empty());
     }
 
     @AfterEach
@@ -90,6 +94,8 @@ class CreateIssueTest extends IssueServiceImplTest {
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
         Mockito.verify(projectCounterRepository, Mockito.times(1)).getNextIssueNumberAndIncrement(PROJECT_ID);
+        Mockito.verify(issueAutoWatchService).watchReporterOnCreate(
+                Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(Issue.class));
     }
 
     @Test
