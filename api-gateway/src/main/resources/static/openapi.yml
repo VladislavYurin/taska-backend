@@ -707,6 +707,57 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/board:
+    get:
+      summary: Получение доски задач проекта
+      operationId: getBoard
+      tags:
+        - board
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueType
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/IssueTypeDto'
+        - name: assigneeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: includeDone
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Доска успешно сформирована
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   ########################## API для issue комментариев ##################
   /api/v1/projects/{projectId}/issues/{issueId}/comments:
     get:
@@ -2182,3 +2233,66 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    BoardResponseDto:
+      type: object
+      required: [ projectId, issueType, columns ]
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardColumnDto'
+
+    BoardColumnDto:
+      type: object
+      required: [ statusKey, name, category, sortOrder, issues ]
+      properties:
+        statusKey:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        sortOrder:
+          type: integer
+          format: int32
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoardIssueDto'
+
+    BoardIssueDto:
+      type: object
+      required: [ id, issueKey, summary ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueKey:
+          type: string
+        summary:
+          type: string
+        storyPoints:
+          type: integer
+          format: int32
+        assignee:
+          $ref: '#/components/schemas/BoardUserDto'
+        labels:
+          type: array
+          items:
+            type: string
+
+    BoardUserDto:
+      type: object
+      required: [ id ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string

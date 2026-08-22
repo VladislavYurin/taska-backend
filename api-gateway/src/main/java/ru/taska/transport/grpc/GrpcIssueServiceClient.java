@@ -26,6 +26,7 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequestBody;
+import ru.taska.api.issue.v1.*;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
@@ -36,11 +37,14 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
-import ru.taska.domain.dto.TransitionIssueRequestDto;
-import ru.taska.domain.dto.UpdateIssueRequestDto;
+import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
+import ru.taska.domain.dto.UpdateIssueRequestDto;
+import ru.taska.domain.dto.TransitionIssueRequestDto;
+import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.mapper.IssueMapper;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -409,5 +413,44 @@ public class GrpcIssueServiceClient {
                 .setRequestId(context.requestId())
                 .setNodeId(context.nodeId())
                 .build();
+    }
+
+    /**
+     * Получает список задач для доски с учетом фильтров и маппит их в REST DTO.
+     */
+    public Mono<List<BoardIssue>> listIssuesForBoard(
+            String projectId,
+            String issueType,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling listIssuesForBoard for project {}", context.requestId(), projectId);
+
+        var requestBodyBuilder = ListIssuesForBoardRequestBody.newBuilder()
+                .setProjectId(projectId)
+                .setIssueType(issueMapper.toGrpcIssueType(issueType))
+                .setActorUserId(context.userContext().userId());
+
+        if (assigneeId != null) {
+            requestBodyBuilder.setAssigneeId(assigneeId);
+        }
+
+        if (labelId != null) {
+            requestBodyBuilder.setLabelId(labelId);
+        }
+
+        if (includeDone != null) {
+            requestBodyBuilder.setIncludeDone(includeDone);
+        }
+
+        return dynamicStub().listIssuesForBoard(
+                        ListIssuesForBoardRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(requestBodyBuilder.build())
+                                .build()
+                )
+                .map(response -> response.getIssuesList());
     }
 }
