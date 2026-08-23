@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 
-class ListIssuesTest extends IssueServiceImplTest {
+class PaginationIssuesTest extends IssueServiceImplTest {
 
     private Set<ProjectRole> allowedRoles;
 
@@ -34,8 +34,8 @@ class ListIssuesTest extends IssueServiceImplTest {
         );
 
         Mockito.when(issueProperties.allowedRoles().listIssueRoles()).thenReturn(allowedRoles);
-        Mockito.lenient().when(issueProperties.list().defaultPageSize()).thenReturn(10);
-        Mockito.lenient().when(issueProperties.list().maxPageSize()).thenReturn(50);
+        Mockito.lenient().when(issueProperties.pagination().defaultPageSize()).thenReturn(10);
+        Mockito.lenient().when(issueProperties.pagination().maxPageSize()).thenReturn(50);
         Mockito.when(projectRoleChecker.checkProjectRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )

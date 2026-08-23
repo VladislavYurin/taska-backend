@@ -81,7 +81,7 @@ public class IssueServiceImplTest {
     protected static final int MAX_PAGE_SIZE = 100;
 
     @Spy
-    protected IssueProperties.List issueListProperties = new IssueProperties.List(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    protected IssueProperties.Pagination issuePaginationProperties = new IssueProperties.Pagination(DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
     protected static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     protected static final UUID REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");

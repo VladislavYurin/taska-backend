@@ -67,7 +67,7 @@ class IssueWatcherServiceImplTest {
     @InjectMocks
     private IssueWatcherServiceImpl service;
 
-    private final IssueProperties.List listConfig = new IssueProperties.List(20, 100);
+    private final IssueProperties.Pagination paginationConfig = new IssueProperties.Pagination(20, 100);
 
     private Issue issue;
     private IssueWatcher watcher;
@@ -99,7 +99,7 @@ class IssueWatcherServiceImplTest {
         Mockito.when(allowedRoles.watchIssueRoles()).thenReturn(watchRoles);
         Mockito.when(allowedRoles.manageWatchersRoles()).thenReturn(manageRoles);
         Mockito.when(allowedRoles.listWatchersRoles()).thenReturn(listRoles);
-        Mockito.when(issueProperties.list()).thenReturn(listConfig);
+        Mockito.when(issueProperties.pagination()).thenReturn(paginationConfig);
     }
 
     @Test

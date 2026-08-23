@@ -2,6 +2,8 @@ package validator;
 
 import com.google.protobuf.ProtocolMessageEnum;
 import io.grpc.Status;
+
+import java.util.Optional;
 import java.util.regex.Pattern;
 import reactor.core.publisher.Mono;
 
@@ -112,6 +114,32 @@ public final class GrpcRequestValidators {
     }
 
     /**
+     * Парсит опциональное строковое значение как {@link UUID}.
+     *
+     * <p>Если поле отсутствует, возвращает {@link Optional#empty()}.
+     * Если поле присутствует, проверяет, что значение не пустое и является валидным UUID.</p>
+     *
+     * @param present   признак наличия поля в запросе
+     * @param raw       строковое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link Optional}, содержащим распарсенный {@link UUID},
+     *         {@link Optional#empty()}, если поле отсутствует, или ошибкой
+     *         {@code INVALID_ARGUMENT}, если переданное значение пустое или не является валидным UUID
+     */
+    public static Mono<Optional<UUID>> parseOptionalUuidOrInvalidArgument(
+            boolean present,
+            String raw,
+            String fieldName
+    ) {
+        if (!present) {
+            return Mono.just(Optional.empty());
+        }
+
+        return parseUuidOrInvalidArgument(raw, fieldName)
+                .map(Optional::of);
+    }
+
+    /**
      * Проверяет что строка не пустая и не состоит из пробелов.
      *
      * @param raw       строковое значение поля
@@ -121,6 +149,95 @@ public final class GrpcRequestValidators {
      */
     public static Mono<String> requireNonBlankOrInvalidArgument(String raw, String fieldName) {
         return requireNonBlank(raw, fieldName);
+    }
+
+    /**
+     * Проверяет опциональное числовое значение на строго положительное значение.
+     *
+     * <p>Если поле отсутствует, возвращает {@link Optional#empty()}.
+     * Если поле присутствует, значение должно быть больше нуля.</p>
+     *
+     * @param present   признак наличия поля в запросе
+     * @param value     числовое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link Optional}, содержащим значение,
+     *         {@link Optional#empty()}, если поле отсутствует, или ошибкой
+     *         {@code INVALID_ARGUMENT}, если значение меньше или равно нулю
+     */
+    public static Mono<Optional<Integer>> requireOptionalPositiveZeroOrInvalidArgument(
+            boolean present,
+            int value,
+            String fieldName
+    ) {
+        if (!present) {
+            return Mono.just(Optional.empty());
+        }
+
+        if (value < 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be positive")
+                    .asRuntimeException());
+        }
+
+        return Mono.just(Optional.of(value));
+    }
+
+    /**
+     * Проверяет опциональное числовое значение на положительность (> 0).
+     * Если значение не указано (hasValue = false) - возвращает Optional.empty().
+     * Если значение указано, должно быть строго больше нуля.
+     *
+     * @param hasValue  флаг, указывающий, что значение присутствует (optional поле в protobuf)
+     * @param value     числовое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link Optional} содержащим значение,
+     *         или ошибкой {@code INVALID_ARGUMENT} если значение <= 0
+     */
+    public static Mono<Optional<Integer>> requireOptionalPositiveOrInvalidArgument(
+            boolean hasValue,
+            Integer value,
+            String fieldName
+    ) {
+        if (!hasValue) {
+            return Mono.just(Optional.empty());
+        }
+        if (value == null || value <= 0) {
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be positive")
+                    .asRuntimeException());
+        }
+        return Mono.just(Optional.of(value));
+    }
+
+
+
+    /**
+     * Проверяет, что опциональное proto enum значение задано
+     * и не является значением UNSPECIFIED.
+     *
+     * <p>Если поле отсутствует, возвращает {@link Optional#empty()}.
+     * Если поле присутствует, его числовое значение не должно быть равно 0.</p>
+     *
+     * @param present   признак наличия поля в запросе
+     * @param value     значение proto enum
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @param <T>       тип proto enum
+     * @return {@link Mono} с {@link Optional}, содержащим значение,
+     *         {@link Optional#empty()}, если поле отсутствует, или ошибкой
+     *         {@code INVALID_ARGUMENT}, если передано значение UNSPECIFIED
+     */
+    public static <T extends ProtocolMessageEnum> Mono<Optional<T>>
+    requireOptionalSpecifiedOrInvalidArgument(
+            boolean present,
+            T value,
+            String fieldName
+    ) {
+        if (!present) {
+            return Mono.just(Optional.empty());
+        }
+
+        return requireSpecifiedOrInvalidArgument(value, fieldName)
+                .map(Optional::of);
     }
 
     /**

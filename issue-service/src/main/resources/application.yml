@@ -32,7 +32,7 @@ app:
       processing-timeout: ${KAFKA_PROCESSING_OUTBOX_TIMEOUT:5m}
 
 issue:
-  list:
+  pagination:
     default-page-size: ${ISSUE_LIST_DEFAULT_PAGE_SIZE:20}
     max-page-size: ${ISSUE_LIST_MAX_PAGE_SIZE:100}
   card:
@@ -66,6 +66,9 @@ issue:
     add-issue-label-roles: ${ISSUE_ADD_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
     remove-issue-label-roles: ${ISSUE_REMOVE_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
     list-issue-label-roles: ${ISSUE_LIST_ISSUE_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
+    search-issue-roles: [ADMIN, MEMBER, VIEWER]
+  search:
+    min-query-length: ${ISSUE_SEARCH_MIN_QUERY_LENGTH:3}
   idempotency-key-ttl:
     ttl: ${ISSUE_IDEMPOTENCY_TTL:24h}
   retry:

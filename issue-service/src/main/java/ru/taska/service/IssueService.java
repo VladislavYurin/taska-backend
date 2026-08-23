@@ -93,4 +93,19 @@ public interface IssueService {
                             String description,
                             IssuePriority priority
     );
+
+    Mono<PageResult<Issue>> searchIssues(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            String query,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            Integer page,
+            Integer pageSize
+    );
 }

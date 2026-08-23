@@ -1,6 +1,8 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
@@ -233,6 +235,7 @@ public class IssueMapper {
             case ISSUE_PRIORITY_MEDIUM -> IssuePriority.MEDIUM;
             case ISSUE_PRIORITY_HIGH -> IssuePriority.HIGH;
             default -> throw new IllegalArgumentException("Unknown IssuePriority: " + proto);
+
         };
     }
 
@@ -318,5 +321,54 @@ public class IssueMapper {
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())
                 .build();
+    }
+
+    /**
+     * Маппинг строки результата R2DBC в объект Issue.
+     */
+    public Issue mapRowToIssue(Row row, RowMetadata metadata) {
+        Issue issue = new Issue();
+
+        // Обязательные поля
+        issue.setId(row.get("id", UUID.class));
+        issue.setProjectId(row.get("project_id", UUID.class));
+        issue.setIssueNumber(row.get("issue_number", Integer.class));
+        issue.setIssueKey(row.get("issue_key", String.class));
+        issue.setIssueType(IssueType.valueOf(row.get("issue_type", String.class)));
+        issue.setSummary(row.get("summary", String.class));
+        issue.setDescription(row.get("description", String.class));
+        issue.setStatusKey(row.get("status_key", String.class));
+        issue.setPriority(IssuePriority.valueOf(row.get("priority", String.class)));
+
+        // Опциональные поля
+        setOptionalUuidField(issue::setAssigneeId, row.get("assignee_id", String.class));
+        setOptionalUuidField(issue::setReporterId, row.get("reporter_id", String.class));
+
+        issue.setVersion(row.get("version", Integer.class));
+
+        // Даты
+        setOptionalInstantField(issue::setCreatedAt, row.get("created_at", java.time.OffsetDateTime.class));
+        setOptionalInstantField(issue::setUpdatedAt, row.get("updated_at", java.time.OffsetDateTime.class));
+        setOptionalInstantField(issue::setDeletedAt, row.get("deleted_at", java.time.OffsetDateTime.class));
+
+        return issue;
+    }
+
+    /**
+     * Утилитный метод для установки опционального UUID поля.
+     */
+    private void setOptionalUuidField(java.util.function.Consumer<UUID> setter, String value) {
+        if (value != null && !value.isEmpty()) {
+            setter.accept(UUID.fromString(value));
+        }
+    }
+
+    /**
+     * Утилитный метод для установки опционального Instant поля из OffsetDateTime.
+     */
+    private void setOptionalInstantField(java.util.function.Consumer<java.time.Instant> setter, java.time.OffsetDateTime value) {
+        if (value != null) {
+            setter.accept(value.toInstant());
+        }
     }
 }

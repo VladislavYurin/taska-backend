@@ -99,39 +99,39 @@ class CommentServiceImplTest {
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // issueTransitionRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // getIssueRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueRoles
+
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // createIssueLinksRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteIssueLinksRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueLinksRoles
+
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // uploadAttachmentRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // viewAttachmentRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // deleteOwnAttachmentRoles
-                Set.of(ProjectRole.ADMIN), // deleteAttachmentRoles
+                Set.of(ProjectRole.ADMIN),                     // deleteAttachmentRoles
+
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // commentRoles
+
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // watchIssueRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listWatchersRoles
                 Set.of(ProjectRole.ADMIN), // manageWatchersRoles
-                /// 16-22: роли для labels
-                // 16 createProjectLabelRoles
-                Set.of(ProjectRole.ADMIN),
-                // 17 updateProjectLabelRoles
-                Set.of(ProjectRole.ADMIN),
-                // 18 deleteProjectLabelRoles
-                Set.of(ProjectRole.ADMIN),
-                // 19 listProjectLabelRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER),
-                // 20 addIssueLabelRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 21 removeIssueLabelRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),
-                // 22 listIssueLabelRoles
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER)
+                /// роли для labels
+                Set.of(ProjectRole.ADMIN), // createProjectLabelRoles
+                Set.of(ProjectRole.ADMIN), // updateProjectLabelRoles
+                Set.of(ProjectRole.ADMIN), // deleteProjectLabelRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listProjectLabelRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // addIssueLabelRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // removeIssueLabelRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueLabelRoles
+
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER)   // searchIssueRoles
+
         );
 
         lenient().when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
 
-        // Настройка IssueProperties.List
-        IssueProperties.List listConfig = new IssueProperties.List(10, 50);
-        lenient().when(issueProperties.list()).thenReturn(listConfig);
+        // Настройка IssueProperties.Pagination
+        IssueProperties.Pagination paginationConfig = new IssueProperties.Pagination(10, 50);
+        lenient().when(issueProperties.pagination()).thenReturn(paginationConfig);
 
         // Создание задачи
         issue = Issue.builder()
@@ -181,7 +181,6 @@ class CommentServiceImplTest {
         when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
-        // ✅ Исправлено: возвращаем Issue, а не UUID
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
 
@@ -266,7 +265,6 @@ class CommentServiceImplTest {
         when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
-        // ✅ Исправлено: возвращаем Issue, а не UUID
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
 

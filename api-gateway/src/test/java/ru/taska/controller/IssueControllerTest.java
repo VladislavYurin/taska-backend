@@ -31,10 +31,14 @@ import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
+import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.SearchIssuesRequestDto;
+import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
@@ -45,9 +49,11 @@ import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
+import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -59,7 +65,8 @@ import java.util.stream.Stream;
         RequestIdProvider.class,
         BearerTokenExtractor.class,
         GatewayErrorHandler.class,
-        RestErrorMapper.class
+        RestErrorMapper.class,
+        IssueMapper.class
 })
 class IssueControllerTest {
 
@@ -795,5 +802,391 @@ class IssueControllerTest {
 
         Mockito.when(contextMapper.mapToGatewayUserContext(Mockito.any(UserContext.class)))
                 .thenReturn(userContext);
+    }
+
+    @Test
+    @DisplayName("Должен вернуть результаты поиска со статусом 200")
+    void searchIssues_shouldReturnResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(1);
+        response.setItems(List.of());
+
+        SearchIssuesRequestDto requestDto = new SearchIssuesRequestDto()
+                .query("test")
+                .projectId(PROJECT_ID)
+                .statusKey(STATUS_TODO)
+                .assigneeId(ASSIGNEE_ID)
+                .reporterId(USER_ID)
+                .priority(IssuePriorityDto.MEDIUM)
+                .issueType(IssueTypeDto.TASK)
+                .page(0)
+                .pageSize(20);
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("query", "test")
+                        .queryParam("projectId", PROJECT_ID)
+                        .queryParam("statusKey", STATUS_TODO)
+                        .queryParam("assigneeId", ASSIGNEE_ID)
+                        .queryParam("reporterId", USER_ID)
+                        .queryParam("priority", "MEDIUM")
+                        .queryParam("issueType", "TASK")
+                        .queryParam("page", 0)
+                        .queryParam("pageSize", 20)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен выполнить поиск с минимальным набором параметров")
+    void searchIssues_shouldSearchWithMinimalParameters() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(0);
+        response.setItems(List.of());
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/api/v1/issues/search")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен выполнить поиск с фильтром по приоритету")
+    void searchIssues_shouldFilterByPriority() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(1);
+        response.setItems(List.of());
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("priority", "HIGH")
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен выполнить поиск с фильтром по типу задачи")
+    void searchIssues_shouldFilterByIssueType() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(1);
+        response.setItems(List.of());
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("issueType", "BUG")
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен выполнить поиск с кастомной пагинацией")
+    void searchIssues_shouldHandleCustomPagination() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(100);
+        response.setItems(List.of());
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("query", "test")
+                        .queryParam("page", 2)
+                        .queryParam("pageSize", 50)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен выполнить поиск с комбинацией всех фильтров")
+    void searchIssues_shouldHandleAllFiltersCombination() {
+        mockAuthenticatedUser();
+
+        var response = new SearchIssuesResponseDto();
+        response.setTotalCount(1);
+        response.setItems(List.of());
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("query", "important")
+                        .queryParam("projectId", PROJECT_ID)
+                        .queryParam("statusKey", "IN_PROGRESS")
+                        .queryParam("assigneeId", ASSIGNEE_ID)
+                        .queryParam("reporterId", USER_ID)
+                        .queryParam("priority", "HIGH")
+                        .queryParam("issueType", "STORY")
+                        .queryParam("page", 0)
+                        .queryParam("pageSize", 10)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 401 Unauthorized при отсутствии токена")
+    void searchIssues_shouldReturn401_whenNoToken() {
+        webTestClient.get()
+                .uri("/api/v1/issues/search")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 403 Forbidden при отсутствии прав")
+    void searchIssues_shouldReturn403_whenPermissionDenied() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied")));
+
+        webTestClient.get()
+                .uri("/api/v1/issues/search")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 503 Service Unavailable при недоступности downstream")
+    void searchIssues_shouldReturn503_whenDownstreamUnavailable() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/issues/search")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectHeader().exists("X-Request-Id");
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 504 Gateway Timeout при превышении deadline")
+    void searchIssues_shouldReturn504_whenDeadlineExceeded() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.searchIssues(
+                        Mockito.any(SearchIssuesRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/issues/search")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT)
+                .expectHeader().exists("X-Request-Id");
+
+        Mockito.verify(issueClient).searchIssues(
+                Mockito.any(SearchIssuesRequestDto.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при page меньше 0")
+    void searchIssues_shouldReturn400_whenPageNegative() {
+        mockAuthenticatedUser();
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("page", -1)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при pageSize меньше 1")
+    void searchIssues_shouldReturn400_whenPageSizeLessThanMin() {
+        mockAuthenticatedUser();
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("pageSize", 0)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при pageSize больше 100")
+    void searchIssues_shouldReturn400_whenPageSizeExceedsMax() {
+        mockAuthenticatedUser();
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("pageSize", 200)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    private static Stream<Arguments> searchQueryLengths() {
+        return Stream.of(
+                Arguments.of("ab", true),
+                Arguments.of("abc", true),
+                Arguments.of("a", false),
+                Arguments.of("", false),
+                Arguments.of("   ", false)
+        );
     }
 }

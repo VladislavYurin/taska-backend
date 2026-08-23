@@ -1,44 +1,47 @@
 package ru.taska.transport.grpc;
 
+import exception.GrpcExceptionHandler;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.annotation.TrackMetrics;
+import ru.taska.api.issue.v1.AddIssueLabelRequest;
+import ru.taska.api.issue.v1.AddIssueLabelResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
-import ru.taska.api.issue.v1.ListIssuesRequest;
-import ru.taska.api.issue.v1.ListIssuesResponse;
-import ru.taska.api.issue.v1.TransitionIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueResponse;
-import ru.taska.exception.DomainException;
-import ru.taska.mapper.IssueMapper;
-import ru.taska.service.IssueService;
-import ru.taska.service.IssueWatcherService;
-import ru.taska.api.issue.v1.AddIssueLabelRequest;
-import ru.taska.api.issue.v1.AddIssueLabelResponse;
-import ru.taska.api.issue.v1.CreateProjectLabelRequest;
-import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
-import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
 import ru.taska.api.issue.v1.ListIssueLabelsRequest;
 import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListIssuesRequest;
+import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
 import ru.taska.api.issue.v1.ListProjectLabelsResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
 import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
+import ru.taska.api.issue.v1.SearchIssuesResponse;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 import ru.taska.domain.dto.LabelCommands;
+import ru.taska.exception.DomainException;
+import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
+import ru.taska.service.IssueService;
+import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.logging.GrpcIssueLogging;
@@ -46,6 +49,9 @@ import validator.GrpcRequestValidators;
 
 import java.util.Optional;
 import java.util.UUID;
+
+import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
+import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
 
 @Slf4j
 @Service
@@ -88,7 +94,7 @@ public class GrpcIssueService {
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getReporterId(), "body.reporterId"
                                 ))
-                        .doOnError(StatusRuntimeException.class, GrpcIssueLogging.logValidationError(
+                        .doOnError(StatusRuntimeException.class, logValidationError(
                                 req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
                         ))
                         .flatMap(t -> {
@@ -122,7 +128,7 @@ public class GrpcIssueService {
                                                     requestId, nodeId, issue.getId())
                                     )
                                     .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "createIssue")
+                                            logOnError(requestId, nodeId, "createIssue")
                                     );
                         }))
                 .map(issueMapper::toIssueProto);
@@ -146,7 +152,7 @@ public class GrpcIssueService {
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ))
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(
+                                logValidationError(
                                         req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getIssue")
                         )
                         .flatMap(t -> {
@@ -174,7 +180,7 @@ public class GrpcIssueService {
                                             log.info("[{}][{}] getIssue: successfully found, issueId={}, actorUserId={}",
                                                     requestId, nodeId, issueId, actorUserId)
                                     )
-                                    .doOnError(GrpcIssueLogging.logOnError(requestId, nodeId, "getIssue"));
+                                    .doOnError(logOnError(requestId, nodeId, "getIssue"));
                         }));
     }
 
@@ -203,7 +209,7 @@ public class GrpcIssueService {
                                                 : Mono.just(Optional.<UUID>empty())
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(
+                                        logValidationError(
                                                 req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssues")
                                 )
                                 .flatMap(t -> {
@@ -259,7 +265,7 @@ public class GrpcIssueService {
                                                             requestId, nodeId, result.getTotalCount())
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listIssues")
+                                                    logOnError(requestId, nodeId, "listIssues")
                                             );
                                 })
                 );
@@ -286,7 +292,7 @@ public class GrpcIssueService {
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ))
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(
+                                logValidationError(
                                         req.getHeader().getRequestId(), req.getHeader().getNodeId(), "assignIssue")
                         )
                         .flatMap(t -> {
@@ -311,7 +317,7 @@ public class GrpcIssueService {
                                                     requestId, nodeId, issueId)
                                     )
                                     .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "assignIssue")
+                                            logOnError(requestId, nodeId, "assignIssue")
                                     );
                         }))
                 .map(issueMapper::toIssueProto);
@@ -342,7 +348,7 @@ public class GrpcIssueService {
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ))
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(
+                                logValidationError(
                                         req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteIssue")
                         )
                         .flatMap(t -> {
@@ -460,7 +466,7 @@ public class GrpcIssueService {
                                                     issueWithHistory.getIssue().getStatusKey())
                                     )
                                     .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "transitionIssue")
+                                            logOnError(requestId, nodeId, "transitionIssue")
                                     );
                         }))
                 .map(issueMapper::toIssueDetailsProto);
@@ -488,7 +494,7 @@ public class GrpcIssueService {
                                         req.getBody().getColor(), "body.color"
                                 ))
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createProjectLabel")
+                                logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createProjectLabel")
                         )
                         .flatMap(t -> {
                             String requestId = t.getT1();
@@ -510,7 +516,7 @@ public class GrpcIssueService {
                                                     requestId, nodeId, result.getId())
                                     )
                                     .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "createProjectLabel")
+                                            logOnError(requestId, nodeId, "createProjectLabel")
                                     );
                         })
                 );
@@ -543,7 +549,7 @@ public class GrpcIssueService {
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ))
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "updateProjectLabel")
+                                logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "updateProjectLabel")
                         )
                         .flatMap(t -> {
                             String requestId = t.getT1();
@@ -568,7 +574,7 @@ public class GrpcIssueService {
                                                     requestId, nodeId, labelId)
                                     )
                                     .doOnError(DomainException.class,
-                                            GrpcIssueLogging.logOnError(requestId, nodeId, "updateProjectLabel")
+                                            logOnError(requestId, nodeId, "updateProjectLabel")
                                     );
                         })
                 );
@@ -591,7 +597,7 @@ public class GrpcIssueService {
                                                 req.getBody().getActorUserId(), "body.actorUserId")
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteProjectLabel")
+                                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "deleteProjectLabel")
                                 )
                                 .flatMap(t -> {
                                     String requestId = t.getT1();
@@ -613,7 +619,7 @@ public class GrpcIssueService {
                                                             requestId, nodeId, labelId)
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "deleteProjectLabel")
+                                                    logOnError(requestId, nodeId, "deleteProjectLabel")
                                             );
                                 })
                 );
@@ -634,7 +640,7 @@ public class GrpcIssueService {
                                                 req.getBody().getActorUserId(), "body.actorUserId")
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listProjectLabels")
+                                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listProjectLabels")
                                 )
                                 .flatMap(t -> {
                                     String requestId = t.getT1();
@@ -654,7 +660,7 @@ public class GrpcIssueService {
                                                             requestId, nodeId, result.getTotalCount())
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listProjectLabels")
+                                                    logOnError(requestId, nodeId, "listProjectLabels")
                                             );
                                 })
                 );
@@ -677,7 +683,7 @@ public class GrpcIssueService {
                                                 req.getBody().getActorUserId(), "body.actorUserId")
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "addIssueLabel")
+                                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "addIssueLabel")
                                 )
                                 .flatMap(t -> {
                                     String requestId = t.getT1();
@@ -700,7 +706,7 @@ public class GrpcIssueService {
                                                             requestId, nodeId, labelId)
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "addIssueLabel")
+                                                    logOnError(requestId, nodeId, "addIssueLabel")
                                             );
                                 })
                 );
@@ -723,7 +729,7 @@ public class GrpcIssueService {
                                                 req.getBody().getActorUserId(), "body.actorUserId")
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "removeIssueLabel")
+                                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "removeIssueLabel")
                                 )
                                 .flatMap(t -> {
                                     String requestId = t.getT1();
@@ -746,7 +752,7 @@ public class GrpcIssueService {
                                                             requestId, nodeId, labelId)
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "removeIssueLabel")
+                                                    logOnError(requestId, nodeId, "removeIssueLabel")
                                             );
                                 })
                 );
@@ -767,7 +773,7 @@ public class GrpcIssueService {
                                                 req.getBody().getActorUserId(), "body.actorUserId")
                                 )
                                 .doOnError(StatusRuntimeException.class,
-                                        GrpcIssueLogging.logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssueLabels")
+                                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listIssueLabels")
                                 )
                                 .flatMap(t -> {
                                     String requestId = t.getT1();
@@ -787,9 +793,120 @@ public class GrpcIssueService {
                                                             requestId, nodeId)
                                             )
                                             .doOnError(DomainException.class,
-                                                    GrpcIssueLogging.logOnError(requestId, nodeId, "listIssueLabels")
+                                                    logOnError(requestId, nodeId, "listIssueLabels")
                                             );
                                 })
                 );
+    }
+
+    @TrackMetrics(counter = "issue-service_search-issues_grpc_counter",
+            timer = "issue-service_search-issues_grpc_timer")
+    public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
+        return request
+                .flatMap(req ->
+                        Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                                        GrpcRequestValidators.parseOptionalUuidOrInvalidArgument(req.getBody().hasProjectId(), req.getBody().getProjectId(), "body.projectId"),
+                                        GrpcRequestValidators.parseOptionalUuidOrInvalidArgument(req.getBody().hasAssigneeId(), req.getBody().getAssigneeId(), "body.assigneeId"),
+                                        GrpcRequestValidators.parseOptionalUuidOrInvalidArgument(req.getBody().hasReporterId(), req.getBody().getReporterId(), "body.reporterId"),
+                                        GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(req.getBody().hasPage(), req.getBody().getPage(), "body.page"),
+                                        GrpcRequestValidators.requireOptionalPositiveOrInvalidArgument(req.getBody().hasPageSize(), req.getBody().getPageSize(), "body.pageSize")
+                                )
+                                .zipWith(
+                                        Mono.zip(
+                                                GrpcRequestValidators.requireOptionalSpecifiedOrInvalidArgument(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"),
+                                                GrpcRequestValidators.requireOptionalSpecifiedOrInvalidArgument(req.getBody().hasIssueType(), req.getBody().getIssueType(), "body.issueType")
+                                        )
+                                )
+                                .doOnError(
+                                        StatusRuntimeException.class,
+                                        logValidationError(
+                                                req.getHeader().getRequestId(),
+                                                req.getHeader().getNodeId(),
+                                                "searchIssues"
+                                        )
+                                )
+                                .flatMap(t -> {
+                                    var values = t.getT1();
+                                    var enums = t.getT2();
+
+                                    String requestId = values.getT1();
+                                    String nodeId = values.getT2();
+                                    UUID actorUserId = values.getT3();
+                                    UUID projectId = values.getT4().orElse(null);
+                                    UUID assigneeId = values.getT5().orElse(null);
+                                    UUID reporterId = values.getT6().orElse(null);
+                                    Integer page = values.getT7().orElse(null);
+                                    Integer pageSize = values.getT8().orElse(null);
+
+                                    IssuePriority protoPriority = enums.getT1().orElse(null);
+                                    IssueType protoIssueType = enums.getT2().orElse(null);
+
+                                    ru.taska.domain.IssuePriority priority = protoPriority != null
+                                            ? issueMapper.toDomainIssuePriority(protoPriority)
+                                            : null;
+
+                                    ru.taska.domain.IssueType issueType = protoIssueType != null
+                                            ? issueMapper.toDomainIssueType(protoIssueType)
+                                            : null;
+
+                                    String query = req.getBody().hasQuery()
+                                            ? req.getBody().getQuery()
+                                            : null;
+
+                                    String statusKey = req.getBody().hasStatusKey()
+                                            ? req.getBody().getStatusKey()
+                                            : null;
+
+                                    log.info(
+                                            "[{}][{}] searchIssues: query={}, projectId={}, actorUserId={}, " +
+                                                    "statusKey={}, assigneeId={}, reporterId={}, priority={}, " +
+                                                    "issueType={}, page={}, pageSize={}",
+                                            requestId, nodeId,query,projectId,actorUserId,
+                                            statusKey,assigneeId,reporterId,priority,
+                                            issueType,page,pageSize
+                                    );
+
+                                    return issueService.searchIssues(
+                                                    requestId,
+                                                    nodeId,
+                                                    actorUserId,
+                                                    query,
+                                                    projectId,
+                                                    statusKey,
+                                                    assigneeId,
+                                                    reporterId,
+                                                    priority,
+                                                    issueType,
+                                                    page,
+                                                    pageSize
+                                            )
+                                            .map(result ->
+                                                    SearchIssuesResponse.newBuilder()
+                                                            .addAllIssues(
+                                                                    result.items().stream()
+                                                                            .map(issueMapper::toIssueShortProto)
+                                                                            .toList()
+                                                            )
+                                                            .setTotalCount((int) result.totalCount())
+                                                            .build()
+                                            )
+                                            .doOnNext(response ->
+                                                    log.info(
+                                                            "[{}][{}] searchIssues: successfully found {} issues",
+                                                            requestId,
+                                                            nodeId,
+                                                            response.getTotalCount()
+                                                    )
+                                            )
+                                            .doOnError(
+                                                    DomainException.class,
+                                                    logOnError(requestId,nodeId,"searchIssues")
+                                            );
+                                })
+                )
+                .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
     }
 }

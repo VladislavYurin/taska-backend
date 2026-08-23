@@ -2,9 +2,11 @@ package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
+import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
@@ -16,15 +18,23 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
+import ru.taska.api.issue.v1.SearchIssuesRequestBody;
+import ru.taska.api.issue.v1.SearchIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueShortResponseDto;
+import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.SearchIssuesRequestDto;
+import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -34,9 +44,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class IssueMapper {
 
     private final ObjectMapper objectMapper;
@@ -154,6 +167,8 @@ public class IssueMapper {
         };
     }
 
+
+
     public String toRestIssueType(IssueType grpcIssueType) {
         return switch (grpcIssueType) {
             case ISSUE_TYPE_TASK -> "TASK";
@@ -166,12 +181,34 @@ public class IssueMapper {
         };
     }
 
+    public IssueType toGrpcIssueType(IssueTypeDto issueType) {
+        if (issueType == null) {
+            return IssueType.ISSUE_TYPE_UNSPECIFIED;
+        }
+        return switch (issueType) {
+            case TASK -> IssueType.ISSUE_TYPE_TASK;
+            case BUG -> IssueType.ISSUE_TYPE_BUG;
+            case STORY -> IssueType.ISSUE_TYPE_STORY;
+        };
+    }
+
     public IssuePriority toGrpcIssuePriority(String restIssuePriority) {
         return switch (restIssuePriority) {
             case "LOW" -> IssuePriority.ISSUE_PRIORITY_LOW;
             case "MEDIUM" -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case "HIGH" -> IssuePriority.ISSUE_PRIORITY_HIGH;
             default -> IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+        };
+    }
+
+    public IssuePriority toGrpcIssuePriority(IssuePriorityDto priority) {
+        if (priority == null) {
+            return IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+        }
+        return switch (priority) {
+            case LOW -> IssuePriority.ISSUE_PRIORITY_LOW;
+            case MEDIUM -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
+            case HIGH -> IssuePriority.ISSUE_PRIORITY_HIGH;
         };
     }
 
@@ -219,6 +256,148 @@ public class IssueMapper {
     public OffsetDateTime toOffsetDateTime(Timestamp timestamp) {
         return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
                 .atOffset(ZoneOffset.UTC);
+    }
+
+    /**
+     * Создает gRPC запрос для поиска задач.
+     */
+    public SearchIssuesRequest toSearchIssuesGrpcRequest(
+            SearchIssuesRequestDto request,
+            GatewayContext context
+    ) {
+        SearchIssuesRequestBody.Builder bodyBuilder =
+                SearchIssuesRequestBody.newBuilder()
+                        .setActorUserId(context.userContext().userId());
+
+        setIfPresent(request.getQuery(), bodyBuilder::setQuery);
+        setIfPresent(request.getProjectId(), bodyBuilder::setProjectId);
+        setIfPresent(request.getStatusKey(), bodyBuilder::setStatusKey);
+        setIfPresent(request.getAssigneeId(), bodyBuilder::setAssigneeId);
+        setIfPresent(request.getReporterId(), bodyBuilder::setReporterId);
+
+        setIfPresent(request.getPriority(),this::toGrpcIssuePriority,bodyBuilder::setPriority);
+        setIfPresent(request.getIssueType(),this::toGrpcIssueType,bodyBuilder::setIssueType);
+
+        setIfPresent(request.getPage(), bodyBuilder::setPage);
+        setIfPresent(request.getPageSize(), bodyBuilder::setPageSize);
+
+        return SearchIssuesRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId(context.requestId())
+                        .setNodeId(context.nodeId())
+                        .build())
+                .setBody(bodyBuilder.build())
+                .build();
+    }
+
+    /**
+     * Преобразует gRPC ответ поиска в REST DTO.
+     */
+    public SearchIssuesResponseDto toRestSearchIssuesResponse(SearchIssuesResponse protoDto) {
+        SearchIssuesResponseDto restDto = new SearchIssuesResponseDto();
+        List<IssueShortResponseDto> items = new ArrayList<>();
+
+        protoDto.getIssuesList()
+                .forEach(issue -> items.add(toIssueShortResponseDto(issue)));
+
+        restDto.setItems(items);
+        restDto.setTotalCount(protoDto.getTotalCount());
+
+        return restDto;
+    }
+
+    /**
+     * Безопасно преобразует строку в IssuePriorityDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssuePriorityDto safeParsePriority(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssuePriorityDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid priority value: {}, ignoring", value);
+            return null;
+        }
+    }
+
+    /**
+     * Безопасно преобразует строку в IssueTypeDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssueTypeDto safeParseIssueType(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssueTypeDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid issueType value: {}, ignoring", value);
+            return null;
+        }
+    }
+
+    /**
+     * Создает SearchIssuesRequestDto из параметров запроса.
+     */
+    public SearchIssuesRequestDto toSearchRequestDto(
+            String query,
+            String projectId,
+            String statusKey,
+            String assigneeId,
+            String reporterId,
+            String priority,
+            String issueType,
+            Integer page,
+            Integer pageSize
+    ) {
+        return new SearchIssuesRequestDto()
+                .query(query)
+                .projectId(projectId)
+                .statusKey(statusKey)
+                .assigneeId(assigneeId)
+                .reporterId(reporterId)
+                .priority(safeParsePriority(priority))
+                .issueType(safeParseIssueType(issueType))
+                .page(page != null ? page : 0)
+                .pageSize(pageSize != null ? pageSize : 20);
+    }
+
+    /**
+     * Устанавливает значение в билдер, если строка не null и не пустая.
+     */
+    private static void setIfPresent(String value, Consumer<String> setter) {
+        if (value != null && !value.isBlank()) {
+            setter.accept(value);
+        }
+    }
+
+    /**
+     * Устанавливает значение в билдер, если объект не null.
+     */
+    private static <T> void setIfPresent(T value, Consumer<T> setter) {
+        if (value != null) {
+            setter.accept(value);
+        }
+    }
+
+    /**
+     * Устанавливает значение с преобразованием, если строка не null и не пустая.
+     */
+    private static <T> void setIfPresent(String value, Function<String, T> converter, Consumer<T> setter) {
+        if (value != null && !value.isBlank()) {
+            setter.accept(converter.apply(value));
+        }
+    }
+
+    /**
+     * Устанавливает значение с преобразованием, если объект не null.
+     */
+    private static <T, R> void setIfPresent(T value, Function<T, R> converter, Consumer<R> setter) {
+        if (value != null) {
+            setter.accept(converter.apply(value));
+        }
     }
 
     public Object parsePayload(String payload) {

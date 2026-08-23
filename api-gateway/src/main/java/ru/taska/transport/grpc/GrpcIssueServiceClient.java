@@ -22,6 +22,7 @@ import ru.taska.api.issue.v1.ListIssueLinksRequestBody;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesRequestBody;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
@@ -36,6 +37,8 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.SearchIssuesRequestDto;
+import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
@@ -409,5 +412,26 @@ public class GrpcIssueServiceClient {
                 .setRequestId(context.requestId())
                 .setNodeId(context.nodeId())
                 .build();
+    }
+
+    /**
+     * Выполняет поиск задач по ключу, summary, description с фильтрами.
+     *
+     * @param request dto c параметрами поиска
+     * @param context контекст запроса
+     * @return результат поиска
+     */
+    public Mono<SearchIssuesResponseDto> searchIssues(
+            SearchIssuesRequestDto request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling searchIssues: {}", context.requestId(), request);
+
+        SearchIssuesRequest grpcRequest =
+                issueMapper.toSearchIssuesGrpcRequest(request, context);
+
+        return dynamicStub()
+                .searchIssues(grpcRequest)
+                .map(issueMapper::toRestSearchIssuesResponse);
     }
 }
