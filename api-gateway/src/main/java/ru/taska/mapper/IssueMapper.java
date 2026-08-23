@@ -224,6 +224,12 @@ public class IssueMapper {
         };
     }
 
+    /**
+     *  Преобразовывает proto типы issue событий,
+     *  Если придет неизвестный ISSUE_EVENT_TYPE_SUPER_NEW, мы вернем строку "SUPER_NEW", не уронив весь ответ.
+     * @param grpcIssueEventType - типы issue событий
+     * @return String - rest представление issue события
+     */
     public String toRestIssueEventType(IssueEventType grpcIssueEventType) {
         return switch (grpcIssueEventType) {
             case ISSUE_EVENT_TYPE_CREATED -> "CREATED";
@@ -238,10 +244,18 @@ public class IssueMapper {
             case ISSUE_EVENT_TYPE_COMMENT_CREATED -> "COMMENT_CREATED";
             case ISSUE_EVENT_TYPE_COMMENT_UPDATED -> "COMMENT_UPDATED";
             case ISSUE_EVENT_TYPE_COMMENT_DELETED -> "COMMENT_DELETED";
-            default -> throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Unknown event type: " + grpcIssueEventType
-            );
+            case ISSUE_EVENT_TYPE_LABEL_ADDED -> "LABEL_ADDED";
+            case ISSUE_EVENT_TYPE_LABEL_REMOVED -> "LABEL_REMOVED";
+            default -> {
+                String name = grpcIssueEventType.name();
+                if (name.startsWith("ISSUE_EVENT_TYPE_")) {
+                    yield name.substring("ISSUE_EVENT_TYPE_".length());
+                } else if (name.startsWith("ISSUE_LINK_EVENT_TYPE_")) {
+                    yield name.substring("ISSUE_LINK_EVENT_TYPE_".length());
+                } else {
+                    yield name;
+                }
+            }
         };
     }
 

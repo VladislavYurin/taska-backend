@@ -1906,7 +1906,9 @@ components:
           type: string
           format: uuid
         notificationType:
-          $ref: '#/components/schemas/NotificationTypeDto'
+          type: string
+          description: Тип уведомления.
+          example: ISSUE_ASSIGNED,MEMBER_REMOVED etc.
         title:
           type: string
         body:
@@ -1924,21 +1926,6 @@ components:
         sourceEventId:
           type: string
           format: uuid
-
-    NotificationTypeDto:
-      type: string
-      enum:
-        - ISSUE_ASSIGNED
-        - ISSUE_TRANSITIONED
-        - ISSUE_CREATED
-        - ISSUE_UPDATED
-        - ISSUE_DELETED
-        - USER_INVITED
-        - USER_ACTIVATED
-        - PROJECT_CREATED
-        - MEMBER_ADDED
-        - MEMBER_UPDATED
-        - MEMBER_REMOVED
 
     ReadOnlyTableRowsResponseDto:
       type: object

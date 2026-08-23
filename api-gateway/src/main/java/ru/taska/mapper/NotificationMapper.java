@@ -9,7 +9,6 @@ import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
-import ru.taska.domain.dto.NotificationTypeDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -73,32 +72,38 @@ public class NotificationMapper {
     }
 
     /**
-     * Преобразует тип уведомления из Protobuf enum в REST enum.
+     * Преобразует тип уведомления из Protobuf enum в REST string
+     * В случае отсутствия значения в Protobuf enum возвращает
      * <p>
      * REST API не должен отдавать наружу технический gRPC-префикс {@code NOTIFICATION_KIND_},
      * поэтому значения приводятся к frontend-friendly формату из OpenAPI контракта.
      *
      * @param source тип уведомления {@link NotificationKind} из gRPC контракта
-     * @return соответствующий REST enum {@link NotificationTypeDto}
-     * @throws ResponseStatusException если notification-service вернул неподдерживаемый тип уведомления
+     * @return String - rest представление NotificationType
      */
-    public NotificationTypeDto toRestNotificationType(NotificationKind source) {
+    public String toRestNotificationType(NotificationKind source) {
         return switch (source) {
-            case NOTIFICATION_KIND_ISSUE_ASSIGNED -> NotificationTypeDto.ISSUE_ASSIGNED;
-            case NOTIFICATION_KIND_ISSUE_TRANSITIONED -> NotificationTypeDto.ISSUE_TRANSITIONED;
-            case NOTIFICATION_KIND_ISSUE_CREATED -> NotificationTypeDto.ISSUE_CREATED;
-            case NOTIFICATION_KIND_ISSUE_UPDATED -> NotificationTypeDto.ISSUE_UPDATED;
-            case NOTIFICATION_KIND_ISSUE_DELETED -> NotificationTypeDto.ISSUE_DELETED;
-            case NOTIFICATION_KIND_USER_INVITED -> NotificationTypeDto.USER_INVITED;
-            case NOTIFICATION_KIND_USER_ACTIVATED -> NotificationTypeDto.USER_ACTIVATED;
-            case NOTIFICATION_KIND_PROJECT_CREATED -> NotificationTypeDto.PROJECT_CREATED;
-            case NOTIFICATION_KIND_MEMBER_ADDED -> NotificationTypeDto.MEMBER_ADDED;
-            case NOTIFICATION_KIND_MEMBER_UPDATED -> NotificationTypeDto.MEMBER_UPDATED;
-            case NOTIFICATION_KIND_MEMBER_REMOVED -> NotificationTypeDto.MEMBER_REMOVED;
-            default -> throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Unsupported notification type received from notification-service"
-            );
+            case NOTIFICATION_KIND_ISSUE_ASSIGNED -> "ISSUE_ASSIGNED";
+            case NOTIFICATION_KIND_ISSUE_TRANSITIONED -> "ISSUE_TRANSITIONED";
+            case NOTIFICATION_KIND_ISSUE_CREATED -> "ISSUE_CREATED";
+            case NOTIFICATION_KIND_ISSUE_UPDATED -> "ISSUE_UPDATED";
+            case NOTIFICATION_KIND_ISSUE_DELETED -> "ISSUE_DELETED";
+            case NOTIFICATION_KIND_USER_INVITED -> "USER_INVITED";
+            case NOTIFICATION_KIND_USER_ACTIVATED -> "USER_ACTIVATED";
+            case NOTIFICATION_KIND_PROJECT_CREATED -> "PROJECT_CREATED";
+            case NOTIFICATION_KIND_MEMBER_ADDED -> "MEMBER_ADDED";
+            case NOTIFICATION_KIND_MEMBER_UPDATED -> "MEMBER_UPDATED";
+            case NOTIFICATION_KIND_MEMBER_REMOVED -> "MEMBER_REMOVED";
+            case NOTIFICATION_KIND_LABEL_ADDED -> "LABEL_ADDED";
+            case NOTIFICATION_KIND_LABEL_REMOVED -> "LABEL_REMOVED";
+            default -> {
+                String name = source.name();
+                if (name.startsWith("NOTIFICATION_KIND_")) {
+                    yield name.substring("NOTIFICATION_KIND_".length());
+                } else {
+                    yield name;
+                }
+            }
         };
     }
 

@@ -437,14 +437,11 @@ class IssueMapperTest {
     }
 
     @Test
-    @DisplayName("Должен выбрасывать ResponseStatusException, если приходит неизвестный gRPC issueEventType")
+    @DisplayName("Должен возвращать строку для неизвестного gRPC issueEventType")
     void toRestIssueEventType_shouldThrowsException_whenUnknownIssuePriority() {
-        var ex = Assertions.assertThrows(
-                ResponseStatusException.class,
-                () -> mapper.toRestIssueEventType(IssueEventType.ISSUE_EVENT_TYPE_UNSPECIFIED)
-        );
+        var result = mapper.toRestIssueEventType(IssueEventType.ISSUE_EVENT_TYPE_UNSPECIFIED);
+        Assertions.assertEquals("UNSPECIFIED", result);
 
-        Assertions.assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatusCode());
     }
 
     @ParameterizedTest
@@ -496,7 +493,15 @@ class IssueMapperTest {
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_UPDATED, "UPDATED"),
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED, "ASSIGNED"),
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED, "TRANSITIONED"),
-                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_DELETED, "DELETED")
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_DELETED, "DELETED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED, "ATTACHMENT_UPLOADED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_DELETED, "ATTACHMENT_DELETED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_COMMENT_CREATED, "COMMENT_CREATED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_COMMENT_UPDATED, "COMMENT_UPDATED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_COMMENT_DELETED, "COMMENT_DELETED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_LABEL_ADDED, "LABEL_ADDED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_LABEL_REMOVED, "LABEL_REMOVED"),
+                Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_UNSPECIFIED, "UNSPECIFIED")
         );
     }
 
