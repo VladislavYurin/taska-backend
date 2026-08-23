@@ -23,6 +23,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.mapper.AdminDataMapper;
+import ru.taska.mapper.AdminUserManagementMapper;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -46,6 +47,9 @@ class GrpcAdminServiceClientTest {
     private AdminDataMapper mapper;
 
     @Mock
+    private AdminUserManagementMapper adminUserManagementMapper;
+
+    @Mock
     private GrpcClientProperties properties;
 
     @Mock
@@ -66,7 +70,7 @@ class GrpcAdminServiceClientTest {
                 ArgumentMatchers.any()
         )).thenReturn(adminServiceStub);
 
-        client = new GrpcAdminServiceClient(adminServiceStub, mapper, properties);
+        client = new GrpcAdminServiceClient(adminServiceStub, mapper, adminUserManagementMapper, properties);
     }
 
     // ==================== HELPER ====================

@@ -52,7 +52,8 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                             .map(savedUser -> new UserStatusChangeDto(
                                     savedUser.getId(),
                                     oldStatus,
-                                    savedUser.getStatus()
+                                    savedUser.getStatus(),
+                                    savedUser.getUpdatedAt()
                             ));
                 })
                 .as(transactionalOperator::transactional);
@@ -81,7 +82,8 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                             .map(savedUser -> new UserStatusChangeDto(
                                     savedUser.getId(),
                                     oldStatus,
-                                    savedUser.getStatus()
+                                    savedUser.getStatus(),
+                                    savedUser.getUpdatedAt()
                             ));
                 })
                 .as(transactionalOperator::transactional);

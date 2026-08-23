@@ -47,8 +47,7 @@ public class GrpcAdminUserManagementService {
                     String requestId = t.getT4();
                     String nodeId = t.getT5();
                     String actorLogin = t.getT6();
-//                    JsonNode actorRoles = toJsonNode(req.getBody().getActorRoles());
-                    JsonNode actorRoles = objectMapper.createObjectNode(); // TODO: временно, вернуть нормальный конвертер protobuf Value -> JsonNode
+                    JsonNode actorRoles = toJsonNode(req.getBody().getActorRoles());
 
                     log.info("[{}][{}] blockUser with id {}", requestId, nodeId, targetUserId);
 
@@ -86,8 +85,7 @@ public class GrpcAdminUserManagementService {
                     String requestId = t.getT4();
                     String nodeId = t.getT5();
                     String actorLogin = t.getT6();
-//                    JsonNode actorRoles = toJsonNode(req.getBody().getActorRoles());
-                    JsonNode actorRoles = objectMapper.createObjectNode(); // TODO: временно, вернуть нормальный конвертер protobuf Value -> JsonNode
+                    JsonNode actorRoles = toJsonNode(req.getBody().getActorRoles());
 
                     log.info("[{}][{}] unblockUser with id {}", requestId, nodeId, targetUserId);
 
@@ -101,6 +99,15 @@ public class GrpcAdminUserManagementService {
                             nodeId
                     ).map(mapper::toGatewayUnblockUserResponse);
                 }));
+    }
+
+    private JsonNode toJsonNode(com.google.protobuf.Value value) {
+        var roles = objectMapper.createArrayNode();
+        if (value.hasListValue()) {
+            value.getListValue().getValuesList()
+                    .forEach(v -> roles.add(v.getStringValue()));
+        }
+        return roles;
     }
 
 }

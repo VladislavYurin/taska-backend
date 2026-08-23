@@ -6,6 +6,8 @@ import ru.taska.api.auth.admin.management.v1.UnblockUserResponse;
 import ru.taska.dto.UserStatusChangeDto;
 import ru.taska.entity.UserStatus;
 
+import java.time.Instant;
+
 @Component
 public class AdminUserMapper {
 
@@ -14,6 +16,7 @@ public class AdminUserMapper {
                 .setUserId(dto.userId().toString())
                 .setPreviousStatus(toProtoStatus(dto.oldStatus()))
                 .setCurrentStatus(toProtoStatus(dto.newStatus()))
+                .setUpdatedAt(toTimestamp(dto.updatedAt()))
                 .build();
     }
 
@@ -22,6 +25,14 @@ public class AdminUserMapper {
                 .setUserId(dto.userId().toString())
                 .setPreviousStatus(toProtoStatus(dto.oldStatus()))
                 .setCurrentStatus(toProtoStatus(dto.newStatus()))
+                .setUpdatedAt(toTimestamp(dto.updatedAt()))
+                .build();
+    }
+
+    private com.google.protobuf.Timestamp toTimestamp(Instant instant) {
+        return com.google.protobuf.Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
                 .build();
     }
 
