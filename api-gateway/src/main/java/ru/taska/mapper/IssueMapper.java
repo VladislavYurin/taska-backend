@@ -74,14 +74,11 @@ public class IssueMapper {
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         restDto.setVersion(protoDto.getVersion());
-
-        if (!protoDto.getLabelsList().isEmpty()) {
-            restDto.setLabels(
-                    protoDto.getLabelsList().stream()
-                            .map(this::toRestIssueLabelResponseDto)
-                            .collect(Collectors.toList())
-            );
-        }
+        restDto.setLabels(
+                protoDto.getLabelsList().stream()
+                        .map(this::toRestIssueLabelResponseDto)
+                        .collect(Collectors.toList())
+        );
 
         return restDto;
     }
