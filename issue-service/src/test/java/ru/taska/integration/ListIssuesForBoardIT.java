@@ -16,7 +16,11 @@ import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.labels.IssueLabels;
+import ru.taska.domain.labels.ProjectLabels;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.labels.IssueLabelsRepository;
+import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.service.IssueService;
 
 import java.util.List;
@@ -32,6 +36,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private ProjectLabelsRepository projectLabelsRepository;
+
+    @Autowired
+    private IssueLabelsRepository issueLabelsRepository;
 
     private static final UUID PROJECT_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID PROJECT_ID_2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
@@ -59,10 +69,16 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     private final List<Issue> issues = List.of(issue1, issue2, issue3, issue4, issue5, issue6, issue7, issue8);
 
+    private List<Issue> savedIssues;
+
     @BeforeEach
     void refillDb(){
+        issueLabelsRepository.deleteAll().block();
+        projectLabelsRepository.deleteAll().block();
         issueRepository.deleteAll().block();
-        issues.forEach(issue -> issueRepository.save(issue).block());
+        savedIssues = issues.stream()
+                .map(issue -> issueRepository.save(issue).block())
+                .toList();
     }
 
     @BeforeEach
@@ -165,6 +181,66 @@ public class ListIssuesForBoardIT extends AbstractIT {
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
                 null, null, ISSUE_STATUS_KEY_IN_PROGRESS, true, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(result).isEmpty();
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldReturnIssuesFilteredByLabelId(){
+        ProjectLabels label = projectLabelsRepository.save(
+                ProjectLabels.builder()
+                        .projectId(PROJECT_ID_1)
+                        .name("urgent")
+                        .color("#FF0000")
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+
+        issueLabelsRepository.save(
+                IssueLabels.builder()
+                        .issueId(savedIssues.get(0).getId())
+                        .labelId(label.getId())
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+        issueLabelsRepository.save(
+                IssueLabels.builder()
+                        .issueId(savedIssues.get(1).getId())
+                        .labelId(label.getId())
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                null, null, null, true, List.of(label.getId()), null)
+        ).assertNext(result -> {
+            Assertions.assertThat(result).hasSize(2);
+
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .sorted()
+                            .toList()
+            ).containsExactly("TEST-1", "TEST-2");
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenLabelIdMatchesNothing(){
+        ProjectLabels unusedLabel = projectLabelsRepository.save(
+                ProjectLabels.builder()
+                        .projectId(PROJECT_ID_1)
+                        .name("unused")
+                        .color("#00FF00")
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                null, null, null, true, List.of(unusedLabel.getId()), null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
         }).verifyComplete();
