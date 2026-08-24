@@ -930,21 +930,36 @@ public class GrpcIssueService {
                         ),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(
                                 req.getBody().getActorUserId(), "body.actorUserId"
-                        )
+                        ),
+                                req.getBody().hasAssigneeId()
+                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req
+                                        .getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
+                                        : Mono.just(Optional.<UUID>empty())
+
                 )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
                             UUID projectId = t.getT3();
                             UUID actorUserId = t.getT4();
+                            UUID assigneeId = t.getT5().orElse(null);
+                            String statusKey = req.getBody().hasStatusKey()
+                                    ? req.getBody().getStatusKey()
+                                    : null;
+                            Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
+                                    ? req.getBody().getPageSizePerColumn()
+                                    : null;
+                            ru.taska.domain.IssueType issueType = req.getBody().hasIssueType()
+                                    ? issueMapper.toDomainIssueType(req.getBody().getIssueType())
+                                    : null;
 
                             return issueService.listIssueBoard(
                                     requestId, nodeId, projectId, actorUserId,
-                                    null, //issueType
-                                    null, //assigneekey
-                                    null, //statuskey
+                                    issueType,
+                                    assigneeId,
+                                    statusKey,
                                     req.getBody().getIncludeDone(),
-                                    null //pageSizePerColumn
+                                    pageSizePerColumn
                             )
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
                                             .addAllIssues(issues)
