@@ -30,7 +30,9 @@ import ru.taska.service.IssueService;
 import ru.taska.transport.grpc.GrpcIssueService;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class ListIssuesForBoardIT extends AbstractIT {
 
@@ -192,6 +194,24 @@ public class ListIssuesForBoardIT extends AbstractIT {
                 null, null, ISSUE_STATUS_KEY_IN_PROGRESS, true, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldLimitResultsPerColumnNotTotalWhenPageSizePerColumnIsSet(){
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                null, null, null, true, null, 1)
+        ).assertNext(result -> {
+            Map<String, List<IssueBoardResponse>> byStatus = result.stream()
+                    .collect(Collectors.groupingBy(IssueBoardResponse::getStatusKey));
+
+            Assertions.assertThat(byStatus.keySet())
+                    .containsExactlyInAnyOrder(ISSUE_STATUS_KEY_TODO, ISSUE_STATUS_KEY_DONE);
+
+            byStatus.values().forEach(issuesInColumn ->
+                    Assertions.assertThat(issuesInColumn).hasSize(1)
+            );
         }).verifyComplete();
     }
 

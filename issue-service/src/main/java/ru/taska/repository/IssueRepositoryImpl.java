@@ -18,6 +18,7 @@ import ru.taska.repository.builder.SearchQueryBuilder;
 import ru.taska.repository.executor.SearchQueryExecutor;
 
 import java.util.AbstractMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -223,19 +224,81 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                         return Flux.empty();
                     }
 
+                    if (pageSizePerColumn != null) {
+                        return findForBoardLimitedPerColumn(
+                                projectId, issueType, assigneeId, statusKey, includeDone,
+                                labelFilterActive ? issueIds : null, pageSizePerColumn
+                        );
+                    }
+
                     Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
                     if (labelFilterActive) {
                         criteria = criteria.and("id").in(issueIds);
                     }
                     Query query = Query.query(criteria)
                             .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
-                    if (pageSizePerColumn != null) {
-                        query = query.limit(pageSizePerColumn);
-                    }
 
                     return r2dbcEntityTemplate.select(query, Issue.class);
                 });
 
+    }
+
+    /**
+     * Находит задачи для доски с ограничением количества задач в каждой колонке (status_key),
+     * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
+     * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
+     */
+    private Flux<Issue> findForBoardLimitedPerColumn(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<UUID> labelFilterIssueIds,
+            int pageSizePerColumn
+    ) {
+        StringBuilder where = new StringBuilder("i.project_id = :projectId AND i.deleted_at IS NULL");
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("projectId", projectId);
+
+        if (issueType != null) {
+            where.append(" AND i.issue_type = :issueType");
+            params.put("issueType", issueType.name());
+        }
+        if (assigneeId != null) {
+            where.append(" AND i.assignee_id = :assigneeId");
+            params.put("assigneeId", assigneeId);
+        }
+        if (statusKey != null) {
+            where.append(" AND i.status_key = :statusKey");
+            params.put("statusKey", statusKey);
+        }
+        if (!includeDone) {
+            where.append(" AND i.status_key <> 'DONE'");
+        }
+        if (labelFilterIssueIds != null) {
+            where.append(" AND i.id IN (:labelFilterIssueIds)");
+            params.put("labelFilterIssueIds", labelFilterIssueIds);
+        }
+        params.put("pageSizePerColumn", pageSizePerColumn);
+
+        String sql = """
+                SELECT * FROM (
+                    SELECT i.*,
+                           ROW_NUMBER() OVER (PARTITION BY i.status_key ORDER BY i.created_at ASC) AS rn
+                    FROM taska.issues i
+                    WHERE %s
+                ) t
+                WHERE rn <= :pageSizePerColumn
+                ORDER BY status_key ASC, created_at ASC
+                """.formatted(where);
+
+        DatabaseClient.GenericExecuteSpec spec = r2dbcEntityTemplate.getDatabaseClient().sql(sql);
+        for (var entry : params.entrySet()) {
+            spec = spec.bind(entry.getKey(), entry.getValue());
+        }
+
+        return spec.map(issueMapper::mapRowToIssue).all();
     }
 
     @Override
