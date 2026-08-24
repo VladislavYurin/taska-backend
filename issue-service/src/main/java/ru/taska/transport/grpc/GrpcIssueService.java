@@ -7,6 +7,7 @@ import exception.GrpcExceptionHandler;
 import io.grpc.StatusRuntimeException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -1008,6 +1009,11 @@ public class GrpcIssueService {
                             ru.taska.domain.IssueType issueType = req.getBody().hasIssueType()
                                     ? issueMapper.toDomainIssueType(req.getBody().getIssueType())
                                     : null;
+                            List<UUID> labelIds = req.getBody().getLabelIdsList().isEmpty()
+                                    ? null
+                                    : req.getBody().getLabelIdsList().stream()
+                                        .map(UUID::fromString)
+                                        .toList();
 
                             return issueService.listIssueBoard(
                                     requestId, nodeId, projectId, actorUserId,
@@ -1015,6 +1021,7 @@ public class GrpcIssueService {
                                     assigneeId,
                                     statusKey,
                                     req.getBody().getIncludeDone(),
+                                    labelIds,
                                     pageSizePerColumn
                             )
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
@@ -1023,3 +1030,4 @@ public class GrpcIssueService {
                         }));
     }
 }
+
