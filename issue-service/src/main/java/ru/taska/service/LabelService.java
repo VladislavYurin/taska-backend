@@ -1,8 +1,8 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
-import ru.taska.domain.dto.LabelCommands;
-import ru.taska.domain.dto.LabelResponses;
+import ru.taska.domain.dto.labels.LabelCommands;
+import ru.taska.domain.dto.labels.LabelResponses;
 
 /**
  * Сервис для управления метками задач.

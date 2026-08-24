@@ -36,7 +36,7 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
-import ru.taska.domain.dto.LabelCommands;
+import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
@@ -254,7 +254,10 @@ public class GrpcIssueService {
                                             .map(result -> ListIssuesResponse.newBuilder()
                                                     .addAllIssues(
                                                             result.items().stream()
-                                                                    .map(issueMapper::toIssueShortProto)
+                                                                    .map(issueWithLabels->issueMapper.toIssueProto(
+                                                                            issueWithLabels.issue(),
+                                                                            issueWithLabels.labels()
+                                                                    ))
                                                                     .toList()
                                                     )
                                                     .setTotalCount((int) result.totalCount())

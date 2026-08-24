@@ -151,7 +151,7 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssues(Mockito.any(ListIssuesRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(issueMapper.toRestListIssuesRequest(grpcResponse))
+        Mockito.when(issueMapper.toRestListIssuesResponseDto(grpcResponse))
                 .thenReturn(restResponse);
 
         StepVerifier.create(client.listIssues(PROJECT_ID, STATUS_KEY, ASSIGNEE_ID, page, pageSize, LABEL_ID, context))
@@ -174,7 +174,7 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(pageSize);
 
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestListIssuesRequest(grpcResponse);
+                .toRestListIssuesResponseDto(grpcResponse);
     }
 
     @Test
@@ -186,7 +186,7 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssues(Mockito.any(ListIssuesRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(issueMapper.toRestListIssuesRequest(grpcResponse))
+        Mockito.when(issueMapper.toRestListIssuesResponseDto(grpcResponse))
                 .thenReturn(restResponse);
 
         StepVerifier.create(client.listIssues(PROJECT_ID, null, null, null, null, null, context))
@@ -209,7 +209,7 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().hasPageSize()).isFalse();
 
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestListIssuesRequest(grpcResponse);
+                .toRestListIssuesResponseDto(grpcResponse);
     }
 
     @Test

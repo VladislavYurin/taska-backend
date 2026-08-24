@@ -16,6 +16,8 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.labels.IssueWithLabels;
+import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
 import ru.taska.domain.labels.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -40,11 +42,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -301,10 +305,10 @@ public class IssueServiceImpl implements IssueService {
     }
 
     /**
-     * Возвращает listIssues
+     * Возвращает listIssues со списком меток каждой задачи
      */
     @Override
-    public Mono<PageResult<Issue>> listIssues(
+    public Mono<PageResult<IssueWithLabels>> listIssues(
             String requestId,
             String nodeId,
             UUID projectId,
@@ -333,10 +337,42 @@ public class IssueServiceImpl implements IssueService {
                                 : issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset).collectList()
                         )
                 )
-                .map(t ->{
-                    List<Issue> listIssue = t.getT2();
+                .flatMap(t ->{
+                    List<Issue> issues = t.getT2();
                     Long count = t.getT1();
-                    return new PageResult<>(listIssue, count);
+
+                    if (issues.isEmpty()) {
+                        log.debug("[{}][{}] No issues found for project: {}", requestId, nodeId, projectId);
+                        return Mono.just(new PageResult<>(List.of(), count));
+                    }
+
+                    List<UUID> issueIds = issues.stream().map(Issue::getId).toList();
+
+                    return issueLabelsRepository.findActiveLabelsWithIssueId(issueIds)
+                            .collectList()
+                            .map(labels->{
+
+                                    Map<UUID, List<ProjectLabels>> labelsMap = new HashMap<>();
+
+                                    for (ProjectLabelWithIssuesId label : labels) {
+                                        // если в мапе уже есть ключ issueId, то кладет label в существующий List<ProjectLabels>
+                                        // если ключа, равного issueId нет, то кладет label в новый ArrayList
+                                        labelsMap.computeIfAbsent(label.issueId(), k -> new ArrayList<>())
+                                                .add(label.toProjectLabels());
+                                    }
+
+                                    List<IssueWithLabels> result = issues.stream()
+                                            .map(issue -> new IssueWithLabels(
+                                                    issue,
+                                                    labelsMap.getOrDefault(issue.getId(), List.of())
+                                            ))
+                                            .toList();
+
+                                    log.debug("[{}][{}] Found {} issues with labels, total count: {}",
+                                        requestId, nodeId, result.size(), count);
+
+                                    return new PageResult<>(result, count);
+                            });
                 });
     }
 

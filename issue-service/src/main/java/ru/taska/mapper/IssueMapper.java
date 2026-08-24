@@ -32,6 +32,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -93,7 +94,6 @@ public class IssueMapper {
                 .toList();
         var issueProto = toIssueProto(issueWithHistory.getIssue());
 
-        // Добавление меток в issueHistory
         var issueWithLabels = issueProto.toBuilder()
                 .addAllLabels(
                         issueWithHistory.getLabels().stream()
@@ -130,7 +130,9 @@ public class IssueMapper {
                 .build();
     }
 
-    //  domain ProjectLabels → proto ProjectLabelResponse
+    /**
+     * Domain ProjectLabels → Proto ProjectLabelResponse
+     */
     private ProjectLabelResponse toProjectLabelProto(ProjectLabels label) {
         var builder = ProjectLabelResponse.newBuilder()
                 .setId(label.getId().toString())
@@ -158,6 +160,19 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .build();
+    }
+
+    /**
+     * Мапит задачу со списком меток задачи в proto ответ
+     */
+    public IssueResponse toIssueProto(Issue issue, List<ProjectLabels> labels) {
+        return toIssueProto(issue).toBuilder()
+                .addAllLabels(
+                        labels.stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
                 .build();
     }
 

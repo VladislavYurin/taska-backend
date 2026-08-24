@@ -589,7 +589,7 @@ message ListIssuesResponse {
   /**
    * Список задач.
    */
-  repeated IssueShortResponse issues = 1;
+  repeated IssueResponse issues = 1;
 
   /**
    * Общее количество задач, соответствующих фильтру.

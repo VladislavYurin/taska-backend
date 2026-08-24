@@ -6,6 +6,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
+import ru.taska.domain.dto.labels.IssueWithLabels;
 
 import java.util.UUID;
 
@@ -42,7 +43,7 @@ public interface IssueService {
             UUID actorUserId
     );
 
-    Mono<PageResult<Issue>> listIssues(
+    Mono<PageResult<IssueWithLabels>> listIssues(
             String requestId,
             String nodeId,
             UUID projectId,

@@ -21,6 +21,7 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import tools.jackson.databind.JsonNode;
@@ -28,6 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 class IssueMapperTest {
@@ -189,13 +191,13 @@ class IssueMapperTest {
 
     @Test
     @DisplayName("Должен корректно преобразовать ListIssuesResponse(gRPC DTO) в ListIssuesResponseDto(REST DTO)")
-    void toRestListIssuesRequest_shouldCorrectMapsAllFields() {
-        var firstIssue = IssueShortResponse.newBuilder()
+    void toRestListIssuesResponseDto_shouldCorrectMapsAllFields() {
+        var firstIssue = IssueResponse.newBuilder()
                 .setIssueType(IssueType.ISSUE_TYPE_TASK)
                 .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
                 .build();
 
-        var secondIssue = IssueShortResponse.newBuilder()
+        var secondIssue = IssueResponse.newBuilder()
                 .setIssueType(IssueType.ISSUE_TYPE_BUG)
                 .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
                 .build();
@@ -205,7 +207,7 @@ class IssueMapperTest {
                 .setTotalCount(5)
                 .build();
 
-        var result = mapper.toRestListIssuesRequest(source);
+        var result = mapper.toRestListIssuesResponseDto(source);
 
         Assertions.assertNotNull(result.getItems());
         Assertions.assertEquals(2, result.getItems().size());
@@ -213,6 +215,108 @@ class IssueMapperTest {
         Assertions.assertEquals("MEDIUM", result.getItems().getFirst().getPriority());
         Assertions.assertEquals("BUG", result.getItems().get(1).getIssueType());
         Assertions.assertEquals("HIGH", result.getItems().get(1).getPriority());
+        Assertions.assertEquals(5, result.getTotalCount());
+    }
+
+    @Test
+    @DisplayName("Должен корректно преобразовать IssueResponse с метками в IssueResponseDto")
+    void toRestIssueResponse_shouldCorrectMapLabels() {
+        var label1 = ProjectLabelResponse.newBuilder()
+                .setId("00000000-0000-0000-0000-000000000010")
+                .setName("test")
+                .setColor("#8B5CF6")
+                .build();
+
+        var label2 = ProjectLabelResponse.newBuilder()
+                .setId("00000000-0000-0000-0000-000000000011")
+                .setName("test2")
+                .setColor("#E3A008")
+                .build();
+
+        var source = IssueResponse.newBuilder()
+                .setId(ISSUE_ID)
+                .setProjectId(PROJECT_ID)
+                .setIssueNumber(ISSUE_NUMBER)
+                .setIssueKey(ISSUE_KEY)
+                .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                .setSummary(SUMMARY)
+                .setDescription(DESCRIPTION)
+                .setStatusKey(STATUS_KEY)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                .setAssigneeId(ASSIGNEE_ID)
+                .setReporterId(USER_ID)
+                .setVersion(VERSION)
+                .addAllLabels(List.of(label1, label2))
+                .build();
+
+        var result = mapper.toRestIssueResponse(source);
+
+        Assertions.assertNotNull(result.getLabels());
+        Assertions.assertEquals(2, result.getLabels().size());
+
+        var resultLabel1 = result.getLabels().get(0);
+        Assertions.assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000010"), resultLabel1.getId());
+        Assertions.assertEquals("test", resultLabel1.getName());
+        Assertions.assertEquals("#8B5CF6", resultLabel1.getColor());
+
+        var resultLabel2 = result.getLabels().get(1);
+        Assertions.assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000011"), resultLabel2.getId());
+        Assertions.assertEquals("test2", resultLabel2.getName());
+        Assertions.assertEquals("#E3A008", resultLabel2.getColor());
+    }
+
+    @Test
+    @DisplayName("Должен корректно преобразовать ListIssuesResponse с метками в ListIssuesResponseDto")
+    void toRestListIssuesResponseDto_shouldCorrectMapLabels() {
+        var label1 = ProjectLabelResponse.newBuilder()
+                .setId("00000000-0000-0000-0000-000000000010")
+                .setName("test")
+                .setColor("#8B5CF6")
+                .build();
+
+        var label2 = ProjectLabelResponse.newBuilder()
+                .setId("00000000-0000-0000-0000-000000000011")
+                .setName("test2")
+                .setColor("#E3A008")
+                .build();
+
+        var firstIssue = IssueResponse.newBuilder()
+                .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                .addAllLabels(List.of(label1, label2))
+                .build();
+
+        var secondIssue = IssueResponse.newBuilder()
+                .setIssueType(IssueType.ISSUE_TYPE_BUG)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
+                .build();
+
+        var source = ListIssuesResponse.newBuilder()
+                .addAllIssues(List.of(firstIssue, secondIssue))
+                .setTotalCount(5)
+                .build();
+
+        var result = mapper.toRestListIssuesResponseDto(source);
+
+        Assertions.assertNotNull(result.getItems());
+        Assertions.assertEquals(2, result.getItems().size());
+
+        var firstResult = result.getItems().get(0);
+        Assertions.assertEquals("TASK", firstResult.getIssueType());
+        Assertions.assertEquals("MEDIUM", firstResult.getPriority());
+        Assertions.assertNotNull(firstResult.getLabels());
+        Assertions.assertEquals(2, firstResult.getLabels().size());
+        Assertions.assertEquals("test", firstResult.getLabels().get(0).getName());
+        Assertions.assertEquals("#8B5CF6", firstResult.getLabels().get(0).getColor());
+        Assertions.assertEquals("test2", firstResult.getLabels().get(1).getName());
+        Assertions.assertEquals("#E3A008", firstResult.getLabels().get(1).getColor());
+
+        var secondResult = result.getItems().get(1);
+        Assertions.assertEquals("BUG", secondResult.getIssueType());
+        Assertions.assertEquals("HIGH", secondResult.getPriority());
+        Assertions.assertNotNull(secondResult.getLabels());
+        Assertions.assertTrue(secondResult.getLabels().isEmpty());
+
         Assertions.assertEquals(5, result.getTotalCount());
     }
 

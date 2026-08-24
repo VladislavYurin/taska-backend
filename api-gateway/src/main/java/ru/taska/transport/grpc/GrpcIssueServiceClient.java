@@ -137,7 +137,7 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(issueMapper::toRestListIssuesRequest);
+                .map(issueMapper::toRestListIssuesResponseDto);
     }
 
     /**
