@@ -79,7 +79,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssueFromGivenProject(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                null, null, null, true, null)
+                null, null, null, true, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(4);
 
@@ -96,7 +96,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByIssueType(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                ISSUE_TYPE_BUG, null, null, true, null)
+                ISSUE_TYPE_BUG, null, null, true,null,  null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -113,7 +113,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByAssignee(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                null, ASSIGNEE_ID_1, null, true, null)
+                null, ASSIGNEE_ID_1, null, true, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -130,7 +130,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByStatusKey(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                null, null, ISSUE_STATUS_KEY_TODO, true, null)
+                null, null, ISSUE_STATUS_KEY_TODO, true, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -147,7 +147,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldExcludeDoneIssuesWhenIncludeDoneIsFalse(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                null, null, null, false, null)
+                null, null, null, false, null,null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -164,7 +164,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnEmptyListWhenStatusKeyDoesNotMatch(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
-                null, null, ISSUE_STATUS_KEY_IN_PROGRESS, true, null)
+                null, null, ISSUE_STATUS_KEY_IN_PROGRESS, true, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
         }).verifyComplete();

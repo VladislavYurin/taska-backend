@@ -198,16 +198,34 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
+            List<UUID> labelIds,
             Integer pageSizePerColumn
     ) {
-        Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
-        Query query = Query.query(criteria)
-                .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
-        if (pageSizePerColumn != null) {
-            query = query.limit(pageSizePerColumn);
+        Mono<List<UUID>> issueIdsMono;
+        if (labelIds != null && !labelIds.isEmpty()){
+            issueIdsMono = r2dbcEntityTemplate.getDatabaseClient()
+                    .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
+                    .bind("labelIds", labelIds)
+                    .map(row -> row.get("issue_id", UUID.class))
+                    .all()
+                    .collectList();
+        }else {
+            issueIdsMono = Mono.just(List.of());
         }
 
-        return r2dbcEntityTemplate.select(query, Issue.class);
+        return issueIdsMono.flatMapMany(issueIds ->{
+                    Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
+                    if (!issueIds.isEmpty()){
+                        criteria = criteria.and("id").in(issueIds);
+                    }
+                    Query query = Query.query(criteria)
+                            .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
+                    if (pageSizePerColumn != null) {
+                        query = query.limit(pageSizePerColumn);
+                    }
+
+                    return r2dbcEntityTemplate.select(query, Issue.class);
+                });
 
     }
 

@@ -88,6 +88,7 @@ public interface IssueRepositoryCustom {
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
+            List<UUID> labelIds,
             Integer pageSizePerColumn
     );
 }

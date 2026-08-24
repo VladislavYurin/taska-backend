@@ -648,13 +648,14 @@ public class IssueServiceImpl implements IssueService {
                                                   UUID assigneeId,
                                                   String statusKey,
                                                   boolean includeDone,
+                                                  List<UUID> labelIds,
                                                   Integer pageSizePerColumn
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
-                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, pageSizePerColumn)
+                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone,labelIds, pageSizePerColumn)
                                 .map(issueMapper::toIssueBoardProto)
                                 .collectList()
                 );

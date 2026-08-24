@@ -49,6 +49,7 @@ import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.logging.GrpcIssueLogging;
 import validator.GrpcRequestValidators;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -952,6 +953,11 @@ public class GrpcIssueService {
                             ru.taska.domain.IssueType issueType = req.getBody().hasIssueType()
                                     ? issueMapper.toDomainIssueType(req.getBody().getIssueType())
                                     : null;
+                            List<UUID> labelIds = req.getBody().getLabelIdsList().isEmpty()
+                                    ? null
+                                    : req.getBody().getLabelIdsList().stream()
+                                        .map(UUID::fromString)
+                                        .toList();
 
                             return issueService.listIssueBoard(
                                     requestId, nodeId, projectId, actorUserId,
@@ -959,11 +965,11 @@ public class GrpcIssueService {
                                     assigneeId,
                                     statusKey,
                                     req.getBody().getIncludeDone(),
+                                    labelIds,
                                     pageSizePerColumn
                             )
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
                                             .addAllIssues(issues)
                                             .build());
-                        }));
-    }
-}
+                        }
+

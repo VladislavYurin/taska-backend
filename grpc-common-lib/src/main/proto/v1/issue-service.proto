@@ -1785,22 +1785,60 @@ message ListIssuesForBoardRequestBody {
    * Размер страницы на одну колонку доски (опционально).
    */
   optional int32 page_size_per_column = 7;
+
+  /**
+   * Фильтр по идентификаторам меток (опционально).
+   */
+
+  repeated string label_ids = 8;
 }
 
 /**
  * Ответ список задач для доски.
  */
-message IssueBoardResponse{
+message IssueBoardResponse {
+  /**
+   * Идентификатор задачи.
+   */
   string id = 1;
+  /**
+   * Денормализованный ключ задачи.
+   */
   string issue_key = 2;
+  /**
+   * Краткое описание задачи.
+   */
   string summary = 3;
+  /**
+   * Тип задачи
+   */
   IssueType issue_type = 4;
+  /**
+   * Статус задачи
+   */
   string status_key = 5;
+  /**
+   * Идентификатор исполнителя задачи.
+   */
   string assignee_id = 6;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
   string reporter_id = 7;
+  /**
+   * Приоритет задачи.
+   */
   IssuePriority priority = 8;
 }
 
+/**
+ * Ответ со списком задач для доски.
+ */
 message ListIssuesForBoardResponse {
+
+  /**
+   * Списко задач.
+   */
   repeated IssueBoardResponse issues = 1;
 }
