@@ -18,6 +18,8 @@ import ru.taska.repository.builder.SearchQueryBuilder;
 import ru.taska.repository.executor.SearchQueryExecutor;
 
 import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -224,18 +226,16 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                         return Flux.empty();
                     }
 
+                    List<BoardFilterCondition> conditions = boardFilterConditions(
+                            projectId, issueType, assigneeId, statusKey, includeDone,
+                            labelFilterActive ? issueIds : null
+                    );
+
                     if (pageSizePerColumn != null) {
-                        return findForBoardLimitedPerColumn(
-                                projectId, issueType, assigneeId, statusKey, includeDone,
-                                labelFilterActive ? issueIds : null, pageSizePerColumn
-                        );
+                        return findForBoardLimitedPerColumn(conditions, pageSizePerColumn);
                     }
 
-                    Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
-                    if (labelFilterActive) {
-                        criteria = criteria.and("id").in(issueIds);
-                    }
-                    Query query = Query.query(criteria)
+                    Query query = Query.query(toCriteria(conditions))
                             .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
 
                     return r2dbcEntityTemplate.select(query, Issue.class);
@@ -248,38 +248,9 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
      * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
      */
-    private Flux<Issue> findForBoardLimitedPerColumn(
-            UUID projectId,
-            IssueType issueType,
-            UUID assigneeId,
-            String statusKey,
-            boolean includeDone,
-            List<UUID> labelFilterIssueIds,
-            int pageSizePerColumn
-    ) {
-        StringBuilder where = new StringBuilder("i.project_id = :projectId AND i.deleted_at IS NULL");
+    private Flux<Issue> findForBoardLimitedPerColumn(List<BoardFilterCondition> conditions, int pageSizePerColumn) {
         Map<String, Object> params = new LinkedHashMap<>();
-        params.put("projectId", projectId);
-
-        if (issueType != null) {
-            where.append(" AND i.issue_type = :issueType");
-            params.put("issueType", issueType.name());
-        }
-        if (assigneeId != null) {
-            where.append(" AND i.assignee_id = :assigneeId");
-            params.put("assigneeId", assigneeId);
-        }
-        if (statusKey != null) {
-            where.append(" AND i.status_key = :statusKey");
-            params.put("statusKey", statusKey);
-        }
-        if (!includeDone) {
-            where.append(" AND i.status_key <> 'DONE'");
-        }
-        if (labelFilterIssueIds != null) {
-            where.append(" AND i.id IN (:labelFilterIssueIds)");
-            params.put("labelFilterIssueIds", labelFilterIssueIds);
-        }
+        String where = toSqlWhere(conditions, params);
         params.put("pageSizePerColumn", pageSizePerColumn);
 
         String sql = """
@@ -320,21 +291,84 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                         .collect(Collectors.toMap(Map.Entry::getKey, e -> List.copyOf(e.getValue()))));
     }
 
-    private Criteria buildBoardCriteria(UUID projectId, IssueType issueType, UUID assigneeId, String statusKey, boolean includeDone) {
-        Criteria criteria = Criteria.where("project_id").is(projectId)
-                .and("deleted_at").isNull();
+    /**
+     * Единый список условий фильтрации задач для доски — общий источник как для Criteria API
+     * (путь без {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией
+     * (путь с {@code pageSizePerColumn}). Раньше эти условия дублировались в двух местах вручную,
+     * что легко было рассинхронизировать при добавлении нового фильтра в будущем.
+     */
+    private List<BoardFilterCondition> boardFilterConditions(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<UUID> labelFilterIssueIds
+    ) {
+        List<BoardFilterCondition> conditions = new ArrayList<>();
+        conditions.add(new BoardFilterCondition("project_id", "projectId", BoardFilterOperator.EQUALS, projectId));
+        conditions.add(new BoardFilterCondition("deleted_at", null, BoardFilterOperator.IS_NULL, null));
         if (issueType != null) {
-            criteria = criteria.and("issue_type").is(issueType.name());
+            conditions.add(new BoardFilterCondition("issue_type", "issueType", BoardFilterOperator.EQUALS, issueType.name()));
         }
         if (assigneeId != null) {
-            criteria = criteria.and("assignee_id").is(assigneeId);
+            conditions.add(new BoardFilterCondition("assignee_id", "assigneeId", BoardFilterOperator.EQUALS, assigneeId));
         }
         if (statusKey != null) {
-            criteria = criteria.and("status_key").is(statusKey);
+            conditions.add(new BoardFilterCondition("status_key", "statusKey", BoardFilterOperator.EQUALS, statusKey));
         }
         if (!includeDone) {
-            criteria = criteria.and("status_key").not("DONE");
+            conditions.add(new BoardFilterCondition("status_key", "excludedStatusKey", BoardFilterOperator.NOT_EQUALS, "DONE"));
         }
-        return criteria;
+        if (labelFilterIssueIds != null) {
+            conditions.add(new BoardFilterCondition("id", "labelFilterIssueIds", BoardFilterOperator.IN, labelFilterIssueIds));
+        }
+        return conditions;
+    }
+
+    private Criteria toCriteria(List<BoardFilterCondition> conditions) {
+        List<Criteria> criteriaList = conditions.stream()
+                .map(c -> switch (c.operator()) {
+                    case EQUALS -> Criteria.where(c.column()).is(c.value());
+                    case NOT_EQUALS -> Criteria.where(c.column()).not(c.value());
+                    case IN -> Criteria.where(c.column()).in((Collection<?>) c.value());
+                    case IS_NULL -> Criteria.where(c.column()).isNull();
+                })
+                .toList();
+        return Criteria.from(criteriaList);
+    }
+
+    private String toSqlWhere(List<BoardFilterCondition> conditions, Map<String, Object> paramsOut) {
+        return conditions.stream()
+                .map(c -> {
+                    String column = "i." + c.column();
+                    return switch (c.operator()) {
+                        case EQUALS -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " = :" + c.paramName();
+                        }
+                        case NOT_EQUALS -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " <> :" + c.paramName();
+                        }
+                        case IN -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " IN (:" + c.paramName() + ")";
+                        }
+                        case IS_NULL -> column + " IS NULL";
+                    };
+                })
+                .collect(Collectors.joining(" AND "));
+    }
+
+    /**
+     * Одно условие фильтрации board-запроса: колонка + оператор + значение.
+     * {@code paramName} используется только для SQL-пути (именованный параметр); для Criteria-пути не нужен.
+     */
+    private record BoardFilterCondition(String column, String paramName, BoardFilterOperator operator, Object value) {
+    }
+
+    private enum BoardFilterOperator {
+        EQUALS, NOT_EQUALS, IN, IS_NULL
     }
 }
