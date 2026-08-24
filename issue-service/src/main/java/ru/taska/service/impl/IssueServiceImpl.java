@@ -655,9 +655,20 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
-                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone,labelIds, pageSizePerColumn)
-                                .map(issueMapper::toIssueBoardProto)
+                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, labelIds, pageSizePerColumn)
                                 .collectList()
-                );
+                )
+                .flatMap(issues -> {
+                    List<UUID> issueIds = issues.stream().map(Issue::getId).toList();
+
+                    return issueRepository.findLabelIdsByIssueIds(issueIds)
+                            .map(labelIdsByIssueId -> issues.stream()
+                                    .map(issue -> issueMapper.toIssueBoardProto(
+                                            issue,
+                                            labelIdsByIssueId.getOrDefault(issue.getId(), List.of())
+                                    ))
+                                    .toList()
+                            );
+                });
     }
 }

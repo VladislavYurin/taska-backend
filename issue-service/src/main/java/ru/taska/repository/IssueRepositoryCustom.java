@@ -7,6 +7,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface IssueRepositoryCustom {
@@ -91,4 +92,10 @@ public interface IssueRepositoryCustom {
             List<UUID> labelIds,
             Integer pageSizePerColumn
     );
+
+    /**
+     * Батчево находит идентификаторы меток для списка задач, сгруппированные по issueId.
+     * Задачи без меток в карте отсутствуют (не N+1 — один запрос на весь список issueIds).
+     */
+    Mono<Map<UUID, List<UUID>>> findLabelIdsByIssueIds(List<UUID> issueIds);
 }

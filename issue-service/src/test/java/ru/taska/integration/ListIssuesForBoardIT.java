@@ -281,6 +281,69 @@ public class ListIssuesForBoardIT extends AbstractIT {
                 .verify();
     }
 
+    @Test
+    void shouldReturnBothLabelIdsForIssueWithTwoLabels(){
+        ProjectLabels label1 = projectLabelsRepository.save(
+                ProjectLabels.builder()
+                        .projectId(PROJECT_ID_1)
+                        .name("bug")
+                        .color("#FF0000")
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+        ProjectLabels label2 = projectLabelsRepository.save(
+                ProjectLabels.builder()
+                        .projectId(PROJECT_ID_1)
+                        .name("urgent")
+                        .color("#00FF00")
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+
+        issueLabelsRepository.save(
+                IssueLabels.builder()
+                        .issueId(savedIssues.get(0).getId())
+                        .labelId(label1.getId())
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+        issueLabelsRepository.save(
+                IssueLabels.builder()
+                        .issueId(savedIssues.get(0).getId())
+                        .labelId(label2.getId())
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                null, null, null, true, null, null)
+        ).assertNext(result -> {
+            IssueBoardResponse card = result.stream()
+                    .filter(r -> r.getIssueKey().equals("TEST-1"))
+                    .findFirst()
+                    .orElseThrow();
+
+            Assertions.assertThat(card.getLabelIdsList())
+                    .containsExactlyInAnyOrder(label1.getId().toString(), label2.getId().toString());
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldReturnEmptyLabelIdsListForIssueWithoutLabels(){
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, PROJECT_ID_1, ACTOR_USER_ID,
+                null, null, null, true, null, null)
+        ).assertNext(result -> {
+            IssueBoardResponse card = result.stream()
+                    .filter(r -> r.getIssueKey().equals("TEST-1"))
+                    .findFirst()
+                    .orElseThrow();
+
+            Assertions.assertThat(card.getLabelIdsList()).isEmpty();
+        }).verifyComplete();
+    }
+
     private Issue buildIssue(int number, UUID projectId, String statusKey, UUID assigneeId, IssueType issueType){
         return Issue.builder()
                 .projectId(projectId)

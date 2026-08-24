@@ -17,8 +17,11 @@ import ru.taska.repository.criteria.SearchCriteria;
 import ru.taska.repository.builder.SearchQueryBuilder;
 import ru.taska.repository.executor.SearchQueryExecutor;
 
+import java.util.AbstractMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
@@ -233,6 +236,25 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     return r2dbcEntityTemplate.select(query, Issue.class);
                 });
 
+    }
+
+    @Override
+    public Mono<Map<UUID, List<UUID>>> findLabelIdsByIssueIds(List<UUID> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, label_id FROM taska.issue_labels WHERE issue_id IN (:issueIds)")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("label_id", UUID.class)
+                ))
+                .all()
+                .collectMultimap(Map.Entry::getKey, Map.Entry::getValue)
+                .map(multimap -> multimap.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> List.copyOf(e.getValue()))));
     }
 
     private Criteria buildBoardCriteria(UUID projectId, IssueType issueType, UUID assigneeId, String statusKey, boolean includeDone) {

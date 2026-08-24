@@ -1830,6 +1830,11 @@ message IssueBoardResponse {
    * Приоритет задачи.
    */
   IssuePriority priority = 8;
+
+  /**
+   * Идентификаторы меток задачи.
+   */
+  repeated string label_ids = 9;
 }
 
 /**
