@@ -13,6 +13,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AddIssueLabelRequest;
@@ -991,7 +992,8 @@ public class GrpcIssueService {
                                 req.getBody().hasAssigneeId()
                                         ? GrpcRequestValidators.parseUuidOrInvalidArgument(req
                                         .getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
-                                        : Mono.just(Optional.<UUID>empty())
+                                        : Mono.just(Optional.<UUID>empty()),
+                                validateLabelIds(req.getBody().getLabelIdsList())
 
                 )
                         .flatMap(t -> {
@@ -1009,11 +1011,7 @@ public class GrpcIssueService {
                             ru.taska.domain.IssueType issueType = req.getBody().hasIssueType()
                                     ? issueMapper.toDomainIssueType(req.getBody().getIssueType())
                                     : null;
-                            List<UUID> labelIds = req.getBody().getLabelIdsList().isEmpty()
-                                    ? null
-                                    : req.getBody().getLabelIdsList().stream()
-                                        .map(UUID::fromString)
-                                        .toList();
+                            List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
                             return issueService.listIssueBoard(
                                     requestId, nodeId, projectId, actorUserId,
@@ -1028,6 +1026,16 @@ public class GrpcIssueService {
                                             .addAllIssues(issues)
                                             .build());
                         }));
+    }
+
+    /**
+     * Валидирует {@code body.labelIds}: каждый элемент должен быть валидным UUID.
+     * Пустой список считается валидным (фильтр по меткам не задан).
+     */
+    private Mono<List<UUID>> validateLabelIds(List<String> rawLabelIds) {
+        return Flux.fromIterable(rawLabelIds)
+                .concatMap(raw -> GrpcRequestValidators.parseUuidOrInvalidArgument(raw, "body.labelIds"))
+                .collectList();
     }
 }
 
