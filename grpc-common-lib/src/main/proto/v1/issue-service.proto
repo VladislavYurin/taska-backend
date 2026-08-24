@@ -1733,11 +1733,11 @@ message GetIssueWatchStateResponse {
 }
 
 /**
- * Запрос на получение спика задач для доски.
+ * Запрос на получение списка задач для доски.
  */
 message ListIssuesForBoardRequest{
   /**
-   * Загловок запроса.
+   * Заголовок запроса.
    */
   ru.taska.common.v1.Header header = 1;
 
@@ -1843,7 +1843,7 @@ message IssueBoardResponse {
 message ListIssuesForBoardResponse {
 
   /**
-   * Списко задач.
+   * Список задач.
    */
   repeated IssueBoardResponse issues = 1;
 }
