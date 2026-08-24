@@ -425,7 +425,7 @@ public class IssueMapper {
         }
     }
 
-    public IssueBoardResponse toIssueBoardProto(Issue issue){
+    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds){
         return IssueBoardResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
@@ -435,6 +435,7 @@ public class IssueMapper {
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
                 .setReporterId(issue.getReporterId().toString())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
+                .addAllLabelIds(labelIds.stream().map(UUID::toString).toList())
                 .build();
     }
 }
