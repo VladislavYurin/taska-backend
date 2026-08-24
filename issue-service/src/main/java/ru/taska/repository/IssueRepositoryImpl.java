@@ -201,8 +201,10 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             List<UUID> labelIds,
             Integer pageSizePerColumn
     ) {
+        boolean labelFilterActive = labelIds != null && !labelIds.isEmpty();
+
         Mono<List<UUID>> issueIdsMono;
-        if (labelIds != null && !labelIds.isEmpty()){
+        if (labelFilterActive) {
             issueIdsMono = r2dbcEntityTemplate.getDatabaseClient()
                     .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
                     .bind("labelIds", labelIds)
@@ -213,9 +215,13 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             issueIdsMono = Mono.just(List.of());
         }
 
-        return issueIdsMono.flatMapMany(issueIds ->{
+        return issueIdsMono.flatMapMany(issueIds -> {
+                    if (labelFilterActive && issueIds.isEmpty()) {
+                        return Flux.empty();
+                    }
+
                     Criteria criteria = buildBoardCriteria(projectId, issueType, assigneeId, statusKey, includeDone);
-                    if (!issueIds.isEmpty()){
+                    if (labelFilterActive) {
                         criteria = criteria.and("id").in(issueIds);
                     }
                     Query query = Query.query(criteria)

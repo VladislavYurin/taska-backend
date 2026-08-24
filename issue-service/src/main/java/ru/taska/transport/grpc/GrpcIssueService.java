@@ -971,5 +971,7 @@ public class GrpcIssueService {
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
                                             .addAllIssues(issues)
                                             .build());
-                        }
+                        }));
+    }
+}
 
