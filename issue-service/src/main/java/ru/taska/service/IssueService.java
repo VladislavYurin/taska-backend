@@ -130,11 +130,11 @@ public interface IssueService {
             String nodeId,
             UUID projectId,
             UUID actorUserId,
-            IssueType issuetype,
+            IssueType issueType,
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
-            List<UUID> labelsIds,
+            List<UUID> labelIds,
             Integer pageSizePerColumn
     );
 }
