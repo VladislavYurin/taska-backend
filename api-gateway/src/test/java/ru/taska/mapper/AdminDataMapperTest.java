@@ -6,17 +6,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import com.google.protobuf.Timestamp;
 import ru.taska.api.admin.v1.Catalog;
 import ru.taska.api.admin.v1.ColumnMetadata;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.MetaInfo;
 import ru.taska.api.admin.v1.PaginationInfo;
+import ru.taska.api.admin.v1.ProblematicEventCountsByService;
 import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.ServiceMetadata;
 import ru.taska.api.admin.v1.TableMetadata;
 import ru.taska.api.admin.v1.Value;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -396,6 +401,172 @@ class AdminDataMapperTest {
         var createdAt = result.getData().getFirst().get("created_at");
         Assertions.assertInstanceOf(Instant.class, createdAt);
         Assertions.assertEquals(Instant.ofEpochSecond(1_700_000_000L), createdAt);
+    }
+
+    // ==================== ТЕСТЫ PROBLEMATIC OUTBOX EVENTS SUMMARY ====================
+
+    @Test
+    @DisplayName("Должен корректно преобразовать GetProblematicOutboxEventsSummaryResponse со всеми полями")
+    void toRestProblematicOutboxEventsSummaryResponse_shouldCorrectMapsAllFields() {
+        // given
+        var timestamp = Timestamp.newBuilder().setSeconds(1_700_000_000L).setNanos(0).build();
+
+        var grpcEvent = ru.taska.api.admin.v1.ProblematicOutboxEventDto.newBuilder()
+                .setId("evt-001")
+                .setAggregateType("Issue")
+                .setAggregateId("agg-123")
+                .setEventType("IssueCreated")
+                .setPayload("{\"key\":\"value\"}")
+                .setStatus("FAILED")
+                .setCreatedAt(timestamp)
+                .setPublishedAt(timestamp)
+                .setAttempts(3)
+                .setLastErrorMessage("Connection refused")
+                .setProcessingStartedAt(timestamp)
+                .setRequestId("req-001")
+                .setServiceKey("issue-service")
+                .setReason("FAILED")
+                .build();
+
+        var grpcCounts = ProblematicEventCountsByService.newBuilder()
+                .setServiceKey("issue-service")
+                .setOverdueNewCount(5)
+                .setStuckProcessingCount(2)
+                .setFailedCount(3)
+                .build();
+
+        var source = GetProblematicOutboxEventsSummaryResponse.newBuilder()
+                .addEvents(grpcEvent)
+                .addCounts(grpcCounts)
+                .setNotAllShown(true)
+                .build();
+
+        // when
+        var result = mapper.toRestProblematicOutboxEventsSummaryResponse(source);
+
+        // then
+        Assertions.assertNotNull(result);
+
+        // Проверяем events
+        Assertions.assertEquals(1, result.getEvents().size());
+        var event = result.getEvents().getFirst();
+        Assertions.assertEquals("evt-001", event.getId());
+        Assertions.assertEquals("Issue", event.getAggregateType());
+        Assertions.assertEquals("agg-123", event.getAggregateId());
+        Assertions.assertEquals("IssueCreated", event.getEventType());
+        Assertions.assertEquals("{\"key\":\"value\"}", event.getPayload());
+        Assertions.assertEquals("FAILED", event.getStatus());
+        Assertions.assertEquals(3, event.getAttempts());
+        Assertions.assertEquals("Connection refused", event.getLastErrorMessage());
+        Assertions.assertEquals("req-001", event.getRequestId());
+        Assertions.assertEquals("issue-service", event.getServiceKey());
+        Assertions.assertEquals("FAILED", event.getReason());
+
+        var expectedDateTime = OffsetDateTime.ofInstant(Instant.ofEpochSecond(1_700_000_000L), ZoneOffset.UTC);
+        Assertions.assertEquals(expectedDateTime, event.getCreatedAt());
+        Assertions.assertEquals(expectedDateTime, event.getPublishedAt());
+        Assertions.assertEquals(expectedDateTime, event.getProcessingStartedAt());
+
+        // Проверяем counts
+        Assertions.assertEquals(1, result.getCounts().size());
+        var counts = result.getCounts().getFirst();
+        Assertions.assertEquals("issue-service", counts.getServiceKey());
+        Assertions.assertEquals(5L, counts.getOverdueNewCount());
+        Assertions.assertEquals(2L, counts.getStuckProcessingCount());
+        Assertions.assertEquals(3L, counts.getFailedCount());
+
+        // Проверяем notAllShown
+        Assertions.assertTrue(result.getNotAllShown());
+    }
+
+    @Test
+    @DisplayName("Должен обрабатывать пустой ответ problematic outbox events summary")
+    void toRestProblematicOutboxEventsSummaryResponse_shouldHandleEmptyResponse() {
+        // given
+        var source = GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+
+        // when
+        var result = mapper.toRestProblematicOutboxEventsSummaryResponse(source);
+
+        // then
+        Assertions.assertNotNull(result);
+        Assertions.assertNotNull(result.getEvents());
+        Assertions.assertTrue(result.getEvents().isEmpty());
+        Assertions.assertNotNull(result.getCounts());
+        Assertions.assertTrue(result.getCounts().isEmpty());
+        Assertions.assertFalse(result.getNotAllShown());
+    }
+
+    @Test
+    @DisplayName("Должен корректно маппить event без optional полей (publishedAt, lastErrorMessage, processingStartedAt, requestId)")
+    void toRestProblematicOutboxEventsSummaryResponse_shouldHandleEventWithoutOptionalFields() {
+        // given
+        var timestamp = Timestamp.newBuilder().setSeconds(1_700_000_000L).setNanos(0).build();
+
+        var grpcEvent = ru.taska.api.admin.v1.ProblematicOutboxEventDto.newBuilder()
+                .setId("evt-002")
+                .setAggregateType("Project")
+                .setAggregateId("agg-456")
+                .setEventType("ProjectCreated")
+                .setPayload("{}")
+                .setStatus("NEW")
+                .setCreatedAt(timestamp)
+                .setAttempts(0)
+                .setServiceKey("project-service")
+                .setReason("OVERDUE_NEW")
+                .build();
+
+        var source = GetProblematicOutboxEventsSummaryResponse.newBuilder()
+                .addEvents(grpcEvent)
+                .build();
+
+        // when
+        var result = mapper.toRestProblematicOutboxEventsSummaryResponse(source);
+
+        // then
+        var event = result.getEvents().getFirst();
+        Assertions.assertEquals("evt-002", event.getId());
+        Assertions.assertNull(event.getPublishedAt());
+        Assertions.assertNull(event.getLastErrorMessage());
+        Assertions.assertNull(event.getProcessingStartedAt());
+        Assertions.assertNull(event.getRequestId());
+    }
+
+    @Test
+    @DisplayName("Должен корректно маппить несколько сервисов в counts")
+    void toRestProblematicOutboxEventsSummaryResponse_shouldMapMultipleCounts() {
+        // given
+        var counts1 = ProblematicEventCountsByService.newBuilder()
+                .setServiceKey("issue-service")
+                .setOverdueNewCount(10)
+                .setStuckProcessingCount(0)
+                .setFailedCount(5)
+                .build();
+
+        var counts2 = ProblematicEventCountsByService.newBuilder()
+                .setServiceKey("project-service")
+                .setOverdueNewCount(0)
+                .setStuckProcessingCount(3)
+                .setFailedCount(0)
+                .build();
+
+        var source = GetProblematicOutboxEventsSummaryResponse.newBuilder()
+                .addCounts(counts1)
+                .addCounts(counts2)
+                .build();
+
+        // when
+        var result = mapper.toRestProblematicOutboxEventsSummaryResponse(source);
+
+        // then
+        Assertions.assertEquals(2, result.getCounts().size());
+
+        Assertions.assertEquals("issue-service", result.getCounts().get(0).getServiceKey());
+        Assertions.assertEquals(10L, result.getCounts().get(0).getOverdueNewCount());
+        Assertions.assertEquals(5L, result.getCounts().get(0).getFailedCount());
+
+        Assertions.assertEquals("project-service", result.getCounts().get(1).getServiceKey());
+        Assertions.assertEquals(3L, result.getCounts().get(1).getStuckProcessingCount());
     }
 
     // ==================== ТЕСТЫ ДЛЯ ПРОВЕРКИ МАППИНГА СТРУКТУР ====================

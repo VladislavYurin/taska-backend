@@ -5,7 +5,7 @@ import io.grpc.ManagedChannelBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
@@ -110,7 +110,7 @@ public class GrpcClientConfig {
         return ReactorProjectServiceGrpc.newReactorStub(projectManagedChannel());
     }
     @Bean
-    public ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub() {
-        return ReactorAdminServiceGrpc.newReactorStub(adminManagedChannel());
+    public ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub adminServiceStub() {
+        return ReactorAdminReadonlyServiceGrpc.newReactorStub(adminManagedChannel());
     }
 }

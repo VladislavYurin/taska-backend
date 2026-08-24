@@ -11,6 +11,9 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequestBody;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
 import ru.taska.api.admin.v1.GetTableRowByIdResponse;
@@ -19,14 +22,17 @@ import ru.taska.api.admin.v1.ListTableRowsRequestBody;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.common.v1.Header;
 import ru.taska.dto.CatalogDto;
+import ru.taska.dto.GetProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
 import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
+import ru.taska.mapper.ProblematicOutboxEventMapper;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
+import ru.taska.service.ProblematicOutboxEventService;
 
 import java.util.List;
 import java.util.Map;
@@ -49,8 +55,16 @@ class GrpcAdminReadonlyServiceTest {
     @Mock
     private ListTableRowsMapper listTableRowsMapper;
 
+    @Mock
+    private ProblematicOutboxEventService problematicOutboxEventService;
+
+    @Mock
+    private ProblematicOutboxEventMapper problematicOutboxEventMapper;
+
     @InjectMocks
     private GrpcAdminReadonlyService grpcAdminReadonlyService;
+
+    // ==================== getCatalog ====================
 
     @Test
     void getCatalog_blankRequestId_fails() {
@@ -75,20 +89,54 @@ class GrpcAdminReadonlyServiceTest {
     }
 
     @Test
-    void getCatalog_success_mapsResponse() {
+    void getCatalog_success_delegatesToMetadataService() {
+        GetCatalogRequest grpcRequest = GetCatalogRequest.newBuilder()
+                .setHeader(validHeader())
+                .build();
+
         CatalogDto catalogDto = new CatalogDto(List.of());
         GetCatalogResponse grpcResponse = GetCatalogResponse.newBuilder().build();
 
         Mockito.when(metadataService.getCatalog()).thenReturn(Mono.just(catalogDto));
         Mockito.when(metadataCatalogMapper.toGetCatalogResponse(catalogDto)).thenReturn(grpcResponse);
 
-        GetCatalogRequest request = GetCatalogRequest.newBuilder()
-                .setHeader(validHeader())
-                .build();
-
-        StepVerifier.create(grpcAdminReadonlyService.getCatalog(Mono.just(request)))
+        StepVerifier.create(grpcAdminReadonlyService.getCatalog(Mono.just(grpcRequest)))
                 .expectNext(grpcResponse)
                 .verifyComplete();
+
+        Mockito.verify(metadataService).getCatalog();
+    }
+
+    // ==================== listTableRows ====================
+
+    @Test
+    void listTableRows_blankRequestId_fails() {
+        ListTableRowsRequest request = ListTableRowsRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId("").setNodeId(NODE_ID).build())
+                .setBody(ListTableRowsRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .setTableName("users")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.listTableRows(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void listTableRows_blankNodeId_fails() {
+        ListTableRowsRequest request = ListTableRowsRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(" ").build())
+                .setBody(ListTableRowsRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .setTableName("users")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.listTableRows(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
     }
 
     @Test
@@ -120,6 +168,40 @@ class GrpcAdminReadonlyServiceTest {
         Mockito.verify(adminReadonlyService).listTableRows(requestDto, REQUEST_ID, NODE_ID);
     }
 
+    // ==================== getTableRowById ====================
+
+    @Test
+    void getTableRowById_blankRequestId_fails() {
+        GetTableRowByIdRequest request = GetTableRowByIdRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId("").setNodeId(NODE_ID).build())
+                .setBody(GetTableRowByIdRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .setTableName("users")
+                        .setId("row-1")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.getTableRowById(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void getTableRowById_blankNodeId_fails() {
+        GetTableRowByIdRequest request = GetTableRowByIdRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(" ").build())
+                .setBody(GetTableRowByIdRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .setTableName("users")
+                        .setId("row-1")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.getTableRowById(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
+    }
+
     @Test
     void getTableRowById_success_delegatesToAdminService() {
         GetTableRowByIdRequest grpcRequest = GetTableRowByIdRequest.newBuilder()
@@ -145,6 +227,62 @@ class GrpcAdminReadonlyServiceTest {
 
         Mockito.verify(adminReadonlyService).getTableRowById(requestDto, REQUEST_ID, NODE_ID);
     }
+
+    // ==================== getProblematicOutboxEventsSummary ====================
+
+    @Test
+    void getProblematicOutboxEventsSummary_blankRequestId_fails() {
+        GetProblematicOutboxEventsSummaryRequest request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId("").setNodeId(NODE_ID).build())
+                .setBody(GetProblematicOutboxEventsSummaryRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.getProblematicOutboxEventsSummary(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void getProblematicOutboxEventsSummary_blankNodeId_fails() {
+        GetProblematicOutboxEventsSummaryRequest request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(" ").build())
+                .setBody(GetProblematicOutboxEventsSummaryRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.getProblematicOutboxEventsSummary(Mono.just(request)))
+                .expectError(StatusRuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    void getProblematicOutboxEventsSummary_success_delegatesToService() {
+        GetProblematicOutboxEventsSummaryRequest grpcRequest = GetProblematicOutboxEventsSummaryRequest.newBuilder()
+                .setHeader(validHeader())
+                .setBody(GetProblematicOutboxEventsSummaryRequestBody.newBuilder()
+                        .setServiceKey("auth")
+                        .build())
+                .build();
+
+        GetProblematicOutboxEventsSummaryResponseDto responseDto = new GetProblematicOutboxEventsSummaryResponseDto(
+                List.of(), List.of(), false
+        );
+        GetProblematicOutboxEventsSummaryResponse grpcResponse = GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+
+        Mockito.when(problematicOutboxEventService.getProblematicOutboxEventsSummary("auth", REQUEST_ID, NODE_ID)).thenReturn(Mono.just(responseDto));
+        Mockito.when(problematicOutboxEventMapper.toProto(responseDto)).thenReturn(grpcResponse);
+
+        StepVerifier.create(grpcAdminReadonlyService.getProblematicOutboxEventsSummary(Mono.just(grpcRequest)))
+                .expectNext(grpcResponse)
+                .verifyComplete();
+
+        Mockito.verify(problematicOutboxEventService).getProblematicOutboxEventsSummary("auth", REQUEST_ID, NODE_ID);
+    }
+
+    // ==================== helpers ====================
 
     private static Header validHeader() {
         return Header.newBuilder()

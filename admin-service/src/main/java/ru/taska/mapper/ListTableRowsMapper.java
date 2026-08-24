@@ -58,6 +58,8 @@ public class ListTableRowsMapper {
             builder.setTimestampValue(((OffsetDateTime) value).toEpochSecond());
         } else if (value instanceof LocalDateTime) {
             builder.setTimestampValue(((LocalDateTime) value).toEpochSecond(ZoneOffset.UTC));
+        } else if (value instanceof io.r2dbc.postgresql.codec.Json) {
+            builder.setStringValue(((io.r2dbc.postgresql.codec.Json) value).asString());
         } else {
             builder.setStringValue(value.toString());
         }

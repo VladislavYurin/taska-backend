@@ -6,18 +6,20 @@ import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 
 /**
  * gRPC-адаптер, который публикует {@link GrpcAdminReadonlyService} как protobuf endpoint.
  */
 @GrpcService
 @RequiredArgsConstructor
-public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminServiceGrpc.AdminServiceImplBase {
+public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminReadonlyServiceGrpc.AdminReadonlyServiceImplBase {
 
     private final GrpcAdminReadonlyService grpcAdminReadonlyService;
 
@@ -37,5 +39,11 @@ public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminServiceGrpc.Adm
     public Mono<GetTableRowByIdResponse> getTableRowById(Mono<GetTableRowByIdRequest> request) {
         return grpcAdminReadonlyService.getTableRowById(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getTableRowById"));
+    }
+
+    @Override
+    public Mono<GetProblematicOutboxEventsSummaryResponse> getProblematicOutboxEventsSummary(Mono<GetProblematicOutboxEventsSummaryRequest> request) {
+        return grpcAdminReadonlyService.getProblematicOutboxEventsSummary(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProblematicOutboxEventsSummary"));
     }
 }

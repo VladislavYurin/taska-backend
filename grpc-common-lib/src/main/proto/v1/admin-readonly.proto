@@ -3,24 +3,21 @@ syntax = "proto3";
 package ru.taska.admin.v1;
 
 import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.admin.v1";
 option java_outer_classname = "AdminApiProto";
 
-/**
- * gRPC API admin-service: metadata catalog подключённых БД.
- */
-service AdminService {
-  /**
-   * Возвращает полный metadata catalog всех подключённых БД
-   * с учётом denylist таблиц и флагов sensitive у колонок.
-   */
+service AdminReadonlyService {
+
   rpc GetCatalog(GetCatalogRequest) returns (GetCatalogResponse);
 
   rpc ListTableRows(ListTableRowsRequest) returns (ListTableRowsResponse);
 
   rpc GetTableRowById(GetTableRowByIdRequest) returns (GetTableRowByIdResponse);
+
+  rpc GetProblematicOutboxEventsSummary(GetProblematicOutboxEventsSummaryRequest) returns (GetProblematicOutboxEventsSummaryResponse);
 }
 
 message GetCatalogRequest {
@@ -133,6 +130,45 @@ message GetTableRowByIdRequestBody {
 
 message GetTableRowByIdResponse {
   Row row = 1;
+}
+
+message GetProblematicOutboxEventsSummaryRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProblematicOutboxEventsSummaryRequestBody body = 2;
+}
+
+message GetProblematicOutboxEventsSummaryRequestBody {
+  optional string service_key = 1;
+}
+
+message GetProblematicOutboxEventsSummaryResponse {
+  repeated ProblematicOutboxEventDto events = 1;
+  repeated ProblematicEventCountsByService counts = 2;
+  bool not_all_shown = 3;
+}
+
+message ProblematicEventCountsByService {
+  string service_key = 1;
+  int64 overdue_new_count = 2;
+  int64 stuck_processing_count = 3;
+  int64 failed_count = 4;
+}
+
+message ProblematicOutboxEventDto {
+  string id = 1;
+  string aggregate_type = 2;
+  string aggregate_id = 3;
+  string event_type = 4;
+  string payload = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  optional google.protobuf.Timestamp published_at = 8;
+  int32 attempts = 9;
+  optional string last_error_message = 10;
+  optional google.protobuf.Timestamp processing_started_at = 11;
+  optional string request_id = 12;
+  string service_key = 13;
+  string reason = 14;
 }
 
 message MetaInfo {

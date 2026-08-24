@@ -1460,6 +1460,34 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/readonly/outbox/problematic-summary:
+    get:
+      summary: Получение сводки проблемных outbox-событий (только для GLOBAL_ADMIN)
+      operationId: getProblematicOutboxEventsSummary
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: serviceKey
+          in: query
+          required: false
+          description: Ключ сервиса для фильтрации (если не указан — все сервисы)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Сводка проблемных outbox-событий
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblematicOutboxEventsSummaryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/readonly/catalog:
     get:
       summary: Получение каталога доступных сервисов и таблиц (только для GLOBAL_ADMIN)
@@ -2313,3 +2341,68 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    ProblematicOutboxEventsSummaryResponseDto:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblematicOutboxEventDto'
+        counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblematicEventCountsByServiceDto'
+        notAllShown:
+          type: boolean
+
+    ProblematicOutboxEventDto:
+      type: object
+      properties:
+        id:
+          type: string
+        aggregateType:
+          type: string
+        aggregateId:
+          type: string
+        eventType:
+          type: string
+        payload:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+          format: int32
+        lastErrorMessage:
+          type: string
+        processingStartedAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        serviceKey:
+          type: string
+        reason:
+          type: string
+
+    ProblematicEventCountsByServiceDto:
+      type: object
+      properties:
+        serviceKey:
+          type: string
+        overdueNewCount:
+          type: integer
+          format: int64
+        stuckProcessingCount:
+          type: integer
+          format: int64
+        failedCount:
+          type: integer
+          format: int64

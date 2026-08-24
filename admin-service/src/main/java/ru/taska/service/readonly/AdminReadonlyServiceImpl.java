@@ -16,7 +16,6 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
-import ru.taska.service.SensitiveColumnMaskService;
 
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,7 @@ import java.util.Map;
 public class AdminReadonlyServiceImpl implements AdminReadonlyService {
 
     private final MetadataCatalogProperties catalogProperties;
-    private final SensitiveColumnMaskService maskService;
+    private final SensitiveDataMaskService maskService;
     private final MetadataService metadataService;
     private final ReadOnlyRepository readOnlyRepository;
     private final ReadOnlyQueryBuilder queryBuilder;
@@ -68,7 +67,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                                 .flatMap(rows ->
                                     readOnlyRepository.countRows(serviceKey, safeQuery.countQuery().parameterizedQuery(), safeQuery.countQuery().params())
                                             .map(total -> {
-                                                List<Map<String, Object>> maskedRows = maskService.maskSensitiveColumns(
+                                                List<Map<String, Object>> maskedRows = maskService.maskSensitiveData(
                                                         rows, serviceKey, tableName, requestId, nodeId
                                                 );
                                                 return new ListTableRowsResponseDto(
@@ -106,7 +105,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                                             "Row not found: " + tableName + "." + pkColumn + " = " + id));
                                 }))
                                 .map(row -> {
-                                    Map<String, Object> maskedRow = maskService.maskSensitiveColumns(
+                                    Map<String, Object> maskedRow = maskService.maskSensitiveData(
                                             List.of(row), serviceKey, tableName, requestId, nodeId
                                     ).getFirst();
                                     return new GetTableRowByIdResponseDto(maskedRow);

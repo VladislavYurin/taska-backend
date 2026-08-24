@@ -37,16 +37,20 @@ public record MetadataCatalogProperties(
     }
 
     /**
-     * @param allow            если список непустой — в каталог попадают только эти таблицы;
-     *                         пустой список означает «разрешены все»
-     * @param deny             таблицы, скрытые из каталога; имеет приоритет над {@code allow}
-     * @param sensitiveColumns колонки в формате table.column → тип маскировки (MASK_FULL, MASK_PARTIAL, HIDE);
-     *                         если тип не указан (null/пустая строка), используется {@code defaultMaskType}
+     * @param allow               если список непустой — в каталог попадают только эти таблицы;
+     *                            пустой список означает «разрешены все»
+     * @param deny                таблицы, скрытые из каталога; имеет приоритет над {@code allow}
+     * @param sensitiveColumns    колонки в формате table.column → тип маскировки (MASK_FULL, MASK_PARTIAL, HIDE);
+     *                            если тип не указан (null/пустая строка), используется {@code defaultMaskType}
+     * @param sensitiveJsonFields JSON-колонки, внутри которых нужно маскировать отдельные поля.
+     *                            Формат: table → column → (jsonField → тип маскировки).
+     *                            Например: outbox_events → payload → {email: MASK_PARTIAL}
      */
     public record TableProperties(
             @DefaultValue List<String> allow,
             @DefaultValue List<String> deny,
-            @DefaultValue Map<String, String> sensitiveColumns
+            @DefaultValue Map<String, String> sensitiveColumns,
+            @DefaultValue Map<String, Map<String, Map<String, String>>> sensitiveJsonFields
     ) {
     }
 }

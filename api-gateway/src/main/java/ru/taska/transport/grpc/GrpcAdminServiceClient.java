@@ -5,15 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.api.admin.v1.GetCatalogRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequestBody;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsRequestBody;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.mapper.AdminDataMapper;
@@ -27,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class GrpcAdminServiceClient {
 
-    private final ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub;
+    private final ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub adminServiceStub;
     private final AdminDataMapper mapper;
     private final GrpcClientProperties properties;
 
@@ -98,10 +101,31 @@ public class GrpcAdminServiceClient {
                 .map(mapper::toRestGetTableRowByIdResponse);
     }
 
+    public Mono<ProblematicOutboxEventsSummaryResponseDto> getProblematicOutboxEventsSummary(
+            String serviceKey,
+            GatewayContext context
+    ) {
+        log.debug("[{}] Calling getProblematicOutboxEventsSummary", context.requestId());
+
+        GetProblematicOutboxEventsSummaryRequestBody.Builder bodyBuilder =
+                GetProblematicOutboxEventsSummaryRequestBody.newBuilder();
+        if (serviceKey != null) {
+            bodyBuilder.setServiceKey(serviceKey);
+        }
+
+        GetProblematicOutboxEventsSummaryRequest request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
+                .setHeader(buildGrpcHeader(context))
+                .setBody(bodyBuilder.build())
+                .build();
+
+        return dynamicStub().getProblematicOutboxEventsSummary(request)
+                .map(mapper::toRestProblematicOutboxEventsSummaryResponse);
+    }
+
     /**
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
-    private ReactorAdminServiceGrpc.ReactorAdminServiceStub dynamicStub() {
+    private ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub dynamicStub() {
         return adminServiceStub.withDeadlineAfter(properties.adminService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
     }
 

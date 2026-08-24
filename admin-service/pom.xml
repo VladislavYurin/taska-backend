@@ -90,6 +90,17 @@
             <artifactId>grpc-common-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>ru.taska</groupId>
+            <artifactId>metrics-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Jackson (JSON parsing for sensitive field masking) -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
 
         <!-- Validation API -->
         <dependency>

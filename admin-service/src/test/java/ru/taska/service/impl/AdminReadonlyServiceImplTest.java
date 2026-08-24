@@ -21,7 +21,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.MetadataService;
-import ru.taska.service.SensitiveColumnMaskService;
+import ru.taska.service.readonly.SensitiveDataMaskService;
 import ru.taska.service.readonly.AdminReadonlyServiceImpl;
 import ru.taska.service.readonly.FilterParser;
 import ru.taska.service.readonly.PageableListQueries;
@@ -51,7 +51,7 @@ class AdminReadonlyServiceImplTest {
     private FilterParser filterParser;
 
     @Mock
-    private SensitiveColumnMaskService maskService;
+    private SensitiveDataMaskService maskService;
 
     @Mock
     private MetadataService metadataService;
@@ -75,7 +75,7 @@ class AdminReadonlyServiceImplTest {
         MetadataCatalogProperties catalogProperties =
                 new MetadataCatalogProperties(pagination, MaskType.MASK_FULL, Map.of(
                         TEST_SERVICE, new MetadataCatalogProperties.ServiceProperties(
-                                TEST_SERVICE, TEST_SCHEMA, new MetadataCatalogProperties.TableProperties(List.of(), List.of(), Map.of()))
+                                TEST_SERVICE, TEST_SCHEMA, new MetadataCatalogProperties.TableProperties(List.of(), List.of(), Map.of(), Map.of()))
                 ));
         adminService = new AdminReadonlyServiceImpl(
                 catalogProperties, maskService, metadataService,
@@ -139,7 +139,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(Flux.empty());
         Mockito.when(readOnlyRepository.countRows(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
                 .thenReturn(Mono.just(0L));
-        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        Mockito.when(maskService.maskSensitiveData(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(List.of());
 
         StepVerifier.create(adminService.listTableRows(listRequest(PAGE, PAGE_SIZE), "test-request-id", "test-node-id"))
@@ -249,7 +249,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(byIdQuery);
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.just(row));
-        Mockito.when(maskService.maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
+        Mockito.when(maskService.maskSensitiveData(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
                 .thenReturn(List.of(maskedRow));
 
         StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
@@ -290,7 +290,7 @@ class AdminReadonlyServiceImplTest {
                 .expectNextCount(1)
                 .verifyComplete();
 
-        Mockito.verify(maskService).maskSensitiveColumns(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
+        Mockito.verify(maskService).maskSensitiveData(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
     }
 
     @Test
@@ -310,14 +310,14 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(byIdQuery);
         Mockito.when(readOnlyRepository.executeQuery(TEST_SERVICE, byIdQuery.parameterizedQuery(), byIdQuery.params()))
                 .thenReturn(Flux.just(row));
-        Mockito.when(maskService.maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
+        Mockito.when(maskService.maskSensitiveData(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
                 .thenReturn(List.of(row));
 
         StepVerifier.create(adminService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectNextCount(1)
                 .verifyComplete();
 
-        Mockito.verify(maskService).maskSensitiveColumns(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
+        Mockito.verify(maskService).maskSensitiveData(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
     }
 
     @Test
@@ -356,7 +356,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(Flux.fromIterable(rows));
         Mockito.when(readOnlyRepository.countRows(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
                 .thenReturn(Mono.just(1L));
-        Mockito.when(maskService.maskSensitiveColumns(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
+        Mockito.when(maskService.maskSensitiveData(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(maskedRows);
     }
 

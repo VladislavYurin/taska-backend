@@ -24,6 +24,22 @@ spring:
 # Локальные defaults используют user taska только для удобства разработки.
 # На стенде/проде должны быть отдельные RO users (только SELECT).
 admin:
+  # Используются те же переменные окружения, что и в сервисах-производителях,
+  # чтобы admin-service применял их фактические пороги застрявшести событий.
+  outbox:
+    services:
+      - auth
+      - issue
+      - project
+    max-problematic-list-size: 100
+    processing-timeouts:
+      auth: ${AUTH_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+      project: ${PROJECT_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+      issue: ${ISSUE_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+    overdue-new-thresholds:
+      auth: ${AUTH_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
+      project: ${PROJECT_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
+      issue: ${ISSUE_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
   readonly:
     auth:
       url: ${ADMIN_RO_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
@@ -103,6 +119,11 @@ admin:
             credentials.meta:
             refresh_tokens.token_hash: HIDE
             invite_tokens.token_hash: HIDE
+          sensitive-json-fields:
+            outbox_events:
+              payload:
+                email: MASK_PARTIAL
+                rawInviteToken:
       project:
         alias: project
         schema: taska

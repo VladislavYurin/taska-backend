@@ -133,7 +133,7 @@ class MetadataServiceTest {
         List<TableDto> tables = buildTables(
                 List.of(col("users", "id", "uuid"), col("sessions", "id", "uuid")),
                 List.of(),
-                new TableProperties(List.of("users", "sessions"), List.of("sessions"), Map.of())
+                new TableProperties(List.of("users", "sessions"), List.of("sessions"), Map.of(), Map.of())
         );
 
         assertThat(tables).extracting(TableDto::name).containsExactly("users");
@@ -398,15 +398,15 @@ class MetadataServiceTest {
     }
 
     private static TableProperties allTables() {
-        return new TableProperties(List.of(), List.of(), Map.of());
+        return new TableProperties(List.of(), List.of(), Map.of(), Map.of());
     }
 
     private static TableProperties allowOnly(String... tables) {
-        return new TableProperties(List.of(tables), List.of(), Map.of());
+        return new TableProperties(List.of(tables), List.of(), Map.of(), Map.of());
     }
 
     private static TableProperties denied(String... tables) {
-        return new TableProperties(List.of(), List.of(tables), Map.of());
+        return new TableProperties(List.of(), List.of(tables), Map.of(), Map.of());
     }
 
     private static TableProperties sensitive(String... columns) {
@@ -414,7 +414,7 @@ class MetadataServiceTest {
         for (String column : columns) {
             map.put(column, "MASK_FULL");
         }
-        return new TableProperties(List.of(), List.of(), map);
+        return new TableProperties(List.of(), List.of(), map, Map.of());
     }
 
     private static ColumnDto column(List<TableDto> tables, String tableName, String columnName) {

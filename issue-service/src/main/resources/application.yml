@@ -29,7 +29,7 @@ app:
       recovery-interval: ${ISSUE_KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
       batch-size: ${ISSUE_KAFKA_OUTBOX_BATCH_SIZE:100}
       max-attempts: ${ISSUE_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
-      processing-timeout: ${KAFKA_PROCESSING_OUTBOX_TIMEOUT:5m}
+      processing-timeout: ${ISSUE_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
 
 issue:
   pagination:
