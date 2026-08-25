@@ -1,4 +1,4 @@
-package ru.taska.domain.dto;
+package ru.taska.domain.dto.labels;
 
 import java.util.UUID;
 

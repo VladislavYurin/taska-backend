@@ -16,8 +16,9 @@ import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.dto.LabelCommands;
-import ru.taska.domain.dto.LabelResponses;
+import ru.taska.domain.dto.labels.IssueWithLabels;
+import ru.taska.domain.dto.labels.LabelCommands;
+import ru.taska.domain.dto.labels.LabelResponses;
 import ru.taska.domain.labels.ProjectLabels;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -412,7 +413,7 @@ class LabelServiceIT extends AbstractIT {
         mockProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
 
         // Act
-        Mono<ru.taska.domain.PageResult<Issue>> result = issueService.listIssues(
+        Mono<ru.taska.domain.PageResult<IssueWithLabels>> result = issueService.listIssues(
                 REQUEST_ID, NODE_ID, PROJECT_ID, VIEWER_ID,
                 null, null, label1.getId(), 0, 10
         );
@@ -422,7 +423,7 @@ class LabelServiceIT extends AbstractIT {
                 .assertNext(pageResult -> {
                     Assertions.assertThat(pageResult.totalCount()).isEqualTo(1);
                     Assertions.assertThat(pageResult.items()).hasSize(1);
-                    Assertions.assertThat(pageResult.items().get(0).getId()).isEqualTo(issueId);
+                    Assertions.assertThat(pageResult.items().get(0).issue().getId()).isEqualTo(issueId);
                 })
                 .verifyComplete();
     }

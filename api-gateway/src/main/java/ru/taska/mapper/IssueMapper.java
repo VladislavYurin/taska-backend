@@ -18,12 +18,14 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
 import ru.taska.api.issue.v1.SearchIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
+import ru.taska.domain.dto.IssueLabelResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
@@ -44,8 +46,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -70,7 +74,20 @@ public class IssueMapper {
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         restDto.setVersion(protoDto.getVersion());
+        restDto.setLabels(
+                protoDto.getLabelsList().stream()
+                        .map(this::toRestIssueLabelResponseDto)
+                        .collect(Collectors.toList())
+        );
 
+        return restDto;
+    }
+
+    public IssueLabelResponseDto toRestIssueLabelResponseDto(ProjectLabelResponse protoDto) {
+        var restDto = new IssueLabelResponseDto();
+        restDto.setId(UUID.fromString(protoDto.getId()));
+        restDto.setName(protoDto.getName());
+        restDto.setColor(protoDto.getColor());
         return restDto;
     }
 
@@ -110,14 +127,14 @@ public class IssueMapper {
         return restDto;
     }
 
-    public ListIssuesResponseDto toRestListIssuesRequest(ListIssuesResponse protoDto) {
+    public ListIssuesResponseDto toRestListIssuesResponseDto(ListIssuesResponse protoDto) {
         var restDto = new ListIssuesResponseDto();
-        List<IssueShortResponseDto> shortIssues = new ArrayList<>();
+        List<IssueResponseDto> issues = new ArrayList<>();
 
         protoDto.getIssuesList()
-                .forEach(issue -> shortIssues.add(this.toIssueShortResponseDto(issue)));
+                .forEach(issue -> issues.add(this.toRestIssueResponse(issue)));
 
-        restDto.setItems(shortIssues);
+        restDto.setItems(issues);
         restDto.setTotalCount(protoDto.getTotalCount());
 
         return restDto;

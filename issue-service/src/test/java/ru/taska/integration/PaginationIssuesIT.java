@@ -94,7 +94,7 @@ class PaginationIssuesIT extends AbstractIT {
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
-                    Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                    Assertions.assertThat(result.items().stream().map(issueWithLabels -> issueWithLabels.issue().getIssueNumber()).sorted().toList())
                             .containsExactly(1, 2, 3, 4);
                 })
                 .verifyComplete();
@@ -108,7 +108,7 @@ class PaginationIssuesIT extends AbstractIT {
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
-                    Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                    Assertions.assertThat(result.items().stream().map(issueWithLabels -> issueWithLabels.issue().getIssueNumber()).sorted().toList())
                             .containsExactly(1, 3);
                 })
                 .verifyComplete();
@@ -122,7 +122,7 @@ class PaginationIssuesIT extends AbstractIT {
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
-                    Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).sorted().toList())
+                    Assertions.assertThat(result.items().stream().map(issueWithLabels -> issueWithLabels.issue().getIssueNumber()).sorted().toList())
                             .containsExactly(1, 2);
                 })
                 .verifyComplete();
@@ -136,7 +136,7 @@ class PaginationIssuesIT extends AbstractIT {
                 )
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(1);
-                    Assertions.assertThat(result.items().stream().map(Issue::getIssueNumber).toList())
+                    Assertions.assertThat(result.items().stream().map(issueWithLabels -> issueWithLabels.issue().getIssueNumber()).toList())
                             .containsExactly(1);
                 })
                 .verifyComplete();

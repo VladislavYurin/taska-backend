@@ -4,9 +4,11 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
 import ru.taska.domain.labels.IssueLabels;
 import ru.taska.domain.labels.ProjectLabels;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -48,4 +50,20 @@ public interface IssueLabelsRepository extends R2dbcRepository<IssueLabels, UUID
         AND pl.deleted_at IS NULL
     """)
     Flux<ProjectLabels> findActiveLabelsByIssueId(UUID issueId);
+
+    /**
+     * Находит все активные метки и айди, привязанные к задаче.
+     * Выполняет JOIN с таблицей project_labels для получения полной информации о метках.
+     * Возвращает только активные метки (deleted_at IS NULL).
+     *
+     * @param issueIds список идентификаторов задач
+     * @return Flux<{@link ProjectLabelWithIssuesId}> поток активных меток задачи с issueId
+     */
+    @Query("""
+        SELECT pl.*, il.issue_id as issue_id FROM taska.project_labels pl
+        JOIN taska.issue_labels il ON il.label_id = pl.id
+        WHERE il.issue_id IN (:issueIds)
+          AND pl.deleted_at IS NULL
+        """)
+    Flux<ProjectLabelWithIssuesId> findActiveLabelsWithIssueId(List<UUID> issueIds);
 }
