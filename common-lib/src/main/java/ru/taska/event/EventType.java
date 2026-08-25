@@ -30,6 +30,8 @@ public enum EventType {
     COMMENT_CREATED("CommentCreated"),
     COMMENT_UPDATED("CommentUpdated"),
     COMMENT_DELETED("CommentDeleted"),
+    USER_BLOCKED("USER_BLOCKED"),
+    USER_UNBLOCKED("USER_UNBLOCKED"),
     ISSUE_WATCHED("IssueWatched"),
     ISSUE_UNWATCHED("IssueUnwatched"),
     ISSUE_LABEL_ADDED("LabelAdded"),

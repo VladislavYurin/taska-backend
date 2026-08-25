@@ -3,13 +3,16 @@ syntax = "proto3";
 package ru.taska.admin.v1;
 
 import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.admin.v1";
 option java_outer_classname = "AdminApiProto";
 
 /**
- * gRPC API admin-service: metadata catalog подключённых БД.
+ * gRPC API admin-service
  */
 service AdminService {
   /**
@@ -21,7 +24,69 @@ service AdminService {
   rpc ListTableRows(ListTableRowsRequest) returns (ListTableRowsResponse);
 
   rpc GetTableRowById(GetTableRowByIdRequest) returns (GetTableRowByIdResponse);
+
+  rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
 }
+
+/**
+ * Запрос на блокировку пользователя.
+ */
+message BlockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  BlockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса блокировки пользователя.
+ */
+message BlockUserRequestBody {
+  string target_user_id = 1;
+  string actor_user_id = 2;
+  string actor_login = 3;
+  google.protobuf.Value actor_roles = 4;
+  string reason = 5;
+}
+
+/**
+ * Ответ на запрос блокировки пользователя.
+ */
+message BlockUserResponse {
+  string user_id = 1;
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  ru.taska.common.v1.UserStatus current_status = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+/**
+ * Запрос на разблокировку пользователя.
+ */
+message UnblockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  UnblockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса разблокировки пользователя.
+ */
+message UnblockUserRequestBody {
+  string target_user_id = 1;
+  string actor_user_id = 2;
+  string actor_login = 3;
+  google.protobuf.Value actor_roles = 4;
+  string reason = 5;
+}
+
+/**
+ * Ответ на запрос разблокировки пользователя.
+ */
+message UnblockUserResponse {
+  string user_id = 1;
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  ru.taska.common.v1.UserStatus current_status = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
 
 message GetCatalogRequest {
   ru.taska.common.v1.Header header = 1;

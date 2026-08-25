@@ -4,19 +4,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-import ru.taska.api.admin.v1.GetCatalogRequest;
-import ru.taska.api.admin.v1.GetTableRowByIdRequest;
-import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsRequestBody;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.*;
 import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.UserStatusResponseDto;
 import ru.taska.mapper.AdminDataMapper;
+import ru.taska.mapper.AdminUserManagementMapper;
 
 import java.util.Map;
 import java.util.UUID;
@@ -28,8 +25,38 @@ import java.util.concurrent.TimeUnit;
 public class GrpcAdminServiceClient {
 
     private final ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub;
-    private final AdminDataMapper mapper;
+    private final AdminDataMapper adminDataMapper;
+    private final AdminUserManagementMapper adminUserManagementMapper;
     private final GrpcClientProperties properties;
+
+    public Mono<UserStatusResponseDto> blockUser(
+            UUID userId,
+            String reason,
+            GatewayContext context
+    ) {
+        log.debug("[{}] Calling blockUser", context.requestId());
+
+        BlockUserRequest blockUserRequest = adminUserManagementMapper
+                .toBlockUserGrpcRequest(userId,reason,context);
+
+        return dynamicStub().blockUser(blockUserRequest)
+                .map(adminUserManagementMapper::toRestBlockUserResponse);
+    }
+
+
+    public Mono<UserStatusResponseDto> unblockUser(
+            UUID userId,
+            String reason,
+            GatewayContext context
+    ) {
+        log.debug("[{}] Calling unblockUser", context.requestId());
+
+        UnblockUserRequest unblockUserRequest = adminUserManagementMapper
+                .toUnblockUserGrpcRequest(userId,reason,context);
+
+        return dynamicStub().unblockUser(unblockUserRequest)
+                .map(adminUserManagementMapper::toRestUnblockUserResponse);
+    }
 
     public Mono<MetadataResponse> getCatalog(GatewayContext context){
 
@@ -39,7 +66,7 @@ public class GrpcAdminServiceClient {
                 .setHeader(buildGrpcHeader(context))
                 .build();
         return dynamicStub().getCatalog(getCatalogRequest)
-                .map(mapper::toRestGetCatalogResponse);
+                .map(adminDataMapper::toRestGetCatalogResponse);
     }
 
     public Mono<ReadOnlyTableRowsResponseDto> listTableRows(
@@ -72,7 +99,7 @@ public class GrpcAdminServiceClient {
                 .build();
 
         return dynamicStub().listTableRows(listTableRowsRequest)
-                .map(mapper::toRestListTableRowsResponse);
+                .map(adminDataMapper::toRestListTableRowsResponse);
     }
 
     public Mono<ReadOnlySingleRowResponseDto> getTableRowById(
@@ -95,7 +122,7 @@ public class GrpcAdminServiceClient {
                 .build();
 
         return dynamicStub().getTableRowById(request)
-                .map(mapper::toRestGetTableRowByIdResponse);
+                .map(adminDataMapper::toRestGetTableRowByIdResponse);
     }
 
     /**
