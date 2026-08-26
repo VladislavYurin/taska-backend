@@ -1008,9 +1008,7 @@ public class GrpcIssueService {
                             Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
                                     ? req.getBody().getPageSizePerColumn()
                                     : null;
-                            ru.taska.domain.IssueType issueType = req.getBody().hasIssueType()
-                                    ? issueMapper.toDomainIssueType(req.getBody().getIssueType())
-                                    : null;
+                            ru.taska.domain.IssueType issueType = issueMapper.toDomainIssueType(req.getBody().getIssueType());
                             List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
                             return issueService.listIssueBoard(
@@ -1038,4 +1036,3 @@ public class GrpcIssueService {
                 .collectList();
     }
 }
-
