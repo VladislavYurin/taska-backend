@@ -1762,9 +1762,9 @@ message ListIssuesForBoardRequestBody {
   string actor_user_id = 2;
 
   /**
-   * Фильтр по типу задачи (опционально)
+   * Фильтр по типу задачи
    */
-  optional IssueType issue_type = 3;
+   IssueType issue_type = 3;
 
   /**
    * Фильтр по идентификатору исполнителя (опционально).
