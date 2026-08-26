@@ -22,23 +22,36 @@ import java.util.Map;
 @Component
 public class ProblematicOutboxEventMapper {
 
+    private static final String COL_ID = "id";
+    private static final String COL_AGGREGATE_TYPE = "aggregate_type";
+    private static final String COL_AGGREGATE_ID = "aggregate_id";
+    private static final String COL_EVENT_TYPE = "event_type";
+    private static final String COL_PAYLOAD = "payload";
+    private static final String COL_STATUS = "status";
+    private static final String COL_CREATED_AT = "created_at";
+    private static final String COL_PUBLISHED_AT = "published_at";
+    private static final String COL_ATTEMPTS = "attempts";
+    private static final String COL_LAST_ERROR_MESSAGE = "last_error_message";
+    private static final String COL_PROCESSING_STARTED_AT = "processing_started_at";
+    private static final String COL_REQUEST_ID = "request_id";
+
     /**
      * Маппинг строки из таблицы outbox_events в DTO.
      */
     public ProblematicOutboxEventResponseDto toDto(Map<String, Object> row, String serviceKey, String reason) {
         return new ProblematicOutboxEventResponseDto(
-                row.get("id").toString(),
-                (String) row.get("aggregate_type"),
-                row.get("aggregate_id").toString(),
-                (String) row.get("event_type"),
-                extractPayload(row.get("payload")),
-                (String) row.get("status"),
-                toInstant(row.get("created_at")),
-                toInstant(row.get("published_at")),
-                ((Number) row.get("attempts")).intValue(),
-                (String) row.get("last_error_message"),
-                toInstant(row.get("processing_started_at")),
-                (String) row.get("request_id"),
+                row.get(COL_ID).toString(),
+                (String) row.get(COL_AGGREGATE_TYPE),
+                row.get(COL_AGGREGATE_ID).toString(),
+                (String) row.get(COL_EVENT_TYPE),
+                extractPayload(row.get(COL_PAYLOAD)),
+                (String) row.get(COL_STATUS),
+                toInstant(row.get(COL_CREATED_AT)),
+                toInstant(row.get(COL_PUBLISHED_AT)),
+                ((Number) row.get(COL_ATTEMPTS)).intValue(),
+                (String) row.get(COL_LAST_ERROR_MESSAGE),
+                toInstant(row.get(COL_PROCESSING_STARTED_AT)),
+                (String) row.get(COL_REQUEST_ID),
                 serviceKey,
                 reason
         );
