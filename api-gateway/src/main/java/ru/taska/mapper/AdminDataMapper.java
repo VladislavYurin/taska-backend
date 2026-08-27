@@ -3,7 +3,9 @@ package ru.taska.mapper;
 import org.springframework.stereotype.Component;
 import ru.taska.api.admin.v1.ColumnMetadata;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.api.admin.v1.ProblematicEventCountsByService;
 import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.ServiceMetadata;
 import ru.taska.api.admin.v1.TableMetadata;
@@ -11,13 +13,20 @@ import ru.taska.api.admin.v1.Value;
 import ru.taska.domain.dto.ColumnMetadataDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.PaginationInfoDto;
+import ru.taska.domain.dto.ProblematicEventCountsByServiceDto;
+import ru.taska.domain.dto.ProblematicOutboxEventDto;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.domain.dto.ServiceMetadataDto;
 import ru.taska.domain.dto.TableCapabilitiesDto;
 import ru.taska.domain.dto.TableMetadataDto;
 
+import com.google.protobuf.Timestamp;
+
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +153,64 @@ public class AdminDataMapper {
     }
 
     /**
+     * Преобразует gRPC GetProblematicOutboxEventsSummaryResponse → REST ProblematicOutboxEventsSummaryResponseDto
+     */
+    public ProblematicOutboxEventsSummaryResponseDto toRestProblematicOutboxEventsSummaryResponse(
+            GetProblematicOutboxEventsSummaryResponse grpcResponse) {
+        ProblematicOutboxEventsSummaryResponseDto dto = new ProblematicOutboxEventsSummaryResponseDto();
+
+        dto.setEvents(grpcResponse.getEventsList().stream()
+                .map(this::toRestProblematicOutboxEventDto)
+                .collect(Collectors.toList()));
+
+        dto.setCounts(grpcResponse.getCountsList().stream()
+                .map(this::toRestProblematicEventCountsByServiceDto)
+                .collect(Collectors.toList()));
+
+        dto.setNotAllShown(grpcResponse.getNotAllShown());
+
+        return dto;
+    }
+
+    private ProblematicOutboxEventDto toRestProblematicOutboxEventDto(
+            ru.taska.api.admin.v1.ProblematicOutboxEventDto grpcEvent) {
+        ProblematicOutboxEventDto dto = new ProblematicOutboxEventDto();
+        dto.setId(grpcEvent.getId());
+        dto.setAggregateType(grpcEvent.getAggregateType());
+        dto.setAggregateId(grpcEvent.getAggregateId());
+        dto.setEventType(grpcEvent.getEventType());
+        dto.setPayload(grpcEvent.getPayload());
+        dto.setStatus(grpcEvent.getStatus());
+        dto.setCreatedAt(toOffsetDateTime(grpcEvent.getCreatedAt()));
+        if (grpcEvent.hasPublishedAt()) {
+            dto.setPublishedAt(toOffsetDateTime(grpcEvent.getPublishedAt()));
+        }
+        dto.setAttempts(grpcEvent.getAttempts());
+        if (grpcEvent.hasLastErrorMessage()) {
+            dto.setLastErrorMessage(grpcEvent.getLastErrorMessage());
+        }
+        if (grpcEvent.hasProcessingStartedAt()) {
+            dto.setProcessingStartedAt(toOffsetDateTime(grpcEvent.getProcessingStartedAt()));
+        }
+        if (grpcEvent.hasRequestId()) {
+            dto.setRequestId(grpcEvent.getRequestId());
+        }
+        dto.setServiceKey(grpcEvent.getServiceKey());
+        dto.setReason(grpcEvent.getReason());
+        return dto;
+    }
+
+    private ProblematicEventCountsByServiceDto toRestProblematicEventCountsByServiceDto(
+            ProblematicEventCountsByService grpcCounts) {
+        ProblematicEventCountsByServiceDto dto = new ProblematicEventCountsByServiceDto();
+        dto.setServiceKey(grpcCounts.getServiceKey());
+        dto.setOverdueNewCount(grpcCounts.getOverdueNewCount());
+        dto.setStuckProcessingCount(grpcCounts.getStuckProcessingCount());
+        dto.setFailedCount(grpcCounts.getFailedCount());
+        return dto;
+    }
+
+    /**
      * Преобразует gRPC Row → Map<String, Object>
      */
     private Map<String, Object> rowToMap(Row grpcRow) {
@@ -152,6 +219,11 @@ public class AdminDataMapper {
             map.put(entry.getKey(), convertValue(entry.getValue()));
         }
         return map;
+    }
+
+    private OffsetDateTime toOffsetDateTime(Timestamp timestamp) {
+        return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
+                .atOffset(ZoneOffset.UTC);
     }
 
     /**

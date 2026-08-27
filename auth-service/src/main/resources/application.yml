@@ -33,7 +33,7 @@ app:
       recovery-interval: ${AUTH_KAFKA_OUTBOX_RECOVERY_INTERVAL:10s}
       batch-size: ${AUTH_KAFKA_OUTBOX_BATCH_SIZE:100}
       max-attempts: ${AUTH_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
-      processing-timeout: ${AUTH_KAFKA_PROCESSING_TIMEOUT:5m}
+      processing-timeout: ${AUTH_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
 
 management:
   endpoints:

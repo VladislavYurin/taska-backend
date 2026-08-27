@@ -15,12 +15,15 @@ import reactor.test.StepVerifier;
 import ru.taska.api.admin.v1.Catalog;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.mapper.AdminDataMapper;
 
@@ -40,7 +43,7 @@ class GrpcAdminServiceClientTest {
     private static final String NODE_ID = "test-node-id";
 
     @Mock
-    private ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub;
+    private ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub adminServiceStub;
 
     @Mock
     private AdminDataMapper mapper;
@@ -109,6 +112,88 @@ class GrpcAdminServiceClientTest {
         GetCatalogRequest request = captor.getValue();
         Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
         Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+    }
+
+    // ==================== ТЕСТЫ listTableRows ====================
+
+    // ==================== ТЕСТЫ getProblematicOutboxEventsSummary ====================
+
+    @Test
+    @DisplayName("Должен вызвать gRPC getProblematicOutboxEventsSummary без serviceKey и вернуть отмапленный ответ")
+    void shouldGetProblematicOutboxEventsSummary_withoutServiceKey() {
+        // given
+        GatewayContext context = createContext();
+
+        GetProblematicOutboxEventsSummaryResponse grpcResponse =
+                GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+        ProblematicOutboxEventsSummaryResponseDto restResponse = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestProblematicOutboxEventsSummaryResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(null, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<GetProblematicOutboxEventsSummaryRequest> captor =
+                ArgumentCaptor.forClass(GetProblematicOutboxEventsSummaryRequest.class);
+        Mockito.verify(adminServiceStub).getProblematicOutboxEventsSummary(captor.capture());
+
+        GetProblematicOutboxEventsSummaryRequest request = captor.getValue();
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().hasServiceKey()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC getProblematicOutboxEventsSummary с serviceKey и вернуть отмапленный ответ")
+    void shouldGetProblematicOutboxEventsSummary_withServiceKey() {
+        // given
+        GatewayContext context = createContext();
+
+        GetProblematicOutboxEventsSummaryResponse grpcResponse =
+                GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+        ProblematicOutboxEventsSummaryResponseDto restResponse = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestProblematicOutboxEventsSummaryResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(TEST_SERVICE, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<GetProblematicOutboxEventsSummaryRequest> captor =
+                ArgumentCaptor.forClass(GetProblematicOutboxEventsSummaryRequest.class);
+        Mockito.verify(adminServiceStub).getProblematicOutboxEventsSummary(captor.capture());
+
+        GetProblematicOutboxEventsSummaryRequest request = captor.getValue();
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getServiceKey()).isEqualTo(TEST_SERVICE);
+    }
+
+    @Test
+    @DisplayName("Должен пробросить gRPC ошибку при запросе problematic outbox events summary")
+    void shouldPropagateGrpcError_whenGetProblematicOutboxEventsSummary() {
+        // given
+        GatewayContext context = createContext();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.error(new io.grpc.StatusRuntimeException(io.grpc.Status.UNAVAILABLE)));
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(null, context))
+                .expectError(io.grpc.StatusRuntimeException.class)
+                .verify();
     }
 
     // ==================== ТЕСТЫ listTableRows ====================

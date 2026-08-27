@@ -29,6 +29,7 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.error.GatewayErrorHandler;
@@ -312,6 +313,117 @@ class AdminReadOnlyControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+    }
+
+    // ==================== ТЕСТЫ getProblematicOutboxEventsSummary ====================
+
+    @Test
+    @DisplayName("getProblematicOutboxEventsSummary: должен вернуть сводку и статус 200")
+    void getProblematicOutboxEventsSummary_shouldReturnResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminClient.getProblematicOutboxEventsSummary(
+                        Mockito.isNull(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/api/v1/readonly/outbox/problematic-summary")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(ProblematicOutboxEventsSummaryResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(adminClient).getProblematicOutboxEventsSummary(
+                Mockito.isNull(),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("getProblematicOutboxEventsSummary: должен передать serviceKey как query-параметр")
+    void getProblematicOutboxEventsSummary_shouldPassServiceKeyParam() {
+        mockAuthenticatedUser();
+
+        var response = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminClient.getProblematicOutboxEventsSummary(
+                        Mockito.eq(SERVICE_KEY),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/readonly/outbox/problematic-summary")
+                        .queryParam("serviceKey", SERVICE_KEY)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id");
+
+        Mockito.verify(adminClient).getProblematicOutboxEventsSummary(
+                Mockito.eq(SERVICE_KEY),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("getProblematicOutboxEventsSummary: должен вернуть 503 при недоступном downstream")
+    void getProblematicOutboxEventsSummary_shouldReturn503_whenDownstreamUnavailable() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.getProblematicOutboxEventsSummary(
+                        Mockito.any(), Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/readonly/outbox/problematic-summary")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("getProblematicOutboxEventsSummary: должен вернуть 504 при превышении deadline")
+    void getProblematicOutboxEventsSummary_shouldReturn504_whenDeadlineExceeded() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.getProblematicOutboxEventsSummary(
+                        Mockito.any(), Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/readonly/outbox/problematic-summary")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT)
+                .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("getProblematicOutboxEventsSummary: должен вернуть 401 без Bearer токена")
+    void getProblematicOutboxEventsSummary_shouldReturn401_whenNoBearerToken() {
+        webTestClient.get()
+                .uri("/api/v1/readonly/outbox/problematic-summary")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(adminClient, Mockito.never())
+                .getProblematicOutboxEventsSummary(Mockito.any(), Mockito.any());
     }
 
     // ==================== ОБЩИЕ ТЕСТЫ (authentication, downstream errors) ====================

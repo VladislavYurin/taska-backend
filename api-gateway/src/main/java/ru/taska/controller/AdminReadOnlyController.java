@@ -8,6 +8,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
@@ -26,6 +27,20 @@ public class AdminReadOnlyController implements AdminApi {
 
     private final GatewayRequestExecutor executor;
     private final GrpcAdminServiceClient adminServiceClient;
+
+    /**
+     * GET /api/v1/readonly/outbox/problematic-summary
+     * Возвращает сводку проблемных outbox-событий.
+     */
+    @Override
+    public Mono<ResponseEntity<ProblematicOutboxEventsSummaryResponseDto>> getProblematicOutboxEventsSummary(
+            String serviceKey,
+            ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.getProblematicOutboxEventsSummary(serviceKey, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
 
     /**
      * GET /api/v1/readonly/catalog
