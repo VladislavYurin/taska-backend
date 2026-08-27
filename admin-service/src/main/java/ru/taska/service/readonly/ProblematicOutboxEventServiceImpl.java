@@ -102,7 +102,7 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
      */
     private Mono<ProblematicEventCountDto> countProblematicEvents(String serviceKey, Instant now) {
         OffsetDateTime processingCutoff = computeProcessingCutoff(serviceKey, now);
-        OffsetDateTime newCutoff = computeNewCutoff(serviceKey, now);
+        OffsetDateTime newCutoff = computeNewCutoff(now);
 
         return outboxEventRepository.countProblematicEvents(serviceKey, processingCutoff, newCutoff)
                 .map(row -> ProblematicEventCountDto.builder()
@@ -133,7 +133,7 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
             String requestId,
             String nodeId) {
         OffsetDateTime processingCutoff = computeProcessingCutoff(serviceKey, now);
-        OffsetDateTime newCutoff = computeNewCutoff(serviceKey, now);
+        OffsetDateTime newCutoff = computeNewCutoff(now);
 
         return outboxEventRepository.fetchProblematicEvents(serviceKey, processingCutoff, newCutoff, limit)
                 .collectList()
@@ -177,8 +177,8 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
      * Вычисляет пороговую точку времени для статуса NEW: события, остающиеся
      * в NEW дольше этой точки, считаются просроченными (overdue).
      */
-    private OffsetDateTime computeNewCutoff(String serviceKey, Instant now) {
-        Duration threshold = outboxProperties.overdueNewThresholds().get(serviceKey);
+    private OffsetDateTime computeNewCutoff(Instant now) {
+        Duration threshold = outboxProperties.overdueNewThreshold();
         return OffsetDateTime.ofInstant(now.minus(threshold), ZoneOffset.UTC);
     }
 }

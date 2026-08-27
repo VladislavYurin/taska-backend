@@ -261,7 +261,7 @@ class ProblematicOutboxEventServiceImplTest {
         when(outboxProperties.services()).thenReturn(List.of(SERVICE_A));
         when(outboxProperties.maxProblematicListSize()).thenReturn(MAX_SIZE);
         when(outboxProperties.processingTimeouts()).thenReturn(Map.of(SERVICE_A, processingTimeout));
-        when(outboxProperties.overdueNewThresholds()).thenReturn(Map.of(SERVICE_A, overdueThreshold));
+        when(outboxProperties.overdueNewThreshold()).thenReturn(overdueThreshold);
 
         Map<String, Object> countRow = Map.of("failed_count", 0L, "stuck_count", 0L, "overdue_count", 0L);
         when(outboxEventRepository.countProblematicEvents(eq(SERVICE_A), processingCutoffCaptor.capture(), newCutoffCaptor.capture()))
@@ -373,10 +373,7 @@ class ProblematicOutboxEventServiceImplTest {
                 SERVICE_A, Duration.ofMinutes(5),
                 SERVICE_B, Duration.ofMinutes(5)
         ));
-        when(outboxProperties.overdueNewThresholds()).thenReturn(Map.of(
-                SERVICE_A, Duration.ofMinutes(10),
-                SERVICE_B, Duration.ofMinutes(10)
-        ));
+        when(outboxProperties.overdueNewThreshold()).thenReturn(Duration.ofMinutes(10));
     }
 
     private void stubCountsForAllServices() {
@@ -430,7 +427,7 @@ class ProblematicOutboxEventServiceImplTest {
         when(outboxProperties.services()).thenReturn(List.of(serviceKey));
         when(outboxProperties.maxProblematicListSize()).thenReturn(maxSize);
         when(outboxProperties.processingTimeouts()).thenReturn(Map.of(serviceKey, Duration.ofMinutes(5)));
-        when(outboxProperties.overdueNewThresholds()).thenReturn(Map.of(serviceKey, Duration.ofMinutes(10)));
+        when(outboxProperties.overdueNewThreshold()).thenReturn(Duration.ofMinutes(10));
     }
 
     private void stubCountsForService(String serviceKey) {

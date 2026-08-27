@@ -25,12 +25,14 @@ spring:
 # На стенде/проде должны быть отдельные RO users (только SELECT).
 admin:
   # Настройки Outbox-мониторинга.
-  # processing-timeouts и overdue-new-thresholds ссылаются на те же переменные
-  # окружения, что задают пороги в самих сервисах (auth, project, issue).
+  # processing-timeouts ссылаются на те же переменные окружения,
+  # что задают пороги в самих сервисах (auth, project, issue).
   # Это сделано намеренно: admin-service должен считать событие «застрявшим»
   # по тем же критериям, которые использует сервис-производитель.
   # Если порог в сервисе изменится, admin-service автоматически подхватит
   # новое значение — без ручной синхронизации конфигов.
+  # overdue-new-threshold — единый порог для всех сервисов: если событие
+  # остаётся в статусе NEW дольше этого времени, оно считается просроченным.
   outbox:
     services:
       - auth
@@ -41,10 +43,7 @@ admin:
       auth: ${AUTH_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
       project: ${PROJECT_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
       issue: ${ISSUE_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
-    overdue-new-thresholds:
-      auth: ${AUTH_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
-      project: ${PROJECT_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
-      issue: ${ISSUE_OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
+    overdue-new-threshold: ${OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
   readonly:
     auth:
       url: ${ADMIN_RO_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
