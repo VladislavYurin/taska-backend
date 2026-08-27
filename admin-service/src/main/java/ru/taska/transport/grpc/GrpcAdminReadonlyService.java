@@ -22,6 +22,9 @@ import ru.taska.service.ProblematicOutboxEventService;
 import ru.taska.annotation.TrackMetrics;
 import validator.GrpcRequestValidators;
 
+import static ru.taska.transport.grpc.logging.GrpcAdminLogging.logOnError;
+import static ru.taska.transport.grpc.logging.GrpcAdminLogging.logValidationError;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -46,13 +49,20 @@ public class GrpcAdminReadonlyService {
                                 req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getNodeId(), "header.nodeId")
-                ).flatMap(t -> {
+                ).doOnError(logValidationError(
+                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getCatalog"
+                )).flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     log.info("[{}][{}] getCatalog", requestId, nodeId);
 
                     return metadataService.getCatalog()
-                            .map(mapper::toGetCatalogResponse);
+                            .map(mapper::toGetCatalogResponse)
+                            .doOnSuccess(result ->
+                                    log.info("[{}][{}] getCatalog: successfully retrieved catalog",
+                                            requestId, nodeId)
+                            )
+                            .doOnError(logOnError(requestId, nodeId, "getCatalog"));
                 }));
     }
 
@@ -74,7 +84,9 @@ public class GrpcAdminReadonlyService {
                                 req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getNodeId(), "header.nodeId")
-                ).flatMap(t -> {
+                ).doOnError(logValidationError(
+                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listTableRows"
+                )).flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
 
@@ -91,7 +103,12 @@ public class GrpcAdminReadonlyService {
 
                     // Бизнес-логика
                     return adminReadonlyService.listTableRows(requestDto, requestId, nodeId)
-                            .map(listTableRowsMapper::toListTableRowsResponse);
+                            .map(listTableRowsMapper::toListTableRowsResponse)
+                            .doOnSuccess(result ->
+                                    log.info("[{}][{}] listTableRows: successfully found {} rows",
+                                            requestId, nodeId, result != null ? result.getRowsCount() : 0)
+                            )
+                            .doOnError(logOnError(requestId, nodeId, "listTableRows"));
                 }));
     }
 
@@ -107,7 +124,9 @@ public class GrpcAdminReadonlyService {
                                 req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getNodeId(), "header.nodeId")
-                ).flatMap(t -> {
+                ).doOnError(logValidationError(
+                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getTableRowById"
+                )).flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
 
@@ -118,7 +137,15 @@ public class GrpcAdminReadonlyService {
                             req.getBody().getId());
 
                     return adminReadonlyService.getTableRowById(listTableRowsMapper.toGetByIdRequestDto(req), requestId, nodeId)
-                            .map(listTableRowsMapper::toGetTableRowByIdResponse);
+                            .map(listTableRowsMapper::toGetTableRowByIdResponse)
+                            .doOnSuccess(result ->
+                                    log.info("[{}][{}] getTableRowById: successfully found row, service={}, table={}, id={}",
+                                            requestId, nodeId,
+                                            req.getBody().getServiceKey(),
+                                            req.getBody().getTableName(),
+                                            req.getBody().getId())
+                            )
+                            .doOnError(logOnError(requestId, nodeId, "getTableRowById"));
                 }));
     }
 
@@ -134,7 +161,9 @@ public class GrpcAdminReadonlyService {
                                 req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getNodeId(), "header.nodeId")
-                ).flatMap(t -> {
+                ).doOnError(logValidationError(
+                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getProblematicOutboxEventsSummary"
+                )).flatMap(t -> {
                     String requestId = t.getT1();
                     String nodeId = t.getT2();
                     String serviceKey = req.getBody().hasServiceKey() ? req.getBody().getServiceKey() : null;
@@ -142,7 +171,12 @@ public class GrpcAdminReadonlyService {
                     log.info("[{}][{}] getProblematicOutboxEventsSummary: serviceKey={}", requestId, nodeId, serviceKey);
 
                     return problematicOutboxEventService.getProblematicOutboxEventsSummary(serviceKey, requestId, nodeId)
-                            .map(problematicOutboxEventMapper::toProto);
+                            .map(problematicOutboxEventMapper::toProto)
+                            .doOnSuccess(result ->
+                                    log.info("[{}][{}] getProblematicOutboxEventsSummary: successfully retrieved summary",
+                                            requestId, nodeId)
+                            )
+                            .doOnError(logOnError(requestId, nodeId, "getProblematicOutboxEventsSummary"));
                 }));
     }
 }

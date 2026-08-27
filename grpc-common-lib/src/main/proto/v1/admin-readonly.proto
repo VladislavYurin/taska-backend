@@ -9,18 +9,35 @@ option java_multiple_files = true;
 option java_package = "ru.taska.api.admin.v1";
 option java_outer_classname = "AdminApiProto";
 
+/**
+ * Административный readonly-сервис для просмотра метаданных, данных таблиц
+ * и мониторинга проблемных outbox-событий.
+ */
 service AdminReadonlyService {
 
+  /**
+   * Возвращает каталог метаданных всех сервисов (таблицы, колонки, типы).
+   */
   rpc GetCatalog(GetCatalogRequest) returns (GetCatalogResponse);
 
+  /**
+   * Возвращает список строк таблицы с пагинацией, сортировкой и фильтрацией.
+   */
   rpc ListTableRows(ListTableRowsRequest) returns (ListTableRowsResponse);
 
+  /**
+   * Возвращает одну строку таблицы по первичному ключу.
+   */
   rpc GetTableRowById(GetTableRowByIdRequest) returns (GetTableRowByIdResponse);
 
+  /**
+   * Возвращает сводку по проблемным outbox-событиям: список событий и счётчики по сервисам.
+   */
   rpc GetProblematicOutboxEventsSummary(GetProblematicOutboxEventsSummaryRequest) returns (GetProblematicOutboxEventsSummaryResponse);
 }
 
 message GetCatalogRequest {
+  /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetCatalogRequestBody body = 2;
 }
@@ -32,13 +49,21 @@ message GetCatalogRequestBody {
 }
 
 message GetCatalogResponse {
+  /** Каталог метаданных всех зарегистрированных сервисов. */
   Catalog catalog = 1;
 }
 
+/**
+ * Каталог: набор сервисов с описанием их таблиц и колонок.
+ */
 message Catalog {
+  /** Список сервисов с метаданными таблиц. */
   repeated ServiceMetadata services = 1;
 }
 
+/**
+ * Метаданные одного сервиса: ключ, alias и список доступных таблиц.
+ */
 message ServiceMetadata {
   /**
    * Ключ сервиса из конфига:
@@ -51,20 +76,31 @@ message ServiceMetadata {
    */
   string alias = 2;
 
+  /** Список таблиц сервиса с метаданными колонок. */
   repeated TableMetadata tables = 3;
 }
 
+/**
+ * Метаданные таблицы: имя и список колонок.
+ */
 message TableMetadata {
+  /** Имя таблицы в БД. */
   string name = 1;
+  /** Список колонок таблицы. */
   repeated ColumnMetadata columns = 2;
 }
 
+/**
+ * Метаданные одной колонки таблицы.
+ */
 message ColumnMetadata {
+  /** Имя колонки. */
   string name = 1;
   /**
    * Тип из information_schema.columns.data_type.
    */
   string type = 2;
+  /** true, если колонка входит в первичный ключ. */
   bool primary_key = 3;
   /**
    * true, если колонка указана в sensitive-columns конфига.
@@ -73,108 +109,178 @@ message ColumnMetadata {
 }
 
 message ListTableRowsRequest {
+  /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   ListTableRowsRequestBody body = 2;
 }
 
 message ListTableRowsRequestBody {
+  /** Ключ сервиса (auth, project, issue и т.д.). */
   string service_key = 1;
+  /** Имя таблицы. */
   string table_name = 2;
+  /** Номер страницы (начиная с 0). */
   optional int32 page = 3;
+  /** Размер страницы. */
   optional int32 page_size = 4;
+  /** Имя колонки для сортировки. */
   optional string sort = 5;
+  /** Направление сортировки: asc / desc. */
   optional string order = 6;
+  /** Фильтры: имя колонки → значение. */
   map<string, string> filters = 7;
 }
 
 message ListTableRowsResponse {
+  /** Строки таблицы. */
   repeated Row rows = 1;
+  /** Информация о пагинации. */
   PaginationInfo pagination = 2;
+  /** Метаинформация о таблице (колонки, сортируемые/фильтруемые поля). */
   MetaInfo meta = 3;
 }
 
+/**
+ * Строка таблицы: набор пар «имя колонки → значение».
+ */
 message Row {
   map<string, Value> fields = 1;
 }
 
+/**
+ * Универсальное значение ячейки таблицы.
+ */
 message Value {
   oneof kind {
     string string_value = 1;
     int64 int_value = 2;
     double double_value = 3;
     bool bool_value = 4;
+    /** Timestamp в виде epoch millis. */
     int64 timestamp_value = 5;
+    /** true означает SQL NULL. */
     bool null_value = 6;
   }
 }
 
+/**
+ * Информация о пагинации.
+ */
 message PaginationInfo {
+  /** Текущая страница. */
   int32 current_page = 1;
+  /** Размер страницы. */
   int32 page_size = 2;
+  /** Общее количество строк. */
   int64 total_rows = 3;
+  /** Общее количество страниц. */
   int32 total_pages = 4;
+  /** Есть ли следующая страница. */
   bool has_next = 5;
+  /** Есть ли предыдущая страница. */
   bool has_prev = 6;
 }
 
 message GetTableRowByIdRequest {
+  /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetTableRowByIdRequestBody body = 2;
 }
 
 message GetTableRowByIdRequestBody {
+  /** Ключ сервиса. */
   string service_key = 1;
+  /** Имя таблицы. */
   string table_name = 2;
+  /** Значение первичного ключа. */
   string id = 3;
 }
 
 message GetTableRowByIdResponse {
+  /** Найденная строка. */
   Row row = 1;
 }
 
 message GetProblematicOutboxEventsSummaryRequest {
+  /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetProblematicOutboxEventsSummaryRequestBody body = 2;
 }
 
 message GetProblematicOutboxEventsSummaryRequestBody {
+  /** Фильтр по сервису. Если не указан — возвращаются события по всем сервисам. */
   optional string service_key = 1;
 }
 
 message GetProblematicOutboxEventsSummaryResponse {
+  /** Список проблемных outbox-событий (ограничен по размеру, см. not_all_shown). */
   repeated ProblematicOutboxEventDto events = 1;
+  /** Счётчики проблемных событий в разбивке по сервисам (всегда по всем сервисам). */
   repeated ProblematicEventCountsByService counts = 2;
+  /** true, если список events обрезан и показаны не все проблемные события. */
   bool not_all_shown = 3;
 }
 
+/**
+ * Счётчики проблемных outbox-событий для одного сервиса.
+ */
 message ProblematicEventCountsByService {
+  /** Ключ сервиса. */
   string service_key = 1;
+  /** Количество событий в статусе NEW, не обработанных вовремя. */
   int64 overdue_new_count = 2;
+  /** Количество событий, застрявших в статусе PROCESSING. */
   int64 stuck_processing_count = 3;
+  /** Количество событий в статусе FAILED. */
   int64 failed_count = 4;
 }
 
+/**
+ * Проблемное outbox-событие с указанием причины.
+ */
 message ProblematicOutboxEventDto {
+  /** Идентификатор события. */
   string id = 1;
+  /** Тип агрегата (например, Issue, Project). */
   string aggregate_type = 2;
+  /** Идентификатор агрегата. */
   string aggregate_id = 3;
+  /** Тип события (например, ISSUE_CREATED). */
   string event_type = 4;
+  /** Полезная нагрузка события (JSON). Чувствительные поля маскируются. */
   string payload = 5;
+  /** Текущий статус события (NEW, PROCESSING, FAILED). */
   string status = 6;
+  /** Время создания события. */
   google.protobuf.Timestamp created_at = 7;
+  /** Время публикации события (если было опубликовано). */
   optional google.protobuf.Timestamp published_at = 8;
+  /** Количество попыток обработки. */
   int32 attempts = 9;
+  /** Сообщение последней ошибки обработки. */
   optional string last_error_message = 10;
+  /** Время начала последней обработки. */
   optional google.protobuf.Timestamp processing_started_at = 11;
+  /** Идентификатор запроса, создавшего событие. */
   optional string request_id = 12;
+  /** Ключ сервиса, которому принадлежит событие. */
   string service_key = 13;
+  /** Человекочитаемая причина, почему событие считается проблемным. */
   string reason = 14;
 }
 
+/**
+ * Метаинформация о таблице: какие колонки доступны, какие сортируемые и фильтруемые.
+ */
 message MetaInfo {
+  /** Ключ сервиса. */
   string service_key = 1;
+  /** Имя таблицы. */
   string table_name = 2;
+  /** Все колонки таблицы. */
   repeated string columns = 3;
+  /** Колонки, по которым можно сортировать. */
   repeated string sortable_columns = 4;
+  /** Колонки, по которым можно фильтровать. */
   repeated string filterable_columns = 5;
 }

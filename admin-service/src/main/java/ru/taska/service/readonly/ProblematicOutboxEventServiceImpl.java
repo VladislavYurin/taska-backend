@@ -15,10 +15,6 @@ import ru.taska.mapper.ProblematicOutboxEventMapper;
 import ru.taska.repository.ProblematicOutboxEventRepository;
 import ru.taska.service.ProblematicOutboxEventService;
 
-import static ru.taska.repository.ProblematicOutboxEventRepository.COL_FAILED_COUNT;
-import static ru.taska.repository.ProblematicOutboxEventRepository.COL_OVERDUE_COUNT;
-import static ru.taska.repository.ProblematicOutboxEventRepository.COL_STUCK_COUNT;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -26,6 +22,10 @@ import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+
+import static ru.taska.repository.ProblematicOutboxEventRepository.COL_FAILED_COUNT;
+import static ru.taska.repository.ProblematicOutboxEventRepository.COL_OVERDUE_COUNT;
+import static ru.taska.repository.ProblematicOutboxEventRepository.COL_STUCK_COUNT;
 
 @Slf4j
 @Service
@@ -39,13 +39,22 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
     private final ProblematicOutboxEventMapper problematicOutboxEventMapper;
     private final SensitiveDataMaskService maskService;
 
+    private static final String COL_STATUS = "status";
+    private static final String COL_ID = "id";
+
+    private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_PROCESSING = "PROCESSING";
+    private static final String STATUS_NEW = "NEW";
+
     private static final String REASON_FAILED = "Event processing failed";
     private static final String REASON_STUCK_PROCESSING = "Event stuck in PROCESSING state (exceeded processing timeout)";
     private static final String REASON_OVERDUE_NEW = "Event stuck in NEW state (not picked up for processing)";
 
     @Override
     public Mono<GetProblematicOutboxEventsSummaryResponseDto> getProblematicOutboxEventsSummary(
-            String serviceKey, String requestId, String nodeId) {
+            String serviceKey,
+            String requestId,
+            String nodeId) {
         return Mono.defer(() -> {
             List<String> outboxServices = outboxProperties.services();
             int maxSize = outboxProperties.maxProblematicListSize();
@@ -66,7 +75,8 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
                     .collectList();
 
             Mono<List<ProblematicOutboxEventResponseDto>> eventsMono = Flux.fromIterable(targetServices)
-                    // +1, чтобы определить, есть ли ещё записи сверх лимита (для notAllShown)
+                    // Запрашиваем на 1 больше лимита: если вернётся maxSize+1 записей,
+                    // значит есть ещё не показанные — выставляем флаг notAllShown в ответе
                     .flatMap(sk -> fetchProblematicEvents(sk, now, maxSize + 1, requestId, nodeId))
                     .collectSortedList(Comparator.comparing(ProblematicOutboxEventResponseDto::createdAt));
 
@@ -85,22 +95,43 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
         });
     }
 
+    /**
+     * Подсчитывает количество проблемных событий в разбивке по категориям (overdue, stuck, failed)
+     * для указанного сервиса. Счётчики всегда возвращаются по всем сервисам независимо от фильтра,
+     * чтобы дать общую картину состояния системы.
+     */
     private Mono<ProblematicEventCountDto> countProblematicEvents(String serviceKey, Instant now) {
         OffsetDateTime processingCutoff = computeProcessingCutoff(serviceKey, now);
         OffsetDateTime newCutoff = computeNewCutoff(serviceKey, now);
 
         return outboxEventRepository.countProblematicEvents(serviceKey, processingCutoff, newCutoff)
-                .map(row -> new ProblematicEventCountDto(
-                        serviceKey,
-                        ((Number) row.get(COL_OVERDUE_COUNT)).longValue(),
-                        ((Number) row.get(COL_STUCK_COUNT)).longValue(),
-                        ((Number) row.get(COL_FAILED_COUNT)).longValue()
-                ))
-                .defaultIfEmpty(new ProblematicEventCountDto(serviceKey, 0, 0, 0));
+                .map(row -> ProblematicEventCountDto.builder()
+                        .serviceKey(serviceKey)
+                        .overdueNewCount(((Number) row.get(COL_OVERDUE_COUNT)).longValue())
+                        .stuckProcessingCount(((Number) row.get(COL_STUCK_COUNT)).longValue())
+                        .failedCount(((Number) row.get(COL_FAILED_COUNT)).longValue())
+                        .build())
+                .defaultIfEmpty(ProblematicEventCountDto.builder()
+                        .serviceKey(serviceKey)
+                        .overdueNewCount(0)
+                        .stuckProcessingCount(0)
+                        .failedCount(0)
+                        .build());
     }
 
+    /**
+     * Загружает проблемные события для указанного сервиса с маскировкой чувствительных данных.
+     * Результат маппится в DTO с указанием причины проблемности (failed / stuck / overdue).
+     *
+     * @param limit запрашиваемое количество записей (обычно {@code maxSize + 1},
+     *              чтобы определить наличие записей сверх лимита)
+     */
     private Flux<ProblematicOutboxEventResponseDto> fetchProblematicEvents(
-            String serviceKey, Instant now, int limit, String requestId, String nodeId) {
+            String serviceKey,
+            Instant now,
+            int limit,
+            String requestId,
+            String nodeId) {
         OffsetDateTime processingCutoff = computeProcessingCutoff(serviceKey, now);
         OffsetDateTime newCutoff = computeNewCutoff(serviceKey, now);
 
@@ -111,28 +142,41 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
                 .map(row -> problematicOutboxEventMapper.toDto(row, serviceKey, determineReason(row)));
     }
 
+    /**
+     * Определяет человекочитаемую причину, по которой событие считается проблемным,
+     * на основе его статуса. Если статус не соответствует ни одной из ожидаемых категорий —
+     * это ошибка в SQL-запросе, и метод выбрасывает исключение.
+     */
     private String determineReason(Map<String, Object> row) {
-        String status = (String) row.get("status");
-        if ("FAILED".equals(status)) {
+        String status = (String) row.get(COL_STATUS);
+        if (STATUS_FAILED.equals(status)) {
             return REASON_FAILED;
         }
-        if ("PROCESSING".equals(status)) {
+        if (STATUS_PROCESSING.equals(status)) {
             return REASON_STUCK_PROCESSING;
         }
-        if ("NEW".equals(status)) {
+        if (STATUS_NEW.equals(status)) {
             return REASON_OVERDUE_NEW;
         }
-        log.error("Outbox event id={} with status '{}' is not problematic, but was returned by the query", row.get("id"), status);
+        log.error("Outbox event id={} with status '{}' is not problematic, but was returned by the query", row.get(COL_ID), status);
         throw new DomainException(
                 DomainStatus.INTERNAL,
-                "Outbox event id=" + row.get("id") + " with status '" + status + "' is not problematic");
+                "Outbox event id=" + row.get(COL_ID) + " with status '" + status + "' is not problematic");
     }
 
+    /**
+     * Вычисляет пороговую точку времени для статуса PROCESSING: события, перешедшие
+     * в PROCESSING раньше этой точки, считаются застрявшими (stuck).
+     */
     private OffsetDateTime computeProcessingCutoff(String serviceKey, Instant now) {
         Duration timeout = outboxProperties.processingTimeouts().get(serviceKey);
         return OffsetDateTime.ofInstant(now.minus(timeout), ZoneOffset.UTC);
     }
 
+    /**
+     * Вычисляет пороговую точку времени для статуса NEW: события, остающиеся
+     * в NEW дольше этой точки, считаются просроченными (overdue).
+     */
     private OffsetDateTime computeNewCutoff(String serviceKey, Instant now) {
         Duration threshold = outboxProperties.overdueNewThresholds().get(serviceKey);
         return OffsetDateTime.ofInstant(now.minus(threshold), ZoneOffset.UTC);

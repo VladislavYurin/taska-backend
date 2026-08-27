@@ -34,7 +34,7 @@ public class GrpcAdminServiceClient {
     private final AdminDataMapper mapper;
     private final GrpcClientProperties properties;
 
-    public Mono<MetadataResponse> getCatalog(GatewayContext context){
+    public Mono<MetadataResponse> getCatalog(GatewayContext context) {
 
         log.debug("[{}] Calling getCatalog", context.requestId());
 
@@ -61,10 +61,10 @@ public class GrpcAdminServiceClient {
                 .setServiceKey(service)
                 .setTableName(table);
 
-        if (page != null)     bodyBuilder.setPage(page);
+        if (page != null) bodyBuilder.setPage(page);
         if (pageSize != null) bodyBuilder.setPageSize(pageSize);
-        if (sort != null)     bodyBuilder.setSort(sort);
-        if (order != null)    bodyBuilder.setOrder(order);
+        if (sort != null) bodyBuilder.setSort(sort);
+        if (order != null) bodyBuilder.setOrder(order);
         if (filters != null && !filters.isEmpty()) bodyBuilder.putAllFilters(filters);
 
         ListTableRowsRequestBody listTableRowsRequestBody = bodyBuilder.build();
@@ -107,13 +107,13 @@ public class GrpcAdminServiceClient {
     ) {
         log.debug("[{}] Calling getProblematicOutboxEventsSummary", context.requestId());
 
-        GetProblematicOutboxEventsSummaryRequestBody.Builder bodyBuilder =
+        var bodyBuilder =
                 GetProblematicOutboxEventsSummaryRequestBody.newBuilder();
         if (serviceKey != null) {
             bodyBuilder.setServiceKey(serviceKey);
         }
 
-        GetProblematicOutboxEventsSummaryRequest request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
+        var request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
                 .setHeader(buildGrpcHeader(context))
                 .setBody(bodyBuilder.build())
                 .build();

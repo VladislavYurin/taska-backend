@@ -39,22 +39,22 @@ public class ProblematicOutboxEventMapper {
      * Маппинг строки из таблицы outbox_events в DTO.
      */
     public ProblematicOutboxEventResponseDto toDto(Map<String, Object> row, String serviceKey, String reason) {
-        return new ProblematicOutboxEventResponseDto(
-                row.get(COL_ID).toString(),
-                (String) row.get(COL_AGGREGATE_TYPE),
-                row.get(COL_AGGREGATE_ID).toString(),
-                (String) row.get(COL_EVENT_TYPE),
-                extractPayload(row.get(COL_PAYLOAD)),
-                (String) row.get(COL_STATUS),
-                toInstant(row.get(COL_CREATED_AT)),
-                toInstant(row.get(COL_PUBLISHED_AT)),
-                ((Number) row.get(COL_ATTEMPTS)).intValue(),
-                (String) row.get(COL_LAST_ERROR_MESSAGE),
-                toInstant(row.get(COL_PROCESSING_STARTED_AT)),
-                (String) row.get(COL_REQUEST_ID),
-                serviceKey,
-                reason
-        );
+        return ProblematicOutboxEventResponseDto.builder()
+                .id(row.get(COL_ID).toString())
+                .aggregateType((String) row.get(COL_AGGREGATE_TYPE))
+                .aggregateId(row.get(COL_AGGREGATE_ID).toString())
+                .eventType((String) row.get(COL_EVENT_TYPE))
+                .payload(extractPayload(row.get(COL_PAYLOAD)))
+                .status((String) row.get(COL_STATUS))
+                .createdAt(toInstant(row.get(COL_CREATED_AT)))
+                .publishedAt(toInstant(row.get(COL_PUBLISHED_AT)))
+                .attempts(((Number) row.get(COL_ATTEMPTS)).intValue())
+                .lastErrorMessage((String) row.get(COL_LAST_ERROR_MESSAGE))
+                .processingStartedAt(toInstant(row.get(COL_PROCESSING_STARTED_AT)))
+                .requestId((String) row.get(COL_REQUEST_ID))
+                .serviceKey(serviceKey)
+                .reason(reason)
+                .build();
     }
 
     private String extractPayload(Object value) {
