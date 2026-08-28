@@ -52,7 +52,7 @@ public class IssueMapper {
     }
 
     public IssueResponse toIssueProto(Issue issue) {
-        return IssueResponse.newBuilder()
+        IssueResponse.Builder builder =  IssueResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setProjectId(issue.getProjectId().toString())
                 .setIssueNumber(issue.getIssueNumber())
@@ -66,8 +66,25 @@ public class IssueMapper {
                 .setReporterId(issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
-                .setVersion(issue.getVersion())
-                .build();
+                .setVersion(issue.getVersion());
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(issue.getStartDate().toString());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(issue.getDueDate().toString());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
+
+        return builder.build();
     }
 
     public IssueResponse toIssueProto(Issue issue, IssueWatchStateDto watchState) {
@@ -153,14 +170,19 @@ public class IssueMapper {
     }
 
     public IssueShortResponse toIssueShortProto(Issue issue) {
-        return IssueShortResponse.newBuilder()
+        IssueShortResponse.Builder builder = IssueShortResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .build();
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "");
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+
+        return builder.build();
     }
 
     /**
@@ -184,12 +206,29 @@ public class IssueMapper {
     }
 
     public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
-        return UpdateIssueResponse.newBuilder()
+        UpdateIssueResponse.Builder builder = UpdateIssueResponse.newBuilder()
                 .setUpdatedIssueId(issue.getId().toString())
                 .setSummary(issue.getSummary())
                 .setDescription(issue.getDescription())
-                .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .build();
+                .setPriority(toProtoIssuePriority(issue.getPriority()));
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(issue.getStartDate().toString());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(issue.getDueDate().toString());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
+
+        return builder.build();
     }
 
     public IssueLinkResponse toIssueLinkProto(IssueLink link, UUID issueId) {
@@ -360,6 +399,13 @@ public class IssueMapper {
         setOptionalUuidField(issue::setReporterId, row.get("reporter_id", String.class));
 
         issue.setVersion(row.get("version", Integer.class));
+
+        // Planning fields
+        issue.setStoryPoints(row.get("story_points", java.math.BigDecimal.class));
+        issue.setStartDate(row.get("start_date", java.time.LocalDate.class));
+        issue.setDueDate(row.get("due_date", java.time.LocalDate.class));
+        issue.setOriginalEstimateMinutes(row.get("original_estimate_minutes", Integer.class));
+        issue.setRemainingEstimateMinutes(row.get("remaining_estimate_minutes", Integer.class));
 
         // Даты
         setOptionalInstantField(issue::setCreatedAt, row.get("created_at", java.time.OffsetDateTime.class));

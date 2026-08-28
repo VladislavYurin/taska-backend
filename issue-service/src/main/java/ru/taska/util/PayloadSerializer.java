@@ -1,5 +1,10 @@
 package ru.taska.util;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Issue;
@@ -11,9 +16,6 @@ import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
-
-import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Создает {@link JsonNode} с фактически изменившимися данными задачи.
@@ -51,6 +53,16 @@ public class PayloadSerializer {
     private static final String WATCHER_USER_ID = "watcherUserId";
     private static final String ACTOR_USER_ID = "actorUserId";
     private static final String LABEL_NAME = "labelName";
+    private static final String OLD_STORY_POINTS = "oldStoryPoints";
+    private static final String NEW_STORY_POINTS = "newStoryPoints";
+    private static final String OLD_START_DATE = "oldStartDate";
+    private static final String NEW_START_DATE = "newStartDate";
+    private static final String OLD_DUE_DATE = "oldDueDate";
+    private static final String NEW_DUE_DATE = "newDueDate";
+    private static final String OLD_ORIGINAL_ESTIMATE_MINUTES = "oldOriginalEstimateMinutes";
+    private static final String NEW_ORIGINAL_ESTIMATE_MINUTES = "newOriginalEstimateMinutes";
+    private static final String OLD_REMAINING_ESTIMATE_MINUTES = "oldRemainingEstimateMinutes";
+    private static final String NEW_REMAINING_ESTIMATE_MINUTES = "newRemainingEstimateMinutes";
 
     private final ObjectMapper objectMapper;
 
@@ -101,11 +113,19 @@ public class PayloadSerializer {
      * @param newPriority    новый приоритет задачи.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription, IssuePriority newPriority) {
-        if (newSummary.equals(issue.getSummary()) &&
-                newDescription.equals(issue.getDescription()) &&
-                newPriority.equals(issue.getPriority())) {
+    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription, IssuePriority newPriority,
+            BigDecimal storyPoints, LocalDate startDate, LocalDate dueDate, Integer originalEstimateMinutes, Integer remainingEstimateMinutes) {
 
+        boolean nothingChanged = newSummary.equals(issue.getSummary())
+                && newDescription.equals(issue.getDescription())
+                && newPriority.equals(issue.getPriority())
+                && Objects.equals(storyPoints, issue.getStoryPoints())
+                && Objects.equals(startDate, issue.getStartDate())
+                && Objects.equals(dueDate, issue.getDueDate())
+                && Objects.equals(originalEstimateMinutes, issue.getOriginalEstimateMinutes())
+                && Objects .equals(remainingEstimateMinutes, issue.getRemainingEstimateMinutes());
+
+        if (nothingChanged) {
             return objectMapper.createObjectNode();
         }
 
@@ -127,14 +147,87 @@ public class PayloadSerializer {
             node.put(OLD_SUMMARY, issue.getSummary());
             node.put(NEW_SUMMARY, newSummary);
         }
+
         if (!newDescription.equals(issue.getDescription())) {
             node.put(OLD_DESCRIPTION, issue.getDescription());
             node.put(NEW_DESCRIPTION, newDescription);
         }
+
         if (!newPriority.equals(issue.getPriority())) {
             node.put(OLD_PRIORITY, issue.getPriority().toString());
             node.put(NEW_PRIORITY, newPriority.toString());
         }
+
+        if (!Objects.equals(storyPoints, issue.getStoryPoints())) {
+            if (issue.getStoryPoints() != null) {
+                node.put(OLD_STORY_POINTS, issue.getStoryPoints());
+            } else {
+                node.putNull(OLD_STORY_POINTS);
+            }
+
+            if (storyPoints != null) {
+                node.put(NEW_STORY_POINTS, storyPoints);
+            } else {
+                node.putNull(NEW_STORY_POINTS);
+            }
+
+        };
+
+        if (!Objects.equals(startDate, issue.getStartDate())) {
+            if (issue.getStartDate() != null) {
+                node.put(OLD_START_DATE, issue.getStartDate().toString());
+            } else {
+                node.putNull(OLD_START_DATE);
+            }
+
+            if (startDate != null) {
+                node.put(NEW_START_DATE, startDate.toString());
+            } else {
+                node.putNull(NEW_START_DATE);
+            }
+        };
+
+        if (!Objects.equals(dueDate, issue.getDueDate())) {
+            if (issue.getDueDate() != null) {
+                node.put(OLD_DUE_DATE, issue.getDueDate().toString());
+            } else {
+                node.putNull(OLD_DUE_DATE);
+            }
+
+            if (dueDate != null) {
+                node.put(NEW_DUE_DATE, dueDate.toString());
+            } else {
+                node.putNull(NEW_DUE_DATE);
+            }
+        };
+
+        if (!Objects.equals(originalEstimateMinutes, issue.getOriginalEstimateMinutes())) {
+            if (issue.getOriginalEstimateMinutes() != null) {
+                node.put(OLD_ORIGINAL_ESTIMATE_MINUTES, issue.getOriginalEstimateMinutes());
+            } else {
+                node.putNull(OLD_ORIGINAL_ESTIMATE_MINUTES);
+            }
+
+            if (originalEstimateMinutes != null) {
+                node.put(NEW_ORIGINAL_ESTIMATE_MINUTES, originalEstimateMinutes);
+            } else {
+                node.putNull(NEW_ORIGINAL_ESTIMATE_MINUTES);
+            }
+        };
+
+        if (!Objects .equals(remainingEstimateMinutes, issue.getRemainingEstimateMinutes())) {
+            if (issue.getRemainingEstimateMinutes() != null) {
+                node.put(OLD_REMAINING_ESTIMATE_MINUTES, issue.getRemainingEstimateMinutes());
+            } else {
+                node.putNull(OLD_REMAINING_ESTIMATE_MINUTES);
+            }
+
+            if (remainingEstimateMinutes != null) {
+                node.put(NEW_REMAINING_ESTIMATE_MINUTES, remainingEstimateMinutes);
+            } else {
+                node.putNull(NEW_REMAINING_ESTIMATE_MINUTES);
+            }
+        };
 
         return node;
     }

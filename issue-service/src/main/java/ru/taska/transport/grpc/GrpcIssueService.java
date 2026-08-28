@@ -1,7 +1,14 @@
 package ru.taska.transport.grpc;
 
+import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
+import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
+
 import exception.GrpcExceptionHandler;
 import io.grpc.StatusRuntimeException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,14 +51,7 @@ import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
-import ru.taska.transport.grpc.logging.GrpcIssueLogging;
 import validator.GrpcRequestValidators;
-
-import java.util.Optional;
-import java.util.UUID;
-
-import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
-import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
 
 @Slf4j
 @Service
@@ -70,47 +70,72 @@ public class GrpcIssueService {
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getRequestId(), "header.requestId"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getHeader().getNodeId(), "header.nodeId"
-                                ),
-                                GrpcRequestValidators.validateIdempotencyKey(
-                                        req.getBody().getIdempotencyKey(), "body.idempotencyKey"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                        req.getBody().getIssueType(), "body.issueType"
-                                ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getSummary(), "body.summary"
-                                ),
-                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                        req.getBody().getPriority(), "body.priority"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getReporterId(), "body.reporterId"
-                                ))
+                                            Mono.zip(
+                                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                            req.getHeader().getRequestId(), "header.requestId"
+                                                    ),
+                                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                            req.getHeader().getNodeId(), "header.nodeId"
+                                                    ),
+                                                    GrpcRequestValidators.validateIdempotencyKey(
+                                                            req.getBody().getIdempotencyKey(), "body.idempotencyKey"
+                                                    ),
+                                                    GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                            req.getBody().getProjectId(), "body.projectId"
+                                                    ),
+                                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                                            req.getBody().getIssueType(), "body.issueType"
+                                                    ),
+                                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                            req.getBody().getSummary(), "body.summary"
+                                                    ),
+                                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
+                                                            req.getBody().getPriority(), "body.priority"
+                                                    ),
+                                                    GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                            req.getBody().getReporterId(), "body.reporterId"
+                                                    )),
+                                            Mono.zip(
+                                                    GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                                            req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "body.storyPoints"
+                                                    ),
+                                                    GrpcRequestValidators.requireStartDateBeforeDueDate(
+                                                            req.getBody().hasStartDate(), req.getBody().getStartDate(),
+                                                            req.getBody().hasDueDate(), req.getBody().getDueDate(),
+                                                            "body.startDate", "body.dueDate"
+                                                    ),
+                                                    GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                                            req.getBody().hasOriginalEstimateMinutes(), req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"
+                                                    ),
+                                                    GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                                            req.getBody().hasRemainingEstimateMinutes(), req.getBody().getRemainingEstimateMinutes(), "body.remainingEstimateMinutes"
+                                                    )
+                                            )
+                                    )
                         .doOnError(StatusRuntimeException.class, logValidationError(
                                 req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createIssue"
                         ))
                         .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            String idempotencyKey = t.getT3();
-                            UUID projectId = t.getT4();
-                            IssueType issueType = t.getT5();
-                            String summary = t.getT6();
-                            IssuePriority priority = t.getT7();
-                            UUID reporterId = t.getT8();
+                            String requestId = t.getT1().getT1();
+                            String nodeId = t.getT1().getT2();
+                            String idempotencyKey = t.getT1().getT3();
+                            UUID projectId = t.getT1().getT4();
+                            IssueType issueType = t.getT1().getT5();
+                            String summary = t.getT1().getT6();
+                            IssuePriority priority = t.getT1().getT7();
+                            UUID reporterId = t.getT1().getT8();
+                            BigDecimal storyPoints = t.getT2().getT1().orElse(null);
+                            LocalDate startDate = t.getT2().getT2().getFirst().orElse(null);
+                            LocalDate dueDate = t.getT2().getT2().getLast().orElse(null);
+                            Integer originalEstimateMinutes = t.getT2().getT3().orElse(null);
+                            Integer remainingEstimateMinutes = t.getT2().getT4().orElse(null);
 
                             String description = req.getBody().getDescription();
 
-                            log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, priority={}, reporterId={}",
-                                    requestId, nodeId, idempotencyKey, projectId, issueType, summary, priority, reporterId);
+                            log.info("[{}][{}] createIssue: idempotencyKey={}, projectId={}, issueType={}, summary={}, priority={}, reporterId={} " +
+                                    "storyPoints={}, startDate={}, dueDate={}, originalEstimateMinutes={}, remainingEstimateMinutes={}",
+                                    requestId, nodeId, idempotencyKey, projectId, issueType, summary, priority, reporterId, storyPoints,
+                                     startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
 
                             return issueService.createIssue(
                                             requestId,
@@ -121,7 +146,12 @@ public class GrpcIssueService {
                                             summary,
                                             description,
                                             issueMapper.toDomainIssuePriority(priority),
-                                            reporterId
+                                            reporterId,
+                                            storyPoints,
+                                            startDate,
+                                            dueDate,
+                                            originalEstimateMinutes,
+                                            remainingEstimateMinutes
                                     )
                                     .doOnNext(issue ->
                                             log.info("[{}][{}] createIssue: successfully created, issueId={}",
@@ -384,26 +414,52 @@ public class GrpcIssueService {
     public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getDescription(), "body.description"),
-                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority")
+                        Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getDescription(), "body.description"),
+                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority")
+                        ),
+                        Mono.zip(
+                                GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                        req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "body.storyPoints"
+                                ),
+                                GrpcRequestValidators.requireStartDateBeforeDueDate(
+                                        req.getBody().hasStartDate(), req.getBody().getStartDate(),
+                                        req.getBody().hasDueDate(), req.getBody().getDueDate(),
+                                        "body.startDate", "body.dueDate"
+                                ),
+                                GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                        req.getBody().hasOriginalEstimateMinutes(), req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"
+                                ),
+                                GrpcRequestValidators.requireOptionalPositiveZeroOrInvalidArgument(
+                                        req.getBody().hasRemainingEstimateMinutes(), req.getBody().getRemainingEstimateMinutes(), "body.remainingEstimateMinutes"
+                                )
+                        )
                 ))
                 .flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    UUID issueId = t.getT3();
-                    UUID actorUserId = t.getT4();
-                    String summary = t.getT5();
-                    String description = t.getT6();
-                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT7());
+                    String requestId = t.getT1().getT1();
+                    String nodeId = t.getT1().getT2();
+                    UUID issueId = t.getT1().getT3();
+                    UUID actorUserId = t.getT1().getT4();
+                    String summary = t.getT1().getT5();
+                    String description = t.getT1().getT6();
+                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT1().getT7());
+                    BigDecimal storyPoints = t.getT2().getT1().orElse(null);
+                    LocalDate startDate = t.getT2().getT2().getFirst().orElse(null);
+                    LocalDate dueDate = t.getT2().getT2().getLast().orElse(null);
+                    Integer originalEstimateMinutes = t.getT2().getT3().orElse(null);
+                    Integer remainingEstimateMinutes = t.getT2().getT4().orElse(null);
 
-                    log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}",
-                            requestId, nodeId, issueId, actorUserId, summary, description, priority);
-                    return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority);
+                    log.info("[{}][{}] updateIssue: issueId = {}, actorUserId = {}, summary = {}, description = {}, priority = {}" +
+                                     "storyPoints={}, startDate={}, dueDate={}, originalEstimateMinutes={}, remainingEstimateMinutes={}",
+                            requestId, nodeId, issueId, actorUserId, summary, description, priority, storyPoints,
+                             startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
+                    return issueService.updateIssue(requestId, nodeId, issueId, actorUserId, summary, description, priority, storyPoints,
+                                                    startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
                 })
                 .map(issueMapper::toUpdateIssueProto);
     }
@@ -437,7 +493,7 @@ public class GrpcIssueService {
                                 Mono.just(req.getBody().getPayload())
                         )
                         .doOnError(StatusRuntimeException.class,
-                                GrpcIssueLogging.logValidationError(
+                                logValidationError(
                                         req.getHeader().getRequestId(),
                                         req.getHeader().getNodeId(),
                                         "transitionIssue"
