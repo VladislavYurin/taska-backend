@@ -249,6 +249,36 @@ class WatchersControllerTest {
     }
 
     @Test
+    @DisplayName("Должен вернуть 400 Bad Request при отсутствующем или неполном теле запроса")
+    void addIssueWatcher_shouldReturn400_whenBodyIsMissingOrInvalid() {
+        mockAuthenticatedUser();
+
+        Mockito.when(watcherClient.addIssueWatcher(
+                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)))
+                .thenAnswer(inv -> {
+                    Mono<AddIssueWatcherRequestDto> body = inv.getArgument(1);
+                    return body.map(dto -> watchIssueResponse(dto.getUserId(), 1));
+                });
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/watchers", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isBadRequest();
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/watchers", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
     @DisplayName("Должен вернуть 401 Unauthorized при отсутствии токена")
     void listIssueWatchers_shouldReturn401_whenTokenMissing() {
         webTestClient.get()
