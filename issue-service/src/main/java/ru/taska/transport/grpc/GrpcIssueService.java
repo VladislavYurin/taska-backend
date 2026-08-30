@@ -972,8 +972,8 @@ public class GrpcIssueService {
                 )
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
     }
-    @TrackMetrics(counter = "issue-service_list-issue-board_grpc_counter",
-    timer = "issue-service_list-issues-board_grpc_timer")
+    @TrackMetrics(counter = "issue-service_list-issues-board_grpc_counter",
+            timer = "issue-service_list-issues-board_grpc_timer")
     public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
         return request
                 .flatMap(req -> Mono.zip(
@@ -1012,10 +1012,8 @@ public class GrpcIssueService {
                             List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
                             return issueService.listIssueBoard(
-                                    requestId, nodeId, projectId, actorUserId,
+                                    requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
                                     issueType,
-                                    assigneeId,
-                                    statusKey,
                                     req.getBody().getIncludeDone(),
                                     labelIds,
                                     pageSizePerColumn
