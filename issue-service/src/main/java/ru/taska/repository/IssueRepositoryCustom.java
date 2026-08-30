@@ -83,6 +83,10 @@ public interface IssueRepositoryCustom {
             String searchQuery
     );
 
+    /**
+     * Возвращает задачи поекта для отображения на доске.
+     */
+
     Flux<Issue> findForBoard(
             UUID projectId,
             IssueType issueType,

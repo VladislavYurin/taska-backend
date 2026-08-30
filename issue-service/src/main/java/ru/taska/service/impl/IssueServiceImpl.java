@@ -642,11 +642,11 @@ public class IssueServiceImpl implements IssueService {
     @Override
     public Mono<List<IssueBoardResponse>> listIssueBoard(String requestId,
                                                   String nodeId,
-                                                  UUID projectId,
                                                   UUID actorUserId,
-                                                  IssueType issueType,
-                                                  UUID assigneeId,
+                                                  UUID projectId,
                                                   String statusKey,
+                                                  UUID assigneeId,
+                                                  IssueType issueType,
                                                   boolean includeDone,
                                                   List<UUID> labelIds,
                                                   Integer pageSizePerColumn
