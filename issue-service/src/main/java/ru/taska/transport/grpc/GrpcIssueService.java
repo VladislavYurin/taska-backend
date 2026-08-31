@@ -1,6 +1,7 @@
 package ru.taska.transport.grpc;
 
 import exception.GrpcExceptionHandler;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -939,7 +940,14 @@ public class GrpcIssueService {
                                         : Mono.just(Optional.<UUID>empty()),
                                 validateLabelIds(req.getBody().getLabelIdsList())
 
-                )
+                ).doOnError(
+                        StatusRuntimeException.class,
+                        logValidationError(
+                                req.getHeader().getRequestId(),
+                                req.getHeader().getNodeId(),
+                                "listIssuesForBoard"
+                        )
+                                )
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
@@ -955,6 +963,12 @@ public class GrpcIssueService {
                             ru.taska.domain.IssueType issueType = issueMapper.toDomainIssueType(req.getBody().getIssueType());
                             List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
+                            log.info(
+                                    "[{}][{}] listIssuesForBoard: projectId={}, actorUserId={}, statusKey={}, " +
+                                            "assigneeId={}, issueType={}, includeDone={}, labelIds={}, pageSizePerColumn={}",
+                                    requestId, nodeId, projectId, actorUserId, statusKey,
+                                    assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn
+                            );
                             return issueService.listIssueBoard(
                                     requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
                                     issueType,
@@ -964,8 +978,19 @@ public class GrpcIssueService {
                             )
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
                                             .addAllIssues(issues)
-                                            .build());
-                        }));
+                                            .build())
+                                    .doOnSuccess(response ->
+                                            log.info("[{}][{}] listIssuesForBoard: successfully found {} issues",
+                                            requestId, nodeId, response.getIssuesCount()))
+                                    .doOnError(DomainException.class,
+                                            logOnError(
+                                                    req.getHeader().getRequestId(),
+                                                    req.getHeader().getNodeId(),
+                                                    "listIssuesForBoard"
+                                            )
+                                    );
+                        })
+                );
     }
 
     /**
