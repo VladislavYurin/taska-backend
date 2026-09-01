@@ -661,14 +661,24 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issues -> {
                     List<UUID> issueIds = issues.stream().map(Issue::getId).toList();
 
-                    return issueRepository.findLabelIdsByIssueIds(issueIds)
-                            .map(labelIdsByIssueId -> issues.stream()
-                                    .map(issue -> issueMapper.toIssueBoardProto(
-                                            issue,
-                                            labelIdsByIssueId.getOrDefault(issue.getId(), List.of())
-                                    ))
-                                    .toList()
-                            );
+                    return Mono.zip(
+                            issueRepository.findLabelIdsByIssueIds(issueIds),
+                            issueRepository.countCommentsByIssueIds(issueIds),
+                            issueRepository.countWatchersByIssueIds(issueIds)
+                    )
+                            .map(t-> {
+                                Map<UUID, List<UUID>> label = t.getT1();
+                                Map<UUID, Long> comment = t.getT2();
+                                Map<UUID, Long> watcher = t.getT3();
+                                return issues.stream()
+                                        .map(issue -> issueMapper.toIssueBoardProto(
+                                                issue,
+                                                label.getOrDefault(issue.getId(), List.of()),
+                                                comment.getOrDefault(issue.getId(), 0L),
+                                                watcher.getOrDefault(issue.getId(), 0L)
+                                        ))
+                                        .toList();
+                            });
                 });
     }
 }

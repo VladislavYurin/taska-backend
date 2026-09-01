@@ -84,7 +84,7 @@ public interface IssueRepositoryCustom {
     );
 
     /**
-     * Возвращает задачи поекта для отображения на доске.
+     * Возвращает задачи проекта для отображения на доске.
      */
 
     Flux<Issue> findForBoard(
@@ -102,4 +102,14 @@ public interface IssueRepositoryCustom {
      * Задачи без меток в карте отсутствуют (не N+1 — один запрос на весь список issueIds).
      */
     Mono<Map<UUID, List<UUID>>> findLabelIdsByIssueIds(List<UUID> issueIds);
+
+    /**
+     * Подсчет количества наблюдателей задач по списку их айди.
+     */
+    Mono<Map<UUID, Long>> countWatchersByIssueIds(List<UUID> issueIds);
+
+    /**
+     * Подсчет количества комментариев к задачам по списку их айди.
+     */
+    Mono<Map<UUID, Long>> countCommentsByIssueIds(List<UUID> issueIds);
 }
