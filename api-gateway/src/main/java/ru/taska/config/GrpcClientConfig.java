@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.issue.attachment.v1.ReactorIssueAttachmentServiceGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
@@ -72,6 +73,11 @@ public class GrpcClientConfig {
                 )
                 .usePlaintext()
                 .build();
+    }
+
+    @Bean
+    public ReactorIssueAttachmentServiceGrpc.ReactorIssueAttachmentServiceStub issueAttachmentServiceStub() {
+        return ReactorIssueAttachmentServiceGrpc.newReactorStub(issueManagedChannel());
     }
 
     @Bean
