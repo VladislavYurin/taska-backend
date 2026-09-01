@@ -290,6 +290,39 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .map(multimap -> multimap.entrySet().stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, e -> List.copyOf(e.getValue()))));
     }
+    @Override
+    public Mono<Map<UUID, Long>> countWatchersByIssueIds(List<UUID> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_watchers WHERE issue_id IN (:issueIds) GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
+    @Override
+    public Mono<Map<UUID, Long>> countCommentsByIssueIds(List<UUID> issueIds){
+        if (issueIds == null || issueIds.isEmpty()){
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_comments WHERE issue_id IN (:issueIds) AND deleted_at IS NULL GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
 
     /**
      * Единый список условий фильтрации задач для доски — общий источник как для Criteria API
