@@ -1940,6 +1940,16 @@ message IssueBoardResponse {
    * Идентификаторы меток задачи.
    */
   repeated string label_ids = 9;
+
+  /**
+   * Количество наблюдателей задачи.
+   */
+  int32 watchers_count = 10;
+
+  /**
+   * Количество комментариев к задаче.
+   */
+  int32 comments_count = 11;
 }
 
 /**
