@@ -1313,6 +1313,238 @@ paths:
 
   ########################## Окончание API для project/issue меток ##################
 
+  ########################## Начало API watchers ##################
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers:
+    get:
+      summary: Получение списка подписчиков задачи
+      operationId: listIssueWatchers
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список подписчиков задачи успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueWatchersResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление подписчика на задачу (только project ADMIN)
+      description: |
+        Доступно только пользователю с ролью ADMIN в проекте.
+        Подписывает указанного пользователя (`userId` в body) на задачу.
+      operationId: addIssueWatcher
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueWatcherRequestDto'
+      responses:
+        '200':
+          description: Подписчик успешно добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers/me:
+    put:
+      summary: Подписка текущего пользователя на задачу
+      description: userId берётся из Gateway context (JWT), не из тела запроса.
+      operationId: watchIssueMe
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пользователь подписан на задачу
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Отписка текущего пользователя от задачи
+      description: userId берётся из Gateway context (JWT), не из path.
+      operationId: unwatchIssueMe
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пользователь отписан от задачи
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnwatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers/{userId}:
+    delete:
+      summary: Удаление подписчика задачи (только project ADMIN)
+      description: |
+        Доступно только пользователю с ролью ADMIN в проекте.
+        Viewer/MEMBER без роли ADMIN не может удалить чужого watcher.
+      operationId: removeIssueWatcher
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          description: Идентификатор пользователя, которого нужно отписать
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Подписчик успешно удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnwatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  ########################## Окончание API watchers ##################
+
   /api/v1/readonly/{service}/{table}:
     get:
       summary: Получение строк таблицы из сервисной БД (только для GLOBAL_ADMIN)
@@ -1909,6 +2141,78 @@ components:
           format: date-time
 
     # ==================== END LABELS SCHEMAS ====================
+
+    # ==================== WATCHERS SCHEMAS ====================
+
+    ListIssueWatchersResponseDto:
+      type: object
+      properties:
+        watchers:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueWatcherResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество подписчиков задачи
+
+    IssueWatcherResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор подписки
+        issueId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: Подписанный пользователь
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+          description: Кто создал подписку
+
+    AddIssueWatcherRequestDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Пользователь, которого нужно подписать на задачу
+
+    WatchIssueResponseDto:
+      type: object
+      properties:
+        watcher:
+          $ref: '#/components/schemas/IssueWatcherResponseDto'
+        watchersCount:
+          type: integer
+          description: Количество подписчиков после операции
+
+    UnwatchIssueResponseDto:
+      type: object
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        removed:
+          type: boolean
+          description: Была ли подписка фактически удалена
+        watchersCount:
+          type: integer
+          description: Количество подписчиков после операции
+
+    # ==================== END WATCHERS SCHEMAS ====================
 
     NotificationListResponseDto:
       type: object
