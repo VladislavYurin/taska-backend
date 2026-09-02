@@ -197,6 +197,16 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
 
     // ==================== Окончание поиска issues с фильтрами ====================
 
+    /**
+     * Реализация board-запроса из {@link IssueRepositoryCustom}. Непустой {@code labelIds}
+     * сначала отдельным запросом резолвится в множество id задач, помеченных этими метками,
+     * и подставляется в фильтр; {@code null} или пустой {@code labelIds} означает «фильтр по
+     * меткам не применяется», а непустой список, которому не соответствует ни одна задача,
+     * даёт пустой результат, а не молчаливо снятый фильтр. При {@code null}
+     * {@code pageSizePerColumn} выборка не ограничивается и собирается через Criteria API;
+     * при заданном значении выполняется сырой SQL с оконной функцией, оставляющей не более
+     * N задач в каждой колонке доски (по {@code status_key}).
+     */
     @Override
     public Flux<Issue> findForBoard(
             UUID projectId,
@@ -209,19 +219,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     ) {
         boolean labelFilterActive = labelIds != null && !labelIds.isEmpty();
 
-        Mono<List<UUID>> issueIdsMono;
-        if (labelFilterActive) {
-            issueIdsMono = r2dbcEntityTemplate.getDatabaseClient()
-                    .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
-                    .bind("labelIds", labelIds)
-                    .map(row -> row.get("issue_id", UUID.class))
-                    .all()
-                    .collectList();
-        }else {
-            issueIdsMono = Mono.just(List.of());
-        }
-
-        return issueIdsMono.flatMapMany(issueIds -> {
+        return resolveLabelFilterIssueIds(labelIds)
+                .flatMapMany(issueIds -> {
                     if (labelFilterActive && issueIds.isEmpty()) {
                         return Flux.empty();
                     }
@@ -231,16 +230,36 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                             labelFilterActive ? issueIds : null
                     );
 
-                    if (pageSizePerColumn != null) {
-                        return findForBoardLimitedPerColumn(conditions, pageSizePerColumn);
-                    }
-
-                    Query query = Query.query(toCriteria(conditions))
-                            .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
-
-                    return r2dbcEntityTemplate.select(query, Issue.class);
+                    return pageSizePerColumn != null
+                            ? findForBoardLimitedPerColumn(conditions, pageSizePerColumn)
+                            : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(conditions), Issue.class);
                 });
+    }
 
+    /**
+     * Резолвит {@code labelIds} в список id задач, помеченных хотя бы одной из этих меток.
+     * Для {@code null}/пустого {@code labelIds} фильтр по меткам неактивен и возвращается
+     * пустой список; вызывающий код отличает этот случай от «метки заданы, но совпадений нет».
+     */
+    private Mono<List<UUID>> resolveLabelFilterIssueIds(List<UUID> labelIds) {
+        if (labelIds == null || labelIds.isEmpty()) {
+            return Mono.just(List.of());
+        }
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
+                .bind("labelIds", labelIds)
+                .map(row -> row.get("issue_id", UUID.class))
+                .all()
+                .collectList();
+    }
+
+    /**
+     * Criteria-запрос для доски (путь без {@code pageSizePerColumn}): фильтры из
+     * {@code conditions} плюс сортировка по колонке ({@code status_key}) и дате создания.
+     */
+    private Query buildBoardCriteriaQuery(List<BoardFilterCondition> conditions) {
+        return Query.query(toCriteria(conditions))
+                .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
     }
 
     /**
