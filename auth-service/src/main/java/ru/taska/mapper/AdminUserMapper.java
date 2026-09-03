@@ -74,24 +74,29 @@ public class AdminUserMapper {
                 .setCurrentStatus(toProtoStatus(responseDto.newStatus()))
                 .setChangedAt(toTimestamp(responseDto.changedAt()))
                 .setOldCredentialState(
-                        CredentialState.newBuilder()
-                                .setFailedAttempts(responseDto.oldCredentialState().failedAttempts())
-                                .setLockedUntil(toTimestamp(responseDto.oldCredentialState().lockedUntil()))
-                                .setLastFailedAt(toTimestamp(responseDto.oldCredentialState().lastFailedAt()))
-                                .build())
+                        buildCredentialState(responseDto.oldCredentialState())
+                )
                 .setNewCredentialState(
-                        CredentialState.newBuilder()
-                                .setFailedAttempts(responseDto.newCredentialState().failedAttempts())
-                                .setLockedUntil(toTimestamp(responseDto.newCredentialState().lockedUntil()))
-                                .setLastFailedAt(toTimestamp(responseDto.newCredentialState().lastFailedAt()))
-                                .build())
+                        buildCredentialState(responseDto.newCredentialState())
+                )
                 .build();
     }
 
     ///===================== Utils ===========================
 
+    private CredentialState  buildCredentialState(UserCredentialStateResponseDto.CredentialState state) {
+        return CredentialState.newBuilder()
+                .setFailedAttempts(state.failedAttempts())
+                .setLockedUntil(toTimestamp(state.lockedUntil()))
+                .setLastFailedAt(toTimestamp(state.lastFailedAt()))
+                .build();
+    }
+
     private Timestamp toTimestamp(Instant instant) {
-        return com.google.protobuf.Timestamp.newBuilder()
+        if (instant == null) {
+            return Timestamp.getDefaultInstance();
+        }
+        return Timestamp.newBuilder()
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())
                 .build();

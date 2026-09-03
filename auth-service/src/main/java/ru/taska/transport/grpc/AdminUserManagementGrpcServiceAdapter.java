@@ -2,7 +2,7 @@ package ru.taska.transport.grpc;
 
 import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.admin.management.v1.BlockUserRequest;
 import ru.taska.api.auth.admin.management.v1.ReactorAdminUserManagementServiceGrpc;
@@ -11,7 +11,7 @@ import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
 import ru.taska.api.auth.admin.management.v1.UserStatusAuthResponse;
 import ru.taska.api.auth.admin.management.v1.UserCredentialStateAuthResponse;
 
-@Service
+@GrpcService
 @RequiredArgsConstructor
 public class AdminUserManagementGrpcServiceAdapter extends ReactorAdminUserManagementServiceGrpc.AdminUserManagementServiceImplBase {
 
