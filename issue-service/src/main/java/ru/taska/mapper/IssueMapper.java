@@ -5,15 +5,16 @@ import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
-import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.IssueHistoryResponse;
-import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.IssueResponse;
-import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
+import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
@@ -385,5 +386,21 @@ public class IssueMapper {
         if (value != null) {
             setter.accept(value.toInstant());
         }
+    }
+
+    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount){
+        return IssueBoardResponse.newBuilder()
+                .setId(issue.getId().toString())
+                .setIssueKey(issue.getIssueKey())
+                .setSummary(issue.getSummary())
+                .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setStatusKey(issue.getStatusKey())
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
+                .setReporterId(issue.getReporterId().toString())
+                .setPriority(toProtoIssuePriority(issue.getPriority()))
+                .setWatchersCount(watchersCount.intValue())
+                .setCommentsCount(commentsCount.intValue())
+                .addAllLabelIds(labelIds.stream().map(UUID::toString).toList())
+                .build();
     }
 }

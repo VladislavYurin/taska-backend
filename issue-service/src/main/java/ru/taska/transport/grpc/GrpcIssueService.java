@@ -1,10 +1,12 @@
 package ru.taska.transport.grpc;
 
 import exception.GrpcExceptionHandler;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AddIssueLabelRequest;
@@ -23,6 +25,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLabelsRequest;
 import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
@@ -47,6 +51,7 @@ import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.logging.GrpcIssueLogging;
 import validator.GrpcRequestValidators;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -911,5 +916,90 @@ public class GrpcIssueService {
                                 })
                 )
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
+    }
+    @TrackMetrics(counter = "issue-service_list-issues-board_grpc_counter",
+            timer = "issue-service_list-issues-board_grpc_timer")
+    public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"
+                        ),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getProjectId(), "body.projectId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getActorUserId(), "body.actorUserId"
+                        ),
+                                req.getBody().hasAssigneeId()
+                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req
+                                        .getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
+                                        : Mono.just(Optional.<UUID>empty()),
+                                validateLabelIds(req.getBody().getLabelIdsList())
+
+                ).doOnError(
+                        StatusRuntimeException.class,
+                        logValidationError(
+                                req.getHeader().getRequestId(),
+                                req.getHeader().getNodeId(),
+                                "listIssuesForBoard"
+                        )
+                                )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID projectId = t.getT3();
+                            UUID actorUserId = t.getT4();
+                            UUID assigneeId = t.getT5().orElse(null);
+                            String statusKey = req.getBody().hasStatusKey()
+                                    ? req.getBody().getStatusKey()
+                                    : null;
+                            Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
+                                    ? req.getBody().getPageSizePerColumn()
+                                    : null;
+                            ru.taska.domain.IssueType issueType = issueMapper.toDomainIssueType(req.getBody().getIssueType());
+                            List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
+
+                            log.info(
+                                    "[{}][{}] listIssuesForBoard: projectId={}, actorUserId={}, statusKey={}, " +
+                                            "assigneeId={}, issueType={}, includeDone={}, labelIds={}, pageSizePerColumn={}",
+                                    requestId, nodeId, projectId, actorUserId, statusKey,
+                                    assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn
+                            );
+                            return issueService.listIssueBoard(
+                                    requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
+                                    issueType,
+                                    req.getBody().getIncludeDone(),
+                                    labelIds,
+                                    pageSizePerColumn
+                            )
+                                    .map(issues -> ListIssuesForBoardResponse.newBuilder()
+                                            .addAllIssues(issues)
+                                            .build())
+                                    .doOnSuccess(response ->
+                                            log.info("[{}][{}] listIssuesForBoard: successfully found {} issues",
+                                            requestId, nodeId, response.getIssuesCount()))
+                                    .doOnError(DomainException.class,
+                                            logOnError(
+                                                    req.getHeader().getRequestId(),
+                                                    req.getHeader().getNodeId(),
+                                                    "listIssuesForBoard"
+                                            )
+                                    );
+                        })
+                );
+    }
+
+    /**
+     * Валидирует {@code body.labelIds}: каждый элемент должен быть валидным UUID.
+     * Пустой список считается валидным (фильтр по меткам не задан).
+     */
+    private Mono<List<UUID>> validateLabelIds(List<String> rawLabelIds) {
+        return Flux.fromIterable(rawLabelIds)
+                .concatMap(raw -> GrpcRequestValidators.parseUuidOrInvalidArgument(raw, "body.labelIds"))
+                .collectList();
     }
 }
