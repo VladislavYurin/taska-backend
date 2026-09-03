@@ -3,9 +3,12 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
 import ru.taska.api.auth.admin.management.v1.BlockUserRequest;
+import ru.taska.api.auth.admin.management.v1.CredentialState;
 import ru.taska.api.auth.admin.management.v1.ResetCredentialLockoutAuthRequest;
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
+import ru.taska.api.auth.admin.management.v1.UserCredentialStateAuthResponse;
 import ru.taska.api.auth.admin.management.v1.UserStatusAuthResponse;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 import ru.taska.entity.UserStatus;
@@ -50,7 +53,7 @@ public class AdminUserMapper {
     }
 
     /**
-     * DTO response -> GRPC response
+     * DTO response -> auth-service GRPC response
      */
     public UserStatusAuthResponse toProtoResponse(UserStatusResponseDto responseDto) {
         return UserStatusAuthResponse.newBuilder()
@@ -58,6 +61,30 @@ public class AdminUserMapper {
                 .setPreviousStatus(toProtoStatus(responseDto.oldStatus()))
                 .setCurrentStatus(toProtoStatus(responseDto.newStatus()))
                 .setChangedAt(toTimestamp(responseDto.changedAt()))
+                .build();
+    }
+
+    /**
+     * DTO response -> auth-service GRPC response
+     */
+    public UserCredentialStateAuthResponse toProtoResponse(UserCredentialStateResponseDto responseDto) {
+        return UserCredentialStateAuthResponse.newBuilder()
+                .setUserId(responseDto.userId().toString())
+                .setPreviousStatus(toProtoStatus(responseDto.oldStatus()))
+                .setCurrentStatus(toProtoStatus(responseDto.newStatus()))
+                .setChangedAt(toTimestamp(responseDto.changedAt()))
+                .setOldCredentialState(
+                        CredentialState.newBuilder()
+                                .setFailedAttempts(responseDto.oldCredentialState().failedAttempts())
+                                .setLockedUntil(toTimestamp(responseDto.oldCredentialState().lockedUntil()))
+                                .setLastFailedAt(toTimestamp(responseDto.oldCredentialState().lastFailedAt()))
+                                .build())
+                .setNewCredentialState(
+                        CredentialState.newBuilder()
+                                .setFailedAttempts(responseDto.newCredentialState().failedAttempts())
+                                .setLockedUntil(toTimestamp(responseDto.newCredentialState().lockedUntil()))
+                                .setLastFailedAt(toTimestamp(responseDto.newCredentialState().lastFailedAt()))
+                                .build())
                 .build();
     }
 

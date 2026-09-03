@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.auth.admin.management.v1.BlockUserRequest;
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
 import ru.taska.api.auth.admin.management.v1.ReactorAdminUserManagementServiceGrpc;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 import ru.taska.mapper.AdminUserManagementMapper;
@@ -117,7 +118,7 @@ public class GrpcAdminUserManagementServiceClient {
      * @param requestDto DTO с данными запроса (targetUserId, actorUserId, reason)
      * @return {@link Mono}, содержащий {@link UserStatusResponseDto} с результатом операции
      */
-    public Mono<UserStatusResponseDto> resetCredentialLockout(
+    public Mono<UserCredentialStateResponseDto> resetCredentialLockout(
             String requestId,
             String nodeId,
             UserStatusRequestDto requestDto
@@ -127,7 +128,7 @@ public class GrpcAdminUserManagementServiceClient {
         ResetCredentialLockoutAuthRequest grpcRequest = managementMapper.toAuthProtoResetRequest(requestId,nodeId,requestDto);
 
         return dynamicStub().resetCredentialLockout(grpcRequest)
-                .map(managementMapper::toUserStatusResponseDto);
+                .map(managementMapper::toUserCredentialStateResponseDto);
     }
 
     /**

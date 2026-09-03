@@ -22,6 +22,7 @@ import ru.taska.api.admin.v1.UserStatusResponse;
 import ru.taska.api.common.v1.GlobalRoleProto;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.common.v1.UserStatus;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 import ru.taska.mapper.AdminUserManagementMapper;
@@ -59,6 +60,9 @@ class GrpcAdminUserManagementServiceTest {
     private UserStatusRequestDto requestDto;
     private UserStatusResponseDto responseDto;
     private UserStatusResponse protoResponse;
+    private UserCredentialStateResponseDto resetResponse;
+    private UserStatusResponse resetProto;
+
 
     @BeforeEach
     void setUp() {
@@ -83,6 +87,29 @@ class GrpcAdminUserManagementServiceTest {
                 .setUserId(TARGET_USER_ID)
                 .setPreviousStatus(UserStatus.USER_STATUS_ACTIVE)
                 .setCurrentStatus(UserStatus.USER_STATUS_BLOCKED)
+                .build();
+
+        UserCredentialStateResponseDto.CredentialState oldState = UserCredentialStateResponseDto.CredentialState.builder()
+                .failedAttempts(5)
+                .lockedUntil(FIXED_TIME.plusHours(1))
+                .lastFailedAt(FIXED_TIME.minusMinutes(5))
+                .build();
+
+        UserCredentialStateResponseDto.CredentialState newState = UserCredentialStateResponseDto.CredentialState.empty();
+
+        resetResponse = UserCredentialStateResponseDto.builder()
+                .userId(targetUserId)
+                .previousStatus("LOCKED")
+                .currentStatus("ACTIVE")
+                .changedAt(FIXED_TIME)
+                .oldCredentialState(oldState)
+                .newCredentialState(newState)
+                .build();
+
+        resetProto = UserStatusResponse.newBuilder()
+                .setUserId(TARGET_USER_ID)
+                .setPreviousStatus(UserStatus.USER_STATUS_LOCKED)
+                .setCurrentStatus(UserStatus.USER_STATUS_ACTIVE)
                 .build();
     }
 
@@ -442,18 +469,6 @@ class GrpcAdminUserManagementServiceTest {
         @Test
         @DisplayName("Должен успешно сбросить credential lockout")
         void resetCredentialLockout_success() {
-            UserStatusResponseDto resetResponse = UserStatusResponseDto.builder()
-                    .userId(targetUserId)
-                    .previousStatus("LOCKED")
-                    .currentStatus("ACTIVE")
-                    .changedAt(FIXED_TIME)
-                    .build();
-
-            UserStatusResponse resetProto = UserStatusResponse.newBuilder()
-                    .setUserId(TARGET_USER_ID)
-                    .setPreviousStatus(UserStatus.USER_STATUS_LOCKED)
-                    .setCurrentStatus(UserStatus.USER_STATUS_ACTIVE)
-                    .build();
 
             ResetCredentialLockoutRequest grpcRequest = ResetCredentialLockoutRequest.newBuilder()
                     .setHeader(validHeader())

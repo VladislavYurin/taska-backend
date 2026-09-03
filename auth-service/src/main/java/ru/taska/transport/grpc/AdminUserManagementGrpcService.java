@@ -8,6 +8,7 @@ import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.auth.admin.management.v1.BlockUserRequest;
 import ru.taska.api.auth.admin.management.v1.ResetCredentialLockoutAuthRequest;
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
+import ru.taska.api.auth.admin.management.v1.UserCredentialStateAuthResponse;
 import ru.taska.api.auth.admin.management.v1.UserStatusAuthResponse;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.mapper.AdminUserMapper;
@@ -101,7 +102,7 @@ public class AdminUserManagementGrpcService {
 
     @TrackMetrics(counter = "auth-service_reset-credential-lockout_grpc_counter",
             timer = "auth-service_reset-credential-lockout_grpc_timer")
-    public Mono<UserStatusAuthResponse> resetCredentialLockout(Mono<ResetCredentialLockoutAuthRequest> request){
+    public Mono<UserCredentialStateAuthResponse> resetCredentialLockout(Mono<ResetCredentialLockoutAuthRequest> request){
         return request
                 .flatMap(req -> Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(

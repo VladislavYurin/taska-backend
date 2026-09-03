@@ -24,7 +24,7 @@ service AdminUserManagementService {
   /**
    * Сбрасывает блокировку после неудачных попыток входа
    */
-  rpc ResetCredentialLockout(ResetCredentialLockoutAuthRequest) returns (UserStatusAuthResponse);
+  rpc ResetCredentialLockout(ResetCredentialLockoutAuthRequest) returns (UserCredentialStateAuthResponse);
 }
 
 /**
@@ -39,8 +39,11 @@ message BlockUserRequest {
  * Тело запроса блокировки пользователя.
  */
 message BlockUserRequestBody {
+  /** Идентификатор пользователя, над которым выполняется операция*/
   string target_user_id = 1;
+  /** Идентификатор пользователя, который выполняет операцию*/
   string actor_user_id = 2;
+  /** Причина выполнения операции*/
   string reason = 3;
 }
 
@@ -56,8 +59,11 @@ message UnblockUserRequest {
  * Тело запроса разблокировки пользователя.
  */
 message UnblockUserRequestBody {
+  /** Идентификатор пользователя, над которым выполняется операция*/
   string target_user_id = 1;
+  /** Идентификатор пользователя, который выполняет операцию*/
   string actor_user_id = 2;
+  /** Причина выполнения операции*/
   string reason = 3;
 }
 
@@ -65,22 +71,38 @@ message UnblockUserRequestBody {
  * Ответ на запрос(ы) изменений статуса пользователя.
  */
 message UserStatusAuthResponse {
-  /**
-   *
-   */
+  /** Идентификатор пользователя, над которым выполнялась операция*/
   string user_id = 1;
-  /**
-   *
-   */
+  /** Статус пользователя до выполнения операции*/
   ru.taska.common.v1.UserStatus previous_status = 2;
-  /**
-   *
-   */
+  /** Текущий статус пользователя после выполнения операции*/
   ru.taska.common.v1.UserStatus current_status = 3;
-  /**
-   *
-   */
+  /** Временная метка выполнения операция*/
   google.protobuf.Timestamp changed_at = 4;
+}
+
+/**
+ * Ответ на запрос(ы) изменений статуса пользователя.
+ */
+message UserCredentialStateAuthResponse {
+  /** Идентификатор пользователя, над которым выполнялась операция*/
+  string user_id = 1;
+  /** Статус пользователя до выполнения операции*/
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  /** Текущий статус пользователя после выполнения операции*/
+  ru.taska.common.v1.UserStatus current_status = 3;
+  /** Временная метка выполнения операция*/
+  google.protobuf.Timestamp changed_at = 4;
+  /** Временная метка выполнения операция*/
+  CredentialState old_credential_state = 5;
+  /** Временная метка выполнения операция*/
+  CredentialState new_credential_state = 6;
+}
+
+message CredentialState {
+  int32 failed_attempts = 1;
+  google.protobuf.Timestamp locked_until = 2;    // пустая строка = null
+  google.protobuf.Timestamp last_failed_at = 3;  // пустая строка = null
 }
 
 /**
@@ -92,16 +114,10 @@ message ResetCredentialLockoutAuthRequest {
 }
 
 message ResetCredentialLockoutAuthRequestBody {
-  /**
-   *
-   */
+  /** Идентификатор пользователя, над которым выполняется операция*/
   string target_user_id = 1;
-  /**
-   *
-   */
+  /** Идентификатор пользователя, который выполняет операцию*/
   string actor_user_id = 2;
-  /**
-   *
-   */
+  /** Причина выполнения операции*/
   string reason = 3;
 }

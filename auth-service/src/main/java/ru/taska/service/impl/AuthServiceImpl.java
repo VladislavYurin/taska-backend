@@ -276,7 +276,8 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(savedCredential -> {
                     if (shouldLock && (user.getStatus() != UserStatus.LOCKED)) {
                         user.setStatus(UserStatus.LOCKED);
-                        userRepository.save(user);
+                        return userRepository.save(user)
+                                .thenReturn(savedCredential);
                     }
                     return Mono.just(savedCredential);
                 })
@@ -296,7 +297,8 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(savedCredential->{
                     if (user.getStatus() == UserStatus.LOCKED) {
                         user.setStatus(UserStatus.ACTIVE);
-                        userRepository.save(user);
+                        return userRepository.save(user)
+                                .thenReturn(savedCredential);
                     }
                     return Mono.just(savedCredential);
                 })

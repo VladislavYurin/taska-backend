@@ -9,6 +9,7 @@ import ru.taska.api.auth.admin.management.v1.ReactorAdminUserManagementServiceGr
 import ru.taska.api.auth.admin.management.v1.ResetCredentialLockoutAuthRequest;
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
 import ru.taska.api.auth.admin.management.v1.UserStatusAuthResponse;
+import ru.taska.api.auth.admin.management.v1.UserCredentialStateAuthResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +29,7 @@ public class AdminUserManagementGrpcServiceAdapter extends ReactorAdminUserManag
                 .transform(GrpcExceptionHandler.withErrorHandling("unblockUser"));
     }
     @Override
-    public Mono<UserStatusAuthResponse> resetCredentialLockout(Mono<ResetCredentialLockoutAuthRequest> request) {
+    public Mono<UserCredentialStateAuthResponse> resetCredentialLockout(Mono<ResetCredentialLockoutAuthRequest> request) {
         return adminUserManagementGrpcService.resetCredentialLockout(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("resetCredentialLockout"));
     }

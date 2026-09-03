@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 
@@ -93,11 +94,11 @@ public interface AdminUserManagementService {
      * @param requestId  уникальный идентификатор запроса для сквозной трассировки
      * @param nodeId     идентификатор узла-отправителя
      * @param requestDto DTO с данными запроса (targetUserId, actorUserId, reason)
-     * @return {@link Mono}, содержащий {@link UserStatusResponseDto} с результатом операции
+     * @return {@link Mono}, содержащий {@link UserCredentialStateResponseDto} с результатом операции
      * @throws ru.taska.exception.DomainException если пользователь не найден
      *                                            или статус не {@code LOCKED}
      */
-    Mono<UserStatusResponseDto> resetCredentialLockout(
+    Mono<UserCredentialStateResponseDto> resetCredentialLockout(
             String requestId,
             String nodeId,
             UserStatusRequestDto requestDto

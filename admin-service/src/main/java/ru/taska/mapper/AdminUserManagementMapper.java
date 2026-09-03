@@ -10,11 +10,13 @@ import ru.taska.api.auth.admin.management.v1.ResetCredentialLockoutAuthRequestBo
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequest;
 import ru.taska.api.auth.admin.management.v1.UnblockUserRequestBody;
 import ru.taska.api.admin.v1.UserStatusResponse;
+import ru.taska.api.auth.admin.management.v1.UserCredentialStateAuthResponse;
 import ru.taska.api.auth.admin.management.v1.UserStatusAuthResponse;
 import ru.taska.api.common.v1.GlobalRoleProto;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.common.v1.UserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 
@@ -69,6 +71,19 @@ public class AdminUserManagementMapper {
      * DTO response -> GRPC response
      */
     public UserStatusResponse toProtoResponse(UserStatusResponseDto responseDto) {
+        return UserStatusResponse.newBuilder()
+                .setUserId(responseDto.userId().toString())
+                .setPreviousStatus(toProtoStatus(responseDto.previousStatus()))
+                .setCurrentStatus(toProtoStatus(responseDto.currentStatus()))
+                .setChangedAt(toTimestamp(responseDto.changedAt()))
+                .build();
+    }
+
+    /**
+     * DTO response -> GRPC response
+     * Поля credential state наружу не отдаем для единообразного контракта
+     */
+    public UserStatusResponse toProtoResponse(UserCredentialStateResponseDto responseDto) {
         return UserStatusResponse.newBuilder()
                 .setUserId(responseDto.userId().toString())
                 .setPreviousStatus(toProtoStatus(responseDto.previousStatus()))
@@ -137,6 +152,31 @@ public class AdminUserManagementMapper {
                 .previousStatus(grpcResponse.getPreviousStatus().name())
                 .currentStatus(grpcResponse.getCurrentStatus().name())
                 .changedAt(toOffsetDateTime(grpcResponse.getChangedAt()))
+                .build();
+    }
+    /**
+     *  auth-service GRPC response -> DTO Response
+     */
+    public UserCredentialStateResponseDto toUserCredentialStateResponseDto(UserCredentialStateAuthResponse grpcResponse) {
+        return UserCredentialStateResponseDto.builder()
+                .userId(UUID.fromString(grpcResponse.getUserId()))
+                .previousStatus(grpcResponse.getPreviousStatus().name())
+                .currentStatus(grpcResponse.getCurrentStatus().name())
+                .changedAt(toOffsetDateTime(grpcResponse.getChangedAt()))
+                .oldCredentialState(
+                        UserCredentialStateResponseDto.CredentialState.builder()
+                                .failedAttempts(grpcResponse.getOldCredentialState().getFailedAttempts())
+                                .lockedUntil(toOffsetDateTime(grpcResponse.getOldCredentialState().getLockedUntil()))
+                                .lastFailedAt(toOffsetDateTime(grpcResponse.getOldCredentialState().getLastFailedAt()))
+                                .build()
+                )
+                .newCredentialState(
+                        UserCredentialStateResponseDto.CredentialState.builder()
+                                .failedAttempts(grpcResponse.getNewCredentialState().getFailedAttempts())
+                                .lockedUntil(toOffsetDateTime(grpcResponse.getNewCredentialState().getLockedUntil()))
+                                .lastFailedAt(toOffsetDateTime(grpcResponse.getNewCredentialState().getLastFailedAt()))
+                                .build()
+                )
                 .build();
     }
 

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.GlobalRole;
+import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
 import ru.taska.entity.CredentialType;
@@ -122,7 +123,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
      */
     @Override
     @Transactional
-    public Mono<UserStatusResponseDto> resetCredentialLockout(
+    public Mono<UserCredentialStateResponseDto> resetCredentialLockout(
             String requestId,
             String nodeId,
             UserStatusRequestDto requestDto
@@ -138,28 +139,38 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                                 "User is not in LOCKED status"
                         ));
                     }
-                    UserStatus oldStatus = user.getStatus();
-                    user.setStatus(UserStatus.ACTIVE);
-                    return userRepository.save(user)
-                            .flatMap(savedUser ->
-                                    credentialRepository.findByUserIdAndCredentialType(savedUser.getId(), CredentialType.PASSWORD)
-                                            .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Credential not found")))
-                                            .flatMap(credential -> {
-                                                credential.setFailedAttempts(0);
-                                                credential.setLockedUntil(null);
-                                                credential.setLastFailedAt(null);
-                                                return credentialRepository.save(credential);
-                                            })
-                                            .thenReturn(savedUser)
-                            )
-                            .map(savedUser ->
-                                    UserStatusResponseDto.builder()
-                                            .userId(savedUser.getId())
-                                            .oldStatus(oldStatus)
-                                            .newStatus(savedUser.getStatus())
-                                            .changedAt(savedUser.getUpdatedAt())
-                                            .build()
-                            );
+                    return credentialRepository
+                            .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
+                            .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Credential not found")))
+                            .flatMap(credential -> {
+                                UserStatus oldStatus = user.getStatus();
+
+                                UserCredentialStateResponseDto.CredentialState oldState = UserCredentialStateResponseDto.CredentialState.builder()
+                                        .failedAttempts(credential.getFailedAttempts())
+                                        .lockedUntil(credential.getLockedUntil())
+                                        .lastFailedAt(credential.getLastFailedAt())
+                                        .build();
+
+                                credential.setFailedAttempts(0);
+                                credential.setLockedUntil(null);
+                                credential.setLastFailedAt(null);
+
+                                user.setStatus(UserStatus.ACTIVE);
+
+                                UserCredentialStateResponseDto.CredentialState newState = UserCredentialStateResponseDto.CredentialState.empty();
+
+                                return credentialRepository.save(credential)
+                                        .then(userRepository.save(user))
+                                        .map(savedUser -> UserCredentialStateResponseDto.builder()
+                                                .userId(savedUser.getId())
+                                                .oldStatus(oldStatus)
+                                                .newStatus(savedUser.getStatus())
+                                                .changedAt(savedUser.getUpdatedAt())
+                                                .oldCredentialState(oldState)
+                                                .newCredentialState(newState)
+                                                .build()
+                                        );
+                            });
                 });
 
     }
