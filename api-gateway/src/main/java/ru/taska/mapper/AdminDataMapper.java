@@ -21,6 +21,10 @@ import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.domain.dto.ServiceMetadataDto;
 import ru.taska.domain.dto.TableCapabilitiesDto;
 import ru.taska.domain.dto.TableMetadataDto;
+import ru.taska.api.admin.v1.RetryOutboxEventResponse;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
+
+import java.util.UUID;
 
 import com.google.protobuf.Timestamp;
 
@@ -238,5 +242,25 @@ public class AdminDataMapper {
             case TIMESTAMP_VALUE -> Instant.ofEpochSecond(value.getTimestampValue());
             default -> null;
         };
+    }
+
+    /**
+     * Преобразует gRPC-ответ ручного retry outbox-события
+     * в REST DTO API Gateway.
+     *
+     * @param grpcResponse ответ admin-service
+     * @return REST DTO состояния события после retry
+     */
+    public RetryOutboxEventResponseDto toRestRetryOutboxEventResponse(
+            RetryOutboxEventResponse grpcResponse
+    ) {
+        RetryOutboxEventResponseDto dto =
+                new RetryOutboxEventResponseDto();
+
+        dto.setEventId(UUID.fromString(grpcResponse.getEventId()));
+        dto.setStatus(grpcResponse.getStatus());
+        dto.setAttempts(grpcResponse.getAttempts());
+
+        return dto;
     }
 }

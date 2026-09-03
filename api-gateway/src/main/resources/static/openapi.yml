@@ -1745,6 +1745,64 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/admin/outbox/{service}/{eventId}/retry:
+    post:
+      summary: Повторная обработка outbox-события (только для GLOBAL_ADMIN)
+      operationId: retryOutboxEvent
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: service
+          in: path
+          required: true
+          description: Сервис-владелец outbox-события
+          schema:
+            type: string
+            enum:
+              - auth
+              - project
+              - issue
+
+        - name: eventId
+          in: path
+          required: true
+          description: Идентификатор outbox-события
+          schema:
+            type: string
+            format: uuid
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryOutboxEventRequestDto'
+
+      responses:
+        '200':
+          description: Outbox-событие успешно отправлено на повторную обработку
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryOutboxEventResponseDto'
+
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2710,3 +2768,32 @@ components:
         failedCount:
           type: integer
           format: int64
+
+    RetryOutboxEventRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Причина ручного retry outbox-события
+          example: Retry after Kafka incident
+
+    RetryOutboxEventResponseDto:
+      type: object
+      required:
+        - eventId
+        - status
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Текущий статус outbox-события после retry
+        attempts:
+          type: integer
+          format: int32
+          nullable: true
