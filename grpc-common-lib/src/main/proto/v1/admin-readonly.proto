@@ -34,6 +34,12 @@ service AdminReadonlyService {
    * Возвращает сводку по проблемным outbox-событиям: список событий и счётчики по сервисам.
    */
   rpc GetProblematicOutboxEventsSummary(GetProblematicOutboxEventsSummaryRequest) returns (GetProblematicOutboxEventsSummaryResponse);
+
+  /**
+   * Повторно переводит FAILED или зависшее PROCESSING
+   * outbox-событие в состояние NEW.
+   */
+  rpc RetryOutboxEvent(RetryOutboxEventRequest) returns (RetryOutboxEventResponse);
 }
 
 message GetCatalogRequest {
@@ -283,4 +289,77 @@ message MetaInfo {
   repeated string sortable_columns = 4;
   /** Колонки, по которым можно фильтровать. */
   repeated string filterable_columns = 5;
+}
+
+/**
+ * Запрос на ручной retry outbox-события.
+ */
+message RetryOutboxEventRequest {
+  /**
+   * Технический заголовок запроса с request_id и node_id.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Данные административной операции retry.
+   */
+  RetryOutboxEventRequestBody body = 2;
+}
+
+/**
+ * Данные административной операции retry.
+ *
+ * actor_* передаются доверенным API Gateway после проверки
+ * GLOBAL_ADMIN и используются для обязательного аудита.
+ */
+message RetryOutboxEventRequestBody {
+  /**
+   * Ключ сервиса-владельца outbox-события.
+   */
+  string service_key = 1;
+
+  /**
+   * UUID outbox-события, которое необходимо повторно обработать.
+   */
+  string event_id = 2;
+
+  /**
+   * Причина ручного retry, указанная администратором.
+   */
+  string reason = 3;
+
+  /**
+   * UUID администратора, инициировавшего retry.
+   */
+  string actor_user_id = 4;
+
+  /**
+   * Логин администратора, инициировавшего retry.
+   */
+  string actor_login = 5;
+
+  /**
+   * Глобальные роли администратора для записи аудита.
+   */
+  repeated string actor_roles = 6;
+}
+
+/**
+ * Результат ручного retry outbox-события.
+ */
+message RetryOutboxEventResponse {
+  /**
+   * UUID outbox-события после выполнения retry.
+   */
+  string event_id = 1;
+
+  /**
+   * Текущий статус outbox-события после выполнения retry.
+   */
+  string status = 2;
+
+  /**
+   * Количество попыток обработки outbox-события.
+   */
+  optional int32 attempts = 3;
 }

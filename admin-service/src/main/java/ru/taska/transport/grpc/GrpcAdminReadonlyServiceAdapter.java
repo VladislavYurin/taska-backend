@@ -13,6 +13,8 @@ import ru.taska.api.admin.v1.GetTableRowByIdResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
+import ru.taska.api.admin.v1.RetryOutboxEventRequest;
+import ru.taska.api.admin.v1.RetryOutboxEventResponse;
 
 /**
  * gRPC-адаптер, который публикует {@link GrpcAdminReadonlyService} как protobuf endpoint.
@@ -45,5 +47,17 @@ public class GrpcAdminReadonlyServiceAdapter extends ReactorAdminReadonlyService
     public Mono<GetProblematicOutboxEventsSummaryResponse> getProblematicOutboxEventsSummary(Mono<GetProblematicOutboxEventsSummaryRequest> request) {
         return grpcAdminReadonlyService.getProblematicOutboxEventsSummary(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProblematicOutboxEventsSummary"));
+    }
+
+    /**
+     * Публикует административную операцию retry outbox-события через gRPC.
+     *
+     * @param request запрос на ручной retry
+     * @return результат retry
+     */
+    @Override
+    public Mono<RetryOutboxEventResponse> retryOutboxEvent(Mono<RetryOutboxEventRequest> request) {
+        return grpcAdminReadonlyService.retryOutboxEvent(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("retryOutboxEvent"));
     }
 }

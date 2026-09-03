@@ -95,6 +95,41 @@ admin:
         max-size: ${ADMIN_RO_ADMIN_POOL_MAX_SIZE:10}
         max-idle-time-minutes: ${ADMIN_RO_ADMIN_POOL_MAX_IDLE_TIME_MINUTES:10}
 
+  # Ограниченные write-подключения только для административных
+  # операций над outbox_events.
+  # На стенде/проде должны использоваться отдельные DB users
+  # с SELECT/UPDATE только на taska.outbox_events.
+  outbox-write:
+    auth:
+      url: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
+      username: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+    project:
+      url: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
+      username: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+    issue:
+      url: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
+      username: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+  outbox-retry:
+    stuck-threshold: ${ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD:10m}
+
   # Metadata catalog: правила для каждого сервиса.
   # allow — если список непустой, в каталог попадают только эти таблицы;
   #         пустой список означает «разрешены все».

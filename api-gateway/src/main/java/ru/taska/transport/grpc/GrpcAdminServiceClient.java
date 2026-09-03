@@ -12,6 +12,8 @@ import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsRequestBody;
 import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
+import ru.taska.api.admin.v1.RetryOutboxEventRequest;
+import ru.taska.api.admin.v1.RetryOutboxEventRequestBody;
 import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
@@ -19,6 +21,8 @@ import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.mapper.AdminDataMapper;
 
 import java.util.Map;
@@ -35,12 +39,12 @@ public class GrpcAdminServiceClient {
     private final GrpcClientProperties properties;
 
     public Mono<MetadataResponse> getCatalog(GatewayContext context) {
-
         log.debug("[{}] Calling getCatalog", context.requestId());
 
         GetCatalogRequest getCatalogRequest = GetCatalogRequest.newBuilder()
                 .setHeader(buildGrpcHeader(context))
                 .build();
+
         return dynamicStub().getCatalog(getCatalogRequest)
                 .map(mapper::toRestGetCatalogResponse);
     }
@@ -107,26 +111,79 @@ public class GrpcAdminServiceClient {
     ) {
         log.debug("[{}] Calling getProblematicOutboxEventsSummary", context.requestId());
 
-        var bodyBuilder =
+        GetProblematicOutboxEventsSummaryRequestBody.Builder bodyBuilder =
                 GetProblematicOutboxEventsSummaryRequestBody.newBuilder();
+
         if (serviceKey != null) {
             bodyBuilder.setServiceKey(serviceKey);
         }
 
-        var request = GetProblematicOutboxEventsSummaryRequest.newBuilder()
-                .setHeader(buildGrpcHeader(context))
-                .setBody(bodyBuilder.build())
-                .build();
+        GetProblematicOutboxEventsSummaryRequest request =
+                GetProblematicOutboxEventsSummaryRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(bodyBuilder.build())
+                        .build();
 
         return dynamicStub().getProblematicOutboxEventsSummary(request)
                 .map(mapper::toRestProblematicOutboxEventsSummaryResponse);
     }
 
     /**
+     * Выполняет ручной retry outbox-события через admin-service.
+     * <p>
+     * Данные REST-запроса извлекаются из {@link RetryOutboxEventRequestDto},
+     * а actor context формируется из проверенного {@link GatewayContext}.
+     *
+     * @param service    сервис-владелец outbox
+     * @param eventId    идентификатор outbox-события
+     * @param requestDto REST-запрос с причиной ручного retry
+     * @param context    проверенный контекст GLOBAL_ADMIN
+     * @return состояние события после retry
+     */
+    public Mono<RetryOutboxEventResponseDto> retryOutboxEvent(
+            String service,
+            UUID eventId,
+            RetryOutboxEventRequestDto requestDto,
+            GatewayContext context
+    ) {
+        log.debug(
+                "[{}] Calling retryOutboxEvent: service={}, eventId={}",
+                context.requestId(),
+                service,
+                eventId
+        );
+
+        var userContext = context.userContext();
+
+        RetryOutboxEventRequestBody body =
+                RetryOutboxEventRequestBody.newBuilder()
+                        .setServiceKey(service)
+                        .setEventId(eventId.toString())
+                        .setReason(requestDto.getReason())
+                        .setActorUserId(userContext.userId())
+                        .setActorLogin(userContext.login())
+                        .addActorRoles(userContext.globalRole().name())
+                        .build();
+
+        RetryOutboxEventRequest request =
+                RetryOutboxEventRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(body)
+                        .build();
+
+        return dynamicStub()
+                .retryOutboxEvent(request)
+                .map(mapper::toRestRetryOutboxEventResponse);
+    }
+
+    /**
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
     private ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub dynamicStub() {
-        return adminServiceStub.withDeadlineAfter(properties.adminService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+        return adminServiceStub.withDeadlineAfter(
+                properties.adminService().deadlineDuration().toMillis(),
+                TimeUnit.MILLISECONDS
+        );
     }
 
     private Header buildGrpcHeader(GatewayContext context) {

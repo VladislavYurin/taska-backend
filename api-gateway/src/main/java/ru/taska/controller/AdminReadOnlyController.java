@@ -13,6 +13,8 @@ import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 
 import java.util.Map;
 import java.util.Set;
@@ -103,5 +105,39 @@ public class AdminReadOnlyController implements AdminApi {
         return allParams.entrySet().stream()
                 .filter(entry -> !NOT_FILTER_QUERY_PARAMS.contains(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Выполняет ручной retry outbox-события.
+     * <p>
+     * Операция доступна только пользователю с глобальной ролью GLOBAL_ADMIN.
+     * Actor context формируется из проверенного GatewayContext и не принимается
+     * от REST-клиента.
+     *
+     * @param service сервис-владелец outbox
+     * @param eventId идентификатор outbox-события
+     * @param request запрос с обязательной причиной retry
+     * @param exchange текущий HTTP exchange
+     * @return состояние outbox-события после retry
+     */
+    @Override
+    public Mono<ResponseEntity<RetryOutboxEventResponseDto>> retryOutboxEvent(
+            String service,
+            UUID eventId,
+            Mono<RetryOutboxEventRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(
+                exchange,
+                EndpointSecurity.GLOBAL_ADMIN_REQUIRED,
+                context -> request
+                        .flatMap(body -> adminServiceClient.retryOutboxEvent(
+                                service,
+                                eventId,
+                                body,
+                                context
+                        ))
+                        .map(ResponseEntity::ok)
+        );
     }
 }
