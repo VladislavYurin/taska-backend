@@ -345,6 +345,108 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/admin/users/{userId}/block:
+    post:
+      summary: Блокировка пользователя
+      description: Изменяет статус пользователя на BLOCKED. Требует прав GLOBAL_ADMIN и указания причины.
+      operationId: blockUser
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockUserRequestDto'
+      responses:
+        '200':
+          description: Пользователь успешно заблокирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          description: Некорректный запрос (неверный UUID или отсутствует reason)
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          description: Неавторизован
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль GLOBAL_ADMIN)
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Конфликт бизнес-логики (попытка заблокировать последнего GLOBAL_ADMIN или некорректный переход статуса)
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/users/{userId}/unblock:
+    post:
+      summary: Разблокировка пользователя
+      description: Изменяет статус пользователя с BLOCKED на ACTIVE. Запрещено активировать пользователей в статусе INVITED через этот эндпоинт. Требует прав GLOBAL_ADMIN.
+      operationId: unblockUser
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnblockUserRequestDto'
+      responses:
+        '200':
+          description: Пользователь успешно разблокирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          description: Некорректный запрос (неверный формат UUID или отсутствует reason)
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          description: Неавторизован
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль GLOBAL_ADMIN)
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Конфликт бизнес-логики (попытка разблокировать пользователя со статусом, отличным от BLOCKED)
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues:
     post:
       summary: Создание задачи
@@ -1745,6 +1847,50 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+########################## API для сброса блокировки учетных данных ##################
+
+  /api/v1/admin/users/{userId}/reset-lockout:
+    post:
+      summary: Сброс блокировки учётных данных пользователя (только GLOBAL_ADMIN)
+      operationId: resetCredentialLockout
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetLockoutRequestDto'
+      responses:
+        '200':
+          description: Lockout успешно сброшен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+########################## Окончание API для сброса блокировки учетных данных ##################
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2259,6 +2405,21 @@ components:
           type: string
           format: uuid
 
+    NotificationTypeDto:
+      type: string
+      enum:
+        - ISSUE_ASSIGNED
+        - ISSUE_TRANSITIONED
+        - ISSUE_CREATED
+        - ISSUE_UPDATED
+        - ISSUE_DELETED
+        - USER_INVITED
+        - USER_ACTIVATED
+        - PROJECT_CREATED
+        - MEMBER_ADDED
+        - MEMBER_UPDATED
+        - MEMBER_REMOVED
+
     ReadOnlyTableRowsResponseDto:
       type: object
       properties:
@@ -2710,3 +2871,61 @@ components:
         failedCount:
           type: integer
           format: int64
+
+    BlockUserRequestDto:
+      type: object
+      required: [ reason ]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина блокировки пользователя (обязательное поле для аудита)
+          example: "Нарушение правил безопасности"
+
+    UnblockUserRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина разблокировки пользователя (обязательное поле для аудита)
+          example: "Блокировка снята по решению администрации после проверки"
+    
+    ResetLockoutRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина снятия блокировки на credentials (обязательное поле для аудита)
+          example: "Обещал не забывать пароль и записать в надежном месте"
+
+    UserStatusResponseDto:
+      type: object
+      required: [ userId,previousStatus, currentStatus, changedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        previousStatus:
+          $ref: '#/components/schemas/UserStatusDto'
+        currentStatus:
+          $ref: '#/components/schemas/UserStatusDto'
+        changedAt:
+          type: string
+          format: date-time
+
+    UserStatusDto:
+      type: string
+      enum:
+        - INVITED
+        - ACTIVE
+        - BLOCKED
+        - LOCKED

@@ -40,6 +40,8 @@ public class NotificationFactory {
             case USER_ACTIVATED -> buildUserActivated(event, eventId);
             case ISSUE_LABEL_ADDED -> buildLabelAdded(event, payload, eventId);
             case ISSUE_LABEL_REMOVED -> buildLabelRemoved(event, payload, eventId);
+            case USER_BLOCKED -> buildUserBlocked(event, payload, eventId);
+            case USER_UNBLOCKED -> buildUserUnblocked(event, payload, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
@@ -265,7 +267,6 @@ public class NotificationFactory {
         return List.of(notificationMapper.toIssueLinkCreated(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
     }
 
-
     private List<Notification> buildLabelRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID issueId = extractUuid(payload, "issueId");
         UUID removedBy = extractUuid(payload, "deletedBy");
@@ -277,6 +278,36 @@ public class NotificationFactory {
         }
 
         return List.of(notificationMapper.toLabelRemoved(event, issueId, removedBy, labelName));
+    }
+
+    /**
+     * Создает уведомление для пользователя о его блокировке
+     */
+    private List<Notification> buildUserBlocked(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "userId");
+        String reason = extractString(payload, "reason");
+
+        if (userId == null) {
+            log.warn("UserBlocked event without userId, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toUserBlocked(event, userId, reason));
+    }
+
+    /**
+     * Создает уведомление для пользователя о его разблокировке
+     */
+    private List<Notification> buildUserUnblocked(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID userId = extractUuid(payload, "userId");
+        String reason = extractString(payload, "reason");
+
+        if (userId == null) {
+            log.warn("UserUnblocked event without userId, eventId={}", eventId);
+            return List.of();
+        }
+
+        return List.of(notificationMapper.toUserUnblocked(event, userId, reason));
     }
 
 }

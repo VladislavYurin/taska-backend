@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package ru.taska.admin_user_management.v1;
+
+import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.admin.management.v1";
+option java_outer_classname = "AdminUserManagementApiProto";
+
+service AdminUserManagementService {
+
+  /**
+  * Блокирует пользователя (админ-операция)
+  */
+  rpc BlockUser(BlockUserRequest) returns (UserStatusAuthResponse);
+
+  /**
+   * Снимает блокировку с пользователя (админ-операция)
+   */
+  rpc UnblockUser(UnblockUserRequest) returns (UserStatusAuthResponse);
+
+  /**
+   * Сбрасывает блокировку после неудачных попыток входа
+   */
+  rpc ResetCredentialLockout(ResetCredentialLockoutAuthRequest) returns (UserCredentialStateAuthResponse);
+}
+
+/**
+ * Запрос на блокировку пользователя.
+ */
+message BlockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  BlockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса блокировки пользователя.
+ */
+message BlockUserRequestBody {
+  /** Идентификатор пользователя, над которым выполняется операция*/
+  string target_user_id = 1;
+  /** Идентификатор пользователя, который выполняет операцию*/
+  string actor_user_id = 2;
+  /** Причина выполнения операции*/
+  string reason = 3;
+}
+
+/**
+ * Запрос на разблокировку пользователя.
+ */
+message UnblockUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  UnblockUserRequestBody body = 2;
+}
+
+/**
+ * Тело запроса разблокировки пользователя.
+ */
+message UnblockUserRequestBody {
+  /** Идентификатор пользователя, над которым выполняется операция*/
+  string target_user_id = 1;
+  /** Идентификатор пользователя, который выполняет операцию*/
+  string actor_user_id = 2;
+  /** Причина выполнения операции*/
+  string reason = 3;
+}
+
+/**
+ * Ответ на запрос(ы) изменений статуса пользователя.
+ */
+message UserStatusAuthResponse {
+  /** Идентификатор пользователя, над которым выполнялась операция*/
+  string user_id = 1;
+  /** Статус пользователя до выполнения операции*/
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  /** Текущий статус пользователя после выполнения операции*/
+  ru.taska.common.v1.UserStatus current_status = 3;
+  /** Временная метка выполнения операция*/
+  google.protobuf.Timestamp changed_at = 4;
+}
+
+/**
+ * Ответ на запрос(ы) изменений статуса пользователя.
+ */
+message UserCredentialStateAuthResponse {
+  /** Идентификатор пользователя, над которым выполнялась операция*/
+  string user_id = 1;
+  /** Статус пользователя до выполнения операции*/
+  ru.taska.common.v1.UserStatus previous_status = 2;
+  /** Текущий статус пользователя после выполнения операции*/
+  ru.taska.common.v1.UserStatus current_status = 3;
+  /** Временная метка выполнения операция*/
+  google.protobuf.Timestamp changed_at = 4;
+  /** Временная метка выполнения операция*/
+  CredentialState old_credential_state = 5;
+  /** Временная метка выполнения операция*/
+  CredentialState new_credential_state = 6;
+}
+
+message CredentialState {
+  int32 failed_attempts = 1;
+  google.protobuf.Timestamp locked_until = 2;    // пустая строка = null
+  google.protobuf.Timestamp last_failed_at = 3;  // пустая строка = null
+}
+
+/**
+ * Запрос на сброс блокировки пользователя после неудачных попыток входа.
+ */
+message ResetCredentialLockoutAuthRequest {
+  ru.taska.common.v1.Header header = 1;
+  ResetCredentialLockoutAuthRequestBody body = 2;
+}
+
+message ResetCredentialLockoutAuthRequestBody {
+  /** Идентификатор пользователя, над которым выполняется операция*/
+  string target_user_id = 1;
+  /** Идентификатор пользователя, который выполняет операцию*/
+  string actor_user_id = 2;
+  /** Причина выполнения операции*/
+  string reason = 3;
+}
