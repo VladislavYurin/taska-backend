@@ -800,6 +800,223 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  # ============ API для issue attachments ============
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments:
+    get:
+      summary: Получение списка вложений к задаче
+      operationId: listAttachments
+      tags:
+        - attachments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Вложения к задаче получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueAttachmentsResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url:
+    post:
+      summary: Запрос Presigned URL для загрузки файла в S3
+      operationId: createAttachmentUploadUrl
+      tags:
+        - attachments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAttachmentUploadUrlRequestDto'
+      responses:
+        '200':
+          description: Presigned URL успешно сгенерирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAttachmentUploadUrlResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/confirm:
+    post:
+      summary: Подтверждение успешной загрузки файла в S3
+      operationId: confirmAttachmentUpload
+      tags:
+        - attachments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmAttachmentUploadRequestDto'
+      responses:
+        '201':
+          description: Вложение успешно прикреплено к задаче
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueAttachmentDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/download-url:
+    get:
+      summary: Получение Presigned URL для скачивания файла
+      operationId: getAttachmentDownloadUrl
+      tags:
+        - attachments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: attachmentId
+          required: true
+          in: path
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ссылка для скачивания получена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAttachmentDownloadUrlResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}:
+    delete:
+      summary: Удаление вложения  задачи
+      operationId: deleteAttachment
+      tags:
+        - attachments
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Вложение успешно удалено
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  # ============== конец API для issue attachments =================
+
   ########################## API для issue комментариев ##################
   /api/v1/projects/{projectId}/issues/{issueId}/comments:
     get:
@@ -1967,7 +2184,7 @@ components:
         history:
           type: array
           items:
-           $ref: '#/components/schemas/IssueHistoryResponseDto'
+            $ref: '#/components/schemas/IssueHistoryResponseDto'
 
     IssueShortResponseDto:
       type: object
@@ -2703,6 +2920,90 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+
+    IssueAttachmentDto:
+      type: object
+      required: [ id, issueId, fileName, contentType, sizeBytes, uploadedBy, createdAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueId:
+          type: string
+          format: uuid
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        uploadedBy:
+          type: string
+          format: uuid
+        checksum:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    IssueAttachmentsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueAttachmentDto'
+
+    CreateAttachmentUploadUrlRequestDto:
+      type: object
+      required: [ fileName, contentType, sizeBytes ]
+      properties:
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+
+    CreateAttachmentUploadUrlResponseDto:
+      type: object
+      required: [ uploadUrl, objectKey ]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+        objectKey:
+          type: string
+
+    ConfirmAttachmentUploadRequestDto:
+      type: object
+      required: [ objectKey, fileName, contentType ]
+      properties:
+        objectKey:
+          type: string
+        fileName:
+          type: string
+        contentType:
+          type: string
+
+    GetAttachmentDownloadUrlResponseDto:
+      type: object
+      required: [downloadUrl]
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+        checksum:
+          type: string
+          nullable: true
+
+
 
     ProblematicOutboxEventsSummaryResponseDto:
       type: object
