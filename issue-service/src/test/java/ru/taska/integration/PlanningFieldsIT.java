@@ -104,7 +104,6 @@ class PlanningFieldsIT extends AbstractIT {
         Assertions.assertThat(created.getOriginalEstimateMinutes()).isNull();
         Assertions.assertThat(created.getRemainingEstimateMinutes()).isNull();
 
-        // GetIssue возвращает planning fields (в данном случае null)
         Issue fetched = issueService.getIssue(REQUEST_ID, NODE_ID, created.getId(), ACTOR_USER_ID)
                                     .block()
                                     .getIssue();
@@ -124,7 +123,6 @@ class PlanningFieldsIT extends AbstractIT {
 
         Assertions.assertThat(created).isNotNull();
 
-        // Перечитываем из реальной БД — проверяем, что R2DBC-маппинг корректно сохранил и прочитал значения
         Issue fetched = issueRepository.findById(created.getId()).block();
         Assertions.assertThat(fetched).isNotNull();
         Assertions.assertThat(fetched.getStoryPoints()).isEqualByComparingTo(STORY_POINTS);

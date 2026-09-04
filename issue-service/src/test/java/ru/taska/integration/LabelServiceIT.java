@@ -60,8 +60,8 @@ class LabelServiceIT extends AbstractIT {
     private static final String REQUEST_ID = "req-label-001";
     private static final String NODE_ID = "issue-service";
 
-    private static final String LABEL_NAME_1 = "Bug";
-    private static final String LABEL_NAME_2 = "Feature";
+    private static final String LABEL_NAME_1 = "bug";
+    private static final String LABEL_NAME_2 = "feature";
     private static final String LABEL_COLOR_1 = "#FF0000";
     private static final String LABEL_COLOR_2 = "#00FF00";
     private static final String LABEL_COLOR_3 = "#FF00FF";

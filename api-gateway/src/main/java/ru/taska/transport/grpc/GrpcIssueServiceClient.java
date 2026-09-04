@@ -158,23 +158,9 @@ public class GrpcIssueServiceClient {
         log.info("[{}] Calling createIssue", context.requestId());
 
         return request.flatMap(requestDto ->
-                        dynamicStub().createIssue(
-                                CreateIssueRequest.newBuilder()
-                                        .setHeader(buildGrpcHeader(context))
-                                        .setBody(
-                                                CreateIssueRequestBody.newBuilder()
-                                                        .setIdempotencyKey(idempotencyKey)
-                                                        .setProjectId(projectId)
-                                                        .setIssueType(issueMapper.toGrpcIssueType(requestDto.getIssueType()))
-                                                        .setSummary(requestDto.getSummary())
-                                                        .setDescription(requestDto.getDescription())
-                                                        .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()))
-                                                        .setReporterId(context.userContext().userId())
-                                                        .build()
-                                        )
-                                        .build())
-                )
-                .map(issueMapper::toRestIssueResponse);
+                           dynamicStub().createIssue(issueMapper.toCreateIssueGrpcRequest(projectId, idempotencyKey, requestDto, context))
+                      )
+                      .map(issueMapper::toRestIssueResponse);
     }
 
     /**
@@ -225,22 +211,9 @@ public class GrpcIssueServiceClient {
         log.info("[{}] Calling updateIssue", context.requestId());
 
         return request.flatMap(requestDto ->
-                        dynamicStub().updateIssue(
-                                UpdateIssueRequest.newBuilder()
-                                        .setHeader(buildGrpcHeader(context))
-                                        .setBody(
-                                                UpdateIssueRequestBody.newBuilder()
-                                                        .setIssueId(issueId)
-                                                        .setActorUserId(context.userContext().userId())
-                                                        .setSummary(requestDto.getSummary())
-                                                        .setDescription(requestDto.getDescription())
-                                                        .setPriority(issueMapper.toGrpcIssuePriority(requestDto.getPriority()))
-                                                        .build()
-                                        )
-                                        .build()
-                        )
-                )
-                .map(issueMapper::toRestUpdateResponse);
+                                       dynamicStub().updateIssue(issueMapper.toUpdateIssueRequest(issueId, requestDto, context))
+                      )
+                      .map(issueMapper::toRestUpdateResponse);
     }
 
     /**

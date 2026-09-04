@@ -77,6 +77,11 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                     Assertions.assertThat(result.getDescription()).isEqualTo(newDescription);
                     Assertions.assertThat(result.getPriority()).isEqualTo(newPriority);
                     Assertions.assertThat(result.getVersion()).isEqualTo(2);
+                    Assertions.assertThat(result.getStoryPoints()).isEqualTo(STORY_POINTS);
+                    Assertions.assertThat(result.getStartDate()).isEqualTo(START_DATE);
+                    Assertions.assertThat(result.getDueDate()).isEqualTo(DUE_DATE);
+                    Assertions.assertThat(result.getOriginalEstimateMinutes()).isEqualTo(ORIGINAL_ESTIMATE_MINUTES);
+                    Assertions.assertThat(result.getRemainingEstimateMinutes()).isEqualTo(REMAINING_ESTIMATE_MINUTES);
                 })
                 .verifyComplete();
 

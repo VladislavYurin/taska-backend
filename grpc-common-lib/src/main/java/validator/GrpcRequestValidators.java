@@ -180,8 +180,8 @@ public final class GrpcRequestValidators {
 
         if (value < 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
 
         return Mono.just(Optional.of(value));
@@ -208,8 +208,8 @@ public final class GrpcRequestValidators {
         }
         if (value == null || value <= 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
         return Mono.just(Optional.of(value));
     }
@@ -411,8 +411,8 @@ public final class GrpcRequestValidators {
     public static Mono<Long> requirePositiveOrInvalidArgument(long value, String fieldName) {
         if (value <= 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
         return Mono.just(value);
     }
@@ -428,8 +428,8 @@ public final class GrpcRequestValidators {
     public static <T extends ProtocolMessageEnum> Mono<T> requireSpecifiedOrInvalidArgument(T value, String fieldName) {
         if (value.getNumber() == 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be specified")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be specified")
+                                      .asRuntimeException());
         }
         return Mono.just(value);
     }

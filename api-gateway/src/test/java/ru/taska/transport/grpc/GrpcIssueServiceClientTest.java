@@ -1,5 +1,7 @@
 package ru.taska.transport.grpc;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,9 +14,11 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueRequestBody;
 import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
@@ -33,6 +37,7 @@ import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
@@ -50,9 +55,6 @@ import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
-
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 @ExtendWith(MockitoExtension.class)
 class GrpcIssueServiceClientTest {
@@ -216,43 +218,48 @@ class GrpcIssueServiceClientTest {
     @DisplayName("Должен вызвать gRPC createIssue и вернуть ответ")
     void createIssue_shouldCallStubAndReturnMappedResponse() {
         var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, "MEDIUM");
+
+        var grpcRequest = CreateIssueRequest.newBuilder()
+                                            .setHeader(
+                                                    Header.newBuilder()
+                                                          .setRequestId(REQUEST_ID)
+                                                          .setNodeId(NODE_ID)
+                                                          .build()
+                                            )
+                                            .setBody(
+                                                    CreateIssueRequestBody.newBuilder()
+                                                                          .setIdempotencyKey(IDEMPOTENCY_KEY)
+                                                                          .setProjectId(PROJECT_ID)
+                                                                          .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                                                                          .setSummary(SUMMARY)
+                                                                          .setDescription(DESCRIPTION)
+                                                                          .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                                                                          .setReporterId(USER_ID)
+                                                                          .build()
+                                            )
+                                            .build();
+
         var grpcResponse = IssueResponse.getDefaultInstance();
         var restResponse = new IssueResponseDto();
 
-        Mockito.when(stub.createIssue(Mockito.any(CreateIssueRequest.class)))
-                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(issueMapper.toCreateIssueGrpcRequest(PROJECT_ID, IDEMPOTENCY_KEY, restRequest, context))
+               .thenReturn(grpcRequest);
 
-        Mockito.when(issueMapper.toGrpcIssueType("TASK"))
-                .thenReturn(IssueType.ISSUE_TYPE_TASK);
-
-        Mockito.when(issueMapper.toGrpcIssuePriority("MEDIUM"))
-                .thenReturn(IssuePriority.ISSUE_PRIORITY_MEDIUM);
+        Mockito.when(stub.createIssue(grpcRequest))
+               .thenReturn(Mono.just(grpcResponse));
 
         Mockito.when(issueMapper.toRestIssueResponse(grpcResponse))
-                .thenReturn(restResponse);
+               .thenReturn(restResponse);
 
         StepVerifier.create(client.createIssue(PROJECT_ID, IDEMPOTENCY_KEY, Mono.just(restRequest), context))
-                .expectNext(restResponse)
-                .verifyComplete();
+                    .expectNext(restResponse)
+                    .verifyComplete();
 
-        var captor = ArgumentCaptor.forClass(CreateIssueRequest.class);
-
-        Mockito.verify(stub, Mockito.times(1)).createIssue(captor.capture());
-
-        var request = captor.getValue();
-
-        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
-        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
-        Assertions.assertThat(request.getBody().getIdempotencyKey()).isEqualTo(IDEMPOTENCY_KEY);
-        Assertions.assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT_ID);
-        Assertions.assertThat(request.getBody().getIssueType()).isEqualTo(IssueType.ISSUE_TYPE_TASK);
-        Assertions.assertThat(request.getBody().getSummary()).isEqualTo(SUMMARY);
-        Assertions.assertThat(request.getBody().getDescription()).isEqualTo(DESCRIPTION);
-        Assertions.assertThat(request.getBody().getPriority()).isEqualTo(IssuePriority.ISSUE_PRIORITY_MEDIUM);
-        Assertions.assertThat(request.getBody().getReporterId()).isEqualTo(USER_ID);
-
+        Mockito.verify(stub, Mockito.times(1)).createIssue(grpcRequest);
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestIssueResponse(grpcResponse);
+               .toCreateIssueGrpcRequest(PROJECT_ID, IDEMPOTENCY_KEY, restRequest, context);
+        Mockito.verify(issueMapper, Mockito.times(1))
+               .toRestIssueResponse(grpcResponse);
     }
 
     @Test
@@ -292,38 +299,46 @@ class GrpcIssueServiceClientTest {
     @DisplayName("Должен вызвать gRPC updateIssue и вернуть ответ")
     void updateIssue_shouldCallStubAndReturnMappedResponse() {
         var restRequest = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, "MEDIUM");
+
+        var grpcRequest = UpdateIssueRequest.newBuilder()
+                                            .setHeader(
+                                                    Header.newBuilder()
+                                                          .setRequestId(REQUEST_ID)
+                                                          .setNodeId(NODE_ID)
+                                                          .build()
+                                            )
+                                            .setBody(
+                                                    UpdateIssueRequestBody.newBuilder()
+                                                                          .setIssueId(ISSUE_ID)
+                                                                          .setActorUserId(USER_ID)
+                                                                          .setSummary(SUMMARY)
+                                                                          .setDescription(DESCRIPTION)
+                                                                          .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                                                                          .build()
+                                            )
+                                            .build();
+
         var grpcResponse = UpdateIssueResponse.getDefaultInstance();
         var restResponse = new UpdateIssueResponseDto();
 
-        Mockito.when(stub.updateIssue(Mockito.any(UpdateIssueRequest.class)))
-                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(issueMapper.toUpdateIssueRequest(ISSUE_ID, restRequest, context))
+               .thenReturn(grpcRequest);
 
-        Mockito.when(issueMapper.toGrpcIssuePriority("MEDIUM"))
-                .thenReturn(IssuePriority.ISSUE_PRIORITY_MEDIUM);
+        Mockito.when(stub.updateIssue(grpcRequest))
+               .thenReturn(Mono.just(grpcResponse));
 
         Mockito.when(issueMapper.toRestUpdateResponse(grpcResponse))
-                .thenReturn(restResponse);
+               .thenReturn(restResponse);
 
         StepVerifier.create(client.updateIssue(ISSUE_ID, Mono.just(restRequest), context))
-                .expectNext(restResponse)
-                .verifyComplete();
+                    .expectNext(restResponse)
+                    .verifyComplete();
 
-        var capture = ArgumentCaptor.forClass(UpdateIssueRequest.class);
-
-        Mockito.verify(stub, Mockito.times(1)).updateIssue(capture.capture());
-
-        var request = capture.getValue();
-
-        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
-        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
-        Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
-        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
-        Assertions.assertThat(request.getBody().getSummary()).isEqualTo(SUMMARY);
-        Assertions.assertThat(request.getBody().getDescription()).isEqualTo(DESCRIPTION);
-        Assertions.assertThat(request.getBody().getPriority()).isEqualTo(IssuePriority.ISSUE_PRIORITY_MEDIUM);
-
+        Mockito.verify(stub, Mockito.times(1)).updateIssue(grpcRequest);
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestUpdateResponse(grpcResponse);
+               .toUpdateIssueRequest(ISSUE_ID, restRequest, context);
+        Mockito.verify(issueMapper, Mockito.times(1))
+               .toRestUpdateResponse(grpcResponse);
     }
 
     @Test
