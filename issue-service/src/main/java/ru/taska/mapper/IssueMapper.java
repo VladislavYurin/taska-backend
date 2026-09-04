@@ -67,6 +67,7 @@ public class IssueMapper {
                 .setReporterId(issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
+                .setTimeSpentMinutes(issue.getTimeSpentMinutes() != null ? issue.getTimeSpentMinutes() : 0)
                 .setVersion(issue.getVersion());
 
         if (issue.getStoryPoints() != null) {
@@ -320,6 +321,9 @@ public class IssueMapper {
             case COMMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_DELETED;
             case LABEL_ADDED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_ADDED;
             case LABEL_REMOVED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_REMOVED;
+            case WORKLOG_ADDED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_WORKLOG_ADDED;
+            case WORKLOG_UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_WORKLOG_UPDATED;
+            case WORKLOG_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_WORKLOG_DELETED;
         };
     }
 
