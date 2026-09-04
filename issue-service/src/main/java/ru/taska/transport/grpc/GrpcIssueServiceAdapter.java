@@ -8,6 +8,8 @@ import ru.taska.api.issue.v1.AddIssueCommentRequest;
 import ru.taska.api.issue.v1.AddIssueCommentResponse;
 import ru.taska.api.issue.v1.AddIssueLabelRequest;
 import ru.taska.api.issue.v1.AddIssueLabelResponse;
+import ru.taska.api.issue.v1.AddIssueWorklogRequest;
+import ru.taska.api.issue.v1.AddIssueWorklogResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
@@ -18,6 +20,8 @@ import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.DeleteIssueWorklogRequest;
+import ru.taska.api.issue.v1.DeleteIssueWorklogResponse;
 import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
@@ -34,6 +38,8 @@ import ru.taska.api.issue.v1.ListIssueLinksRequest;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssueWatchersRequest;
 import ru.taska.api.issue.v1.ListIssueWatchersResponse;
+import ru.taska.api.issue.v1.ListIssueWorklogsRequest;
+import ru.taska.api.issue.v1.ListIssueWorklogsResponse;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.api.issue.v1.ListIssuesForBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
@@ -53,6 +59,8 @@ import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
 import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.issue.v1.UpdateIssueWorklogRequest;
+import ru.taska.api.issue.v1.UpdateIssueWorklogResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 import ru.taska.api.issue.v1.WatchIssueRequest;
 import ru.taska.api.issue.v1.WatchIssueResponse;
@@ -65,6 +73,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     private final GrpcIssueCommentService grpcIssueCommentService;
     private final GrpcIssueLinkService grpcIssueLinkService;
     private final GrpcIssueWatcherService grpcIssueWatcherService;
+    private final GrpcIssueWorklogService grpcIssueWorklogService;
 
     @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
@@ -192,6 +201,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
         return grpcIssueWatcherService.getIssueWatchState(request);
     }
 
+    @Override
     public Mono<ProjectLabelResponse> createProjectLabel(Mono<CreateProjectLabelRequest> request) {
         return grpcIssueService.createProjectLabel(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("createProjectLabel"));
@@ -242,6 +252,30 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
         return grpcIssueService.searchIssues(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
+    }
+
+    @Override
+    public Mono<AddIssueWorklogResponse> addIssueWorklog( Mono<AddIssueWorklogRequest> request) {
+        return grpcIssueWorklogService.addIssueWorklog(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addIssueWorklog"));
+    }
+
+    @Override
+    public Mono<UpdateIssueWorklogResponse> updateIssueWorklog(Mono<UpdateIssueWorklogRequest> request) {
+        return grpcIssueWorklogService.updateIssueWorklog(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateIssueWorklog"));
+    }
+
+    @Override
+    public Mono<ListIssueWorklogsResponse> listIssueWorklogs(Mono<ListIssueWorklogsRequest> request) {
+        return grpcIssueWorklogService.listIssueWorklogs(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssueWorklogs"));
+    }
+
+    @Override
+    public Mono<DeleteIssueWorklogResponse> deleteIssueWorklog(Mono<DeleteIssueWorklogRequest> request) {
+        return grpcIssueWorklogService.deleteIssueWorklog(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueWorklog"));
     }
 
     @Override

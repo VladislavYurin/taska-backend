@@ -151,4 +151,11 @@ public class Issue {
      */
     @Column("remaining_estimate_minutes")
     private Integer remainingEstimateMinutes;
+
+    /**
+     * Потраченное время в минутах.
+     */
+    @Column("time_spent_minutes")
+    private Integer timeSpentMinutes;
+
 }

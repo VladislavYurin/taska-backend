@@ -67,6 +67,11 @@ issue:
     remove-issue-label-roles: ${ISSUE_REMOVE_ISSUE_LABEL_ROLES:ADMIN,MEMBER}
     list-issue-label-roles: ${ISSUE_LIST_ISSUE_LABEL_ROLES:ADMIN,MEMBER,VIEWER}
     search-issue-roles: [ADMIN, MEMBER, VIEWER]
+    add-worklog-roles: ${ISSUE_ADD_WORKLOG_ROLES:ADMIN,MEMBER}
+    update-worklog-roles: ${ISSUE_UPDATE_WORKLOG_ROLES:ADMIN,MEMBER}
+    delete-worklog-roles: ${ISSUE_DELETE_WORKLOG_ROLES:ADMIN,MEMBER}
+    manage-worklog-roles: ${ISSUE_MANAGE_WORKLOG_ROLES:ADMIN}
+    list-worklog-roles: ${ISSUE_LIST_WORKLOG_ROLES:ADMIN,MEMBER,VIEWER}
   search:
     min-query-length: ${ISSUE_SEARCH_MIN_QUERY_LENGTH:3}
   idempotency-key-ttl:
@@ -74,6 +79,7 @@ issue:
   retry:
     max-attempts: ${ISSUE_TRANSITION_RETRY_MAX_ATTEMPTS:2}
     min-backoff: ${ISSUE_TRANSITION_RETRY_MIN_BACKOFF:100ms}
+  max-future-days: ${MAX_FUTURE_DAYS:1}
 
 management:
   endpoints:
