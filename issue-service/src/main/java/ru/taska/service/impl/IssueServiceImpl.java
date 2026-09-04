@@ -1,5 +1,8 @@
 package ru.taska.service.impl;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -84,7 +87,12 @@ public class IssueServiceImpl implements IssueService {
             String summary,
             String description,
             IssuePriority priority,
-            UUID reporterId
+            UUID reporterId,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
         String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
@@ -120,6 +128,11 @@ public class IssueServiceImpl implements IssueService {
                                             .reporterId(reporterId)
                                             .statusKey(INIT_STATUS)
                                             .version(INIT_VERSION)
+                                            .storyPoints(storyPoints)
+                                            .startDate(startDate)
+                                            .dueDate(dueDate)
+                                            .originalEstimateMinutes(originalEstimateMinutes)
+                                            .remainingEstimateMinutes(remainingEstimateMinutes)
                                             .build());
                                 })
                                 .flatMap(issue -> {
@@ -196,8 +209,20 @@ public class IssueServiceImpl implements IssueService {
 
     @Override
     @Transactional
-    public Mono<Issue> updateIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
-                                   String summary, String description, IssuePriority priority) {
+    public Mono<Issue> updateIssue(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId,
+            String summary,
+            String description,
+            IssuePriority priority,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes
+    ) {
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
@@ -211,7 +236,22 @@ public class IssueServiceImpl implements IssueService {
                             .thenReturn(issue);
                 })
                 .flatMap(updatingIssue -> {
-                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority);
+
+                    if (updatingIssue.getDueDate() != null && startDate != null && startDate.isAfter(updatingIssue.getDueDate())) {
+                        log.warn("Start date: [{}] must be before Due date: [{}]",
+                                startDate, updatingIssue.getDueDate());
+                        throw new DomainException(
+                                DomainStatus.INVALID_ARGUMENT,
+                                "Due date: " + startDate + " must be after Start date: " + updatingIssue.getDueDate()
+                        );
+                    };
+
+                    if (updatingIssue.getStartDate() != null && dueDate != null && dueDate.isBefore(updatingIssue.getStartDate())) {
+                        log.warn("Due date: [{}] must be after Start date: [{}]", dueDate, updatingIssue.getStartDate());
+                        throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Due date: "+ dueDate + " must be after Start date: " + updatingIssue.getStartDate());
+                    };
+
+                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority, storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
                     if (payload.isEmpty()) {
                         log.info("[{}][{}] Issue with id: {} equals updated updatingIssue by user with id: {}",
                                 requestId, nodeId, issueId, actorUserId);
@@ -223,6 +263,11 @@ public class IssueServiceImpl implements IssueService {
                     updatingIssue.setPriority(priority);
                     updatingIssue.setUpdatedAt(Instant.now());
                     updatingIssue.setVersion(updatingIssue.getVersion() + 1);
+                    updatingIssue.setStoryPoints(storyPoints);
+                    updatingIssue.setStartDate(startDate);
+                    updatingIssue.setDueDate(dueDate);
+                    updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
+                    updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
 
                     return issueRepository.save(updatingIssue)
                             .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, savedIssue.getId(),

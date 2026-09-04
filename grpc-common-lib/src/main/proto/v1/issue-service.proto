@@ -290,6 +290,31 @@ message CreateIssueRequestBody {
    * Идентификатор создателя задачи.
    */
   string reporter_id = 7;
+
+  /**
+    * Story points задачи.
+    */
+  optional double story_points = 8;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 9;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 10;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 11;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 12;
 }
 
 message GetIssueRequest {
@@ -377,6 +402,31 @@ message UpdateIssueRequestBody {
    * Приоритет задачи.
    */
   IssuePriority priority = 6;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 7;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 8;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 9;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 10;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 11;
 }
 
 message ListIssuesRequest {
@@ -583,6 +633,31 @@ message UpdateIssueResponse {
    * Приоритет задачи.
    */
   IssuePriority priority = 4;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 5;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 6;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 7;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 8;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 9;
 }
 
 message ListIssuesResponse {
@@ -627,6 +702,11 @@ message IssueShortResponse {
    * Идентификатор исполнителя задачи.
    */
   string assignee_id = 6;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 7;
 }
 
 message IssueResponse {
@@ -706,19 +786,44 @@ message IssueResponse {
   google.protobuf.Timestamp deleted_at = 15;
 
   /**
+   * Story points задачи.
+   */
+  optional double story_points = 16;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 17;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 18;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 19;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 20;
+
+  /**
    * Метки задачи.
    */
-  repeated ProjectLabelResponse labels = 16;
+  repeated ProjectLabelResponse labels = 21;
 
   /**
    * Количество подписчиков задачи.
    */
-  int32 watchers_count = 17;
+  int32 watchers_count = 22;
 
   /**
    * Признак подписки текущего пользователя (если актор известен).
    */
-  optional bool watched_by_me = 18;
+  optional bool watched_by_me = 23;
 }
 
 // ============ Метки проекта =================
