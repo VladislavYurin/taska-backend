@@ -86,7 +86,8 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldCallProjectCounterOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
@@ -107,7 +108,8 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue result = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.BUG,
-                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID
+                "Ошибка", "Описание", IssuePriority.HIGH, REPORTER_ID,
+                null, null, null, null, null
         ).block();
 
         Assertions.assertThat(result).isNotNull();
@@ -128,11 +130,13 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Задача 1", null, IssuePriority.LOW, REPORTER_ID
+                "Задача 1", null, IssuePriority.LOW, REPORTER_ID,
+                null, null, null, null, null
         ).block();
         Issue second = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_2, PROJECT_ID, IssueType.TASK,
-                "Задача 2", null, IssuePriority.LOW, REPORTER_ID
+                "Задача 2", null, IssuePriority.LOW, REPORTER_ID,
+                null, null, null, null, null
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2))
@@ -152,7 +156,8 @@ class CreateIssueTest extends IssueServiceImplTest {
     void shouldSaveOutboxEventOnIssueCreation() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY_1, PROJECT_ID, IssueType.TASK,
-                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID
+                "Тестовая задача", null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null
         ).block();
 
         Mockito.verify(outboxEventService, Mockito.times(1))

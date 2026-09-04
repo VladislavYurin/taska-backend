@@ -78,7 +78,8 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldSaveIdempotencyKeyAndReturnCreatedIssue() {
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .assertNext(result -> {
                     Assertions.assertNotNull(result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -86,7 +87,7 @@ class IdempotencyKeyIT extends AbstractIT {
                 .verifyComplete();
 
         Assertions.assertEquals(1L, issueRepository.count().block());
-        Assertions.assertEquals(1L, outboxEventRepository.count().block());
+        Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         IdempotencyKey saved = idempotencyKeyRepository.findByUserIdAndKey(REPORTER_ID, IDEMPOTENCY_KEY).block();
         Assertions.assertNotNull(saved);
@@ -102,7 +103,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null).block();
         Assertions.assertNotNull(first);
 
         long issuesAfterFirst = issueRepository.count().block();
@@ -110,7 +112,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .assertNext(result -> {
                     Assertions.assertEquals(first.getId(), result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -125,13 +128,15 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldThrowFailedPreconditionOnSameKeyDifferentBody() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null).block();
 
         long issuesAfterFirst = issueRepository.count().block();
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID))
+                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .expectErrorSatisfies(error -> {
                     DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
                     Assertions.assertEquals(DomainStatus.FAILED_PRECONDITION, ex.getStatus());
@@ -149,7 +154,8 @@ class IdempotencyKeyIT extends AbstractIT {
                 Flux.range(0, parallelism)
                         .map(i -> issueService.createIssue(
                                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID)
+                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                                        null, null, null, null, null)
                                 .map(issue -> "OK")
                                 .onErrorResume(e -> Mono.just("ERR:" + e.getClass().getSimpleName()))
                                 .subscribeOn(Schedulers.boundedElastic()))
@@ -157,7 +163,7 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Assertions.assertEquals(1L, issueRepository.count().block());
         Assertions.assertEquals(1L, idempotencyKeyRepository.count().block());
-        Assertions.assertEquals(1L, outboxEventRepository.count().block());
+        Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         Assertions.assertNotNull(results);
         Assertions.assertEquals(parallelism, results.size());

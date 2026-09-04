@@ -1,5 +1,7 @@
 package ru.taska.domain;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -119,4 +121,34 @@ public class Issue {
      */
     @Column("deleted_at")
     private Instant deletedAt;
+
+    /**
+     * Story points задачи (абстрактная оценка сложности).
+     */
+    @Column("story_points")
+    private BigDecimal storyPoints;
+
+    /**
+     * Дата начала работы над задачей.
+     */
+    @Column("start_date")
+    private LocalDate startDate;
+
+    /**
+     * Дата окончания работы над задачей (дедлайн).
+     */
+    @Column("due_date")
+    private LocalDate dueDate;
+
+    /**
+     * Исходная оценка времени в минутах.
+     */
+    @Column("original_estimate_minutes")
+    private Integer originalEstimateMinutes;
+
+    /**
+     * Оставшееся время в минутах.
+     */
+    @Column("remaining_estimate_minutes")
+    private Integer remainingEstimateMinutes;
 }

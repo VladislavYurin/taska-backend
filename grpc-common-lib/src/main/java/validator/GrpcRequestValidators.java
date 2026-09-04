@@ -3,6 +3,11 @@ package validator;
 import com.google.protobuf.ProtocolMessageEnum;
 import io.grpc.Status;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import reactor.core.publisher.Mono;
@@ -106,7 +111,7 @@ public final class GrpcRequestValidators {
                     try {
                         return Mono.just(UUID.fromString(value));
                     } catch (IllegalArgumentException ex) {
-                        return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                        return Mono.error(Status.INVALID_ARGUMENT
                                                   .withDescription(fieldName + " must be a valid UUID")
                                                   .asRuntimeException());
                     }
@@ -175,8 +180,8 @@ public final class GrpcRequestValidators {
 
         if (value < 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
 
         return Mono.just(Optional.of(value));
@@ -202,14 +207,113 @@ public final class GrpcRequestValidators {
             return Mono.just(Optional.empty());
         }
         if (value == null || value <= 0) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
         return Mono.just(Optional.of(value));
     }
 
+    /**
+     * Проверяет опциональное числовое значение на положительность (>= 0).
+     * Если значение не указано (hasValue = false) - возвращает Optional.empty().
+     *
+     * @param hasValue  флаг, указывающий, что значение присутствует (optional поле в protobuf)
+     * @param value     числовое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link Optional} содержащим значение,
+     *         или ошибкой {@code INVALID_ARGUMENT} если значение <= 0
+     */
+    public static Mono<Optional<BigDecimal>> requireOptionalPositiveZeroOrInvalidArgument(
+            boolean hasValue,
+            Double value,
+            String fieldName
+    ) {
+        if (!hasValue) {
+            return Mono.just(Optional.empty());
+        }
+        if (value == null || value < 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
+        }
+        return Mono.just(Optional.of(BigDecimal.valueOf(value)));
+    }
 
+    /**
+     * Проверяет, что дата начала не позже даты завершения, и возвращает распарсенные даты
+     * в виде списка {@link Optional}.
+     *
+     * <p>Метод парсит переданные строковые представления дат в формате ISO {@code yyyy-MM-dd}
+     * (если соответствующий флаг {@code hasValue*} установлен в {@code true}), после чего,
+     * если обе даты присутствуют, проверяет, что дата начала не наступает позже даты
+     * завершения.
+     *
+     * <p>Результатом является {@link Mono} со списком из двух элементов:
+     * <ul>
+     *     <li>элемент с индексом {@code 0} — {@link Optional#of(Object)} с датой начала,
+     *     если {@code hasValueStart} равен {@code true}, иначе {@link Optional#empty()};</li>
+     *     <li>элемент с индексом {@code 1} — {@link Optional#of(Object)} с датой завершения,
+     *     если {@code hasValueDue} равен {@code true}, иначе {@link Optional#empty()}.</li>
+     * </ul>
+     *
+     * @param hasValueStart  флаг, указывающий, что дата начала присутствует (optional поле в protobuf)
+     * @param startDate      строковое представление даты начала в формате ISO {@code yyyy-MM-dd};
+     * @param hasValueDue    флаг, указывающий, что дата окончания присутствует (optional поле в protobuf)
+     * @param dueDate        строковое представление даты завершения в формате ISO {@code yyyy-MM-dd};
+     * @param fieldNameStart наименование поля даты начала, используемое в сообщении об ошибке
+     * @param fieldNameDue   наименование поля даты завершения, используемое в сообщении об ошибке
+     * @return {@link Mono}, список из двух {@link Optional}: дата начала и дата
+     *              завершения (в этом порядке)
+     * @throws io.grpc.StatusRuntimeException (через {@link Mono#error(Throwable)}) со статусом
+     *         {@code INVALID_ARGUMENT}, если:
+     *         <ul>
+     *             <li>{@code startDate} или {@code dueDate} не удалось распарсить как дату
+     *             в формате ISO {@code yyyy-MM-dd};</li>
+     *             <li>обе даты присутствуют и дата начала позже даты завершения.</li>
+     *         </ul>
+     */
+    public static Mono<List<Optional<LocalDate>>> requireStartDateBeforeDueDate(
+            boolean hasValueStart,
+            String startDate,
+            boolean hasValueDue,
+            String dueDate,
+            String fieldNameStart,
+            String fieldNameDue) {
+
+        LocalDate startLocalDate;
+        LocalDate dueLocalDate;
+
+        try {
+            startLocalDate = hasValueStart ? LocalDate.parse(startDate) : null;
+            dueLocalDate = hasValueDue ? LocalDate.parse(dueDate) : null;
+        } catch (DateTimeParseException e) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription("Invalid date format, expected ISO yyyy-MM-dd: " + e.getParsedString())
+                                      .asRuntimeException());
+        }
+        List<Optional<LocalDate>> optionalList = new ArrayList<>();
+
+        if (hasValueStart && hasValueDue && startLocalDate.isAfter(dueLocalDate)) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription(fieldNameStart + " cannot be later than " + fieldNameDue)
+                                      .asRuntimeException());
+        }
+
+        if (hasValueStart) {
+            optionalList.add(Optional.of(startLocalDate));
+        } else {
+            optionalList.add(Optional.empty());
+        }
+
+        if (hasValueDue) {
+            optionalList.add(Optional.of(dueLocalDate));
+        } else {
+            optionalList.add(Optional.empty());
+        }
+
+        return Mono.just(optionalList);
+    }
 
     /**
      * Проверяет, что опциональное proto enum значение задано
@@ -251,7 +355,7 @@ public final class GrpcRequestValidators {
     public static Mono<String> requireValidLogin(String raw, String fieldName) {
         return requireNonBlank(raw, fieldName)
                 .filter(login -> !login.contains("@"))
-                .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                .switchIfEmpty(Mono.error(Status.INVALID_ARGUMENT
                                                   .withDescription(fieldName + " must not contain '@'")
                                                   .asRuntimeException()));
     }
@@ -282,14 +386,14 @@ public final class GrpcRequestValidators {
     public static Mono<String> requireValidEmail(String raw, String fieldName) {
         return requireNonBlank(raw, fieldName)
                 .filter(email -> email.contains("@"))
-                .switchIfEmpty(Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                .switchIfEmpty(Mono.error(Status.INVALID_ARGUMENT
                                                   .withDescription(fieldName + " must contain '@'")
                                                   .asRuntimeException()));
     }
 
     private static Mono<String> requireNonBlank(String raw, String fieldName) {
         if (raw == null || raw.isBlank()) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+            return Mono.error(Status.INVALID_ARGUMENT
                                       .withDescription(fieldName + " must not be blank")
                                       .asRuntimeException());
         }
@@ -306,9 +410,9 @@ public final class GrpcRequestValidators {
      */
     public static Mono<Long> requirePositiveOrInvalidArgument(long value, String fieldName) {
         if (value <= 0) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription(fieldName + " must be positive")
+                                      .asRuntimeException());
         }
         return Mono.just(value);
     }
@@ -323,9 +427,9 @@ public final class GrpcRequestValidators {
      */
     public static <T extends ProtocolMessageEnum> Mono<T> requireSpecifiedOrInvalidArgument(T value, String fieldName) {
         if (value.getNumber() == 0) {
-            return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be specified")
-                    .asRuntimeException());
+            return Mono.error(Status.INVALID_ARGUMENT
+                                      .withDescription(fieldName + " must be specified")
+                                      .asRuntimeException());
         }
         return Mono.just(value);
     }

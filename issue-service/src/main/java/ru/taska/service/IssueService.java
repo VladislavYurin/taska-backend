@@ -1,5 +1,8 @@
 package ru.taska.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
@@ -24,7 +27,12 @@ public interface IssueService {
             String summary,
             String description,
             IssuePriority priority,
-            UUID reporterId
+            UUID reporterId,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes
     );
 
     Mono<Issue> assignIssue(
@@ -92,7 +100,12 @@ public interface IssueService {
                             UUID actorUserId,
                             String summary,
                             String description,
-                            IssuePriority priority
+                            IssuePriority priority,
+                            BigDecimal storyPoints,
+                            LocalDate startDate,
+                            LocalDate dueDate,
+                            Integer originalEstimateMinutes,
+                            Integer remainingEstimateMinutes
     );
 
     Mono<PageResult<Issue>> searchIssues(
