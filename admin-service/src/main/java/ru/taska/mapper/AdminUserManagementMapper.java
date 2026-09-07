@@ -228,7 +228,7 @@ public class AdminUserManagementMapper {
             case USER_STATUS_BLOCKED -> "BLOCKED";
             case USER_STATUS_INVITED -> "INVITED";
             case USER_STATUS_LOCKED -> "LOCKED";
-            default -> throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid user status received");
+            default -> throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid user status received: " + protoStatus.name());
         };
     }
 }
