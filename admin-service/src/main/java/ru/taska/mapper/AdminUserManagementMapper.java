@@ -19,6 +19,8 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -149,8 +151,8 @@ public class AdminUserManagementMapper {
     public UserStatusResponseDto toUserStatusResponseDto(UserStatusAuthResponse grpcResponse) {
         return UserStatusResponseDto.builder()
                 .userId(UUID.fromString(grpcResponse.getUserId()))
-                .previousStatus(grpcResponse.getPreviousStatus().name())
-                .currentStatus(grpcResponse.getCurrentStatus().name())
+                .previousStatus(toUserStatus(grpcResponse.getPreviousStatus()))
+                .currentStatus(toUserStatus(grpcResponse.getCurrentStatus()))
                 .changedAt(toOffsetDateTime(grpcResponse.getChangedAt()))
                 .build();
     }
@@ -160,8 +162,8 @@ public class AdminUserManagementMapper {
     public UserCredentialStateResponseDto toUserCredentialStateResponseDto(UserCredentialStateAuthResponse grpcResponse) {
         return UserCredentialStateResponseDto.builder()
                 .userId(UUID.fromString(grpcResponse.getUserId()))
-                .previousStatus(grpcResponse.getPreviousStatus().name())
-                .currentStatus(grpcResponse.getCurrentStatus().name())
+                .previousStatus(toUserStatus(grpcResponse.getPreviousStatus()))
+                .currentStatus(toUserStatus(grpcResponse.getCurrentStatus()))
                 .changedAt(toOffsetDateTime(grpcResponse.getChangedAt()))
                 .oldCredentialState(
                         UserCredentialStateResponseDto.CredentialState.builder()
@@ -210,6 +212,23 @@ public class AdminUserManagementMapper {
             case "INVITED" -> UserStatus.USER_STATUS_INVITED;
             case "LOCKED" -> UserStatus.USER_STATUS_LOCKED;
             default -> UserStatus.USER_STATUS_UNSPECIFIED;
+        };
+    }
+
+    /**
+     * Преобразует protobuf статус пользователя в строковое представление без префикса.
+     *
+     * @param protoStatus protobuf статус пользователя
+     * @return строковое представление статуса без префикса
+     * @throws DomainException если передан неизвестный статус (чего в теории быть не должно), чтобы в аудит не записывалось невалидное значение
+     */
+    private String toUserStatus(UserStatus protoStatus) {
+        return switch (protoStatus) {
+            case USER_STATUS_ACTIVE -> "ACTIVE";
+            case USER_STATUS_BLOCKED -> "BLOCKED";
+            case USER_STATUS_INVITED -> "INVITED";
+            case USER_STATUS_LOCKED -> "LOCKED";
+            default -> throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid user status received");
         };
     }
 }
