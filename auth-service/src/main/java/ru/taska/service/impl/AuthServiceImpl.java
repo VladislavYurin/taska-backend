@@ -92,7 +92,7 @@ public class AuthServiceImpl implements AuthService {
                             }
                             return verifyPassword(credential, password, user)
                                     .flatMap(validCredential ->
-                                            resetFailedAttempts(validCredential)
+                                            resetFailedAttempts(validCredential,user)
                                                     .then(generateTokens(credential.getUserId()))
                                     );
                         })
@@ -245,7 +245,7 @@ public class AuthServiceImpl implements AuthService {
                         return Mono.just(credential);
                     } else {
                         log.warn("Failed login attempt for user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
-                        return handleFailedAttempt(credential);
+                        return handleFailedAttempt(credential,user);
                     }
                 });
     }
@@ -256,12 +256,14 @@ public class AuthServiceImpl implements AuthService {
      * @param credential учётные данные
      * @return никогда не возвращает успех, всегда ошибка {@link DomainException}
      */
-    private Mono<Credential> handleFailedAttempt(Credential credential) {
+    private Mono<Credential> handleFailedAttempt(Credential credential,User user) {
         int newAttempts = (credential.getFailedAttempts() == null ? 1 : credential.getFailedAttempts() + 1);
         Instant now = Instant.now();
         Instant lockedUntil = null;
 
-        if (newAttempts >= securityProperties.getMaxFailedAttempts()) {
+        boolean shouldLock = newAttempts >= securityProperties.getMaxFailedAttempts();
+
+        if (shouldLock) {
             lockedUntil = now.plus(securityProperties.getLockDuration().toMinutes(), ChronoUnit.MINUTES);
             log.warn("Account locked until {} due to {} failed attempts", lockedUntil, newAttempts);
         }
@@ -271,6 +273,14 @@ public class AuthServiceImpl implements AuthService {
         credential.setLockedUntil(lockedUntil);
 
         return credentialRepository.save(credential)
+                .flatMap(savedCredential -> {
+                    if (shouldLock && (user.getStatus() != UserStatus.LOCKED)) {
+                        user.setStatus(UserStatus.LOCKED);
+                        return userRepository.save(user)
+                                .thenReturn(savedCredential);
+                    }
+                    return Mono.just(savedCredential);
+                })
                 .then(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
     }
 
@@ -280,10 +290,21 @@ public class AuthServiceImpl implements AuthService {
      * @param credential учётные данные
      * @return сохранённые учётные данные с обнулёнными попытками
      */
-    private Mono<Credential> resetFailedAttempts(Credential credential) {
+    private Mono<Credential> resetFailedAttempts(Credential credential,User user) {
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
-        return credentialRepository.save(credential);
+        return credentialRepository.save(credential)
+                .flatMap(savedCredential->{
+                    if (user.getStatus() == UserStatus.LOCKED) {
+                        user.setStatus(UserStatus.ACTIVE);
+                        return userRepository.save(user)
+                                .thenReturn(savedCredential);
+                    }
+                    return Mono.just(savedCredential);
+                })
+                .doOnSuccess(result->
+                        log.info("User automatically unlocked after successful login")
+                );
     }
 
     /**

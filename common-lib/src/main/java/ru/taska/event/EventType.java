@@ -33,7 +33,9 @@ public enum EventType {
     ISSUE_WATCHED("IssueWatched"),
     ISSUE_UNWATCHED("IssueUnwatched"),
     ISSUE_LABEL_ADDED("LabelAdded"),
-    ISSUE_LABEL_REMOVED("LabelRemoved");
+    ISSUE_LABEL_REMOVED("LabelRemoved"),
+    USER_BLOCKED("UserBlocked"),
+    USER_UNBLOCKED("UserUnblocked");
 
     private final String value;
 

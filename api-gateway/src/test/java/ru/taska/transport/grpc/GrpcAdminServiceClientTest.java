@@ -19,13 +19,14 @@ import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.mapper.AdminDataMapper;
+import ru.taska.mapper.AdminUserManagementMapper;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -43,10 +44,13 @@ class GrpcAdminServiceClientTest {
     private static final String NODE_ID = "test-node-id";
 
     @Mock
-    private ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub adminServiceStub;
+    private ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub;
 
     @Mock
     private AdminDataMapper mapper;
+
+    @Mock
+    private AdminUserManagementMapper adminUserManagementMapper;
 
     @Mock
     private GrpcClientProperties properties;
@@ -69,7 +73,7 @@ class GrpcAdminServiceClientTest {
                 ArgumentMatchers.any()
         )).thenReturn(adminServiceStub);
 
-        client = new GrpcAdminServiceClient(adminServiceStub, mapper, properties);
+        client = new GrpcAdminServiceClient(adminServiceStub, mapper, adminUserManagementMapper, properties);
     }
 
     // ==================== HELPER ====================

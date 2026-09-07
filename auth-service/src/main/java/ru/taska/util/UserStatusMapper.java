@@ -22,6 +22,7 @@ public final class UserStatusMapper {
             case INVITED -> UserStatus.USER_STATUS_INVITED;
             case ACTIVE -> UserStatus.USER_STATUS_ACTIVE;
             case BLOCKED -> UserStatus.USER_STATUS_BLOCKED;
+            case LOCKED -> UserStatus.USER_STATUS_LOCKED;
         };
     }
 
@@ -35,6 +36,7 @@ public final class UserStatusMapper {
         return switch (protoStatus) {
             case USER_STATUS_ACTIVE -> ru.taska.entity.UserStatus.ACTIVE;
             case USER_STATUS_BLOCKED -> ru.taska.entity.UserStatus.BLOCKED;
+            case USER_STATUS_LOCKED -> ru.taska.entity.UserStatus.LOCKED;
             default -> ru.taska.entity.UserStatus.INVITED;
         };
     }
