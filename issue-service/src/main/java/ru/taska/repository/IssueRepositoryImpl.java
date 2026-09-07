@@ -11,13 +11,20 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
+import ru.taska.domain.IssueType;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.criteria.SearchCriteria;
 import ru.taska.repository.builder.SearchQueryBuilder;
 import ru.taska.repository.executor.SearchQueryExecutor;
 
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
@@ -189,4 +196,231 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     }
 
     // ==================== Окончание поиска issues с фильтрами ====================
+
+    /**
+     * Реализация board-запроса из {@link IssueRepositoryCustom}. Непустой {@code labelIds}
+     * сначала отдельным запросом резолвится в множество id задач, помеченных этими метками,
+     * и подставляется в фильтр; {@code null} или пустой {@code labelIds} означает «фильтр по
+     * меткам не применяется», а непустой список, которому не соответствует ни одна задача,
+     * даёт пустой результат, а не молчаливо снятый фильтр. При {@code null}
+     * {@code pageSizePerColumn} выборка не ограничивается и собирается через Criteria API;
+     * при заданном значении выполняется сырой SQL с оконной функцией, оставляющей не более
+     * N задач в каждой колонке доски (по {@code status_key}).
+     */
+    @Override
+    public Flux<Issue> findForBoard(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<UUID> labelIds,
+            Integer pageSizePerColumn
+    ) {
+        boolean labelFilterActive = labelIds != null && !labelIds.isEmpty();
+
+        return resolveLabelFilterIssueIds(labelIds)
+                .flatMapMany(issueIds -> {
+                    if (labelFilterActive && issueIds.isEmpty()) {
+                        return Flux.empty();
+                    }
+
+                    List<BoardFilterCondition> conditions = boardFilterConditions(
+                            projectId, issueType, assigneeId, statusKey, includeDone,
+                            labelFilterActive ? issueIds : null
+                    );
+
+                    return pageSizePerColumn != null
+                            ? findForBoardLimitedPerColumn(conditions, pageSizePerColumn)
+                            : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(conditions), Issue.class);
+                });
+    }
+
+    /**
+     * Резолвит {@code labelIds} в список id задач, помеченных хотя бы одной из этих меток.
+     * Для {@code null}/пустого {@code labelIds} фильтр по меткам неактивен и возвращается
+     * пустой список; вызывающий код отличает этот случай от «метки заданы, но совпадений нет».
+     */
+    private Mono<List<UUID>> resolveLabelFilterIssueIds(List<UUID> labelIds) {
+        if (labelIds == null || labelIds.isEmpty()) {
+            return Mono.just(List.of());
+        }
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
+                .bind("labelIds", labelIds)
+                .map(row -> row.get("issue_id", UUID.class))
+                .all()
+                .collectList();
+    }
+
+    /**
+     * Criteria-запрос для доски (путь без {@code pageSizePerColumn}): фильтры из
+     * {@code conditions} плюс сортировка по колонке ({@code status_key}) и дате создания.
+     */
+    private Query buildBoardCriteriaQuery(List<BoardFilterCondition> conditions) {
+        return Query.query(toCriteria(conditions))
+                .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
+    }
+
+    /**
+     * Находит задачи для доски с ограничением количества задач в каждой колонке (status_key),
+     * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
+     * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
+     */
+    private Flux<Issue> findForBoardLimitedPerColumn(List<BoardFilterCondition> conditions, int pageSizePerColumn) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        String where = toSqlWhere(conditions, params);
+        params.put("pageSizePerColumn", pageSizePerColumn);
+
+        String sql = """
+                SELECT * FROM (
+                    SELECT i.*,
+                           ROW_NUMBER() OVER (PARTITION BY i.status_key ORDER BY i.created_at ASC) AS rn
+                    FROM taska.issues i
+                    WHERE %s
+                ) t
+                WHERE rn <= :pageSizePerColumn
+                ORDER BY status_key ASC, created_at ASC
+                """.formatted(where);
+
+        DatabaseClient.GenericExecuteSpec spec = r2dbcEntityTemplate.getDatabaseClient().sql(sql);
+        for (var entry : params.entrySet()) {
+            spec = spec.bind(entry.getKey(), entry.getValue());
+        }
+
+        return spec.map(issueMapper::mapRowToIssue).all();
+    }
+
+    @Override
+    public Mono<Map<UUID, List<UUID>>> findLabelIdsByIssueIds(List<UUID> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, label_id FROM taska.issue_labels WHERE issue_id IN (:issueIds)")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("label_id", UUID.class)
+                ))
+                .all()
+                .collectMultimap(Map.Entry::getKey, Map.Entry::getValue)
+                .map(multimap -> multimap.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> List.copyOf(e.getValue()))));
+    }
+    @Override
+    public Mono<Map<UUID, Long>> countWatchersByIssueIds(List<UUID> issueIds) {
+        if (issueIds == null || issueIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_watchers WHERE issue_id IN (:issueIds) GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
+    @Override
+    public Mono<Map<UUID, Long>> countCommentsByIssueIds(List<UUID> issueIds){
+        if (issueIds == null || issueIds.isEmpty()){
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_comments WHERE issue_id IN (:issueIds) AND deleted_at IS NULL GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
+    /**
+     * Единый список условий фильтрации задач для доски — общий источник как для Criteria API
+     * (путь без {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией
+     * (путь с {@code pageSizePerColumn}). Раньше эти условия дублировались в двух местах вручную,
+     * что легко было рассинхронизировать при добавлении нового фильтра в будущем.
+     */
+    private List<BoardFilterCondition> boardFilterConditions(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<UUID> labelFilterIssueIds
+    ) {
+        List<BoardFilterCondition> conditions = new ArrayList<>();
+        conditions.add(new BoardFilterCondition("project_id", "projectId", BoardFilterOperator.EQUALS, projectId));
+        conditions.add(new BoardFilterCondition("deleted_at", null, BoardFilterOperator.IS_NULL, null));
+        if (issueType != null) {
+            conditions.add(new BoardFilterCondition("issue_type", "issueType", BoardFilterOperator.EQUALS, issueType.name()));
+        }
+        if (assigneeId != null) {
+            conditions.add(new BoardFilterCondition("assignee_id", "assigneeId", BoardFilterOperator.EQUALS, assigneeId));
+        }
+        if (statusKey != null) {
+            conditions.add(new BoardFilterCondition("status_key", "statusKey", BoardFilterOperator.EQUALS, statusKey));
+        }
+        if (!includeDone) {
+            conditions.add(new BoardFilterCondition("status_key", "excludedStatusKey", BoardFilterOperator.NOT_EQUALS, "DONE"));
+        }
+        if (labelFilterIssueIds != null) {
+            conditions.add(new BoardFilterCondition("id", "labelFilterIssueIds", BoardFilterOperator.IN, labelFilterIssueIds));
+        }
+        return conditions;
+    }
+
+    private Criteria toCriteria(List<BoardFilterCondition> conditions) {
+        List<Criteria> criteriaList = conditions.stream()
+                .map(c -> switch (c.operator()) {
+                    case EQUALS -> Criteria.where(c.column()).is(c.value());
+                    case NOT_EQUALS -> Criteria.where(c.column()).not(c.value());
+                    case IN -> Criteria.where(c.column()).in((Collection<?>) c.value());
+                    case IS_NULL -> Criteria.where(c.column()).isNull();
+                })
+                .toList();
+        return Criteria.from(criteriaList);
+    }
+
+    private String toSqlWhere(List<BoardFilterCondition> conditions, Map<String, Object> paramsOut) {
+        return conditions.stream()
+                .map(c -> {
+                    String column = "i." + c.column();
+                    return switch (c.operator()) {
+                        case EQUALS -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " = :" + c.paramName();
+                        }
+                        case NOT_EQUALS -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " <> :" + c.paramName();
+                        }
+                        case IN -> {
+                            paramsOut.put(c.paramName(), c.value());
+                            yield column + " IN (:" + c.paramName() + ")";
+                        }
+                        case IS_NULL -> column + " IS NULL";
+                    };
+                })
+                .collect(Collectors.joining(" AND "));
+    }
+
+    /**
+     * Одно условие фильтрации board-запроса: колонка + оператор + значение.
+     * {@code paramName} используется только для SQL-пути (именованный параметр); для Criteria-пути не нужен.
+     */
+    private record BoardFilterCondition(String column, String paramName, BoardFilterOperator operator, Object value) {
+    }
+
+    private enum BoardFilterOperator {
+        EQUALS, NOT_EQUALS, IN, IS_NULL
+    }
 }
