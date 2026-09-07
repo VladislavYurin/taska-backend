@@ -4,14 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequestBody;
-import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsRequestBody;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.ReactorAdminReadonlyServiceGrpc;
 import ru.taska.api.admin.v1.RetryOutboxEventRequest;
 import ru.taska.api.admin.v1.RetryOutboxEventRequestBody;
 import ru.taska.api.common.v1.Header;
@@ -21,14 +21,9 @@ import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
-import ru.taska.domain.dto.ResetLockoutRequestDto;
-import ru.taska.domain.dto.BlockUserRequestDto;
-import ru.taska.domain.dto.UnblockUserRequestDto;
-import ru.taska.domain.dto.UserStatusResponseDto;
 import ru.taska.domain.dto.RetryOutboxEventRequestDto;
 import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.mapper.AdminDataMapper;
-import ru.taska.mapper.AdminUserManagementMapper;
 
 import java.util.Map;
 import java.util.UUID;
@@ -39,9 +34,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class GrpcAdminServiceClient {
 
-    private final ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub;
-    private final AdminDataMapper adminDataMapper;
-    private final AdminUserManagementMapper adminUserManagementMapper;
+    private final ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub adminServiceStub;
+    private final AdminDataMapper mapper;
     private final GrpcClientProperties properties;
 
     public Mono<MetadataResponse> getCatalog(GatewayContext context) {
@@ -52,7 +46,7 @@ public class GrpcAdminServiceClient {
                 .build();
 
         return dynamicStub().getCatalog(getCatalogRequest)
-                .map(adminDataMapper::toRestGetCatalogResponse);
+                .map(mapper::toRestGetCatalogResponse);
     }
 
     public Mono<ReadOnlyTableRowsResponseDto> listTableRows(
@@ -85,7 +79,7 @@ public class GrpcAdminServiceClient {
                 .build();
 
         return dynamicStub().listTableRows(listTableRowsRequest)
-                .map(adminDataMapper::toRestListTableRowsResponse);
+                .map(mapper::toRestListTableRowsResponse);
     }
 
     public Mono<ReadOnlySingleRowResponseDto> getTableRowById(
@@ -108,7 +102,7 @@ public class GrpcAdminServiceClient {
                 .build();
 
         return dynamicStub().getTableRowById(request)
-                .map(adminDataMapper::toRestGetTableRowByIdResponse);
+                .map(mapper::toRestGetTableRowByIdResponse);
     }
 
     public Mono<ProblematicOutboxEventsSummaryResponseDto> getProblematicOutboxEventsSummary(
@@ -131,56 +125,7 @@ public class GrpcAdminServiceClient {
                         .build();
 
         return dynamicStub().getProblematicOutboxEventsSummary(request)
-                .map(adminDataMapper::toRestProblematicOutboxEventsSummaryResponse);
-    }
-
-    public Mono<UserStatusResponseDto> blockUser(
-            UUID userId,
-            Mono<BlockUserRequestDto> request,
-            GatewayContext context
-    ) {
-        log.debug("[{}] Calling blockUser", context.requestId());
-
-        return request
-                .flatMap(requestDto->
-                        dynamicStub().blockUser(
-                                adminUserManagementMapper.toBlockUserGrpcRequest(userId,requestDto,context)
-                        )
-                )
-                .map(adminUserManagementMapper::toRestUserStatusResponse);
-    }
-
-
-    public Mono<UserStatusResponseDto> unblockUser(
-            UUID userId,
-            Mono<UnblockUserRequestDto> request,
-            GatewayContext context
-    ) {
-        log.debug("[{}] Calling unblockUser", context.requestId());
-
-        return request
-                .flatMap(requestDto->
-                        dynamicStub().unblockUser(
-                                adminUserManagementMapper.toUnblockUserGrpcRequest(userId,requestDto,context)
-                        )
-                )
-                .map(adminUserManagementMapper::toRestUserStatusResponse);
-    }
-
-    public Mono<UserStatusResponseDto> resetCredentialLockout(
-            UUID userId,
-            Mono<ResetLockoutRequestDto> request,
-            GatewayContext context
-    ) {
-        log.debug("[{}] Calling resetCredentialLockout", context.requestId());
-
-        return request
-                .flatMap(requestDto->
-                        dynamicStub().resetCredentialLockout(
-                                adminUserManagementMapper.toResetCredentialLockoutRequest(userId,requestDto,context)
-                        )
-                )
-                .map(adminUserManagementMapper::toRestUserStatusResponse);
+                .map(mapper::toRestProblematicOutboxEventsSummaryResponse);
     }
 
     /**
@@ -228,13 +173,13 @@ public class GrpcAdminServiceClient {
 
         return dynamicStub()
                 .retryOutboxEvent(request)
-                .map(adminDataMapper::toRestRetryOutboxEventResponse);
+                .map(mapper::toRestRetryOutboxEventResponse);
     }
 
     /**
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
-    private ReactorAdminServiceGrpc.ReactorAdminServiceStub dynamicStub() {
+    private ReactorAdminReadonlyServiceGrpc.ReactorAdminReadonlyServiceStub dynamicStub() {
         return adminServiceStub.withDeadlineAfter(
                 properties.adminService().deadlineDuration().toMillis(),
                 TimeUnit.MILLISECONDS

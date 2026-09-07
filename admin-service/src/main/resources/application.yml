@@ -5,12 +5,6 @@ spring:
   grpc:
     server:
       port: ${ADMIN_GRPC_SERVER_PORT:9097}
-    client:
-      auth-service:
-        host: ${AUTH_GRPC_SERVICE_HOST:localhost}
-        port: ${AUTH_GRPC_SERVICE_PORT:9091}
-        deadline-duration: 5s
-        service-name: auth-service
   r2dbc:
     url: ${ADMIN_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5438/admin_db}
     username: ${ADMIN_SPRING_R2DBC_USERNAME:taska}
@@ -154,7 +148,7 @@ admin:
         alias: auth
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
@@ -173,16 +167,16 @@ admin:
         alias: project
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: { }
+          sensitive-columns: {}
       issue:
         alias: issue
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
@@ -192,16 +186,16 @@ admin:
         alias: workflow
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: { }
+          sensitive-columns: {}
       notification:
         alias: notification
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
@@ -212,11 +206,11 @@ admin:
         alias: admin
         schema: taska
         tables:
-          allow: [ ]
+          allow: []
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: { }
+          sensitive-columns: {}
 
 management:
   endpoints:

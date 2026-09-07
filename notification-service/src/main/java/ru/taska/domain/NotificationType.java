@@ -15,7 +15,5 @@ public enum NotificationType {
     MEMBER_UPDATED,
     MEMBER_REMOVED,
     LABEL_ADDED,
-    LABEL_REMOVED,
-    USER_BLOCKED,
-    USER_UNBLOCKED
+    LABEL_REMOVED
 }
