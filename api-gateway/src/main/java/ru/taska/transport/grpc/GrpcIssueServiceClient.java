@@ -27,10 +27,10 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequestBody;
-import ru.taska.api.issue.v1.BoardIssue;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
+import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
@@ -438,18 +438,20 @@ public class GrpcIssueServiceClient {
                 .searchIssues(grpcRequest)
                 .map(issueMapper::toRestSearchIssuesResponse);
     }
+
     /**
-     * Получает список задач для доски проекта с учетом фильтров.
+     * Получает список задач для доски проекта с учетом фильтров
+     * и преобразует gRPC-модели во внутренние модели API Gateway.
      *
-     * @param projectId идентификатор проекта
-     * @param issueType тип задачи
+     * @param projectId  идентификатор проекта
+     * @param issueType  тип задачи
      * @param assigneeId идентификатор исполнителя
-     * @param labelId идентификатор метки
+     * @param labelId    идентификатор метки
      * @param includeDone включать ли завершенные задачи
-     * @param context контекст запроса
-     * @return список задач для доски
+     * @param context    контекст запроса
+     * @return список задач для формирования доски
      */
-    public Mono<List<BoardIssue>> listIssuesForBoard(
+    public Mono<List<BoardIssueData>> listIssuesForBoard(
             String projectId,
             String issueType,
             String assigneeId,
@@ -465,19 +467,16 @@ public class GrpcIssueServiceClient {
 
         var requestBodyBuilder = ListIssuesForBoardRequestBody.newBuilder()
                 .setProjectId(projectId)
+                .setActorUserId(context.userContext().userId())
                 .setIssueType(issueMapper.toGrpcIssueType(issueType))
-                .setActorUserId(context.userContext().userId());
+                .setIncludeDone(Boolean.TRUE.equals(includeDone));
 
-        if (assigneeId != null) {
+        if (assigneeId != null && !assigneeId.isBlank()) {
             requestBodyBuilder.setAssigneeId(assigneeId);
         }
 
-        if (labelId != null) {
-            requestBodyBuilder.setLabelId(labelId);
-        }
-
-        if (includeDone != null) {
-            requestBodyBuilder.setIncludeDone(includeDone);
+        if (labelId != null && !labelId.isBlank()) {
+            requestBodyBuilder.addLabelIds(labelId);
         }
 
         return dynamicStub()
@@ -487,6 +486,9 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(response -> response.getIssuesList());
+                .map(response -> response.getIssuesList().stream()
+                        .map(issueMapper::toBoardIssueData)
+                        .toList()
+                );
     }
 }

@@ -114,11 +114,17 @@ class BoardControllerWebTestClientTest {
                         .build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
-                .expectBody(String.class)
-                .consumeWith(result -> {
-                    System.out.println("Status: " + result.getStatus());
-                    System.out.println("Body: " + result.getResponseBody());
-                });
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.projectId").isEqualTo(PROJECT_ID.toString())
+                .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE.name())
+                .jsonPath("$.columns.length()").isEqualTo(2)
+                .jsonPath("$.columns[0].statusKey").isEqualTo("TODO")
+                .jsonPath("$.columns[0].issues.length()").isEqualTo(1)
+                .jsonPath("$.columns[0].issues[0].issueKey").isEqualTo("TAS-1")
+                .jsonPath("$.columns[1].statusKey").isEqualTo("DONE")
+                .jsonPath("$.columns[1].issues.length()").isEqualTo(0);
+
         Mockito.verify(boardService).getBoard(
                 Mockito.eq(PROJECT_ID),
                 Mockito.eq(ISSUE_TYPE),

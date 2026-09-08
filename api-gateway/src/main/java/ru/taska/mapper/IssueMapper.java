@@ -24,6 +24,7 @@ import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
 import ru.taska.api.issue.v1.SearchIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardUserDto;
@@ -176,6 +177,21 @@ public class IssueMapper {
         restDto.setLabels(new ArrayList<>(protoDto.getLabelIdsList()));
 
         return restDto;
+    }
+
+    /**
+     * Преобразует gRPC-модель задачи доски во внутреннюю модель API Gateway.
+     * Ключ статуса сохраняется отдельно для группировки по колонкам и
+     * не попадает в конечный REST DTO.
+     *
+     * @param protoDto задача из issue-service
+     * @return внутренняя модель задачи доски
+     */
+    public BoardIssueData toBoardIssueData(IssueBoardResponse protoDto) {
+        return new BoardIssueData(
+                protoDto.getStatusKey(),
+                toRestBoardIssue(protoDto)
+        );
     }
 
     public IssueLinkResponseDto toRestIssueLinkResponse(IssueLinkResponse protoDto) {

@@ -6,11 +6,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
-import ru.taska.api.issue.v1.BoardIssue;
+import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.*;
 import ru.taska.mapper.BoardMapper;
-import ru.taska.mapper.IssueMapper;
 import ru.taska.service.BoardService;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
@@ -21,6 +20,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис формирования доски проекта на основе workflow и задач из issue-service.
+ */
 @RequiredArgsConstructor
 @Service
 @Slf4j
@@ -29,8 +31,18 @@ public class BoardServiceImpl implements BoardService {
     private final GrpcWorkflowServiceClient workflowClient;
     private final GrpcIssueServiceClient issueClient;
     private final BoardMapper boardMapper;
-    private final IssueMapper issueMapper;
 
+    /**
+     * Формирует доску проекта: получает workflow, загружает задачи и группирует их по статусам.
+     *
+     * @param projectId идентификатор проекта
+     * @param issueType тип задач
+     * @param assigneeId фильтр по исполнителю
+     * @param labelId фильтр по метке
+     * @param includeDone включать ли завершенные задачи
+     * @param context контекст запроса
+     * @return сформированная доска проекта
+     */
     @Override
     public Mono<BoardResponseDto> getBoard(
             UUID projectId,
@@ -57,11 +69,11 @@ public class BoardServiceImpl implements BoardService {
                 .map(tuple -> {
 
                     WorkflowResponseDto workflow = tuple.getT1();
-                    List<BoardIssue> issues = tuple.getT2();
+                    List<BoardIssueData> issues = tuple.getT2();
 
-                    Map<String, List<BoardIssue>> issuesByStatus =
+                    Map<String, List<BoardIssueData>> issuesByStatus =
                             issues.stream()
-                                    .collect(Collectors.groupingBy(BoardIssue::getStatusKey));
+                                    .collect(Collectors.groupingBy(BoardIssueData::statusKey));
 
                     List<BoardColumnDto> columns =
                             workflow.getStatuses()
@@ -72,10 +84,10 @@ public class BoardServiceImpl implements BoardService {
                                         List<BoardIssueDto> issuesForColumn =
                                                 issuesByStatus.getOrDefault(
                                                                 status.getStatusKey(),
-                                                                List.<BoardIssue>of()
+                                                                List.<BoardIssueData>of()
                                                         )
                                                         .stream()
-                                                        .map(issueMapper::toRestBoardIssue)
+                                                        .map(BoardIssueData::issue)
                                                         .toList();
 
                                         issuesByStatus.remove(status.getStatusKey());
@@ -88,7 +100,7 @@ public class BoardServiceImpl implements BoardService {
                                     .toList();
 
                     if (!issuesByStatus.isEmpty()) {
-                        log.error(
+                        log.warn(
                                 "[{}] Found issues with unknown statuses: {}",
                                 context.requestId(),
                                 issuesByStatus.keySet()
