@@ -332,7 +332,7 @@ class ProfileGrpcServiceTest {
                             .build())
                     .build();
 
-            uploadResult = new PresignedUploadResult("avatars/generated-key.png", "https://s3.example.com/upload-url");
+            uploadResult = new PresignedUploadResult("avatars/generated-key.png", "https://s3.example.com/upload-url",300);
         }
 
         @Test

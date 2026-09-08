@@ -58,6 +58,7 @@ public class ProfileMapper {
         return CreateAvatarUploadUrlResponse.newBuilder()
                 .setUploadUrl(result.url())
                 .setObjectKey(result.objectKey())
+                .setExpiresIn(result.expiresIn())
                 .build();
     }
 

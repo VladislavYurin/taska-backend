@@ -101,7 +101,11 @@ public class S3StorageClient implements StorageClient {
                                     .key(objectKey)
                                     .contentType(contentType))
                             .build();
-                    return new PresignedUploadResult(objectKey, s3Presigner.presignPutObject(presignRequest).url().toString());
+                    return new PresignedUploadResult(
+                            objectKey,
+                            s3Presigner.presignPutObject(presignRequest).url().toString(),
+                            properties.getPresignedUrlTtl().toSeconds()
+                    );
                 })
                 .transform(S3ExceptionHandler.withErrorHandling("createPresignedUploadUrl[" + bucket + "/" + objectKey + "]"));
     }
