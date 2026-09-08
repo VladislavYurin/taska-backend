@@ -1,74 +1,142 @@
 package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-import ru.taska.api.ReadonlyApi;
+import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.MetadataResponse;
-import ru.taska.domain.dto.ReadOnlyResponseDto;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
-public class AdminReadOnlyController implements ReadonlyApi {
+public class AdminReadOnlyController implements AdminApi {
+
+    private static final Set<String> NOT_FILTER_QUERY_PARAMS = Set.of("page", "pageSize", "sort", "order");
 
     private final GatewayRequestExecutor executor;
     private final GrpcAdminServiceClient adminServiceClient;
-    private static final Set<String> SYSTEM_PARAMS = Set.of("page", "pageSize", "sort", "order");
-
-
 
     /**
-     * Эндпоинт для получения метаданных (каталог сервисов и таблиц)
-     * GET /api/v1/readonly/metadata
-     * Вызывает gRPC метод getCatalog()
+     * GET /api/v1/readonly/outbox/problematic-summary
+     * Возвращает сводку проблемных outbox-событий.
      */
     @Override
-    public Mono<ResponseEntity<MetadataResponse>> getMetadata(ServerWebExchange exchange) {
-        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED,context ->
-            adminServiceClient.getCatalog(context)
-                    .map(ResponseEntity::ok)
+    public Mono<ResponseEntity<ProblematicOutboxEventsSummaryResponseDto>> getProblematicOutboxEventsSummary(
+            String serviceKey,
+            ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.getProblematicOutboxEventsSummary(serviceKey, context)
+                        .map(ResponseEntity::ok)
         );
-
-
     }
 
     /**
-     * Эндпоинт для получения данных таблицы
-     * GET /api/v1/readonly/{service}/{table}
-     * Вызывает gRPC метод listTableRows()
+     * GET /api/v1/readonly/catalog
+     * Возвращает каталог доступных сервисов и таблиц.
      */
     @Override
-    public Mono<ResponseEntity<ReadOnlyResponseDto>> listTableRows(
+    public Mono<ResponseEntity<MetadataResponse>> getCatalog(ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.getCatalog(context).map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * GET /api/v1/readonly/{service}/{table}
+     * Возвращает строки таблицы с пагинацией, сортировкой и фильтрами.
+     */
+    @Override
+    public Mono<ResponseEntity<ReadOnlyTableRowsResponseDto>> listTableRows(
             String service,
             String table,
             Integer page,
             Integer pageSize,
-            @Nullable String sort,
+            String sort,
             String order,
-            @Nullable Map<String, String> ignoredFilter,
+            Map<String, String> ignoredFilters,
             ServerWebExchange exchange) {
 
+        Map<String, String> filters = extractColumnFilters(exchange);
 
-        /// Получаем все параметры из URL в виде Map<String, String>
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.listTableRows(service, table, page, pageSize, sort, order, filters, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * GET /api/v1/readonly/{service}/{table}/{id}
+     * Возвращает одну строку таблицы по ID.
+     */
+    @Override
+    public Mono<ResponseEntity<ReadOnlySingleRowResponseDto>> getTableRowById(
+            String service,
+            String table,
+            UUID id,
+            ServerWebExchange exchange) {
+
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.getTableRowById(service, table, id, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Все query-параметры URL, кроме page/pageSize/sort/order.
+     * <p>
+     * {@code toSingleValueMap()}: при дублях (?status.equals=a&status.equals=b) берётся одно значение.
+     */
+    static Map<String, String> extractColumnFilters(ServerWebExchange exchange) {
         Map<String, String> allParams = exchange.getRequest().getQueryParams().toSingleValueMap();
-        //toSingleValueMap() -> придет ?status=active&status=blocked, бэкенд обработает только active,
-        /// Отфильтровываем системные параметры, оставляя только фильтры колонок
-        Map<String, String> columnFilters = allParams.entrySet().stream()
-                .filter(entry -> !SYSTEM_PARAMS.contains(entry.getKey()))
+        return allParams.entrySet().stream()
+                .filter(entry -> !NOT_FILTER_QUERY_PARAMS.contains(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
 
-        return executor.execute(exchange,EndpointSecurity.GLOBAL_ADMIN_REQUIRED,context ->
-                adminServiceClient.listTableRows(service, table, page, pageSize, sort, order, columnFilters, context)
+    /**
+     * Выполняет ручной retry outbox-события.
+     * <p>
+     * Операция доступна только пользователю с глобальной ролью GLOBAL_ADMIN.
+     * Actor context формируется из проверенного GatewayContext и не принимается
+     * от REST-клиента.
+     *
+     * @param service сервис-владелец outbox
+     * @param eventId идентификатор outbox-события
+     * @param request запрос с обязательной причиной retry
+     * @param exchange текущий HTTP exchange
+     * @return состояние outbox-события после retry
+     */
+    @Override
+    public Mono<ResponseEntity<RetryOutboxEventResponseDto>> retryOutboxEvent(
+            String service,
+            UUID eventId,
+            Mono<RetryOutboxEventRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(
+                exchange,
+                EndpointSecurity.GLOBAL_ADMIN_REQUIRED,
+                context -> request
+                        .flatMap(body -> adminServiceClient.retryOutboxEvent(
+                                service,
+                                eventId,
+                                body,
+                                context
+                        ))
                         .map(ResponseEntity::ok)
         );
     }

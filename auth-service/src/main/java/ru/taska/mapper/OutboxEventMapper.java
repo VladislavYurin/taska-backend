@@ -1,6 +1,10 @@
 package ru.taska.mapper;
 
 
+import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
+import ru.taska.entity.User;
+import ru.taska.entity.UserStatus;
+import ru.taska.event.payload.authService.UserStatusChangedPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +14,8 @@ import org.springframework.stereotype.Component;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
-import ru.taska.event.payload.UserActivatedPayload;
-import ru.taska.event.payload.UserInvitedPayload;
+import ru.taska.event.payload.authService.UserActivatedPayload;
+import ru.taska.event.payload.authService.UserInvitedPayload;
 
 import java.util.UUID;
 
@@ -24,6 +28,10 @@ public class OutboxEventMapper {
     private static final String EMAIL = "email";
     private static final String INVITED_BY = "invitedBy";
     private static final String SCHEMA_VERSION = "v1";
+    private static final String OLD_STATUS = "oldStatus";
+    private static final String NEW_STATUS = "newStatus";
+    private static final String ACTOR_ID = "actorUserId";
+    private static final String REASON = "reason";
 
     @Value("${spring.application.name}")
     private String producerService;
@@ -69,12 +77,64 @@ public class OutboxEventMapper {
                     getString(sourcePayload, EMAIL)
             ));
 
+            case USER_BLOCKED, USER_UNBLOCKED -> objectMapper.valueToTree(new UserStatusChangedPayload(
+                    getUuid(sourcePayload, USER_ID),
+                    getString(sourcePayload, OLD_STATUS),
+                    getString(sourcePayload, NEW_STATUS),
+                    getString(sourcePayload, REASON),
+                    getUuid(sourcePayload, ACTOR_ID)
+            ));
+
             default -> {
                 log.warn("Unknown event type: {}, using original payload", eventType);
                 yield sourcePayload;
             }
         };
     }
+
+    /**
+     * Создает payload для USER_BLOCKED события
+     * @param user пользователь с измененным статусом
+     * @param oldStatus старый статус пользователя
+     */
+    public JsonNode buildUserBlockedPayload(
+            User user,
+            UserStatus oldStatus,
+            UserStatusRequestDto requestDto
+    ) {
+        UserStatusChangedPayload payload = UserStatusChangedPayload.builder()
+                .userId(user.getId())
+                .oldStatus(oldStatus.name())
+                .newStatus(user.getStatus().name())
+                .reason(requestDto.reason())
+                .actorUserId(requestDto.actorUserId())
+                .build();
+
+        return objectMapper.valueToTree(payload);
+    }
+
+    /**
+     * Создает payload для USER_UNBLOCKED события
+     * @param user пользователь с измененным статусом
+     * @param oldStatus старый статус пользователя
+     */
+    public JsonNode buildUserUnblockedPayload(
+            User user,
+            UserStatus oldStatus,
+            UserStatusRequestDto requestDto
+    ) {
+        UserStatusChangedPayload payload = UserStatusChangedPayload.builder()
+                .userId(user.getId())
+                .oldStatus(oldStatus.name())
+                .newStatus(user.getStatus().name())
+                .reason(requestDto.reason())
+                .actorUserId(requestDto.actorUserId())
+                .build();
+
+        return objectMapper.valueToTree(payload);
+    }
+
+    ///====================== Utils ==========================
 
     private UUID getUuid(JsonNode node, String field) {
         if (node == null || !node.hasNonNull(field)) {

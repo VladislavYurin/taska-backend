@@ -23,6 +23,8 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
   ISSUE_EVENT_TYPE_COMMENT_UPDATED = 11;
   ISSUE_EVENT_TYPE_COMMENT_DELETED = 12;
+  ISSUE_EVENT_TYPE_LABEL_ADDED = 13;
+  ISSUE_EVENT_TYPE_LABEL_REMOVED = 14;
 }
 
 enum IssueType {
@@ -97,6 +99,12 @@ service IssueService {
    */
   rpc TransitionIssue(TransitionIssueRequest)
       returns (IssueWithHistoryResponse);
+  /**
+     * Делает поиск issue.
+     */
+  rpc SearchIssues(SearchIssuesRequest)
+      returns (SearchIssuesResponse);
+
 
   /**
    * Возвращает список связей для задачи.
@@ -117,14 +125,8 @@ service IssueService {
       returns (DeleteIssueLinkResponse);
 
   /**
-   * Возвращает список задач для доски (Board API).
-   */
-  rpc ListIssuesForBoard(ListIssuesForBoardRequest)
-      returns (ListIssuesForBoardResponse);
-
-  /**
-   * Добавляет комментарий к задаче.
-   */
+  * Добавляет комментарий к задаче.
+  */
   rpc AddIssueComment(AddIssueCommentRequest)
       returns (AddIssueCommentResponse);
 
@@ -145,6 +147,77 @@ service IssueService {
    */
   rpc ListIssueComments(ListIssueCommentsRequest)
       returns (ListIssueCommentsResponse);
+
+
+  /**
+   * Подписывает пользователя на задачу.
+   */
+  rpc WatchIssue(WatchIssueRequest)
+      returns (WatchIssueResponse);
+
+  /**
+   * Отписывает пользователя от задачи.
+   */
+  rpc UnwatchIssue(UnwatchIssueRequest)
+      returns (UnwatchIssueResponse);
+
+  /**
+   * Возвращает список подписчиков задачи.
+   */
+  rpc ListIssueWatchers(ListIssueWatchersRequest)
+      returns (ListIssueWatchersResponse);
+
+  /**
+   * Возвращает состояние подписки задачи для пользователя.
+   */
+  rpc GetIssueWatchState(GetIssueWatchStateRequest)
+      returns (GetIssueWatchStateResponse);
+
+
+  // ============ Управление метками проекта (только ADMIN) ============
+
+  /**
+   * Создаёт новую метку в проекте.
+   */
+  rpc CreateProjectLabel(CreateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  /**
+   * Обновляет существующую метку проекта.
+   */
+  rpc UpdateProjectLabel(UpdateProjectLabelRequest) returns (ProjectLabelResponse);
+
+  /**
+   * Удаляет метку проекта (soft-delete).
+   */
+  rpc DeleteProjectLabel(DeleteProjectLabelRequest) returns (DeleteProjectLabelResponse);
+
+  /**
+   * Возвращает список всех активных меток проекта.
+   */
+  rpc ListProjectLabels(ListProjectLabelsRequest) returns (ListProjectLabelsResponse);
+
+  // ============ Управление метками задачи (MEMBER/ADMIN) ============
+
+  /**
+   * Добавляет существующую метку проекта к задаче.
+   */
+  rpc AddIssueLabel(AddIssueLabelRequest) returns (AddIssueLabelResponse);
+
+  /**
+   * Удаляет метку с задачи.
+   */
+  rpc RemoveIssueLabel(RemoveIssueLabelRequest) returns (RemoveIssueLabelResponse);
+
+  /**
+   * Возвращает список всех меток, привязанных к задаче.
+   */
+  rpc ListIssueLabels(ListIssueLabelsRequest) returns (ListIssueLabelsResponse);
+
+  /**
+   * Возвращает список задач для доски.
+   */
+  rpc ListIssuesForBoard(ListIssuesForBoardRequest)
+      returns (ListIssuesForBoardResponse);
 }
 
 message AssignIssueRequest {
@@ -223,6 +296,31 @@ message CreateIssueRequestBody {
    * Идентификатор создателя задачи.
    */
   string reporter_id = 7;
+
+  /**
+    * Story points задачи.
+    */
+  optional double story_points = 8;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 9;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 10;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 11;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 12;
 }
 
 message GetIssueRequest {
@@ -310,6 +408,31 @@ message UpdateIssueRequestBody {
    * Приоритет задачи.
    */
   IssuePriority priority = 6;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 7;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 8;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 9;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 10;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 11;
 }
 
 message ListIssuesRequest {
@@ -354,6 +477,11 @@ message ListIssuesRequestBody {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 6;
+
+  /**
+   * Фильтр по идентификатору метки (опционально).
+   */
+  optional string label_id = 7;
 }
 
 message TransitionIssueRequest {
@@ -511,13 +639,38 @@ message UpdateIssueResponse {
    * Приоритет задачи.
    */
   IssuePriority priority = 4;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 5;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 6;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 7;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 8;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 9;
 }
 
 message ListIssuesResponse {
   /**
    * Список задач.
    */
-  repeated IssueShortResponse issues = 1;
+  repeated IssueResponse issues = 1;
 
   /**
    * Общее количество задач, соответствующих фильтру.
@@ -555,6 +708,11 @@ message IssueShortResponse {
    * Идентификатор исполнителя задачи.
    */
   string assignee_id = 6;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 7;
 }
 
 message IssueResponse {
@@ -632,6 +790,386 @@ message IssueResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 15;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 16;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 17;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 18;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 19;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 20;
+
+  /**
+   * Метки задачи.
+   */
+  repeated ProjectLabelResponse labels = 21;
+
+  /**
+   * Количество подписчиков задачи.
+   */
+  int32 watchers_count = 22;
+
+  /**
+   * Признак подписки текущего пользователя (если актор известен).
+   */
+  optional bool watched_by_me = 23;
+}
+
+// ============ Метки проекта =================
+
+message ProjectLabelResponse {
+  /**
+   * Идентификатор метки.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта, к которому относится метка.
+   */
+  string project_id = 2;
+
+  /**
+   * Название метки (уникально в рамках проекта, регистронезависимо).
+   */
+  string name = 3;
+
+  /**
+   * Цвет метки в формате HEX (например, #0052CC).
+   */
+  string color = 4;
+
+  /**
+   * Идентификатор пользователя, создавшего метку.
+   */
+  string created_by = 5;
+
+  /**
+   * Временная метка создания метки.
+   */
+  google.protobuf.Timestamp created_at = 6;
+
+  /**
+   * Временная метка мягкого удаления (null — метка активна).
+   */
+  google.protobuf.Timestamp deleted_at = 7;
+}
+
+/**
+ *  Запрос на создание метки проекта
+ */
+message CreateProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CreateProjectLabelRequestBody body = 2;
+}
+
+message CreateProjectLabelRequestBody {
+  /**
+   * Идентификатор проекта, в котором создаётся метка.
+   */
+  string project_id = 1;
+
+  /**
+   * Название метки.
+   */
+  string name = 2;
+
+  /**
+   * Цвет метки в формате HEX.
+   */
+  string color = 3;
+
+  /**
+   * Идентификатор пользователя, создающего метку (только ADMIN).
+   */
+  string created_by = 4;
+}
+
+/**
+ *  Запрос на обновление метки проекта
+ */
+message UpdateProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UpdateProjectLabelRequestBody body = 2;
+}
+
+message UpdateProjectLabelRequestBody {
+  /**
+   * Идентификатор обновляемой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Новое название метки (опционально).
+   */
+  string name = 3;
+
+  /**
+   * Новый цвет метки в формате HEX (опционально).
+   */
+  string color = 4;
+
+  /**
+   * Идентификатор пользователя, обновляющего метку (только ADMIN).
+   */
+  string actor_user_id = 5;
+}
+
+/**
+ *  Запрос на удаление метки проекта
+ */
+message DeleteProjectLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteProjectLabelRequestBody body = 2;
+}
+
+message DeleteProjectLabelRequestBody {
+  /**
+   * Идентификатор удаляемой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Идентификатор пользователя, удаляющего метку (только ADMIN).
+   */
+  string actor_user_id = 3;
+}
+
+message DeleteProjectLabelResponse {
+  /**
+   * Идентификатор удалённой метки.
+   */
+  string label_id = 1;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 2;
+
+  /**
+   * Временная метка удаления.
+   */
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
+/**
+ *  Запрос на получение списка меток проекта
+ */
+message ListProjectLabelsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListProjectLabelsRequestBody body = 2;
+}
+
+message ListProjectLabelsRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, запрашивающего список (VIEWER+).
+   */
+  string actor_user_id = 2;
+}
+
+message ListProjectLabelsResponse {
+  /**
+   * Список меток проекта.
+   */
+  repeated ProjectLabelResponse labels = 1;
+
+  /**
+   * Общее количество меток в проекте.
+   */
+  int32 total_count = 2;
+}
+
+// ============ Метки задачи =================
+
+/**
+ *  Запрос на добавление метки к задаче
+ */
+message AddIssueLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddIssueLabelRequestBody body = 2;
+}
+
+message AddIssueLabelRequestBody {
+  /**
+   * Идентификатор задачи, к которой добавляется метка.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор добавляемой метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, добавляющего метку (MEMBER+).
+   */
+  string actor_user_id = 3;
+}
+
+message AddIssueLabelResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор добавленной метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, добавившего метку.
+   */
+  string created_by = 3;
+
+  /**
+   * Временная метка добавления метки.
+   */
+  google.protobuf.Timestamp created_at = 4;
+}
+
+/**
+ *  Запрос на удаление метки с задачи
+ */
+message RemoveIssueLabelRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  RemoveIssueLabelRequestBody body = 2;
+}
+
+message RemoveIssueLabelRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор удаляемой метки.
+   */
+  string label_id = 2;
+
+  /**
+   * Идентификатор пользователя, удаляющего метку (MEMBER+).
+   */
+  string actor_user_id = 3;
+}
+
+message RemoveIssueLabelResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор удалённой метки.
+   */
+  string label_id = 2;
+}
+
+/**
+ *  Запрос на получение меток задачи
+ */
+message ListIssueLabelsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueLabelsRequestBody body = 2;
+}
+
+message ListIssueLabelsRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, запрашивающего список (VIEWER+).
+   */
+  string actor_user_id = 2;
+}
+
+message ListIssueLabelsResponse {
+  /**
+   * Список меток, привязанных к задаче.
+   */
+  repeated ProjectLabelResponse labels = 1;
 }
 
 message IssueHistoryResponse {
@@ -741,7 +1279,9 @@ message DeleteIssueLinkResponse {
    */
   IssueEventType event_type = 2;
 }
-message ListIssuesForBoardRequest {
+
+// ===== Search issue messages =====
+message SearchIssuesRequest {
   /**
    * Заголовок запроса.
    */
@@ -750,19 +1290,21 @@ message ListIssuesForBoardRequest {
   /**
    * Тело запроса.
    */
-  ListIssuesForBoardRequestBody body = 2;
+  SearchIssuesRequestBody body = 2;
 }
 
-message ListIssuesForBoardRequestBody {
+message SearchIssuesRequestBody {
   /**
-   * Идентификатор проекта.
+   * Поисковый запрос (поиск по issue_key, summary, description).
+   * Если не указан, возвращаются все задачи с применёнными фильтрами.
    */
-  string project_id = 1;
+  optional string query = 1;
 
   /**
-   * Тип задачи (TASK, BUG, STORY).
+   * Идентификатор проекта (опционально).
+   * Если не указан, поиск выполняется по всем проектам, доступным пользователю.
    */
-  IssueType issue_type = 2;
+  optional string project_id = 2;
 
   /**
    * Идентификатор пользователя, инициировавшего запрос.
@@ -770,75 +1312,51 @@ message ListIssuesForBoardRequestBody {
   string actor_user_id = 3;
 
   /**
+   * Фильтр по статусу задачи (опционально).
+   */
+  optional string status_key = 4;
+
+  /**
    * Фильтр по идентификатору исполнителя (опционально).
    */
-  optional string assignee_id = 4;
+  optional string assignee_id = 5;
 
   /**
-   * Фильтр по метке (опционально).
+   * Фильтр по идентификатору создателя (опционально).
    */
-  optional string label_id = 5;
+  optional string reporter_id = 6;
 
   /**
-   * Включать ли завершенные задачи (опционально).
+   * Фильтр по приоритету (опционально).
    */
-  optional bool include_done = 6;
+  optional IssuePriority priority = 7;
+
+  /**
+   * Фильтр по типу задачи (опционально).
+   */
+  optional IssueType issue_type = 8;
+
+  /**
+   * Размер страницы (если не указан, используется значение по умолчанию из конфига).
+   */
+  optional int32 page_size = 9;
+
+  /**
+   * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
+   */
+  optional int32 page = 10;
 }
 
-message ListIssuesForBoardResponse {
+message SearchIssuesResponse {
   /**
-   * Список задач для доски.
+   * Список найденных задач.
    */
-  repeated BoardIssue issues = 1;
-}
-
-message BoardIssue {
-  /**
-   * Идентификатор задачи.
-   */
-  string id = 1;
+  repeated IssueShortResponse issues = 1;
 
   /**
-   * Денормализованный ключ задачи (например, ABC-123).
+   * Общее количество задач, соответствующих фильтру.
    */
-  string issue_key = 2;
-
-  /**
-   * Краткое описание задачи.
-   */
-  string summary = 3;
-
-  /**
-   * Стори поинты (оценка сложности).
-   */
-  optional int32 story_points = 4;
-
-  /**
-   * Текущий статус задачи (для группировки по колонкам).
-   */
-  string status_key = 5;
-
-  /**
-   * Исполнитель задачи (опционально).
-   */
-  BoardUser assignee = 6;
-
-  /**
-   * Список меток (labels).
-   */
-  repeated string labels = 7;
-}
-
-message BoardUser {
-  /**
-   * Идентификатор пользователя.
-   */
-  string id = 1;
-
-  /**
-   * Отображаемое имя пользователя.
-   */
-  string display_name = 2;
+  int32 total_count = 2;
 }
 
 // ===== Comment messages =====
@@ -1080,4 +1598,367 @@ message ListIssueCommentsResponse {
    * Общее количество комментариев.
    */
   int32 total_count = 2;
+}
+
+message IssueWatcherResponse {
+  /**
+   * Идентификатор подписки.
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 2;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 3;
+
+  /**
+   * Идентификатор подписанного пользователя.
+   */
+  string user_id = 4;
+
+  /**
+   * Временная метка создания подписки.
+   */
+  google.protobuf.Timestamp created_at = 5;
+
+  /**
+   * Идентификатор пользователя, создавшего подписку.
+   */
+  string created_by = 6;
+}
+
+/**
+ * Запрос на подписку на задачу.
+ */
+message WatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  WatchIssueRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на подписку на задачу.
+ */
+message WatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Идентификатор подписываемого пользователя (опционально; по умолчанию — актор).
+   */
+  optional string target_user_id = 3;
+}
+
+/**
+ * Ответ на подписку на задачу.
+ */
+message WatchIssueResponse {
+  /**
+   * Созданная либо уже существовавшая подписка.
+   */
+  IssueWatcherResponse watcher = 1;
+
+  /**
+   * Количество подписчиков задачи после операции.
+   */
+  int32 watchers_count = 2;
+}
+
+/**
+ * Запрос на отписку от задачи.
+ */
+message UnwatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UnwatchIssueRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на отписку от задачи.
+ */
+message UnwatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Идентификатор отписываемого пользователя (опционально; по умолчанию — актор).
+   */
+  optional string target_user_id = 3;
+}
+
+/**
+ * Ответ на отписку от задачи.
+ */
+message UnwatchIssueResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Признак фактического удаления подписки.
+   */
+  bool removed = 2;
+
+  /**
+   * Количество подписчиков задачи после операции.
+   */
+  int32 watchers_count = 3;
+}
+
+/**
+ * Запрос на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueWatchersRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Размер страницы (опционально).
+   */
+  optional int32 page_size = 3;
+
+  /**
+   * Номер страницы, начиная с 0 (опционально).
+   */
+  optional int32 page = 4;
+}
+
+/**
+ * Ответ на получение списка подписчиков задачи.
+ */
+message ListIssueWatchersResponse {
+  /**
+   * Список подписчиков.
+   */
+  repeated IssueWatcherResponse watchers = 1;
+
+  /**
+   * Общее количество подписчиков.
+   */
+  int32 total_count = 2;
+}
+
+/**
+ * Запрос на получение состояния подписки.
+ */
+message GetIssueWatchStateRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  GetIssueWatchStateRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение состояния подписки.
+ */
+message GetIssueWatchStateRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+}
+
+/**
+ * Ответ на получение состояния подписки.
+ */
+message GetIssueWatchStateResponse {
+  /**
+   * Признак подписки текущего пользователя.
+   */
+  bool watched_by_me = 1;
+
+  /**
+   * Количество подписчиков задачи.
+   */
+  int32 watchers_count = 2;
+}
+
+/**
+ * Запрос на получение списка задач для доски.
+ */
+message ListIssuesForBoardRequest{
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssuesForBoardRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на получение списка задач для доски.
+ */
+message ListIssuesForBoardRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Фильтр по типу задачи
+   */
+   IssueType issue_type = 3;
+
+  /**
+   * Фильтр по идентификатору исполнителя (опционально).
+   */
+  optional string assignee_id = 4;
+
+  /**
+   * Фильтр по статусу задачи (опционально).
+   */
+  optional string status_key = 5;
+
+  /**
+   * Включать ли задачи в финальном статусе Done.
+   */
+  bool include_done = 6;
+
+  /**
+   * Размер страницы на одну колонку доски (опционально).
+   */
+  optional int32 page_size_per_column = 7;
+
+  /**
+   * Фильтр по идентификаторам меток (опционально).
+   */
+
+  repeated string label_ids = 8;
+}
+
+/**
+ * Ответ список задач для доски.
+ */
+message IssueBoardResponse {
+  /**
+   * Идентификатор задачи.
+   */
+  string id = 1;
+  /**
+   * Денормализованный ключ задачи.
+   */
+  string issue_key = 2;
+  /**
+   * Краткое описание задачи.
+   */
+  string summary = 3;
+  /**
+   * Тип задачи
+   */
+  IssueType issue_type = 4;
+  /**
+   * Статус задачи
+   */
+  string status_key = 5;
+  /**
+   * Идентификатор исполнителя задачи.
+   */
+  string assignee_id = 6;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
+  string reporter_id = 7;
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 8;
+
+  /**
+   * Идентификаторы меток задачи.
+   */
+  repeated string label_ids = 9;
+
+  /**
+   * Количество наблюдателей задачи.
+   */
+  int32 watchers_count = 10;
+
+  /**
+   * Количество комментариев к задаче.
+   */
+  int32 comments_count = 11;
+}
+
+/**
+ * Ответ со списком задач для доски.
+ */
+message ListIssuesForBoardResponse {
+
+  /**
+   * Список задач.
+   */
+  repeated IssueBoardResponse issues = 1;
 }

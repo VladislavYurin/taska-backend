@@ -69,7 +69,9 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         StepVerifier.create(issueService.updateIssue(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
-                        newSummary, newDescription, newPriority))
+                        newSummary, newDescription, newPriority, STORY_POINTS,
+                        START_DATE, DUE_DATE, ORIGINAL_ESTIMATE_MINUTES,
+                        REMAINING_ESTIMATE_MINUTES))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getSummary()).isEqualTo(newSummary);
                     Assertions.assertThat(result.getDescription()).isEqualTo(newDescription);
@@ -82,7 +84,8 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID),
-                Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority));
+                Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority), Mockito.eq(STORY_POINTS),
+                Mockito.eq(START_DATE), Mockito.eq(DUE_DATE), Mockito.eq(ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(REMAINING_ESTIMATE_MINUTES));
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
         Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class),
                 Mockito.any(UUID.class), Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class));
@@ -118,14 +121,19 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         )).thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.updateIssue(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
-                        sameSummary, sameDescription, samePriority))
+                            REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
+                            sameSummary, sameDescription, samePriority, EMPTY_STORY_POINTS,
+                            EMPTY_START_DATE, EMPTY_DUE_DATE,
+                            EMPTY_ORIGINAL_ESTIMATE_MINUTES, EMPTY_REMAINING_ESTIMATE_MINUTES))
                 .expectNext(existingIssue)
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
-        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(sameSummary), Mockito.eq(sameDescription), Mockito.eq(samePriority));
+        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(sameSummary), Mockito.eq(sameDescription), Mockito.eq(samePriority),
+                                                                    Mockito.eq(EMPTY_STORY_POINTS), Mockito.eq(
+                        EMPTY_START_DATE), Mockito.eq(EMPTY_DUE_DATE),
+                                                                    Mockito.eq(EMPTY_ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(EMPTY_REMAINING_ESTIMATE_MINUTES));
 
         Mockito.verifyNoMoreInteractions(issueRepository, projectRoleChecker);
         Mockito.verifyNoInteractions(issueHistoryService, outboxEventService);
@@ -141,8 +149,10 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.empty());
 
         StepVerifier.create(issueService.updateIssue(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
-                        newSummary, newDescription, newPriority))
+                            REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID,
+                            newSummary, newDescription, newPriority, EMPTY_STORY_POINTS,
+                            EMPTY_START_DATE, EMPTY_DUE_DATE,
+                            EMPTY_ORIGINAL_ESTIMATE_MINUTES, EMPTY_REMAINING_ESTIMATE_MINUTES))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertThat(throwable).isInstanceOf(DomainException.class);
                     DomainException exception = (DomainException) throwable;

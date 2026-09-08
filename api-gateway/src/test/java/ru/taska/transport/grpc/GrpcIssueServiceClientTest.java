@@ -66,6 +66,7 @@ class GrpcIssueServiceClientTest {
     private static final String IDEMPOTENCY_KEY = "00000000-0000-0000-0000-000000000005";
     private static final String TRANSITION_ID = "00000000-0000-0000-0000-000000000006";
     private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
+    private static final String LABEL_ID = "00000000-0000-0000-0000-000000000007";
     public static final String SUMMARY = "Summary-1";
     public static final String DESCRIPTION = "Description-1";
     public static final String STATUS_KEY = "TODO";
@@ -150,10 +151,10 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssues(Mockito.any(ListIssuesRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(issueMapper.toRestListIssuesRequest(grpcResponse))
+        Mockito.when(issueMapper.toRestListIssuesResponseDto(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.listIssues(PROJECT_ID, STATUS_KEY, ASSIGNEE_ID, page, pageSize, context))
+        StepVerifier.create(client.listIssues(PROJECT_ID, STATUS_KEY, ASSIGNEE_ID, page, pageSize, LABEL_ID, context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -173,7 +174,7 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(pageSize);
 
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestListIssuesRequest(grpcResponse);
+                .toRestListIssuesResponseDto(grpcResponse);
     }
 
     @Test
@@ -185,10 +186,10 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssues(Mockito.any(ListIssuesRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(issueMapper.toRestListIssuesRequest(grpcResponse))
+        Mockito.when(issueMapper.toRestListIssuesResponseDto(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.listIssues(PROJECT_ID, null, null, null, null, context))
+        StepVerifier.create(client.listIssues(PROJECT_ID, null, null, null, null, null, context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -208,7 +209,7 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().hasPageSize()).isFalse();
 
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestListIssuesRequest(grpcResponse);
+                .toRestListIssuesResponseDto(grpcResponse);
     }
 
     @Test

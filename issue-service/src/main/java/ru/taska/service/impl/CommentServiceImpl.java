@@ -237,7 +237,7 @@ public class CommentServiceImpl implements CommentService {
                             requestId, nodeId, result.totalCount(), issueId);
                 })
                 .doOnError(e ->
-                        log.error("[{}][{}] Failed to list comments: {}", requestId, nodeId, e.getMessage())
+                        log.error("[{}][{}] Failed to pagination comments: {}", requestId, nodeId, e.getMessage())
                 );
     }
 
@@ -380,8 +380,8 @@ public class CommentServiceImpl implements CommentService {
 
     private int validatePageSize(Integer pageSize) {
         if (pageSize == null || pageSize < 1) {
-            return issueProperties.list().defaultPageSize();
+            return issueProperties.pagination().defaultPageSize();
         }
-        return Math.min(pageSize, issueProperties.list().maxPageSize());
+        return Math.min(pageSize, issueProperties.pagination().maxPageSize());
     }
 }

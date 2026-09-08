@@ -27,6 +27,7 @@ enum UserStatus {
   USER_STATUS_INVITED = 1;
   USER_STATUS_ACTIVE = 2;
   USER_STATUS_BLOCKED = 3;
+  USER_STATUS_LOCKED = 4;
 }
 
 enum GlobalRoleProto {

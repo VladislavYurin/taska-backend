@@ -26,10 +26,8 @@ import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
-import ru.taska.error.GatewayValidationExceptionHandler;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
-import ru.taska.domain.dto.NotificationTypeDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -402,7 +400,7 @@ class NotificationControllerWebTestClientTest {
         NotificationResponseDto dto = new NotificationResponseDto();
 
         dto.setId(UUID.fromString("906b9963-9511-4508-b546-d398f62f5765"));
-        dto.setNotificationType(NotificationTypeDto.ISSUE_ASSIGNED);
+        dto.setNotificationType("ISSUE_ASSIGNED");
         dto.setTitle("Вас назначили исполнителем");
         dto.setBody("Вы назначены исполнителем задачи TASKA-12");
         dto.setLink("/projects/TASKA/issues/TASKA-12");

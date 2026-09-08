@@ -4,39 +4,67 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
+import ru.taska.api.issue.v1.AddIssueCommentRequest;
+import ru.taska.api.issue.v1.AddIssueCommentResponse;
+import ru.taska.api.issue.v1.AddIssueLabelRequest;
+import ru.taska.api.issue.v1.AddIssueLabelResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
+import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
+import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.GetIssueWatchStateRequest;
+import ru.taska.api.issue.v1.GetIssueWatchStateResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
-import ru.taska.api.issue.v1.ListIssueLinksRequest;
-import ru.taska.api.issue.v1.ListIssueLinksResponse;
-import ru.taska.api.issue.v1.ListIssuesRequest;
-import ru.taska.api.issue.v1.ListIssuesResponse;
-import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
-import ru.taska.api.issue.v1.TransitionIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueResponse;
-import ru.taska.api.issue.v1.AddIssueCommentRequest;
-import ru.taska.api.issue.v1.AddIssueCommentResponse;
-import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
-import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
-import ru.taska.api.issue.v1.DeleteIssueCommentRequest;
-import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.ListIssueCommentsRequest;
 import ru.taska.api.issue.v1.ListIssueCommentsResponse;
+import ru.taska.api.issue.v1.ListIssueLabelsRequest;
+import ru.taska.api.issue.v1.ListIssueLabelsResponse;
+import ru.taska.api.issue.v1.ListIssueLinksRequest;
+import ru.taska.api.issue.v1.ListIssueLinksResponse;
+import ru.taska.api.issue.v1.ListIssueWatchersRequest;
+import ru.taska.api.issue.v1.ListIssueWatchersResponse;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardResponse;
+import ru.taska.api.issue.v1.ListIssuesRequest;
+import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.ListProjectLabelsRequest;
+import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
+import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
+import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
+import ru.taska.api.issue.v1.SearchIssuesResponse;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
+import ru.taska.api.issue.v1.UnwatchIssueRequest;
+import ru.taska.api.issue.v1.UnwatchIssueResponse;
+import ru.taska.api.issue.v1.UpdateIssueCommentRequest;
+import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
+import ru.taska.api.issue.v1.WatchIssueRequest;
+import ru.taska.api.issue.v1.WatchIssueResponse;
 
 @GrpcService
 @RequiredArgsConstructor
 public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServiceImplBase{
 
     private final GrpcIssueService grpcIssueService;
+    private final GrpcIssueCommentService grpcIssueCommentService;
+    private final GrpcIssueLinkService grpcIssueLinkService;
+    private final GrpcIssueWatcherService grpcIssueWatcherService;
 
     @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
@@ -81,18 +109,18 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
 
     @Override
     public Mono<ListIssueLinksResponse> listIssueLinks(Mono<ListIssueLinksRequest> request) {
-        return grpcIssueService.listIssueLinks(request)
+        return grpcIssueLinkService.listIssueLinks(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueLinks"));    }
 
     @Override
     public Mono<IssueLinkResponse> createIssueLink(Mono<CreateIssueLinkRequest> request) {
-        return grpcIssueService.createIssueLink(request)
+        return grpcIssueLinkService.createIssueLink(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssueLink"));
     }
 
     @Override
     public Mono<DeleteIssueLinkResponse> deleteIssueLink(Mono<DeleteIssueLinkRequest> request) {
-        return grpcIssueService.deleteIssueLink(request)
+        return grpcIssueLinkService.deleteIssueLink(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueLink"));
     }
     // --------------------------------- Методы для комментариев к issue --------------------
@@ -104,7 +132,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<AddIssueCommentResponse> addIssueComment(Mono<AddIssueCommentRequest> request) {
-        return grpcIssueService.addIssueComment(request)
+        return grpcIssueCommentService.addIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueComment"));
     }
 
@@ -116,7 +144,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<UpdateIssueCommentResponse> updateIssueComment(Mono<UpdateIssueCommentRequest> request) {
-        return grpcIssueService.updateIssueComment(request)
+        return grpcIssueCommentService.updateIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssueComment"));
     }
 
@@ -128,7 +156,7 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<DeleteIssueCommentResponse> deleteIssueComment(Mono<DeleteIssueCommentRequest> request) {
-        return grpcIssueService.deleteIssueComment(request)
+        return grpcIssueCommentService.deleteIssueComment(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueComment"));
     }
 
@@ -140,7 +168,85 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<ListIssueCommentsResponse> listIssueComments(Mono<ListIssueCommentsRequest> request) {
-        return grpcIssueService.listIssueComments(request)
+        return grpcIssueCommentService.listIssueComments(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueComments"));
+    }
+
+    @Override
+    public Mono<WatchIssueResponse> watchIssue(Mono<WatchIssueRequest> request) {
+        return grpcIssueWatcherService.watchIssue(request);
+    }
+
+    @Override
+    public Mono<UnwatchIssueResponse> unwatchIssue(Mono<UnwatchIssueRequest> request) {
+        return grpcIssueWatcherService.unwatchIssue(request);
+    }
+
+    @Override
+    public Mono<ListIssueWatchersResponse> listIssueWatchers(Mono<ListIssueWatchersRequest> request) {
+        return grpcIssueWatcherService.listIssueWatchers(request);
+    }
+
+    @Override
+    public Mono<GetIssueWatchStateResponse> getIssueWatchState(Mono<GetIssueWatchStateRequest> request) {
+        return grpcIssueWatcherService.getIssueWatchState(request);
+    }
+
+    public Mono<ProjectLabelResponse> createProjectLabel(Mono<CreateProjectLabelRequest> request) {
+        return grpcIssueService.createProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProjectLabel"));
+    }
+
+    @Override
+    public Mono<ProjectLabelResponse> updateProjectLabel(Mono<UpdateProjectLabelRequest> request) {
+        return grpcIssueService.updateProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProjectLabel"));
+    }
+
+    @Override
+    public Mono<DeleteProjectLabelResponse> deleteProjectLabel(Mono<DeleteProjectLabelRequest> request) {
+        return grpcIssueService.deleteProjectLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectLabel"));
+    }
+
+    @Override
+    public Mono<ListProjectLabelsResponse> listProjectLabels(Mono<ListProjectLabelsRequest> request) {
+        return grpcIssueService.listProjectLabels(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectLabels"));
+    }
+
+    // ===== Методы для управления метками задачи (MEMBER) =====
+
+    @Override
+    public Mono<AddIssueLabelResponse> addIssueLabel(Mono<AddIssueLabelRequest> request) {
+        return grpcIssueService.addIssueLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addIssueLabel"));
+    }
+
+    @Override
+    public Mono<RemoveIssueLabelResponse> removeIssueLabel(Mono<RemoveIssueLabelRequest> request) {
+        return grpcIssueService.removeIssueLabel(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("removeIssueLabel"));
+    }
+
+    @Override
+    public Mono<ListIssueLabelsResponse> listIssueLabels(Mono<ListIssueLabelsRequest> request) {
+        return grpcIssueService.listIssueLabels(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listIssueLabels"));
+    }
+
+    /**
+     * Поиск задач по ключу, summary и description с фильтрами
+     */
+    @Override
+    public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
+        return grpcIssueService.searchIssues(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
+    }
+
+    @Override
+    public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
+        return grpcIssueService.listIssuesForBoard(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("ListIssuesForBoard"));
     }
 }

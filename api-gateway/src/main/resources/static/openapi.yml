@@ -86,7 +86,7 @@ paths:
       tags:
         - auth
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
       responses:
         '200':
           description: Данные успешно получены
@@ -107,7 +107,7 @@ paths:
       tags:
         - notifications
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
       parameters:
         - name: unreadOnly
           in: query
@@ -152,7 +152,7 @@ paths:
       tags:
         - notifications
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
       parameters:
         - name: notificationId
           in: path
@@ -345,6 +345,108 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/admin/users/{userId}/block:
+    post:
+      summary: Блокировка пользователя
+      description: Изменяет статус пользователя на BLOCKED. Требует прав GLOBAL_ADMIN и указания причины.
+      operationId: blockUser
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockUserRequestDto'
+      responses:
+        '200':
+          description: Пользователь успешно заблокирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          description: Некорректный запрос (неверный UUID или отсутствует reason)
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          description: Неавторизован
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль GLOBAL_ADMIN)
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Конфликт бизнес-логики (попытка заблокировать последнего GLOBAL_ADMIN или некорректный переход статуса)
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/users/{userId}/unblock:
+    post:
+      summary: Разблокировка пользователя
+      description: Изменяет статус пользователя с BLOCKED на ACTIVE. Запрещено активировать пользователей в статусе INVITED через этот эндпоинт. Требует прав GLOBAL_ADMIN.
+      operationId: unblockUser
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: Уникальный идентификатор пользователя (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnblockUserRequestDto'
+      responses:
+        '200':
+          description: Пользователь успешно разблокирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          description: Некорректный запрос (неверный формат UUID или отсутствует reason)
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          description: Неавторизован
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль GLOBAL_ADMIN)
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Конфликт бизнес-логики (попытка разблокировать пользователя со статусом, отличным от BLOCKED)
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues:
     post:
       summary: Создание задачи
@@ -352,7 +454,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: projectId
@@ -393,7 +495,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: projectId
@@ -425,6 +527,13 @@ paths:
           required: false
           schema:
             type: integer
+
+        - name: labelId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по идентификатору метки (возвращает задачи, имеющие эту метку)
 
       responses:
         '200':
@@ -541,7 +650,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -569,7 +678,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -604,7 +713,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -629,7 +738,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -665,7 +774,7 @@ paths:
       tags:
         - issue
       security:
-        - bearerAuth: [ ]
+        - bearerAuth: []
 
       parameters:
         - name: issueId
@@ -697,6 +806,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/search:
+    get:
+      summary: Поиск задач по ключу, summary и description с фильтрами (Все параметры применяются через логическое "AND")
+      operationId: searchIssues
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: query
+          in: query
+          required: false
+          description: Строка для поиска (поиск по issue_key, summary, description через логическое "OR")
+          schema:
+            type: string
+            minLength: 2
+        - name: projectId
+          in: query
+          required: false
+          description: Идентификатор проекта (если не указан, поиск по проектам доступным для пользователя)
+          schema:
+            type: string
+#            format: uuid
+        - name: statusKey
+          in: query
+          required: false
+          description: Фильтр по статусу задачи
+          schema:
+            type: string
+        - name: assigneeId
+          in: query
+          required: false
+          description: Фильтр по исполнителю
+          schema:
+            type: string
+#            format: uuid
+        - name: reporterId
+          in: query
+          required: false
+          description: Фильтр по создателю
+          schema:
+            type: string
+#            format: uuid
+        - name: priority
+          in: query
+          required: false
+          description: Фильтр по приоритету (LOW, MEDIUM, HIGH)
+          schema:
+            type: string
+            enum: [ LOW, MEDIUM, HIGH ]
+        - name: issueType
+          in: query
+          required: false
+          description: Фильтр по типу задачи (TASK, BUG, STORY)
+          schema:
+            type: string
+            enum: [ TASK, BUG, STORY ]
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы (начиная с 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          required: false
+          description: Размер страницы
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Результаты поиска успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIssuesResponseDto'
+        '400':
+          description: Некорректные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -965,12 +1167,543 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  ########################## API для project/issue меток ##################
+
+  /api/v1/projects/{projectId}/labels:
+    get:
+      summary: Получение списка меток проекта
+      operationId: listProjectLabels
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список меток успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectLabelsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление метки к проекту
+      operationId: createProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectLabelRequestDto'
+      responses:
+        '201':
+          description: Метка успешно создана
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/labels/{labelId}:
+    patch:
+      summary: Обновление метки проекта
+      operationId: updateProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectLabelRequestDto'
+      responses:
+        '200':
+          description: Метка успешно обновлена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление метки проекта (soft-delete)
+      operationId: deleteProjectLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Метка успешно удалена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/labels:
+    get:
+      summary: Получение списка меток задачи
+      operationId: listIssueLabels
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список меток задачи успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueLabelsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление метки к задаче
+      operationId: addIssueLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueLabelRequestDto'
+      responses:
+        '201':
+          description: Метка успешно добавлена к задаче
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddIssueLabelResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/labels/{labelId}:
+    delete:
+      summary: Удаление метки у задачи
+      operationId: removeIssueLabel
+      tags:
+        - labels
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Метка успешно удалена у задачи
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  ########################## Окончание API для project/issue меток ##################
+
+  ########################## Начало API watchers ##################
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers:
+    get:
+      summary: Получение списка подписчиков задачи
+      operationId: listIssueWatchers
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Список подписчиков задачи успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueWatchersResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Добавление подписчика на задачу (только project ADMIN)
+      description: |
+        Доступно только пользователю с ролью ADMIN в проекте.
+        Подписывает указанного пользователя (`userId` в body) на задачу.
+      operationId: addIssueWatcher
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueWatcherRequestDto'
+      responses:
+        '200':
+          description: Подписчик успешно добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers/me:
+    put:
+      summary: Подписка текущего пользователя на задачу
+      description: userId берётся из Gateway context (JWT), не из тела запроса.
+      operationId: watchIssueMe
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пользователь подписан на задачу
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Отписка текущего пользователя от задачи
+      description: userId берётся из Gateway context (JWT), не из path.
+      operationId: unwatchIssueMe
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пользователь отписан от задачи
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnwatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/watchers/{userId}:
+    delete:
+      summary: Удаление подписчика задачи (только project ADMIN)
+      description: |
+        Доступно только пользователю с ролью ADMIN в проекте.
+        Viewer/MEMBER без роли ADMIN не может удалить чужого watcher.
+      operationId: removeIssueWatcher
+      tags:
+        - watchers
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: userId
+          in: path
+          required: true
+          description: Идентификатор пользователя, которого нужно отписать
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Подписчик успешно удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnwatchIssueResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  ########################## Окончание API watchers ##################
+
   /api/v1/readonly/{service}/{table}:
     get:
       summary: Получение строк таблицы из сервисной БД (только для GLOBAL_ADMIN)
       operationId: listTableRows
       tags:
-        - readonly
+        - admin
       security:
         - bearerAuth: [ ]
       parameters:
@@ -979,20 +1712,20 @@ paths:
           required: true
           schema:
             type: string
-          description: Имя сервиса (auth, project, issue, workflow, notification, admin) Актуальный список возвращается через GET /api/v1/readonly/metadata. Валидация происходит на бэкенде через metadata catalog.
+          description: Имя сервиса (auth, project, issue, workflow, notification, admin). Актуальный список возвращается через GET /api/v1/readonly/catalog.
         - name: table
           in: path
           required: true
           schema:
             type: string
-          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/metadata. Валидация происходит на бэкенде через metadata catalog.
+          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/catalog.
         - name: page
           in: query
           required: false
           schema:
             type: integer
-            minimum: 1
-            default: 1
+            minimum: 0
+            default: 0
         - name: pageSize
           in: query
           required: false
@@ -1024,22 +1757,24 @@ paths:
             additionalProperties:
               type: string
           description: |
-            Фильтры по колонкам таблицы. Имя динамического свойства — это название колонки.
-            
-            Формат: column.operator=value (точное совпадение)
-            
-            Примеры:
-            - ?status=active → status = 'active'
-            - ?email.contains=@gmail.com → email LIKE '%@gmail.com%'
-            - ?created_at.from=2026-01-01T00:00:00Z → created_at >= '2026-01-01T00:00:00Z'
-            - ?created_at.to=2026-12-31T23:59:59Z → created_at <= '2026-12-31T23:59:59Z'
-            - ?status=active&assignee_id=123 → комбинация фильтров
-            
+            Фильтры по колонкам таблицы. Формат ключа: column.operator.
+
+            Параметры page, pageSize, sort, order — не фильтры (пагинация/сортировка).
+
             Поддерживаемые операторы:
-            - .eq (или без оператора) - точное совпадение column=value
-            - .contains - поиск по подстроке (column LIKE '%value%')
-            - .from - нижняя граница для timestamp (column >= value)
-            - .to - верхняя граница для timestamp (column <= value)
+            - .equals — точное совпадение (column = value)
+            - .contains — поиск по подстроке (column LIKE '%value%')
+            - .from — нижняя граница для timestamp (column >= value)
+            - .to — верхняя граница для timestamp (column <= value)
+
+            Примеры:
+            - ?status.equals=active → status = 'active'
+            - ?email.contains=@gmail.com → email LIKE '%@gmail.com%'
+            - ?created_at.from=2026-01-01T00:00:00Z → created_at >= '2026-01-01'
+            - ?status.equals=active&email.contains=@test.com → комбинация фильтров
+
+            Каждый ключ фильтра может быть указан только один раз.
+            При дублировании (?status.equals=active&status.equals=blocked) будет использовано только одно значение.
       responses:
         '200':
           description: Данные успешно получены
@@ -1049,7 +1784,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReadOnlyResponseDto'
+                $ref: '#/components/schemas/ReadOnlyTableRowsResponseDto'
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '401':
@@ -1061,12 +1796,89 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-  /api/v1/readonly/metadata:
+  /api/v1/readonly/{service}/{table}/{id}:
+    get:
+      summary: Получение одной строки таблицы по ID (только для GLOBAL_ADMIN)
+      operationId: getTableRowById
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Имя сервиса. Актуальный список возвращается через GET /api/v1/readonly/catalog.
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Имя таблицы. Актуальный список таблиц возвращается через GET /api/v1/readonly/catalog.
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор строки (primary key)
+      responses:
+        '200':
+          description: Данные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadOnlySingleRowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/readonly/outbox/problematic-summary:
+    get:
+      summary: Получение сводки проблемных outbox-событий (только для GLOBAL_ADMIN)
+      operationId: getProblematicOutboxEventsSummary
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: serviceKey
+          in: query
+          required: false
+          description: Ключ сервиса для фильтрации (если не указан — все сервисы)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Сводка проблемных outbox-событий
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblematicOutboxEventsSummaryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/readonly/catalog:
     get:
       summary: Получение каталога доступных сервисов и таблиц (только для GLOBAL_ADMIN)
-      operationId: getMetadata
+      operationId: getCatalog
       tags:
-        - readonly
+        - admin
       security:
         - bearerAuth: [ ]
       responses:
@@ -1085,6 +1897,108 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/outbox/{service}/{eventId}/retry:
+    post:
+      summary: Повторная обработка outbox-события (только для GLOBAL_ADMIN)
+      operationId: retryOutboxEvent
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: service
+          in: path
+          required: true
+          description: Сервис-владелец outbox-события
+          schema:
+            type: string
+            enum:
+              - auth
+              - project
+              - issue
+
+        - name: eventId
+          in: path
+          required: true
+          description: Идентификатор outbox-события
+          schema:
+            type: string
+            format: uuid
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryOutboxEventRequestDto'
+
+      responses:
+        '200':
+          description: Outbox-событие успешно отправлено на повторную обработку
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryOutboxEventResponseDto'
+
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+########################## API для сброса блокировки учетных данных ##################
+
+  /api/v1/admin/users/{userId}/reset-lockout:
+    post:
+      summary: Сброс блокировки учётных данных пользователя (только GLOBAL_ADMIN)
+      operationId: resetCredentialLockout
+      tags:
+        - admin-user-management
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetLockoutRequestDto'
+      responses:
+        '200':
+          description: Lockout успешно сброшен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatusResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+########################## Окончание API для сброса блокировки учетных данных ##################
 
 components:
   securitySchemes:
@@ -1113,7 +2027,7 @@ components:
   schemas:
     LoginRequestDto:
       type: object
-      required: [ email, password ]
+      required: [email, password]
       properties:
         email:
           type: string
@@ -1133,7 +2047,7 @@ components:
 
     RefreshRequestDto:
       type: object
-      required: [ refreshToken ]
+      required: [refreshToken]
       properties:
         refreshToken:
           type: string
@@ -1151,7 +2065,7 @@ components:
 
     PasswordByTokenRequestDto:
       type: object
-      required: [ token, newPassword ]
+      required: [token, newPassword]
       properties:
         token:
           type: string
@@ -1177,7 +2091,7 @@ components:
 
     CreateIssueRequestDto:
       type: object
-      required: [ issueType, summary, description, priority ]
+      required: [issueType, summary, description, priority]
       properties:
         issueType:
           type: string
@@ -1221,6 +2135,11 @@ components:
           format: date-time
         version:
           type: integer
+        labels:
+          type: array
+          description: Метки задачи (краткая информация)
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
 
     IssueHistoryResponseDto:
       type: object
@@ -1269,13 +2188,13 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/IssueShortResponseDto'
+            $ref: '#/components/schemas/IssueResponseDto'
         totalCount:
           type: integer
 
     UpdateIssueRequestDto:
       type: object
-      required: [ summary, description, priority ]
+      required: [summary, description, priority]
       properties:
         summary:
           type: string
@@ -1298,7 +2217,7 @@ components:
 
     AssignIssueRequestDto:
       type: object
-      required: [ assigneeId ]
+      required: [assigneeId]
       properties:
         assigneeId:
           type: string
@@ -1345,6 +2264,211 @@ components:
           type: string
           format: date-time
 
+    # ==================== LABELS SCHEMAS ====================
+
+    ListProjectLabelsResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectLabelResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество меток
+
+    CreateProjectLabelRequestDto:
+      type: object
+      required:
+        - name
+        - color
+      properties:
+        name:
+          type: string
+          description: Название метки (уникально в пределах проекта)
+          minLength: 1
+          maxLength: 50
+          example: "backend"
+        color:
+          type: string
+          description: Цвет метки в HEX формате (Пример:#0052CC)
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
+
+    UpdateProjectLabelRequestDto:
+      type: object
+      required:
+        - name
+        - color
+      properties:
+        name:
+          type: string
+          description: Новое название метки
+          minLength: 1
+          maxLength: 50
+          example: "backend"
+        color:
+          type: string
+          description: Новый цвет метки в HEX формате
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
+
+    ProjectLabelResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор метки
+        projectId:
+          type: string
+          format: uuid
+          description: Идентификатор проекта
+        name:
+          type: string
+          description: Название метки
+        color:
+          type: string
+          description: Цвет метки
+        createdBy:
+          type: string
+          format: uuid
+          description: Идентификатор создателя метки
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата и время удаления (null если не удалена)
+
+    ListIssueLabelsResponseDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество меток у задачи
+
+    IssueLabelResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор метки
+        name:
+          type: string
+          description: Название метки
+        color:
+          type: string
+          description: Цвет метки
+
+    AddIssueLabelRequestDto:
+      type: object
+      required:
+        - labelId
+      properties:
+        labelId:
+          type: string
+          format: uuid
+          description: Идентификатор метки для добавления к задаче
+
+    AddIssueLabelResponseDto:
+      type: object
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        labelId:
+          type: string
+          format: uuid
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    # ==================== END LABELS SCHEMAS ====================
+
+    # ==================== WATCHERS SCHEMAS ====================
+
+    ListIssueWatchersResponseDto:
+      type: object
+      properties:
+        watchers:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueWatcherResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество подписчиков задачи
+
+    IssueWatcherResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор подписки
+        issueId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          description: Подписанный пользователь
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          format: uuid
+          description: Кто создал подписку
+
+    AddIssueWatcherRequestDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Пользователь, которого нужно подписать на задачу
+
+    WatchIssueResponseDto:
+      type: object
+      properties:
+        watcher:
+          $ref: '#/components/schemas/IssueWatcherResponseDto'
+        watchersCount:
+          type: integer
+          description: Количество подписчиков после операции
+
+    UnwatchIssueResponseDto:
+      type: object
+      properties:
+        issueId:
+          type: string
+          format: uuid
+        removed:
+          type: boolean
+          description: Была ли подписка фактически удалена
+        watchersCount:
+          type: integer
+          description: Количество подписчиков после операции
+
+    # ==================== END WATCHERS SCHEMAS ====================
+
     NotificationListResponseDto:
       type: object
       required:
@@ -1369,7 +2493,9 @@ components:
           type: string
           format: uuid
         notificationType:
-          $ref: '#/components/schemas/NotificationTypeDto'
+          type: string
+          description: Тип уведомления.
+          example: ISSUE_ASSIGNED,MEMBER_REMOVED etc.
         title:
           type: string
         body:
@@ -1403,7 +2529,7 @@ components:
         - MEMBER_UPDATED
         - MEMBER_REMOVED
 
-    ReadOnlyResponseDto:
+    ReadOnlyTableRowsResponseDto:
       type: object
       properties:
         data:
@@ -1415,7 +2541,15 @@ components:
         pagination:
           $ref: '#/components/schemas/PaginationInfoDto'
         meta:
-          $ref: '#/components/schemas/MetaInfoDto'
+          $ref: '#/components/schemas/TableCapabilitiesDto'
+
+    ReadOnlySingleRowResponseDto:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+          description: Строка таблицы
 
     PaginationInfoDto:
       type: object
@@ -1434,7 +2568,7 @@ components:
         hasPrev:
           type: boolean
 
-    MetaInfoDto:
+    TableCapabilitiesDto:
       type: object
       properties:
         service:
@@ -1568,7 +2702,7 @@ components:
 
     RestErrorResponse:
       type: object
-      required: [ code, message ]
+      required: [code, message]
       properties:
         code:
           type: string
@@ -1582,12 +2716,63 @@ components:
         - BUG
         - STORY
 
+    IssuePriorityDto:
+      type: string
+      enum:
+        - LOW
+        - MEDIUM
+        - HIGH
+
     IssueLinkTypeDto:
       type: string
       enum:
         - BLOCKS
         - RELATES_TO
         - DUPLICATES
+
+    SearchIssuesRequestDto:
+      type: object
+      properties:
+        query:
+          type: string
+          minLength: 2
+        projectId:
+          type: string
+        statusKey:
+          type: string
+        assigneeId:
+          type: string
+        reporterId:
+          type: string
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        page:
+          type: integer
+          minimum: 0
+          default: 0
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+
+    SearchIssuesResponseDto:
+      type: object
+      required:
+        - items
+        - totalCount
+      properties:
+        items:
+          type: array
+          description: Список найденных задач
+          items:
+            $ref: '#/components/schemas/IssueShortResponseDto'
+        totalCount:
+          type: integer
+          description: Общее количество задач, соответствующих поисковому запросу
+          example: 42
 
     # ==================== КОММЕНТАРИИ к issue ====================
     CommentRequestDto:
@@ -1730,6 +2915,158 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    ProblematicOutboxEventsSummaryResponseDto:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblematicOutboxEventDto'
+        counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblematicEventCountsByServiceDto'
+        notAllShown:
+          type: boolean
+
+    ProblematicOutboxEventDto:
+      type: object
+      properties:
+        id:
+          type: string
+        aggregateType:
+          type: string
+        aggregateId:
+          type: string
+        eventType:
+          type: string
+        payload:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+          format: int32
+        lastErrorMessage:
+          type: string
+        processingStartedAt:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        serviceKey:
+          type: string
+        reason:
+          type: string
+
+    ProblematicEventCountsByServiceDto:
+      type: object
+      properties:
+        serviceKey:
+          type: string
+        overdueNewCount:
+          type: integer
+          format: int64
+        stuckProcessingCount:
+          type: integer
+          format: int64
+        failedCount:
+          type: integer
+          format: int64
+
+    RetryOutboxEventRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Причина ручного retry outbox-события
+          example: Retry after Kafka incident
+
+    RetryOutboxEventResponseDto:
+      type: object
+      required:
+        - eventId
+        - status
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: Текущий статус outbox-события после retry
+        attempts:
+          type: integer
+          format: int32
+          nullable: true
+
+    BlockUserRequestDto:
+      type: object
+      required: [ reason ]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина блокировки пользователя (обязательное поле для аудита)
+          example: "Нарушение правил безопасности"
+
+    UnblockUserRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина разблокировки пользователя (обязательное поле для аудита)
+          example: "Блокировка снята по решению администрации после проверки"
+
+    ResetLockoutRequestDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 550
+          description: Причина снятия блокировки на credentials (обязательное поле для аудита)
+          example: "Обещал не забывать пароль и записать в надежном месте"
+
+    UserStatusResponseDto:
+      type: object
+      required: [ userId,previousStatus, currentStatus, changedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        previousStatus:
+          $ref: '#/components/schemas/UserStatusDto'
+        currentStatus:
+          $ref: '#/components/schemas/UserStatusDto'
+        changedAt:
+          type: string
+          format: date-time
+
+    UserStatusDto:
+      type: string
+      enum:
+        - INVITED
+        - ACTIVE
+        - BLOCKED
+        - LOCKED
 
     BoardResponseDto:
       type: object

@@ -15,8 +15,8 @@ import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.IdempotencyKey;
@@ -63,8 +63,8 @@ class IdempotencyKeyIT extends AbstractIT {
                         .setProjectExists(true)
                         .build()));
 
-        Mockito.when(projectServiceStub.getProject(Mockito.any(GetProjectRequest.class)))
-                .thenReturn(Mono.just(ProjectResponse.newBuilder()
+        Mockito.when(projectServiceStub.getProjectKeyInternal(Mockito.any(GetProjectKeyInternalRequest.class)))
+                .thenReturn(Mono.just(ProjectKeyResponse.newBuilder()
                         .setProjectKey("TSK")
                         .build()));
 
@@ -78,7 +78,8 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldSaveIdempotencyKeyAndReturnCreatedIssue() {
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .assertNext(result -> {
                     Assertions.assertNotNull(result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -102,7 +103,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Issue first = issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null).block();
         Assertions.assertNotNull(first);
 
         long issuesAfterFirst = issueRepository.count().block();
@@ -110,7 +112,8 @@ class IdempotencyKeyIT extends AbstractIT {
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID))
+                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .assertNext(result -> {
                     Assertions.assertEquals(first.getId(), result.getId());
                     Assertions.assertEquals(SUMMARY, result.getSummary());
@@ -125,13 +128,15 @@ class IdempotencyKeyIT extends AbstractIT {
     void shouldThrowFailedPreconditionOnSameKeyDifferentBody() {
         issueService.createIssue(
                 REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID).block();
+                SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                null, null, null, null, null).block();
 
         long issuesAfterFirst = issueRepository.count().block();
 
         StepVerifier.create(issueService.createIssue(
                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID))
+                        "Другое описание из-за которого вернёт ошибку", null, IssuePriority.MEDIUM, REPORTER_ID,
+                        null, null, null, null, null))
                 .expectErrorSatisfies(error -> {
                     DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
                     Assertions.assertEquals(DomainStatus.FAILED_PRECONDITION, ex.getStatus());
@@ -149,7 +154,8 @@ class IdempotencyKeyIT extends AbstractIT {
                 Flux.range(0, parallelism)
                         .map(i -> issueService.createIssue(
                                         REQUEST_ID, NODE_ID, IDEMPOTENCY_KEY, PROJECT_ID, IssueType.TASK,
-                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID)
+                                        SUMMARY, null, IssuePriority.MEDIUM, REPORTER_ID,
+                                        null, null, null, null, null)
                                 .map(issue -> "OK")
                                 .onErrorResume(e -> Mono.just("ERR:" + e.getClass().getSimpleName()))
                                 .subscribeOn(Schedulers.boundedElastic()))

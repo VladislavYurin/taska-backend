@@ -22,11 +22,14 @@ import ru.taska.api.issue.v1.ListIssueLinksRequestBody;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesRequestBody;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequestBody;
-import ru.taska.api.issue.v1.*;
+import ru.taska.api.issue.v1.BoardIssue;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
@@ -37,11 +40,11 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
-import ru.taska.domain.dto.AssignIssueRequestDto;
-import ru.taska.domain.dto.UpdateIssueResponseDto;
-import ru.taska.domain.dto.UpdateIssueRequestDto;
+import ru.taska.domain.dto.SearchIssuesRequestDto;
+import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
-import ru.taska.domain.dto.BoardIssueDto;
+import ru.taska.domain.dto.UpdateIssueRequestDto;
+import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
 import java.util.List;
@@ -104,6 +107,7 @@ public class GrpcIssueServiceClient {
             String assigneeId,
             Integer page,
             Integer pageSize,
+            String labelId,
             GatewayContext context
     ) {
         log.info("[{}] Calling listIssues", context.requestId());
@@ -127,6 +131,9 @@ public class GrpcIssueServiceClient {
         if (pageSize != null) {
             requestBodyBuilder.setPageSize(pageSize);
         }
+        if (labelId != null) {
+            requestBodyBuilder.setLabelId(labelId);
+        }
 
         return dynamicStub().listIssues(
                         ListIssuesRequest.newBuilder()
@@ -134,7 +141,7 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(issueMapper::toRestListIssuesRequest);
+                .map(issueMapper::toRestListIssuesResponseDto);
     }
 
     /**
@@ -412,7 +419,35 @@ public class GrpcIssueServiceClient {
     }
 
     /**
-     * Получает список задач для доски с учетом фильтров и маппит их в REST DTO.
+     * Выполняет поиск задач по ключу, summary, description с фильтрами.
+     *
+     * @param request dto c параметрами поиска
+     * @param context контекст запроса
+     * @return результат поиска
+     */
+    public Mono<SearchIssuesResponseDto> searchIssues(
+            SearchIssuesRequestDto request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling searchIssues: {}", context.requestId(), request);
+
+        SearchIssuesRequest grpcRequest =
+                issueMapper.toSearchIssuesGrpcRequest(request, context);
+
+        return dynamicStub()
+                .searchIssues(grpcRequest)
+                .map(issueMapper::toRestSearchIssuesResponse);
+    }
+    /**
+     * Получает список задач для доски проекта с учетом фильтров.
+     *
+     * @param projectId идентификатор проекта
+     * @param issueType тип задачи
+     * @param assigneeId идентификатор исполнителя
+     * @param labelId идентификатор метки
+     * @param includeDone включать ли завершенные задачи
+     * @param context контекст запроса
+     * @return список задач для доски
      */
     public Mono<List<BoardIssue>> listIssuesForBoard(
             String projectId,
@@ -422,7 +457,11 @@ public class GrpcIssueServiceClient {
             Boolean includeDone,
             GatewayContext context
     ) {
-        log.info("[{}] Calling listIssuesForBoard for project {}", context.requestId(), projectId);
+        log.info(
+                "[{}] Calling listIssuesForBoard for project {}",
+                context.requestId(),
+                projectId
+        );
 
         var requestBodyBuilder = ListIssuesForBoardRequestBody.newBuilder()
                 .setProjectId(projectId)
@@ -441,7 +480,8 @@ public class GrpcIssueServiceClient {
             requestBodyBuilder.setIncludeDone(includeDone);
         }
 
-        return dynamicStub().listIssuesForBoard(
+        return dynamicStub()
+                .listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(requestBodyBuilder.build())

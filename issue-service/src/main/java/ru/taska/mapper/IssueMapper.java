@@ -1,16 +1,20 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import io.r2dbc.spi.Row;
+import io.r2dbc.spi.RowMetadata;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
-import ru.taska.api.issue.v1.DeleteIssueResponse;
-import ru.taska.api.issue.v1.IssueHistoryResponse;
-import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.IssueResponse;
-import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.ProjectLabelResponse;
+import ru.taska.api.issue.v1.IssueShortResponse;
+import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
+import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
@@ -23,10 +27,13 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWatchStateDto;
+import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -46,7 +53,7 @@ public class IssueMapper {
     }
 
     public IssueResponse toIssueProto(Issue issue) {
-        return IssueResponse.newBuilder()
+        IssueResponse.Builder builder =  IssueResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setProjectId(issue.getProjectId().toString())
                 .setIssueNumber(issue.getIssueNumber())
@@ -60,7 +67,31 @@ public class IssueMapper {
                 .setReporterId(issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
-                .setVersion(issue.getVersion())
+                .setVersion(issue.getVersion());
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(issue.getStartDate().toString());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(issue.getDueDate().toString());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
+
+        return builder.build();
+    }
+
+    public IssueResponse toIssueProto(Issue issue, IssueWatchStateDto watchState) {
+        return toIssueProto(issue).toBuilder()
+                .setWatchersCount((int) watchState.watchersCount())
+                .setWatchedByMe(watchState.watchedByMe())
                 .build();
     }
 
@@ -79,20 +110,92 @@ public class IssueMapper {
         var historyProto = issueWithHistory.getHistory().stream()
                 .map(this::toIssueHistoryProto)
                 .toList();
+        var issueProto = toIssueProto(issueWithHistory.getIssue());
+
+        var issueWithLabels = issueProto.toBuilder()
+                .addAllLabels(
+                        issueWithHistory.getLabels().stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
+                .build();
+
         return IssueWithHistoryResponse.newBuilder()
-                .setIssue(toIssueProto(issueWithHistory.getIssue()))
+                .setIssue(issueWithLabels)
                 .addAllHistory(historyProto)
                 .build();
     }
 
+    public IssueWithHistoryResponse toIssueDetailsProto(
+            IssueWithHistory issueWithHistory,
+            IssueWatchStateDto watchState
+    ) {
+        var historyProto = issueWithHistory.getHistory().stream()
+                .map(this::toIssueHistoryProto)
+                .toList();
+
+        var issueProto = toIssueProto(issueWithHistory.getIssue(), watchState).toBuilder()
+                .addAllLabels(
+                        issueWithHistory.getLabels().stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
+                .build();
+
+        return IssueWithHistoryResponse.newBuilder()
+                .setIssue(issueProto)
+                .addAllHistory(historyProto)
+                .build();
+    }
+
+    /**
+     * Domain ProjectLabels → Proto ProjectLabelResponse
+     */
+    private ProjectLabelResponse toProjectLabelProto(ProjectLabels label) {
+        var builder = ProjectLabelResponse.newBuilder()
+                .setId(label.getId().toString())
+                .setProjectId(label.getProjectId().toString())
+                .setName(label.getName())
+                .setColor(label.getColor())
+                .setCreatedBy(label.getCreatedBy().toString());
+
+        if (label.getCreatedAt() != null) {
+            builder.setCreatedAt(toTimestamp(label.getCreatedAt()));
+        }
+
+        if (label.getDeletedAt() != null) {
+            builder.setDeletedAt(toTimestamp(label.getDeletedAt()));
+        }
+
+        return builder.build();
+    }
+
     public IssueShortResponse toIssueShortProto(Issue issue) {
-        return IssueShortResponse.newBuilder()
+        IssueShortResponse.Builder builder = IssueShortResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "");
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Мапит задачу со списком меток задачи в proto ответ
+     */
+    public IssueResponse toIssueProto(Issue issue, List<ProjectLabels> labels) {
+        return toIssueProto(issue).toBuilder()
+                .addAllLabels(
+                        labels.stream()
+                                .map(this::toProjectLabelProto)
+                                .toList()
+                )
                 .build();
     }
 
@@ -104,12 +207,29 @@ public class IssueMapper {
     }
 
     public UpdateIssueResponse toUpdateIssueProto(Issue issue) {
-        return UpdateIssueResponse.newBuilder()
+        UpdateIssueResponse.Builder builder = UpdateIssueResponse.newBuilder()
                 .setUpdatedIssueId(issue.getId().toString())
                 .setSummary(issue.getSummary())
                 .setDescription(issue.getDescription())
-                .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .build();
+                .setPriority(toProtoIssuePriority(issue.getPriority()));
+
+        if (issue.getStoryPoints() != null) {
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+        if (issue.getStartDate() != null) {
+            builder.setStartDate(issue.getStartDate().toString());
+        }
+        if (issue.getDueDate() != null) {
+            builder.setDueDate(issue.getDueDate().toString());
+        }
+        if (issue.getOriginalEstimateMinutes() != null) {
+            builder.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
+        }
+        if (issue.getRemainingEstimateMinutes() != null) {
+            builder.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
+        }
+
+        return builder.build();
     }
 
     public IssueLinkResponse toIssueLinkProto(IssueLink link, UUID issueId) {
@@ -170,6 +290,7 @@ public class IssueMapper {
             case ISSUE_PRIORITY_MEDIUM -> IssuePriority.MEDIUM;
             case ISSUE_PRIORITY_HIGH -> IssuePriority.HIGH;
             default -> throw new IllegalArgumentException("Unknown IssuePriority: " + proto);
+
         };
     }
 
@@ -197,6 +318,8 @@ public class IssueMapper {
             case COMMENT_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_CREATED;
             case COMMENT_UPDATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_UPDATED;
             case COMMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_COMMENT_DELETED;
+            case LABEL_ADDED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_ADDED;
+            case LABEL_REMOVED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LABEL_REMOVED;
         };
     }
 
@@ -252,6 +375,78 @@ public class IssueMapper {
         return Timestamp.newBuilder()
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())
+                .build();
+    }
+
+    /**
+     * Маппинг строки результата R2DBC в объект Issue.
+     */
+    public Issue mapRowToIssue(Row row, RowMetadata metadata) {
+        Issue issue = new Issue();
+
+        // Обязательные поля
+        issue.setId(row.get("id", UUID.class));
+        issue.setProjectId(row.get("project_id", UUID.class));
+        issue.setIssueNumber(row.get("issue_number", Integer.class));
+        issue.setIssueKey(row.get("issue_key", String.class));
+        issue.setIssueType(IssueType.valueOf(row.get("issue_type", String.class)));
+        issue.setSummary(row.get("summary", String.class));
+        issue.setDescription(row.get("description", String.class));
+        issue.setStatusKey(row.get("status_key", String.class));
+        issue.setPriority(IssuePriority.valueOf(row.get("priority", String.class)));
+
+        // Опциональные поля
+        setOptionalUuidField(issue::setAssigneeId, row.get("assignee_id", String.class));
+        setOptionalUuidField(issue::setReporterId, row.get("reporter_id", String.class));
+
+        issue.setVersion(row.get("version", Integer.class));
+
+        // Planning fields
+        issue.setStoryPoints(row.get("story_points", java.math.BigDecimal.class));
+        issue.setStartDate(row.get("start_date", java.time.LocalDate.class));
+        issue.setDueDate(row.get("due_date", java.time.LocalDate.class));
+        issue.setOriginalEstimateMinutes(row.get("original_estimate_minutes", Integer.class));
+        issue.setRemainingEstimateMinutes(row.get("remaining_estimate_minutes", Integer.class));
+
+        // Даты
+        setOptionalInstantField(issue::setCreatedAt, row.get("created_at", java.time.OffsetDateTime.class));
+        setOptionalInstantField(issue::setUpdatedAt, row.get("updated_at", java.time.OffsetDateTime.class));
+        setOptionalInstantField(issue::setDeletedAt, row.get("deleted_at", java.time.OffsetDateTime.class));
+
+        return issue;
+    }
+
+    /**
+     * Утилитный метод для установки опционального UUID поля.
+     */
+    private void setOptionalUuidField(java.util.function.Consumer<UUID> setter, String value) {
+        if (value != null && !value.isEmpty()) {
+            setter.accept(UUID.fromString(value));
+        }
+    }
+
+    /**
+     * Утилитный метод для установки опционального Instant поля из OffsetDateTime.
+     */
+    private void setOptionalInstantField(java.util.function.Consumer<java.time.Instant> setter, java.time.OffsetDateTime value) {
+        if (value != null) {
+            setter.accept(value.toInstant());
+        }
+    }
+
+    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount){
+        return IssueBoardResponse.newBuilder()
+                .setId(issue.getId().toString())
+                .setIssueKey(issue.getIssueKey())
+                .setSummary(issue.getSummary())
+                .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setStatusKey(issue.getStatusKey())
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
+                .setReporterId(issue.getReporterId().toString())
+                .setPriority(toProtoIssuePriority(issue.getPriority()))
+                .setWatchersCount(watchersCount.intValue())
+                .setCommentsCount(commentsCount.intValue())
+                .addAllLabelIds(labelIds.stream().map(UUID::toString).toList())
                 .build();
     }
 }

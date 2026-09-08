@@ -1,12 +1,18 @@
 package ru.taska.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Optional;
 import reactor.core.publisher.Mono;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
+import ru.taska.domain.dto.labels.IssueWithLabels;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -23,7 +29,12 @@ public interface IssueService {
             String summary,
             String description,
             IssuePriority priority,
-            UUID reporterId
+            UUID reporterId,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes
     );
 
     Mono<Issue> assignIssue(
@@ -42,13 +53,14 @@ public interface IssueService {
             UUID actorUserId
     );
 
-    Mono<PageResult<Issue>> listIssues(
+    Mono<PageResult<IssueWithLabels>> listIssues(
             String requestId,
             String nodeId,
             UUID projectId,
             UUID actorUserId,
             String status,
             UUID assigneeId,
+            UUID labelId,
             Integer page,
             Integer pageSize
     );
@@ -90,5 +102,53 @@ public interface IssueService {
                             UUID actorUserId,
                             String summary,
                             String description,
-                            IssuePriority priority);
+                            IssuePriority priority,
+                            BigDecimal storyPoints,
+                            LocalDate startDate,
+                            LocalDate dueDate,
+                            Integer originalEstimateMinutes,
+                            Integer remainingEstimateMinutes
+    );
+
+    Mono<PageResult<Issue>> searchIssues(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            String query,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            Integer page,
+            Integer pageSize
+    );
+
+    /**
+     * Возвращает список задач для доски.
+     * @param requestId         айди запроса
+     * @param nodeId            айди узла
+     * @param actorUserId       айди изменяющего юзера
+     * @param projectId         айди проекта
+     * @param statusKey         статус задачи
+     * @param assigneeId        айди исполнителя задачи
+     * @param issueType         тип задачи
+     * @param includeDone       маркер включения выполненных задач в ответ
+     * @param labelIds          список айди меток
+     * @param pageSizePerColumn количество задач на одну колонку
+     * @return                  Mono с готовыми к ответу представлениями задач для доски
+     */
+    Mono<List<IssueBoardResponse>> listIssueBoard(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<UUID> labelIds,
+            Integer pageSizePerColumn
+    );
 }

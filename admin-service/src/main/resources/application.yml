@@ -5,6 +5,12 @@ spring:
   grpc:
     server:
       port: ${ADMIN_GRPC_SERVER_PORT:9097}
+    client:
+      auth-service:
+        host: ${AUTH_GRPC_SERVICE_HOST:localhost}
+        port: ${AUTH_GRPC_SERVICE_PORT:9091}
+        deadline-duration: 5s
+        service-name: auth-service
   r2dbc:
     url: ${ADMIN_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5438/admin_db}
     username: ${ADMIN_SPRING_R2DBC_USERNAME:taska}
@@ -24,6 +30,26 @@ spring:
 # Локальные defaults используют user taska только для удобства разработки.
 # На стенде/проде должны быть отдельные RO users (только SELECT).
 admin:
+  # Настройки Outbox-мониторинга.
+  # processing-timeouts ссылаются на те же переменные окружения,
+  # что задают пороги в самих сервисах (auth, project, issue).
+  # Это сделано намеренно: admin-service должен считать событие «застрявшим»
+  # по тем же критериям, которые использует сервис-производитель.
+  # Если порог в сервисе изменится, admin-service автоматически подхватит
+  # новое значение — без ручной синхронизации конфигов.
+  # overdue-new-threshold — единый порог для всех сервисов: если событие
+  # остаётся в статусе NEW дольше этого времени, оно считается просроченным.
+  outbox:
+    services:
+      - auth
+      - issue
+      - project
+    max-problematic-list-size: 100
+    processing-timeouts:
+      auth: ${AUTH_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+      project: ${PROJECT_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+      issue: ${ISSUE_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
+    overdue-new-threshold: ${OUTBOX_OVERDUE_NEW_THRESHOLD:5m}
   readonly:
     auth:
       url: ${ADMIN_RO_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
@@ -75,73 +101,122 @@ admin:
         max-size: ${ADMIN_RO_ADMIN_POOL_MAX_SIZE:10}
         max-idle-time-minutes: ${ADMIN_RO_ADMIN_POOL_MAX_IDLE_TIME_MINUTES:10}
 
+  # Ограниченные write-подключения только для административных
+  # операций над outbox_events.
+  # На стенде/проде должны использоваться отдельные DB users
+  # с SELECT/UPDATE только на taska.outbox_events.
+  outbox-write:
+    auth:
+      url: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
+      username: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_AUTH_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_AUTH_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+    project:
+      url: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_URL:r2dbc:postgresql://localhost:5434/project_db}
+      username: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_PROJECT_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_PROJECT_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+    issue:
+      url: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_URL:r2dbc:postgresql://localhost:5436/issue_db}
+      username: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_USERNAME:taska}
+      password: ${ADMIN_OUTBOX_WRITE_ISSUE_R2DBC_PASSWORD:taska}
+      pool:
+        initial-size: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_INITIAL_SIZE:1}
+        max-size: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_MAX_SIZE:5}
+        max-idle-time-minutes: ${ADMIN_OUTBOX_WRITE_ISSUE_POOL_MAX_IDLE_TIME_MINUTES:10}
+
+  outbox-retry:
+    stuck-threshold: ${ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD:10m}
+
   # Metadata catalog: правила для каждого сервиса.
   # allow — если список непустой, в каталог попадают только эти таблицы;
   #         пустой список означает «разрешены все».
   # deny — таблицы, которые не возвращаются в каталоге (приоритет над allow).
-  # sensitive-columns — колонки в формате table.column, помечаемые как секретные (флаг в ответе).
+  # sensitive-columns — колонки в формате table.column → тип маскировки (MASK_FULL, MASK_PARTIAL, HIDE).
+  #                     Если тип не указан — используется default-mask-type.
   # Менять без правки кода — только этот файл или env.
   metadata:
+    default-mask-type: MASK_FULL
+    pagination:
+      default-page: ${ADMIN_PAGINATION_DEFAULT_PAGE:0}
+      default-page-size: ${ADMIN_PAGINATION_DEFAULT_PAGE_SIZE:20}
+      max-page-size: ${ADMIN_PAGINATION_MAX_PAGE_SIZE:100}
     services:
       auth:
         alias: auth
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
-            - users.password_hash
-            - users.token_hash
-            - users.secret_hash
-            - users.refresh_token
-            - users.access_token
+            credentials.secret_hash: HIDE
+            credentials.algo:
+            credentials.meta:
+            refresh_tokens.token_hash: HIDE
+            invite_tokens.token_hash: HIDE
+          sensitive-json-fields:
+            outbox_events:
+              payload:
+                email: MASK_PARTIAL
+                rawInviteToken:
       project:
         alias: project
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: { }
       issue:
         alias: issue
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns:
+            idempotency_keys.request_hash:
       workflow:
         alias: workflow
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: { }
       notification:
         alias: notification
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns:
+            notification_preferences.email: MASK_PARTIAL
+            email_delivery_attempts.to_email: MASK_PARTIAL
       admin:
         alias: admin
         schema: taska
         tables:
-          allow: []
+          allow: [ ]
           deny:
             - databasechangelog
             - databasechangeloglock
-          sensitive-columns: []
+          sensitive-columns: { }
 
 management:
   endpoints:

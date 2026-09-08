@@ -11,7 +11,6 @@ import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
-import ru.taska.domain.dto.NotificationTypeDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -45,7 +44,7 @@ class NotificationMapperTest {
         NotificationResponseDto result = mapper.toRestResponse(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
-        assertThat(result.getNotificationType()).isEqualTo(NotificationTypeDto.ISSUE_ASSIGNED);
+        assertThat(result.getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
         assertThat(result.getTitle()).isEqualTo("Вас назначили исполнителем");
         assertThat(result.getBody()).isEqualTo("Вы назначены исполнителем задачи TASKA-12");
         assertThat(result.getLink()).isEqualTo("/projects/TASKA/issues/TASKA-12");
@@ -72,7 +71,7 @@ class NotificationMapperTest {
         NotificationResponseDto result = mapper.toRestResponse(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
-        assertThat(result.getNotificationType()).isEqualTo(NotificationTypeDto.ISSUE_CREATED);
+        assertThat(result.getNotificationType()).isEqualTo("ISSUE_CREATED");
         assertThat(result.getReadAt()).isNull();
         assertThat(result.getSourceEventId()).isEqualTo(sourceEventId);
     }
@@ -91,35 +90,37 @@ class NotificationMapperTest {
         NotificationListResponseDto result = mapper.toRestListResponse(source);
 
         assertThat(result.getItems()).hasSize(2);
-        assertThat(result.getItems().get(0).getNotificationType()).isEqualTo(NotificationTypeDto.ISSUE_ASSIGNED);
-        assertThat(result.getItems().get(1).getNotificationType()).isEqualTo(NotificationTypeDto.PROJECT_CREATED);
+        assertThat(result.getItems().get(0).getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
+        assertThat(result.getItems().get(1).getNotificationType()).isEqualTo("PROJECT_CREATED");
     }
 
     @Test
     @DisplayName("Должен маппить все notificationType без protobuf prefix")
     void toRestNotificationType_mapsAllSupportedTypes() {
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED))
-                .isEqualTo(NotificationTypeDto.ISSUE_ASSIGNED);
+                .isEqualTo("ISSUE_ASSIGNED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED))
-                .isEqualTo(NotificationTypeDto.ISSUE_TRANSITIONED);
+                .isEqualTo("ISSUE_TRANSITIONED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED))
-                .isEqualTo(NotificationTypeDto.ISSUE_CREATED);
+                .isEqualTo("ISSUE_CREATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_UPDATED))
-                .isEqualTo(NotificationTypeDto.ISSUE_UPDATED);
+                .isEqualTo("ISSUE_UPDATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED))
-                .isEqualTo(NotificationTypeDto.ISSUE_DELETED);
+                .isEqualTo("ISSUE_DELETED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_USER_INVITED))
-                .isEqualTo(NotificationTypeDto.USER_INVITED);
+                .isEqualTo("USER_INVITED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED))
-                .isEqualTo(NotificationTypeDto.USER_ACTIVATED);
+                .isEqualTo("USER_ACTIVATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED))
-                .isEqualTo(NotificationTypeDto.PROJECT_CREATED);
+                .isEqualTo("PROJECT_CREATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED))
-                .isEqualTo(NotificationTypeDto.MEMBER_ADDED);
+                .isEqualTo("MEMBER_ADDED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED))
-                .isEqualTo(NotificationTypeDto.MEMBER_UPDATED);
+                .isEqualTo("MEMBER_UPDATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED))
-                .isEqualTo(NotificationTypeDto.MEMBER_REMOVED);
+                .isEqualTo("MEMBER_REMOVED");
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
+                .isEqualTo("UNSPECIFIED");
     }
 
     private NotificationResponse notification(NotificationKind kind) {
@@ -198,25 +199,9 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть BAD_GATEWAY для неподдерживаемого notificationType")
-    void toRestNotificationType_unsupportedType_throwsBadGateway() {
-        Assertions.assertThatThrownBy(() ->
-                        mapper.toRestNotificationType(
-                                NotificationKind.NOTIFICATION_KIND_UNSPECIFIED
-                        )
-                )
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> {
-                    ResponseStatusException exception =
-                            (ResponseStatusException) error;
-
-                    Assertions.assertThat(exception.getStatusCode())
-                            .isEqualTo(HttpStatus.BAD_GATEWAY);
-
-                    Assertions.assertThat(exception.getReason())
-                            .isEqualTo(
-                                    "Unsupported notification type received from notification-service"
-                            );
-                });
+    @DisplayName("Должен вернуть строку для неизвестного notificationType")
+    void toRestNotificationType_unknownType_returnsString() {
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
+                .isEqualTo("UNSPECIFIED");
     }
 }

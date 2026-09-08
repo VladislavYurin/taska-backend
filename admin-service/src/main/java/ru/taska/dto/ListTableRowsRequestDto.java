@@ -5,9 +5,9 @@ import java.util.Map;
 public record ListTableRowsRequestDto(
         String serviceKey,
         String tableName,
-        int page,
-        int pageSize,
+        Integer page,
+        Integer pageSize,
         String sort,
         String order,
-        Map<String, FilterOperatorsDto> filters
+        Map<String, String> filters
 ) {}

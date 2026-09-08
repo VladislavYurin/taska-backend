@@ -16,6 +16,8 @@ import ru.taska.event.payload.issueService.IssueLinkCreatedPayload;
 import ru.taska.event.payload.issueService.IssueLinkDeletedPayload;
 import ru.taska.event.payload.issueService.IssueTransitionedPayload;
 import ru.taska.event.payload.issueService.IssueUpdatedPayload;
+import ru.taska.event.payload.issueService.LabelAddedPayload;
+import ru.taska.event.payload.issueService.LabelRemovedPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -124,6 +126,18 @@ public class OutboxEventMapper {
                     getUuid(sourcePayload, "commentId"),
                     getUuid(sourcePayload, "actorUserId"),
                     sourcePayload.path("body").asText()
+            ));
+
+            case ISSUE_LABEL_ADDED -> objectMapper.valueToTree(new LabelAddedPayload(
+                    getUuid(sourcePayload, "issueId"),
+                    getString(sourcePayload, "labelName"),
+                    getUuid(sourcePayload, "createdBy")
+            ));
+
+            case ISSUE_LABEL_REMOVED -> objectMapper.valueToTree(new LabelRemovedPayload(
+                    getUuid(sourcePayload, "issueId"),
+                    getString(sourcePayload, "labelName"),
+                    getUuid(sourcePayload, "deletedBy")
             ));
 
             default -> sourcePayload;

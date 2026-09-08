@@ -8,8 +8,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.service.ReadOnlyQueryBuilder;
-
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,21 +38,19 @@ public class ReadOnlyRepository {
      * Выполняет SELECT запрос и возвращает строки
      *
      * @param serviceKey - нужен, чтобы выбрать DatabaseClient для конкретной БД
-     * @param sqlQuery   - содержит SQL с плейсхолдерами и параметры
+     * @param sql        - SQL запрос с плейсхолдерами
+     * @param params     - значения для плейсхолдеров
      * @return Flux<Map<String, Object>> - строки таблицы
      */
     public Flux<Map<String,Object>> executeQuery(
             String serviceKey,
-            ReadOnlyQueryBuilder.SqlQuery sqlQuery
+            String sql,
+            List<Object> params
     ){
-        // Получаем DatabaseClient по сервису(serviceKey)
         return Flux.defer(()->{
             DatabaseClient client = getClient(serviceKey);
-            // Выполняем запрос
-            //    sqlQuery.sql() = "SELECT * FROM users WHERE status = $1 AND email = $2"
-            //    sqlQuery.params() = ["active", "john@gmail.com"]
-            return client.sql(sqlQuery.sql())
-                    .bindValues(sqlQuery.params())
+            return client.sql(sql)
+                    .bindValues(params)
                     .fetch()
                     .all();
         });
@@ -62,22 +59,20 @@ public class ReadOnlyRepository {
     /**
      * Выполняет COUNT запрос для подсчета общего количества записей.
      *
-     * @param serviceKey ключ сервиса ("user-service") - для выбора БД
-     * @param safeCountQuery   COUNT SQL с плейсхолдерами и параметрами
+     * @param serviceKey - ключ сервиса ("user-service") - для выбора БД
+     * @param sql        - COUNT SQL запрос с плейсхолдерами
+     * @param params     - значения для плейсхолдеров
      * @return Mono<Long> - количество записей
      */
     public Mono<Long> countRows(
             String serviceKey,
-            ReadOnlyQueryBuilder.SqlQuery safeCountQuery
+            String sql,
+            List<Object> params
     ) {
-        // Получаем DatabaseClient по сервису(serviceKey)
         return Mono.defer(()->{
             DatabaseClient client = getClient(serviceKey);
-            // Выполняем запрос
-            //    safeCountQuery.sql() = "SELECT COUNT FROM users WHERE status = $1 AND email = $2"
-            //    safeCountQuery.params() = ["active", "john@gmail.com"]
-            return client.sql(safeCountQuery.sql())
-                    .bindValues(safeCountQuery.params())
+            return client.sql(sql)
+                    .bindValues(params)
                     .map(row -> row.get(0, Long.class))
                     .first();
         });

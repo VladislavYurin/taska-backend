@@ -15,14 +15,18 @@ import reactor.test.StepVerifier;
 import ru.taska.api.admin.v1.Catalog;
 import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
-import ru.taska.domain.dto.ReadOnlyResponseDto;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.mapper.AdminDataMapper;
+import ru.taska.mapper.AdminUserManagementMapper;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -46,6 +50,9 @@ class GrpcAdminServiceClientTest {
     private AdminDataMapper mapper;
 
     @Mock
+    private AdminUserManagementMapper adminUserManagementMapper;
+
+    @Mock
     private GrpcClientProperties properties;
 
     @Mock
@@ -66,7 +73,7 @@ class GrpcAdminServiceClientTest {
                 ArgumentMatchers.any()
         )).thenReturn(adminServiceStub);
 
-        client = new GrpcAdminServiceClient(adminServiceStub, mapper, properties);
+        client = new GrpcAdminServiceClient(adminServiceStub, mapper, adminUserManagementMapper, properties);
     }
 
     // ==================== HELPER ====================
@@ -113,6 +120,88 @@ class GrpcAdminServiceClientTest {
 
     // ==================== ТЕСТЫ listTableRows ====================
 
+    // ==================== ТЕСТЫ getProblematicOutboxEventsSummary ====================
+
+    @Test
+    @DisplayName("Должен вызвать gRPC getProblematicOutboxEventsSummary без serviceKey и вернуть отмапленный ответ")
+    void shouldGetProblematicOutboxEventsSummary_withoutServiceKey() {
+        // given
+        GatewayContext context = createContext();
+
+        GetProblematicOutboxEventsSummaryResponse grpcResponse =
+                GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+        ProblematicOutboxEventsSummaryResponseDto restResponse = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestProblematicOutboxEventsSummaryResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(null, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<GetProblematicOutboxEventsSummaryRequest> captor =
+                ArgumentCaptor.forClass(GetProblematicOutboxEventsSummaryRequest.class);
+        Mockito.verify(adminServiceStub).getProblematicOutboxEventsSummary(captor.capture());
+
+        GetProblematicOutboxEventsSummaryRequest request = captor.getValue();
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().hasServiceKey()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC getProblematicOutboxEventsSummary с serviceKey и вернуть отмапленный ответ")
+    void shouldGetProblematicOutboxEventsSummary_withServiceKey() {
+        // given
+        GatewayContext context = createContext();
+
+        GetProblematicOutboxEventsSummaryResponse grpcResponse =
+                GetProblematicOutboxEventsSummaryResponse.newBuilder().build();
+        ProblematicOutboxEventsSummaryResponseDto restResponse = new ProblematicOutboxEventsSummaryResponseDto();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestProblematicOutboxEventsSummaryResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(TEST_SERVICE, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<GetProblematicOutboxEventsSummaryRequest> captor =
+                ArgumentCaptor.forClass(GetProblematicOutboxEventsSummaryRequest.class);
+        Mockito.verify(adminServiceStub).getProblematicOutboxEventsSummary(captor.capture());
+
+        GetProblematicOutboxEventsSummaryRequest request = captor.getValue();
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getServiceKey()).isEqualTo(TEST_SERVICE);
+    }
+
+    @Test
+    @DisplayName("Должен пробросить gRPC ошибку при запросе problematic outbox events summary")
+    void shouldPropagateGrpcError_whenGetProblematicOutboxEventsSummary() {
+        // given
+        GatewayContext context = createContext();
+
+        Mockito.when(adminServiceStub.getProblematicOutboxEventsSummary(
+                        Mockito.any(GetProblematicOutboxEventsSummaryRequest.class)))
+                .thenReturn(Mono.error(new io.grpc.StatusRuntimeException(io.grpc.Status.UNAVAILABLE)));
+
+        // when & then
+        StepVerifier.create(client.getProblematicOutboxEventsSummary(null, context))
+                .expectError(io.grpc.StatusRuntimeException.class)
+                .verify();
+    }
+
+    // ==================== ТЕСТЫ listTableRows ====================
+
     @Test
     @DisplayName("Должен вызвать gRPC listTableRows с equals фильтром")
     void shouldListTableRowsWithEqualsFilter() {
@@ -123,7 +212,7 @@ class GrpcAdminServiceClientTest {
         filters.put("status", "active");
 
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
-        ReadOnlyResponseDto restResponse = new ReadOnlyResponseDto();
+        ReadOnlyTableRowsResponseDto restResponse = new ReadOnlyTableRowsResponseDto();
 
         Mockito.when(adminServiceStub.listTableRows(Mockito.any(ListTableRowsRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
@@ -131,7 +220,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ReadOnlyResponseDto> result = client.listTableRows(
+        Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
                 TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
         );
 
@@ -151,8 +240,7 @@ class GrpcAdminServiceClientTest {
         Assertions.assertThat(request.getBody().getTableName()).isEqualTo(TEST_TABLE);
         Assertions.assertThat(request.getBody().getPage()).isEqualTo(1);
         Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(20);
-        Assertions.assertThat(request.getBody().getFiltersMap()).containsKey("status");
-        Assertions.assertThat(request.getBody().getFiltersMap().get("status").getEquals()).isEqualTo("active");
+        Assertions.assertThat(request.getBody().getFiltersMap()).containsEntry("status", "active");
     }
 
     @Test
@@ -165,7 +253,7 @@ class GrpcAdminServiceClientTest {
         filters.put("email.contains", "@test.com");
 
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
-        ReadOnlyResponseDto restResponse = new ReadOnlyResponseDto();
+        ReadOnlyTableRowsResponseDto restResponse = new ReadOnlyTableRowsResponseDto();
 
         Mockito.when(adminServiceStub.listTableRows(Mockito.any(ListTableRowsRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
@@ -173,7 +261,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ReadOnlyResponseDto> result = client.listTableRows(
+        Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
                 TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
         );
 
@@ -186,7 +274,7 @@ class GrpcAdminServiceClientTest {
         Mockito.verify(adminServiceStub).listTableRows(captor.capture());
 
         ListTableRowsRequest request = captor.getValue();
-        Assertions.assertThat(request.getBody().getFiltersMap().get("email").getContains()).isEqualTo("@test.com");
+        Assertions.assertThat(request.getBody().getFiltersMap()).containsEntry("email.contains", "@test.com");
     }
 
     @Test
@@ -200,7 +288,7 @@ class GrpcAdminServiceClientTest {
         filters.put("created_at.to", "2026-12-31T23:59:59Z");
 
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
-        ReadOnlyResponseDto restResponse = new ReadOnlyResponseDto();
+        ReadOnlyTableRowsResponseDto restResponse = new ReadOnlyTableRowsResponseDto();
 
         Mockito.when(adminServiceStub.listTableRows(Mockito.any(ListTableRowsRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
@@ -208,7 +296,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ReadOnlyResponseDto> result = client.listTableRows(
+        Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
                 TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
         );
 
@@ -221,10 +309,9 @@ class GrpcAdminServiceClientTest {
         Mockito.verify(adminServiceStub).listTableRows(captor.capture());
 
         ListTableRowsRequest request = captor.getValue();
-        Assertions.assertThat(request.getBody().getFiltersMap().get("created_at").getFrom())
-                .isEqualTo("2026-01-01T00:00:00Z");
-        Assertions.assertThat(request.getBody().getFiltersMap().get("created_at").getTo())
-                .isEqualTo("2026-12-31T23:59:59Z");
+        Assertions.assertThat(request.getBody().getFiltersMap())
+                .containsEntry("created_at.from", "2026-01-01T00:00:00Z")
+                .containsEntry("created_at.to", "2026-12-31T23:59:59Z");
     }
 
     @Test
@@ -240,7 +327,7 @@ class GrpcAdminServiceClientTest {
         filters.put("created_at.to", "2026-12-31T23:59:59Z");
 
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
-        ReadOnlyResponseDto restResponse = new ReadOnlyResponseDto();
+        ReadOnlyTableRowsResponseDto restResponse = new ReadOnlyTableRowsResponseDto();
 
         Mockito.when(adminServiceStub.listTableRows(Mockito.any(ListTableRowsRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
@@ -248,7 +335,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ReadOnlyResponseDto> result = client.listTableRows(
+        Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
                 TEST_SERVICE, TEST_TABLE, 1, 20, "created_at", "desc", filters, context
         );
 
@@ -264,15 +351,11 @@ class GrpcAdminServiceClientTest {
         Assertions.assertThat(request.getBody().getSort()).isEqualTo("created_at");
         Assertions.assertThat(request.getBody().getOrder()).isEqualTo("desc");
 
-        var statusFilter = request.getBody().getFiltersMap().get("status");
-        Assertions.assertThat(statusFilter.getEquals()).isEqualTo("active");
-
-        var emailFilter = request.getBody().getFiltersMap().get("email");
-        Assertions.assertThat(emailFilter.getContains()).isEqualTo("@test.com");
-
-        var dateFilter = request.getBody().getFiltersMap().get("created_at");
-        Assertions.assertThat(dateFilter.getFrom()).isEqualTo("2026-01-01T00:00:00Z");
-        Assertions.assertThat(dateFilter.getTo()).isEqualTo("2026-12-31T23:59:59Z");
+        Assertions.assertThat(request.getBody().getFiltersMap())
+                .containsEntry("status", "active")
+                .containsEntry("email.contains", "@test.com")
+                .containsEntry("created_at.from", "2026-01-01T00:00:00Z")
+                .containsEntry("created_at.to", "2026-12-31T23:59:59Z");
     }
 
     @Test
@@ -282,7 +365,7 @@ class GrpcAdminServiceClientTest {
         GatewayContext context = createContext();
 
         ListTableRowsResponse grpcResponse = ListTableRowsResponse.newBuilder().build();
-        ReadOnlyResponseDto restResponse = new ReadOnlyResponseDto();
+        ReadOnlyTableRowsResponseDto restResponse = new ReadOnlyTableRowsResponseDto();
 
         Mockito.when(adminServiceStub.listTableRows(Mockito.any(ListTableRowsRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
@@ -290,7 +373,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ReadOnlyResponseDto> result = client.listTableRows(
+        Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
                 TEST_SERVICE, TEST_TABLE, null, null, null, null, null, context
         );
 
@@ -303,10 +386,10 @@ class GrpcAdminServiceClientTest {
         Mockito.verify(adminServiceStub).listTableRows(captor.capture());
 
         ListTableRowsRequest request = captor.getValue();
-        Assertions.assertThat(request.getBody().getPage()).isEqualTo(1);  // default
-        Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(20);  // default
-        Assertions.assertThat(request.getBody().getSort()).isEmpty();
-        Assertions.assertThat(request.getBody().getOrder()).isEqualTo("asc");
+        Assertions.assertThat(request.getBody().hasPage()).isFalse();
+        Assertions.assertThat(request.getBody().hasPageSize()).isFalse();
+        Assertions.assertThat(request.getBody().hasSort()).isFalse();
+        Assertions.assertThat(request.getBody().hasOrder()).isFalse();
         Assertions.assertThat(request.getBody().getFiltersMap()).isEmpty();
     }
 }

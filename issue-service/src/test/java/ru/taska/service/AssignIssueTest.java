@@ -40,6 +40,10 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 Mockito.any(),
                 Mockito.eq(allowedRoles)
         )).thenReturn(Mono.empty());
+
+        Mockito.lenient().when(issueAutoWatchService.watchAssigneeOnAssign(
+                        Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class), Mockito.any(UUID.class)))
+                .thenReturn(Mono.empty());
     }
 
     @Test
@@ -92,6 +96,8 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.ASSIGNED), Mockito.eq(payload));
         Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class),
                 Mockito.any(UUID.class), Mockito.eq(EventType.ISSUE_ASSIGNED), Mockito.eq(payload));
+        Mockito.verify(issueAutoWatchService).watchAssigneeOnAssign(
+                REQUEST_ID, NODE_ID, updatedIssue, ACTOR_USER_ID);
 
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, payloadSerializer);
     }
@@ -121,7 +127,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
 
         Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService);
+        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService, issueAutoWatchService);
     }
 
     @Test
