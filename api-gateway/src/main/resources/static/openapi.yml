@@ -3133,6 +3133,7 @@ components:
           type: string
           format: date-time
 
+    # ======= начало dto для attachments =========
 
     IssueAttachmentDto:
       type: object
@@ -3182,6 +3183,8 @@ components:
           type: integer
           format: int64
           minimum: 1
+          maximum: 2097152
+          description: Размер файла в байтах (максимум 2 МБ)
 
     CreateAttachmentUploadUrlResponseDto:
       type: object
@@ -3215,7 +3218,7 @@ components:
           type: string
           nullable: true
 
-
+    # ======= конец dto для attachments =========
 
     ProblematicOutboxEventsSummaryResponseDto:
       type: object

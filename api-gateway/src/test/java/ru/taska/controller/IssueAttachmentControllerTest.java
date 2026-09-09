@@ -436,6 +436,66 @@ class IssueAttachmentControllerTest {
         Mockito.verifyNoInteractions(attachmentClient);
     }
 
+    @Test
+    @DisplayName("createAttachmentUploadUrl: должен вернуть 400 Bad Request при превышении максимального размера файла (sizeBytes > 2MB)")
+    void createAttachmentUploadUrl_shouldReturn400_whenSizeBytesExceedsLimit() {
+        mockAuthenticatedUser();
+
+        var request = createUploadUrlRequest();
+        request.setSizeBytes(2_097_153L); // 2 MB + 1 byte
+
+        Mockito.when(attachmentClient.createAttachmentUploadUrl(
+                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)))
+                .thenAnswer(inv -> {
+                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(1);
+                    return body.flatMap(dto -> {
+                        // Если дошло до сервиса и валидация размера происходит внутри gRPC-клиента/домена
+                        if (dto.getSizeBytes() > 2_097_152L) {
+                            return Mono.error(Status.OUT_OF_RANGE
+                                    .withDescription("File size exceeds limit")
+                                    .asRuntimeException());
+                        }
+                        var response = new CreateAttachmentUploadUrlResponseDto();
+                        response.setUploadUrl(URI.create("https://s3.example.com/ok"));
+                        return Mono.just(response);
+                    });
+                });
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("createAttachmentUploadUrl: должен вернуть 400 Bad Request при gRPC ошибке OUT_OF_RANGE")
+    void createAttachmentUploadUrl_shouldReturn400_whenServiceReturnsOutOfRange() {
+        mockAuthenticatedUser();
+
+        var request = createUploadUrlRequest();
+
+        Mockito.when(attachmentClient.createAttachmentUploadUrl(
+                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(Status.OUT_OF_RANGE.asRuntimeException()));
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id");
+    }
+
     private void mockAuthenticatedUser() {
         mockAuthenticatedUserWithRole(GlobalRole.USER);
     }
