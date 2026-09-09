@@ -1,12 +1,13 @@
 server:
   port: ${AUTH_SERVER_PORT:8081}
 
+grpc:
+  server:
+    port: ${AUTH_GRPC_SERVER_PORT:9091}
+
 spring:
   application:
     name: auth-service
-  grpc:
-    server:
-      port: ${AUTH_GRPC_SERVER_PORT:9091}
   r2dbc:
     url: ${AUTH_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5433/auth_db}
     username: ${AUTH_SPRING_R2DBC_USERNAME:taska}

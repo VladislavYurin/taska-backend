@@ -27,7 +27,10 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequestBody;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
+import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
@@ -44,6 +47,7 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -433,5 +437,58 @@ public class GrpcIssueServiceClient {
         return dynamicStub()
                 .searchIssues(grpcRequest)
                 .map(issueMapper::toRestSearchIssuesResponse);
+    }
+
+    /**
+     * Получает список задач для доски проекта с учетом фильтров
+     * и преобразует gRPC-модели во внутренние модели API Gateway.
+     *
+     * @param projectId  идентификатор проекта
+     * @param issueType  тип задачи
+     * @param assigneeId идентификатор исполнителя
+     * @param labelId    идентификатор метки
+     * @param includeDone включать ли завершенные задачи
+     * @param context    контекст запроса
+     * @return список задач для формирования доски
+     */
+    public Mono<List<BoardIssueData>> listIssuesForBoard(
+            String projectId,
+            String issueType,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            GatewayContext context
+    ) {
+        log.info(
+                "[{}] Calling listIssuesForBoard for project {}",
+                context.requestId(),
+                projectId
+        );
+
+        var requestBodyBuilder = ListIssuesForBoardRequestBody.newBuilder()
+                .setProjectId(projectId)
+                .setActorUserId(context.userContext().userId())
+                .setIssueType(issueMapper.toGrpcIssueType(issueType))
+                .setIncludeDone(Boolean.TRUE.equals(includeDone));
+
+        if (assigneeId != null && !assigneeId.isBlank()) {
+            requestBodyBuilder.setAssigneeId(assigneeId);
+        }
+
+        if (labelId != null && !labelId.isBlank()) {
+            requestBodyBuilder.addLabelIds(labelId);
+        }
+
+        return dynamicStub()
+                .listIssuesForBoard(
+                        ListIssuesForBoardRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(requestBodyBuilder.build())
+                                .build()
+                )
+                .map(response -> response.getIssuesList().stream()
+                        .map(issueMapper::toBoardIssueData)
+                        .toList()
+                );
     }
 }

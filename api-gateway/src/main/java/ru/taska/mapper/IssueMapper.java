@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
@@ -23,7 +24,10 @@ import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
 import ru.taska.api.issue.v1.SearchIssuesResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
+import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.BoardIssueDto;
+import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLabelResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
@@ -148,6 +152,46 @@ public class IssueMapper {
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
 
         return restDto;
+    }
+
+    /**
+     * Преобразует задачу из gRPC-ответа {@link IssueBoardResponse}
+     * в DTO для REST-ответа доски.
+     *
+     * @param protoDto задача из issue-service
+     * @return задача для REST Board API
+     */
+    public BoardIssueDto toRestBoardIssue(IssueBoardResponse protoDto) {
+        var restDto = new BoardIssueDto();
+
+        restDto.setId(UUID.fromString(protoDto.getId()));
+        restDto.setIssueKey(protoDto.getIssueKey());
+        restDto.setSummary(protoDto.getSummary());
+
+        if (!protoDto.getAssigneeId().isBlank()) {
+            var userDto = new BoardUserDto();
+            userDto.setId(UUID.fromString(protoDto.getAssigneeId()));
+            restDto.setAssignee(userDto);
+        }
+
+        restDto.setLabels(new ArrayList<>(protoDto.getLabelIdsList()));
+
+        return restDto;
+    }
+
+    /**
+     * Преобразует gRPC-модель задачи доски во внутреннюю модель API Gateway.
+     * Ключ статуса сохраняется отдельно для группировки по колонкам и
+     * не попадает в конечный REST DTO.
+     *
+     * @param protoDto задача из issue-service
+     * @return внутренняя модель задачи доски
+     */
+    public BoardIssueData toBoardIssueData(IssueBoardResponse protoDto) {
+        return new BoardIssueData(
+                protoDto.getStatusKey(),
+                toRestBoardIssue(protoDto)
+        );
     }
 
     public IssueLinkResponseDto toRestIssueLinkResponse(IssueLinkResponse protoDto) {
