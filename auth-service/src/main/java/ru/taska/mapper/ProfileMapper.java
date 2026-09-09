@@ -7,7 +7,9 @@ import ru.taska.api.auth.profile.v1.ConfirmAvatarUploadResponse;
 import ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlResponse;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlResponse;
 import ru.taska.api.auth.profile.v1.GetUserProfileResponse;
+import ru.taska.api.auth.profile.v1.UserDetails;
 import ru.taska.dto.AvatarDto;
+import ru.taska.dto.UserDetailsDto;
 import ru.taska.dto.UserProfileDto;
 import ru.taska.entity.UserAvatar;
 import ru.taska.storage.dto.PresignedUploadResult;
@@ -81,6 +83,17 @@ public class ProfileMapper {
                         .setNanos(dto.getCreatedAt().getNano())
                         .build());
 
+        return builder.build();
+    }
+
+    public UserDetails toProto(UserDetailsDto dto) {
+        UserDetails.Builder builder = UserDetails.newBuilder()
+                .setUserId(dto.userId().toString())
+                .setDisplayName(dto.displayName())
+                .setEmail(dto.email());
+        if (dto.avatar() != null && dto.avatar().getId() != null) {
+            builder.setAvatar(toProto(dto.avatar()));
+        }
         return builder.build();
     }
 }

@@ -16,6 +16,7 @@ service ProfileService {
   rpc CreateAvatarUploadUrl(CreateAvatarUploadUrlRequest) returns (CreateAvatarUploadUrlResponse);
   rpc ConfirmAvatarUpload(ConfirmAvatarUploadRequest) returns (ConfirmAvatarUploadResponse);
   rpc DeleteMyAvatar(DeleteMyAvatarRequest) returns (google.protobuf.Empty);
+  rpc GetUserDetailsByIds(GetUserDetailsByIdsRequest) returns (GetUserDetailsByIdsResponse);
 }
 
 /**
@@ -258,4 +259,24 @@ message AvatarResponse {
    * Presigned URL для скачивания аватара.
    */
   string download_url = 8;
+}
+
+message GetUserDetailsByIdsRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetUserDetailsByIdsRequestBody body = 2;
+}
+
+message GetUserDetailsByIdsRequestBody {
+  repeated string user_ids = 1;
+}
+
+message GetUserDetailsByIdsResponse {
+  repeated UserDetails user_details = 1;
+}
+
+message UserDetails {
+  string user_id = 1;
+  string display_name = 2;
+  string email = 3;
+  optional AvatarResponse avatar = 4;
 }

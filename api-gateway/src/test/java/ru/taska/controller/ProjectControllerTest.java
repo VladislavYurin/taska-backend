@@ -1,8 +1,10 @@
 package ru.taska.controller;
 
 import io.grpc.Status;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,9 +24,12 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AddProjectMemberRequestDto;
+import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.error.GatewayErrorHandler;
@@ -36,6 +41,9 @@ import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
+
+import java.util.List;
+import java.util.UUID;
 
 @WebFluxTest(controllers = ProjectController.class)
 @Import({
@@ -576,5 +584,85 @@ public class ProjectControllerTest {
         Mockito.when(contextMapper.mapToGatewayUserContext(Mockito.any(UserContext.class)))
                 .thenReturn(userContext);
 
+    }
+
+    @Nested
+    @DisplayName("Tests for GET /api/v1/projects/{projectId}/members endpoint")
+    class GetProjectMembersEndpointTests {
+        private final String getMembersUri = "/api/v1/projects/{projectId}/members";
+
+        private ListProjectMemberDetailsDto responseDto;
+        private AvatarDto avatarDto;
+
+        @BeforeEach
+        void setUpTestData() {
+            avatarDto = new AvatarDto();
+            avatarDto.setId(UUID.randomUUID().toString());
+            avatarDto.setObjectKey("avatars/john.jpg");
+            avatarDto.setFileName("john.jpg");
+            avatarDto.setContentType("image/jpeg");
+            avatarDto.setSizeBytes(1024L);
+            avatarDto.setDownloadUrl("https://storage.example.com/avatars/john.jpg");
+
+            ProjectMemberDetailsDto memberDto = new ProjectMemberDetailsDto();
+            memberDto.setUserId(MEMBER_ID);
+            memberDto.setRole("MEMBER");
+            memberDto.setDisplayName("John Doe");
+            memberDto.setEmail("john.doe@example.com");
+            memberDto.setAvatar(avatarDto);
+
+            responseDto = new ListProjectMemberDetailsDto();
+            responseDto.setMembers(List.of(memberDto));
+        }
+
+        @Test
+        @DisplayName("Should return 200 OK and project members list when request is valid")
+        void getProjectMembers_whenRequestIsValid_thenReturns200AndMembersList() {
+            mockAuthenticatedUser();
+            Mockito.when(projectClient.getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.just(responseDto));
+
+            webTestClient.get()
+                    .uri(getMembersUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody(ListProjectMemberDetailsDto.class)
+                    .value(actualResponse -> {
+                        Assertions.assertThat(actualResponse).isNotNull();
+                        Assertions.assertThat(actualResponse.getMembers()).hasSize(1);
+
+                        ProjectMemberDetailsDto actualMember = actualResponse.getMembers().getFirst();
+                        Assertions.assertThat(actualMember.getUserId()).isEqualTo(MEMBER_ID);
+                        Assertions.assertThat(actualMember.getRole()).isEqualTo("MEMBER");
+                        Assertions.assertThat(actualMember.getDisplayName()).isEqualTo("John Doe");
+                        Assertions.assertThat(actualMember.getEmail()).isEqualTo("john.doe@example.com");
+                        Assertions.assertThat(actualMember.getAvatar().getId()).isEqualTo(avatarDto.getId());
+                    });
+
+            Mockito.verify(projectClient, Mockito.times(1))
+                    .getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any());
+        }
+
+        @Test
+        @DisplayName("Should return error status when projectClient throws exception")
+        void getProjectMembers_whenClientFails_thenReturnsErrorStatus() {
+            mockAuthenticatedUser();
+            RuntimeException serviceException = new RuntimeException("Service temporarily unavailable");
+
+            Mockito.when(projectClient.getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.error(serviceException));
+
+            webTestClient.get()
+                    .uri(getMembersUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().is5xxServerError();
+
+            Mockito.verify(projectClient, Mockito.times(1))
+                    .getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any());
+        }
     }
 }

@@ -12,6 +12,7 @@ import ru.taska.domain.dto.AddProjectMemberRequestDto;
 import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
@@ -114,5 +115,19 @@ public class ProjectController implements ProjectApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED,context ->
                 projectClient.removeProjectMember(projectId,userId,context))
                         .thenReturn(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * GET /api/v1/projects/{projectId}/members
+     * Возвращает список участников проекта → 200 OK
+     */
+    @Override
+    public Mono<ResponseEntity<ListProjectMemberDetailsDto>> getProjectMembers(
+            String projectId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                        projectClient.getProjectMembers(projectId, context))
+                .map(ResponseEntity::ok);
     }
 }

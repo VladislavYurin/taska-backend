@@ -14,9 +14,11 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.GetListProjectMemberRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
@@ -254,5 +256,29 @@ public class GrpcProjectService {
                                 .setProjectKey(key)
                                 .build()
                 );
+    }
+
+    @TrackMetrics(counter = "project-service_get-projectMembers_grpc_counter",
+            timer = "project-service_get-projectMembers_grpc_timer")
+    public Mono<ListProjectMemberResponse> getProjectMembers(Mono<GetListProjectMemberRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")))
+                .flatMapMany(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID projectId = t.getT3();
+                    UUID actorUserId = t.getT4();
+
+                    log.info("[{}][{}] Received request to getProjectMembers: projectId={}, from user={}", requestId, nodeId, projectId, actorUserId);
+
+                    return projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId);
+                })
+                .map(projectMemberMapper::toProjectMemberResponse)
+                .collectList()
+                .map(p -> ListProjectMemberResponse.newBuilder().addAllMembers(p).build());
     }
 }

@@ -11,6 +11,8 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.CreateProjectRequestBody;
+import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetListProjectMemberRequestBody;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequestBody;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -24,6 +26,7 @@ import ru.taska.domain.dto.AddProjectMemberRequestDto;
 import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.mapper.ProjectMapper;
@@ -208,6 +211,26 @@ public class GrpcProjectServiceClient {
                                 .build())
                         .build()
         ).then();
+    }
+
+
+    /**
+     * Вызов получения списка участников проекта
+     * @param projectId идентификатор проекта
+     * @param context контекст запроса
+     *
+     * @return Rest DTO участников проекта
+     */
+    public Mono<ListProjectMemberDetailsDto> getProjectMembers(String projectId, GatewayContext context) {
+        log.info("[{}] Calling getProjectMembers",context.requestId());
+        return dynamicStub().getProjectMembers(GetListProjectMemberRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(GetListProjectMemberRequestBody.newBuilder()
+                                .setProjectId(projectId)
+                                .setActorUserId(context.userContext().userId())
+                                .build())
+                        .build())
+                .map(projectMapper::toListProjectMemberDetailsDto);
     }
 
     /**

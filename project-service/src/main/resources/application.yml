@@ -36,6 +36,12 @@ app:
       max-attempts: ${PROJECT_KAFKA_OUTBOX_MAX_ATTEMPTS:5}
       processing-timeout: ${PROJECT_KAFKA_OUTBOX_PROCESSING_TIMEOUT:5m}
 
+grpc:
+  client:
+    auth-service:
+      host: ${AUTH_GRPC_HOST:localhost}
+      port: ${AUTH_GRPC_PORT:9091}
+
 management:
   endpoints:
     web:

@@ -3,13 +3,16 @@ package ru.taska.mapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
+import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ValueMapping;
 import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
 
@@ -88,4 +91,17 @@ public interface ProjectMemberMapper {
                 .setProjectExists(dto.isProjectExists())
                 .build();
     }
+
+    /**
+     * Преобразует внутренний DTO с детальной информацией об участнике проекта
+     * в транспортный {@link ru.taska.api.project.v1.ProjectMemberDetailsResponse}.
+     *
+     * @param dto DTO участника проекта с обогащенными данными из auth-service
+     * @return {@link ru.taska.api.project.v1.ProjectMemberDetailsResponse} для передачи в gRPC
+     */
+    @Mapping(
+            target = "avatar",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
+    )
+    ProjectMemberDetailsResponse toProjectMemberResponse(ProjectMemberDetailsDto dto);
 }

@@ -1,16 +1,20 @@
 package ru.taska.service;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.dto.AvatarDto;
+import ru.taska.dto.UserDetailsDto;
 import ru.taska.entity.User;
 import ru.taska.storage.dto.PresignedUploadResult;
 import ru.taska.storage.dto.StoredObjectMetadata;
@@ -25,6 +29,8 @@ import ru.taska.service.impl.ProfileServiceImpl;
 import ru.taska.storage.client.StorageClient;
 import org.springframework.transaction.reactive.TransactionalOperator;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +41,7 @@ class ProfileServiceImplTest {
     private static final String CONTENT_TYPE = "image/png";
     private static final long SIZE_BYTES = 102400L;
     private static final String NEW_OBJECT_KEY = "new-object-key";
+    public static final String TEST_USER_EMAIL = "test@example.com";
 
     @Mock
     private UserRepository userRepository;
@@ -53,17 +60,23 @@ class ProfileServiceImplTest {
     private ProfileServiceImpl profileServiceImpl;
 
     private UUID testUserId;
+    private UUID testUserId2;
+
     private User testUser;
     private UserAvatar testAvatar;
+
+    private UserDetailsDto testUserDetailsDto;
+    private UserDetailsDto testUserDetailsDto2;
 
     @BeforeEach
     void setUp() {
         profileServiceImpl = new ProfileServiceImpl(userRepository, userAvatarRepository, storageClient, profileMapper, transactionalOperator);
         testUserId = UUID.randomUUID();
+        testUserId2 = UUID.randomUUID();
 
         testUser = User.builder()
                 .id(testUserId)
-                .email("test@example.com")
+                .email(TEST_USER_EMAIL)
                 .login("testuser")
                 .status(UserStatus.ACTIVE)
                 .build();
@@ -75,6 +88,17 @@ class ProfileServiceImplTest {
         testAvatar.setFileName(FILE_NAME);
         testAvatar.setContentType(CONTENT_TYPE);
         testAvatar.setSizeBytes(SIZE_BYTES);
+
+        testUserDetailsDto = UserDetailsDto.builder()
+                .userId(testUserId)
+                .displayName("John Doe")
+                .email(TEST_USER_EMAIL)
+                .build();
+
+        testUserDetailsDto2 = UserDetailsDto.builder()
+                .userId(testUserId2)
+                .displayName("Jane Doe")
+                .build();
     }
 
     @Nested
@@ -450,6 +474,64 @@ class ProfileServiceImplTest {
 
             Mockito.verify(userAvatarRepository).delete(testAvatar);
             Mockito.verify(storageClient).deleteObject(objectKey);
+        }
+    }
+
+    @Nested
+    @DisplayName("UserDetailsByIds Tests")
+    class UserDetailsByIdsTests {
+        @Test
+        @DisplayName("Should return empty Flux when user IDs list is empty")
+        void getUserDetailsByIds_whenListIsEmpty_thenReturnsEmptyFlux() {
+            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(Collections.emptyList());
+
+            StepVerifier.create(result)
+                    .verifyComplete();
+
+            Mockito.verifyNoInteractions(userRepository);
+        }
+
+        @Test
+        @DisplayName("Should throw NOT_FOUND when one or more users are not found")
+        void getUserDetailsByIds_whenSomeUsersNotFound_thenThrowsDomainException() {
+            UUID missingUserId = UUID.randomUUID();
+            List<UUID> requestIds = List.of(testUserId, missingUserId);
+
+            Mockito.when(userRepository.findUsersWithAvatars(ArgumentMatchers.anyList()))
+                    .thenReturn(Flux.just(testUserDetailsDto));
+
+            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(requestIds);
+
+            StepVerifier.create(result)
+                    .expectErrorSatisfies(throwable -> {
+                        Assertions.assertInstanceOf(DomainException.class, throwable);
+                        DomainException exception = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                    })
+                    .verify();
+
+            Mockito.verify(userRepository, Mockito.times(1))
+                    .findUsersWithAvatars(requestIds);
+        }
+
+        @Test
+        @DisplayName("Should return Flux of user details when all requested users are found")
+        void getUserDetailsByIds_whenAllUsersFound_thenReturnsUserDetailsFlux() {
+            List<UUID> requestIds = List.of(testUserId, testUserId2, testUserId);
+            List<UUID> expectedDistinctIds = List.of(testUserId, testUserId2);
+
+            Mockito.when(userRepository.findUsersWithAvatars(expectedDistinctIds))
+                    .thenReturn(Flux.just(testUserDetailsDto, testUserDetailsDto2));
+
+            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(requestIds);
+
+            StepVerifier.create(result)
+                    .expectNext(testUserDetailsDto)
+                    .expectNext(testUserDetailsDto2)
+                    .verifyComplete();
+
+            Mockito.verify(userRepository, Mockito.times(1))
+                    .findUsersWithAvatars(expectedDistinctIds);
         }
     }
 }
