@@ -20,7 +20,7 @@ import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowBindingRepository;
 import ru.taska.repository.WorkflowRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 
 import java.util.List;
 import java.util.Map;
@@ -41,26 +41,26 @@ public class WorkflowCreateService {
     private final StatusRepository statusRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowBindingRepository bindingRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessChecker projectAccessChecker;
     private final WorkflowProperties workflowProperties;
 
     @Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
-        return projectRoleChecker.checkProjectRole(
+        return projectAccessChecker.checkProjectAccess(
                         requestId,
                         nodeId,
                         dto.getProjectId(),
                         actorUserId,
                         workflowProperties.allowedRoles().createWorkflowRoles()
                 )
-                .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
-                .flatMap(violations -> handleViolations(violations, requestId, nodeId))
-                .then(Mono.defer(() -> {
+                                   .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
+                                   .flatMap(violations -> handleViolations(violations, requestId, nodeId))
+                                   .then(Mono.defer(() -> {
                     List<String> issueTypeNames = dto.getIssueTypes().stream().map(Enum::name).toList();
                     return bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(), issueTypeNames).collectList();
                 }))
-                .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))
-                .then(Mono.defer(() -> createWorkflow(dto)
+                                   .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))
+                                   .then(Mono.defer(() -> createWorkflow(dto)
                         .doOnSuccess(aggregate ->
                                 log.info("[{}][{}] Workflow successfully created: name={}", requestId, nodeId, dto.getName()))
                 ));

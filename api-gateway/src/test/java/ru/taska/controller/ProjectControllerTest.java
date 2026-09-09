@@ -577,4 +577,31 @@ public class ProjectControllerTest {
                 .thenReturn(userContext);
 
     }
+
+    // ========== DELETE PROJECT ==========
+
+    @Test
+    @DisplayName("Должен успешно удалить (архивировать) проект и вернуть 200 OK")
+    void deleteProject_shouldReturn200OK() {
+        mockAuthenticatedUser();
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+        response.setProjectKey(PROJECT_KEY);
+        response.setName(PROJECT_NAME);
+
+        Mockito.when(projectClient.deleteProject(Mockito.any(), Mockito.any()))
+               .thenReturn(Mono.just(response));
+
+        webTestClient.delete()
+                     .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                     .exchange()
+                     .expectStatus().isOk()
+                     .expectHeader().exists("X-Request-Id")
+                     .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                     .expectBody(ProjectResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(projectClient).deleteProject(Mockito.eq(PROJECT_ID), Mockito.any());
+    }
 }

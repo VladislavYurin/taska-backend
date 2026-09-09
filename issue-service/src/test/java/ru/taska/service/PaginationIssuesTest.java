@@ -41,7 +41,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
         Mockito.when(issueProperties.allowedRoles().listIssueRoles()).thenReturn(allowedRoles);
         Mockito.lenient().when(issueProperties.pagination().defaultPageSize()).thenReturn(10);
         Mockito.lenient().when(issueProperties.pagination().maxPageSize()).thenReturn(50);
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -83,7 +83,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
     }
@@ -110,7 +110,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
@@ -136,7 +136,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
     }
@@ -166,7 +166,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
     }
@@ -188,7 +188,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verify();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
     }
@@ -209,7 +209,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
@@ -232,7 +232,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
@@ -254,7 +254,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
@@ -276,7 +276,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository)
@@ -299,7 +299,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
         Mockito.verify(issueRepository).findByFilter(eq(PROJECT_ID), any(), any(), anyInt(), anyLong());
@@ -347,7 +347,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
 
@@ -405,7 +405,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
 
@@ -455,7 +455,7 @@ class PaginationIssuesTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).listIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles
         );
 

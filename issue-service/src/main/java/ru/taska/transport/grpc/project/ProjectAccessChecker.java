@@ -1,34 +1,45 @@
 package ru.taska.transport.grpc.project;
 
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.RoleMapper;
-
-import java.util.Set;
-import java.util.UUID;
+import ru.taska.mapper.IssueMapper;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class ProjectRoleChecker {
-
+public class ProjectAccessChecker {
+//todo превратить метод в ValidateAccess
     private final GrpcProjectServiceClient client;
-    private final RoleMapper roleMapper;
+    private final IssueMapper issueMapper;
 
-    public Mono<Void> checkProjectRole(
+    /**
+     * Проверяет, что проект не удален, а пользователь является участником проекта и его роль входит в список допустимых.
+     *
+     * <p>Завершается пустым {@link Mono} при успешной проверке.
+     * В случае ошибки бросает {@link DomainException}:</p>
+     * <ul>
+     *   <li>{@link DomainStatus#NOT_FOUND} — проект не найден;</li>
+     *   <li>{@link DomainStatus#PERMISSION_DENIED} — пользователь не является участником проекта
+     *       или его роль не входит в {@code allowedRoles}.</li>
+     *   <li>{@link DomainStatus#PROJECT_ARCHIVED} — проект удален (soft delete);</li>
+     * </ul>
+     */
+    public Mono<Void> checkProjectAccess(
             String requestId,
             String nodeId,
             UUID projectId,
             UUID userId,
             Set<ProjectRole> allowedRoles
     ) {
-        return client.checkProjectRole(requestId, nodeId, projectId, userId)
+        return client.checkProjectAccess(requestId, nodeId, projectId, userId)
                 .flatMap(response ->
                         validateAccess(requestId, nodeId, projectId, userId, allowedRoles, response)
                 );
@@ -40,14 +51,25 @@ public class ProjectRoleChecker {
             UUID projectId,
             UUID userId,
             Set<ProjectRole> allowedRoles,
-            CheckProjectMemberRoleResponse response
+            CheckProjectAccessResponse response
     ) {
         if (!response.getProjectExists()) {
             log.warn("[{}][{}] Project doesn't exist: projectId={}",
                     requestId, nodeId, projectId
             );
+
             return Mono.error(new DomainException(
                     DomainStatus.NOT_FOUND, "Project not found")
+            );
+        }
+
+        if (response.getProjectArchived()) {
+            log.warn("[{}][{}] Project archived: projectId={}",
+                     requestId, nodeId, projectId
+            );
+
+            return Mono.error(new DomainException(
+                    DomainStatus.PROJECT_ARCHIVED, "Project archived")
             );
         }
 
@@ -55,16 +77,18 @@ public class ProjectRoleChecker {
             log.warn("[{}][{}] User isn't a member of the project: projectId={}, userId={}",
                     requestId, nodeId, projectId, userId
             );
+
             return Mono.error(new DomainException(
                     DomainStatus.PERMISSION_DENIED, "Access denied")
             );
         }
 
-        ProjectRole role = roleMapper.toDomainRole(response.getRole());
+        ProjectRole role = issueMapper.toDomainRole(response.getRole());
         if (!allowedRoles.contains(role)) {
             log.warn("[{}][{}] Not allowed role for the project: role={}, projectId={}, userId={}",
                     requestId, nodeId, role, projectId, userId
             );
+
             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Not allowed role"));
         }
 
@@ -74,4 +98,5 @@ public class ProjectRoleChecker {
 
         return Mono.empty();
     }
+
 }

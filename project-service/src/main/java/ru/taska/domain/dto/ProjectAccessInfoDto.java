@@ -4,9 +4,10 @@ import lombok.Builder;
 import ru.taska.domain.ProjectRole;
 
 @Builder
-public record ProjectMembershipInfoDto(
+public record ProjectAccessInfoDto(
         ProjectRole role,
         Boolean isMember,
-        Boolean isProjectExists
+        Boolean isProjectExists,
+        Boolean isProjectArchived
 ) {
 }

@@ -246,6 +246,31 @@ paths:
                 $ref: '#/components/schemas/ProjectResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
+    delete:
+      summary: Мягкое удаление проекта по идентификатору
+      operationId: deleteProject
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Проект успешно удален
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
 
   /api/v1/projects/{projectId}/members:
     post:

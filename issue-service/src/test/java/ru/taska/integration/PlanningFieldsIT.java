@@ -21,8 +21,8 @@ import org.springframework.data.domain.Limit;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectRole;
@@ -75,12 +75,13 @@ class PlanningFieldsIT extends AbstractIT {
     void setUp() {
         issueRepository.deleteAll().block();
 
-        Mockito.when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
-               .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                                                                   .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                                                                   .setIsMember(true)
-                                                                   .setProjectExists(true)
-                                                                   .build()));
+        Mockito.when(projectServiceStub.checkProjectAccess(any(CheckProjectAccessRequest.class)))
+               .thenReturn(Mono.just(CheckProjectAccessResponse.newBuilder()
+                                                               .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                                                               .setIsMember(true)
+                                                               .setProjectExists(true)
+                                                               .setProjectArchived(false)
+                                                               .build()));
 
         Mockito.when(projectServiceStub.getProjectKeyInternal(any(GetProjectKeyInternalRequest.class)))
                .thenReturn(Mono.just(ProjectKeyResponse.newBuilder()

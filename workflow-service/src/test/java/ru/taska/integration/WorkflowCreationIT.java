@@ -35,11 +35,10 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowBindingRepository;
 import ru.taska.service.WorkflowService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 class WorkflowCreationIT extends AbstractIT {
@@ -59,7 +58,7 @@ class WorkflowCreationIT extends AbstractIT {
     private WorkflowBindingRepository workflowBindingRepository;
 
     @MockitoBean
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessChecker projectAccessChecker;
 
     @MockitoSpyBean
     private TransitionRepository transitionRepository;
@@ -99,7 +98,7 @@ class WorkflowCreationIT extends AbstractIT {
 
     @BeforeEach
     void stubRoleChecker() {
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),

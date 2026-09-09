@@ -28,7 +28,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.service.impl.LabelServiceImpl;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
@@ -63,7 +63,7 @@ class LabelServiceImplTest {
     private LabelMapper mapper;
 
     @Mock
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessChecker projectAccessChecker;
 
     @Mock
     private IssueHistoryService issueHistoryService;
@@ -132,7 +132,7 @@ class LabelServiceImplTest {
         // Arrange
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.createProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.existsActiveByName(any(), anyString()))
@@ -164,7 +164,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.createProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.existsActiveByName(any(), anyString()))
@@ -190,7 +190,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.createProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Permission denied")));
 
         // Act & Assert
@@ -219,7 +219,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -266,7 +266,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -323,7 +323,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -352,7 +352,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listProjectLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(any()))
@@ -391,7 +391,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listProjectLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(any()))
@@ -423,7 +423,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -471,7 +471,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -508,7 +508,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(any()))
@@ -550,7 +550,7 @@ class LabelServiceImplTest {
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(issueLabelsRepository.findActiveLabelsByIssueId(any()))
@@ -578,7 +578,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.updateProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -623,7 +623,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.updateProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -655,7 +655,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.deleteProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))
@@ -685,7 +685,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.deleteProjectLabelRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(), any(), anySet()))
+        Mockito.when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(), any(), anySet()))
                 .thenReturn(Mono.empty());
 
         Mockito.when(projectLabelsRepository.findByIdAndDeletedAtIsNull(any()))

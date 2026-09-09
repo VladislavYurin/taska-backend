@@ -123,6 +123,7 @@ enum NotificationKind {
   NOTIFICATION_KIND_LABEL_REMOVED = 15;
 
   /**
+<<<<<<< HEAD
    * Уведомление о блокировке пользователя
    */
   NOTIFICATION_KIND_USER_BLOCKED = 16;
@@ -131,6 +132,11 @@ enum NotificationKind {
    * Уведомление о разблокировке пользователя
    */
   NOTIFICATION_KIND_USER_UNBLOCKED = 17;
+
+  /**
+   * Уведомление о создании проекта.
+   */
+  NOTIFICATION_KIND_PROJECT_ARCHIVED = 18;
 }
 
 /**

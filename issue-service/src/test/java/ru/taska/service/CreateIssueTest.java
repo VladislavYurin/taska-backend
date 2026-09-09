@@ -41,7 +41,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         Mockito.lenient().when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
         Mockito.lenient().when(issueProperties.idempotencyKeyTtl().ttl()).thenReturn(Duration.ofHours(24));
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
+        Mockito.lenient().when(projectAccessChecker.checkProjectAccess(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
                 .thenReturn(Mono.empty());
 
         Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(REQUEST_ID, NODE_ID, PROJECT_ID))
@@ -91,7 +91,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
         Mockito.verify(projectCounterRepository, Mockito.times(1)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -116,7 +116,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         Assertions.assertThat(result.getIssueNumber()).isEqualTo(nextIssueNumber);
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
     }
@@ -141,7 +141,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2))
                 .createIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectAccessChecker, Mockito.times(2)).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
         Mockito.verify(projectCounterRepository, Mockito.times(2)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -164,7 +164,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class), Mockito.any(Issue.class));
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
     }

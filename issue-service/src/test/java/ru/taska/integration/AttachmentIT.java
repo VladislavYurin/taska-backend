@@ -1,5 +1,10 @@
 package ru.taska.integration;
 
+import static org.mockito.ArgumentMatchers.any;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,8 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
@@ -23,10 +28,6 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.attachment.AttachmentService;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.StoredObjectMetadata;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 
 class AttachmentIT extends AbstractIT {
 
@@ -84,12 +85,13 @@ class AttachmentIT extends AbstractIT {
                 .build();
         issueId = issueRepository.save(issue).block().getId();
 
-        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
-                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                        .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                        .setIsMember(true)
-                        .setProjectExists(true)
-                        .build()));
+        Mockito.when(projectServiceStub.checkProjectAccess(any(CheckProjectAccessRequest.class)))
+               .thenReturn(Mono.just(CheckProjectAccessResponse.newBuilder()
+                                                               .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                                                               .setIsMember(true)
+                                                               .setProjectExists(true)
+                                                               .setProjectArchived(false)
+                                                               .build()));
     }
 
     @Test

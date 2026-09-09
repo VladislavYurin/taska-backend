@@ -8,9 +8,10 @@ import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.DeleteProjectRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -41,6 +42,12 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     }
 
     @Override
+    public Mono<ProjectResponse> deleteProject(Mono<DeleteProjectRequest> request) {
+        return grpcProjectService.deleteProject(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProject"));
+    }
+
+    @Override
     public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return grpcProjectService.listMyProjects(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listMyProjects"));
@@ -64,8 +71,8 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
                 .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));
     }
     @Override
-    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole (Mono<CheckProjectMemberRoleRequest> request) {
-        return grpcProjectService.checkProjectMemberRole(request)
+    public Mono<CheckProjectAccessResponse> checkProjectAccess(Mono<CheckProjectAccessRequest> request) {
+        return grpcProjectService.checkProjectAccess(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("checkProjectRole"));
     }
 

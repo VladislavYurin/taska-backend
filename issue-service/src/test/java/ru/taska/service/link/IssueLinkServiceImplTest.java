@@ -22,7 +22,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 
 import java.time.Instant;
 import java.util.Set;
@@ -52,7 +52,7 @@ class IssueLinkServiceImplTest {
     private IssueLinkRepository issueLinkRepository;
 
     @Mock
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessChecker projectAccessChecker;
 
     @Mock
     private IssueProperties properties;
@@ -109,7 +109,7 @@ class IssueLinkServiceImplTest {
         Mockito.lenient().when(allowedRoles.deleteIssueLinksRoles())
                 .thenReturn(Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER));
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectAccessChecker.checkProjectAccess(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
@@ -136,7 +136,7 @@ class IssueLinkServiceImplTest {
         Mockito.verify(issueRepository).findActiveById(SOURCE_ISSUE_ID);
         Mockito.verify(properties).allowedRoles();
         Mockito.verify(allowedRoles).listIssueLinksRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -161,7 +161,8 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveById(SOURCE_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, issueLinkRepository);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles,
+                                         projectAccessChecker, issueLinkRepository);
     }
 
     @Test
@@ -197,7 +198,7 @@ class IssueLinkServiceImplTest {
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
         Mockito.verify(properties).allowedRoles();
         Mockito.verify(allowedRoles).createIssueLinksRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -233,7 +234,8 @@ class IssueLinkServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verifyNoMoreInteractions(issueRepository, properties, allowedRoles, projectRoleChecker, executor);
+        Mockito.verifyNoMoreInteractions(issueRepository, properties, allowedRoles,
+                                         projectAccessChecker, executor);
     }
 
     @Test
@@ -258,7 +260,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessChecker, executor);
     }
 
     @Test
@@ -283,7 +285,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessChecker, executor);
     }
 
     @Test
@@ -310,7 +312,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessChecker, executor);
     }
 
     @Test
@@ -374,6 +376,6 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueLinkRepository).findActiveByIdAndIssueId(LINK_ID, SOURCE_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessChecker, executor);
     }
 }

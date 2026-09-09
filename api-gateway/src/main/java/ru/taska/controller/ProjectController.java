@@ -61,6 +61,20 @@ public class ProjectController implements ProjectApi {
     }
 
     /**
+     * DELETE /api/v1/projects/{projectId}
+     * Мягко удаляет проект по ID → 200 OK
+     */
+    @Override
+    public Mono<ResponseEntity<ProjectResponseDto>> deleteProject(
+            String projectId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED,context ->
+                               projectClient.deleteProject(projectId,context))
+                       .map(ResponseEntity::ok);
+    }
+
+    /**
      * GET /api/v1/projects
      * Получает проекты текущего пользователя → 200 OK
      */
