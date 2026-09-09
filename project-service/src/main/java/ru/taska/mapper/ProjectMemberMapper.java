@@ -8,13 +8,11 @@ import org.mapstruct.ValueMapping;
 import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
-import ru.taska.domain.dto.ProjectMemberDetailsDto;
-import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProjectMemberMapper {
@@ -68,29 +66,6 @@ public interface ProjectMemberMapper {
             @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "PROJECT_ROLE_UNSPECIFIED")})
     ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
 
-    /**
-     * Билдер, который создает транспортный grpc объектп.
-     *
-     * @param {@link ProjectMembershipInfoDto} из трех элементов, содержащий:
-     *               <ul>
-     *               <li>{@link ProjectRole} — роль участника проекта</li>
-     *               <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
-     *               <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
-     *               </ul>
-     * @return {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse} из трех элементов, содержащий:
-     * <ul>
-     * <li>{@link ProjectRole} — роль участника проекта</li>
-     * <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
-     * <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
-     * </ul>
-     */
-    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(ProjectMembershipInfoDto dto) {
-        return CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(this.toGrpcRole(dto.role()))
-                .setIsMember(dto.isMember())
-                .setProjectExists(dto.isProjectExists())
-                .build();
-    }
 
     /**
      * Преобразует внутренний DTO с детальной информацией об участнике проекта

@@ -1,5 +1,8 @@
 package ru.taska.service.watcher;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,9 +14,12 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.GetProjectRequest;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueWatcher;
@@ -22,12 +28,12 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 /**
  * Тесты соответствуют актуальному API:
@@ -50,7 +56,10 @@ class IssueWatcherServiceImplTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessibility projectAccessibility;
+
+    @Mock
+    private TransactionalOperator transactionalOperator;
 
     @Mock
     private IssueProperties issueProperties;
@@ -100,15 +109,22 @@ class IssueWatcherServiceImplTest {
         Mockito.when(allowedRoles.manageWatchersRoles()).thenReturn(manageRoles);
         Mockito.when(allowedRoles.listWatchersRoles()).thenReturn(listRoles);
         Mockito.when(issueProperties.pagination()).thenReturn(paginationConfig);
+
+        Mockito.lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
+               .thenReturn(Mono.just(ProjectResponse.newBuilder()
+                                                    .setProjectKey("TSK")
+                                                    .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
+                                                    .build()));
+        lenient().when(issueRepository.findActiveById(any()))
+                 .thenReturn(Mono.just(issue));
+        lenient().when(transactionalOperator.transactional(any(Mono.class)))
+                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
     @DisplayName("watchIssue: должен подписать себя и вернуть count")
     void watchIssue_self_shouldSucceed() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(executor.executeWatch(
                         REQUEST_ID, NODE_ID, issue, ACTOR_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(watcher));
@@ -132,9 +148,6 @@ class IssueWatcherServiceImplTest {
         IssueWatcher targetWatcher = watcher.toBuilder().userId(TARGET_USER_ID).build();
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, manageRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(executor.executeWatch(
                         REQUEST_ID, NODE_ID, issue, TARGET_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(targetWatcher));
@@ -167,15 +180,17 @@ class IssueWatcherServiceImplTest {
     @DisplayName("watchIssue: ошибка роли → PERMISSION_DENIED пробрасывается")
     void watchIssue_permissionDenied() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
-                .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
+        Mockito.when(projectAccessibility.check(
+                       REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
+               .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
 
         StepVerifier.create(service.watchIssue(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, null))
-                .expectErrorMatches(e -> e instanceof DomainException
-                        && ((DomainException) e).getStatus() == DomainStatus.PERMISSION_DENIED)
-                .verify();
+                    .expectErrorMatches(e -> e instanceof DomainException
+                            && ((DomainException) e).getStatus() == DomainStatus.PERMISSION_DENIED)
+                    .verify();
 
+        Mockito.verify(projectAccessibility).check(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles);
         Mockito.verifyNoInteractions(executor);
     }
 
@@ -183,9 +198,6 @@ class IssueWatcherServiceImplTest {
     @DisplayName("unwatchIssue: должен вернуть removed=true и count")
     void unwatchIssue_shouldSucceed() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(executor.executeUnwatch(
                         REQUEST_ID, NODE_ID, issue, ACTOR_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(true));
@@ -203,9 +215,6 @@ class IssueWatcherServiceImplTest {
     @DisplayName("unwatchIssue: отписка другого пользователя требует manageWatchersRoles")
     void unwatchIssue_forTarget_shouldUseManageRoles() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, manageRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(executor.executeUnwatch(
                         REQUEST_ID, NODE_ID, issue, TARGET_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(true));
@@ -234,9 +243,6 @@ class IssueWatcherServiceImplTest {
                 .build();
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(2L));
         Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 10, 0L))
                 .thenReturn(Flux.fromIterable(List.of(watcher, second)));
@@ -259,9 +265,6 @@ class IssueWatcherServiceImplTest {
                 .build();
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(2L));
         Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 1, 1L))
                 .thenReturn(Flux.just(second));
@@ -281,9 +284,6 @@ class IssueWatcherServiceImplTest {
     @DisplayName("listIssueWatchers: пустой список → items=[] и totalCount=0")
     void listIssueWatchers_shouldReturnEmptyPage() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(0L));
         Mockito.when(issueWatcherRepository.findByIssueId(ISSUE_ID, 10, 0L)).thenReturn(Flux.empty());
 
@@ -300,27 +300,26 @@ class IssueWatcherServiceImplTest {
     @DisplayName("listIssueWatchers: ошибка роли → PERMISSION_DENIED")
     void listIssueWatchers_permissionDenied() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
-                .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
+        Mockito.when(projectAccessibility.check(
+                       REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
+               .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
 
         StepVerifier.create(service.listIssueWatchers(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, 0, 10))
-                .expectErrorMatches(e -> e instanceof DomainException
-                        && ((DomainException) e).getStatus() == DomainStatus.PERMISSION_DENIED)
-                .verify();
+                            REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, 0, 10))
+                    .expectErrorMatches(e -> e instanceof DomainException
+                            && ((DomainException) e).getStatus() == DomainStatus.PERMISSION_DENIED)
+                    .verify();
 
+        Mockito.verify(projectAccessibility).check(
+                REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles);
         Mockito.verify(issueWatcherRepository, Mockito.never())
-                .findByIssueId(Mockito.any(), Mockito.anyInt(), Mockito.anyLong());
+               .findByIssueId(Mockito.any(), Mockito.anyInt(), Mockito.anyLong());
     }
 
     @Test
     @DisplayName("getIssueWatchState: должен вернуть watchedByMe и count")
     void getIssueWatchState_shouldSucceed() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, listRoles))
-                .thenReturn(Mono.empty());
         Mockito.when(issueWatcherRepository.existsByIssueIdAndUserId(ISSUE_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(true));
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(5L));
@@ -347,6 +346,6 @@ class IssueWatcherServiceImplTest {
                 })
                 .verifyComplete();
 
-        Mockito.verifyNoInteractions(projectRoleChecker, issueRepository);
+        Mockito.verifyNoInteractions(projectAccessibility, issueRepository);
     }
 }

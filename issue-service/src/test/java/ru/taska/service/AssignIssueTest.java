@@ -1,5 +1,8 @@
 package ru.taska.service;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,6 +11,7 @@ import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
@@ -34,13 +38,15 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(issueProperties.allowedRoles().assignIssueRoles()).thenReturn(allowedRoles);
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
-                Mockito.anyString(),
-                Mockito.anyString(),
-                Mockito.eq(PROJECT_ID),
-                Mockito.any(),
-                Mockito.eq(allowedRoles)
-        )).thenReturn(Mono.empty());
+        Mockito.lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
+               .thenReturn(Mono.just(ProjectResponse.newBuilder()
+                                                    .setProjectKey("TSK")
+                                                    .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
+                                                    .build()));
+        lenient().when(issueRepository.findActiveById(any()))
+                 .thenReturn(Mono.just(new Issue()));
+        lenient().when(transactionalOperator.transactional(any(Mono.class)))
+                 .thenAnswer(inv -> inv.getArgument(0));
 
         Mockito.lenient().when(issueAutoWatchService.watchAssigneeOnAssign(
                         Mockito.anyString(), Mockito.anyString(), Mockito.any(Issue.class), Mockito.any(UUID.class)))
@@ -93,12 +99,13 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
-                Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
-                Mockito.any(), Mockito.eq(allowedRoles)
+        Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2)).assignIssueRoles();
+        Mockito.verify(projectAccessibility, Mockito.times(2)).check(
+                Mockito.anyString(), Mockito.anyString(), Mockito.any(),
+                Mockito.any(), Mockito.any()
         );
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
 
         Mockito.verify(payloadSerializer).createIssueAssignedPayload(
@@ -135,10 +142,10 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 .expectNext(existingIssue)
                 .verifyComplete();
 
-        Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
-                Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
-                Mockito.any(), Mockito.eq(allowedRoles)
+        Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2)).assignIssueRoles();
+        Mockito.verify(projectAccessibility, Mockito.times(2)).check(
+                Mockito.anyString(), Mockito.anyString(), Mockito.any(),
+                Mockito.any(), Mockito.any()
         );
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
 
@@ -162,7 +169,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verifyNoInteractions(projectRoleChecker, payloadSerializer, issueHistoryService, outboxEventService);
+        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService);
     }
 }
 

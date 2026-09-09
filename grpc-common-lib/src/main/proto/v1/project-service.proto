@@ -54,15 +54,9 @@ service ProjectService {
   rpc ChangeProjectMemberRole (ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
 
   /**
-   * Проверяет роль пользователя в проекте.
+   * Удаляет проект (soft delete).
    */
-  rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
-
-  /**
-   * Внутренний метод. Возвращает ключ проекта по ID без проверки прав.
-   * Используется только сервисами, которые уже проверили права.
-   */
-  rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
+  rpc DeleteProject (DeleteProjectRequest) returns (ProjectResponse);
 }
 
 message CreateProjectRequest {
@@ -95,35 +89,6 @@ message ListMyProjectsRequestBody {
   string user_id = 1;
 }
 
-/**
- * Запрос на проверку роли пользователя в проекте.
- */
-message CheckProjectMemberRoleRequest {
-  /**
-   * Заголовок запроса.
-   */
-  ru.taska.common.v1.Header header = 1;
-
-  /**
-   * Тело запроса.
-   */
-  CheckProjectMemberRoleRequestBody body = 2;
-}
-
-/**
- * Тело запроса на проверку роли пользователя в проекте.
- */
-message CheckProjectMemberRoleRequestBody {
-  /**
-   * Идентификатор проекта.
-   */
-  string project_id = 1;
-
-  /**
-   * Идентификатор участника проекта.
-   */
-  string user_id = 2;
-}
 
 message ProjectResponse {
   string id = 1;
@@ -192,41 +157,6 @@ message ChangeProjectMemberRoleResponse {
   string project_id = 3;
 }
 
-/**
- * Ответ проверки роли пользователя в проекте.
- */
-message CheckProjectMemberRoleResponse {
-  /**
-   * Роль пользователя.
-   */
-  ProjectRole role = 1;
-
-  /**
-   * Является ли пользователь участником проекта.
-   */
-  bool is_member = 2;
-
-  /**
-   * Существует ли проект.
-   */
-  bool project_exists = 3;
-}
-
-/**
- * Запрос получения projectKey.
- */
-message GetProjectKeyInternalRequest {
-  ru.taska.common.v1.Header header = 1;
-  GetProjectKeyInternalRequestBody body = 2;
-}
-
-message GetProjectKeyInternalRequestBody {
-  /**
-   * Идентификатор проекта.
-   */
-  string project_id = 1;
-}
-
 message ProjectKeyResponse {
   /**
    * Ключ-название проекта
@@ -234,6 +164,21 @@ message ProjectKeyResponse {
   string project_key = 1;
 }
 
+message DeleteProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  DeleteProjectRequestBody body = 2;
+}
+
+message DeleteProjectRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+  /**
+   * Идентификатор пользователя отправившего запрос.
+   */
+  string actor_user_id=2;
+}
 message GetListProjectMemberRequest {
   ru.taska.common.v1.Header header = 1;
   GetListProjectMemberRequestBody body = 2;

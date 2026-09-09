@@ -13,11 +13,13 @@ import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.OutboxEventService;
 import ru.taska.service.ProjectService;
+import ru.taska.service.validator.ProjectValidator;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -35,6 +37,8 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
+    private final ProjectMapper projectMapper;
+    private final ProjectValidator projectValidator;
 
     @Override
     @Transactional
@@ -92,14 +96,41 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public Mono<String> getProjectKeyByIdInternal(UUID projectId) {
-        return projectRepository.findProjectKeyById(projectId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("Project not found: {}", projectId);
-                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
-                }))
-                .doOnSuccess(key ->
-                        log.debug("Successfully getting project key: {} for projectId: {}", key, projectId)
+    @Transactional
+    public Mono<Project> softDeleteProject(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId) {
+
+        return projectRepository.findById(projectId)
+                                .switchIfEmpty(
+                                        Mono.defer(() -> {
+                                            log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                                            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                                        })
+                                ).flatMap(project ->
+                                                  projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)
+                                                                         .switchIfEmpty(Mono.defer(() -> {
+                                                                             log.warn("[{}][{}] User not found: {}", requestId, nodeId, actorUserId);
+                                                                             return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found"));})
+                                                                         )
+                                                                         .filter(member -> ProjectRole.ADMIN.equals(member.getRole()))
+                                                                         .switchIfEmpty(Mono.defer(() -> {
+                                                                             log.warn("[{}][{}] Don't have permission: {}", requestId, nodeId, actorUserId);
+                                                                             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User must have the role ADMIN"));})
+                                                                         )
+                                                                         .then(Mono.defer(() -> {
+                                                                             if (project.getArchivedAt() == null) {
+                                                                                 project.setArchivedAt(Instant.now());
+                                                                                 log.debug("Project: {} successfully archived", projectId);
+                                                                                 return projectRepository.save(project)
+                                                                                                         .flatMap(saved ->
+                                                                                                                          outboxEventService.saveProjectArchived(requestId, nodeId, saved, actorUserId).thenReturn(saved));
+                                                                             }
+                                                                             log.debug("Project: {} already archived", projectId);
+                                                                             return Mono.just(project);
+                                                                         }))
                 );
     }
 

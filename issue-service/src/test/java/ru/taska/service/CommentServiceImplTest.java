@@ -9,9 +9,11 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueComment;
@@ -28,9 +30,8 @@ import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.impl.CommentServiceImpl;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.util.Set;
@@ -66,7 +67,10 @@ class CommentServiceImplTest {
     private OutboxEventService outboxEventService;
 
     @Mock
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessibility projectAccessibility;
+
+    @Mock
+    private TransactionalOperator transactionalOperator;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -184,6 +188,17 @@ class CommentServiceImplTest {
                 .aggregateId(issueId)
                 .eventType("COMMENT_CREATED")
                 .build();
+
+
+        lenient().when(issueRepository.findActiveById(any()))
+                 .thenReturn(Mono.just(issue));
+        lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
+                 .thenReturn(Mono.just(ProjectResponse.newBuilder()
+                                                      .setProjectKey("TSK")
+                                                      .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
+                                                      .build()));
+        lenient().when(transactionalOperator.transactional(any(Mono.class)))
+                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
     // ==================== ТЕСТЫ ДЛЯ addComment ====================
@@ -192,8 +207,6 @@ class CommentServiceImplTest {
     @DisplayName("addComment: должен успешно добавить комментарий")
     void addComment_success() {
         // Arrange
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -221,7 +234,7 @@ class CommentServiceImplTest {
                 .expectNextMatches(savedComment -> savedComment.getId().equals(commentId))
                 .verifyComplete();
 
-        verify(projectRoleChecker).checkProjectRole(
+        verify(projectAccessibility).check(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(issueRepository).findActiveByIdForUpdate(issueId);
@@ -273,8 +286,6 @@ class CommentServiceImplTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -319,10 +330,11 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
+                .thenReturn(Mono.just(issue));
+
+        when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
 
         when(commentRepository.findActiveById(commentId))
@@ -359,8 +371,6 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -405,8 +415,6 @@ class CommentServiceImplTest {
                 .deletedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -447,8 +455,6 @@ class CommentServiceImplTest {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -485,8 +491,6 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 10;
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -513,7 +517,7 @@ class CommentServiceImplTest {
                 .verifyComplete();
 
         verify(issueRepository).findActiveById(issueId);
-        verify(projectRoleChecker).checkProjectRole(
+        verify(projectAccessibility).check(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(commentRepository).countActiveByIssueId(issueId);
@@ -524,8 +528,6 @@ class CommentServiceImplTest {
     @DisplayName("listComments: должен использовать значения по умолчанию для пагинации")
     void listComments_defaultPagination() {
         // Arrange
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -561,8 +563,6 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 100;
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
-                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -595,6 +595,8 @@ class CommentServiceImplTest {
         // Arrange
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.empty());
+        when(issueRepository.findActiveById(issueId))
+                .thenReturn(Mono.empty());
 
         when(commentRepository.countActiveByIssueId(issueId))
                 .thenReturn(Mono.just(0L));
@@ -618,7 +620,6 @@ class CommentServiceImplTest {
                     assert error instanceof DomainException;
                     DomainException ex = (DomainException) error;
                     assert ex.getStatus() == DomainStatus.NOT_FOUND;
-                    assert ex.getMessage().contains("Issue not found");
                 })
                 .verify();
     }

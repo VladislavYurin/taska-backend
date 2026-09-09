@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import java.time.Instant;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.impl.ProjectServiceImpl;
+import ru.taska.service.validator.ProjectValidator;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -51,6 +53,9 @@ class ProjectServiceImplTest {
 
     @Mock
     private ProjectMapper projectMapper;
+
+    @Mock
+    private ProjectValidator projectValidator;
 
     @InjectMocks
     private ProjectServiceImpl projectService;
@@ -224,33 +229,133 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
     }
 
+    // ---------- softDeleteProject ----------
+
     @Test
-    void getProjectKeyByIdInternal_Success() {
-        String expectedProjectKey = "TEST";
-        Mockito.when(projectRepository.findProjectKeyById(projectId))
-                .thenReturn(Mono.just(expectedProjectKey));
+    void softDeleteProject_Success_WhenNotArchived() {
+        ProjectMember adminMember = ProjectMember.builder()
+                                                 .userId(actorUserId)
+                                                 .projectId(projectId)
+                                                 .role(ProjectRole.ADMIN)
+                                                 .build();
 
-        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
-                .expectNext(expectedProjectKey)
-                .verifyComplete();
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
+               .thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
+               .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        Mockito.when(outboxEventService.saveProjectArchived(
+                       ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class),ArgumentMatchers.eq(actorUserId)))
+               .thenReturn(Mono.just(new OutboxEvent()));
 
-        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+                    .expectNextMatches(project -> project.getId().equals(projectId) && project.getArchivedAt() != null)
+                    .verifyComplete();
+
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService).saveProjectArchived(
+                ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class),ArgumentMatchers.eq(actorUserId));
     }
 
     @Test
-    void getProjectKeyByIdInternal_ThrowsNotFoundException_WhenProjectDoesNotExist() {
-        Mockito.when(projectRepository.findProjectKeyById(projectId))
-                .thenReturn(Mono.empty());
+    void softDeleteProject_Success_WhenAlreadyArchived() {
+        Project archivedProject = Project.builder()
+                                         .id(projectId)
+                                         .projectKey(projectKey)
+                                         .name(projectName)
+                                         .createdBy(userId)
+                                         .archivedAt(Instant.now())
+                                         .build();
 
-        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
-                .expectErrorSatisfies(throwable -> {
-                    Assertions.assertInstanceOf(DomainException.class, throwable);
-                    DomainException exception = (DomainException) throwable;
-                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    Assertions.assertEquals("Project not found", exception.getMessage());
-                })
-                .verify();
+        ProjectMember adminMember = ProjectMember.builder()
+                                                 .userId(actorUserId)
+                                                 .projectId(projectId)
+                                                 .role(ProjectRole.ADMIN)
+                                                 .build();
 
-        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(archivedProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
+               .thenReturn(Mono.just(adminMember));
+
+        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+                    .expectNext(archivedProject)
+                    .verifyComplete();
+
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
+                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),ArgumentMatchers.any());
+    }
+
+    @Test
+    void softDeleteProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.empty());
+
+        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+                    .expectErrorSatisfies(throwable -> {
+                        Assertions.assertTrue(throwable instanceof DomainException);
+                        DomainException exception = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                        Assertions.assertEquals("Project not found", exception.getMessage());
+                    })
+                    .verify();
+
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository, Mockito.never())
+               .findByUserIdAndProjectId(ArgumentMatchers.any(), ArgumentMatchers.any());
+        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
+                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void softDeleteProject_ThrowsNotFoundException_WhenActorIsNotAMember() {
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
+               .thenReturn(Mono.empty());
+
+        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+                    .expectErrorSatisfies(throwable -> {
+                        Assertions.assertTrue(throwable instanceof DomainException);
+                        DomainException exception = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                        Assertions.assertEquals("User not found", exception.getMessage());
+                    })
+                    .verify();
+
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(actorUserId, projectId);
+        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
+                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void softDeleteProject_ThrowsPermissionDenied_WhenActorIsNotAdmin() {
+        ProjectMember viewerMember = ProjectMember.builder()
+                                                  .userId(actorUserId)
+                                                  .projectId(projectId)
+                                                  .role(ProjectRole.VIEWER)
+                                                  .build();
+
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
+               .thenReturn(Mono.just(viewerMember));
+
+        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+                    .expectErrorSatisfies(throwable -> {
+                        Assertions.assertTrue(throwable instanceof DomainException);
+                        DomainException exception = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, exception.getStatus());
+                        Assertions.assertEquals("User must have the role ADMIN", exception.getMessage());
+                    })
+                    .verify();
+
+        Mockito.verify(projectRepository).findById(projectId);
+        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(actorUserId, projectId);
+        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
+        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
+                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 }

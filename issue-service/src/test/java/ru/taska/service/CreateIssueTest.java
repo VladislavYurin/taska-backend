@@ -1,5 +1,8 @@
 package ru.taska.service;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
@@ -41,11 +45,14 @@ class CreateIssueTest extends IssueServiceImplTest {
         Mockito.lenient().when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);
         Mockito.lenient().when(issueProperties.idempotencyKeyTtl().ttl()).thenReturn(Duration.ofHours(24));
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
-                .thenReturn(Mono.empty());
+        Mockito.lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
+               .thenReturn(Mono.just(ProjectResponse.newBuilder()
+                                                    .setProjectKey("TSK")
+                                                    .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
+                                                    .build()));
+        lenient().when(transactionalOperator.transactional(any(Mono.class)))
+                 .thenAnswer(inv -> inv.getArgument(0));
 
-        Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(REQUEST_ID, NODE_ID, PROJECT_ID))
-                .thenReturn(Mono.just("TSK"));
         Mockito.lenient().when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))
                 .thenReturn(Mono.just(1));
         Mockito.lenient().when(idempotencyKeyRepository.findByUserIdAndKey(Mockito.any(), Mockito.any()))
@@ -91,7 +98,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         ).block();
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessibility).check(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
         Mockito.verify(projectCounterRepository, Mockito.times(1)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -116,7 +123,7 @@ class CreateIssueTest extends IssueServiceImplTest {
         Assertions.assertThat(result.getIssueNumber()).isEqualTo(nextIssueNumber);
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessibility).check(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
     }
@@ -141,7 +148,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueProperties.allowedRoles(), Mockito.times(2))
                 .createIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectAccessibility, Mockito.times(2)).check(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
         Mockito.verify(projectCounterRepository, Mockito.times(2)).getNextIssueNumberAndIncrement(PROJECT_ID);
@@ -164,7 +171,7 @@ class CreateIssueTest extends IssueServiceImplTest {
                 .saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class), Mockito.any(Issue.class));
 
         Mockito.verify(issueProperties.allowedRoles()).createIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessibility).check(
                 REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles
         );
     }

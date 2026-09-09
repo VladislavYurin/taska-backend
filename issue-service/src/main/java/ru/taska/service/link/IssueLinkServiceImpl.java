@@ -1,5 +1,7 @@
 package ru.taska.service.link;
 
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,10 +16,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
-
-import java.util.Set;
-import java.util.UUID;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 /**
  * Оркестратор для работы со связями задачи, реализующий {@link IssueLinkService}.
@@ -32,12 +31,12 @@ public class IssueLinkServiceImpl implements IssueLinkService {
     private final IssueLinkExecutor executor;
     private final IssueRepository issueRepository;
     private final IssueLinkRepository issueLinkRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final IssueProperties issueProperties;
 
     /**
      * Находит в БД активную задачу, связи которой запрашиваются.
-     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectRoleChecker},
+     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectAccessChecker},
      * и в случае успешной проверки возвращает все связи задачи.
      */
     @Override
@@ -56,8 +55,8 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .flatMapMany(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueLinksRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenMany(issueLinkRepository.findAllByIssueId(issueId));
+                    return projectAccessibility.check(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                                               .thenMany(issueLinkRepository.findAllByIssueId(issueId));
                 })
                 .doOnComplete(() ->
                         log.debug("[{}][{}] Links successfully found for issue: issueId={}", requestId, nodeId, issueId)
@@ -67,7 +66,7 @@ public class IssueLinkServiceImpl implements IssueLinkService {
     /**
      * Создает новую связь между двумя задачами.
      * Запрашивает из БД необходимые данные о задачах, между которыми устанавливается связь.
-     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectRoleChecker},
+     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectAccessChecker},
      * и в случае успешной проверки передает выполнение создания связи
      * в транзакционный блок {@link IssueLinkExecutor#executeLinkCreation}.
      */
@@ -88,8 +87,8 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .flatMap(projectId -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueLinksRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
-                            .thenReturn(projectId);
+                    return projectAccessibility.check(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                                               .thenReturn(projectId);
                 })
                 .flatMap(projectId ->
                         issueRepository.findActiveById(sourceIssueId)
@@ -111,7 +110,7 @@ public class IssueLinkServiceImpl implements IssueLinkService {
 
     /**
      * Удаляет связь (мягкое удаление).
-     * Находит в БД активную связь. Проверяет роль пользователя, инициировавшего запрос через {@link ProjectRoleChecker},
+     * Находит в БД активную связь. Проверяет роль пользователя, инициировавшего запрос через {@link ProjectAccessChecker},
      * и в случае успешной проверки передает выполнение удаления связи
      * в транзакционный блок {@link IssueLinkExecutor#executeLinkDeletion} .
      */
@@ -132,8 +131,8 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .flatMap(link -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueLinksRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, link.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(link);
+                    return projectAccessibility.check(requestId, nodeId, link.getProjectId(), actorUserId, allowedRoles)
+                                               .thenReturn(link);
                 })
                 .flatMap(link ->
                         issueRepository.findById(link.getSourceIssueId())
