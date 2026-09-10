@@ -180,8 +180,8 @@ public final class GrpcRequestValidators {
 
         if (value < 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+                                      .withDescription(fieldName + " must be positive or zero")
+                                      .asRuntimeException());
         }
 
         return Mono.just(Optional.of(value));
@@ -234,7 +234,7 @@ public final class GrpcRequestValidators {
         }
         if (value == null || value < 0) {
             return Mono.error(Status.INVALID_ARGUMENT
-                                      .withDescription(fieldName + " must be positive")
+                                      .withDescription(fieldName + " must be positive or zero")
                                       .asRuntimeException());
         }
         return Mono.just(Optional.of(BigDecimal.valueOf(value)));

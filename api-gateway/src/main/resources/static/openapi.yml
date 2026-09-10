@@ -2101,9 +2101,34 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+          description: Оценка сложности задачи в story points
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          description: Первоначальная оценка времени в минутах
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          description: Оставшееся время в минутах
+          minimum: 0
 
     IssueResponseDto:
       type: object
+      required: [id, projectId, issueNumber, issueKey, issueType, summary, description,
+                 priority, assigneeId, reporterId, createdAt, updatedAt,version, labels]
       properties:
         id:
           type: string
@@ -2135,6 +2160,29 @@ components:
           format: date-time
         version:
           type: integer
+        storyPoints:
+          type: number
+          format: double
+          description: Оценка сложности задачи в story points
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          description: Первоначальная оценка времени в минутах
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          description: Оставшееся время в минутах
+          minimum: 0
         labels:
           type: array
           description: Метки задачи (краткая информация)
@@ -2168,6 +2216,7 @@ components:
 
     IssueShortResponseDto:
       type: object
+      required: [id, issueKey, summary, issueType, priority, assigneeId]
       properties:
         id:
           type: string
@@ -2181,6 +2230,11 @@ components:
           type: string
         assigneeId:
           type: string
+        storyPoints:
+          type: number
+          format: double
+          description: Оценка сложности задачи в story points
+          minimum: 0
 
     ListIssuesResponseDto:
       type: object
@@ -2202,9 +2256,33 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+          description: Оценка сложности задачи в story points
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          description: Первоначальная оценка времени в минутах
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          description: Оставшееся время в минутах
+          minimum: 0
 
     UpdateIssueResponseDto:
       type: object
+      required: [id, summary, description, priority]
       properties:
         id:
           type: string
@@ -2214,6 +2292,29 @@ components:
           type: string
         priority:
           type: string
+        storyPoints:
+          type: number
+          format: double
+          description: Оценка сложности задачи в story points
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          description: Первоначальная оценка времени в минутах
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          description: Оставшееся время в минутах
+          minimum: 0
 
     AssignIssueRequestDto:
       type: object
