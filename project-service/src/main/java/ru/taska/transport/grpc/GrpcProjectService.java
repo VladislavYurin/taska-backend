@@ -1,8 +1,10 @@
 package ru.taska.transport.grpc;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,11 +26,12 @@ import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectContextResponse;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.UpdateProjectRequest;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.ProjectRole;
 import ru.taska.mapper.ProjectMapper;
@@ -58,29 +61,28 @@ public class GrpcProjectService {
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getName(), "body.name"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getProjectKey(), "body.projectKey"),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getUserId(), "body.userId")
-                        )
-                        .doOnError(logValidationError(
-                                req.getHeader().getRequestId(), req.getHeader().getNodeId(), "createProject")
-                        )
-                        .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            String projectName = t.getT3();
-                            String projectKey = t.getT4();
-                            UUID userId = t.getT5();
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getUserId(), "body.userId"),
+                        req.getBody().hasDescription()
+                                ? Mono.just(Optional.of(req.getBody().getDescription()))
+                                : Mono.just(Optional.<String>empty()),
+                        req.getBody().hasColor()
+                                ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getColor(), "body.color").map(Optional::of)
+                                : Mono.just(Optional.<String>empty())
+                ))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    String projectName = t.getT3();
+                    String projectKey = t.getT4();
+                    UUID userId = t.getT5();
+                    Optional<String> description = t.getT6();
+                    Optional<String> color = t.getT7();
 
-                            log.info("[{}][{}] Received request to createProject: projectKey={}, projectName={}, userId={}", requestId, nodeId, projectKey, projectName, userId);
+                    log.info("[{}][{}] Received request to createProject: projectKey={}, projectName={}, userId={}", requestId, nodeId, projectKey, projectName, userId);
 
-                            return projectService.createProject(requestId, nodeId, projectKey, projectName, userId)
-                                    .doOnSuccess(result ->
-                                            log.info("[{}][{}] createProject: successfully createProject",
-                                                    requestId, nodeId
-                                            )
-                                    )
-                                    .doOnError(logOnError(requestId, nodeId, "createProject"));
-                        })
-                )
+                    return projectService.createProject(requestId, nodeId, projectKey, projectName, userId, description, color);
+                })
                 .map(projectMapper::toProjectResponse);
     }
 
@@ -451,5 +453,54 @@ public class GrpcProjectService {
                             .doOnError(error -> log.warn("[{}][{}] GetProjectInfoBatchInternal failed for projectId={}: {}",
                                     requestId, nodeId, projectIds, error.getMessage()));
                 });
+    }
+
+    //TODO: HEX-паттерн color и длина name валидируются только на api-gateway (осознанно, TAS-145) — понадобятся и здесь, если появится клиент этого RPC в обход api-gateway.
+    @TrackMetrics(counter = "project-service_update-project_grpc_counter",
+            timer = "project-service_update-project_grpc_timer")
+    public Mono<ProjectResponse> updateProject(Mono<UpdateProjectRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"
+                        ),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getProjectId(), "body.projectId"
+                        ),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                req.getBody().getActorUserId(), "body.actorUserId"
+                        ),
+                        req.getBody().hasName()
+                                ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getName(), "body.name").map(Optional::of)
+                                : Mono.just(Optional.<String>empty()),
+                        req.getBody().hasDescription()
+                                ? Mono.just(Optional.of(req.getBody().getDescription()))
+                                : Mono.just(Optional.<String>empty()),
+                        req.getBody().hasColor()
+                                ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getColor(), "body.color").map(Optional::of)
+                                : Mono.just(Optional.<String>empty())
+                ))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    UUID projectId = t.getT3();
+                    UUID actorUserId = t.getT4();
+                    Optional<String> name = t.getT5();
+                    Optional<String> description = t.getT6();
+                    Optional<String> color = t.getT7();
+
+                    log.info("[{}][{}] Received request to updateProject: projectId={}, actorUserId={}",
+                            requestId, nodeId, projectId, actorUserId);
+
+                    return projectService.updateProject(
+                            requestId, nodeId, projectId, actorUserId, name, description, color
+                    );
+                })
+                .map(projectMapper::toProjectResponse);
     }
 }

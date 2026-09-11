@@ -26,6 +26,7 @@ import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
+import ru.taska.api.project.v1.UpdateProjectRequest;
 
 
 @GrpcService
@@ -97,5 +98,11 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<GetProjectInfoBatchInternalResponse> getProjectInfoBatchInternal(Mono<GetProjectInfoBatchInternalRequest> request) {
         return grpcProjectService.getProjectInfoBatchInternal(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProjectInfoBatchInternal"));
+    }
+
+    @Override
+    public Mono<ProjectResponse> updateProject(Mono<UpdateProjectRequest> request) {
+        return grpcProjectService.updateProject(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProject"));
     }
 }

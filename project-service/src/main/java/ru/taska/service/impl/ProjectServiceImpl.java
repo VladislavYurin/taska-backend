@@ -2,6 +2,7 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -58,13 +60,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public Mono<Project> createProject(
-            String requestId,
-            String nodeId,
-            String projectKey,
-            String projectName,
-            UUID userId
-    ) {
+    public Mono<Project> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId,
+                                       Optional<String> description, Optional<String> color) {
         return projectRepository.findByProjectKey(projectKey)
                 .flatMap(p -> {
                     log.info("[{}][{}] Project already exists: projectKey={}",
@@ -76,6 +73,8 @@ public class ProjectServiceImpl implements ProjectService {
                                              .projectKey(projectKey)
                                              .name(projectName)
                                              .createdBy(userId)
+                                             .description(description.orElse(null))
+                                             .color(color.orElse(null))
                                              .build();
 
                     return projectRepository.save(project)
@@ -274,4 +273,47 @@ public class ProjectServiceImpl implements ProjectService {
                 .collectList();
     }
 
+    @Override
+    @Transactional
+    public Mono<Project> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
+                                       Optional<String> name, Optional<String> description, Optional<String> color) {
+        return projectRepository.findById(projectId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                }))
+                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
+                            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
+                        }))
+                        .flatMap(member -> {
+                            if (member.getRole() != ProjectRole.ADMIN) {
+                                log.warn("[{}][{}] User {} is not ADMIN of project {}", requestId, nodeId, actorUserId, projectId);
+                                return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Only project ADMIN can update the project"));
+                            }
+
+                            if (name.isEmpty() && description.isEmpty() && color.isEmpty()) {
+                                log.info("[{}][{}] Empty PATCH for project {}, nothing to update", requestId, nodeId, projectId);
+                                return Mono.just(project);
+                            }
+
+                            Project updatedProject = project.toBuilder()
+                                    .name(name.orElse(project.getName()))
+                                    .description(description.orElse(project.getDescription()))
+                                    .color(color.orElse(project.getColor()))
+                                    .build();
+
+                            return projectRepository.save(updatedProject)
+                                    .onErrorMap(OptimisticLockingFailureException.class, ex -> {
+                                        log.warn("[{}][{}] Project was concurrently modified: projectId={}", requestId, nodeId, projectId);
+                                        return new DomainException(DomainStatus.ABORTED,
+                                                "Project was concurrently modified by another request, please retry");
+                                    })
+                                    .flatMap(savedProject ->
+                                            outboxEventService.saveProjectUpdated(requestId, nodeId, savedProject, actorUserId)
+                                                    .thenReturn(savedProject));
+                        }))
+                .doOnSuccess(p -> log.info("[{}][{}] Project successfully updated: projectId={}", requestId, nodeId, projectId));
+    }
 }

@@ -19,6 +19,8 @@ import java.util.UUID;
         Instant created_at,
         Instant updated_at,
         Instant archived_at,
+        String description,
+        String color,
         UUID user_id,
         ProjectRole role
     ){}

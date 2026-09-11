@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -44,10 +45,10 @@ import ru.taska.transport.grpc.client.GrpcWorkFlowServiceClient;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.time.Instant;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -130,7 +131,7 @@ class ProjectServiceImplTest {
                         ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class)))
                 .thenReturn(Mono.just(new OutboxEvent()));
 
-        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
+        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId, Optional.empty(), Optional.empty()))
                 .expectNext(mockProject)
                 .verifyComplete();
 
@@ -147,7 +148,7 @@ class ProjectServiceImplTest {
     void createProject_ThrowsAlreadyExistsException_WhenProjectExists() {
         Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.just(mockProject));
 
-        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
+        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId, Optional.empty(), Optional.empty()))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
@@ -268,6 +269,32 @@ class ProjectServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
+
+    @Test
+    void updateProject_ThrowsAbortedException_WhenConcurrentlyModified() {
+        ProjectMember adminMember = ProjectMember.builder()
+                .projectId(projectId)
+                .userId(actorUserId)
+                .role(ProjectRole.ADMIN)
+                .build();
+
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
+                .thenReturn(Mono.error(new OptimisticLockingFailureException("Project was concurrently modified")));
+
+        StepVerifier.create(projectService.updateProject(requestId, nodeId, projectId, actorUserId,
+                        Optional.of("New name"), Optional.empty(), Optional.empty()))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertInstanceOf(DomainException.class, throwable);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.ABORTED, exception.getStatus());
+                })
+                .verify();
+
+        Mockito.verify(outboxEventService, Mockito.never())
+                .saveProjectUpdated(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     @Test
