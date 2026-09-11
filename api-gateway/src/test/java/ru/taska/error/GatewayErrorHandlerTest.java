@@ -63,13 +63,13 @@ class GatewayErrorHandlerTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть 500 при gRPC-ошибке OUT_OF_RANGE (неизвестный код)")
-    void handleError_grpcOutOfRange_setsStatus500() {
+    @DisplayName("Должен вернуть 400 при gRPC-ошибке OUT_OF_RANGE")
+    void handleError_grpcOutOfRange_setsStatus400() {
         StatusRuntimeException error = Status.OUT_OF_RANGE.asRuntimeException();
 
         StepVerifier.create(handler.handleError(exchange, error, REQUEST_ID)).verifyComplete();
 
-        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         ArgumentCaptor<RestErrorResponse> captor = ArgumentCaptor.forClass(RestErrorResponse.class);
         verify(objectMapper).writeValueAsBytes(captor.capture());
