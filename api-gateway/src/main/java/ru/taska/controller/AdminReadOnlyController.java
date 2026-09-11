@@ -8,9 +8,11 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
 import ru.taska.domain.dto.RetryOutboxEventRequestDto;
@@ -66,7 +68,7 @@ public class AdminReadOnlyController implements AdminApi {
             Integer page,
             Integer pageSize,
             String sort,
-            String order,
+            SortOrderDto order,
             Map<String, String> ignoredFilters,
             ServerWebExchange exchange) {
 
@@ -122,7 +124,7 @@ public class AdminReadOnlyController implements AdminApi {
      */
     @Override
     public Mono<ResponseEntity<RetryOutboxEventResponseDto>> retryOutboxEvent(
-            String service,
+            OutboxServiceTypeDto service,
             UUID eventId,
             Mono<RetryOutboxEventRequestDto> request,
             ServerWebExchange exchange

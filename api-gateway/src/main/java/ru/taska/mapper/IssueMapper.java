@@ -462,38 +462,6 @@ public class IssueMapper {
     }
 
     /**
-     * Безопасно преобразует строку в IssuePriorityDto.
-     * Возвращает null если строка null или невалидна.
-     */
-    public IssuePriorityDto safeParsePriority(String value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return IssuePriorityDto.valueOf(value.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid priority value: {}, ignoring", value);
-            return null;
-        }
-    }
-
-    /**
-     * Безопасно преобразует строку в IssueTypeDto.
-     * Возвращает null если строка null или невалидна.
-     */
-    public IssueTypeDto safeParseIssueType(String value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return IssueTypeDto.valueOf(value.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid issueType value: {}, ignoring", value);
-            return null;
-        }
-    }
-
-    /**
      * Создает SearchIssuesRequestDto из параметров запроса.
      */
     public SearchIssuesRequestDto toSearchRequestDto(
@@ -502,8 +470,8 @@ public class IssueMapper {
             String statusKey,
             String assigneeId,
             String reporterId,
-            String priority,
-            String issueType,
+            IssuePriorityDto priority,
+            IssueTypeDto issueType,
             Integer page,
             Integer pageSize
     ) {
@@ -513,8 +481,8 @@ public class IssueMapper {
                 .statusKey(statusKey)
                 .assigneeId(assigneeId)
                 .reporterId(reporterId)
-                .priority(safeParsePriority(priority))
-                .issueType(safeParseIssueType(issueType))
+                .priority(priority)
+                .issueType(issueType)
                 .page(page != null ? page : 0)
                 .pageSize(pageSize != null ? pageSize : 20);
     }

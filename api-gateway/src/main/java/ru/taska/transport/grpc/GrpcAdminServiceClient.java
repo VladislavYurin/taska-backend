@@ -18,11 +18,13 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
 import ru.taska.domain.dto.ResetLockoutRequestDto;
 import ru.taska.domain.dto.BlockUserRequestDto;
+import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.domain.dto.UnblockUserRequestDto;
 import ru.taska.domain.dto.UserStatusResponseDto;
 import ru.taska.domain.dto.RetryOutboxEventRequestDto;
@@ -61,7 +63,7 @@ public class GrpcAdminServiceClient {
             Integer page,
             Integer pageSize,
             String sort,
-            String order,
+            SortOrderDto order,
             Map<String, String> filters,
             GatewayContext context
     ) {
@@ -74,7 +76,7 @@ public class GrpcAdminServiceClient {
         if (page != null) bodyBuilder.setPage(page);
         if (pageSize != null) bodyBuilder.setPageSize(pageSize);
         if (sort != null) bodyBuilder.setSort(sort);
-        if (order != null) bodyBuilder.setOrder(order);
+        if (order != null) bodyBuilder.setOrder(order.toString());
         if (filters != null && !filters.isEmpty()) bodyBuilder.putAllFilters(filters);
 
         ListTableRowsRequestBody listTableRowsRequestBody = bodyBuilder.build();
@@ -196,7 +198,7 @@ public class GrpcAdminServiceClient {
      * @return состояние события после retry
      */
     public Mono<RetryOutboxEventResponseDto> retryOutboxEvent(
-            String service,
+            OutboxServiceTypeDto service,
             UUID eventId,
             RetryOutboxEventRequestDto requestDto,
             GatewayContext context
@@ -212,7 +214,7 @@ public class GrpcAdminServiceClient {
 
         RetryOutboxEventRequestBody body =
                 RetryOutboxEventRequestBody.newBuilder()
-                        .setServiceKey(service)
+                        .setServiceKey(service.toString())
                         .setEventId(eventId.toString())
                         .setReason(requestDto.getReason())
                         .setActorUserId(userContext.userId())
