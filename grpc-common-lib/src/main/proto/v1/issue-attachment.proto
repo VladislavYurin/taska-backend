@@ -257,6 +257,11 @@ message CreateAttachmentUploadUrlResponse {
    * Ключ объекта в хранилище для последующего сохранения в БД.
    */
   string object_key = 2;
+
+  /**
+   * Время жизни presigned URL в секундах.
+   */
+  int64 expires_in = 3;
 }
 
 /**
