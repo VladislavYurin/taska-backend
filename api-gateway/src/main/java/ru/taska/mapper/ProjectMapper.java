@@ -43,6 +43,12 @@ public class ProjectMapper {
         if (protoDto.hasArchivedAt()){
             restDto.setArchivedAt(toOffsetDateTime(protoDto.getArchivedAt()));
         }
+        if (protoDto.hasDescription()) {
+            restDto.setDescription(protoDto.getDescription());
+        }
+        if (protoDto.hasColor()) {
+            restDto.setColor(protoDto.getColor());
+        }
         return restDto;
     }
 
