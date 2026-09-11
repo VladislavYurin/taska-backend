@@ -3,7 +3,9 @@ package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -11,14 +13,22 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.AvatarResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ListProjectMemberResponse;
+import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.dto.AvatarDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 public class ProjectMapperTest {
@@ -276,5 +286,123 @@ public class ProjectMapperTest {
 
         // then
         Assertions.assertThat(result).isNull();
+    }
+
+    @Nested
+    @DisplayName("Tests for toListProjectMemberDetailsDto mapping method")
+    class ToListProjectMemberDetailsDtoTests {
+        private final String userId1 = UUID.randomUUID().toString();
+        private final String userId2 = UUID.randomUUID().toString();
+        private final String role1 = "ADMIN";
+        private final String role2 = "MEMBER";
+        private final String displayName1 = "John Doe";
+        private final String displayName2 = "Jane Doe";
+        private final String email1 = "john@example.com";
+        private final String email2 = "jane@example.com";
+        private AvatarResponse avatarResponse;
+        private ProjectMemberDetailsResponse memberWithoutAvatar;
+        private ProjectMemberDetailsResponse memberWithAvatar;
+
+        @BeforeEach
+        void setUp() {
+            avatarResponse = AvatarResponse.newBuilder().build();
+
+            memberWithAvatar = ProjectMemberDetailsResponse.newBuilder()
+                    .setUserId(userId1)
+                    .setRole(role1)
+                    .setDisplayName(displayName1)
+                    .setEmail(email1)
+                    .setAvatar(avatarResponse)
+                    .build();
+
+            memberWithoutAvatar = ProjectMemberDetailsResponse.newBuilder()
+                    .setUserId(userId2)
+                    .setRole(role2)
+                    .setDisplayName(displayName2)
+                    .setEmail(email2)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should correctly map ListProjectMemberResponse to ListProjectMemberDetailsDto " +
+                "with all fields including avatar")
+        void toListProjectMemberDetailsDto_whenAllFieldsAndAvatarPresent_thenMapsSuccessfully() {
+            ListProjectMemberResponse listResponse = ListProjectMemberResponse.newBuilder()
+                    .addMembers(memberWithAvatar)
+                    .build();
+
+            ListProjectMemberDetailsDto result = mapper.toListProjectMemberDetailsDto(listResponse);
+
+            Assertions.assertThat(result).isNotNull();
+            Assertions.assertThat(result.getMembers()).isNotNull();
+            Assertions.assertThat(result.getMembers()).hasSize(1);
+
+            ProjectMemberDetailsDto memberDto = result.getMembers().get(0);
+            Assertions.assertThat(memberDto.getUserId()).isEqualTo(userId1);
+            Assertions.assertThat(memberDto.getRole()).isEqualTo(role1);
+            Assertions.assertThat(memberDto.getDisplayName()).isEqualTo(displayName1);
+            Assertions.assertThat(memberDto.getEmail()).isEqualTo(email1);
+            Assertions.assertThat(memberDto.getAvatar())
+                    .isNotNull()
+                    .returns(avatarResponse.getId(), AvatarDto::getId)
+                    .returns(avatarResponse.getObjectKey(), AvatarDto::getObjectKey)
+                    .returns(avatarResponse.getFileName(), AvatarDto::getFileName)
+                    .returns(avatarResponse.getContentType(), AvatarDto::getContentType)
+                    .returns(avatarResponse.getSizeBytes(), AvatarDto::getSizeBytes)
+                    .returns(avatarResponse.getDownloadUrl(), AvatarDto::getDownloadUrl);
+        }
+
+        @Test
+        @DisplayName("Should map avatar to null when avatar is missing in Protobuf message")
+        void toListProjectMemberDetailsDto_whenAvatarIsNotPresent_thenAvatarMappedToNull() {
+            ListProjectMemberResponse listResponse = ListProjectMemberResponse.newBuilder()
+                    .addMembers(memberWithoutAvatar)
+                    .build();
+
+            ListProjectMemberDetailsDto result = mapper.toListProjectMemberDetailsDto(listResponse);
+
+            Assertions.assertThat(result).isNotNull();
+            Assertions.assertThat(result.getMembers()).hasSize(1);
+
+            ProjectMemberDetailsDto memberDto = result.getMembers().get(0);
+            Assertions.assertThat(memberDto.getUserId()).isEqualTo(userId2);
+            Assertions.assertThat(memberDto.getRole()).isEqualTo(role2);
+            Assertions.assertThat(memberDto.getDisplayName()).isEqualTo(displayName2);
+            Assertions.assertThat(memberDto.getEmail()).isEqualTo(email2);
+            Assertions.assertThat(memberDto.getAvatar()).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return DTO with empty members list when Protobuf response contains no members")
+        void toListProjectMemberDetailsDto_whenMembersListIsEmpty_thenReturnsDtoWithEmptyList() {
+            ListProjectMemberResponse emptyListResponse = ListProjectMemberResponse.newBuilder().build();
+
+            ListProjectMemberDetailsDto result = mapper.toListProjectMemberDetailsDto(emptyListResponse);
+
+            Assertions.assertThat(result).isNotNull();
+            Assertions.assertThat(result.getMembers()).isNotNull();
+            Assertions.assertThat(result.getMembers()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Should correctly map multiple members in single response")
+        void toListProjectMemberDetailsDto_whenMultipleMembersInResponse_thenMapsAllMembers() {
+            ListProjectMemberResponse listResponse = ListProjectMemberResponse.newBuilder()
+                    .addAllMembers(List.of(memberWithAvatar, memberWithoutAvatar))
+                    .build();
+
+            ListProjectMemberDetailsDto result = mapper.toListProjectMemberDetailsDto(listResponse);
+
+            Assertions.assertThat(result).isNotNull();
+            Assertions.assertThat(result.getMembers()).hasSize(2);
+
+            Assertions.assertThat(result.getMembers().get(0).getUserId()).isEqualTo(userId1);
+            Assertions.assertThat(result.getMembers().get(0).getAvatar())
+                    .isNotNull()
+                    .returns(avatarResponse.getId(), AvatarDto::getId);
+
+            Assertions.assertThat(result.getMembers().get(1).getUserId()).isEqualTo(userId2);
+            Assertions.assertThat(result.getMembers().get(1).getAvatar()).isNull();
+        }
     }
 }

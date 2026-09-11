@@ -7,11 +7,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
+import ru.taska.api.project.v1.AvatarResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ListProjectMemberResponse;
+import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 
@@ -42,6 +48,9 @@ public class ProjectMapper {
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         if (protoDto.hasArchivedAt()){
             restDto.setArchivedAt(toOffsetDateTime(protoDto.getArchivedAt()));
+        }
+        if (protoDto.hasCurrentUserRole()) {
+            restDto.currentUserRole(toRestProjectRole(protoDto.getCurrentUserRole()));
         }
         return restDto;
     }
@@ -86,6 +95,56 @@ public class ProjectMapper {
         restDto.setUserId(protoDto.getChangedMemberId());
         restDto.setRole(toRestProjectRole(protoDto.getRole()));
         return restDto;
+    }
+
+    /**
+     * ListProjectMemberResponse -> ListProjectMemberDetailsDto
+     * @param listProjectMemberResponse
+     * @return restDto
+     */
+    public ListProjectMemberDetailsDto toListProjectMemberDetailsDto(ListProjectMemberResponse listProjectMemberResponse) {
+        ListProjectMemberDetailsDto restDto = new ListProjectMemberDetailsDto();
+        List<ProjectMemberDetailsDto> members = new ArrayList<>();
+
+        listProjectMemberResponse.getMembersList()
+                .forEach(project -> members.add(toProjectMemberDetailsDto(project)));
+
+        restDto.setMembers(members);
+        return restDto;
+    }
+
+    /**
+     * ProjectMemberDetailsResponse -> ProjectMemberDetailsDto
+     * @param projectMemberDetails
+     * @return dto
+     */
+    private ProjectMemberDetailsDto toProjectMemberDetailsDto(ProjectMemberDetailsResponse projectMemberDetails) {
+        ProjectMemberDetailsDto dto = new ProjectMemberDetailsDto();
+        dto.setUserId(projectMemberDetails.getUserId());
+        dto.setRole(projectMemberDetails.getRole());
+        dto.setDisplayName(projectMemberDetails.getDisplayName());
+        dto.setEmail(projectMemberDetails.getEmail());
+        if (projectMemberDetails.hasAvatar()) {
+            dto.setAvatar(toAvatarDto(projectMemberDetails.getAvatar()));
+        }
+
+        return dto;
+    }
+
+    private AvatarDto toAvatarDto(AvatarResponse avatarResponse) {
+        if (avatarResponse == null) {
+            return null;
+        }
+
+        AvatarDto avatarDto = new AvatarDto();
+        avatarDto.setId(avatarResponse.getId());
+        avatarDto.setObjectKey(avatarResponse.getObjectKey());
+        avatarDto.setFileName(avatarResponse.getFileName());
+        avatarDto.setContentType(avatarResponse.getContentType());
+        avatarDto.setSizeBytes(avatarResponse.getSizeBytes());
+        avatarDto.setDownloadUrl(avatarResponse.getDownloadUrl());
+
+        return avatarDto;
     }
 
     /// REST строка -> ProjectRole Enum grpc

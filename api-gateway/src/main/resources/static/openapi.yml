@@ -248,6 +248,29 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
   /api/v1/projects/{projectId}/members:
+    get:
+      description: Возвращает список участников проекта
+      operationId: getProjectMembers
+      tags:
+        - project
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: New response
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectMemberDetailsDto'
     post:
       summary: Добавляет участника в проект
       operationId: addProjectMember
@@ -2764,6 +2787,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        currentUserRole:
+          type: string
 
     ListMyProjectResponseDto:
       type: object
@@ -2800,6 +2825,49 @@ components:
           type: string
         role:
           type: string
+
+    AvatarDto:
+      type: object
+      properties:
+        id:
+          type: string
+        objectKey:
+          type: string
+        fileName:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+
+    ProjectMemberDetailsDto:
+      type: object
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        avatar:
+          $ref: '#/components/schemas/AvatarDto'
+
+
+    ListProjectMemberDetailsDto:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMemberDetailsDto'
 
     RestErrorResponse:
       type: object

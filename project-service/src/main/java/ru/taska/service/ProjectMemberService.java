@@ -1,7 +1,9 @@
 package ru.taska.service;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
 
@@ -62,4 +64,15 @@ public interface ProjectMemberService {
      * </ul>
      */
     Mono<ProjectMembershipInfoDto> checkProjectMemberRole(String requestId, String nodeId, UUID projectId, UUID userId);
+
+    /**
+     * Возвращает список участников проекта с обогащенными данными из сервиса пользователей.
+     *
+     * @param requestId   айди запроса
+     * @param nodeId      айди узла
+     * @param projectId   айди проекта
+     * @param actorUserId айди инициатора события
+     * @return Flux<{@link ProjectMemberDetailsDto}> с детальной информацией об участниках проекта
+     */
+    Flux<ProjectMemberDetailsDto> getProjectMembers(String requestId, String nodeId, UUID projectId, UUID actorUserId);
 }

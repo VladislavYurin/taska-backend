@@ -3,6 +3,7 @@ package ru.taska.service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Project;
+import ru.taska.domain.dto.ProjectCheckMembershipDto;
 
 import java.util.UUID;
 
@@ -27,7 +28,7 @@ public interface ProjectService {
      * @param actorUserId aйди актора, для проверки доступа (вхождения) в проект
      * @return Mono<{@link Project}> проект из БД по запросу
      */
-    Mono<Project> getProject(String requestId, String nodeId, UUID projectId, UUID actorUserId);
+    Mono<ProjectCheckMembershipDto> getProject(String requestId, String nodeId, UUID projectId, UUID actorUserId);
 
     /**
      * Возвращает список всех проектов пользователя по его Id
@@ -35,7 +36,7 @@ public interface ProjectService {
      * @param userId айди пользователя
      * @return Flux<{@link Project}> список проектов пользователя с перeданным в метод Id
      */
-    Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId);
+    Flux<ProjectCheckMembershipDto> listMyProjects(String requestId, String nodeId, UUID userId);
 
     /**
      * Возвращает ключ проекта по Id (без проверки прав).

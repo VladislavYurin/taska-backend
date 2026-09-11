@@ -2,6 +2,7 @@ package ru.taska.transport.grpc;
 
 import com.google.protobuf.Empty;
 import io.grpc.StatusRuntimeException;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -12,8 +13,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.auth.profile.v1.AvatarResponse;
 import ru.taska.api.auth.profile.v1.ConfirmAvatarUploadRequest;
 import ru.taska.api.auth.profile.v1.ConfirmAvatarUploadRequestBody;
 import ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlRequest;
@@ -23,10 +26,15 @@ import ru.taska.api.auth.profile.v1.DeleteMyAvatarRequestBody;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequestBody;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlResponse;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequest;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequestBody;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.GetUserProfileRequest;
 import ru.taska.api.auth.profile.v1.GetUserProfileRequestBody;
+import ru.taska.api.auth.profile.v1.UserDetails;
 import ru.taska.api.common.v1.Header;
 import ru.taska.dto.AvatarDto;
+import ru.taska.dto.UserDetailsDto;
 import ru.taska.dto.UserProfileDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -35,6 +43,7 @@ import ru.taska.service.ProfileService;
 import ru.taska.storage.dto.PresignedUploadResult;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -789,6 +798,173 @@ class ProfileGrpcServiceTest {
                     .verify();
 
             Mockito.verify(profileService, Mockito.never()).getUserProfile(ArgumentMatchers.any());
+        }
+    }
+
+
+    @Nested
+    @DisplayName("GetUserDetailsByIds Tests")
+    class GetUserDetailsByIdsTests {
+        public final String email1 = "john@example.com";
+        public final String email2 = "jane@example.com";
+        public final String displayName1 = "John Doe";
+        public final String displayName2 = "Jane Doe";
+        private final UUID userId1 = UUID.randomUUID();
+        private final UUID userId2 = UUID.randomUUID();
+
+        private UserDetailsDto userDetailsDto1;
+        private UserDetailsDto userDetailsDto2;
+        private UserDetails userDetailsProto1;
+        private UserDetails userDetailsProto2;
+        private AvatarDto avatarDto1;
+        private AvatarDto avatarDto2;
+        private AvatarResponse avatarResponse1;
+        private AvatarResponse avatarResponse2;
+
+        @BeforeEach
+        void setUp() {
+            UUID avatarId1 = UUID.randomUUID();
+            UUID avatarId2 = UUID.randomUUID();
+
+            avatarDto1 = createAvatarDto(avatarId1, userId1, "user1");
+            avatarDto2 = createAvatarDto(avatarId2, userId2, "user2");
+
+            userDetailsDto1 = UserDetailsDto.builder()
+                    .userId(userId1)
+                    .displayName(displayName1)
+                    .email(email1)
+                    .avatar(avatarDto1)
+                    .build();
+            userDetailsDto2 = UserDetailsDto.builder()
+                    .userId(userId2)
+                    .displayName(displayName2)
+                    .email(email2)
+                    .avatar(avatarDto2)
+                    .build();
+
+            avatarResponse1 = createAvatarResponse(avatarDto1);
+            avatarResponse2 = createAvatarResponse(avatarDto2);
+
+            userDetailsProto1 = UserDetails.newBuilder()
+                    .setUserId(userId1.toString())
+                    .setDisplayName(displayName1)
+                    .setEmail(email1)
+                    .setAvatar(avatarResponse1)
+                    .build();
+
+            userDetailsProto2 = UserDetails.newBuilder()
+                    .setUserId(userId2.toString())
+                    .setDisplayName(displayName2)
+                    .setEmail(email2)
+                    .setAvatar(avatarResponse2)
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Should successfully return GetUserDetailsByIdsResponse when request is valid")
+        void getUserDetailsByIds_whenRequestIsValid_thenReturnsSuccessfulResponse() {
+            List<UUID> expectedUserIds = List.of(userId1, userId2);
+            GetUserDetailsByIdsRequest validRequest = buildRequest(List.of(userId1.toString(), userId2.toString()));
+
+            Mockito.when(profileService.getUserDetailsByIds(expectedUserIds))
+                    .thenReturn(Flux.just(userDetailsDto1, userDetailsDto2));
+
+            Mockito.when(profileMapper.toProto(userDetailsDto1))
+                    .thenReturn(userDetailsProto1);
+            Mockito.when(profileMapper.toProto(userDetailsDto2))
+                    .thenReturn(userDetailsProto2);
+
+            Mono<GetUserDetailsByIdsResponse> responseMono =
+                    profileGrpcService.getUserDetailsByIds(Mono.just(validRequest));
+
+            StepVerifier.create(responseMono)
+                    .assertNext(response -> {
+                        Assertions.assertEquals(2, response.getUserDetailsCount());
+                        Assertions.assertEquals(userId1.toString(), response.getUserDetails(0).getUserId());
+                        Assertions.assertEquals(userId2.toString(), response.getUserDetails(1).getUserId());
+                    })
+                    .verifyComplete();
+
+            Mockito.verify(profileService, Mockito.times(1))
+                    .getUserDetailsByIds(expectedUserIds);
+            Mockito.verify(profileMapper, Mockito.times(1))
+                    .toProto(userDetailsDto1);
+            Mockito.verify(profileMapper, Mockito.times(1))
+                    .toProto(userDetailsDto2);
+        }
+
+        @Test
+        @DisplayName("Should propagate error when profileService throws an exception")
+        void getUserDetailsByIds_whenServiceFails_thenPropagatesError() {
+            List<UUID> expectedUserIds = List.of(userId1);
+            GetUserDetailsByIdsRequest validRequest = buildRequest(List.of(userId1.toString()));
+
+            DomainException domainException = new DomainException(DomainStatus.NOT_FOUND, "Users not found");
+
+            Mockito.when(profileService.getUserDetailsByIds(expectedUserIds))
+                    .thenReturn(Flux.error(domainException));
+
+            Mono<GetUserDetailsByIdsResponse> responseMono =
+                    profileGrpcService.getUserDetailsByIds(Mono.just(validRequest));
+
+            StepVerifier.create(responseMono)
+                    .expectErrorSatisfies(throwable -> Assertions.assertEquals(domainException, throwable))
+                    .verify();
+
+            Mockito.verify(profileService, Mockito.times(1))
+                    .getUserDetailsByIds(expectedUserIds);
+            Mockito.verifyNoInteractions(profileMapper);
+        }
+
+        @Test
+        @DisplayName("Should return validation error when userIds contains invalid UUID format")
+        void getUserDetailsByIds_whenUserIdIsInvalidUuid_thenReturnsValidationError() {
+            GetUserDetailsByIdsRequest invalidRequest = buildRequest(List.of("invalid-uuid-format"));
+
+            Mono<GetUserDetailsByIdsResponse> responseMono =
+                    profileGrpcService.getUserDetailsByIds(Mono.just(invalidRequest));
+
+            StepVerifier.create(responseMono)
+                    .expectError()
+                    .verify();
+
+            Mockito.verifyNoInteractions(profileService);
+            Mockito.verifyNoInteractions(profileMapper);
+        }
+
+        private GetUserDetailsByIdsRequest buildRequest(List<String> userIds) {
+            GetUserDetailsByIdsRequestBody body = GetUserDetailsByIdsRequestBody.newBuilder()
+                    .addAllUserIds(userIds)
+                    .build();
+            return GetUserDetailsByIdsRequest.newBuilder()
+                    .setHeader(validHeader)
+                    .setBody(body)
+                    .build();
+        }
+
+        private AvatarDto createAvatarDto(UUID avatarId, UUID userId, String name) {
+            return AvatarDto.builder()
+                    .id(avatarId)
+                    .userId(userId)
+                    .objectKey("avatars/" + name + ".jpg")
+                    .fileName(name + ".jpg")
+                    .contentType("image/jpeg")
+                    .sizeBytes(2048L)
+                    .createdAt(Instant.now())
+                    .downloadUrl("https://storage.example.com/avatars/" + name + ".jpg")
+                    .build();
+        }
+
+        private AvatarResponse createAvatarResponse(AvatarDto dto) {
+            return AvatarResponse.newBuilder()
+                    .setId(dto.getId().toString())
+                    .setUserId(dto.getUserId().toString())
+                    .setObjectKey(dto.getObjectKey())
+                    .setFileName(dto.getFileName())
+                    .setContentType(dto.getContentType())
+                    .setSizeBytes(dto.getSizeBytes())
+                    .setDownloadUrl(dto.getDownloadUrl())
+                    .build();
         }
     }
 }
