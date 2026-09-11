@@ -26,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 
 import java.util.Set;
 
-class PlanningFieldsServiceTest extends IssueServiceImplTest {
+class IssuePlanningFieldsTest extends IssueServiceImplTest {
 
     private Set<ProjectRole> createRoles;
     private Set<ProjectRole> updateRoles;

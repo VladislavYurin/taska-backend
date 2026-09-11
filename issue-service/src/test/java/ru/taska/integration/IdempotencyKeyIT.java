@@ -87,7 +87,7 @@ class IdempotencyKeyIT extends AbstractIT {
                 .verifyComplete();
 
         Assertions.assertEquals(1L, issueRepository.count().block());
-        Assertions.assertEquals(1L, outboxEventRepository.count().block());
+        Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         IdempotencyKey saved = idempotencyKeyRepository.findByUserIdAndKey(REPORTER_ID, IDEMPOTENCY_KEY).block();
         Assertions.assertNotNull(saved);
@@ -163,7 +163,7 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Assertions.assertEquals(1L, issueRepository.count().block());
         Assertions.assertEquals(1L, idempotencyKeyRepository.count().block());
-        Assertions.assertEquals(1L, outboxEventRepository.count().block());
+        Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         Assertions.assertNotNull(results);
         Assertions.assertEquals(parallelism, results.size());

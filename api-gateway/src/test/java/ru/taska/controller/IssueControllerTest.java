@@ -1,6 +1,7 @@
 package ru.taska.controller;
 
 import io.grpc.Status;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
+import ru.taska.exception.DomainException;
 import ru.taska.filter.BearerTokenExtractor;
 import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
@@ -89,6 +91,15 @@ class IssueControllerTest {
     private static final String STATUS_TODO = "TODO";
     private static final String ISSUE_TYPE_TASK = "TASK";
     private static final String ISSUE_PRIORITY_MEDIUM = "MEDIUM";
+    private static final double STORY_POINTS = 5;
+    private static final double NEGATIVE_STORY_POINTS = -5;
+    private static final Integer ORIGINAL_ESTIMATE_MINUTES = 480;
+    private static final Integer NEGATIVE_ORIGINAL_ESTIMATE_MINUTES = -480;
+    private static final Integer REMAINING_ESTIMATE_MINUTES = 240;
+    private static final Integer NEGATIVE_REMAINING_ESTIMATE_MINUTES = -240;
+    private static final LocalDate START_DATE = LocalDate.of(2026, 9, 1);
+    private static final LocalDate DUE_DATE = LocalDate.of(2026, 9, 10);
+    private static final LocalDate INVALID_START_AFTER_DUE_DATE = LocalDate.of(2026, 9, 15);
 
     @Autowired
     private WebTestClient webTestClient;
@@ -141,6 +152,57 @@ class IssueControllerTest {
                 .expectHeader().exists("X-Request-Id")
                 .expectHeader().contentType(MediaType.APPLICATION_JSON)
                 .expectBody(IssueResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).createIssue(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(IDEMPOTENCY_KEY),
+                Mockito.any(Mono.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("Должен вернуть ответ с телом IssueResponseDto и статусом 201")
+    void createIssue_shouldReturnsResponseAndStatus201_withOptionalFields() {
+        mockAuthenticatedUser();
+
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        request.setStoryPoints(STORY_POINTS);
+        request.setStartDate(START_DATE);
+        request.setDueDate(DUE_DATE);
+        request.setOriginalEstimateMinutes(ORIGINAL_ESTIMATE_MINUTES);
+        request.setRemainingEstimateMinutes(REMAINING_ESTIMATE_MINUTES);
+
+        var response = new IssueResponseDto();
+        response.setId(ISSUE_ID);
+        response.setProjectId(PROJECT_ID);
+        response.setSummary(SUMMARY);
+        response.setDescription(DESCRIPTION);
+        response.setStoryPoints(STORY_POINTS);
+        response.setStartDate(START_DATE);
+        response.setDueDate(DUE_DATE);
+        response.setOriginalEstimateMinutes(ORIGINAL_ESTIMATE_MINUTES);
+        response.setRemainingEstimateMinutes(REMAINING_ESTIMATE_MINUTES);
+
+        Mockito.when(issueClient.createIssue(
+                       Mockito.eq(PROJECT_ID),
+                       Mockito.eq(IDEMPOTENCY_KEY),
+                       Mockito.any(Mono.class),
+                       Mockito.any(GatewayContext.class)
+               ))
+               .thenReturn(Mono.just(response));
+
+        webTestClient.post()
+                     .uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
+                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                     .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                     .contentType(MediaType.APPLICATION_JSON)
+                     .bodyValue(request)
+                     .exchange()
+                     .expectStatus().isCreated()
+                     .expectHeader().exists("X-Request-Id")
+                     .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                     .expectBody(IssueResponseDto.class).isEqualTo(response);
 
         Mockito.verify(issueClient).createIssue(
                 Mockito.eq(PROJECT_ID),
@@ -255,6 +317,40 @@ class IssueControllerTest {
 
         Mockito.verify(issueClient, Mockito.never())
                 .createIssue(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен выбросить исключение со статусом 400 Bad Request, если storyPoints < 0")
+    void createIssue_shouldThrowsExceptionAndStatus400_whenStoryPointsNegative() {
+        mockAuthenticatedUser();
+
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        request.setStoryPoints(NEGATIVE_STORY_POINTS);
+
+        Mockito.when(issueClient.createIssue(
+                       Mockito.eq(PROJECT_ID),
+                       Mockito.eq(IDEMPOTENCY_KEY),
+                       Mockito.any(Mono.class),
+                       Mockito.any(GatewayContext.class)
+               ))
+               .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "storyPoints must be >= 0")));
+
+        webTestClient.post()
+                     .uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
+                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                     .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                     .contentType(MediaType.APPLICATION_JSON)
+                     .bodyValue(request)
+                     .exchange()
+                     .expectStatus().isBadRequest()
+                     .expectHeader().exists("X-Request-Id")
+                     .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                     .expectBody()
+                     .jsonPath("$.code").exists()
+                     .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.times(1))
+               .createIssue(Mockito.eq(PROJECT_ID), Mockito.eq(IDEMPOTENCY_KEY), Mockito.any(Mono.class), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -497,6 +593,37 @@ class IssueControllerTest {
 
         Mockito.verify(issueClient)
                 .updateIssue(Mockito.eq(ISSUE_ID), Mockito.any(Mono.class), Mockito.any(GatewayContext.class));
+    }
+
+    @Test
+    @DisplayName("Должен выбросить исключение со статусом 400 Bad Request, если storyPoints < 0")
+    void updateIssue_shouldThrowsExceptionAndStatus400_whenStoryPointsNegative() {
+        mockAuthenticatedUser();
+
+        var request = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, ISSUE_PRIORITY_MEDIUM);
+        request.setStoryPoints(NEGATIVE_STORY_POINTS);
+
+        Mockito.when(issueClient.updateIssue(
+                       Mockito.eq(ISSUE_ID),
+                       Mockito.any(Mono.class),
+                       Mockito.any(GatewayContext.class)
+               ))
+               .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "storyPoints must be >= 0")));
+
+        webTestClient.put()
+                     .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                     .bodyValue(request)
+                     .exchange()
+                     .expectStatus().isBadRequest()
+                     .expectHeader().exists("X-Request-Id")
+                     .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                     .expectBody()
+                     .jsonPath("$.code").exists()
+                     .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.times(1))
+               .updateIssue(Mockito.eq(ISSUE_ID), Mockito.any(Mono.class), Mockito.any(GatewayContext.class));
     }
 
     @Test

@@ -1,6 +1,9 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import java.time.LocalDate;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -8,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.IssueBoardResponse;
+import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueRequestBody;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
@@ -23,9 +28,12 @@ import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
 import ru.taska.api.issue.v1.SearchIssuesResponse;
+import ru.taska.api.issue.v1.UpdateIssueRequest;
+import ru.taska.api.issue.v1.UpdateIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.CreateIssueRequestDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
@@ -41,6 +49,7 @@ import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
+import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -83,6 +92,13 @@ public class IssueMapper {
                         .map(this::toRestIssueLabelResponseDto)
                         .collect(Collectors.toList())
         );
+
+        // Optional поля:
+        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
+        setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
+        setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
+        setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
 
         return restDto;
     }
@@ -127,6 +143,7 @@ public class IssueMapper {
         restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
         restDto.setAssigneeId(protoDto.getAssigneeId());
+        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
 
         return restDto;
     }
@@ -150,6 +167,13 @@ public class IssueMapper {
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+
+        // Optional поля:
+        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
+        setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
+        setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
+        setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
 
         return restDto;
     }
@@ -357,12 +381,9 @@ public class IssueMapper {
         setIfPresent(request.getPageSize(), bodyBuilder::setPageSize);
 
         return SearchIssuesRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
-                .setBody(bodyBuilder.build())
-                .build();
+                                  .setHeader(buildGrpcHeader(context))
+                                  .setBody(bodyBuilder.build())
+                                  .build();
     }
 
     /**
@@ -379,6 +400,65 @@ public class IssueMapper {
         restDto.setTotalCount(protoDto.getTotalCount());
 
         return restDto;
+    }
+
+    /**
+     * Создает gRPC запрос для создания задачи.
+     */
+    public CreateIssueRequest  toCreateIssueGrpcRequest(
+            String projectId,
+            String IdempotencyKey,
+            CreateIssueRequestDto request,
+            GatewayContext context
+    ) {
+        CreateIssueRequestBody.Builder bodyBuilder = CreateIssueRequestBody.newBuilder();
+
+        bodyBuilder.setIdempotencyKey(IdempotencyKey)
+                   .setProjectId(projectId)
+                   .setIssueType(toGrpcIssueType(request.getIssueType()))
+                   .setSummary(request.getSummary())
+                   .setDescription(request.getDescription())
+                   .setPriority(toGrpcIssuePriority(request.getPriority()))
+                   .setReporterId(context.userContext().userId());
+
+        setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
+        setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
+        setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
+        setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
+        setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
+
+        return CreateIssueRequest.newBuilder()
+                                 .setHeader(buildGrpcHeader(context))
+                                 .setBody(bodyBuilder.build())
+                                 .build();
+    }
+
+    /**
+     * Создает gRPC запрос для обновления задачи.
+     */
+    public UpdateIssueRequest toUpdateIssueRequest(
+            String issueId,
+            UpdateIssueRequestDto request,
+            GatewayContext context
+    ) {
+        UpdateIssueRequestBody.Builder bodyBuilder = UpdateIssueRequestBody.newBuilder();
+
+        bodyBuilder.setIssueId(issueId)
+                   .setActorUserId(context.userContext().userId())
+                   .setSummary(request.getSummary())
+                   .setDescription(request.getDescription())
+                   .setPriority(toGrpcIssuePriority(request.getPriority()));
+
+        setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
+        setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
+        setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
+        setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
+        setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
+
+        return UpdateIssueRequest.newBuilder()
+                                 .setHeader(buildGrpcHeader(context))
+                                 .setBody(bodyBuilder.build())
+                                 .build();
     }
 
     /**
@@ -467,6 +547,15 @@ public class IssueMapper {
     }
 
     /**
+     * Устанавливает значение в билдер, если объект есть в protoDto.
+     */
+    private static  <T> void setIfPresent(BooleanSupplier hasCheck, Supplier<T> getter, Consumer<T> setter) {
+        if (hasCheck.getAsBoolean()) {
+            setter.accept(getter.get());
+        }
+    }
+
+    /**
      * Устанавливает значение с преобразованием, если объект не null.
      */
     private static <T, R> void setIfPresent(T value, Function<T, R> converter, Consumer<R> setter) {
@@ -493,5 +582,12 @@ public class IssueMapper {
         } catch (JacksonException e) {
             throw new IllegalArgumentException("Failed to serialize payload", e);
         }
+    }
+
+    public Header buildGrpcHeader(GatewayContext context) {
+        return Header.newBuilder()
+                     .setRequestId(context.requestId())
+                     .setNodeId(context.nodeId())
+                     .build();
     }
 }
