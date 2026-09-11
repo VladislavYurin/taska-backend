@@ -140,9 +140,7 @@ public class GrpcProjectServiceClient {
                         .setBody(
                                 AddProjectMemberRequestBody.newBuilder()
                                         .setProjectId(projectId)
-                                        .setRole(projectMapper.toGrpcProjectRole(
-                                                requestDto.getRole() != null ? requestDto.getRole().toString() : null
-                                        ))
+                                        .setRole(projectMapper.toGrpcProjectRole(requestDto.getRole()))
                                         .setAddedMemberId(requestDto.getUserId())
                                         .setActorUserId(context.userContext().userId())
                                         .build())
@@ -176,9 +174,7 @@ public class GrpcProjectServiceClient {
                                         .setProjectId(projectId)
                                         .setChangedMemberId(userId)
                                         .setActorUserId(context.userContext().userId())
-                                        .setRole(projectMapper.toGrpcProjectRole(
-                                                requestDto.getRole() != null ? requestDto.getRole().toString() : null
-                                        ))
+                                        .setRole(projectMapper.toGrpcProjectRole(requestDto.getRole()))
                                         .build()
                         )
                         .build()
