@@ -58,6 +58,8 @@ service ProjectService {
    * Используется только сервисами, которые уже проверили права.
    */
   rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
+
+  rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse);
 }
 
 message CreateProjectRequest {
@@ -69,6 +71,8 @@ message CreateProjectRequestBody {
   string project_key = 1;
   string name = 2;
   string user_id = 3;
+  optional string description = 4;
+  optional string color = 5;
 }
 
 message GetProjectRequest {
@@ -128,6 +132,8 @@ message ProjectResponse {
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
   optional google.protobuf.Timestamp archived_at = 7;
+  optional string description = 8;
+  optional string color = 9;
 }
 
 message ListMyProjectsResponse {
@@ -226,4 +232,20 @@ message ProjectKeyResponse {
    * Ключ-название проекта
    */
   string project_key = 1;
+}
+
+  /**
+  * Запрос обновления проекта.
+  */
+message UpdateProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  UpdateProjectRequestBody body = 2;
+}
+
+message UpdateProjectRequestBody {
+  string project_id = 1;
+  string actor_user_id = 2;
+  optional string name = 3;
+  optional string description = 4;
+  optional string color = 5;
 }

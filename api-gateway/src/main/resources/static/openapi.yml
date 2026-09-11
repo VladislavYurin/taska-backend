@@ -247,6 +247,49 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+    patch:
+      summary: Обновляет проект (имя, описание, цвет)
+      description: >
+        Частичное обновление проекта (PATCH-семантика): поле, отсутствующее в теле запроса,
+        не изменяется. Доступно только участнику проекта с ролью ADMIN.
+      operationId: updateProject
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequestDto'
+      responses:
+        '200':
+          description: Проект успешно обновлён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/members:
     post:
       summary: Добавляет участника в проект
@@ -2737,33 +2780,86 @@ components:
       properties:
         projectKey:
           type: string
+          description: Ключ проекта (используется как префикс issueKey задач, например "TASKA")
           minLength: 1
           pattern: '^[\x21-\x7E]+$'
         name:
           type: string
+          description: Название проекта
           minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          description: Описание проекта
+          maxLength: 2000
+        color:
+          type: string
+          description: Цвет проекта в HEX формате (Пример:#0052CC)
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
+
+    UpdateProjectRequestDto:
+      type: object
+      description: >
+        Все поля опциональны (PATCH-семантика) — отсутствующее поле в запросе не изменяет
+        текущее значение. project_key через этот эндпоинт изменить нельзя.
+      properties:
+        name:
+          type: string
+          description: Новое имя проекта
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          description: Новое описание проекта
+          maxLength: 2000
+        color:
+          type: string
+          description: >
+            Новый цвет проекта в HEX формате. Отсутствие поля в теле запроса и его явная передача
+            как null в этой версии API неразличимы (оба означают «не менять») — явный сброс цвета
+            обратно в null (чтобы клиент снова вычислял цвет сам) через PATCH сейчас не поддерживается.
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#0052CC"
 
     ProjectResponseDto:
       type: object
       properties:
         id:
           type: string
+          description: Уникальный идентификатор проекта
         projectKey:
           type: string
+          description: Ключ проекта (используется как префикс issueKey задач); не меняется никаким запросом
         name:
           type: string
+          description: Название проекта
         createdBy:
           type: string
+          description: Идентификатор пользователя, создавшего проект
         createdAt:
           type: string
           format: date-time
+          description: Дата и время создания проекта
         updatedAt:
           type: string
           format: date-time
+          description: Дата и время последнего обновления проекта
         archivedAt:
           type: string
           format: date-time
           nullable: true
+          description: Дата и время архивации проекта (null, если проект не архивирован)
+        description:
+          type: string
+          nullable: true
+          description: Описание проекта (null, если не задано)
+        color:
+          type: string
+          nullable: true
+          description: >
+            Цвет проекта в HEX формате. null означает, что цвет не выбран пользователем —
+            в этом случае клиент вычисляет цвет самостоятельно (например, по id проекта).
 
     ListMyProjectResponseDto:
       type: object
