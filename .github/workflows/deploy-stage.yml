@@ -1,0 +1,100 @@
+name: Deploy stage to Dokploy
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+      DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+      DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+
+    steps:
+      # 1. Обновляем GIT_COMMIT в Environment Dokploy
+      - name: Set GIT_COMMIT in Dokploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_URL="${DOKPLOY_URL%/}"
+
+          echo "Preparing deploy for commit: ${GITHUB_SHA}"
+
+          # Получаем текущие настройки Compose
+          COMPOSE_JSON=$(curl -fsS \
+            -H "x-api-key: ${DOKPLOY_API_KEY}" \
+            "${BASE_URL}/api/compose.one?composeId=${DOKPLOY_COMPOSE_ID}")
+
+          # Получаем текущий Environment
+          CURRENT_ENV=$(printf '%s' "$COMPOSE_JSON" | jq -r '.env // ""')
+
+          # Удаляем старый GIT_COMMIT, если он уже существует
+          ENV_WITHOUT_GIT_COMMIT=$(printf '%s\n' "$CURRENT_ENV" \
+            | sed '/^GIT_COMMIT=/d')
+
+          # Добавляем актуальный SHA
+          if [ -n "$ENV_WITHOUT_GIT_COMMIT" ]; then
+            NEW_ENV="${ENV_WITHOUT_GIT_COMMIT}"$'\n'"GIT_COMMIT=${GITHUB_SHA}"
+          else
+            NEW_ENV="GIT_COMMIT=${GITHUB_SHA}"
+          fi
+
+          # Формируем JSON для Dokploy
+          PAYLOAD=$(jq -n \
+            --arg composeId "$DOKPLOY_COMPOSE_ID" \
+            --arg env "$NEW_ENV" \
+            '{
+              composeId: $composeId,
+              env: $env,
+              createEnvFile: true
+            }')
+
+          # Сохраняем Environment обратно в Dokploy
+          curl -fsS \
+            -X POST \
+            "${BASE_URL}/api/compose.saveEnvironment" \
+            -H "x-api-key: ${DOKPLOY_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD"
+
+          echo
+          echo "GIT_COMMIT updated to ${GITHUB_SHA}"
+
+      # 2. Запускаем deployment
+      - name: Deploy in Dokploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_URL="${DOKPLOY_URL%/}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+
+          PAYLOAD=$(jq -n \
+            --arg composeId "$DOKPLOY_COMPOSE_ID" \
+            --arg title "GitHub deploy ${SHORT_SHA}" \
+            '{
+              composeId: $composeId,
+              title: $title
+            }')
+
+          curl -fsS \
+            -X POST \
+            "${BASE_URL}/api/compose.deploy" \
+            -H "x-api-key: ${DOKPLOY_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data "$PAYLOAD"
+
+          echo
+          echo "Dokploy deployment started for commit ${GITHUB_SHA}"

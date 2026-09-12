@@ -33,12 +33,6 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-        <!-- Actuator -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-
         <!-- gRPC + Reactor gRPC -->
         <dependency>
             <groupId>io.grpc</groupId>
@@ -111,12 +105,6 @@
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
-        </dependency>
-
-        <!-- Prometheus-->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
         <!--Custom Metrics-->
