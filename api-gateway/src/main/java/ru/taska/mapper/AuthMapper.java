@@ -16,6 +16,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.domain.dto.GlobalRoleTypeDto;
 import ru.taska.domain.dto.LoginRequestDto;
 import ru.taska.domain.dto.LoginResponseDto;
 import ru.taska.domain.dto.PasswordByTokenRequestDto;
@@ -135,8 +136,8 @@ public class AuthMapper {
         dto.setDisplayName(userContext.displayName());
         dto.setStatus(userContext.status() != null ? userContext.status().name() : null);
         dto.setGlobalRole(
-                ValidateAccessTokenResponseDto.GlobalRoleEnum.valueOf(
-                        userContext.globalRole()!=null ? userContext.globalRole().name() : ValidateAccessTokenResponseDto.GlobalRoleEnum.UNSPECIFIED.name()
+                GlobalRoleTypeDto.valueOf(
+                        userContext.globalRole()!=null ? userContext.globalRole().name() : GlobalRoleTypeDto.UNSPECIFIED.name()
                 )
         );
         return dto;

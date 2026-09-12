@@ -25,6 +25,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.mapper.AdminDataMapper;
 import ru.taska.mapper.AdminUserManagementMapper;
 
@@ -221,7 +222,7 @@ class GrpcAdminServiceClientTest {
 
         // when
         Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
-                TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
+                TEST_SERVICE, TEST_TABLE, 1, 20, null, SortOrderDto.ASC, filters, context
         );
 
         // then
@@ -262,7 +263,7 @@ class GrpcAdminServiceClientTest {
 
         // when
         Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
-                TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
+                TEST_SERVICE, TEST_TABLE, 1, 20, null,  SortOrderDto.ASC, filters, context
         );
 
         // then
@@ -297,7 +298,7 @@ class GrpcAdminServiceClientTest {
 
         // when
         Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
-                TEST_SERVICE, TEST_TABLE, 1, 20, null, "asc", filters, context
+                TEST_SERVICE, TEST_TABLE, 1, 20, null,  SortOrderDto.ASC, filters, context
         );
 
         // then
@@ -336,7 +337,7 @@ class GrpcAdminServiceClientTest {
 
         // when
         Mono<ReadOnlyTableRowsResponseDto> result = client.listTableRows(
-                TEST_SERVICE, TEST_TABLE, 1, 20, "created_at", "desc", filters, context
+                TEST_SERVICE, TEST_TABLE, 1, 20, "created_at",  SortOrderDto.DESC, filters, context
         );
 
         // then

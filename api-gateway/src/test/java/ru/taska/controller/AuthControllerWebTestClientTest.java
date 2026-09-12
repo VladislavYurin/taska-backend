@@ -22,9 +22,9 @@ import ru.taska.api.common.v1.UserContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.domain.dto.GlobalRoleTypeDto;
 import ru.taska.domain.dto.LoginResponseDto;
 import ru.taska.domain.dto.RefreshResponseDto;
-import ru.taska.domain.dto.ValidateAccessTokenResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -293,7 +293,7 @@ class AuthControllerWebTestClientTest {
         restResponseDto.setEmail("anna@example.com");
         restResponseDto.setDisplayName("Anna Ivanova");
         restResponseDto.setStatus("ACTIVE");
-        restResponseDto.setGlobalRole(ValidateAccessTokenResponseDto.GlobalRoleEnum.valueOf("USER"));
+        restResponseDto.setGlobalRole(GlobalRoleTypeDto.USER);
 
         Mockito.when(grpcAuthServiceClient.validateAccessToken(ArgumentMatchers.eq(
                 "req-me-success"), ArgumentMatchers.any(), ArgumentMatchers.eq(token)))

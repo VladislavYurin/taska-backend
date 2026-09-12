@@ -857,15 +857,13 @@ paths:
           required: false
           description: Фильтр по приоритету (LOW, MEDIUM, HIGH)
           schema:
-            type: string
-            enum: [ LOW, MEDIUM, HIGH ]
+            $ref: '#/components/schemas/IssuePriorityDto'
         - name: issueType
           in: query
           required: false
           description: Фильтр по типу задачи (TASK, BUG, STORY)
           schema:
-            type: string
-            enum: [ TASK, BUG, STORY ]
+            $ref: '#/components/schemas/IssueTypeDto'
         - name: page
           in: query
           required: false
@@ -1744,9 +1742,7 @@ paths:
           in: query
           required: false
           schema:
-            type: string
-            enum: [ asc, desc ]
-            default: asc
+            $ref: '#/components/schemas/SortOrderDto'
         - name: filter
           in: query
           required: false
@@ -1913,11 +1909,7 @@ paths:
           required: true
           description: Сервис-владелец outbox-события
           schema:
-            type: string
-            enum:
-              - auth
-              - project
-              - issue
+            $ref: '#/components/schemas/OutboxServiceTypeDto'
 
         - name: eventId
           in: path
@@ -2072,6 +2064,14 @@ components:
         newPassword:
           type: string
 
+    GlobalRoleTypeDto:
+      type: string
+      description: Глобальная роль пользователя
+      enum:
+        - GLOBAL_ADMIN
+        - USER
+        - UNSPECIFIED
+
     ValidateAccessTokenResponseDto:
       type: object
       properties:
@@ -2086,8 +2086,7 @@ components:
         status:
           type: string
         globalRole:
-          type: string
-          enum: [GLOBAL_ADMIN, USER, UNSPECIFIED]
+          $ref: '#/components/schemas/GlobalRoleTypeDto'
 
     CreateIssueRequestDto:
       type: object
@@ -2630,6 +2629,14 @@ components:
         - MEMBER_UPDATED
         - MEMBER_REMOVED
 
+    SortOrderDto:
+      type: string
+      description: Порядок сортировки
+      enum:
+        - asc
+        - desc
+      default: asc
+
     ReadOnlyTableRowsResponseDto:
       type: object
       properties:
@@ -2773,6 +2780,14 @@ components:
           items:
             $ref: '#/components/schemas/ProjectResponseDto'
 
+    ProjectMemberRoleDto:
+      type: string
+      description: Роль участника проекта
+      enum:
+        - ADMIN
+        - MEMBER
+        - VIEWER
+
     AddProjectMemberRequestDto:
       type: object
       required: [userId,role]
@@ -2780,16 +2795,14 @@ components:
         userId:
           type: string
         role:
-          type: string
-          enum: [ADMIN, MEMBER, VIEWER]
+          $ref: '#/components/schemas/ProjectMemberRoleDto'
 
     ChangeProjectMemberRoleRequestDto:
       type: object
       required: [role]
       properties:
         role:
-          type: string
-          enum: [ ADMIN, MEMBER, VIEWER ]
+          $ref: '#/components/schemas/ProjectMemberRoleDto'
 
     ProjectMemberResponseDto:
       type: object
@@ -3081,6 +3094,14 @@ components:
         failedCount:
           type: integer
           format: int64
+
+    OutboxServiceTypeDto:
+      type: string
+      description: Сервис-владелец outbox-события
+      enum:
+        - auth
+        - project
+        - issue
 
     RetryOutboxEventRequestDto:
       type: object
