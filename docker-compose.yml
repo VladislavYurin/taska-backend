@@ -297,6 +297,8 @@ services:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-auth-service
     depends_on:
       kafka:
@@ -311,6 +313,8 @@ services:
     build:
       context: .
       dockerfile: project-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-project-service
     depends_on:
       kafka:
@@ -325,6 +329,8 @@ services:
     build:
       context: .
       dockerfile: workflow-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-workflow-service
     depends_on:
       workflow-db:
@@ -337,6 +343,8 @@ services:
     build:
       context: .
       dockerfile: issue-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-issue-service
     depends_on:
       kafka:
@@ -355,6 +363,8 @@ services:
     build:
       context: .
       dockerfile: notification-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-notification-service
     depends_on:
       kafka:
@@ -369,6 +379,8 @@ services:
     build:
       context: .
       dockerfile: admin-service/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-admin-service
     depends_on:
       admin-db:
@@ -392,6 +404,8 @@ services:
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-api-gateway
     depends_on:
       auth-service:

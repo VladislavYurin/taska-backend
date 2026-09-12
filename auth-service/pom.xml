@@ -26,12 +26,6 @@
             <version>1.21.0</version>
         </dependency>
 
-        <!-- Actuator -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-
         <!-- Liquibase for Tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -228,12 +222,6 @@
             <artifactId>liquibase-core</artifactId>
             <version>5.0.2</version>
             <!-- <scope>test</scope> -->
-        </dependency>
-
-        <!-- Prometheus-->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
         <!--Custom Metrics-->
