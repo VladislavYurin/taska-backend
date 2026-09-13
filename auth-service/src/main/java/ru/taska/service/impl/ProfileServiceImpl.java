@@ -22,6 +22,7 @@ import ru.taska.storage.dto.PresignedUploadResult;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -155,22 +156,19 @@ public class ProfileServiceImpl implements ProfileService {
 
         return userRepository.findUsersWithAvatars(distinctIds)
                 .collectMap(UserDetailsDto::userId)
-                .flatMapMany(usersMap -> ensureAllUsersFound(usersMap, distinctIds))
-                .flatMap(this::enrichWithAvatarUrl);
+                .flatMapMany(usersMap -> filterFoundUsersInOrder(usersMap, distinctIds))
+                .flatMapSequential(this::enrichWithAvatarUrl)
+                .doOnError(ex -> log.error("Failed to execute getUserDetailsByIds for userIds: {}", distinctIds, ex))
+                .doOnComplete(() -> log.info("Successfully completed getUserDetailsByIds for requested IDs"));
     }
 
-    private Flux<UserDetailsDto> ensureAllUsersFound(Map<UUID, UserDetailsDto> usersMap, List<UUID> distinctIds) {
-        List<UUID> missingIds = distinctIds.stream()
-                .filter(id -> !usersMap.containsKey(id))
+    private Flux<UserDetailsDto> filterFoundUsersInOrder(Map<UUID, UserDetailsDto> usersMap, List<UUID> distinctIds) {
+        List<UserDetailsDto> foundList = distinctIds.stream()
+                .map(usersMap::get)
+                .filter(Objects::nonNull)
                 .toList();
 
-        if (!missingIds.isEmpty()) {
-            return Flux.error(new DomainException(
-                    DomainStatus.NOT_FOUND, "Users not found: " + missingIds));
-        }
-
-        return Flux.fromIterable(distinctIds)
-                .map(usersMap::get);
+        return Flux.fromIterable(foundList);
     }
 
     private Mono<UserDetailsDto> enrichWithAvatarUrl(UserDetailsDto user) {

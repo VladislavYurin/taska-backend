@@ -28,16 +28,16 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
             u.id AS user_id, 
             u.display_name AS display_name, 
             u.email AS email, 
-            a.id AS "avatar.id",
-            a.user_id AS "avatar.userId",
-            a.object_key AS "avatar.objectKey",
-            a.file_name AS "avatar.fileName",
-            a.content_type AS "avatar.contentType",
-            a.size_bytes AS "avatar.sizeBytes",
-            a.created_at AS "avatar.createdAt"
+            a.user_id AS avatar_user_id,
+            a.object_key AS avatar_object_key,
+            a.file_name AS avatar_file_name,
+            a.content_type AS avatar_content_type,
+            a.size_bytes AS avatar_size_bytes,
+            a.created_at AS avatar_created_at
         FROM taska.users u
         LEFT JOIN taska.user_avatars a ON u.id = a.user_id
         WHERE u.id IN (:userIds)
+        ORDER BY u.id ASC
     """)
     Flux<UserDetailsDto> findUsersWithAvatars(@Param("userIds") Collection<UUID> userIds);
 }

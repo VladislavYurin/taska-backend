@@ -9,15 +9,23 @@ import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequestBody;
 import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
 import ru.taska.api.common.v1.Header;
+import ru.taska.config.props.GrpcClientProperties;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GrpcAuthServiceClient {
     private final ReactorProfileServiceGrpc.ReactorProfileServiceStub profileServiceStub;
+    private final GrpcClientProperties properties;
+
+    private ReactorProfileServiceGrpc.ReactorProfileServiceStub dynamicStub() {
+        return profileServiceStub
+                .withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+    }
 
     public Mono<GetUserDetailsByIdsResponse> getUserDetailsByIds(List<UUID> userIds, String requestId, String nodeId) {
         var request = GetUserDetailsByIdsRequest.newBuilder()
@@ -29,6 +37,6 @@ public class GrpcAuthServiceClient {
                 )
                 .build();
 
-        return profileServiceStub.getUserDetailsByIds(request);
+        return dynamicStub().getUserDetailsByIds(request);
     }
 }

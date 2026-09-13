@@ -167,21 +167,15 @@ public class ProjectMapper {
      * ProjectRole Enum grpc → REST строка
      */
     public String toRestProjectRole(ProjectRole grpcRole) {
-        if (grpcRole == null || grpcRole == ProjectRole.PROJECT_ROLE_UNSPECIFIED) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Invalid project role: " + grpcRole
-            );
+        if (grpcRole == null) {
+            return null;
         }
 
         return switch (grpcRole) {
             case PROJECT_ROLE_ADMIN -> "ADMIN";
             case PROJECT_ROLE_MEMBER -> "MEMBER";
             case PROJECT_ROLE_VIEWER -> "VIEWER";
-            default -> throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Invalid project role: " + grpcRole
-            );
+            default -> null;
         };
     }
 

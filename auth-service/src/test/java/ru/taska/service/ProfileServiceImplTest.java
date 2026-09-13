@@ -503,12 +503,8 @@ class ProfileServiceImplTest {
             Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(requestIds);
 
             StepVerifier.create(result)
-                    .expectErrorSatisfies(throwable -> {
-                        Assertions.assertInstanceOf(DomainException.class, throwable);
-                        DomainException exception = (DomainException) throwable;
-                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                    })
-                    .verify();
+                    .expectNext(testUserDetailsDto)
+                    .verifyComplete();
 
             Mockito.verify(userRepository, Mockito.times(1))
                     .findUsersWithAvatars(requestIds);

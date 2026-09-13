@@ -100,6 +100,14 @@ public interface ProjectMemberMapper {
      * @return {@link ru.taska.api.project.v1.ProjectMemberDetailsResponse} для передачи в gRPC
      */
     @Mapping(
+            target = "displayName",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
+    )
+    @Mapping(
+            target = "email",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
+    )
+    @Mapping(
             target = "avatar",
             nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
     )

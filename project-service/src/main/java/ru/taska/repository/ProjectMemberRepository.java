@@ -37,6 +37,7 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
           WHERE requester.project_id = :projectId
             AND requester.user_id = :actorUserId
       )
+    ORDER BY pm.user_id ASC
     """)
     Flux<ProjectMemberDto> findProjectMembers(UUID projectId, UUID actorUserId);
 }

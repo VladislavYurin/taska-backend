@@ -372,20 +372,34 @@ class ProjectMemberServiceImplTest {
         Mockito.when(projectMemberRepository.findProjectMembers(projectId, actorId))
                 .thenReturn(Flux.just(mockMemberAdminDto, mockMemberViewerDto));
 
-        var exception = new DomainException(DomainStatus.NOT_FOUND, "User not found");
+        var mockUserDetails = UserDetails.newBuilder()
+                .setUserId(mockMemberAdminDto.userId().toString())
+                .setDisplayName("Admin User")
+                .setEmail("admin@example.com")
+                .build();
+
+        var mockResponse = Mockito.mock(GetUserDetailsByIdsResponse.class);
+        Mockito.when(mockResponse.getUserDetailsList()).thenReturn(List.of(mockUserDetails));
+
         Mockito.when(grpcAuthServiceClient.getUserDetailsByIds(Mockito.anyList(), Mockito.eq(requestId), Mockito.eq(nodeId)))
-                .thenReturn(Mono.error(exception));
+                .thenReturn(Mono.just(mockResponse));
 
         StepVerifier
                 .create(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorId))
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertInstanceOf(DomainException.class, error);
-                    Assertions.assertEquals(
-                            DomainStatus.NOT_FOUND,
-                            ((DomainException) error).getStatus()
-                    );
+                .assertNext(member -> {
+                    Assertions.assertEquals(mockMemberAdminDto.userId(), member.userId());
+                    Assertions.assertEquals(mockMemberAdminDto.role(), member.role());
+                    Assertions.assertEquals("Admin User", member.displayName());
+                    Assertions.assertEquals("admin@example.com", member.email());
                 })
-                .verify();
+                .assertNext(member -> {
+                    Assertions.assertEquals(mockMemberViewerDto.userId(), member.userId());
+                    Assertions.assertEquals(mockMemberViewerDto.role(), member.role());
+                    Assertions.assertNull(member.displayName());
+                    Assertions.assertNull(member.email());
+                    Assertions.assertNull(member.avatar());
+                })
+                .verifyComplete();
 
         Mockito.verify(projectRepository).existsById(projectId);
         Mockito.verify(projectMemberRepository).findProjectMembers(projectId, actorId);

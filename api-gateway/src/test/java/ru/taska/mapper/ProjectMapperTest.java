@@ -229,7 +229,9 @@ public class ProjectMapperTest {
         return Stream.of(
                 Arguments.of(ProjectRole.PROJECT_ROLE_ADMIN, "ADMIN"),
                 Arguments.of(ProjectRole.PROJECT_ROLE_MEMBER, "MEMBER"),
-                Arguments.of(ProjectRole.PROJECT_ROLE_VIEWER, "VIEWER")
+                Arguments.of(ProjectRole.PROJECT_ROLE_VIEWER, "VIEWER"),
+                Arguments.of(ProjectRole.PROJECT_ROLE_UNSPECIFIED, null),
+                Arguments.of(null, null)
         );
     }
 
@@ -250,15 +252,6 @@ public class ProjectMapperTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting("statusCode")
                 .isEqualTo(HttpStatus.BAD_REQUEST);
-    }
-
-    @Test
-    @DisplayName("Должен выбрасывать исключение для UNSPECIFIED gRPC роли")
-    void toRestProjectRole_shouldThrowException_whenUnspecified() {
-        // when & then
-        Assertions.assertThatThrownBy(() -> mapper.toRestProjectRole(ProjectRole.PROJECT_ROLE_UNSPECIFIED))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-                .hasMessageContaining("Invalid project role");
     }
 
     // ========== Timestamp → OffsetDateTime ==========

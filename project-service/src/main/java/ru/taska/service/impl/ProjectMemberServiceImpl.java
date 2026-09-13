@@ -182,7 +182,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         var usersById = users.stream()
                 .collect(Collectors.toMap(
                         user -> UUID.fromString(user.getUserId()),
-                        Function.identity()
+                        Function.identity(),
+                        (existing, replacement) -> existing
                 ));
 
         return Flux.fromIterable(members)
@@ -193,16 +194,24 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     }
 
     private ProjectMemberDetailsDto buildProjectMemberDetailsDto(ProjectMemberDto member, UserDetails user) {
-        return ProjectMemberDetailsDto.builder()
+        var builder = ProjectMemberDetailsDto.builder()
                 .userId(member.userId())
-                .role(member.role())
-                .displayName(user.getDisplayName())
-                .email(user.getEmail())
-                .avatar(user.hasAvatar() ? toAvatarDto(user.getAvatar()) : null)
-                .build();
+                .role(member.role());
+
+        if (user != null) {
+            builder.displayName(user.getDisplayName())
+                    .email(user.getEmail())
+                    .avatar(user.hasAvatar() ? toAvatarDto(user.getAvatar()) : null);
+        }
+
+        return builder.build();
     }
 
     private AvatarDto toAvatarDto(AvatarResponse avatarResponse) {
+        if (avatarResponse == null) {
+            return null;
+        }
+
         return AvatarDto.builder()
                 .id(UUID.fromString(avatarResponse.getId()))
                 .userId(UUID.fromString(avatarResponse.getUserId()))

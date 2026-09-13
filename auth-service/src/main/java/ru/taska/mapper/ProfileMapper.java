@@ -14,6 +14,7 @@ import ru.taska.dto.UserProfileDto;
 import ru.taska.entity.UserAvatar;
 import ru.taska.storage.dto.PresignedUploadResult;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Component
@@ -87,13 +88,19 @@ public class ProfileMapper {
     }
 
     public UserDetails toProto(UserDetailsDto dto) {
-        UserDetails.Builder builder = UserDetails.newBuilder()
-                .setUserId(dto.userId().toString())
-                .setDisplayName(dto.displayName())
-                .setEmail(dto.email());
+        if (dto == null) {
+            return null;
+        }
+
+        var builder = UserDetails.newBuilder()
+                .setUserId(dto.userId() != null ? dto.userId().toString() : "")
+                .setDisplayName(Objects.requireNonNullElse(dto.displayName(), ""))
+                .setEmail(Objects.requireNonNullElse(dto.email(), ""));
+
         if (dto.avatar() != null && dto.avatar().getId() != null) {
             builder.setAvatar(toProto(dto.avatar()));
         }
+
         return builder.build();
     }
 }

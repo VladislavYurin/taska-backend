@@ -932,6 +932,39 @@ class ProfileGrpcServiceTest {
             Mockito.verifyNoInteractions(profileMapper);
         }
 
+        @Test
+        @DisplayName("Should return partial response when some requested users are missing")
+        void getUserDetailsByIds_whenSomeUsersNotFound_returnsPartialResponse() {
+            UUID missingUserId = UUID.randomUUID();
+            List<UUID> requestedUserIds = List.of(userId1, missingUserId);
+
+            GetUserDetailsByIdsRequest request = buildRequest(
+                    List.of(userId1.toString(), missingUserId.toString())
+            );
+
+            Mockito.when(profileService.getUserDetailsByIds(requestedUserIds))
+                    .thenReturn(Flux.just(userDetailsDto1));
+
+            Mockito.when(profileMapper.toProto(userDetailsDto1))
+                    .thenReturn(userDetailsProto1);
+
+            Mono<GetUserDetailsByIdsResponse> responseMono =
+                    profileGrpcService.getUserDetailsByIds(Mono.just(request));
+
+            StepVerifier.create(responseMono)
+                    .assertNext(response -> {
+                        Assertions.assertEquals(1, response.getUserDetailsCount());
+                        Assertions.assertEquals(userId1.toString(), response.getUserDetails(0).getUserId());
+                        Assertions.assertEquals(displayName1, response.getUserDetails(0).getDisplayName());
+                    })
+                    .verifyComplete();
+
+            Mockito.verify(profileService, Mockito.times(1))
+                    .getUserDetailsByIds(requestedUserIds);
+            Mockito.verify(profileMapper, Mockito.times(1))
+                    .toProto(userDetailsDto1);
+        }
+
         private GetUserDetailsByIdsRequest buildRequest(List<String> userIds) {
             GetUserDetailsByIdsRequestBody body = GetUserDetailsByIdsRequestBody.newBuilder()
                     .addAllUserIds(userIds)
