@@ -10,7 +10,10 @@ import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -24,7 +27,10 @@ public class NotificationFactory {
         JsonNode payload = event.payload();
         EventType type = EventType.fromValue(event.eventType());
 
-        return switch (type) {
+        log.debug("NotificationFactory.create: eventType={}, eventId={}, aggregateId={}",
+                type, eventId, event.aggregateId());
+
+        List<Notification> notifications = switch (type) {
             case ISSUE_CREATED -> buildIssueCreated(event, payload, eventId);
             case ISSUE_ASSIGNED -> buildIssueAssigned(event, payload, eventId);
             case ISSUE_TRANSITIONED -> buildIssueTransitioned(event, payload, eventId);
@@ -42,11 +48,59 @@ public class NotificationFactory {
             case ISSUE_LABEL_REMOVED -> buildLabelRemoved(event, payload, eventId);
             case USER_BLOCKED -> buildUserBlocked(event, payload, eventId);
             case USER_UNBLOCKED -> buildUserUnblocked(event, payload, eventId);
+            case ISSUE_COMMENT_CREATED -> buildIssueCommentCreated(event, payload, eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
             }
         };
+
+        log.debug("NotificationFactory.create: created {} notifications for eventType={}, eventId={}",
+                notifications.size(), type, eventId);
+
+        return notifications;
+    }
+
+    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID assigneeId = extractUuid(payload, "assigneeId");
+        UUID actorUserId = extractUuid(payload, "actorUserId");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        if (assigneeId == null) {
+            log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
+            return List.of();
+        }
+        Set<UUID> recipients = resolveRecipients(actorUserId, List.of(assigneeId), watcherIds);
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueAssigned(event, userId));
+        }
+
+        return notifications;
+    }
+
+    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID actorUserId = extractUuid(payload, "actorUserId");
+        UUID assigneeId = extractUuid(payload, "assigneeId");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        if (actorUserId == null && assigneeId == null && watcherIds.isEmpty()) {
+            log.warn("IssueTransitioned event without reporterId/assigneeId, eventId={}", eventId);
+            return List.of();
+        }
+
+        Set<UUID> recipients = resolveRecipients(
+                actorUserId,
+                assigneeId != null ? List.of(assigneeId) : List.of(),
+                watcherIds
+        );
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueTransitioned(event, userId));
+        }
+        return notifications;
     }
 
     private List<Notification> buildIssueCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
@@ -64,100 +118,121 @@ public class NotificationFactory {
             notifications.add(notificationMapper.toIssueCreated(event, reporterId));
         }
 
-        if (assigneeId != null && !assigneeId.equals(reporterId)) {
+        if (assigneeId != null && !assigneeId.equals(reporterId) ) {
             notifications.add(notificationMapper.toIssueCreated(event, assigneeId));
         }
 
         return notifications;
     }
 
-    private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID assigneeId = extractUuid(payload, "assigneeId");
-        if (assigneeId == null) {
-            log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
-            return List.of();
-        }
-        return List.of(notificationMapper.toIssueAssigned(event, assigneeId));
-    }
-
-    private List<Notification> buildIssueTransitioned(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID reporterId = extractUuid(payload, "reporterId");
-        UUID assigneeId = extractUuid(payload, "assigneeId");
-
-        if (reporterId == null && assigneeId == null) {
-            log.warn("IssueTransitioned event without reporterId/assigneeId, eventId={}", eventId);
-            return List.of();
-        }
-
-        List<Notification> notifications = new ArrayList<>();
-
-        if (reporterId != null) {
-            notifications.add(notificationMapper.toIssueTransitioned(event, reporterId));
-        }
-        if (assigneeId != null && !assigneeId.equals(reporterId)) {
-            notifications.add(notificationMapper.toIssueTransitioned(event, assigneeId));
-        }
-
-        return notifications;
-    }
-
     private List<Notification> buildIssueUpdated(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID reporterId = extractUuid(payload, "reporterId");
+        UUID actorUserId = extractUuid(payload, "actorUserId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
-        if (reporterId == null && assigneeId == null) {
-            log.warn("IssueUpdated event without reporterId/assigneeId, eventId={}", eventId);
+        if (actorUserId == null && assigneeId == null && watcherIds.isEmpty()) {
+            log.warn("IssueUpdated event without recipients, eventId={}", eventId);
             return List.of();
         }
 
-        List<Notification> notifications = new ArrayList<>();
+        Set<UUID> recipients = resolveRecipients(
+                actorUserId,
+                assigneeId != null ? List.of(assigneeId) : List.of(),
+                watcherIds
+        );
 
-        if (reporterId != null) {
-            notifications.add(notificationMapper.toIssueUpdated(event, reporterId));
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueUpdated(event, userId));
         }
-
-        if (assigneeId != null && !assigneeId.equals(reporterId)) {
-            notifications.add(notificationMapper.toIssueUpdated(event, assigneeId));
-        }
-
         return notifications;
     }
 
     private List<Notification> buildIssueDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID reporterId = extractUuid(payload, "reporterId");
+        UUID actorUserId = extractUuid(payload, "actorUserId");
         UUID assigneeId = extractUuid(payload, "assigneeId");
 
-        if (reporterId == null && assigneeId == null) {
-            log.warn("IssueDeleted event without reporterId/assigneeId, eventId={}", eventId);
+        if (actorUserId == null && assigneeId == null) {
+            log.warn("IssueDeleted event without recipients, eventId={}", eventId);
             return List.of();
         }
 
-        List<Notification> notifications = new ArrayList<>();
-
-        if (reporterId != null) {
-            notifications.add(notificationMapper.toIssueDeleted(event, reporterId));
+        Set<UUID> recipients = new LinkedHashSet<>();
+        if (assigneeId != null && !assigneeId.equals(actorUserId)) {
+            recipients.add(assigneeId);
         }
 
-        if (assigneeId != null && !assigneeId.equals(reporterId)) {
-            notifications.add(notificationMapper.toIssueDeleted(event, assigneeId));
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueDeleted(event, userId));
         }
-
         return notifications;
     }
 
-    private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID userId = extractUuid(payload, "deletedBy");
+    private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID createdBy  = extractUuid(payload, "createdBy");
         UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
         UUID targetIssueId = extractUuid(payload, "targetIssueId");
         String linkType = extractString(payload, "linkType");
         UUID linkId = event.aggregateId();
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
-        if (userId == null) {
-            log.warn("IssueLinkDeleted event without reporterId, eventId={}", eventId);
+        Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
+
+        if (createdBy != null) {
+            recipients.remove(createdBy);
+        }
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueLinkCreated(
+                    event, userId, sourceIssueId, targetIssueId, linkType, linkId
+            ));
+        }
+        return notifications;
+    }
+
+    private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID deletedBy  = extractUuid(payload, "deletedBy");
+        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
+        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String linkType = extractString(payload, "linkType");
+        UUID linkId = event.aggregateId();
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
+
+        if (deletedBy != null) {
+            recipients.remove(deletedBy);
+        }
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toIssueLinkDeleted(
+                    event, userId, sourceIssueId, targetIssueId, linkType, linkId
+            ));
+        }
+        return notifications;
+    }
+
+    private List<Notification> buildIssueCommentCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
+        UUID authorUserId = extractUuid(payload, "authorUserId");
+        String body = extractString(payload, "body");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        if (authorUserId == null) {
+            log.warn("CommentCreated event without authorUserId, eventId={}", eventId);
             return List.of();
         }
 
-        return List.of(notificationMapper.toIssueLinkDeleted(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
+        Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
+        recipients.remove(authorUserId);
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toCommentCreated(event, userId, body));
+        }
+        return notifications;
     }
 
     private List<Notification> buildUserInvited(TaskaEvent event, UUID eventId) {
@@ -252,21 +327,6 @@ public class NotificationFactory {
         return List.of(notificationMapper.toLabelAdded(event, issueId, addedBy, labelName));
     }
 
-    private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID userId = extractUuid(payload, "createdBy");
-        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
-        UUID targetIssueId = extractUuid(payload, "targetIssueId");
-        String linkType = extractString(payload, "linkType");
-        UUID linkId = event.aggregateId();
-
-        if (userId == null) {
-            log.warn("IssueLinkCreated event without reporterId, eventId={}", eventId);
-            return List.of();
-        }
-
-        return List.of(notificationMapper.toIssueLinkCreated(event, userId, sourceIssueId, targetIssueId, linkType, linkId));
-    }
-
     private List<Notification> buildLabelRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID issueId = extractUuid(payload, "issueId");
         UUID removedBy = extractUuid(payload, "deletedBy");
@@ -310,4 +370,77 @@ public class NotificationFactory {
         return List.of(notificationMapper.toUserUnblocked(event, userId, reason));
     }
 
+    /**
+     * Собирает уникальный набор получателей уведомления из двух источников:
+     * <ol>
+     *   <li><b>Явные получатели</b> ({@code explicit}) — например, assignee, reporter,
+     *       участники, указанные в payload события.</li>
+     *   <li><b>Watchers задачи</b> ({@code watcherIds}) — подписчики, полученные из
+     *       snapshot в payload.</li>
+     * </ol>
+     *
+     * <p>Правила обработки:</p>
+     * <ul>
+     *   <li><b>Actor исключается</b> из обоих источников — пользователь,
+     *       совершивший действие, не получает уведомление о нём.
+     *   </li>
+     *   <li><b>Дубликаты не создаются</b> — если один и тот же пользователь
+     *       присутствует и в {@code explicit}, и в {@code watcherIds},
+     *       он попадёт в результат ровно один раз.
+ *       </li>
+     *   <li><b>Порядок сохраняется</b> — благодаря {@link LinkedHashSet}
+     *       явные получатели идут первыми, затем watchers в порядке их появления.</li>
+     * </ul>
+     *
+     * <p><b>Null-safety:</b> метод безопасно обрабатывает {@code null} в любом из
+     * аргументов:</p>
+     * <ul>
+     *   <li>{@code actorUserId == null} — actor не исключается ни из одного источника;</li>
+     *   <li>{@code explicit == null} или содержит {@code null} — такие элементы пропускаются;</li>
+     *   <li>{@code watcherIds == null} или содержит {@code null} — такие элементы пропускаются.</li>
+     * </ul>
+     *
+     * @param actorUserId ID пользователя, совершившего действие.
+     *                    Исключается из результата. Может быть {@code null}.
+     * @param explicit    явные получатели из payload события (например, assignee).
+     *                    Может быть {@code null} или пустым.
+     * @param watcherIds  ID watchers задачи из snapshot payload.
+     *                    Может быть {@code null} или пустым.
+     * @return уникальный набор получателей без actor'а и без дубликатов.
+     *         Никогда не {@code null} — при отсутствии получателей вернётся пустой {@link Set}.
+     */
+    private Set<UUID> resolveRecipients(UUID actorUserId, Collection<UUID> explicit, List<UUID> watcherIds) {
+        Set<UUID> recipients = new LinkedHashSet<>();
+        if (explicit != null) {
+            for (UUID id : explicit) {
+                if (id != null && !id.equals(actorUserId)){
+                    recipients.add(id);
+                }
+            }
+        }
+        if (watcherIds != null) {
+            for (UUID id : watcherIds) {
+                if (id != null && !id.equals(actorUserId)) {
+                    recipients.add(id);
+                }
+            }
+        }
+
+        return recipients;
+    }
+
+    private List<UUID> extractUuidList(JsonNode payload, String field) {
+        if (payload == null || !payload.hasNonNull(field)) return List.of();
+        JsonNode array = payload.get(field);
+        if (!array.isArray()) return List.of();
+        List<UUID> result = new ArrayList<>(array.size());
+        for (JsonNode item : array) {
+            try {
+                result.add(UUID.fromString(item.asString()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid UUID in list field={} value={}", field, item.asString());
+            }
+        }
+        return result;
+    }
 }

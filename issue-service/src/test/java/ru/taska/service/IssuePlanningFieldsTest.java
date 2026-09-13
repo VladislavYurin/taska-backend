@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
@@ -48,6 +49,8 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                        org.mockito.ArgumentMatchers.anySet()))
                .thenReturn(Mono.empty());
+        Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
     }
 
     // ==================== CREATE: без planning fields ====================

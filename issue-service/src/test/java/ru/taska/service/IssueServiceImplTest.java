@@ -14,6 +14,7 @@ import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
@@ -58,6 +59,9 @@ public class IssueServiceImplTest {
 
     @Mock
     protected IssueLabelsRepository issueLabelsRepository;
+
+    @Mock
+    protected IssueWatcherRepository issueWatcherRepository;
 
     @Mock
     protected IssueTransitionValidator validator;

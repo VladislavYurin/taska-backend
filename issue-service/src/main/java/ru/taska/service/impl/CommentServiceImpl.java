@@ -9,6 +9,7 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueComment;
 import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
 import ru.taska.event.AggregateType;
@@ -17,6 +18,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.CommentService;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
@@ -24,6 +26,7 @@ import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -37,13 +40,12 @@ public class CommentServiceImpl implements CommentService {
 
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
+    private final IssueWatcherRepository issueWatcherRepository;
     private final IssueCommentRepository commentRepository;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final ProjectRoleChecker projectRoleChecker;
     private final ObjectMapper objectMapper;
-
-    // ==================== ПУБЛИЧНЫЕ МЕТОДЫ ====================
 
     @Override
     @Transactional
@@ -71,15 +73,19 @@ public class CommentServiceImpl implements CommentService {
                                 body
                         )
                                 .flatMap(savedComment ->
-                                        saveHistoryAndOutbox(
-                                                requestId,
-                                                nodeId,
-                                                issue,
-                                                authorUserId,
-                                                IssueEventType.COMMENT_CREATED,
-                                                EventType.COMMENT_CREATED,
-                                                createCommentPayload(savedComment.getId(), authorUserId, body)
-                                        ).thenReturn(savedComment)
+                                                loadWatcherIds(issueId)
+                                                        .flatMap(watcherIds ->
+                                                                saveHistoryAndOutbox(
+                                                                        requestId,
+                                                                        nodeId,
+                                                                        issue,
+                                                                        authorUserId,
+                                                                        IssueEventType.COMMENT_CREATED,
+                                                                        EventType.ISSUE_COMMENT_CREATED,
+                                                                        createCommentPayload(savedComment.getId(), authorUserId, body, watcherIds)
+                                                                )
+                                                                .thenReturn(savedComment)
+                                                        )
                                 )
                 )
                 .doOnSuccess(comment -> {
@@ -96,7 +102,6 @@ public class CommentServiceImpl implements CommentService {
     public Mono<IssueComment> updateComment(
             String requestId,
             String nodeId,
-//            UUID projectId,
             UUID issueId,
             UUID commentId,
             UUID actorUserId,
@@ -134,7 +139,7 @@ public class CommentServiceImpl implements CommentService {
                                                         issue,
                                                         actorUserId,
                                                         IssueEventType.COMMENT_UPDATED,
-                                                        EventType.COMMENT_UPDATED,
+                                                        EventType.ISSUE_COMMENT_UPDATED,
                                                         payload
                                                 ).thenReturn(savedComment);
                                             });
@@ -161,7 +166,7 @@ public class CommentServiceImpl implements CommentService {
 
         return findIssueWithLock(requestId, nodeId, issueId)
                 .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();  // ✅ Из базы данных!
+                    UUID projectId = issue.getProjectId();
                     return checkPermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
@@ -178,16 +183,14 @@ public class CommentServiceImpl implements CommentService {
                                                     "Comment not found or already deleted"
                                             )))
                                             .flatMap(deletedComment -> {
-                                                ObjectNode payload = createDeletePayload(
-                                                        commentId, actorUserId, comment.getBody()
-                                                );
+                                                ObjectNode payload = createDeletePayload(commentId, actorUserId, comment.getBody());
                                                 return saveHistoryAndOutbox(
                                                         requestId,
                                                         nodeId,
                                                         issue,
                                                         actorUserId,
                                                         IssueEventType.COMMENT_DELETED,
-                                                        EventType.COMMENT_DELETED,
+                                                        EventType.ISSUE_COMMENT_DELETED,
                                                         payload
                                                 ).thenReturn(deletedComment);
                                             });
@@ -219,7 +222,7 @@ public class CommentServiceImpl implements CommentService {
 
         return findIssue(requestId, nodeId, issueId)
                 .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();  // ✅ Из базы данных!
+                    UUID projectId = issue.getProjectId();
                     return checkPermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
@@ -340,35 +343,36 @@ public class CommentServiceImpl implements CommentService {
     /**
      * Создает payload для создания комментария.
      */
-    private ObjectNode createCommentPayload(UUID commentId, UUID authorUserId, String body) {
-        return objectMapper.valueToTree(Map.of(
-                "commentId", commentId.toString(),
-                "authorUserId", authorUserId.toString(),
-                "body", body
-        ));
+    private ObjectNode createCommentPayload(UUID commentId, UUID authorUserId, String body, List<UUID> watcherIds) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("commentId", commentId.toString());
+        node.put("authorUserId", authorUserId.toString());
+        node.put("body", body);
+        node.set("watcherIds", objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
+        return node;
     }
 
     /**
      * Создает payload для обновления комментария.
      */
     private ObjectNode createUpdatePayload(UUID commentId, String oldBody, String newBody, UUID actorUserId) {
-        return objectMapper.valueToTree(Map.of(
-                "commentId", commentId.toString(),
-                "oldBody", oldBody,
-                "newBody", newBody,
-                "actorUserId", actorUserId.toString()
-        ));
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("commentId", commentId.toString());
+        node.put("oldBody", oldBody);
+        node.put("newBody", newBody);
+        node.put("actorUserId", actorUserId.toString());
+        return node;
     }
 
     /**
      * Создает payload для удаления комментария.
      */
     private ObjectNode createDeletePayload(UUID commentId, UUID actorUserId, String body) {
-        return objectMapper.valueToTree(Map.of(
-                "commentId", commentId.toString(),
-                "actorUserId", actorUserId.toString(),
-                "body", body
-        ));
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("commentId", commentId.toString());
+        node.put("actorUserId", actorUserId.toString());
+        node.put("body", body);
+        return node;
     }
 
     private int validatePage(Integer page) {
@@ -383,5 +387,15 @@ public class CommentServiceImpl implements CommentService {
             return issueProperties.pagination().defaultPageSize();
         }
         return Math.min(pageSize, issueProperties.pagination().maxPageSize());
+    }
+
+    /**
+     * Загружает ID всех watchers задачи.
+     * Вызывается в той же транзакции, что и сохранение outbox —
+     * чтобы snapshot был консистентен.
+     */
+    private Mono<List<UUID>> loadWatcherIds(UUID issueId) {
+        return issueWatcherRepository.findUserIdsByIssueId(issueId)
+                .collectList();
     }
 }

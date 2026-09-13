@@ -23,6 +23,7 @@ import ru.taska.domain.IdempotencyKey;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IdempotencyKeyRepository;
@@ -87,6 +88,19 @@ class IdempotencyKeyIT extends AbstractIT {
                 .verifyComplete();
 
         Assertions.assertEquals(1L, issueRepository.count().block());
+        Assertions.assertEquals(1L,
+                outboxEventRepository.findAll()
+                        .filter(e -> e.getEventType().equals(EventType.ISSUE_CREATED.getValue()))
+                        .count()
+                        .block());
+
+        /// auto-watch при createIssue
+        Assertions.assertEquals(1L,
+                outboxEventRepository.findAll()
+                        .filter(e -> e.getEventType().equals(EventType.ISSUE_WATCHED.getValue()))
+                        .count()
+                        .block());
+
         Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         IdempotencyKey saved = idempotencyKeyRepository.findByUserIdAndKey(REPORTER_ID, IDEMPOTENCY_KEY).block();
@@ -163,6 +177,11 @@ class IdempotencyKeyIT extends AbstractIT {
 
         Assertions.assertEquals(1L, issueRepository.count().block());
         Assertions.assertEquals(1L, idempotencyKeyRepository.count().block());
+        Assertions.assertEquals(1L,
+                outboxEventRepository.findAll()
+                        .filter(e -> e.getEventType().equals(EventType.ISSUE_CREATED.getValue()))
+                        .count()
+                        .block());
         Assertions.assertEquals(2L, outboxEventRepository.count().block());
 
         Assertions.assertNotNull(results);

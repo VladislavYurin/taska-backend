@@ -173,7 +173,6 @@ service IssueService {
   rpc GetIssueWatchState(GetIssueWatchStateRequest)
       returns (GetIssueWatchStateResponse);
 
-
   // ============ Управление метками проекта (только ADMIN) ============
 
   /**

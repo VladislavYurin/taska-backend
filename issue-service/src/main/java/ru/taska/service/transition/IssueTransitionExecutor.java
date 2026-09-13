@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
+import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -16,6 +17,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
@@ -34,6 +36,7 @@ public class IssueTransitionExecutor {
 
     private final IssueRepository issueRepository;
     private final IssueHistoryRepository issueHistoryRepository;
+    private final IssueWatcherRepository issueWatcherRepository;
     private final IssueProperties issueProperties;
     private final PayloadSerializer  payloadSerializer;
     private final IssueHistoryService issueHistoryService;
@@ -73,13 +76,19 @@ public class IssueTransitionExecutor {
 
                                 return Mono.error(new DomainException(DomainStatus.ABORTED, "Issue status was modified concurrently"));
                             }))
-                            .flatMap(savedIssue -> {
-                                JsonNode payload = payloadSerializer.createTransitionedPayload(sourceStatusKey, targetStatusKey, transitionId, actorUserId, issue.getAssigneeId());
-
-                                return issueHistoryService.saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, IssueEventType.TRANSITIONED, payload)
-                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue.getId(), EventType.ISSUE_TRANSITIONED, payload))
-                                        .thenReturn(savedIssue);
-                            })
+                            .flatMap(savedIssue ->
+                                    issueWatcherRepository.findUserIdsByIssueId(issueId)
+                                            .collectList()
+                                            .flatMap(watcherIds -> {
+                                                JsonNode payload = payloadSerializer.createTransitionedPayload(
+                                                        sourceStatusKey, targetStatusKey, transitionId,
+                                                        actorUserId, issue.getAssigneeId(), watcherIds
+                                                );
+                                                return issueHistoryService.saveIssueHistory(requestId, nodeId, issue.getId(), actorUserId, IssueEventType.TRANSITIONED, payload)
+                                                        .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, issue.getId(), EventType.ISSUE_TRANSITIONED, payload))
+                                                        .thenReturn(savedIssue);
+                                            })
+                            )
                             .flatMap(this::loadIssueWithHistory);
                 })
                 .doOnSuccess(result -> {

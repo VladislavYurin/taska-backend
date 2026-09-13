@@ -168,7 +168,7 @@ class LabelServiceIT extends AbstractIT {
                         .block();
 
         Assertions.assertThat(saved).isNotNull();
-        Assertions.assertThat(saved.getName()).isEqualTo(LABEL_NAME_1);
+        Assertions.assertThat(saved.getName()).isEqualTo(LABEL_NAME_1.toLowerCase());
         Assertions.assertThat(saved.getColor()).isEqualTo(LABEL_COLOR_1);
 
         StepVerifier.create(
@@ -359,7 +359,10 @@ class LabelServiceIT extends AbstractIT {
                     Assertions.assertThat(dto.labels()).hasSize(2);
                     Assertions.assertThat(dto.labels())
                             .extracting(LabelResponses.ProjectLabelInfo::name)
-                            .containsExactlyInAnyOrder(LABEL_NAME_1, LABEL_NAME_2);
+                            .containsExactlyInAnyOrder(
+                                    LABEL_NAME_1.toLowerCase(),
+                                    LABEL_NAME_2.toLowerCase()
+                            );
                 })
                 .verifyComplete();
     }
@@ -393,10 +396,10 @@ class LabelServiceIT extends AbstractIT {
         labelService.createProjectLabel(REQUEST_ID, NODE_ID, createRequestDto2).block();
 
         ProjectLabels label1 = projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(PROJECT_ID)
-                .filter(l -> l.getName().equals(LABEL_NAME_1))
+                .filter(l -> l.getName().equals(LABEL_NAME_1.toLowerCase()))
                 .blockFirst();
         ProjectLabels label2 = projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(PROJECT_ID)
-                .filter(l -> l.getName().equals(LABEL_NAME_2))
+                .filter(l -> l.getName().equals(LABEL_NAME_2.toLowerCase()))
                 .blockFirst();
 
         mockProjectRole(ProjectRole.PROJECT_ROLE_MEMBER);
@@ -451,7 +454,7 @@ class LabelServiceIT extends AbstractIT {
         StepVerifier.create(result)
                 .assertNext(dto -> {
                     Assertions.assertThat(dto.totalCount()).isEqualTo(1);
-                    Assertions.assertThat(dto.labels().get(0).name()).isEqualTo(LABEL_NAME_1);
+                    Assertions.assertThat(dto.labels().get(0).name()).isEqualTo(LABEL_NAME_1.toLowerCase());
                 })
                 .verifyComplete();
     }
@@ -568,7 +571,7 @@ class LabelServiceIT extends AbstractIT {
         StepVerifier.create(result)
                 .assertNext(dto -> {
                     Assertions.assertThat(dto.labels()).hasSize(1);
-                    Assertions.assertThat(dto.labels().get(0).name()).isEqualTo(LABEL_NAME_1);
+                    Assertions.assertThat(dto.labels().get(0).name()).isEqualTo(LABEL_NAME_1.toLowerCase());
                     Assertions.assertThat(dto.labels().get(0).color()).isEqualTo(LABEL_COLOR_1);
                 })
                 .verifyComplete();
@@ -743,7 +746,7 @@ class LabelServiceIT extends AbstractIT {
         StepVerifier.create(result)
                 .assertNext(info -> {
                     Assertions.assertThat(info.id()).isEqualTo(created.id());
-                    Assertions.assertThat(info.name()).isEqualTo(LABEL_NAME_2);
+                    Assertions.assertThat(info.name()).isEqualTo(LABEL_NAME_2.toLowerCase());
                     Assertions.assertThat(info.color()).isEqualTo(LABEL_COLOR_2);
                 })
                 .verifyComplete();
@@ -751,7 +754,7 @@ class LabelServiceIT extends AbstractIT {
         ProjectLabels label = projectLabelsRepository.findByIdAndDeletedAtIsNull(created.id())
                 .block();
         Assertions.assertThat(label).isNotNull();
-        Assertions.assertThat(label.getName()).isEqualTo(LABEL_NAME_2);
+        Assertions.assertThat(label.getName()).isEqualTo(LABEL_NAME_2.toLowerCase());
         Assertions.assertThat(label.getColor()).isEqualTo(LABEL_COLOR_2);
     }
 
