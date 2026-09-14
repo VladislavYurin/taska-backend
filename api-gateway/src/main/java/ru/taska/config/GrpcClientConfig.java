@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
@@ -64,6 +65,17 @@ public class GrpcClientConfig {
     }
 
     @Bean
+    public ManagedChannel projectManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.projectService().host(),
+                        properties.projectService().port()
+                )
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
     public ManagedChannel adminManagedChannel() {
         return ManagedChannelBuilder
                 .forAddress(
@@ -95,22 +107,16 @@ public class GrpcClientConfig {
     }
 
     @Bean
-    public ManagedChannel projectManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.projectService().host(),
-                        properties.projectService().port()
-                )
-                .usePlaintext()
-                .build();
-    }
-
-    @Bean
     public ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub() {
         return ReactorProjectServiceGrpc.newReactorStub(projectManagedChannel());
     }
     @Bean
     public ReactorAdminServiceGrpc.ReactorAdminServiceStub adminServiceStub() {
         return ReactorAdminServiceGrpc.newReactorStub(adminManagedChannel());
+    }
+
+    @Bean
+    public ReactorProfileServiceGrpc.ReactorProfileServiceStub profileServiceStub() {
+        return ReactorProfileServiceGrpc.newReactorStub(authManagedChannel());
     }
 }

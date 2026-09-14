@@ -51,6 +51,7 @@ public class AttachmentMapper {
         return CreateAttachmentUploadUrlResponse.newBuilder()
                 .setUploadUrl(result.url())
                 .setObjectKey(result.objectKey())
+                .setExpiresIn(result.expiresIn())
                 .build();
     }
 

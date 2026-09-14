@@ -118,7 +118,7 @@ public class AttachmentTest {
 
     @Test
     void testCreateUploadUrl_Success() {
-        PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", "https://s3.example.com/upload");
+        PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", "https://s3.example.com/upload",300L);
 
         Mockito.when(issueRepository.findProjectIdByActiveIssueId(ISSUE_ID)).thenReturn(Mono.just(PROJECT_ID));
 

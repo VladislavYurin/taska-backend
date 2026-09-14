@@ -226,7 +226,7 @@ class ProfileServiceImplTest {
         @DisplayName("Should delegate to storageClient and return PresignedUploadResult")
         void shouldReturnPresignedUploadResult() {
             // Given
-            PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", URL);
+            PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", URL,300);
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
             Mockito.when(storageClient.createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES))

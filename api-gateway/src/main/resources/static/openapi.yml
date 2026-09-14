@@ -2000,6 +2000,134 @@ paths:
 
 ########################## Окончание API для сброса блокировки учетных данных ##################
 
+  ########################## API userProfile ########################
+
+  /api/v1/users/me/avatar/upload-url:
+    post:
+      summary: Запрос presigned URL для загрузки аватара текущего пользователя
+      operationId: createAvatarUploadUrl
+      tags:
+        - user-profile
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAvatarUploadUrlRequestDto'
+      responses:
+        '200':
+          description: Presigned URL для загрузки успешно сгенерирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAvatarUploadUrlResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/avatar/confirm:
+    post:
+      summary: Подтверждение загрузки аватара текущего пользователя
+      description: |
+        Вызывается после успешной загрузки файла в хранилище по presigned URL.
+        Валидирует загруженный файл и сохраняет метаданные в БД.
+      operationId: confirmAvatarUpload
+      tags:
+        - user-profile
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmAvatarUploadRequestDto'
+      responses:
+        '200':
+          description: Аватар успешно подтверждён и сохранён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/avatar:
+    delete:
+      summary: Удаление аватара текущего пользователя
+      description: |
+        Идемпотентная операция. Если аватар отсутствует, завершается успешно.
+        Удаляет запись из БД и файл из хранилища.
+      operationId: deleteMyAvatar
+      tags:
+        - user-profile
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '204':
+          description: Аватар успешно удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/{userId}/avatar:
+    get:
+      summary: Получение presigned URL для скачивания аватара пользователя
+      operationId: getAvatarDownloadUrl
+      tags:
+        - user-profile
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор пользователя, чей аватар запрашивается
+      responses:
+        '200':
+          description: Presigned URL для скачивания успешно сгенерирован
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAvatarDownloadUrlResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  ########################## Окончание API userProfile ########################
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3109,6 +3237,112 @@ components:
         attempts:
           type: integer
           format: int32
+          nullable: true
+
+    CreateAvatarUploadUrlRequestDto:
+      type: object
+      required: [fileName,contentType,sizeBytes]
+      properties:
+        fileName: 
+          type: string
+          description: Оригинальное имя файла
+          minLength: 1
+          maxLength: 255
+          example: "avatar.png"
+        contentType:
+          type: string
+          description: MIME-тип загружаемого файла
+          example: "image/png"
+        sizeBytes:
+          type: integer
+          format: int64
+          description: Размер файла в байтах (макс. 5 MB)
+          minimum: 1
+          maximum: 5242880
+          example: 120000
+
+    CreateAvatarUploadUrlResponseDto:
+      type: object
+      properties:
+        uploadUrl:
+          type: string
+          description: Presigned URL для загрузки файла в хранилище
+          example: "https://s3.example.com/bucket/path?X-Amz-Algorithm=..."
+        objectKey:
+          type: string
+          description: Ключ объекта в хранилище (необходим для подтверждения загрузки)
+          example: "avatars/123e4567-e89b-12d3-a456-426614174000/avatar.png"
+        expiresIn:
+          type: integer
+          format: int64
+          description: Время жизни presigned URL в секундах
+          example: 300
+
+    ConfirmAvatarUploadRequestDto:
+      type: object
+      required: [objectKey, fileName, contentType]
+      properties:
+        objectKey:
+          type: string
+          description: Ключ объекта в хранилище (получен из ответа на запрос upload-url)
+          example: "avatars/123e4567-e89b-12d3-a456-426614174000/avatar.png"
+        fileName:
+          type: string
+          description: Оригинальное имя файла
+          minLength: 1
+          maxLength: 255
+          example: "avatar.png"
+        contentType:
+          type: string
+          description: MIME-тип загруженного файла
+          example: "image/png"
+
+    AvatarResponseDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор записи аватара
+
+        userId:
+          type: string
+          format: uuid
+          description: Идентификатор пользователя
+
+        objectKey:
+          type: string
+          description: Ключ объекта в хранилище
+
+        fileName:
+          type: string
+          description: Оригинальное имя файла
+
+        contentType:
+          type: string
+          description: MIME-тип файла
+
+        sizeBytes:
+          type: integer
+          format: int64
+          description: Размер файла в байтах
+
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+
+        downloadUrl:
+          type: string
+          description: Presigned URL для скачивания аватара
+
+    GetAvatarDownloadUrlResponseDto:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Presigned URL для скачивания аватара (отсутствует, если у пользователя нет аватара)
+          example: "https://s3.example.com/bucket/path?X-Amz-Algorithm=..."
           nullable: true
 
     BlockUserRequestDto:
