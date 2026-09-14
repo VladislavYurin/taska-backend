@@ -24,7 +24,6 @@ import ru.taska.service.worklog.WorklogService;
 import validator.GrpcRequestValidators;
 
 import java.time.LocalDate;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -50,9 +49,6 @@ public class GrpcIssueWorklogService {
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -64,24 +60,22 @@ public class GrpcIssueWorklogService {
                                 GrpcRequestValidators.parseLocalDateOrInvalidArgument(
                                         req.getBody().getWorkDate(),
                                         "body.workDate"
-                                ),
-                                req.getBody().hasComment() ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getComment(),
-                                        "body.comment").map(Optional::of) :
-                                        Mono.just(Optional.<String>empty())
+                                )
                         ).doOnError(StatusRuntimeException.class,
                                 logValidationError(req.getHeader(), "addIssueWorklog"))
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID actorUserId = t.getT5();
-                            int spentMinutes = t.getT6();
-                            LocalDate workDate = t.getT7();
-                            String comment = t.getT8().orElse(null);
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
+                            int spentMinutes = t.getT5();
+                            LocalDate workDate = t.getT6();
 
-                            log.info("[{}][{}] addIssueWorklog: issueId={}, projectId={}, spentMinutes={}, workDate={}",
-                                    requestId, nodeId, issueId, projectId, spentMinutes, workDate);
+                            String rawComment = req.getBody().hasComment() ? req.getBody().getComment() : null;
+                            String comment = (rawComment != null && !rawComment.isBlank()) ? rawComment.trim() : null;
+
+                            log.info("[{}][{}] addIssueWorklog: issueId={}, spentMinutes={}, workDate={}",
+                                    requestId, nodeId, issueId, spentMinutes, workDate);
 
                             CreateWorklogDto createWorklogDto = new CreateWorklogDto(
                                     spentMinutes,
@@ -91,7 +85,6 @@ public class GrpcIssueWorklogService {
 
                             return worklogService.addIssueWorklog(requestId,
                                     nodeId,
-                                    projectId,
                                     issueId,
                                     actorUserId,
                                     createWorklogDto
@@ -112,15 +105,11 @@ public class GrpcIssueWorklogService {
     ) {
         return request
                 .flatMap(req -> Mono.zip(
-                                Mono.zip(
                                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                                 req.getHeader().getRequestId(), "header.requestId"
                                         ),
                                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                                 req.getHeader().getNodeId(), "header.nodeId"
-                                        ),
-                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                                req.getBody().getProjectId(), "body.projectId"
                                         ),
                                         GrpcRequestValidators.parseUuidOrInvalidArgument(
                                                 req.getBody().getIssueId(), "body.issueId"
@@ -137,27 +126,22 @@ public class GrpcIssueWorklogService {
                                         GrpcRequestValidators.parseOptionalLocalDateOrInvalidArgument(
                                                 req.getBody().hasWorkDate(), req.getBody().getWorkDate(), "body.workDate"
                                         )
-                                ),
-                                req.getBody().hasComment()
-                                        ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getComment(), "body.comment"
-                                ).map(Optional::of)
-                                        : Mono.just(Optional.<String>empty())
                         ).doOnError(StatusRuntimeException.class,
                                 logValidationError(req.getHeader(), "updateIssueWorklog"))
                         .flatMap(t -> {
-                            String requestId = t.getT1().getT1();
-                            String nodeId = t.getT1().getT2();
-                            UUID projectId = t.getT1().getT3();
-                            UUID issueId = t.getT1().getT4();
-                            UUID worklogId = t.getT1().getT5();
-                            UUID actorUserId = t.getT1().getT6();
-                            Integer spentMinutes = t.getT1().getT7().orElse(null);
-                            LocalDate workDate = t.getT1().getT8().orElse(null);
-                            String comment = t.getT2().orElse(null);
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID issueId = t.getT3();
+                            UUID worklogId = t.getT4();
+                            UUID actorUserId = t.getT5();
+                            Integer spentMinutes = t.getT6().orElse(null);
+                            LocalDate workDate = t.getT7().orElse(null);
 
-                            log.info("[{}][{}] updateIssueWorklog: issueId={}, projectId={}, spentMinutes={}, workDate={}",
-                                    requestId, nodeId, issueId, projectId, spentMinutes, workDate);
+                            String rawComment = req.getBody().hasComment() ? req.getBody().getComment() : null;
+                            String comment = (rawComment != null && !rawComment.isBlank()) ? rawComment.trim() : null;
+
+                            log.info("[{}][{}] updateIssueWorklog: issueId={}, spentMinutes={}, workDate={}",
+                                    requestId, nodeId, issueId, spentMinutes, workDate);
 
                             UpdateWorklogDto updateWorklogDto = new UpdateWorklogDto(
                                     spentMinutes,
@@ -167,7 +151,6 @@ public class GrpcIssueWorklogService {
 
                             return worklogService.updateIssueWorklog(requestId,
                                     nodeId,
-                                    projectId,
                                     issueId,
                                     worklogId,
                                     actorUserId,
@@ -196,9 +179,6 @@ public class GrpcIssueWorklogService {
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -209,16 +189,14 @@ public class GrpcIssueWorklogService {
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID actorUserId = t.getT5();
+                            UUID issueId = t.getT3();
+                            UUID actorUserId = t.getT4();
 
-                            log.info("[{}][{}] listIssueWorklog: issueId={}, projectId={}",
-                                    requestId, nodeId, issueId, projectId);
+                            log.info("[{}][{}] listIssueWorklog: issueId={}",
+                                    requestId, nodeId, issueId);
 
                             return worklogService.listIssueWorklog(requestId,
                                     nodeId,
-                                    projectId,
                                     issueId,
                                     actorUserId
                             ).doOnNext(worklogs ->
@@ -245,9 +223,6 @@ public class GrpcIssueWorklogService {
                                         req.getHeader().getNodeId(), "header.nodeId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                        req.getBody().getProjectId(), "body.projectId"
-                                ),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getIssueId(), "body.issueId"
                                 ),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
@@ -261,17 +236,15 @@ public class GrpcIssueWorklogService {
                         .flatMap(t -> {
                             String requestId = t.getT1();
                             String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID issueId = t.getT4();
-                            UUID worklogId = t.getT5();
-                            UUID actorUserId = t.getT6();
+                            UUID issueId = t.getT3();
+                            UUID worklogId = t.getT4();
+                            UUID actorUserId = t.getT5();
 
-                            log.info("[{}][{}] deleteIssueWorklog: issueId={}, projectId={}",
-                                    requestId, nodeId, issueId, projectId);
+                            log.info("[{}][{}] deleteIssueWorklog: issueId={}",
+                                    requestId, nodeId, issueId);
 
                             return worklogService.deleteIssueWorklog(requestId,
                                     nodeId,
-                                    projectId,
                                     issueId,
                                     worklogId,
                                     actorUserId

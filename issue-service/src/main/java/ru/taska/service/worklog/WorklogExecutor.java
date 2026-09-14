@@ -21,7 +21,6 @@ import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
-import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -50,16 +49,7 @@ public class WorklogExecutor {
     ) {
         return findActiveIssueForUpdate(requestId, nodeId, issueId)
                 .flatMap(issue -> {
-                    int currentSpent = issue.getTimeSpentMinutes() != null ? issue.getTimeSpentMinutes() : 0;
-                    issue.setTimeSpentMinutes(currentSpent + dto.spentMinutes());
-
-                    if (issue.getRemainingEstimateMinutes() != null) {
-                        int newRemaining = issue.getRemainingEstimateMinutes() - dto.spentMinutes();
-                        issue.setRemainingEstimateMinutes(Math.max(0, newRemaining));
-                    }
-
-                    issue.setUpdatedAt(Instant.now());
-                    issue.setVersion(issue.getVersion() + 1);
+                    issue.addWorklogMinutes(dto.spentMinutes());
 
                     Worklog worklog = Worklog.builder()
                             .issueId(issueId)
@@ -70,34 +60,22 @@ public class WorklogExecutor {
                             .workDate(dto.workDate())
                             .version(1)
                             .build();
-
                     return issueRepository.save(issue)
-                            .flatMap(savedIssue -> worklogRepository.save(worklog))
-                            .flatMap(savedWorklog -> {
-                                JsonNode payload = payloadSerializer.createWorklogAddedPayload(savedWorklog);
+                            .then(worklogRepository.save(worklog));
+                })
+                .flatMap(savedWorklog -> {
+                    JsonNode payload = payloadSerializer.createWorklogAddedPayload(savedWorklog);
 
-                                return issueHistoryService.saveIssueHistory(
-                                                requestId,
-                                                nodeId,
-                                                issueId,
-                                                actorUserId,
-                                                IssueEventType.WORKLOG_ADDED,
-                                                payload
-                                        ).then(outboxEventService.saveOutboxEvent(
-                                                requestId,
-                                                nodeId,
-                                                AggregateType.ISSUE,
-                                                actorUserId,
-                                                EventType.WORKLOG_ADDED,
-                                                payload))
-                                        .then(Mono.fromRunnable(() ->
-                                                log.debug("[{}][{}] User with id: {} successfully added worklog to issue with id: {}",
-                                                        requestId, nodeId, actorUserId, issueId)))
-                                        .thenReturn(savedWorklog);
-                            });
+                    return saveAuditAndOutbox(
+                            requestId, nodeId, issueId, actorUserId,
+                            IssueEventType.WORKLOG_ADDED,
+                            EventType.WORKLOG_ADDED,
+                            payload,
+                            savedWorklog,
+                            "successfully added worklog with id: " + savedWorklog.getId()
+                    );
                 });
     }
-
 
     @Transactional
     public Mono<Worklog> executeUpdate(
@@ -109,74 +87,32 @@ public class WorklogExecutor {
             UpdateWorklogDto worklogDto
     ) {
         return findActiveIssueForUpdate(requestId, nodeId, issueId)
-                .flatMap(issue -> worklogRepository.findActiveByIdForUpdate(worklogId)
-                        .switchIfEmpty(Mono.defer(() -> {
-                            log.warn("[{}][{}] Worklog with id: {} was not found", requestId, nodeId, worklogId);
-
-                            return Mono.error(new DomainException(
-                                    DomainStatus.NOT_FOUND,
-                                    "Worklog with id: " + worklogId + " not found"
-                            ));
-                        }))
+                .flatMap(issue -> findActiveWorklogForUpdate(requestId, nodeId, worklogId)
                         .flatMap(worklog -> {
-                            if (!worklog.getIssueId().equals(issueId)) {
-                                log.warn("[{}][{}] Issue {} doesnt belong to worklog {}", requestId, nodeId, issueId, worklogId);
-
-                                return Mono.error(new DomainException(
-                                        DomainStatus.NOT_FOUND,
-                                        "Issue doesnt belong to worklog"
-                                ));
-                            }
+                            validateWorklogBelongsToIssue(requestId, nodeId, issueId, worklog);
 
                             if (worklogDto.spentMinutes() != null) {
-                                int currentSpent = issue.getTimeSpentMinutes() != null ? issue.getTimeSpentMinutes() : 0;
-                                int deltaSpent = worklog.getSpentMinutes() - worklogDto.spentMinutes();
-                                issue.setTimeSpentMinutes(Math.max(0, currentSpent - deltaSpent));
-                                worklog.setSpentMinutes(worklogDto.spentMinutes());
-
-                                if (issue.getRemainingEstimateMinutes() != null) {
-                                    int newRemaining = issue.getRemainingEstimateMinutes() + deltaSpent;
-                                    issue.setRemainingEstimateMinutes(Math.max(0, newRemaining));
-                                }
+                                issue.updateWorklogMinutes(worklog.getSpentMinutes(), worklogDto.spentMinutes());
+                            } else {
+                                issue.touch();
                             }
-
-                            if (worklogDto.workDate() != null) {
-                                worklog.setWorkDate(worklogDto.workDate());
-                            }
-                            if (worklogDto.comment() != null) {
-                                worklog.setComment(worklogDto.comment());
-                            }
-
-                            issue.setUpdatedAt(Instant.now());
-                            issue.setVersion(issue.getVersion() + 1);
-                            worklog.setUpdatedAt(Instant.now());
-                            worklog.setVersion(worklog.getVersion() + 1);
+                            worklog.update(worklogDto.spentMinutes(), worklogDto.workDate(), worklogDto.comment());
 
                             return issueRepository.save(issue)
-                                    .flatMap(savedIssue -> worklogRepository.save(worklog))
-                                    .flatMap(savedWorklog -> {
-                                        JsonNode payload = payloadSerializer.createWorklogUpdatePayload(savedWorklog);
+                                    .then(worklogRepository.save(worklog));
+                        }))
+                .flatMap(savedWorklog -> {
+                    JsonNode payload = payloadSerializer.createWorklogUpdatePayload(savedWorklog);
 
-                                        return issueHistoryService.saveIssueHistory(
-                                                        requestId,
-                                                        nodeId,
-                                                        issueId,
-                                                        actorUserId,
-                                                        IssueEventType.WORKLOG_UPDATED,
-                                                        payload
-                                                ).then(outboxEventService.saveOutboxEvent(
-                                                        requestId,
-                                                        nodeId,
-                                                        AggregateType.ISSUE,
-                                                        actorUserId,
-                                                        EventType.WORKLOG_UPDATED,
-                                                        payload))
-                                                .then(Mono.fromRunnable(() ->
-                                                        log.debug("[{}][{}] User with id: {} successfully update worklog to issue with id: {}",
-                                                                requestId, nodeId, actorUserId, issueId)))
-                                                .thenReturn(savedWorklog);
-                                    });
-                        }));
+                    return saveAuditAndOutbox(
+                            requestId, nodeId, issueId, actorUserId,
+                            IssueEventType.WORKLOG_UPDATED,
+                            EventType.WORKLOG_UPDATED,
+                            payload,
+                            savedWorklog,
+                            "successfully update worklog with id: " + savedWorklog.getId()
+                    );
+                });
     }
 
     @Transactional
@@ -189,67 +125,41 @@ public class WorklogExecutor {
     ) {
         return findActiveWorklog(requestId, nodeId, worklogId)
                 .flatMap(worklog -> {
-                            if (!worklog.getIssueId().equals(issueId)) {
-                                log.warn("[{}][{}] Issue {} doesnt belong to worklog {}", requestId, nodeId, issueId, worklogId);
+                    validateWorklogBelongsToIssue(requestId, nodeId, issueId, worklog);
+                    return findActiveIssueForUpdate(requestId, nodeId, worklog.getIssueId());
+                })
+                .flatMap(issue -> worklogRepository.softDelete(worklogId)
+                        .switchIfEmpty(Mono.defer(() -> Mono.error(new DomainException(
+                                DomainStatus.NOT_FOUND,
+                                "Worklog with id: " + worklogId + " not found"
+                        ))))
+                        .flatMap(deletedWorklog -> {
+                            issue.removeWorklogMinutes(deletedWorklog.getSpentMinutes());
 
-                                return Mono.error(new DomainException(
-                                        DomainStatus.NOT_FOUND,
-                                        "Issue doesnt belong to worklog"
-                                ));
-                            }
+                            return issueRepository.save(issue)
+                                    .thenReturn(deletedWorklog);
+                        })
+                )
+                .flatMap(deletedWorklog -> {
+                    JsonNode payload = payloadSerializer.createWorklogDeletedPayload(
+                            issueId, worklogId, actorUserId, deletedWorklog.getDeletedAt());
 
-                            return findActiveIssueForUpdate(requestId, nodeId, worklog.getIssueId())
-                                    .flatMap(issue -> worklogRepository.softDelete(worklogId)
-                                            .switchIfEmpty(Mono.defer(() -> Mono.error(new DomainException(
-                                                    DomainStatus.NOT_FOUND,
-                                                    "Worklog with id: " + worklogId + " not found"
-                                            ))))
-                                            .flatMap(deletedWorklog -> {
+                    return saveAuditAndOutbox(
+                            requestId, nodeId, issueId, actorUserId,
+                            IssueEventType.WORKLOG_DELETED, EventType.WORKLOG_DELETED,
+                            payload, deletedWorklog,
+                            "successfully delete worklog with id: " + deletedWorklog.getId()
+                    );
+                });
 
-
-                                                if (issue.getRemainingEstimateMinutes() != null) {
-                                                    issue.setRemainingEstimateMinutes(
-                                                            issue.getRemainingEstimateMinutes() + deletedWorklog.getSpentMinutes()
-                                                    );
-                                                }
-                                                if (issue.getTimeSpentMinutes() != null) {
-                                                    issue.setTimeSpentMinutes(
-                                                            Math.max(0, issue.getTimeSpentMinutes() - deletedWorklog.getSpentMinutes())
-                                                    );
-                                                }
-                                                issue.setVersion(issue.getVersion() + 1);
-                                                issue.setUpdatedAt(Instant.now());
-
-                                                return issueRepository.save(issue)
-                                                        .flatMap(savedIssue -> {
-                                                            JsonNode payload = payloadSerializer.createWorklogDeletedPayload(
-                                                                    issueId, worklogId, actorUserId, deletedWorklog.getDeletedAt());
-
-                                                            return issueHistoryService.saveIssueHistory(
-                                                                            requestId,
-                                                                            nodeId,
-                                                                            deletedWorklog.getIssueId(),
-                                                                            actorUserId,
-                                                                            IssueEventType.WORKLOG_DELETED,
-                                                                            payload
-                                                                    ).then(outboxEventService.saveOutboxEvent(
-                                                                            requestId,
-                                                                            nodeId,
-                                                                            AggregateType.ISSUE,
-                                                                            actorUserId,
-                                                                            EventType.WORKLOG_DELETED,
-                                                                            payload))
-                                                                    .then(Mono.fromRunnable(() ->
-                                                                            log.debug("[{}][{}] User with id: {} successfully delete worklog with id: {}",
-                                                                                    requestId, nodeId, actorUserId, deletedWorklog.getId())))
-                                                                    .thenReturn(deletedWorklog);
-                                                        });
-                                            })
-                                    );
-                        }
-                );
     }
 
+    private void validateWorklogBelongsToIssue(String requestId, String nodeId, UUID issueId, Worklog worklog) {
+        if (!worklog.getIssueId().equals(issueId)) {
+            log.warn("[{}][{}] Issue {} doesnt belong to worklog {}", requestId, nodeId, issueId, worklog.getId());
+            throw new DomainException(DomainStatus.NOT_FOUND, "Issue doesnt belong to worklog");
+        }
+    }
 
     private Mono<Worklog> findActiveWorklog(
             String requestId,
@@ -281,5 +191,41 @@ public class WorklogExecutor {
                             "Issue with id: " + issueId + " not found"
                     ));
                 }));
+    }
+
+    private Mono<Worklog> findActiveWorklogForUpdate(
+            String requestId,
+            String nodeId,
+            UUID worklogId
+    ) {
+        return worklogRepository.findActiveByIdForUpdate(worklogId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[{}][{}] Worklog with id: {} was not found", requestId, nodeId, worklogId);
+
+                    return Mono.error(new DomainException(
+                            DomainStatus.NOT_FOUND,
+                            "Worklog with id: " + worklogId + " not found"
+                    ));
+                }));
+    }
+
+    private Mono<Worklog> saveAuditAndOutbox(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId,
+            IssueEventType issueEventType,
+            EventType eventType,
+            JsonNode payload,
+            Worklog resultWorklog,
+            String logMessage
+    ) {
+        return issueHistoryService.saveIssueHistory(
+                        requestId, nodeId, issueId, actorUserId, issueEventType, payload)
+                .then(outboxEventService.saveOutboxEvent(
+                        requestId, nodeId, AggregateType.ISSUE, actorUserId, eventType, payload))
+                .then(Mono.fromRunnable(() ->
+                        log.debug("[{}][{}] User with id: {} {}", requestId, nodeId, actorUserId, logMessage)))
+                .thenReturn(resultWorklog);
     }
 }

@@ -81,7 +81,7 @@ public class PayloadSerializer {
 
         node.put(ISSUE_ID, issueId.toString());
         node.put(WORKLOG_ID, worklogId.toString());
-        node.put(DELETED_AT, deletedAt != null ? deletedAt.toString() : Instant.now().toString());
+        node.put(DELETED_AT, deletedAt.toString())  ;
         node.put(DELETED_BY, deletedByUserId.toString());
 
         return node;
