@@ -20,6 +20,9 @@ RUN --mount=type=cache,id=maven-repo,target=/root/.m2,sharing=locked \
     mvn -B -ntp -DskipTests -pl issue-service -am clean package
 FROM eclipse-temurin:21-jre
 
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 RUN addgroup --system app && \
     adduser --system --no-create-home --disabled-login --disabled-password --ingroup app app
 

@@ -80,3 +80,15 @@ scrape_configs:
         replacement: 'notification-service'
       - source_labels: [ job ]
         target_label: application
+
+  # Admin Service
+  - job_name: 'admin-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['admin-service:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'admin-service'
+      - source_labels: [ job ]
+        target_label: application
