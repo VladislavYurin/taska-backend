@@ -2,12 +2,13 @@ name: Deploy stage to Dokploy
 
 on:
   push:
-    branches:
-      - develop
+    branches: [develop]
 
 permissions:
   contents: read
 
+# Джоба ждёт окончания деплоя, поэтому деплои идут строго по одному,
+# а серия мержей схлопывается: GitHub держит в группе только один pending-запуск
 concurrency:
   group: deploy-stage
   cancel-in-progress: false
@@ -15,86 +16,81 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Секреты лежат в environment "stage", куда пускают только ветку develop
+    environment: stage
 
     env:
       DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
       DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
       DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
 
+    # Репозиторий публичный, логи Actions видны всем:
+    # не выводить ответ compose.one и не включать set -x — в env лежат секреты стенда
     steps:
-      # 1. Обновляем GIT_COMMIT в Environment Dokploy
       - name: Set GIT_COMMIT in Dokploy
         shell: bash
         run: |
           set -euo pipefail
-
           BASE_URL="${DOKPLOY_URL%/}"
 
-          echo "Preparing deploy for commit: ${GITHUB_SHA}"
+          CURRENT_ENV=$(curl -fsS --max-time 30 --retry 3 \
+              -H "x-api-key: ${DOKPLOY_API_KEY}" \
+              "${BASE_URL}/api/compose.one?composeId=${DOKPLOY_COMPOSE_ID}" \
+            | jq -r '.env // ""')
 
-          # Получаем текущие настройки Compose
-          COMPOSE_JSON=$(curl -fsS \
-            -H "x-api-key: ${DOKPLOY_API_KEY}" \
-            "${BASE_URL}/api/compose.one?composeId=${DOKPLOY_COMPOSE_ID}")
-
-          # Получаем текущий Environment
-          CURRENT_ENV=$(printf '%s' "$COMPOSE_JSON" | jq -r '.env // ""')
-
-          # Удаляем старый GIT_COMMIT, если он уже существует
-          ENV_WITHOUT_GIT_COMMIT=$(printf '%s\n' "$CURRENT_ENV" \
-            | sed '/^GIT_COMMIT=/d')
-
-          # Добавляем актуальный SHA
-          if [ -n "$ENV_WITHOUT_GIT_COMMIT" ]; then
-            NEW_ENV="${ENV_WITHOUT_GIT_COMMIT}"$'\n'"GIT_COMMIT=${GITHUB_SHA}"
-          else
-            NEW_ENV="GIT_COMMIT=${GITHUB_SHA}"
+          # saveEnvironment перезаписывает env целиком: пустой ответ затёр бы всю конфигурацию стенда
+          if [ -z "${CURRENT_ENV//[[:space:]]/}" ]; then
+            echo "::error::Dokploy вернул пустой env, перезапись отменена"
+            exit 1
           fi
 
-          # Формируем JSON для Dokploy
-          PAYLOAD=$(jq -n \
-            --arg composeId "$DOKPLOY_COMPOSE_ID" \
-            --arg env "$NEW_ENV" \
-            '{
-              composeId: $composeId,
-              env: $env,
-              createEnvFile: true
-            }')
+          NEW_ENV="$(printf '%s\n' "$CURRENT_ENV" | sed '/^GIT_COMMIT=/d')"$'\n'"GIT_COMMIT=${GITHUB_SHA}"
 
-          # Сохраняем Environment обратно в Dokploy
-          curl -fsS \
-            -X POST \
-            "${BASE_URL}/api/compose.saveEnvironment" \
-            -H "x-api-key: ${DOKPLOY_API_KEY}" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD"
+          jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg env "$NEW_ENV" \
+              '{composeId: $composeId, env: $env, createEnvFile: true}' \
+            | curl -fsS --max-time 30 -o /dev/null \
+                -X POST "${BASE_URL}/api/compose.saveEnvironment" \
+                -H "x-api-key: ${DOKPLOY_API_KEY}" \
+                -H "Content-Type: application/json" \
+                --data @-
 
-          echo
           echo "GIT_COMMIT updated to ${GITHUB_SHA}"
 
-      # 2. Запускаем deployment
-      - name: Deploy in Dokploy
+      - name: Deploy and wait for result
         shell: bash
         run: |
           set -euo pipefail
-
           BASE_URL="${DOKPLOY_URL%/}"
-          SHORT_SHA="${GITHUB_SHA:0:7}"
+          TITLE="GitHub deploy ${GITHUB_SHA:0:7} #${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
 
-          PAYLOAD=$(jq -n \
-            --arg composeId "$DOKPLOY_COMPOSE_ID" \
-            --arg title "GitHub deploy ${SHORT_SHA}" \
-            '{
-              composeId: $composeId,
-              title: $title
-            }')
-
-          curl -fsS \
-            -X POST \
-            "${BASE_URL}/api/compose.deploy" \
-            -H "x-api-key: ${DOKPLOY_API_KEY}" \
-            -H "Content-Type: application/json" \
-            --data "$PAYLOAD"
-
+          jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg title "$TITLE" \
+              '{composeId: $composeId, title: $title}' \
+            | curl -sS --fail-with-body --max-time 30 \
+                -X POST "${BASE_URL}/api/compose.deploy" \
+                -H "x-api-key: ${DOKPLOY_API_KEY}" \
+                -H "Content-Type: application/json" \
+                --data @-
           echo
-          echo "Dokploy deployment started for commit ${GITHUB_SHA}"
+
+          # compose.deploy только ставит задачу в очередь,
+          # запись deployment появляется, когда воркер Dokploy её забирает
+          for _ in $(seq 1 150); do
+            STATUS=$(curl -fsS --max-time 30 \
+                -H "x-api-key: ${DOKPLOY_API_KEY}" \
+                "${BASE_URL}/api/deployment.allByCompose?composeId=${DOKPLOY_COMPOSE_ID}" \
+              | jq -r --arg t "$TITLE" 'map(select(.title == $t))[0].status // "queued"') \
+              || STATUS="unknown"
+            echo "$(date +%T) ${STATUS}"
+            case "$STATUS" in
+              done) exit 0 ;;
+              error|cancelled)
+                echo "::error::Деплой в Dokploy завершился со статусом ${STATUS}"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::Не дождались завершения деплоя"
+          exit 1
