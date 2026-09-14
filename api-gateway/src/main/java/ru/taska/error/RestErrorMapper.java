@@ -9,7 +9,7 @@ public class RestErrorMapper {
 
     public HttpStatus mapGrpcCodeToHttpStatus(Status.Code code) {
         return switch (code) {
-            case INVALID_ARGUMENT -> HttpStatus.BAD_REQUEST;
+            case INVALID_ARGUMENT, OUT_OF_RANGE -> HttpStatus.BAD_REQUEST;
             case UNAUTHENTICATED -> HttpStatus.UNAUTHORIZED;
             case PERMISSION_DENIED -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
