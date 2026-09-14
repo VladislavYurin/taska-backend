@@ -9,6 +9,7 @@ import java.util.UUID;
  * @param commentId     идентификатор комментария
  * @param actorUserId  идентификатор автора комментария
  * @param body          текст комментария
+ * @param watcherIds   список айди наблюдателей за задачей, к которой создали комментарий
  */
 public record CommentCreatedPayload(
         UUID commentId,

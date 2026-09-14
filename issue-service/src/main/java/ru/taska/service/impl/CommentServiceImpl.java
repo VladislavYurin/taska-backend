@@ -9,7 +9,6 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueComment;
 import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
 import ru.taska.event.AggregateType;
@@ -27,7 +26,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -73,6 +71,7 @@ public class CommentServiceImpl implements CommentService {
                                 body
                         )
                                 .flatMap(savedComment ->
+                                                ///loadWatcherIds вызывается в той же транзакции, что и сохранение outbox — чтобы snapshot был консистентен.
                                                 loadWatcherIds(issueId)
                                                         .flatMap(watcherIds ->
                                                                 saveHistoryAndOutbox(
@@ -391,8 +390,6 @@ public class CommentServiceImpl implements CommentService {
 
     /**
      * Загружает ID всех watchers задачи.
-     * Вызывается в той же транзакции, что и сохранение outbox —
-     * чтобы snapshot был консистентен.
      */
     private Mono<List<UUID>> loadWatcherIds(UUID issueId) {
         return issueWatcherRepository.findUserIdsByIssueId(issueId)

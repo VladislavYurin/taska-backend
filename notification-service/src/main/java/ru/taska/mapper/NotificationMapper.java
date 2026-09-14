@@ -1,8 +1,10 @@
 package ru.taska.mapper;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
+import ru.taska.config.props.NotificationProperties;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
 import ru.taska.event.TaskaEvent;
@@ -13,9 +15,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class NotificationMapper {
 
-    private final int MAX_SHOWN_COMMENT_BODY_LENGTH = 100;
+    private final NotificationProperties notificationProperties;
     private final String ETC_SIGN = "...";
 
     public Notification toIssueCreated(TaskaEvent event, UUID userId) {
@@ -257,8 +260,10 @@ public class NotificationMapper {
             UUID userId,
             String body
     ) {
-        String preview = body != null && body.length() > MAX_SHOWN_COMMENT_BODY_LENGTH
-                ? body.substring(0, MAX_SHOWN_COMMENT_BODY_LENGTH - ETC_SIGN.length()) + ETC_SIGN
+        int maxCommentBodyLength = notificationProperties.comment().maxShownBodyLength();
+
+        String preview = body != null && body.length() > maxCommentBodyLength
+                ? body.substring(0, maxCommentBodyLength - ETC_SIGN.length()) + ETC_SIGN
                 : body;
 
         return Notification.builder()

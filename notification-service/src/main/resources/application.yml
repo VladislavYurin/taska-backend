@@ -70,6 +70,8 @@ kafka:
     issue-events: ${NOTIFICATION_KAFKA_TOPICS_ISSUE_EVENTS:issue.events}
 
 notification:
+  comment:
+    max-shown-body-length: ${NOTIFICATION_COMMENT_MAX_SHOWN_BODY_LENGTH:100}
   email:
     retry-delay: ${NOTIFICATION_EMAIL_RETRY_DELAY:1m}
 
