@@ -259,12 +259,11 @@ message WorklogResponse {
 }
 
 message AddIssueWorklogBody {
-  string project_id = 1;
-  string issue_id = 2;
-  string actor_user_id  = 3;
-  int32 spent_minutes = 4;
-  string work_date = 5;
-  optional string comment = 6;
+  string issue_id = 1;
+  string actor_user_id  = 2;
+  int32 spent_minutes = 3;
+  string work_date = 4;
+  optional string comment = 5;
 }
 
 message UpdateIssueWorklogRequest {
@@ -280,13 +279,12 @@ message UpdateIssueWorklogRequest {
 }
 
 message UpdateIssueWorklogBody {
-  string project_id = 1;
-  string issue_id = 2;
-  string worklog_id = 3;
-  string actor_user_id  = 4;
-  optional int32 spent_minutes = 5;
-  optional string work_date = 6;
-  optional string comment = 7;
+  string issue_id = 1;
+  string worklog_id = 2;
+  string actor_user_id  = 3;
+  optional int32 spent_minutes = 4;
+  optional string work_date = 5;
+  optional string comment = 6;
 }
 
 message DeleteIssueWorklogRequest {
@@ -302,10 +300,9 @@ message DeleteIssueWorklogRequest {
 }
 
 message DeleteIssueWorklogBody {
-  string project_id = 1;
-  string issue_id = 2;
-  string worklog_id = 3;
-  string actor_user_id  = 4;
+  string issue_id = 1;
+  string worklog_id = 2;
+  string actor_user_id  = 3;
 }
 
 message ListIssueWorklogsRequest {
@@ -321,9 +318,8 @@ message ListIssueWorklogsRequest {
 }
 
 message ListIssueWorklogsBody {
-  string project_id = 1;
-  string issue_id = 2;
-  string actor_user_id = 3;
+  string issue_id = 1;
+  string actor_user_id = 2;
 }
 
 message AddIssueWorklogResponse {

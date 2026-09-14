@@ -95,7 +95,6 @@ class GrpcIssueWorklogServiceTest {
         AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
                         .setSpentMinutes(30)
@@ -105,7 +104,7 @@ class GrpcIssueWorklogServiceTest {
                 .build();
 
         Mockito.when(worklogService.addIssueWorklog(
-                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
                         Mockito.eq(ISSUE_ID), Mockito.eq(ACTOR_ID), Mockito.any(CreateWorklogDto.class)))
                 .thenReturn(Mono.just(sampleWorklog()));
 
@@ -121,7 +120,6 @@ class GrpcIssueWorklogServiceTest {
         AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
                 .setHeader(Header.newBuilder().setNodeId(NODE_ID).build())
                 .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
                         .setSpentMinutes(30)
@@ -142,7 +140,6 @@ class GrpcIssueWorklogServiceTest {
         AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId("not-a-uuid")
                         .setActorUserId(ACTOR_ID.toString())
                         .setSpentMinutes(30)
@@ -163,7 +160,6 @@ class GrpcIssueWorklogServiceTest {
         AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
                         .setSpentMinutes(0)
@@ -184,7 +180,6 @@ class GrpcIssueWorklogServiceTest {
         AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
                         .setSpentMinutes(30)
@@ -199,28 +194,6 @@ class GrpcIssueWorklogServiceTest {
         Mockito.verifyNoInteractions(worklogService);
     }
 
-    @Test
-    @DisplayName("addIssueWorklog: должен отклонить пустой comment, если он явно передан")
-    void addIssueWorklog_shouldRejectBlankCommentWhenPresent() {
-        AddIssueWorklogRequest request = AddIssueWorklogRequest.newBuilder()
-                .setHeader(validHeader())
-                .setBody(AddIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
-                        .setIssueId(ISSUE_ID.toString())
-                        .setActorUserId(ACTOR_ID.toString())
-                        .setSpentMinutes(30)
-                        .setWorkDate(LocalDate.now().toString())
-                        .setComment("   ")
-                        .build())
-                .build();
-
-        StepVerifier.create(grpcIssueWorklogService.addIssueWorklog(Mono.just(request)))
-                .expectErrorSatisfies(error -> assertInvalidArgument(error, "comment"))
-                .verify();
-
-        Mockito.verifyNoInteractions(worklogService);
-    }
-
     // ===== updateIssueWorklog =====
 
     @Test
@@ -229,7 +202,6 @@ class GrpcIssueWorklogServiceTest {
         UpdateIssueWorklogRequest request = UpdateIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(UpdateIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setWorklogId(WORKLOG_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
@@ -238,7 +210,7 @@ class GrpcIssueWorklogServiceTest {
 
         ArgumentCaptor<UpdateWorklogDto> dtoCaptor = ArgumentCaptor.forClass(UpdateWorklogDto.class);
         Mockito.when(worklogService.updateIssueWorklog(
-                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
                         Mockito.eq(ISSUE_ID), Mockito.eq(WORKLOG_ID), Mockito.eq(ACTOR_ID), dtoCaptor.capture()))
                 .thenReturn(Mono.just(sampleWorklog()));
 
@@ -257,7 +229,6 @@ class GrpcIssueWorklogServiceTest {
         UpdateIssueWorklogRequest request = UpdateIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(UpdateIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setWorklogId(WORKLOG_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
@@ -280,7 +251,6 @@ class GrpcIssueWorklogServiceTest {
         DeleteIssueWorklogRequest request = DeleteIssueWorklogRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(DeleteIssueWorklogBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setWorklogId(WORKLOG_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
@@ -288,7 +258,7 @@ class GrpcIssueWorklogServiceTest {
                 .build();
 
         Mockito.when(worklogService.deleteIssueWorklog(
-                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
                         Mockito.eq(ISSUE_ID), Mockito.eq(WORKLOG_ID), Mockito.eq(ACTOR_ID)))
                 .thenReturn(Mono.just(sampleWorklog()));
 
@@ -306,14 +276,13 @@ class GrpcIssueWorklogServiceTest {
         ListIssueWorklogsRequest request = ListIssueWorklogsRequest.newBuilder()
                 .setHeader(validHeader())
                 .setBody(ListIssueWorklogsBody.newBuilder()
-                        .setProjectId(PROJECT_ID.toString())
                         .setIssueId(ISSUE_ID.toString())
                         .setActorUserId(ACTOR_ID.toString())
                         .build())
                 .build();
 
         Mockito.when(worklogService.listIssueWorklog(
-                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                        Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
                         Mockito.eq(ISSUE_ID), Mockito.eq(ACTOR_ID)))
                 .thenReturn(Mono.just(List.of(sampleWorklog())));
 

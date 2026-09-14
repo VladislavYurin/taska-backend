@@ -13,7 +13,6 @@ public interface WorklogService {
     Mono<Worklog> addIssueWorklog(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
             UUID actorUserId,
             CreateWorklogDto createWorklogDto
@@ -22,9 +21,8 @@ public interface WorklogService {
     Mono<Worklog> updateIssueWorklog(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
-            UUID worklog,
+            UUID worklogId,
             UUID actorUserId,
             UpdateWorklogDto updateWorklogDto
     );
@@ -32,7 +30,6 @@ public interface WorklogService {
     Mono<List<Worklog>> listIssueWorklog(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
             UUID actorUserId
     );
@@ -40,9 +37,8 @@ public interface WorklogService {
     Mono<Worklog> deleteIssueWorklog(
             String requestId,
             String nodeId,
-            UUID projectId,
             UUID issueId,
-            UUID worklog,
+            UUID worklogId,
             UUID actorUserId
     );
 }

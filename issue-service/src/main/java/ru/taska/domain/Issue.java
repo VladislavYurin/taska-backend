@@ -158,4 +158,58 @@ public class Issue {
     @Column("time_spent_minutes")
     private Integer timeSpentMinutes;
 
+    /**
+     * Увеличивает потраченное время и уменьшает остаток оценки при добавлении ворклога.
+     */
+    public void addWorklogMinutes(int spentMinutes) {
+        int currentSpent = this.timeSpentMinutes != null ? this.timeSpentMinutes : 0;
+        this.timeSpentMinutes = currentSpent + spentMinutes;
+
+        if (this.remainingEstimateMinutes != null) {
+            int newRemaining = this.remainingEstimateMinutes - spentMinutes;
+            this.remainingEstimateMinutes = Math.max(0, newRemaining);
+        }
+
+        touch();
+    }
+
+    /**
+     * Пересчитывает потраченное и оставшееся время при изменении существующего ворклога.
+     */
+    public void updateWorklogMinutes(int oldSpentMinutes, int newSpentMinutes) {
+        int deltaSpent = oldSpentMinutes - newSpentMinutes;
+
+        int currentSpent = this.timeSpentMinutes != null ? this.timeSpentMinutes : 0;
+        this.timeSpentMinutes = Math.max(0, currentSpent - deltaSpent);
+
+        if (this.remainingEstimateMinutes != null) {
+            this.remainingEstimateMinutes = Math.max(0, this.remainingEstimateMinutes + deltaSpent);
+        }
+
+        touch();
+    }
+
+    /**
+     * Уменьшает потраченное время и восстанавливает остаток оценки при удалении ворклога.
+     */
+    public void removeWorklogMinutes(int spentMinutes) {
+        if (this.timeSpentMinutes != null) {
+            this.timeSpentMinutes = Math.max(0, this.timeSpentMinutes - spentMinutes);
+        }
+
+        if (this.remainingEstimateMinutes != null) {
+            this.remainingEstimateMinutes = this.remainingEstimateMinutes + spentMinutes;
+        }
+
+        touch();
+    }
+
+    /**
+     * Обновляет системные поля аудита и оптимистической блокировки.
+     */
+    public void touch() {
+        this.updatedAt = Instant.now();
+        this.version = (this.version != null ? this.version : 0) + 1;
+    }
+
 }

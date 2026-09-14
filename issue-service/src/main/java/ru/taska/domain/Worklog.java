@@ -56,7 +56,7 @@ public class Worklog {
     private Integer spentMinutes;
 
     /**
-     * Дата исполнения задачи.
+     * Дата работы над задачей.
      */
     @Column("work_date")
     private LocalDate workDate;
@@ -92,4 +92,29 @@ public class Worklog {
      */
     @Column("version")
     private Integer version;
+
+    /**
+     * Обновляет поля ворклога и актуализирует версию и время модификации.
+     */
+    public void update(Integer newSpentMinutes, LocalDate newWorkDate, String newComment) {
+        if (newSpentMinutes != null) {
+            this.spentMinutes = newSpentMinutes;
+        }
+        if (newWorkDate != null) {
+            this.workDate = newWorkDate;
+        }
+        if (newComment != null) {
+            this.comment = newComment;
+        }
+
+        touch();
+    }
+
+    /**
+     * Обновляет системные поля аудита и оптимистической блокировки.
+     */
+    private void touch() {
+        this.updatedAt = Instant.now();
+        this.version = (this.version != null ? this.version : 0) + 1;
+    }
 }

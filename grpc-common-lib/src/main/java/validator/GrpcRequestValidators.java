@@ -5,6 +5,7 @@ import io.grpc.Status;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -484,7 +485,7 @@ public final class GrpcRequestValidators {
         return requireNonBlankOrInvalidArgument(raw, fieldName)
                 .flatMap(value -> {
                     try {
-                        return Mono.just(LocalDate.parse(value));
+                        return Mono.just(LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE));
                     } catch (DateTimeParseException e) {
                         return Mono.error(Status.INVALID_ARGUMENT
                                 .withDescription(fieldName + " must be valid ISO date yyyy-MM-dd")

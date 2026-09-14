@@ -104,9 +104,6 @@ class WorklogIT extends AbstractIT {
                 .issueType(IssueType.TASK)
                 .priority(IssuePriority.MEDIUM)
                 .reporterId(REPORTER_ID)
-                // Явно задаём агрегаты, а не полагаемся на DB DEFAULT: Spring Data R2DBC
-                // при INSERT отправляет явный NULL для незаполненных полей, что нарушает
-                // NOT NULL ограничение колонки time_spent_minutes (см. код-ревью).
                 .timeSpentMinutes(0)
                 .remainingEstimateMinutes(INITIAL_REMAINING_MINUTES)
                 .build();
@@ -132,7 +129,7 @@ class WorklogIT extends AbstractIT {
     private Worklog createWorklogViaService(int spentMinutes, LocalDate workDate, String comment) {
         stubProjectRole(ProjectRole.PROJECT_ROLE_MEMBER);
         CreateWorklogDto dto = new CreateWorklogDto(spentMinutes, workDate, comment);
-        return worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, MEMBER_ID, dto).block();
+        return worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, MEMBER_ID, dto).block();
     }
 
     // ===== AddIssueWorklog =====
@@ -141,7 +138,7 @@ class WorklogIT extends AbstractIT {
     void addIssueWorklog_shouldPersistAndAggregateTimeSpentAndDecreaseRemainingEstimate() {
         CreateWorklogDto dto = new CreateWorklogDto(45, LocalDate.now(), "Initial work");
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, MEMBER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, MEMBER_ID, dto))
                 .assertNext(worklog -> {
                     Assertions.assertEquals(issueId, worklog.getIssueId());
                     Assertions.assertEquals(PROJECT_ID, worklog.getProjectId());
@@ -166,7 +163,7 @@ class WorklogIT extends AbstractIT {
     void addIssueWorklog_shouldClampRemainingEstimateAtZero_whenSpentExceedsRemaining() {
         CreateWorklogDto dto = new CreateWorklogDto(INITIAL_REMAINING_MINUTES + 50, LocalDate.now(), null);
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, MEMBER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, MEMBER_ID, dto))
                 .expectNextCount(1)
                 .verifyComplete();
 
@@ -179,7 +176,7 @@ class WorklogIT extends AbstractIT {
     void addIssueWorklog_shouldRejectNonPositiveSpentMinutes_andPersistNothing() {
         CreateWorklogDto dto = new CreateWorklogDto(0, LocalDate.now(), null);
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, MEMBER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, MEMBER_ID, dto))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ((DomainException) error).getStatus());
@@ -196,7 +193,7 @@ class WorklogIT extends AbstractIT {
         LocalDate tooFar = LocalDate.now().plusDays(issueProperties.maxFutureDays() + 30L);
         CreateWorklogDto dto = new CreateWorklogDto(10, tooFar, null);
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, MEMBER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, MEMBER_ID, dto))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ((DomainException) error).getStatus());
@@ -211,7 +208,7 @@ class WorklogIT extends AbstractIT {
         stubProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
         CreateWorklogDto dto = new CreateWorklogDto(10, LocalDate.now(), null);
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, VIEWER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, issueId, VIEWER_ID, dto))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, ((DomainException) error).getStatus());
@@ -226,7 +223,7 @@ class WorklogIT extends AbstractIT {
         UUID missingIssueId = UUID.randomUUID();
         CreateWorklogDto dto = new CreateWorklogDto(10, LocalDate.now(), null);
 
-        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, missingIssueId, MEMBER_ID, dto))
+        StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, missingIssueId, MEMBER_ID, dto))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.NOT_FOUND, ((DomainException) error).getStatus());
@@ -242,12 +239,12 @@ class WorklogIT extends AbstractIT {
         Worklog kept = createWorklogViaService(15, LocalDate.now(), "new");
 
         stubProjectRole(ProjectRole.PROJECT_ROLE_ADMIN);
-        StepVerifier.create(worklogService.deleteIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, toDelete.getId(), ADMIN_ID))
+        StepVerifier.create(worklogService.deleteIssueWorklog(REQUEST_ID, NODE_ID, issueId, toDelete.getId(), ADMIN_ID))
                 .expectNextCount(1)
                 .verifyComplete();
 
         stubProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
-        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, VIEWER_ID))
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, issueId, VIEWER_ID))
                 .assertNext((List<Worklog> list) -> {
                     Assertions.assertEquals(1, list.size());
                     Assertions.assertEquals(kept.getId(), list.get(0).getId());
@@ -265,7 +262,7 @@ class WorklogIT extends AbstractIT {
         UpdateWorklogDto dto = new UpdateWorklogDto(50, null, "updated comment");
 
         StepVerifier.create(worklogService.updateIssueWorklog(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, issueId, created.getId(), MEMBER_ID, dto))
+                        REQUEST_ID, NODE_ID, issueId, created.getId(), MEMBER_ID, dto))
                 .assertNext(worklog -> {
                     Assertions.assertEquals(50, worklog.getSpentMinutes());
                     Assertions.assertEquals("updated comment", worklog.getComment());
@@ -285,7 +282,7 @@ class WorklogIT extends AbstractIT {
         UpdateWorklogDto dto = new UpdateWorklogDto(99, null, null);
 
         StepVerifier.create(worklogService.updateIssueWorklog(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, issueId, created.getId(), OTHER_MEMBER_ID, dto))
+                        REQUEST_ID, NODE_ID, issueId, created.getId(), OTHER_MEMBER_ID, dto))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, ((DomainException) error).getStatus());
@@ -305,7 +302,7 @@ class WorklogIT extends AbstractIT {
         UpdateWorklogDto dto = new UpdateWorklogDto(40, null, null);
 
         StepVerifier.create(worklogService.updateIssueWorklog(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, issueId, created.getId(), ADMIN_ID, dto))
+                        REQUEST_ID, NODE_ID, issueId, created.getId(), ADMIN_ID, dto))
                 .assertNext(worklog -> Assertions.assertEquals(40, worklog.getSpentMinutes()))
                 .verifyComplete();
     }
@@ -317,7 +314,7 @@ class WorklogIT extends AbstractIT {
         Worklog created = createWorklogViaService(40, LocalDate.now(), null);
 
         stubProjectRole(ProjectRole.PROJECT_ROLE_MEMBER);
-        StepVerifier.create(worklogService.deleteIssueWorklog(REQUEST_ID, NODE_ID, PROJECT_ID, issueId, created.getId(), MEMBER_ID))
+        StepVerifier.create(worklogService.deleteIssueWorklog(REQUEST_ID, NODE_ID, issueId, created.getId(), MEMBER_ID))
                 .assertNext(deleted -> Assertions.assertNotNull(deleted.getDeletedAt()))
                 .verifyComplete();
 
@@ -339,7 +336,7 @@ class WorklogIT extends AbstractIT {
 
         stubProjectRole(ProjectRole.PROJECT_ROLE_MEMBER);
         StepVerifier.create(worklogService.deleteIssueWorklog(
-                        REQUEST_ID, NODE_ID, PROJECT_ID, issueId, created.getId(), OTHER_MEMBER_ID))
+                        REQUEST_ID, NODE_ID, issueId, created.getId(), OTHER_MEMBER_ID))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertTrue(error instanceof DomainException);
                     Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, ((DomainException) error).getStatus());
@@ -375,7 +372,6 @@ class WorklogIT extends AbstractIT {
                         worklogService.addIssueWorklog(
                                 REQUEST_ID,
                                 NODE_ID,
-                                PROJECT_ID,
                                 issueId,
                                 MEMBER_ID,
                                 dto
