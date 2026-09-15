@@ -14,6 +14,7 @@ import ru.taska.event.OutboxEventStatus;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
 import ru.taska.event.payload.projectService.MemberUpdatedPayload;
+import ru.taska.event.payload.projectService.ProjectArchivedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.OutboxEventService;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class OutboxEventServiceImpl implements OutboxEventService {
 
     private static final String PROJECT_CREATED = EventType.PROJECT_CREATED.getValue();
+    private static final String PROJECT_ARCHIVED = EventType.PROJECT_ARCHIVED.getValue();
     private static final String MEMBER_ADDED = EventType.MEMBER_ADDED.getValue();
     private static final String MEMBER_REMOVED = EventType.MEMBER_REMOVED.getValue();
 
@@ -48,6 +50,23 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_CREATED, project.getId());
+        return outboxEventRepository.save(event);
+    }
+
+    @Override
+    public Mono<OutboxEvent> saveProjectArchived(String requestId, String nodeId, Project project) {
+        OutboxEvent event = OutboxEvent.builder()
+                                       .aggregateType(AggregateType.PROJECT.getValue())
+                                       .aggregateId(project.getId())
+                                       .eventType(PROJECT_ARCHIVED)
+                                       .payload(projectArchivedPayload(project))
+                                       .attempts(0)
+                                       .status(OutboxEventStatus.NEW)
+                                       .requestId(requestId)
+                                       .build();
+
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
+                  requestId, nodeId, EventType.PROJECT_ARCHIVED, project.getId());
         return outboxEventRepository.save(event);
     }
 
@@ -101,12 +120,25 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         return outboxEventRepository.save(event);
     }
 
+    //todo projectArchived
+
     private JsonNode projectCreatedPayload(Project project) {
         return objectMapper.valueToTree(
                 new ProjectCreatedPayload(
                         project.getId(),
                         project.getProjectKey(),
                         project.getCreatedBy()
+                )
+        );
+    }
+
+    private JsonNode projectArchivedPayload(Project project) {
+        return objectMapper.valueToTree(
+                new ProjectArchivedPayload(
+                        project.getId(),
+                        project.getProjectKey(),
+                        project.getCreatedBy(),
+                        project.getArchivedAt()
                 )
         );
     }

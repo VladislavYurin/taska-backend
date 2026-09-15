@@ -7,11 +7,11 @@ import org.mapstruct.ValueMapping;
 import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
-import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectAccessInfoDto;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProjectMemberMapper {
@@ -68,7 +68,7 @@ public interface ProjectMemberMapper {
     /**
      * Билдер, который создает транспортный grpc объектп.
      *
-     * @param {@link ProjectMembershipInfoDto} из трех элементов, содержащий:
+     * @param {@link ProjectAccessInfoDto} из трех элементов, содержащий:
      *               <ul>
      *               <li>{@link ProjectRole} — роль участника проекта</li>
      *               <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
@@ -81,11 +81,12 @@ public interface ProjectMemberMapper {
      * <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
      * </ul>
      */
-    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(ProjectMembershipInfoDto dto) {
-        return CheckProjectMemberRoleResponse.newBuilder()
-                .setRole(this.toGrpcRole(dto.role()))
-                .setIsMember(dto.isMember())
-                .setProjectExists(dto.isProjectExists())
-                .build();
+    default CheckProjectAccessResponse toCheckProjectAccessResponse(ProjectAccessInfoDto dto) {
+        return CheckProjectAccessResponse.newBuilder()
+                                         .setRole(this.toGrpcRole(dto.role()))
+                                         .setIsMember(dto.isMember())
+                                         .setProjectExists(dto.isProjectExists())
+                                         .setProjectArchived(dto.isProjectArchived())
+                                         .build();
     }
 }

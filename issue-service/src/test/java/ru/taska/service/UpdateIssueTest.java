@@ -50,7 +50,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -86,8 +86,8 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
-                Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
+        Mockito.verify(projectAccessChecker).checkProjectAccess(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+                                                                Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID),
                 Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority), Mockito.eq(STORY_POINTS),
                 Mockito.eq(START_DATE), Mockito.eq(DUE_DATE), Mockito.eq(ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(REMAINING_ESTIMATE_MINUTES));
@@ -97,7 +97,9 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueHistoryService).saveIssueHistory(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(UUID.class),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(IssueEventType.UPDATED), Mockito.any(JsonNode.class));
 
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService,
+                                         projectAccessChecker
+        );
     }
 
     @DisplayName("Возврат задачи без изменений, если переданные поля совпадают с текущими")
@@ -117,7 +119,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -134,13 +136,13 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
+        Mockito.verify(projectAccessChecker).checkProjectAccess(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(sameSummary), Mockito.eq(sameDescription), Mockito.eq(samePriority),
                                                                     Mockito.eq(EMPTY_STORY_POINTS), Mockito.eq(
                         EMPTY_START_DATE), Mockito.eq(EMPTY_DUE_DATE),
                                                                     Mockito.eq(EMPTY_ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(EMPTY_REMAINING_ESTIMATE_MINUTES));
 
-        Mockito.verifyNoMoreInteractions(issueRepository, projectRoleChecker);
+        Mockito.verifyNoMoreInteractions(issueRepository, projectAccessChecker);
         Mockito.verifyNoInteractions(issueHistoryService, outboxEventService);
     }
 
@@ -168,6 +170,6 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
-        Mockito.verifyNoInteractions(projectRoleChecker, issueHistoryService, outboxEventService);
+        Mockito.verifyNoInteractions(projectAccessChecker, issueHistoryService, outboxEventService);
     }
 }

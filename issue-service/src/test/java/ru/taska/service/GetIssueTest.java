@@ -75,7 +75,7 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -109,7 +109,7 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -145,7 +145,7 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
-        Mockito.verifyNoInteractions(projectRoleChecker, issueHistoryRepository);
+        Mockito.verifyNoInteractions(projectAccessChecker, issueHistoryRepository);
     }
 
     @Test
@@ -157,7 +157,7 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessChecker.checkProjectAccess(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -177,6 +177,6 @@ class GetIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
         Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
         Mockito.verify(issueProperties.card()).maxHistorySize();
-        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+        Mockito.verify(projectAccessChecker).checkProjectAccess(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
     }
 }

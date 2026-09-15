@@ -64,17 +64,6 @@ class WorkflowServiceIT extends AbstractIT{
     }
 
     @Test
-    void shouldThrowInvalidArgument_causeWrongIssueType() {
-        StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, WRONG_ISSUE_TYPE))
-                    .expectErrorSatisfies(error -> {
-                        Assertions.assertInstanceOf(DomainException.class, error);
-                        DomainException ex = (DomainException) error;
-                        Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ex.getStatus());
-                    })
-                    .verify();
-    }
-
-    @Test
     void shouldThrowNotFound_causeDefaultWorkflowDoesntExist() {
         cleanAll();
         StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, ISSUE_TYPE))

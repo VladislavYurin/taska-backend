@@ -14,8 +14,8 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.Issue;
@@ -94,8 +94,8 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @BeforeEach
     void setup(){
-        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
-                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+        Mockito.when(projectServiceStub.checkProjectAccess(Mockito.any(CheckProjectAccessRequest.class)))
+                .thenReturn(Mono.just(CheckProjectAccessResponse.newBuilder()
                                 .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
                                 .setIsMember(true)
                                 .setProjectExists(true)

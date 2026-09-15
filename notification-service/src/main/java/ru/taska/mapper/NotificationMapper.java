@@ -130,6 +130,17 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toProjectArchived(TaskaEvent event, UUID userId) {
+        return Notification.builder()
+                           .userId(userId)
+                           .notificationType(NotificationType.PROJECT_ARCHIVED)
+                           .title("Проект удален (soft delete)")
+                           .body("Проект заархивирован " + event.aggregateId())
+                           .createdAt(Instant.now())
+                           .sourceEventId(event.id())
+                           .build();
+    }
+
     public Notification toMemberAdded(TaskaEvent event, UUID userId) {
         return Notification.builder()
                 .userId(userId)
@@ -262,6 +273,7 @@ public class NotificationMapper {
             case ISSUE_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED;
             case USER_INVITED -> NotificationKind.NOTIFICATION_KIND_USER_INVITED;
             case PROJECT_CREATED -> NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED;
+            case PROJECT_ARCHIVED -> NotificationKind.NOTIFICATION_KIND_PROJECT_ARCHIVED;
             case MEMBER_ADDED -> NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED;
             case MEMBER_UPDATED -> NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED;
             case MEMBER_REMOVED -> NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED;

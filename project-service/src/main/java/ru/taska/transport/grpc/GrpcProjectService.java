@@ -1,7 +1,6 @@
 package ru.taska.transport.grpc;
 
 import java.util.UUID;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,17 +10,18 @@ import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.DeleteProjectRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.domain.ProjectRole;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.mapper.ProjectMemberMapper;
@@ -81,6 +81,28 @@ public class GrpcProjectService {
                     log.info("[{}][{}] Received request to getProject: projectId={}, from user={}", requestId, nodeId, projectId, actorUserId);
 
                     return projectService.getProject(requestId, nodeId, projectId, actorUserId);
+                })
+                .map(projectMapper::toProjectResponse);
+    }
+
+    @TrackMetrics(counter = "project-service_delete-Project_grpc_counter",
+                timer = "project-service_delete-Project_grpc_timer")
+    public Mono<ProjectResponse> deleteProject(Mono<DeleteProjectRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")))
+                .flatMap(t -> {
+                             String requestId = t.getT1();
+                             String nodeId = t.getT2();
+                             UUID projectId = t.getT3();
+                             UUID actorUserId = t.getT4();
+
+                             log.info("[{}][{}] Received request to deleteProject: projectId={}, from user={}", requestId, nodeId, projectId, actorUserId);
+
+                             return projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId);
                 })
                 .map(projectMapper::toProjectResponse);
     }
@@ -191,10 +213,9 @@ public class GrpcProjectService {
                 .map(projectMemberMapper::toChangeProjectMemberRoleResponse);
     }
 
-    @TrackMetrics(counter = "project-service_check-projectMemberRole_grpc_counter",
-            timer = "project-service_check-projectMemberRole_grpc_timer")
-    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole
-            (Mono<CheckProjectMemberRoleRequest> request) {
+    @TrackMetrics(counter = "project-service_check-projectAccess_grpc_counter",
+            timer = "project-service_check-projectAccess_grpc_timer")
+    public Mono<CheckProjectAccessResponse> checkProjectAccess(Mono<CheckProjectAccessRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
@@ -217,12 +238,12 @@ public class GrpcProjectService {
                     UUID projectId = t.getT3();
                     UUID userId = t.getT4();
 
-                    log.info("[{}][{}] Received checkProjectRole request: projectId={}, userId={}",
+                    log.info("[{}][{}] Received checkProjectAccess request: projectId={}, userId={}",
                             requestId, nodeId, projectId, userId);
 
-                    return projectMemberService.checkProjectMemberRole(requestId, nodeId, projectId, userId);
+                    return projectService.checkProjectAccess(requestId, nodeId, projectId, userId);
                 })
-                .map(projectMemberMapper::toCheckProjectRoleResponse);
+                .map(projectMemberMapper::toCheckProjectAccessResponse);
     }
 
     @TrackMetrics(counter = "project-service_get-projectKeyInternal_grpc_counter",

@@ -27,6 +27,7 @@ import ru.taska.service.validator.ProjectMemberValidator;
 
 import java.time.Instant;
 import java.util.UUID;
+import ru.taska.service.validator.ProjectValidator;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectMemberServiceImplTest {
@@ -39,6 +40,9 @@ class ProjectMemberServiceImplTest {
 
     @Mock
     private ProjectRepository projectRepository;
+
+    @Mock
+    private ProjectValidator projectValidator;
 
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;
@@ -77,11 +81,14 @@ class ProjectMemberServiceImplTest {
 
         ProjectMemberValidator projectMemberValidator = new ProjectMemberValidatorImpl(projectMemberRepository);
 
+        Mockito.lenient().when(projectValidator.isArchived(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+
         projectMemberService = new ProjectMemberServiceImpl(
                 projectMemberRepository,
                 projectRepository,
                 outboxEventService,
-                projectMemberValidator
+                projectMemberValidator,
+                projectValidator
         );
     }
 

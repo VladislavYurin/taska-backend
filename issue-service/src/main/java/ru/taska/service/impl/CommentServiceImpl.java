@@ -20,7 +20,7 @@ import ru.taska.repository.IssueRepository;
 import ru.taska.service.CommentService;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -40,7 +40,7 @@ public class CommentServiceImpl implements CommentService {
     private final IssueCommentRepository commentRepository;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessChecker projectAccessChecker;
     private final ObjectMapper objectMapper;
 
     // ==================== ПУБЛИЧНЫЕ МЕТОДЫ ====================
@@ -57,7 +57,7 @@ public class CommentServiceImpl implements CommentService {
         return findIssueWithLock(requestId, nodeId, issueId)
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();
-
+                    //todo обращение к другому сервису внутри Transactional
                     return checkPermissions(requestId, nodeId, projectId, authorUserId)
                             .thenReturn(issue);
                 })
@@ -107,7 +107,7 @@ public class CommentServiceImpl implements CommentService {
         return findIssueWithLock(requestId, nodeId, issueId)
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();
-
+                    //todo обращение к другому сервису внутри Transactional
                     return checkPermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
@@ -162,6 +162,7 @@ public class CommentServiceImpl implements CommentService {
         return findIssueWithLock(requestId, nodeId, issueId)
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();  // ✅ Из базы данных!
+                    //todo обращение к другому сервису внутри Transactional
                     return checkPermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
@@ -248,7 +249,7 @@ public class CommentServiceImpl implements CommentService {
      */
     private Mono<Void> checkPermissions(String requestId, String nodeId, UUID projectId, UUID userId) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().commentRoles();
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, userId, allowedRoles);
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, projectId, userId, allowedRoles);
     }
 
     /**

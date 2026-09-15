@@ -23,7 +23,7 @@ import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.LabelService;
 import ru.taska.service.OutboxEventService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
@@ -40,7 +40,7 @@ public class LabelServiceImpl implements LabelService {
     private final IssueLabelsRepository issueLabelsRepository;
     private final IssueRepository issueRepository;
     private final LabelMapper mapper;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessChecker projectAccessChecker;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
@@ -57,17 +57,17 @@ public class LabelServiceImpl implements LabelService {
     ) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createProjectLabelRoles();
+        //todo обращение к другому сервису внутри Transactional
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-
-                .then(Mono.defer(() -> validateLabelNameUniqueness(requestDto.projectId(), requestDto.name())))
-                .then(Mono.defer(() -> {
+                                   .then(Mono.defer(() -> validateLabelNameUniqueness(requestDto.projectId(), requestDto.name())))
+                                   .then(Mono.defer(() -> {
                     ProjectLabels label = mapper.toEntity(requestDto);
                     return projectLabelsRepository.save(label);
                 }))
 
-                .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(labelInfo ->
+                                   .map(mapper::toProjectLabelInfo)
+                                   .doOnSuccess(labelInfo ->
                         log.debug("Created project label: id={}, projectId={}, name={}", labelInfo.id(), labelInfo.projectId(), labelInfo.name())
                 );
 
@@ -85,13 +85,13 @@ public class LabelServiceImpl implements LabelService {
     ) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateProjectLabelRoles();
-
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
-                .switchIfEmpty(Mono.error(new DomainException(
+        //todo обращение к другому сервису внутри Transactional
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+                                   .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
+                                   .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
                 )))
-                .flatMap(label -> {
+                                   .flatMap(label -> {
                     if (!label.getProjectId().equals(requestDto.projectId())) {
                         return Mono.error(new DomainException(
                                 DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project"
@@ -104,8 +104,8 @@ public class LabelServiceImpl implements LabelService {
                             }))
                             .flatMap(projectLabelsRepository::save);
                 })
-                .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(labelInfo ->
+                                   .map(mapper::toProjectLabelInfo)
+                                   .doOnSuccess(labelInfo ->
                         log.debug("Updated project label: id={}, name={}", labelInfo.id(), labelInfo.name())
                 );
     }
@@ -122,10 +122,10 @@ public class LabelServiceImpl implements LabelService {
     ) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteProjectLabelRoles();
-
-        return projectRoleChecker.checkProjectRole(
+        //todo обращение к другому сервису внутри Transactional
+        return projectAccessChecker.checkProjectAccess(
                         requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                                   .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
                         .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
                         )))
@@ -141,7 +141,7 @@ public class LabelServiceImpl implements LabelService {
                                     ));
                         })
                 )
-                .doOnSuccess(dto ->
+                                   .doOnSuccess(dto ->
                         log.debug("Deleted project label: id={}, projectId={}", dto.labelId(), dto.projectId())
                 );
     }
@@ -158,13 +158,13 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(
+        return projectAccessChecker.checkProjectAccess(
                         requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(requestDto.projectId())
+                                   .then(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(requestDto.projectId())
                         .collectList()
                         .map(mapper::toListProjectLabelResponseDto)
                 )
-                .doOnSuccess(dto ->
+                                   .doOnSuccess(dto ->
                         log.debug("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
                 );
 
@@ -188,8 +188,9 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                        //todo обращение к другому сервису внутри Transactional
+                        projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                                            .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
                                         .switchIfEmpty(Mono.error(new DomainException(
                                                 DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
                                         )))
@@ -247,12 +248,13 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
-                                .switchIfEmpty(Mono.error(new DomainException(
+                        //todo обращение к другому сервису внутри Transactional
+                        projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                                            .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
+                                            .switchIfEmpty(Mono.error(new DomainException(
                                         DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
                                 )))
-                                .flatMap(label -> {
+                                            .flatMap(label -> {
                                     if (!label.getProjectId().equals(issue.getProjectId())) {
                                         return Mono.error(new DomainException(
                                                 DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
@@ -301,9 +303,9 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(
+                        projectAccessChecker.checkProjectAccess(
                                         requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
+                                            .then(issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
                                         .collectList()
                                         .map(mapper::toListIssueLabelResponseDto)
                                 )

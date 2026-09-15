@@ -25,7 +25,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.service.impl.CommentServiceImpl;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -60,7 +60,7 @@ class CommentServiceImplTest {
     private OutboxEventService outboxEventService;
 
     @Mock
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessChecker projectAccessChecker;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -178,7 +178,7 @@ class CommentServiceImplTest {
     @DisplayName("addComment: должен успешно добавить комментарий")
     void addComment_success() {
         // Arrange
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -210,7 +210,7 @@ class CommentServiceImplTest {
                 .expectNextMatches(savedComment -> savedComment.getId().equals(commentId))
                 .verifyComplete();
 
-        verify(projectRoleChecker).checkProjectRole(
+        verify(projectAccessChecker).checkProjectAccess(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(issueRepository).findActiveByIdForUpdate(issueId);
@@ -262,7 +262,7 @@ class CommentServiceImplTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -311,7 +311,7 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -351,7 +351,7 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -397,7 +397,7 @@ class CommentServiceImplTest {
                 .deletedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -442,7 +442,7 @@ class CommentServiceImplTest {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -480,7 +480,7 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 10;
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
@@ -508,7 +508,7 @@ class CommentServiceImplTest {
                 .verifyComplete();
 
         verify(issueRepository).findActiveById(issueId);
-        verify(projectRoleChecker).checkProjectRole(
+        verify(projectAccessChecker).checkProjectAccess(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(commentRepository).countActiveByIssueId(issueId);
@@ -519,7 +519,7 @@ class CommentServiceImplTest {
     @DisplayName("listComments: должен использовать значения по умолчанию для пагинации")
     void listComments_defaultPagination() {
         // Arrange
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
@@ -556,7 +556,7 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 100;
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectAccessChecker.checkProjectAccess(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))

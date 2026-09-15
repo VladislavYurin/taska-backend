@@ -51,13 +51,18 @@ service ProjectService {
   /**
    * Проверяет роль пользователя в проекте.
    */
-  rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
+  rpc CheckProjectAccess(CheckProjectAccessRequest) returns (CheckProjectAccessResponse);
 
   /**
    * Внутренний метод. Возвращает ключ проекта по ID без проверки прав.
    * Используется только сервисами, которые уже проверили права.
    */
   rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
+
+  /**
+   * Удаляет проект (soft delete).
+   */
+  rpc DeleteProject (DeleteProjectRequest) returns (ProjectResponse);
 }
 
 message CreateProjectRequest {
@@ -93,7 +98,7 @@ message ListMyProjectsRequestBody {
 /**
  * Запрос на проверку роли пользователя в проекте.
  */
-message CheckProjectMemberRoleRequest {
+message CheckProjectAccessRequest {
   /**
    * Заголовок запроса.
    */
@@ -102,13 +107,13 @@ message CheckProjectMemberRoleRequest {
   /**
    * Тело запроса.
    */
-  CheckProjectMemberRoleRequestBody body = 2;
+  CheckProjectAccessRequestBody body = 2;
 }
 
 /**
  * Тело запроса на проверку роли пользователя в проекте.
  */
-message CheckProjectMemberRoleRequestBody {
+message CheckProjectAccessRequestBody {
   /**
    * Идентификатор проекта.
    */
@@ -189,7 +194,7 @@ message ChangeProjectMemberRoleResponse {
 /**
  * Ответ проверки роли пользователя в проекте.
  */
-message CheckProjectMemberRoleResponse {
+message CheckProjectAccessResponse {
   /**
    * Роль пользователя.
    */
@@ -204,6 +209,11 @@ message CheckProjectMemberRoleResponse {
    * Существует ли проект.
    */
   bool project_exists = 3;
+
+  /**
+   * Удален ли проект (soft delete).
+   */
+  bool project_archived = 4;
 }
 
 /**
@@ -226,4 +236,20 @@ message ProjectKeyResponse {
    * Ключ-название проекта
    */
   string project_key = 1;
+}
+
+message DeleteProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  DeleteProjectRequestBody body = 2;
+}
+
+message DeleteProjectRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+  /**
+   * Идентификатор пользователя отправившего запрос.
+   */
+  string actor_user_id=2;
 }

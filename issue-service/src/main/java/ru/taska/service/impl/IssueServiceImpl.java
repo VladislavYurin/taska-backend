@@ -1,8 +1,15 @@
 package ru.taska.service.impl;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -38,21 +45,12 @@ import ru.taska.service.IssueService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.service.watcher.IssueAutoWatchService;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import ru.taska.util.PayloadSerializer;
 import ru.taska.util.RequestHasher;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -71,7 +69,7 @@ public class IssueServiceImpl implements IssueService {
     private final OutboxEventService outboxEventService;
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final IssueMapper issueMapper;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessChecker projectAccessChecker;
     private final ObjectMapper objectMapper;
     private final IssueHistoryRepository issueHistoryRepository;
     private final IssueAutoWatchService issueAutoWatchService;
@@ -97,9 +95,9 @@ public class IssueServiceImpl implements IssueService {
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
         String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
-
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
-                .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
+        //todo обращение к другому сервису внутри Transactional
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, projectId, reporterId, allowedRoles)
+                                   .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
                         .flatMap(keyEntity -> {
 
                             if (!keyEntity.getRequestHash().equals(currentRequestHash)) {
@@ -114,8 +112,8 @@ public class IssueServiceImpl implements IssueService {
                                             objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
                                     .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
 
-                        }))
-                .switchIfEmpty(grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)
+                        }))//todo обращение к другому сервису внутри Transactional
+                                   .switchIfEmpty(grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)
                         .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                                 .flatMap(number -> {
                                     return issueRepository.save(Issue.builder()
@@ -171,14 +169,14 @@ public class IssueServiceImpl implements IssueService {
                 }))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().assignIssueRoles();
-
-                    Mono<Void> actorCheck = projectRoleChecker.checkProjectRole(
+                    //todo обращение к другому сервису внутри Transactional
+                    Mono<Void> actorCheck = projectAccessChecker.checkProjectAccess(
                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
                     );
-
+                    //todo обращение к другому сервису внутри Transactional
                     Mono<Void> assigneeCheck = actorUserId.equals(assigneeId)
                             ? Mono.empty()
-                            : projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), assigneeId, allowedRoles);
+                            : projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), assigneeId, allowedRoles);
 
                     return actorCheck
                             .then(assigneeCheck)
@@ -232,9 +230,9 @@ public class IssueServiceImpl implements IssueService {
                 }))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
-
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue);
+                    //todo обращение к другому сервису внутри Transactional
+                    return projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                                               .thenReturn(issue);
                 })
                 .flatMap(updatingIssue -> {
 
@@ -297,9 +295,9 @@ public class IssueServiceImpl implements IssueService {
                 }))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
-
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue);
+                    //todo обращение к другому сервису
+                    return projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                                               .thenReturn(issue);
                 })
                 .flatMap(deletedIssue -> {
                     JsonNode payload = payloadSerializer.createIssueDeletedPayload(IssueEventType.DELETED, deletedIssue.getDeletedAt(), actorUserId, deletedIssue.getAssigneeId());
@@ -332,9 +330,8 @@ public class IssueServiceImpl implements IssueService {
                 }))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().getIssueRoles();
-
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue);
+                    return projectAccessChecker.checkProjectAccess(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                                               .thenReturn(issue);
                 })
                 .flatMap(issue ->
                         issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
@@ -371,9 +368,8 @@ public class IssueServiceImpl implements IssueService {
         long offset = (long) resolvedPage * resolvedPageSize;
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
-
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
-                .then(Mono.zip(
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                                   .then(Mono.zip(
                         labelId != null
                                 ? issueRepository.countByLabelIdWithFilters(projectId, labelId, statusKey, assigneeId)
                                 : issueRepository.countByFilter(projectId, statusKey, assigneeId)
@@ -383,7 +379,7 @@ public class IssueServiceImpl implements IssueService {
                                 : issueRepository.findByFilter(projectId, statusKey, assigneeId, resolvedPageSize, offset).collectList()
                         )
                 )
-                .flatMap(t ->{
+                                   .flatMap(t ->{
                     List<Issue> issues = t.getT2();
                     Long count = t.getT1();
 
@@ -521,9 +517,8 @@ public class IssueServiceImpl implements IssueService {
 
         String priorityStr = priority != null ? priority.name() : null;
         String issueTypeStr = issueType != null ? issueType.name() : null;
-
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
-                .then(Mono.zip(
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                                   .then(Mono.zip(
                         issueRepository.countSearchIssues(
                                 projectId,
                                 statusKey,
@@ -545,14 +540,14 @@ public class IssueServiceImpl implements IssueService {
                                 offset
                         ).collectList()
                 ))
-                .map(t -> {
+                                   .map(t -> {
                     Long totalCount = t.getT1();
                     List<Issue> issues = t.getT2();
                     log.info("[{}][{}] Search in project {} completed: found {} issues, total={}",
                             requestId, nodeId, projectId, issues.size(), totalCount);
                     return new PageResult<>(issues, totalCount);
                 })
-                .doOnError(e -> log.error("[{}][{}] Search in project {} failed: {}",
+                                   .doOnError(e -> log.error("[{}][{}] Search in project {} failed: {}",
                         requestId, nodeId, projectId, e.getMessage()));
     }
 
@@ -612,7 +607,6 @@ public class IssueServiceImpl implements IssueService {
     ) {
         log.info("[{}][{}] Getting user projects for userId: {}",
                 requestId, nodeId, actorUserId);
-
         return grpcProjectServiceClient.listMyProjects(requestId, nodeId, actorUserId)
                 .map(projects -> projects.stream()
                         .map(project -> UUID.fromString(project.getId()))
@@ -698,7 +692,7 @@ public class IssueServiceImpl implements IssueService {
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+        return projectAccessChecker.checkProjectAccess(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
                         issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, labelIds, pageSizePerColumn)
                                 .collectList()

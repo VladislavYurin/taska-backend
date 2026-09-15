@@ -1,5 +1,6 @@
 package ru.taska.transport.grpc;
 
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,8 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.CreateProjectRequestBody;
+import ru.taska.api.project.v1.DeleteProjectRequest;
+import ru.taska.api.project.v1.DeleteProjectRequestBody;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequestBody;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -27,8 +30,6 @@ import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.mapper.ProjectMapper;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * gRPC-клиент для взаимодействия с project-service.
@@ -93,6 +94,32 @@ public class GrpcProjectServiceClient {
                                         .build()
                         )
                         .build()
+        ).map(projectMapper::toRestProjectResponse);
+    }
+
+    /**
+     * Вызов мягкого удаления проекта
+     * @param projectId идентификатор проекта
+     * @param context контекст запроса
+     *
+     * @return Rest DTO удаленного проекта
+     */
+    public Mono<ProjectResponseDto> deleteProject(
+            String projectId,
+            GatewayContext context
+    ){
+        log.info("[{}] Calling deleteProject",context.requestId());
+
+        return dynamicStub().deleteProject(
+                DeleteProjectRequest.newBuilder()
+                                    .setHeader(buildGrpcHeader(context))
+                                    .setBody(
+                                            DeleteProjectRequestBody.newBuilder()
+                                                                    .setProjectId(projectId)
+                                                                    .setActorUserId(context.userContext().userId())
+                                                                    .build()
+                                 )
+                                    .build()
         ).map(projectMapper::toRestProjectResponse);
     }
 

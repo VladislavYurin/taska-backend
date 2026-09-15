@@ -2,7 +2,6 @@ package ru.taska.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.InjectMocks;
@@ -19,7 +18,7 @@ import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.service.impl.IssueServiceImpl;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessChecker;
 import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.ObjectMapper;
@@ -54,7 +53,7 @@ public class IssueServiceImplTest {
     protected IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Mock
-    protected ProjectRoleChecker projectRoleChecker;
+    protected ProjectAccessChecker projectAccessChecker;
 
     @Mock
     protected IssueLabelsRepository issueLabelsRepository;

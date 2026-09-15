@@ -33,7 +33,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(issueProperties.allowedRoles().assignIssueRoles()).thenReturn(allowedRoles);
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectAccessChecker.checkProjectAccess(
                 Mockito.anyString(),
                 Mockito.anyString(),
                 Mockito.eq(PROJECT_ID),
@@ -84,7 +84,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectAccessChecker, Mockito.times(2)).checkProjectAccess(
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
@@ -120,7 +120,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectAccessChecker, Mockito.times(2)).checkProjectAccess(
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
@@ -146,7 +146,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verifyNoInteractions(projectRoleChecker, payloadSerializer, issueHistoryService, outboxEventService);
+        Mockito.verifyNoInteractions(projectAccessChecker, payloadSerializer, issueHistoryService, outboxEventService);
     }
 }
 

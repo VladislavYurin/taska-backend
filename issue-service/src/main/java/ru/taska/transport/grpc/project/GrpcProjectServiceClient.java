@@ -1,24 +1,23 @@
 package ru.taska.transport.grpc.project;
 
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequestBody;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectAccessRequest;
+import ru.taska.api.project.v1.CheckProjectAccessRequestBody;
+import ru.taska.api.project.v1.CheckProjectAccessResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequestBody;
-import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequestBody;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -27,31 +26,31 @@ public class GrpcProjectServiceClient {
 
     private final ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
 
-    public Mono<CheckProjectMemberRoleResponse> checkProjectRole(
+    public Mono<CheckProjectAccessResponse> checkProjectAccess(
             String requestId,
             String nodeId,
             UUID projectId,
             UUID userId
     ) {
-        log.info("[{}][{}] Calling checkProjectRole with: projectId={}, userId={}",
+        log.info("[{}][{}] Calling checkProjectAccess with: projectId={}, userId={}",
                 requestId, nodeId, projectId, userId);
 
-        var request = CheckProjectMemberRoleRequest.newBuilder()
-                .setHeader(
+        var request = CheckProjectAccessRequest.newBuilder()
+                                               .setHeader(
                         Header.newBuilder()
                                 .setRequestId(requestId)
                                 .setNodeId(nodeId)
                                 .build()
                 )
-                .setBody(
-                        CheckProjectMemberRoleRequestBody.newBuilder()
-                                .setProjectId(projectId.toString())
-                                .setUserId(userId.toString())
-                                .build()
+                                               .setBody(
+                                                       CheckProjectAccessRequestBody.newBuilder()
+                                                                                    .setProjectId(projectId.toString())
+                                                                                    .setUserId(userId.toString())
+                                                                                    .build()
                 )
-                .build();
+                                               .build();
 
-        return projectServiceStub.checkProjectMemberRole(request);
+        return projectServiceStub.checkProjectAccess(request);
     }
 
     public Mono<String> getProjectKeyInternal(String requestId, String nodeId, UUID projectId) {

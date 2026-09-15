@@ -23,7 +23,7 @@ public final class GrpcExceptionMapper {
             case NOT_FOUND -> io.grpc.Status.NOT_FOUND;
             case ALREADY_EXISTS -> io.grpc.Status.ALREADY_EXISTS;
             case INVALID_ARGUMENT -> io.grpc.Status.INVALID_ARGUMENT;
-            case FAILED_PRECONDITION -> io.grpc.Status.FAILED_PRECONDITION;
+            case FAILED_PRECONDITION, PROJECT_ARCHIVED -> io.grpc.Status.FAILED_PRECONDITION;
             case PERMISSION_DENIED -> io.grpc.Status.PERMISSION_DENIED;
             case UNAUTHENTICATED -> io.grpc.Status.UNAUTHENTICATED;
             case RESOURCE_EXHAUSTED -> io.grpc.Status.RESOURCE_EXHAUSTED;

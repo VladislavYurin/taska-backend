@@ -53,7 +53,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 .thenReturn(allowedRoles);
 
         Mockito.lenient()
-                .when(projectRoleChecker.checkProjectRole(
+                .when(projectAccessChecker.checkProjectAccess(
                         localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -87,14 +87,15 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 .verify();
 
         Mockito.verify(issueProperties.allowedRoles()).deleteIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectAccessChecker).checkProjectAccess(
                 localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles
         );
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
         Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
         Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload);
         Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, AggregateType.ISSUE, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
-        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker, payloadSerializer);
+        Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService,
+                                         projectAccessChecker, payloadSerializer);
     }
 
     @DisplayName("Выкидывание ошибки при отсутствии задачи в БД или если отмечена удаленной.")
@@ -115,6 +116,8 @@ public class DeleteIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
         Mockito.verifyNoMoreInteractions(issueRepository);
-        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService, projectRoleChecker);
+        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService,
+                                     projectAccessChecker
+        );
     }
 }
