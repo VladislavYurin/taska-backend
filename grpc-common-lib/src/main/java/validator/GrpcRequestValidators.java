@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -142,6 +144,25 @@ public final class GrpcRequestValidators {
 
         return parseUuidOrInvalidArgument(raw, fieldName)
                 .map(Optional::of);
+    }
+
+    /**
+     * Проверяет список строковых значений на корректность UUID
+     * и преобразует их в список {@link UUID}.
+     *
+     * @param values список строковых значений для преобразования
+     * @param field имя поля запроса, используемое в сообщении об ошибке
+     * @return {@link Mono}, содержащий список {@link UUID} или ошибкой {@code INVALID_ARGUMENT}
+     *      если хотя бы одно значение не является корректным UUID
+     */
+
+    public static Mono<List<UUID>> parseUuidListOrInvalidArgument(
+            List<String> values,
+            String field
+    ) {
+        return Flux.fromIterable(values)
+                .concatMap(value -> parseUuidOrInvalidArgument(value, field))
+                .collectList();
     }
 
     /**

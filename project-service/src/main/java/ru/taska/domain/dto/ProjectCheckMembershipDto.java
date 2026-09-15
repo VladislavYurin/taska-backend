@@ -1,6 +1,7 @@
 package ru.taska.domain.dto;
 
 import lombok.Builder;
+import ru.taska.domain.ProjectRole;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,5 +19,6 @@ import java.util.UUID;
         Instant created_at,
         Instant updated_at,
         Instant archived_at,
-        UUID user_id
+        UUID user_id,
+        ProjectRole role
     ){}

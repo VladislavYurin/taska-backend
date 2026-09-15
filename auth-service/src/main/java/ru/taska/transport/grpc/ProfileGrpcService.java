@@ -13,12 +13,15 @@ import com.google.protobuf.Empty;
 import ru.taska.api.auth.profile.v1.DeleteMyAvatarRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlResponse;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequest;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.GetUserProfileRequest;
 import ru.taska.api.auth.profile.v1.GetUserProfileResponse;
 import ru.taska.mapper.ProfileMapper;
 import ru.taska.service.ProfileService;
 import validator.GrpcRequestValidators;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -185,5 +188,37 @@ public class ProfileGrpcService {
                                     requestId, nodeId, userId, error.getMessage()));
                 })
                 .map(profileMapper::toProto);
+    }
+
+    @TrackMetrics(counter = "auth-service_getUserDetailsByIds_grpc_counter",
+            timer = "auth-service_getUserDetailsByIds_grpc_timer")
+    public Mono<GetUserDetailsByIdsResponse> getUserDetailsByIds(Mono<GetUserDetailsByIdsRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidListOrInvalidArgument(
+                                req.getBody().getUserIdsList(), "body.userIds")
+                ))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    List<UUID> userIds = t.getT3();
+
+                    log.info("[{}][{}] GetUserDetailsByIds request for userId={}", requestId, nodeId, userIds);
+
+                    return profileService.getUserDetailsByIds(userIds)
+                            .map(profileMapper::toProto)
+                            .collectList()
+                            .map(userDetailsList -> GetUserDetailsByIdsResponse.newBuilder()
+                                    .addAllUserDetails(userDetailsList)
+                                    .build())
+                            .doOnSuccess(response -> log.debug("[{}][{}] GetUserDetailsByIds success for userId={}",
+                                    requestId, nodeId, userIds))
+                            .doOnError(error -> log.warn("[{}][{}] GetUserDetailsByIds failed for userId={}: {}",
+                                    requestId, nodeId, userIds, error.getMessage()));
+                });
     }
 }

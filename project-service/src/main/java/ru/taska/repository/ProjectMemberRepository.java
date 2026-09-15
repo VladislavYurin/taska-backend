@@ -26,4 +26,18 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
     Flux<ProjectMemberDto> getRequiredMembersInProject(UUID actorUserId, UUID changedMemberId, UUID projectId);
 
     Mono<ProjectMember> findByUserIdAndProjectId(UUID userId, UUID projectId);
+
+    @Query("""
+    SELECT pm.user_id, pm.role
+    FROM taska.project_members pm
+    WHERE pm.project_id = :projectId
+      AND EXISTS (
+          SELECT 1
+          FROM taska.project_members requester
+          WHERE requester.project_id = :projectId
+            AND requester.user_id = :actorUserId
+      )
+    ORDER BY pm.user_id ASC
+    """)
+    Flux<ProjectMemberDto> findProjectMembers(UUID projectId, UUID actorUserId);
 }

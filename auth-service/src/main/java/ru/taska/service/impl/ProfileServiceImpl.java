@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.dto.AvatarDto;
+import ru.taska.dto.UserDetailsDto;
 import ru.taska.dto.UserProfileDto;
 import ru.taska.entity.User;
 import ru.taska.entity.UserAvatar;
@@ -18,6 +20,9 @@ import ru.taska.service.ProfileService;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -131,6 +136,47 @@ public class ProfileServiceImpl implements ProfileService {
                                 .onErrorComplete()))
                 .switchIfEmpty(Mono.fromRunnable(() ->
                         log.debug("User {} has no avatar, nothing to delete", actorUserId)));
+    }
+
+    /**
+     * Возвращает данные пользователей по переданным идентификаторам.
+     * Если хотя бы один пользователь не найден, возвращает ошибку {@code NOT_FOUND}.
+     * <p>
+     * Метод автоматически удаляет дубликаты из входного списка {@code userIds} и сохраняет
+     * исходный порядок элементов при возврате результата. Если хотя бы один из запрошенных
+     * пользователей не найден в базе данных, выполнение завершается ошибкой.
+     */
+    @Override
+    public Flux<UserDetailsDto> getUserDetailsByIds(List<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Flux.empty();
+        }
+
+        List<UUID> distinctIds = userIds.stream().distinct().toList();
+
+        return userRepository.findUsersWithAvatars(distinctIds)
+                .collectMap(UserDetailsDto::userId)
+                .flatMapMany(usersMap -> filterFoundUsersInOrder(usersMap, distinctIds))
+                .flatMapSequential(this::enrichWithAvatarUrl)
+                .doOnError(ex -> log.error("Failed to execute getUserDetailsByIds for userIds: {}", distinctIds, ex))
+                .doOnComplete(() -> log.info("Successfully completed getUserDetailsByIds for requested IDs"));
+    }
+
+    private Flux<UserDetailsDto> filterFoundUsersInOrder(Map<UUID, UserDetailsDto> usersMap, List<UUID> distinctIds) {
+        List<UserDetailsDto> foundList = distinctIds.stream()
+                .map(usersMap::get)
+                .filter(Objects::nonNull)
+                .toList();
+
+        return Flux.fromIterable(foundList);
+    }
+
+    private Mono<UserDetailsDto> enrichWithAvatarUrl(UserDetailsDto user) {
+        return Mono.justOrEmpty(user.avatar())
+                .mapNotNull(AvatarDto::getObjectKey)
+                .flatMap(storageClient::createPresignedDownloadUrl)
+                .doOnNext(url -> user.avatar().setDownloadUrl(url))
+                .thenReturn(user);
     }
 
     private Mono<User> verifyUserExists(UUID userId) {

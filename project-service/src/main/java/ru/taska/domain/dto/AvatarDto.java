@@ -1,13 +1,11 @@
-package ru.taska.dto;
+package ru.taska.domain.dto;
 
 import lombok.Builder;
-import lombok.Data;
 import lombok.Value;
 
-import java.time.Instant;
 import java.util.UUID;
 
-@Data
+@Value
 @Builder
 public class AvatarDto {
     UUID id;
@@ -16,6 +14,5 @@ public class AvatarDto {
     String fileName;
     String contentType;
     Long sizeBytes;
-    Instant createdAt;
     String downloadUrl;
 }

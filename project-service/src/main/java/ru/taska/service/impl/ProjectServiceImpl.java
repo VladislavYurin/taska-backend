@@ -10,9 +10,9 @@ import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
+import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
@@ -35,7 +35,6 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
-    private final ProjectMapper projectMapper;
 
     @Override
     @Transactional
@@ -68,7 +67,7 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public Mono<Project> getProject(String requestId, String nodeId, UUID projectId,UUID actorUserId) {
+    public Mono<ProjectCheckMembershipDto> getProject(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
         return projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId,actorUserId)
                 .switchIfEmpty(
                         Mono.defer(() -> {
@@ -82,12 +81,12 @@ public class ProjectServiceImpl implements ProjectService {
                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
                     }
                     log.info("[{}][{}] Successfully getting project with id: {}", requestId, nodeId, projectId);
-                    return Mono.just(projectMapper.toProject(dto));
+                    return Mono.just(dto);
                 });
     }
 
     @Override
-    public Flux<Project> listMyProjects(String requestId, String nodeId, UUID userId) {
+    public Flux<ProjectCheckMembershipDto> listMyProjects(String requestId, String nodeId, UUID userId) {
         return projectRepository.findAllByMemberUserId(userId)
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }

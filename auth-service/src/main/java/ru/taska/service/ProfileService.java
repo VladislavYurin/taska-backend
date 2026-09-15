@@ -1,10 +1,13 @@
 package ru.taska.service;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.dto.AvatarDto;
+import ru.taska.dto.UserDetailsDto;
 import ru.taska.dto.UserProfileDto;
 import ru.taska.storage.dto.PresignedUploadResult;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ProfileService {
@@ -56,4 +59,13 @@ public interface ProfileService {
      * @param actorUserId идентификатор пользователя
      */
     Mono<Void> deleteMyAvatar(UUID actorUserId);
+
+    /**
+     * Возвращает данные пользователей по переданным идентификаторам.
+     * Если хотя бы один пользователь не найден, возвращает ошибку {@code NOT_FOUND}.
+     *
+     * @param userIds идентификаторы пользователей
+     * @return {@link Flux} с данными пользователей
+     */
+    Flux<UserDetailsDto> getUserDetailsByIds(List<UUID> userIds);
 }
