@@ -26,6 +26,7 @@ import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
+import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
@@ -292,7 +293,7 @@ public class ProjectControllerTest {
 
         var request = new AddProjectMemberRequestDto();
         request.setUserId(MEMBER_ID);
-        request.setRole(AddProjectMemberRequestDto.RoleEnum.MEMBER);
+        request.setRole(ProjectMemberRoleDto.MEMBER);
 
         var response = new ProjectMemberResponseDto();
         response.setProjectId(PROJECT_ID);
@@ -324,7 +325,7 @@ public class ProjectControllerTest {
 
         var request = new AddProjectMemberRequestDto();
         request.setUserId(MEMBER_ID);
-        request.setRole(AddProjectMemberRequestDto.RoleEnum.MEMBER);
+        request.setRole(ProjectMemberRoleDto.MEMBER);
 
         Mockito.when(projectClient.addProjectMember(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "User already a member")));
@@ -349,7 +350,7 @@ public class ProjectControllerTest {
         mockAuthenticatedUser();
 
         var request = new ChangeProjectMemberRoleRequestDto();
-        request.setRole(ChangeProjectMemberRoleRequestDto.RoleEnum.VIEWER);
+        request.setRole(ProjectMemberRoleDto.VIEWER);
 
         var response = new ProjectMemberResponseDto();
         response.setProjectId(PROJECT_ID);
@@ -437,7 +438,7 @@ public class ProjectControllerTest {
         mockAuthenticatedUser();
 
         var request = new ChangeProjectMemberRoleRequestDto();
-        request.setRole(ChangeProjectMemberRoleRequestDto.RoleEnum.MEMBER);
+        request.setRole(ProjectMemberRoleDto.MEMBER);
 
         Mockito.when(projectClient.changeProjectMemberRole(
                         Mockito.any(),

@@ -33,6 +33,7 @@ import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
+import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.mapper.ProjectMapper;
 
@@ -201,7 +202,7 @@ public class GrpcProjectServiceClientTest {
         // given
         var restRequest = new AddProjectMemberRequestDto();
         restRequest.setUserId(MEMBER_ID);
-        restRequest.setRole(AddProjectMemberRequestDto.RoleEnum.MEMBER);
+        restRequest.setRole(ProjectMemberRoleDto.MEMBER);
 
         var grpcResponse = AddProjectMemberResponse.newBuilder()
                 .setProjectId(PROJECT_ID)
@@ -213,7 +214,7 @@ public class GrpcProjectServiceClientTest {
         restResponse.setUserId(MEMBER_ID);
         restResponse.setRole("MEMBER");
 
-        Mockito.when(projectMapper.toGrpcProjectRole("MEMBER"))
+        Mockito.when(projectMapper.toGrpcProjectRole(ProjectMemberRoleDto.MEMBER))
                 .thenReturn(ProjectRole.PROJECT_ROLE_MEMBER);
 
         Mockito.when(stub.addProjectMember(Mockito.any(AddProjectMemberRequest.class)))
@@ -250,7 +251,7 @@ public class GrpcProjectServiceClientTest {
     void changeProjectMemberRole_shouldCallStubAndReturnMappedResponse() {
         // given
         var restRequest = new ChangeProjectMemberRoleRequestDto();
-        restRequest.setRole(ChangeProjectMemberRoleRequestDto.RoleEnum.ADMIN);
+        restRequest.setRole(ProjectMemberRoleDto.ADMIN);
 
         var grpcResponse = ChangeProjectMemberRoleResponse.newBuilder()
                 .setProjectId(PROJECT_ID)
@@ -262,7 +263,7 @@ public class GrpcProjectServiceClientTest {
                 restResponse.setUserId(MEMBER_ID);
                 restResponse.setRole("ADMIN");
 
-        Mockito.when(projectMapper.toGrpcProjectRole("ADMIN"))
+        Mockito.when(projectMapper.toGrpcProjectRole(ProjectMemberRoleDto.ADMIN))
                 .thenReturn(ProjectRole.PROJECT_ROLE_ADMIN);
 
         Mockito.when(stub.changeProjectMemberRole(Mockito.any(ChangeProjectMemberRoleRequest.class)))

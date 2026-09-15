@@ -13,6 +13,7 @@ import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
+import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 
 import java.time.Instant;
@@ -88,19 +89,15 @@ public class ProjectMapper {
         return restDto;
     }
 
-    /// REST строка -> ProjectRole Enum grpc
-    public ProjectRole toGrpcProjectRole(String restRole) {
-        if (restRole == null) {
+    /// REST ProjectMemberRoleDto -> ProjectRole Enum grpc
+    public ProjectRole toGrpcProjectRole(ProjectMemberRoleDto role) {
+        if (role == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is required");
         }
-        return switch (restRole) {
-            case "ADMIN" -> ProjectRole.PROJECT_ROLE_ADMIN;
-            case "MEMBER" -> ProjectRole.PROJECT_ROLE_MEMBER;
-            case "VIEWER" -> ProjectRole.PROJECT_ROLE_VIEWER;
-            default -> throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid project role: " + restRole + ". Allowed: ADMIN, MEMBER, VIEWER"
-            );
+        return switch (role) {
+            case ADMIN -> ProjectRole.PROJECT_ROLE_ADMIN;
+            case MEMBER -> ProjectRole.PROJECT_ROLE_MEMBER;
+            case VIEWER -> ProjectRole.PROJECT_ROLE_VIEWER;
         };
     }
 
