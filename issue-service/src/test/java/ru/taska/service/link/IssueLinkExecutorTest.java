@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.IssueEventType;
@@ -23,6 +24,7 @@ import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
@@ -48,6 +50,9 @@ class IssueLinkExecutorTest {
     private IssueLinkRepository issueLinkRepository;
 
     @Mock
+    protected IssueWatcherRepository issueWatcherRepository;
+
+    @Mock
     private IssueHistoryService issueHistoryService;
 
     @Mock
@@ -71,6 +76,12 @@ class IssueLinkExecutorTest {
                 .linkType(LINK_TYPE)
                 .createdBy(ACTOR_USER_ID)
                 .build();
+
+        Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
+        Mockito.lenient()
+                .when(issueWatcherRepository.findUserIdsByIssueIds(Mockito.anyList()))
+                .thenReturn(Flux.empty());
     }
 
     @Test
@@ -96,7 +107,8 @@ class IssueLinkExecutorTest {
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
-                        Mockito.any(UUID.class)
+                        Mockito.any(UUID.class),
+                        Mockito.anyList()
                 ))
                 .thenReturn(payload);
 
@@ -153,7 +165,13 @@ class IssueLinkExecutorTest {
         Assertions.assertThat(argument.getCreatedBy()).isEqualTo(ACTOR_USER_ID);
 
         Mockito.verify(payloadSerializer)
-                .createIssueLinkCreatedPayload(SOURCE_ISSUE_ID, TARGET_ISSUE_ID, LINK_TYPE, ACTOR_USER_ID);
+                .createIssueLinkCreatedPayload(
+                        Mockito.eq(SOURCE_ISSUE_ID),
+                        Mockito.eq(TARGET_ISSUE_ID),
+                        Mockito.eq(LINK_TYPE),
+                        Mockito.eq(ACTOR_USER_ID),
+                        Mockito.anyList()
+                );
 
         Mockito.verify(issueHistoryService)
                 .saveIssueHistory(REQUEST_ID, NODE_ID, SOURCE_ISSUE_ID, ACTOR_USER_ID, IssueEventType.LINK_CREATED, payload);
@@ -219,7 +237,8 @@ class IssueLinkExecutorTest {
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
-                        Mockito.any(UUID.class)
+                        Mockito.any(UUID.class),
+                        Mockito.anyList()
                 ))
                 .thenReturn(payload);
 
@@ -258,7 +277,13 @@ class IssueLinkExecutorTest {
         Mockito.verify(issueLinkRepository).softDelete(link.getId());
 
         Mockito.verify(payloadSerializer)
-                .createIssueLinkDeletedPayload(SOURCE_ISSUE_ID, TARGET_ISSUE_ID, LINK_TYPE, ACTOR_USER_ID);
+                .createIssueLinkDeletedPayload(
+                        Mockito.eq(SOURCE_ISSUE_ID),
+                        Mockito.eq(TARGET_ISSUE_ID),
+                        Mockito.eq(LINK_TYPE),
+                        Mockito.eq(ACTOR_USER_ID),
+                        Mockito.anyList()
+                );
 
         Mockito.verify(issueHistoryService)
                 .saveIssueHistory(REQUEST_ID, NODE_ID, SOURCE_ISSUE_ID, ACTOR_USER_ID, IssueEventType.LINK_DELETED, payload);

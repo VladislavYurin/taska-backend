@@ -1,4 +1,4 @@
-package ru.taska.kafka;
+package ru.taska.transport.kafka;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

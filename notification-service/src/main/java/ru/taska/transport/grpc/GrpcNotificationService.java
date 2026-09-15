@@ -1,6 +1,8 @@
 package ru.taska.transport.grpc;
 
 import java.util.UUID;
+
+import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,9 @@ import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.mapper.NotificationMapper;
 import ru.taska.service.NotificationInboxService;
 import validator.GrpcRequestValidators;
+
+import static ru.taska.transport.grpc.logging.GrpcNotificationLogging.logOnError;
+import static ru.taska.transport.grpc.logging.GrpcNotificationLogging.logValidationError;
 
 @Slf4j
 @Service
@@ -34,24 +39,35 @@ public class GrpcNotificationService {
                                 req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(
                                 req.getBody().getUserId(), "body.userId")
-                ).flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    UUID userId = t.getT3();
-                    boolean unreadOnly = req.getBody().getUnreadOnly();
-                    int pageSize = req.getBody().getPageSize();
-                    long offset = req.getBody().getOffset();
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listNotifications")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID userId = t.getT3();
+                            boolean unreadOnly = req.getBody().getUnreadOnly();
+                            int pageSize = req.getBody().getPageSize();
+                            long offset = req.getBody().getOffset();
 
-                    log.info("[{}][{}] listNotifications: userId={}, unreadOnly={}, pageSize={}, offset={}",
-                            requestId, nodeId, userId, unreadOnly, pageSize, offset);
+                            log.info("[{}][{}] listNotifications: userId={}, unreadOnly={}, pageSize={}, offset={}",
+                                    requestId, nodeId, userId, unreadOnly, pageSize, offset);
 
-                    return notificationInboxService.listNotifications(userId, unreadOnly, pageSize, offset)
-                            .map(notificationMapper::toNotificationProto)
-                            .collectList()
-                            .map(notifications -> ListNotificationsResponse.newBuilder()
-                                    .addAllNotifications(notifications)
-                                    .build());
-                }));
+                            return notificationInboxService.listNotifications(userId, unreadOnly, pageSize, offset)
+                                    .doOnNext(e ->
+                                            log.info("[{}][{}] listNotifications: successfully found, userId={}",
+                                                    requestId, nodeId, userId)
+                                    )
+                                    .doOnError(logOnError(requestId, nodeId, "listNotifications"))
+                                    .map(notificationMapper::toNotificationProto)
+                                    .collectList()
+                                    .map(notifications -> ListNotificationsResponse.newBuilder()
+                                            .addAllNotifications(notifications)
+                                            .build());
+                        })
+                );
     }
 
     @TrackMetrics(counter = "notification-service_mark-As-Read_grpc_counter",
@@ -67,17 +83,28 @@ public class GrpcNotificationService {
                                 req.getBody().getNotificationId(), "body.notificationId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(
                                 req.getBody().getUserId(), "body.userId")
-                ).flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    UUID notificationId = t.getT3();
-                    UUID userId = t.getT4();
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(), req.getHeader().getNodeId(), "markAsRead")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID notificationId = t.getT3();
+                            UUID userId = t.getT4();
 
-                    log.info("[{}][{}] markAsRead: notificationId={}, userId={}",
+                            log.info("[{}][{}] markAsRead: notificationId={}, userId={}",
                             requestId, nodeId, notificationId, userId);
 
-                    return notificationInboxService.markAsRead(notificationId, userId);
-                }))
+                            return notificationInboxService.markAsRead(notificationId, userId)
+                                    .doOnSuccess(e ->
+                                            log.info("[{}][{}] markAsRead: successfully marked, notificationId={}, userId={}",
+                                                    requestId, nodeId, notificationId, userId)
+                                    )
+                                    .doOnError(logOnError(requestId, nodeId, "markAsRead"));
+                        })
+                )
                 .map(notificationMapper::toNotificationProto)
                 .map(this::toMarkAsReadResponse);
     }

@@ -9,15 +9,18 @@ import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkType;
+import ru.taska.domain.IssueWatcher;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +32,7 @@ import java.util.UUID;
 public class IssueLinkExecutor {
 
     private final IssueLinkRepository issueLinkRepository;
+    private final IssueWatcherRepository issueWatcherRepository;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
@@ -67,39 +71,45 @@ public class IssueLinkExecutor {
                 .onErrorMap(DuplicateKeyException.class,
                         ex -> new DomainException(DomainStatus.ALREADY_EXISTS, "Issue link already exists")
                 )
-                .flatMap(savedLink -> {
-                    var payload = payloadSerializer.createIssueLinkCreatedPayload(sourceIssueId, targetIssueId, linkType, actorUserId);
-
-                    return issueHistoryService.saveIssueHistory(
-                                    requestId,
-                                    nodeId,
-                                    savedLink.getSourceIssueId(),
-                                    actorUserId,
-                                    IssueEventType.LINK_CREATED,
-                                    payload
-                            )
-                            .then(issueHistoryService.saveIssueHistory(
-                                    requestId,
-                                    nodeId,
-                                    savedLink.getTargetIssueId(),
-                                    actorUserId,
-                                    IssueEventType.LINK_CREATED,
-                                    payload
-                            ))
-                            .then(outboxEventService.saveOutboxEvent(
-                                    requestId,
-                                    nodeId,
-                                    AggregateType.ISSUE_LINK,
-                                    savedLink.getId(),
-                                    EventType.ISSUE_LINK_CREATED,
-                                    payload
-                            ))
-                            .doOnSuccess(__ ->
-                                    log.debug("[{}][{}] Link successfully created: source issue id {} -> target issue id {}, link type {}",
-                                            requestId, nodeId, sourceIssueId, targetIssueId, linkType)
-                            )
-                            .thenReturn(savedLink);
-                });
+                .flatMap(savedLink ->
+                        issueWatcherRepository.findUserIdsByIssueIds(List.of(sourceIssueId, targetIssueId))
+                                .distinct()
+                                .collectList()
+                                .flatMap(watcherIds -> {
+                                    var payload = payloadSerializer.createIssueLinkCreatedPayload(
+                                            sourceIssueId, targetIssueId, linkType, actorUserId, watcherIds
+                                    );
+                                    return issueHistoryService.saveIssueHistory(
+                                                    requestId,
+                                                    nodeId,
+                                                    savedLink.getSourceIssueId(),
+                                                    actorUserId,
+                                                    IssueEventType.LINK_CREATED,
+                                                    payload
+                                            )
+                                            .then(issueHistoryService.saveIssueHistory(
+                                                    requestId,
+                                                    nodeId,
+                                                    savedLink.getTargetIssueId(),
+                                                    actorUserId,
+                                                    IssueEventType.LINK_CREATED,
+                                                    payload
+                                            ))
+                                            .then(outboxEventService.saveOutboxEvent(
+                                                    requestId,
+                                                    nodeId,
+                                                    AggregateType.ISSUE_LINK,
+                                                    savedLink.getId(),
+                                                    EventType.ISSUE_LINK_CREATED,
+                                                    payload
+                                            ))
+                                            .doOnSuccess(__ ->
+                                                    log.debug("[{}][{}] Link successfully created: source issue id {} -> target issue id {}, link type {}",
+                                                            requestId, nodeId, sourceIssueId, targetIssueId, linkType)
+                                            )
+                                            .thenReturn(savedLink);
+                                })
+                );
     }
 
     /**
@@ -124,44 +134,49 @@ public class IssueLinkExecutor {
 
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue link not found or was already deleted"));
                 }))
-                .flatMap(deletedLink -> {
-                    var payload = payloadSerializer.createIssueLinkDeletedPayload(
-                            deletedLink.getSourceIssueId(),
-                            deletedLink.getTargetIssueId(),
-                            deletedLink.getLinkType(),
-                            actorUserId
-                    );
+                .flatMap(deletedLink ->
+                        issueWatcherRepository.findUserIdsByIssueIds(List.of(deletedLink.getSourceIssueId(), deletedLink.getTargetIssueId()))
+                                .distinct()
+                                .collectList()
+                                .flatMap(watcherIds -> {
+                                    var payload = payloadSerializer.createIssueLinkDeletedPayload(
+                                            deletedLink.getSourceIssueId(),
+                                            deletedLink.getTargetIssueId(),
+                                            deletedLink.getLinkType(),
+                                            actorUserId, watcherIds
+                                    );
 
-                    return issueHistoryService.saveIssueHistory(
-                                    requestId,
-                                    nodeId,
-                                    deletedLink.getSourceIssueId(),
-                                    actorUserId,
-                                    IssueEventType.LINK_DELETED,
-                                    payload
-                            )
-                            .then(issueHistoryService.saveIssueHistory(
-                                    requestId,
-                                    nodeId,
-                                    deletedLink.getTargetIssueId(),
-                                    actorUserId,
-                                    IssueEventType.LINK_DELETED,
-                                    payload
-                            ))
-                            .then(outboxEventService.saveOutboxEvent(
-                                    requestId,
-                                    nodeId,
-                                    AggregateType.ISSUE_LINK,
-                                    deletedLink.getId(),
-                                    EventType.ISSUE_LINK_DELETED,
-                                    payload
-                            ))
-                            .doOnSuccess(__ ->
-                                    log.debug("[{}][{}] Link successfully deleted: id={}",
-                                            requestId, nodeId, deletedLink.getId()
-                                    ))
-                            .thenReturn(deletedLink);
-                });
+                                    return issueHistoryService.saveIssueHistory(
+                                                    requestId,
+                                                    nodeId,
+                                                    deletedLink.getSourceIssueId(),
+                                                    actorUserId,
+                                                    IssueEventType.LINK_DELETED,
+                                                    payload
+                                            )
+                                            .then(issueHistoryService.saveIssueHistory(
+                                                    requestId,
+                                                    nodeId,
+                                                    deletedLink.getTargetIssueId(),
+                                                    actorUserId,
+                                                    IssueEventType.LINK_DELETED,
+                                                    payload
+                                            ))
+                                            .then(outboxEventService.saveOutboxEvent(
+                                                    requestId,
+                                                    nodeId,
+                                                    AggregateType.ISSUE_LINK,
+                                                    deletedLink.getId(),
+                                                    EventType.ISSUE_LINK_DELETED,
+                                                    payload
+                                            ))
+                                            .doOnSuccess(__ ->
+                                                    log.debug("[{}][{}] Link successfully deleted: id={}",
+                                                            requestId, nodeId, deletedLink.getId()
+                                                    ))
+                                            .thenReturn(deletedLink);
+                                })
+                );
     }
 
 }

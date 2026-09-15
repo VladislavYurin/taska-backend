@@ -6,6 +6,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueWatcher;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatcher, UUID> {
@@ -65,4 +66,23 @@ public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatc
             WHERE issue_id = :issueId AND user_id = :userId
             """)
     Mono<Long> deleteByIssueIdAndUserId(UUID issueId, UUID userId);
+
+    /**
+     * Возвращает всех подписчиков задачи одним списком.
+     * Используется для формирования payload'ов событий (snapshot watchers).
+     */
+    @Query("""
+            SELECT user_id FROM taska.issue_watchers
+            WHERE issue_id = :issueId
+        """)
+    Flux<UUID> findUserIdsByIssueId(UUID issueId);
+
+    /**
+     * Возвращает watchers по списку issueId. Один SQL-запрос.
+     */
+    @Query("""
+            SELECT user_id FROM taska.issue_watchers
+            WHERE issue_id IN (:issueIds)
+        """)
+    Flux<UUID> findUserIdsByIssueIds(List<UUID> issueIds);
 }

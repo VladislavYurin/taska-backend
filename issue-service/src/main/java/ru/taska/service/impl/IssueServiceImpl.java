@@ -17,6 +17,7 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
@@ -31,6 +32,7 @@ import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IdempotencyKeyRepository;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.service.IssueHistoryService;
@@ -76,6 +78,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueHistoryRepository issueHistoryRepository;
     private final IssueAutoWatchService issueAutoWatchService;
     private final IssueLabelsRepository issueLabelsRepository;
+    private final IssueWatcherRepository issueWatcherRepository;
 
     @Override
     @Transactional
@@ -189,22 +192,32 @@ public class IssueServiceImpl implements IssueService {
                         return Mono.just(assignedIssue);
                     }
 
-                    JsonNode payload = payloadSerializer.createIssueAssignedPayload(assignedIssue.getAssigneeId(), assigneeId);
+                    UUID previousAssigneeId = assignedIssue.getAssigneeId();
                     assignedIssue.setAssigneeId(assigneeId);
 
                     return issueRepository.save(assignedIssue)
-                            .flatMap(savedIssue -> {
-                                return issueHistoryService.saveIssueHistory(
-                                                requestId, nodeId, assignedIssue.getId(), actorUserId, IssueEventType.ASSIGNED, payload)
-                                        .then(outboxEventService.saveOutboxEvent(
-                                                requestId, nodeId, AggregateType.ISSUE, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
-                                        .then(issueAutoWatchService.watchAssigneeOnAssign(
-                                                requestId, nodeId, savedIssue, actorUserId))
-                                        .then(Mono.fromRunnable(() ->
-                                                log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
-                                                        requestId, nodeId, assigneeId, issueId)))
-                                        .thenReturn(savedIssue);
-                            });
+                            .flatMap(savedIssue ->
+                                issueWatcherRepository.findUserIdsByIssueId(issueId)
+                                        .collectList()
+                                        .flatMap(watcherIds -> {
+                                            JsonNode payload = payloadSerializer.createIssueAssignedPayload(
+                                                    previousAssigneeId,
+                                                    assigneeId,
+                                                    actorUserId,
+                                                    watcherIds
+                                            );
+                                            return issueHistoryService.saveIssueHistory(
+                                                            requestId, nodeId, assignedIssue.getId(), actorUserId, IssueEventType.ASSIGNED, payload)
+                                                    .then(outboxEventService.saveOutboxEvent(
+                                                            requestId, nodeId, AggregateType.ISSUE, assignedIssue.getId(), EventType.ISSUE_ASSIGNED, payload))
+                                                    .then(issueAutoWatchService.watchAssigneeOnAssign(
+                                                            requestId, nodeId, savedIssue, actorUserId))
+                                                    .then(Mono.fromRunnable(() ->
+                                                            log.debug("[{}][{}] User with id: {} successfully assigned to issue with id: {}",
+                                                                    requestId, nodeId, assigneeId, issueId)))
+                                                    .thenReturn(savedIssue);
+                                        })
+                            );
                 });
     }
 
@@ -252,33 +265,43 @@ public class IssueServiceImpl implements IssueService {
                         throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Due date: "+ dueDate + " must be after Start date: " + updatingIssue.getStartDate());
                     };
 
-                    JsonNode payload = payloadSerializer.createIssueUpdatedPayload(updatingIssue, actorUserId, summary, description, priority, storyPoints, startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
-                    if (payload.isEmpty()) {
-                        log.info("[{}][{}] Issue with id: {} equals updated updatingIssue by user with id: {}",
-                                requestId, nodeId, issueId, actorUserId);
-                        return Mono.just(updatingIssue);
-                    }
 
-                    updatingIssue.setSummary(summary);
-                    updatingIssue.setDescription(description);
-                    updatingIssue.setPriority(priority);
-                    updatingIssue.setUpdatedAt(Instant.now());
-                    updatingIssue.setVersion(updatingIssue.getVersion() + 1);
-                    updatingIssue.setStoryPoints(storyPoints);
-                    updatingIssue.setStartDate(startDate);
-                    updatingIssue.setDueDate(dueDate);
-                    updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
-                    updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
+                    return issueWatcherRepository.findUserIdsByIssueId(issueId)
+                            .collectList()
+                            .flatMap(watcherIds -> {
+                                JsonNode payload = payloadSerializer.createIssueUpdatedPayload(
+                                        updatingIssue, actorUserId, summary, description, priority,
+                                        storyPoints, startDate, dueDate,
+                                        originalEstimateMinutes, remainingEstimateMinutes,
+                                        watcherIds
+                                );
+                                if (payload.isEmpty()) {
+                                    log.info("[{}][{}] Issue with id: {} equals updated updatingIssue by user with id: {}",
+                                            requestId, nodeId, issueId, actorUserId);
+                                    return Mono.just(updatingIssue);
+                                }
 
-                    return issueRepository.save(updatingIssue)
-                            .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, savedIssue.getId(),
-                                            EventType.ISSUE_UPDATED, payload)
-                                    .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue.getId(), actorUserId, IssueEventType.UPDATED, payload))
-                                    .then(Mono.fromRunnable(() ->
-                                            log.debug("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
-                                                    requestId, nodeId, issueId, actorUserId)))
-                                    .thenReturn(savedIssue)
-                            );
+                                updatingIssue.setSummary(summary);
+                                updatingIssue.setDescription(description);
+                                updatingIssue.setPriority(priority);
+                                updatingIssue.setUpdatedAt(Instant.now());
+                                updatingIssue.setVersion(updatingIssue.getVersion() + 1);
+                                updatingIssue.setStoryPoints(storyPoints);
+                                updatingIssue.setStartDate(startDate);
+                                updatingIssue.setDueDate(dueDate);
+                                updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
+                                updatingIssue.setRemainingEstimateMinutes(remainingEstimateMinutes);
+
+                                return issueRepository.save(updatingIssue)
+                                        .flatMap(savedIssue -> outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE, savedIssue.getId(),
+                                                        EventType.ISSUE_UPDATED, payload)
+                                                .then(issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue.getId(), actorUserId, IssueEventType.UPDATED, payload))
+                                                .then(Mono.fromRunnable(() ->
+                                                        log.debug("[{}][{}] Issue with id: {} successfully updated by user with id: {}",
+                                                                requestId, nodeId, issueId, actorUserId)))
+                                                .thenReturn(savedIssue)
+                                        );
+                            });
                 });
     }
 
