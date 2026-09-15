@@ -25,6 +25,7 @@ import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
+import ru.taska.api.project.v1.UpdateProjectRequest;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
@@ -34,6 +35,7 @@ import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.mapper.ProjectMapper;
 
 import java.time.Duration;
@@ -124,6 +126,81 @@ public class GrpcProjectServiceClientTest {
 
         Mockito.verify(projectMapper, Mockito.times(1))
                 .toRestProjectResponse(grpcResponse);
+    }
+
+    // ========== UPDATE PROJECT ==========
+
+    @Test
+    @DisplayName("Должен вызвать gRPC updateProject и передать все переданные поля")
+    void updateProject_shouldCallStubAndReturnMappedResponse() {
+        // given
+        var restRequest = new UpdateProjectRequestDto();
+        restRequest.setName("New name");
+        restRequest.setDescription("New description");
+        restRequest.setColor("#0052CC");
+
+        var grpcResponse = ProjectResponse.getDefaultInstance();
+        var restResponse = new ProjectResponseDto();
+
+        Mockito.when(stub.updateProject(Mockito.any(UpdateProjectRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(projectMapper.toRestProjectResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when
+        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), context))
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        // then
+        var captor = ArgumentCaptor.forClass(UpdateProjectRequest.class);
+        Mockito.verify(stub).updateProject(captor.capture());
+
+        var request = captor.getValue();
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT_ID);
+        Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
+        Assertions.assertThat(request.getBody().hasName()).isTrue();
+        Assertions.assertThat(request.getBody().getName()).isEqualTo("New name");
+        Assertions.assertThat(request.getBody().hasDescription()).isTrue();
+        Assertions.assertThat(request.getBody().getDescription()).isEqualTo("New description");
+        Assertions.assertThat(request.getBody().hasColor()).isTrue();
+        Assertions.assertThat(request.getBody().getColor()).isEqualTo("#0052CC");
+
+        Mockito.verify(projectMapper, Mockito.times(1))
+                .toRestProjectResponse(grpcResponse);
+    }
+
+    @Test
+    @DisplayName("PATCH-семантика: непереданное в DTO поле НЕ должно выставляться на protobuf-билдере (hasXxx() == false)")
+    void updateProject_shouldOnlySetProvidedFieldsOnGrpcRequest() {
+        // given: в теле передано только name — description и color отсутствуют (null)
+        var restRequest = new UpdateProjectRequestDto();
+        restRequest.setName("Only name changed");
+
+        var grpcResponse = ProjectResponse.getDefaultInstance();
+
+        Mockito.when(stub.updateProject(Mockito.any(UpdateProjectRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(projectMapper.toRestProjectResponse(grpcResponse))
+                .thenReturn(new ProjectResponseDto());
+
+        // when
+        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), context))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        // then
+        var captor = ArgumentCaptor.forClass(UpdateProjectRequest.class);
+        Mockito.verify(stub).updateProject(captor.capture());
+
+        var body = captor.getValue().getBody();
+        Assertions.assertThat(body.hasName()).isTrue();
+        Assertions.assertThat(body.hasDescription()).isFalse();
+        Assertions.assertThat(body.hasColor()).isFalse();
     }
 
     // ========== GET PROJECT ==========

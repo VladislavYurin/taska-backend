@@ -10,6 +10,7 @@ import ru.taska.event.TaskaEvent;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
+import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -30,6 +31,10 @@ public class OutboxEventMapper {
     private static final String ROLE = "role";
     private static final String CREATED_BY = "createdBy";
     private static final String ADDED_BY = "addedBy";
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
+    private static final String COLOR = "color";
+    private static final String UPDATED_BY = "updatedBy";
     private static final String SCHEMA_VERSION = "v1";
 
     @Value("${spring.application.name}")
@@ -76,6 +81,14 @@ public class OutboxEventMapper {
             case MEMBER_REMOVED -> objectMapper.valueToTree(new MemberRemovedPayload(
                     getUuid(sourcePayload, PROJECT_ID),
                     getUuid(sourcePayload, USER_ID)
+            ));
+
+            case PROJECT_UPDATED -> objectMapper.valueToTree(new ProjectUpdatedPayload(
+                    getUuid(sourcePayload, PROJECT_ID),
+                    getString(sourcePayload, NAME),
+                    getString(sourcePayload, DESCRIPTION),
+                    getString(sourcePayload, COLOR),
+                    getUuid(sourcePayload, UPDATED_BY)
             ));
 
             default -> sourcePayload;

@@ -14,6 +14,7 @@ import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
 
@@ -57,6 +58,21 @@ public class ProjectController implements ProjectApi {
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED,context ->
                 projectClient.getProject(projectId,context))
+                        .map(ResponseEntity::ok);
+    }
+
+    /**
+     * PATCH /api/v1/projects/{projectId}
+     * Обновляет проект (имя/описание/цвет, PATCH-семантика) → 200 OK
+     */
+    @Override
+    public Mono<ResponseEntity<ProjectResponseDto>> updateProject(
+            String projectId,
+            Mono<UpdateProjectRequestDto> updateProjectRequestDto,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                projectClient.updateProject(projectId, updateProjectRequestDto, context))
                         .map(ResponseEntity::ok);
     }
 

@@ -27,6 +27,7 @@ import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -178,6 +179,115 @@ public class ProjectControllerTest {
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    // ========== UPDATE PROJECT ==========
+
+    @Test
+    @DisplayName("Должен успешно обновить проект и вернуть 200 OK")
+    void updateProject_shouldReturn200OK() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new UpdateProjectRequestDto();
+        request.setName("New name");
+        request.setDescription("New description");
+        request.setColor("#0052CC");
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+        response.setProjectKey(PROJECT_KEY);
+        response.setName("New name");
+        response.setDescription("New description");
+        response.setColor("#0052CC");
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(ProjectResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(projectClient).updateProject(Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при невалидном HEX-формате color")
+    void updateProject_shouldReturn400_whenColorIsInvalid() {
+        // given
+        mockAuthenticatedUser();
+        stubClientToForwardRequestBodyValidation();
+
+        var request = new UpdateProjectRequestDto();
+        request.setColor("not-a-hex-color");
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при слишком длинном name")
+    void updateProject_shouldReturn400_whenNameTooLong() {
+        // given
+        mockAuthenticatedUser();
+        stubClientToForwardRequestBodyValidation();
+
+        var request = new UpdateProjectRequestDto();
+        request.setName("a".repeat(256));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при слишком длинном description")
+    void updateProject_shouldReturn400_whenDescriptionTooLong() {
+        // given
+        mockAuthenticatedUser();
+        stubClientToForwardRequestBodyValidation();
+
+        var request = new UpdateProjectRequestDto();
+        request.setDescription("a".repeat(2001));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
                 .expectHeader().exists("X-Request-Id")
                 .expectBody()
                 .jsonPath("$.code").exists()
@@ -576,5 +686,21 @@ public class ProjectControllerTest {
         Mockito.when(contextMapper.mapToGatewayUserContext(Mockito.any(UserContext.class)))
                 .thenReturn(userContext);
 
+    }
+
+    /**
+     * Стаб {@code projectClient.updateProject(...)}, реалистично подписывающийся на переданный
+     * {@code Mono<UpdateProjectRequestDto>} (как это делает настоящий {@code GrpcProjectServiceClient}
+     * через {@code request.flatMap(...)}) — иначе Bean Validation-ошибка, которую фреймворк несёт
+     * именно на этом {@code Mono}, никогда бы не всплыла: голый мок, в отличие от реальной реализации,
+     * не подписывается на свой аргумент сам по себе.
+     */
+    @SuppressWarnings("unchecked")
+    private void stubClientToForwardRequestBodyValidation() {
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenAnswer(invocation -> {
+                    Mono<UpdateProjectRequestDto> requestMono = invocation.getArgument(1);
+                    return requestMono.then(Mono.empty());
+                });
     }
 }

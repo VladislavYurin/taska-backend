@@ -30,6 +30,8 @@ public interface ProjectMapper {
     @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "archivedAt", source = "archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "description", source = "description", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "color", source = "color", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project);
 
     /**
@@ -59,5 +61,7 @@ public interface ProjectMapper {
     @Mapping(target = "createdAt", source = "created_at")
     @Mapping(target = "updatedAt", source = "updated_at")
     @Mapping(target = "archivedAt", source = "archived_at")
+    @Mapping(target = "description", source = "description")
+    @Mapping(target = "color", source = "color")
     Project toProject(ProjectCheckMembershipDto dto);
 }

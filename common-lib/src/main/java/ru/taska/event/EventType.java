@@ -35,7 +35,8 @@ public enum EventType {
     ISSUE_LABEL_ADDED("LabelAdded"),
     ISSUE_LABEL_REMOVED("LabelRemoved"),
     USER_BLOCKED("UserBlocked"),
-    USER_UNBLOCKED("UserUnblocked");
+    USER_UNBLOCKED("UserUnblocked"),
+    PROJECT_UPDATED("ProjectUpdated");
 
     private final String value;
 
