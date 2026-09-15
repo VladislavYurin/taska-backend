@@ -32,6 +32,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          for SECRET_NAME in DOKPLOY_URL DOKPLOY_API_KEY DOKPLOY_COMPOSE_ID; do
+            if [ -z "${!SECRET_NAME:-}" ]; then
+              echo "::error::${SECRET_NAME} is not set"
+              exit 1
+            fi
+          done
+
           BASE_URL="${DOKPLOY_URL%/}"
 
           CURRENT_ENV=$(curl -fsS --max-time 30 --retry 3 \
@@ -49,7 +57,7 @@ jobs:
 
           jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg env "$NEW_ENV" \
               '{composeId: $composeId, env: $env, createEnvFile: true}' \
-            | curl -fsS --max-time 30 -o /dev/null \
+            | curl -fsS --max-time 30 --output /dev/null \
                 -X POST "${BASE_URL}/api/compose.saveEnvironment" \
                 -H "x-api-key: ${DOKPLOY_API_KEY}" \
                 -H "Content-Type: application/json" \
@@ -66,27 +74,60 @@ jobs:
 
           jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg title "$TITLE" \
               '{composeId: $composeId, title: $title}' \
-            | curl -sS --fail-with-body --max-time 30 \
+            | curl -fsS --max-time 30 --output /dev/null \
                 -X POST "${BASE_URL}/api/compose.deploy" \
                 -H "x-api-key: ${DOKPLOY_API_KEY}" \
                 -H "Content-Type: application/json" \
                 --data @-
-          echo
 
           # compose.deploy только ставит задачу в очередь,
           # запись deployment появляется, когда воркер Dokploy её забирает
+          DEPLOYMENT_ID=""
+          MISSING_POLLS=0
           for _ in $(seq 1 150); do
-            STATUS=$(curl -fsS --max-time 30 \
+            if ! DEPLOYMENTS=$(curl -fsS --max-time 30 \
+                --retry 3 --retry-delay 2 --retry-all-errors \
                 -H "x-api-key: ${DOKPLOY_API_KEY}" \
-                "${BASE_URL}/api/deployment.allByCompose?composeId=${DOKPLOY_COMPOSE_ID}" \
-              | jq -r --arg t "$TITLE" 'map(select(.title == $t))[0].status // "queued"') \
-              || STATUS="unknown"
+                "${BASE_URL}/api/deployment.allByCompose?composeId=${DOKPLOY_COMPOSE_ID}"); then
+              echo "::warning::Failed to query Dokploy deployments; retrying on the next poll"
+              sleep 10
+              continue
+            fi
+
+            # Фиксируем запись, как только воркер её создаст. При последующих
+            # поллингах не переключаемся на другую запись.
+            if [ -z "$DEPLOYMENT_ID" ]; then
+              DEPLOYMENT_ID=$(jq -r --arg t "$TITLE" \
+                '[.[] | select(.title == $t)] | sort_by(.createdAt) | last | .deploymentId // empty' \
+                <<<"$DEPLOYMENTS")
+            fi
+
+            if [ -z "$DEPLOYMENT_ID" ]; then
+              STATUS="queued"
+            else
+              STATUS=$(jq -r --arg id "$DEPLOYMENT_ID" \
+                '.[] | select(.deploymentId == $id) | .status' <<<"$DEPLOYMENTS" | head -n 1)
+
+              if [ -z "$STATUS" ]; then
+                MISSING_POLLS=$((MISSING_POLLS + 1))
+                STATUS="missing"
+              else
+                MISSING_POLLS=0
+              fi
+            fi
+
             echo "$(date +%T) ${STATUS}"
             case "$STATUS" in
               done) exit 0 ;;
               error|cancelled)
                 echo "::error::Деплой в Dokploy завершился со статусом ${STATUS}"
                 exit 1
+                ;;
+              missing)
+                if [ "$MISSING_POLLS" -ge 3 ]; then
+                  echo "::error::Dokploy deployment ${DEPLOYMENT_ID} disappeared from the API"
+                  exit 1
+                fi
                 ;;
             esac
             sleep 10

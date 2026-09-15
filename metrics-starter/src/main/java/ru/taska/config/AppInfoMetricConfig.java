@@ -20,18 +20,20 @@ public class AppInfoMetricConfig {
 
     private static final String DEFAULT_VALUE = "unknown";
 
+    @Autowired(required = false)
+    private BuildProperties buildProperties;
+
     @Bean
     @ConditionalOnMissingBean(name = "appInfoMeterBinder")
     public MeterBinder appInfoMeterBinder(
             @Value("${spring.application.name:" + DEFAULT_VALUE + "}") String application,
-            @Value("${GIT_COMMIT:" + DEFAULT_VALUE + "}") String commit,
-            @Autowired(required = false) BuildProperties buildProperties) {
+            @Value("${GIT_COMMIT:" + DEFAULT_VALUE + "}") String commit) {
 
         String version = buildProperties != null && buildProperties.getVersion() != null
                 ? buildProperties.getVersion()
                 : DEFAULT_VALUE;
 
-        return registry -> Gauge.builder("app_info", () -> 1.0)
+        return registry -> Gauge.builder("app.info", () -> 1.0)
                 .tag("application", application)
                 .tag("version", version)
                 .tag("commit", commit)
