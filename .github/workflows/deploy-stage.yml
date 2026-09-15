@@ -57,12 +57,11 @@ jobs:
 
           jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg env "$NEW_ENV" \
               '{composeId: $composeId, env: $env, createEnvFile: true}' \
-            | curl -sS --fail-with-body --max-time 30 \
+            | curl -fsS --max-time 30 --output /dev/null \
                 -X POST "${BASE_URL}/api/compose.saveEnvironment" \
                 -H "x-api-key: ${DOKPLOY_API_KEY}" \
                 -H "Content-Type: application/json" \
                 --data @-
-          echo
 
           echo "GIT_COMMIT updated to ${GITHUB_SHA}"
 
@@ -75,12 +74,11 @@ jobs:
 
           jq -n --arg composeId "$DOKPLOY_COMPOSE_ID" --arg title "$TITLE" \
               '{composeId: $composeId, title: $title}' \
-            | curl -sS --fail-with-body --max-time 30 \
+            | curl -fsS --max-time 30 --output /dev/null \
                 -X POST "${BASE_URL}/api/compose.deploy" \
                 -H "x-api-key: ${DOKPLOY_API_KEY}" \
                 -H "Content-Type: application/json" \
                 --data @-
-          echo
 
           # compose.deploy только ставит задачу в очередь,
           # запись deployment появляется, когда воркер Dokploy её забирает
@@ -96,8 +94,8 @@ jobs:
               continue
             fi
 
-            # Pin one record as soon as the worker creates it. Never switch to
-            # another record during subsequent polls.
+            # Фиксируем запись, как только воркер её создаст. При последующих
+            # поллингах не переключаемся на другую запись.
             if [ -z "$DEPLOYMENT_ID" ]; then
               DEPLOYMENT_ID=$(jq -r --arg t "$TITLE" \
                 '[.[] | select(.title == $t)] | sort_by(.createdAt) | last | .deploymentId // empty' \
