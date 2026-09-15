@@ -12,6 +12,7 @@ import ru.taska.domain.IssueAttachment;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.IssuePriority;
+import ru.taska.domain.Worklog;
 import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -63,8 +64,42 @@ public class PayloadSerializer {
     private static final String NEW_ORIGINAL_ESTIMATE_MINUTES = "newOriginalEstimateMinutes";
     private static final String OLD_REMAINING_ESTIMATE_MINUTES = "oldRemainingEstimateMinutes";
     private static final String NEW_REMAINING_ESTIMATE_MINUTES = "newRemainingEstimateMinutes";
+    private static final String WORKLOG_ID = "worklogId";
+    private static final String WORKLOG_SPENT_MINUTES = "worklogSpentMinutes";
+    private static final String WORKLOG_DATE ="worklogDate";
+    private static final String WORKLOG_COMMENT ="worklogComment";
+    private static final String AUTHOR_USER_ID = "authorUserId";
 
     private final ObjectMapper objectMapper;
+
+
+    /**
+     * Создает {@link JsonNode} с данными об удаленном ворклоге.
+     */
+    public JsonNode createWorklogDeletedPayload(UUID issueId, UUID worklogId, UUID deletedByUserId, Instant deletedAt) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        node.put(ISSUE_ID, issueId.toString());
+        node.put(WORKLOG_ID, worklogId.toString());
+        node.put(DELETED_AT, deletedAt.toString())  ;
+        node.put(DELETED_BY, deletedByUserId.toString());
+
+        return node;
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными о добавленном к задаче ворклоге.
+     */
+    public JsonNode createWorklogAddedPayload(Worklog worklog) {
+        return createWorklogPayload(worklog);
+    }
+
+    /**
+     * Создает {@link JsonNode} с данными об обновленном ворклоге.
+     */
+    public JsonNode createWorklogUpdatePayload(Worklog worklog) {
+        return createWorklogPayload(worklog);
+    }
 
     /**
      * Создает {@link JsonNode} с issue snapshot при создании задачи.
@@ -103,6 +138,7 @@ public class PayloadSerializer {
 
         return node;
     }
+
 
     /**
      * Создает {@link JsonNode} с измененными данными при обновлении задачи.
@@ -463,6 +499,40 @@ public class PayloadSerializer {
         node.put(PROJECT_ID, projectId.toString());
         node.put(WATCHER_USER_ID, watcherUserId.toString());
         node.put(ACTOR_USER_ID, actorUserId.toString());
+
+        return node;
+    }
+
+    private ObjectNode createWorklogPayload(Worklog worklog) {
+        ObjectNode node = objectMapper.createObjectNode();
+
+        if (worklog.getIssueId() != null) {
+            node.put(ISSUE_ID, worklog.getIssueId().toString());
+        }
+
+        if (worklog.getProjectId() != null) {
+            node.put(PROJECT_ID, worklog.getProjectId().toString());
+        }
+
+        if (worklog.getAuthorUserId() != null) {
+            node.put(AUTHOR_USER_ID, worklog.getAuthorUserId().toString());
+        }
+
+        if (worklog.getId() != null) {
+            node.put(WORKLOG_ID, worklog.getId().toString());
+        }
+
+        if (worklog.getSpentMinutes() != null) {
+            node.put(WORKLOG_SPENT_MINUTES, worklog.getSpentMinutes());
+        }
+
+        if (worklog.getWorkDate() != null) {
+            node.put(WORKLOG_DATE, worklog.getWorkDate().toString());
+        }
+
+        if (worklog.getComment() != null) {
+            node.put(WORKLOG_COMMENT, worklog.getComment());
+        }
 
         return node;
     }

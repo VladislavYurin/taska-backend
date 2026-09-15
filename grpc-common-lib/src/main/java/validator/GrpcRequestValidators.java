@@ -5,6 +5,7 @@ import io.grpc.Status;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -418,6 +419,23 @@ public final class GrpcRequestValidators {
     }
 
     /**
+     * Проверяет, что значение строго положительное (больше нуля).
+     *
+     * @param value числовое значение
+     * @param fieldName имя поля
+     * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT}
+     */
+    public static Mono<Integer> requirePositiveOrInvalidArgument(int value, String fieldName) {
+        if (value <= 0) {
+            return Mono.error(Status.INVALID_ARGUMENT
+                    .withDescription(fieldName + " must be positive")
+                    .asRuntimeException());
+        }
+
+        return Mono.just(value);
+    }
+
+    /**
      * Проверяет что proto enum задан (не является значением UNSPECIFIED, т.е. не равен 0).
      *
      * @param value     значение proto enum
@@ -432,5 +450,47 @@ public final class GrpcRequestValidators {
                     .asRuntimeException());
         }
         return Mono.just(value);
+    }
+
+    /**
+     * Проверяет и преобразует строковое значение в {@link LocalDate}.
+     *
+     * @param raw       строковое представление даты в формате {@code yyyy-MM-dd}
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с преобразованным значением или ошибкой {@code INVALID_ARGUMENT},
+     *         если значение пустое или имеет некорректный формат даты
+     */
+    public static Mono<LocalDate> parseLocalDateOrInvalidArgument(String raw, String fieldName) {
+        return requireNonBlankOrInvalidArgument(raw, fieldName)
+                .flatMap(value -> {
+                    try {
+                        return Mono.just(LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE));
+                    } catch (DateTimeParseException e) {
+                        return Mono.error(Status.INVALID_ARGUMENT
+                                .withDescription(fieldName + " must be valid ISO date yyyy-MM-dd")
+                                .asRuntimeException());
+                    }
+                });
+    }
+
+    /**
+     * Проверяет и преобразует необязательное строковое значение в {@link LocalDate}.
+     *
+     * @param hasValue  признак наличия значения
+     * @param rawDate   строковое представление даты в формате {@code yyyy-MM-dd}
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link Optional}, содержащим дату, или пустым {@link Optional},
+     *         если значение отсутствует
+     */
+    public static Mono<Optional<LocalDate>> parseOptionalLocalDateOrInvalidArgument(
+            boolean hasValue,
+            String rawDate,
+            String fieldName
+    ) {
+        if (!hasValue) {
+            return Mono.just(Optional.empty());
+        }
+        return parseLocalDateOrInvalidArgument(rawDate,fieldName)
+                .map(Optional::of);
     }
 }

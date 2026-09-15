@@ -25,6 +25,9 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_COMMENT_DELETED = 12;
   ISSUE_EVENT_TYPE_LABEL_ADDED = 13;
   ISSUE_EVENT_TYPE_LABEL_REMOVED = 14;
+  ISSUE_EVENT_TYPE_WORKLOG_ADDED = 15;
+  ISSUE_EVENT_TYPE_WORKLOG_DELETED = 16;
+  ISSUE_EVENT_TYPE_WORKLOG_UPDATED = 17;
 }
 
 enum IssueType {
@@ -105,6 +108,17 @@ service IssueService {
   rpc SearchIssues(SearchIssuesRequest)
       returns (SearchIssuesResponse);
 
+  rpc AddIssueWorklog(AddIssueWorklogRequest)
+      returns (AddIssueWorklogResponse);
+
+  rpc UpdateIssueWorklog(UpdateIssueWorklogRequest)
+    returns (UpdateIssueWorklogResponse);
+
+  rpc DeleteIssueWorklog(DeleteIssueWorklogRequest)
+      returns (DeleteIssueWorklogResponse);
+
+  rpc ListIssueWorklogs(ListIssueWorklogsRequest)
+      returns (ListIssueWorklogsResponse);
 
   /**
    * Возвращает список связей для задачи.
@@ -218,6 +232,111 @@ service IssueService {
    */
   rpc ListIssuesForBoard(ListIssuesForBoardRequest)
       returns (ListIssuesForBoardResponse);
+}
+
+message AddIssueWorklogRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddIssueWorklogBody body = 2;
+}
+
+message WorklogResponse {
+  string id = 1;
+  string issue_id = 2;
+  string project_id = 3;
+  string author_user_id = 4;
+  int32 spent_minutes = 5;
+  string work_date = 6;
+  optional string comment = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  int32 version = 10;
+}
+
+message AddIssueWorklogBody {
+  string issue_id = 1;
+  string actor_user_id  = 2;
+  int32 spent_minutes = 3;
+  string work_date = 4;
+  optional string comment = 5;
+}
+
+message UpdateIssueWorklogRequest {
+  /**
+  * Заголовок запроса.1
+  */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  UpdateIssueWorklogBody body = 2;
+}
+
+message UpdateIssueWorklogBody {
+  string issue_id = 1;
+  string worklog_id = 2;
+  string actor_user_id  = 3;
+  optional int32 spent_minutes = 4;
+  optional string work_date = 5;
+  optional string comment = 6;
+}
+
+message DeleteIssueWorklogRequest {
+  /**
+  * Заголовок запроса.
+  */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  DeleteIssueWorklogBody body = 2;
+}
+
+message DeleteIssueWorklogBody {
+  string issue_id = 1;
+  string worklog_id = 2;
+  string actor_user_id  = 3;
+}
+
+message ListIssueWorklogsRequest {
+  /**
+  * Заголовок запроса.
+  */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListIssueWorklogsBody body = 2;
+}
+
+message ListIssueWorklogsBody {
+  string issue_id = 1;
+  string actor_user_id = 2;
+}
+
+message AddIssueWorklogResponse {
+  WorklogResponse worklog = 1;
+}
+
+message UpdateIssueWorklogResponse {
+  WorklogResponse worklog = 1;
+}
+
+message DeleteIssueWorklogResponse {
+  WorklogResponse worklog = 1;
+}
+
+message ListIssueWorklogsResponse {
+  repeated WorklogResponse worklogs = 1;
 }
 
 message AssignIssueRequest {
@@ -830,6 +949,11 @@ message IssueResponse {
    * Признак подписки текущего пользователя (если актор известен).
    */
   optional bool watched_by_me = 23;
+
+  /**
+     * Потраченное время в минутах.
+     */
+  int32 time_spent_minutes = 24;
 }
 
 // ============ Метки проекта =================

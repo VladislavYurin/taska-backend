@@ -34,6 +34,9 @@ public enum EventType {
     ISSUE_UNWATCHED("IssueUnwatched"),
     ISSUE_LABEL_ADDED("LabelAdded"),
     ISSUE_LABEL_REMOVED("LabelRemoved"),
+    WORKLOG_ADDED("WorklogAdded"),
+    WORKLOG_UPDATED("WorklogUpdated"),
+    WORKLOG_DELETED("WorklogDeleted"),
     USER_BLOCKED("UserBlocked"),
     USER_UNBLOCKED("UserUnblocked");
 
