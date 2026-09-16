@@ -3,6 +3,7 @@ package ru.taska.util;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,6 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 @RequiredArgsConstructor
 public class PayloadSerializer {
-    private static final String REPORTER = "reporterId";
     private static final String ASSIGNEE = "assigneeId";
     private static final String PREVIOUS_ASSIGNEE_ID = "previousAssigneeId";
     private static final String OLD_SUMMARY = "oldSummary";
@@ -63,6 +63,7 @@ public class PayloadSerializer {
     private static final String NEW_ORIGINAL_ESTIMATE_MINUTES = "newOriginalEstimateMinutes";
     private static final String OLD_REMAINING_ESTIMATE_MINUTES = "oldRemainingEstimateMinutes";
     private static final String NEW_REMAINING_ESTIMATE_MINUTES = "newRemainingEstimateMinutes";
+    private static final String WATCHER_IDS = "watcherIds";
 
     private final ObjectMapper objectMapper;
 
@@ -86,7 +87,12 @@ public class PayloadSerializer {
      * @param newAssigneeId      айди нового исполнителя.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueAssignedPayload(UUID previousAssigneeId, UUID newAssigneeId) {
+    public JsonNode createIssueAssignedPayload(
+            UUID previousAssigneeId,
+            UUID newAssigneeId,
+            UUID actorUserId,
+            List<UUID> watcherIds
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
 
         if (previousAssigneeId != null) {
@@ -101,6 +107,11 @@ public class PayloadSerializer {
             node.putNull(ASSIGNEE);
         }
 
+        if (actorUserId != null) node.put(ACTOR_USER_ID, actorUserId.toString());
+        else node.putNull(ACTOR_USER_ID);
+
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
+
         return node;
     }
 
@@ -113,8 +124,19 @@ public class PayloadSerializer {
      * @param newPriority    новый приоритет задачи.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueUpdatedPayload(Issue issue, UUID actorUserId, String newSummary, String newDescription, IssuePriority newPriority,
-            BigDecimal storyPoints, LocalDate startDate, LocalDate dueDate, Integer originalEstimateMinutes, Integer remainingEstimateMinutes) {
+    public JsonNode createIssueUpdatedPayload(
+            Issue issue,
+            UUID actorUserId,
+            String newSummary,
+            String newDescription,
+            IssuePriority newPriority,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes,
+            List<UUID> watcherIds
+    ) {
 
         boolean nothingChanged = newSummary.equals(issue.getSummary())
                 && newDescription.equals(issue.getDescription())
@@ -132,9 +154,9 @@ public class PayloadSerializer {
         ObjectNode node = objectMapper.createObjectNode();
 
         if (actorUserId != null) {
-            node.put(REPORTER, actorUserId.toString());
+            node.put(ACTOR_USER_ID, actorUserId.toString());
         } else {
-            node.putNull(REPORTER);
+            node.putNull(ACTOR_USER_ID);
         }
 
         if (issue.getAssigneeId() != null) {
@@ -228,7 +250,7 @@ public class PayloadSerializer {
                 node.putNull(NEW_REMAINING_ESTIMATE_MINUTES);
             }
         };
-
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 
@@ -240,13 +262,20 @@ public class PayloadSerializer {
      * @param actorUserId  айди актора изменения.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createTransitionedPayload(String sourceStatus, String targetStatus, UUID transitionId, UUID actorUserId, UUID assigneeId) {
+    public JsonNode createTransitionedPayload(
+            String sourceStatus,
+            String targetStatus,
+            UUID transitionId,
+            UUID actorUserId,
+            UUID assigneeId,
+            List<UUID> watcherIds
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
 
         if (actorUserId != null) {
-            node.put(REPORTER, actorUserId.toString());
+            node.put(ACTOR_USER_ID, actorUserId.toString());
         } else {
-            node.putNull(REPORTER);
+            node.putNull(ACTOR_USER_ID);
         }
 
         if (assigneeId != null) {
@@ -258,7 +287,7 @@ public class PayloadSerializer {
         node.put(TRANSITIONED_ID, transitionId.toString());
         node.put(FROM_STATUS, sourceStatus != null ? sourceStatus : "");
         node.put(TO_STATUS, targetStatus != null ? targetStatus : "");
-
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 
@@ -273,9 +302,9 @@ public class PayloadSerializer {
         ObjectNode node = objectMapper.createObjectNode();
 
         if (actorUserId != null) {
-            node.put(REPORTER, actorUserId.toString());
+            node.put(ACTOR_USER_ID, actorUserId.toString());
         } else {
-            node.putNull(REPORTER);
+            node.putNull(ACTOR_USER_ID);
         }
 
         if (assigneeId != null) {
@@ -299,7 +328,13 @@ public class PayloadSerializer {
      * @param actorUserId   идентификатор пользователя, создавшего связь.
      * @return исторические данные.
      */
-    public JsonNode createIssueLinkCreatedPayload(UUID sourceIssueId, UUID targetIssueId, IssueLinkType linkType, UUID actorUserId) {
+    public JsonNode createIssueLinkCreatedPayload(
+            UUID sourceIssueId,
+            UUID targetIssueId,
+            IssueLinkType linkType,
+            UUID actorUserId,
+            List<UUID> watcherIds
+    ) {
         var node = objectMapper.createObjectNode();
 
         if (sourceIssueId != null) {
@@ -326,6 +361,7 @@ public class PayloadSerializer {
             node.putNull(CREATED_BY);
         }
 
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 
@@ -338,7 +374,13 @@ public class PayloadSerializer {
      * @param actorUserId   идентификатор пользователя, удаляющего связь.
      * @return исторические данные.
      */
-    public JsonNode createIssueLinkDeletedPayload(UUID sourceIssueId, UUID targetIssueId, IssueLinkType linkType, UUID actorUserId) {
+    public JsonNode createIssueLinkDeletedPayload(
+            UUID sourceIssueId,
+            UUID targetIssueId,
+            IssueLinkType linkType,
+            UUID actorUserId,
+            List<UUID> watcherIds
+    ) {
         var node = objectMapper.createObjectNode();
 
         if (sourceIssueId != null) {
@@ -364,7 +406,7 @@ public class PayloadSerializer {
         } else {
             node.putNull(DELETED_BY);
         }
-
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 

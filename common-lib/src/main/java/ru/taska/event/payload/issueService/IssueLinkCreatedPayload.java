@@ -1,5 +1,6 @@
 package ru.taska.event.payload.issueService;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -9,6 +10,7 @@ public record IssueLinkCreatedPayload(
         UUID createdBy,
         UUID sourceIssueId,
         UUID targetIssueId,
-        String linkType
+        String linkType,
+        List<UUID> watcherIds
 ) {
 }

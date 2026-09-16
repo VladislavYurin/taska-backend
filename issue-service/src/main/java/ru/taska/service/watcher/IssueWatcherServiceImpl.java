@@ -146,10 +146,25 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 .map(tuple -> new IssueWatchStateDto(tuple.getT1(), tuple.getT2()));
     }
 
+    ///====================== Utils =============================
+
     private UUID resolveWatcherUserId(UUID actorUserId, UUID targetUserId) {
         return targetUserId == null ? actorUserId : targetUserId;
     }
 
+    /**
+     * Проверяет, имеет ли пользователь право на выполнение операции назначения следящего за задачей.
+     *
+     * <p>Операция заключается в назначении пользователя с идентификатором {@code watcherUserId}
+     * следящим за задачей. Проверка прав зависит от того, кто выполняет действие:</p>
+     * <ul>
+     *   <li><b>Сам пользователь:</b> если {@code actorUserId} совпадает с {@code watcherUserId},
+     *       то пользователю достаточно роли {@code MEMBER} для назначения самого себя следящим.</li>
+     *   <li><b>Другой пользователь:</b> если {@code actorUserId} не совпадает с {@code watcherUserId},
+     *       то инициатор должен обладать правами {@code ADMIN}, чтобы назначить другого пользователя
+     *       следящим за задачей.</li>
+     * </ul>
+     */
     private Mono<Void> checkMutationRole(
             String requestId,
             String nodeId,

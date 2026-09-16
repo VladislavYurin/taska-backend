@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -24,6 +26,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.impl.CommentServiceImpl;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
@@ -54,6 +57,9 @@ class CommentServiceImplTest {
     private IssueCommentRepository commentRepository;
 
     @Mock
+    private IssueWatcherRepository issueWatcherRepository;
+
+    @Mock
     private IssueHistoryService issueHistoryService;
 
     @Mock
@@ -62,8 +68,8 @@ class CommentServiceImplTest {
     @Mock
     private ProjectRoleChecker projectRoleChecker;
 
-    @Mock
-    private ObjectMapper objectMapper;
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private CommentServiceImpl commentService;
@@ -133,6 +139,9 @@ class CommentServiceImplTest {
         IssueProperties.Pagination paginationConfig = new IssueProperties.Pagination(10, 50);
         lenient().when(issueProperties.pagination()).thenReturn(paginationConfig);
 
+        lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
+
         // Создание задачи
         issue = Issue.builder()
                 .id(issueId)
@@ -192,9 +201,6 @@ class CommentServiceImplTest {
 
         when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
-
-        ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();
-        when(objectMapper.valueToTree(any())).thenReturn(mockObjectNode);
 
         // Act
         Mono<IssueComment> result = commentService.addComment(
@@ -280,9 +286,6 @@ class CommentServiceImplTest {
 
         when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
-
-        ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();
-        when(objectMapper.valueToTree(any())).thenReturn(mockObjectNode);
 
         // Act
         Mono<IssueComment> result = commentService.updateComment(
@@ -414,9 +417,6 @@ class CommentServiceImplTest {
 
         when(outboxEventService.saveOutboxEvent(anyString(), anyString(), any(AggregateType.class), any(), any(EventType.class), any()))
                 .thenReturn(Mono.just(outboxEvent));
-
-        ObjectNode mockObjectNode = new ObjectMapper().createObjectNode();
-        when(objectMapper.valueToTree(any())).thenReturn(mockObjectNode);
 
         // Act
         Mono<IssueComment> result = commentService.deleteComment(

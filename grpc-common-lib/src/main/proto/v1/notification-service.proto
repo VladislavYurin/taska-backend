@@ -131,6 +131,21 @@ enum NotificationKind {
    * Уведомление о разблокировке пользователя
    */
   NOTIFICATION_KIND_USER_UNBLOCKED = 17;
+
+  /**
+   * Уведомление о создании комментария под задачей
+   */
+  NOTIFICATION_KIND_ISSUE_COMMENT_CREATED = 18;
+
+  /**
+   * Уведомление об обновлении комментария под задачей
+   */
+  NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED = 19;
+
+  /**
+   * Уведомление об удалении комментария под задачей
+   */
+  NOTIFICATION_KIND_ISSUE_COMMENT_DELETED = 20;
 }
 
 /**

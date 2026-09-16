@@ -1,6 +1,7 @@
 package ru.taska.service.transition;
 
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,12 +18,14 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
+import ru.taska.domain.IssueLink;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
@@ -52,6 +55,9 @@ class IssueTransitionExecutorTest {
     @Mock
     private OutboxEventService outboxEventService;
 
+    @Mock
+    private IssueWatcherRepository issueWatcherRepository;
+
     @InjectMocks
     private IssueTransitionExecutor executor;
 
@@ -59,12 +65,19 @@ class IssueTransitionExecutorTest {
     private static final UUID ISSUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
+    private static final UUID ASSIGNEE_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
     private static final String SOURCE_STATUS_KEY = "TODO";
     private static final String TARGET_STATUS_KEY = "IN_PROGRESS";
     private static final int CURRENT_VERSION = 1;
     private static final int UPDATED_VERSION = 2;
+
+    @BeforeEach
+    void setUp() {
+        Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
+    }
 
     @Test
     @DisplayName("Должен успешно изменить статус и сохранить в БД историю и outbox")
@@ -99,7 +112,14 @@ class IssueTransitionExecutorTest {
         Mockito.when(issueRepository.changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION))
                 .thenReturn(Mono.just(updatedIssue));
 
-        Mockito.when(payloadSerializer.createTransitionedPayload(SOURCE_STATUS_KEY, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null))
+        Mockito.when(payloadSerializer.createTransitionedPayload(
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.anyList()
+                ))
                 .thenReturn(payload);
 
         Mockito.when(issueHistoryService.saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue.getId(), ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload))
@@ -132,7 +152,15 @@ class IssueTransitionExecutorTest {
 
         Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.times(1)).changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
-        Mockito.verify(payloadSerializer, Mockito.times(1)).createTransitionedPayload(SOURCE_STATUS_KEY, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null);
+        Mockito.verify(payloadSerializer)
+                .createTransitionedPayload(
+                        Mockito.eq(SOURCE_STATUS_KEY),
+                        Mockito.eq(TARGET_STATUS_KEY),
+                        Mockito.eq(TRANSITION_ID),
+                        Mockito.eq(ACTOR_USER_ID),
+                        Mockito.isNull(),
+                        Mockito.anyList()
+                );
         Mockito.verify(issueHistoryService, Mockito.times(1)).saveIssueHistory(REQUEST_ID, NODE_ID, sourceIssue.getId(), ACTOR_USER_ID, IssueEventType.TRANSITIONED, payload);
         Mockito.verify(outboxEventService, Mockito.times(1)).saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, sourceIssue.getId(), EventType.ISSUE_TRANSITIONED, payload);
         Mockito.verify(historyRepository, Mockito.times(1)).findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.eq(Limit.of(10)));

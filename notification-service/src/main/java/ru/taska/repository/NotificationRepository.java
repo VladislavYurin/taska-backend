@@ -40,4 +40,15 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
             RETURNING *
             """)
     Mono<Notification> markAsRead(UUID notificationId, UUID userId, Instant readAt);
+
+    /**
+     * Находит все уведомления, созданные из указанного события.
+     * Используется в тестах и при отладке.
+     */
+    @Query("""
+        SELECT * FROM taska.notifications
+        WHERE source_event_id = :sourceEventId
+        ORDER BY created_at DESC
+        """)
+    Flux<Notification> findAllBySourceEventId(UUID sourceEventId);
 }

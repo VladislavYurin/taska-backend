@@ -1,8 +1,10 @@
 package ru.taska.mapper;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
+import ru.taska.config.props.NotificationProperties;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
 import ru.taska.event.TaskaEvent;
@@ -13,7 +15,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class NotificationMapper {
+
+    private final NotificationProperties notificationProperties;
+    private final String ETC_SIGN = "...";
 
     public Notification toIssueCreated(TaskaEvent event, UUID userId) {
         return Notification.builder()
@@ -249,6 +255,58 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toCommentCreated(
+            TaskaEvent event,
+            UUID userId,
+            String body
+    ) {
+        int maxCommentBodyLength = notificationProperties.comment().maxShownBodyLength();
+
+        String preview = body != null && body.length() > maxCommentBodyLength
+                ? body.substring(0, maxCommentBodyLength - ETC_SIGN.length()) + ETC_SIGN
+                : body;
+
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_COMMENT_CREATED)
+                .title("Новый комментарий")
+                .body("Новый комментарий к задаче " + event.aggregateId() + ": " + preview)
+                .link("/issues/" + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toCommentUpdated(
+            TaskaEvent event,
+            UUID userId
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_COMMENT_UPDATED)
+                .title("Комментарий обновлён")
+                .body("Комментарий к задаче " + event.aggregateId() + " был обновлён")
+                .link("/issues/" + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toCommentDeleted(
+            TaskaEvent event,
+            UUID userId
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_COMMENT_DELETED)
+                .title("Комментарий удалён")
+                .body("Комментарий к задаче " + event.aggregateId() + " был удалён")
+                .link("/issues/" + event.aggregateId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     private NotificationKind toProtoNotificationKind(NotificationType domain) {
         if (domain == null) {
             return NotificationKind.NOTIFICATION_KIND_UNSPECIFIED;
@@ -272,6 +330,9 @@ public class NotificationMapper {
             case LABEL_REMOVED -> NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED;
             case USER_BLOCKED-> NotificationKind.NOTIFICATION_KIND_USER_BLOCKED;
             case USER_UNBLOCKED -> NotificationKind.NOTIFICATION_KIND_USER_UNBLOCKED;
+            case ISSUE_COMMENT_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_CREATED;
+            case ISSUE_COMMENT_UPDATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED;
+            case ISSUE_COMMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_DELETED;
         };
     }
 

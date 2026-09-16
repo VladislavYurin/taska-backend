@@ -19,6 +19,7 @@ import ru.taska.api.notification.v1.MarkAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
+import ru.taska.config.props.NotificationProperties;
 import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
 import ru.taska.mapper.NotificationMapper;
@@ -46,13 +47,16 @@ class GrpcNotificationServiceTest {
     @Mock
     private NotificationInboxService notificationInboxService;
 
+    @Mock
+    private NotificationProperties notificationProperties;
+
     private GrpcNotificationService grpcNotificationService;
 
     @BeforeEach
     void setUp() {
         grpcNotificationService = new GrpcNotificationService(
                 notificationInboxService,
-                new NotificationMapper()
+                new NotificationMapper(notificationProperties)
         );
     }
 

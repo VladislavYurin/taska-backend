@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.domain.Issue;
@@ -31,6 +32,9 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.lenient()
                 .when(issueProperties.allowedRoles().updateIssueRoles())
                 .thenReturn(expectedRoles);
+
+        Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
     }
 
     @DisplayName("Успешное обновление полей задачи")
@@ -88,9 +92,19 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
-        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID),
-                Mockito.eq(newSummary), Mockito.eq(newDescription), Mockito.eq(newPriority), Mockito.eq(STORY_POINTS),
-                Mockito.eq(START_DATE), Mockito.eq(DUE_DATE), Mockito.eq(ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(REMAINING_ESTIMATE_MINUTES));
+        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
+                Mockito.any(Issue.class),
+                Mockito.eq(ACTOR_USER_ID),
+                Mockito.eq(newSummary),
+                Mockito.eq(newDescription),
+                Mockito.eq(newPriority),
+                Mockito.eq(STORY_POINTS),
+                Mockito.eq(START_DATE),
+                Mockito.eq(DUE_DATE),
+                Mockito.eq(ORIGINAL_ESTIMATE_MINUTES),
+                Mockito.eq(REMAINING_ESTIMATE_MINUTES),
+                Mockito.anyList()
+        );
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
         Mockito.verify(outboxEventService).saveOutboxEvent(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.any(AggregateType.class),
                 Mockito.any(UUID.class), Mockito.eq(EventType.ISSUE_UPDATED), Mockito.any(JsonNode.class));
@@ -135,11 +149,19 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
         Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
-        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(Mockito.any(Issue.class), Mockito.eq(ACTOR_USER_ID), Mockito.eq(sameSummary), Mockito.eq(sameDescription), Mockito.eq(samePriority),
-                                                                    Mockito.eq(EMPTY_STORY_POINTS), Mockito.eq(
-                        EMPTY_START_DATE), Mockito.eq(EMPTY_DUE_DATE),
-                                                                    Mockito.eq(EMPTY_ORIGINAL_ESTIMATE_MINUTES), Mockito.eq(EMPTY_REMAINING_ESTIMATE_MINUTES));
-
+        Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
+                Mockito.any(Issue.class),
+                Mockito.eq(ACTOR_USER_ID),
+                Mockito.eq(sameSummary),
+                Mockito.eq(sameDescription),
+                Mockito.eq(samePriority),
+                Mockito.eq(EMPTY_STORY_POINTS),
+                Mockito.eq(EMPTY_START_DATE),
+                Mockito.eq(EMPTY_DUE_DATE),
+                Mockito.eq(EMPTY_ORIGINAL_ESTIMATE_MINUTES),
+                Mockito.eq(EMPTY_REMAINING_ESTIMATE_MINUTES),
+                Mockito.anyList()
+        );
         Mockito.verifyNoMoreInteractions(issueRepository, projectRoleChecker);
         Mockito.verifyNoInteractions(issueHistoryService, outboxEventService);
     }
