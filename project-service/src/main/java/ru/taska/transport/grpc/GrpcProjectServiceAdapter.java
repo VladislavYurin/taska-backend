@@ -11,10 +11,12 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.GetListProjectMemberRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
@@ -75,4 +77,9 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
                 .transform(GrpcExceptionHandler.withErrorHandling("getProjectKeyInternal"));
     }
 
+    @Override
+    public Mono<ListProjectMemberResponse> getProjectMembers(Mono<GetListProjectMemberRequest> request) {
+        return grpcProjectService.getProjectMembers(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectMembers"));
+    }
 }

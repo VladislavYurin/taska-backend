@@ -15,6 +15,7 @@ import reactor.test.StepVerifier;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
+import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.exception.DomainException;
@@ -63,6 +64,7 @@ class ProjectServiceImplTest {
     private final UUID actorUserId = UUID.randomUUID();
 
     private Project mockProject;
+    private ProjectCheckMembershipDto projectCheckMembershipDto;
 
     @BeforeEach
     void setUp() {
@@ -71,6 +73,15 @@ class ProjectServiceImplTest {
                 .projectKey(projectKey)
                 .name(projectName)
                 .createdBy(userId)
+                .build();
+
+        projectCheckMembershipDto = ProjectCheckMembershipDto.builder()
+                .project_id(projectId)
+                .project_key(projectKey)
+                .role(ProjectRole.ADMIN)
+                .name(projectName)
+                .created_by(userId)
+                .user_id(actorUserId)
                 .build();
     }
 
@@ -129,20 +140,18 @@ class ProjectServiceImplTest {
                 .updated_at(null)
                 .archived_at(null)
                 .user_id(actorUserId)
+                .role(ProjectRole.ADMIN)
                 .build();
 
         Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                 .thenReturn(Mono.just(dto)
                 );
-        Mockito.when(projectMapper.toProject(dto))
-                .thenReturn(mockProject);
 
         StepVerifier.create(projectService.getProject(requestId, nodeId, projectId, actorUserId))
-                .expectNext(mockProject)
+                .expectNext(projectCheckMembershipDto)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId);
-        Mockito.verify(projectMapper).toProject(dto);
     }
 
     @Test
@@ -193,11 +202,12 @@ class ProjectServiceImplTest {
     @Test
     void listMyProjects_Success() {
 
-        Mockito.when(projectRepository.findAllByMemberUserId(userId)).thenReturn(Flux.just(mockProject, mockProject));
+        Mockito.when(projectRepository.findAllByMemberUserId(userId))
+                .thenReturn(Flux.just(projectCheckMembershipDto, projectCheckMembershipDto));
 
         StepVerifier.create(projectService.listMyProjects(requestId, nodeId, userId))
-                .expectNext(mockProject)
-                .expectNext(mockProject)
+                .expectNext(projectCheckMembershipDto)
+                .expectNext(projectCheckMembershipDto)
                 .verifyComplete();
 
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);

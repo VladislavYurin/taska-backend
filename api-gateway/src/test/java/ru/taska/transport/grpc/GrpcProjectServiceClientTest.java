@@ -3,9 +3,11 @@ package ru.taska.transport.grpc;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -17,9 +19,11 @@ import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.GetListProjectMemberRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
+import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
@@ -32,6 +36,7 @@ import ru.taska.domain.dto.AddProjectMemberRequestDto;
 import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.mapper.ProjectMapper;
@@ -336,5 +341,70 @@ public class GrpcProjectServiceClientTest {
         StepVerifier.create(client.createProject(Mono.just(restRequest), context))
                 .expectError(io.grpc.StatusRuntimeException.class)
                 .verify();
+    }
+
+    @Nested
+    @DisplayName("Tests for getProjectMembers method")
+    class GetProjectMembersTests {
+        private ListProjectMemberResponse listProjectMemberResponse;
+        private ListProjectMemberDetailsDto expectedDto;
+
+        @BeforeEach
+        void setUpData() {
+            listProjectMemberResponse = ListProjectMemberResponse.newBuilder().build();
+            expectedDto = new ListProjectMemberDetailsDto();
+        }
+
+        @Test
+        @DisplayName("Should successfully fetch project members and map response to DTO")
+        void getProjectMembers_whenRequestIsValid_thenReturnsListProjectMemberDetailsDto() {
+            Mockito.when(stub.getProjectMembers(ArgumentMatchers.any(GetListProjectMemberRequest.class)))
+                    .thenReturn(Mono.just(listProjectMemberResponse));
+            Mockito.when(projectMapper.toListProjectMemberDetailsDto(listProjectMemberResponse))
+                    .thenReturn(expectedDto);
+
+            Mono<ListProjectMemberDetailsDto> resultMono = client.getProjectMembers(PROJECT_ID, context);
+
+            StepVerifier.create(resultMono)
+                    .assertNext(actualDto ->
+                            Assertions.assertThat(actualDto).isSameAs(expectedDto)
+                    )
+                    .verifyComplete();
+
+            ArgumentCaptor<GetListProjectMemberRequest> requestCaptor =
+                    ArgumentCaptor.forClass(GetListProjectMemberRequest.class);
+
+            Mockito.verify(stub, Mockito.times(1))
+                    .getProjectMembers(requestCaptor.capture());
+
+            GetListProjectMemberRequest capturedRequest = requestCaptor.getValue();
+            Assertions.assertThat(capturedRequest.getBody().getProjectId()).isEqualTo(PROJECT_ID);
+            Assertions.assertThat(capturedRequest.getBody().getActorUserId()).isEqualTo(USER_ID);
+
+            Mockito.verify(projectMapper, Mockito.times(1))
+                    .toListProjectMemberDetailsDto(listProjectMemberResponse);
+        }
+
+        @Test
+        @DisplayName("Should propagate error when gRPC stub call fails")
+        void getProjectMembers_whenGrpcCallFails_thenPropagatesError() {
+            RuntimeException grpcException = new RuntimeException("gRPC service unavailable");
+
+            Mockito.when(stub.getProjectMembers(ArgumentMatchers.any(GetListProjectMemberRequest.class)))
+                    .thenReturn(Mono.error(grpcException));
+
+            Mono<ListProjectMemberDetailsDto> resultMono = client.getProjectMembers(PROJECT_ID, context);
+
+            StepVerifier.create(resultMono)
+                    .expectErrorSatisfies(throwable -> Assertions.assertThat(throwable)
+                            .isInstanceOf(RuntimeException.class)
+                            .hasMessage("gRPC service unavailable"))
+                    .verify();
+
+            Mockito.verify(stub, Mockito.times(1))
+                    .getProjectMembers(ArgumentMatchers.any(GetListProjectMemberRequest.class));
+
+            Mockito.verifyNoInteractions(projectMapper);
+        }
     }
 }

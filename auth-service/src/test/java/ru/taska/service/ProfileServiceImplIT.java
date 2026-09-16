@@ -34,6 +34,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +47,8 @@ class ProfileServiceImplIT extends AbstractIT {
     private static final String CONTENT_TYPE = "image/png";
     private static final String FILE_NAME = "avatar.png";
     private static final byte[] FILE_CONTENT = "fake-image-content".getBytes(StandardCharsets.UTF_8);
+    public static final String TEST_USER_DISPLAY_NAME = "Test User";
+    public static final String TEST_USER_EMAIL = "test@example.com";
 
     @Container
     static MinIOContainer minio = new MinIOContainer("minio/minio:latest");
@@ -96,8 +100,8 @@ class ProfileServiceImplIT extends AbstractIT {
     void setUp() {
         User user = User.builder()
                 .login("testuser")
-                .email("test@example.com")
-                .displayName("Test User")
+                .email(TEST_USER_EMAIL)
+                .displayName(TEST_USER_DISPLAY_NAME)
                 .status(UserStatus.ACTIVE)
                 .globalRole(GlobalRole.USER)
                 .build();
@@ -235,6 +239,55 @@ class ProfileServiceImplIT extends AbstractIT {
 
         // Запись аватара в БД не создана
         assertThat(userAvatarRepository.findByUserId(userId).block()).isNull();
+    }
+
+    @Test
+    @DisplayName("getUserDetailsByIds должен возвращать данные пользователей с обогащенными аватарами и сохранять порядок")
+    void getUserDetailsByIds_shouldReturnEnrichedUserDetailsInOrder() {
+        String objectKey = uploadFileToS3(FILE_CONTENT);
+
+        UserAvatar avatar = new UserAvatar();
+        avatar.setUserId(userId);
+        avatar.setObjectKey(objectKey);
+        avatar.setFileName(FILE_NAME);
+        avatar.setContentType(CONTENT_TYPE);
+        avatar.setSizeBytes((long) FILE_CONTENT.length);
+        avatar.setCreatedAt(Instant.now());
+
+        userAvatarRepository.save(avatar).block();
+
+        User userWithoutAvatar = User.builder()
+                .login("noavatar")
+                .email("noavatar@example.com")
+                .displayName("No Avatar User")
+                .status(UserStatus.ACTIVE)
+                .globalRole(GlobalRole.USER)
+                .build();
+        UUID user2Id = userRepository.save(userWithoutAvatar).block().getId();
+
+        profileService.getUserDetailsByIds(List.of(userId, user2Id))
+                .as(StepVerifier::create)
+                .assertNext(dto -> {
+                    assertThat(dto.userId()).isEqualTo(userId);
+                    assertThat(dto.displayName()).isEqualTo(TEST_USER_DISPLAY_NAME);
+                    assertThat(dto.email()).isEqualTo(TEST_USER_EMAIL);
+
+                    assertThat(dto.avatar()).isNotNull();
+                    assertThat(dto.avatar().getFileName()).isEqualTo(FILE_NAME);
+                    assertThat(dto.avatar().getContentType()).isEqualTo(CONTENT_TYPE);
+                    assertThat(dto.avatar().getSizeBytes()).isEqualTo(FILE_CONTENT.length);
+                    assertThat(dto.avatar().getDownloadUrl())
+                            .isNotNull()
+                            .contains(BUCKET_NAME)
+                            .contains("http");
+                })
+                .assertNext(dto -> {
+                    assertThat(dto.userId()).isEqualTo(user2Id);
+                    assertThat(dto.displayName()).isEqualTo("No Avatar User");
+                    assertThat(dto.email()).isEqualTo("noavatar@example.com");
+                    assertThat(dto.avatar()).isNull();
+                })
+                .verifyComplete();
     }
 
     /**

@@ -16,7 +16,9 @@ import java.util.UUID;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING,
         collectionMappingStrategy = CollectionMappingStrategy.ADDER_PREFERRED,
-        unmappedTargetPolicy = ReportingPolicy.IGNORE)
+        unmappedTargetPolicy = ReportingPolicy.IGNORE,
+        uses = {ProjectMemberMapper.class}
+)
 public interface ProjectMapper {
     /**
      * Маппинг {@link Project} в {@link ProjectResponse}
@@ -31,6 +33,21 @@ public interface ProjectMapper {
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "archivedAt", source = "archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project);
+
+    /**
+     * Маппинг {@link ProjectCheckMembershipDto} в {@link ProjectResponse}
+     * param {@link ProjectCheckMembershipDto}
+     * return {@link ProjectResponse}
+     */
+    @Mapping(target = "id", source = "project_id")
+    @Mapping(target = "projectKey", source = "project_key")
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "createdBy", source = "created_by")
+    @Mapping(target = "createdAt", source = "created_at")
+    @Mapping(target = "updatedAt", source = "updated_at")
+    @Mapping(target = "archivedAt", source = "archived_at", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "currentUserRole", source = "role", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    ProjectResponse toProjectResponse(ProjectCheckMembershipDto project);
 
     /**
      * Конвертация UUID в String

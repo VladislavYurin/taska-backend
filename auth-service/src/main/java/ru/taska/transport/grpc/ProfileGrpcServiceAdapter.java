@@ -12,6 +12,8 @@ import com.google.protobuf.Empty;
 import ru.taska.api.auth.profile.v1.DeleteMyAvatarRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlResponse;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequest;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.GetUserProfileRequest;
 import ru.taska.api.auth.profile.v1.GetUserProfileResponse;
 import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
@@ -53,5 +55,11 @@ public class ProfileGrpcServiceAdapter extends ReactorProfileServiceGrpc.Profile
     public Mono<GetUserProfileResponse> getUserProfile(Mono<GetUserProfileRequest> request) {
         return profileGrpcService.getUserProfile(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getUserProfile"));
+    }
+
+    @Override
+    public Mono<GetUserDetailsByIdsResponse> getUserDetailsByIds(Mono<GetUserDetailsByIdsRequest> request) {
+        return profileGrpcService.getUserDetailsByIds(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getUserDetailsByIds"));
     }
 }

@@ -44,6 +44,11 @@ service ProjectService {
   rpc RmProjectMember (RmProjectMemberRequest) returns (RmProjectMemberResponse);
 
   /**
+   * Возвращает список участников проекта
+   */
+  rpc GetProjectMembers (GetListProjectMemberRequest) returns (ListProjectMemberResponse);
+
+  /**
    * Меняет роль участника проекта.
    */
   rpc ChangeProjectMemberRole (ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
@@ -128,6 +133,7 @@ message ProjectResponse {
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
   optional google.protobuf.Timestamp archived_at = 7;
+  optional ProjectRole current_user_role = 8;
 }
 
 message ListMyProjectsResponse {
@@ -226,4 +232,35 @@ message ProjectKeyResponse {
    * Ключ-название проекта
    */
   string project_key = 1;
+}
+
+message GetListProjectMemberRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetListProjectMemberRequestBody body = 2;
+}
+
+message GetListProjectMemberRequestBody {
+  string project_id = 1;
+  string actor_user_id=2;
+}
+
+message ListProjectMemberResponse {
+  repeated ProjectMemberDetailsResponse members = 1;
+}
+
+message ProjectMemberDetailsResponse {
+  string user_id = 1;
+  string role = 2;
+  string display_name = 3;
+  string email = 4;
+  optional AvatarResponse avatar = 5;
+}
+
+message AvatarResponse {
+  string id = 1;
+  string object_key = 2;
+  string file_name = 3;
+  string content_type = 4;
+  int64 size_bytes = 5;
+  string download_url = 6;
 }
