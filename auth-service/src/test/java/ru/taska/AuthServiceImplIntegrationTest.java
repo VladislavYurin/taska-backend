@@ -45,6 +45,7 @@ import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.PasswordHashServiceImpl;
+import ru.taska.security.config.SecurityProperties;
 import ru.taska.service.AuthService;
 
 @Slf4j
@@ -70,6 +71,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
     @Autowired
     private PasswordHashServiceImpl passwordHashServiceImpl;
 
+    @Autowired
+    private SecurityProperties securityProperties;
+
     private static ManagedChannel channel;
     private static ReactorAuthServiceGrpc.ReactorAuthServiceStub authStub;
 
@@ -86,13 +90,6 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
 
     @BeforeAll
     static void setUp() {
-        // Ждем пока Liquibase применит миграции и gRPC сервер запустится
-//        try {
-//            TimeUnit.SECONDS.sleep(5);
-//        } catch (InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//        }
-
         // Создаем канал к gRPC серверу
         channel = ManagedChannelBuilder.forAddress("localhost", 9090)
                 .usePlaintext()
@@ -532,5 +529,186 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         InviteToken usedToken = inviteTokenRepository.findByTokenHash(inviteTokenHash).block(Duration.ofSeconds(5));
         Assertions.assertThat(usedToken).isNotNull();
         Assertions.assertThat(usedToken.getUsedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should increment failed attempts and lock account after max attempts (transaction committed)")
+    void testFailedAttemptsIncrementAndLock() {
+        int maxAttempts = securityProperties.getMaxFailedAttempts();
+        log.info(">>> Testing failed attempts logic, maxAttempts={}", maxAttempts);
+
+        // When/Then: делаем maxAttempts - 1 неудачных попыток,
+        // после каждой счётчик должен расти и коммититься в БД
+        for (int i = 1; i < maxAttempts; i++) {
+            final int attemptNumber = i;
+
+            LoginRequest request = LoginRequest.newBuilder()
+                    .setHeader(Header.newBuilder()
+                            .setRequestId("test-req-failed-" + attemptNumber)
+                            .setNodeId("test-node")
+                            .build())
+                    .setBody(LoginRequestBody.newBuilder()
+                            .setEmail(testEmail)
+                            .setPassword("wrongPassword" + attemptNumber + "!")
+                            .build())
+                    .build();
+
+            Assertions.assertThatThrownBy(() ->
+                            authStub.login(Mono.just(request)).block(Duration.ofSeconds(10)))
+                    .isInstanceOf(StatusRuntimeException.class)
+                    .satisfies(ex -> {
+                        StatusRuntimeException statusEx = (StatusRuntimeException) ex;
+                        Assertions.assertThat(statusEx.getStatus().getCode().toString())
+                                .isEqualTo("UNAUTHENTICATED");
+                    });
+
+            Credential credential = credentialRepository
+                    .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                    .block(Duration.ofSeconds(5));
+
+            Assertions.assertThat(credential).isNotNull();
+            Assertions.assertThat(credential.getFailedAttempts())
+                    .as("Failed attempts should be persisted after attempt #%d", attemptNumber)
+                    .isEqualTo(attemptNumber);
+            Assertions.assertThat(credential.getLastFailedAt()).isNotNull();
+            Assertions.assertThat(credential.getLockedUntil())
+                    .as("Account should not be locked yet before reaching max attempts")
+                    .isNull();
+
+            User user = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
+            Assertions.assertThat(user).isNotNull();
+            Assertions.assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+
+            log.info(">>> Attempt #{}: failedAttempts={}, status={}",
+                    attemptNumber, credential.getFailedAttempts(), user.getStatus());
+        }
+
+        // When: делаем последнюю (maxAttempts) неудачную попытку — она должна заблокировать аккаунт
+        LoginRequest finalRequest = LoginRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-failed-final")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(LoginRequestBody.newBuilder()
+                        .setEmail(testEmail)
+                        .setPassword("wrongPasswordFinal!")
+                        .build())
+                .build();
+
+        Assertions.assertThatThrownBy(() ->
+                        authStub.login(Mono.just(finalRequest)).block(Duration.ofSeconds(10)))
+                .isInstanceOf(StatusRuntimeException.class)
+                .satisfies(ex -> {
+                    StatusRuntimeException statusEx = (StatusRuntimeException) ex;
+                    Assertions.assertThat(statusEx.getStatus().getCode().toString())
+                            .isEqualTo("UNAUTHENTICATED");
+                });
+
+        // Then: счётчик достиг максимума, credential заблокирован, user переведён в LOCKED
+        Credential lockedCredential = credentialRepository
+                .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                .block(Duration.ofSeconds(5));
+
+        Assertions.assertThat(lockedCredential).isNotNull();
+        Assertions.assertThat(lockedCredential.getFailedAttempts()).isEqualTo(maxAttempts);
+        Assertions.assertThat(lockedCredential.getLockedUntil())
+                .as("lockedUntil should be set after max attempts")
+                .isNotNull();
+        Assertions.assertThat(lockedCredential.getLockedUntil()).isAfter(Instant.now());
+
+        User lockedUser = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
+        Assertions.assertThat(lockedUser).isNotNull();
+        Assertions.assertThat(lockedUser.getStatus())
+                .as("User should be LOCKED after max failed attempts")
+                .isEqualTo(UserStatus.LOCKED);
+
+        log.info(">>> Account locked until {} after {} failed attempts",
+                lockedCredential.getLockedUntil(), maxAttempts);
+
+        // And: даже с правильным паролем логин должен падать, пока аккаунт заблокирован
+        LoginRequest correctPasswordRequest = LoginRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-correct-after-lock")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(LoginRequestBody.newBuilder()
+                        .setEmail(testEmail)
+                        .setPassword(testPassword)  // правильный пароль
+                        .build())
+                .build();
+
+        Assertions.assertThatThrownBy(() ->
+                        authStub.login(Mono.just(correctPasswordRequest)).block(Duration.ofSeconds(10)))
+                .isInstanceOf(StatusRuntimeException.class)
+                .satisfies(ex -> {
+                    StatusRuntimeException statusEx = (StatusRuntimeException) ex;
+                    Assertions.assertThat(statusEx.getStatus().getCode().toString())
+                            .isEqualTo("PERMISSION_DENIED");
+                    Assertions.assertThat(statusEx.getStatus().getDescription())
+                            .contains("Account is locked until");
+                });
+
+        // И счётчик НЕ должен увеличиться при попытке залогиниться в заблокированный аккаунт
+        Credential afterLockedAttempt = credentialRepository
+                .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                .block(Duration.ofSeconds(5));
+
+        Assertions.assertThat(afterLockedAttempt).isNotNull();
+        Assertions.assertThat(afterLockedAttempt.getFailedAttempts())
+                .as("Failed attempts should NOT increment when account is already locked")
+                .isEqualTo(maxAttempts);
+
+        log.info(">>> Verified: locked account does not increment counter on further attempts");
+    }
+
+    @Test
+    @DisplayName("Should reset failed attempts after successful login")
+    void testFailedAttemptsResetAfterSuccessfulLogin() {
+        // Given: одна неудачная попытка
+        LoginRequest wrongRequest = LoginRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-reset-1")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(LoginRequestBody.newBuilder()
+                        .setEmail(testEmail)
+                        .setPassword("wrongPassword!")
+                        .build())
+                .build();
+
+        Assertions.assertThatThrownBy(() ->
+                        authStub.login(Mono.just(wrongRequest)).block(Duration.ofSeconds(10)))
+                .isInstanceOf(StatusRuntimeException.class);
+
+        Credential afterFailure = credentialRepository
+                .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(afterFailure.getFailedAttempts()).isEqualTo(1);
+
+        // When: успешный логин
+        LoginRequest correctRequest = LoginRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId("test-req-reset-2")
+                        .setNodeId("test-node")
+                        .build())
+                .setBody(LoginRequestBody.newBuilder()
+                        .setEmail(testEmail)
+                        .setPassword(testPassword)
+                        .build())
+                .build();
+
+        LoginResponse response = authStub.login(Mono.just(correctRequest)).block(Duration.ofSeconds(10));
+        Assertions.assertThat(response).isNotNull();
+        Assertions.assertThat(response.getAccessToken()).isNotEmpty();
+
+        // Then: счётчик сброшен, lockedUntil очищен
+        Credential afterSuccess = credentialRepository
+                .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(afterSuccess.getFailedAttempts()).isEqualTo(0);
+        Assertions.assertThat(afterSuccess.getLockedUntil()).isNull();
+
+        User user = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
+        Assertions.assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
 }

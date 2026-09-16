@@ -65,7 +65,7 @@ jwt:
 
 security:
   max-failed-attempts: ${AUTH_SECURITY_MAX_FAILED_ATTEMPTS:5}
-  lock-duration: ${AUTH_SECURITY_LOCK_DURATION:15}
+  lock-duration: ${AUTH_SECURITY_LOCK_DURATION:15m}
   password-encoder: ${AUTH_PASSWORD_ENCODER:bcrypt} # bcrypt or argon2
 
 validation:
