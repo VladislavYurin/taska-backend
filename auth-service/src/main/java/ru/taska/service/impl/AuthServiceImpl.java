@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.dto.AuthResponseDto;
@@ -32,7 +33,6 @@ import ru.taska.util.PasswordValidator;
 import ru.taska.util.UserStatusMapper;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /**
@@ -56,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final PasswordValidator passwordValidator;
     private final JwtValidator jwtValidator;
-
+    private final TransactionalOperator requiresNewTransactionalOperator;
     /**
      * {@inheritDoc}
      */
@@ -74,27 +74,14 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(user -> credentialRepository
                         .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
                         .switchIfEmpty(Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Email and password are required")))
-                        .flatMap(credential -> {
-                            if (credential.getLockedUntil() != null &&
-                                    credential.getLockedUntil().isAfter(Instant.now())) {
-                                log.warn("Login attempt for locked account: {}", DataMaskingHelper.maskEmail(email));
-                                return Mono.error(new DomainException(
-                                        DomainStatus.UNAUTHENTICATED,
-                                        "Invalid credentials"
-                                ));
-                            }
+                        .flatMap( credential ->{
+
                             if (user.getStatus() == UserStatus.BLOCKED || user.getStatus() == UserStatus.INVITED) {
-                                log.warn("Login attempt for BLOCKED or INVITED user: {}", DataMaskingHelper.maskEmail(email));
-                                return Mono.error(new DomainException(
-                                        DomainStatus.UNAUTHENTICATED,
-                                        "Invalid credentials"
-                                ));
+                                log.warn("Login attempt for {} user: {}", user.getStatus(), DataMaskingHelper.maskEmail(email));
+                                return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
                             }
-                            return verifyPassword(credential, password, user)
-                                    .flatMap(validCredential ->
-                                            resetFailedAttempts(validCredential,user)
-                                                    .then(generateTokens(credential.getUserId()))
-                                    );
+                            return unlockIfLockoutExpired(user, credential)
+                                    .then(Mono.defer(() ->authenticate(user, credential, password)));
                         })
                 );
     }
@@ -221,14 +208,34 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    private Mono<Credential> checkAccountLock(Credential credential) {
-        if (credential.getLockedUntil() != null && credential.getLockedUntil().isAfter(Instant.now())) {
-            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
-                    "Account is locked until " + credential.getLockedUntil()));
+    private Mono<Void> unlockIfLockoutExpired(User user, Credential credential) {
+        if (user.getStatus() != UserStatus.LOCKED) {
+            return Mono.empty();
         }
-        return Mono.just(credential);
+        Instant now = Instant.now();
+        boolean expired = (credential.getLockedUntil() == null) || (credential.getLockedUntil().isBefore(now));
+        if (!expired) {
+            return Mono.error(new DomainException(
+                    DomainStatus.PERMISSION_DENIED,
+                    "Account is locked until " + credential.getLockedUntil() + ". Try again later."
+            ));
+        }
+        log.info("Lock expired for user {}, unlocking", user.getId());
+        user.setStatus(UserStatus.ACTIVE);
+        credential.setLockedUntil(null);
+        credential.setFailedAttempts(0);
+        return requiresNewTransactionalOperator.transactional(
+                userRepository.save(user)
+                        .then(credentialRepository.save(credential))
+                        .then()
+        );
     }
 
+    private Mono<AuthResponseDto> authenticate(User user, Credential credential, String password) {
+        return verifyPassword(credential, password, user)
+                .flatMap(valid -> resetFailedAttempts(valid)
+                        .then(generateTokens(user.getId())));
+    }
     /**
      * Сверяет переданный пароль с хэшем в учётных данных.
      *
@@ -243,7 +250,8 @@ public class AuthServiceImpl implements AuthService {
                     if (matches) {
                         log.info("Successful login for user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
                         return Mono.just(credential);
-                    } else {
+                    }
+                    else {
                         log.warn("Failed login attempt for user: {}", DataMaskingHelper.maskEmail(user.getEmail()));
                         return handleFailedAttempt(credential,user);
                     }
@@ -257,54 +265,48 @@ public class AuthServiceImpl implements AuthService {
      * @return никогда не возвращает успех, всегда ошибка {@link DomainException}
      */
     private Mono<Credential> handleFailedAttempt(Credential credential,User user) {
-        int newAttempts = (credential.getFailedAttempts() == null ? 1 : credential.getFailedAttempts() + 1);
+        int newAttempts = credential.getFailedAttempts() + 1;
+
         Instant now = Instant.now();
-        Instant lockedUntil = null;
 
         boolean shouldLock = newAttempts >= securityProperties.getMaxFailedAttempts();
 
-        if (shouldLock) {
-            lockedUntil = now.plus(securityProperties.getLockDuration().toMinutes(), ChronoUnit.MINUTES);
-            log.warn("Account locked until {} due to {} failed attempts", lockedUntil, newAttempts);
-        }
+        Instant lockedUntil = shouldLock
+                ? now.plus(securityProperties.getLockDuration())
+                : null;
 
         credential.setFailedAttempts(newAttempts);
         credential.setLastFailedAt(now);
         credential.setLockedUntil(lockedUntil);
 
-        return credentialRepository.save(credential)
-                .flatMap(savedCredential -> {
-                    if (shouldLock && (user.getStatus() != UserStatus.LOCKED)) {
-                        user.setStatus(UserStatus.LOCKED);
-                        return userRepository.save(user)
-                                .thenReturn(savedCredential);
-                    }
-                    return Mono.just(savedCredential);
-                })
+        return requiresNewTransactionalOperator.transactional(
+                credentialRepository.save(credential)
+                        .flatMap(savedCredential -> {
+                            if (shouldLock && (user.getStatus() != UserStatus.LOCKED)) {
+                                user.setStatus(UserStatus.LOCKED);
+                                return userRepository.save(user)
+                                        .doOnSuccess( savedUser->
+                                                log.warn("Account locked until {} due to {} failed attempts", lockedUntil, newAttempts)
+                                        )
+                                        .thenReturn(savedCredential);
+
+                            }
+                            return Mono.just(savedCredential);
+                        })
+                )
                 .then(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
     }
 
     /**
-     * Сбрасывает счётчик неудачных попыток после успешного входа.
+     * Обнуляет счётчик неудачных попыток после успешного входа.
      *
      * @param credential учётные данные
      * @return сохранённые учётные данные с обнулёнными попытками
      */
-    private Mono<Credential> resetFailedAttempts(Credential credential,User user) {
+    private Mono<Credential> resetFailedAttempts(Credential credential) {
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
-        return credentialRepository.save(credential)
-                .flatMap(savedCredential->{
-                    if (user.getStatus() == UserStatus.LOCKED) {
-                        user.setStatus(UserStatus.ACTIVE);
-                        return userRepository.save(user)
-                                .thenReturn(savedCredential);
-                    }
-                    return Mono.just(savedCredential);
-                })
-                .doOnSuccess(result->
-                        log.info("User automatically unlocked after successful login")
-                );
+        return credentialRepository.save(credential);
     }
 
     /**
