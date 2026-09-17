@@ -541,6 +541,18 @@ class AdminReadOnlyControllerTest {
                 );
     }
 
+    @Test
+    void retryOutboxEvent_ShouldReturn400_WhenServiceIsInvalid() {
+        mockAuthenticatedUser();
+
+        webTestClient.post()
+                .uri("/api/v1/admin/outbox/{service}/{eventId}/retry", "unknown", UUID.randomUUID())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
     // ==================== HELPER METHODS ====================
 
     private static Stream<Arguments> listTableRowsArguments() {

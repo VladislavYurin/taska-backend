@@ -9,6 +9,13 @@ import ru.taska.domain.dto.SortOrderDto;
 @Configuration
 public class WebConfig implements WebFluxConfigurer {
 
+    /**
+     * Настраивает маппинг строковых Query и Path параметров
+     * в DTO-перечисления OpenAPI (SortOrderDto, OutboxServiceTypeDto).
+     * Требуется для поддержки нижнего регистра (lowercase).
+     *
+     * @param registry реестр конвертеров Spring
+     */
     @Override
     public void addFormatters(FormatterRegistry registry) {
         registry.addConverter(String.class, SortOrderDto.class, source -> {
