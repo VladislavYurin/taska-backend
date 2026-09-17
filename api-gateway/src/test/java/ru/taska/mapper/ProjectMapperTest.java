@@ -20,6 +20,7 @@ import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
@@ -199,7 +200,7 @@ public class ProjectMapperTest {
     @ParameterizedTest
     @MethodSource("restRoleToGrpcRoleArguments")
     @DisplayName("Должен корректно преобразовать REST роль в gRPC роль")
-    void toGrpcProjectRole_shouldCorrectMapsAllFields(String restRole, ProjectRole expected) {
+    void toGrpcProjectRole_shouldCorrectMapsAllFields(ProjectMemberRoleDto restRole, ProjectRole expected) {
 
         // when
         var result = mapper.toGrpcProjectRole(restRole);
@@ -209,9 +210,9 @@ public class ProjectMapperTest {
     }
     private static Stream<Arguments> restRoleToGrpcRoleArguments() {
         return Stream.of(
-                Arguments.of("ADMIN", ProjectRole.PROJECT_ROLE_ADMIN),
-                Arguments.of("MEMBER", ProjectRole.PROJECT_ROLE_MEMBER),
-                Arguments.of("VIEWER", ProjectRole.PROJECT_ROLE_VIEWER)
+                Arguments.of(ProjectMemberRoleDto.ADMIN, ProjectRole.PROJECT_ROLE_ADMIN),
+                Arguments.of(ProjectMemberRoleDto.MEMBER, ProjectRole.PROJECT_ROLE_MEMBER),
+                Arguments.of(ProjectMemberRoleDto.VIEWER, ProjectRole.PROJECT_ROLE_VIEWER)
         );
     }
 
@@ -233,15 +234,6 @@ public class ProjectMapperTest {
                 Arguments.of(ProjectRole.PROJECT_ROLE_UNSPECIFIED, null),
                 Arguments.of(null, null)
         );
-    }
-
-    @Test
-    @DisplayName("Должен выбрасывать исключение для неизвестной REST роли")
-    void toGrpcProjectRole_shouldThrowException_whenUnknownRole() {
-        // when & then
-        Assertions.assertThatThrownBy(() -> mapper.toGrpcProjectRole("AbstractRole"))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-                .hasMessageContaining("Invalid project role");
     }
 
     @Test
