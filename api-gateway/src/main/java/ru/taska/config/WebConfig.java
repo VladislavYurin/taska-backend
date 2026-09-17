@@ -6,6 +6,12 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.SortOrderDto;
 
+/**
+ * Конфигурация Spring WebFlux для регистрации кастомных конвертеров типов.
+ * <p>
+ * Обеспечивает корректное связывание строковых URL-параметров (Query и Path)
+ * с OpenAPI DTO-перечислениями, поступающими в нижнем регистре (lowercase).
+ */
 @Configuration
 public class WebConfig implements WebFluxConfigurer {
 
