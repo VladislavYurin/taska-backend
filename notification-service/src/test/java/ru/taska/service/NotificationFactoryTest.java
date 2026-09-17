@@ -32,7 +32,6 @@ class NotificationFactoryTest {
     // ==================== Поля payload ====================
 
     private static final String FIELD_ISSUE_ID = "issueId";
-    private static final String FIELD_AUTHOR_USER_ID = "authorUserId";
     private static final String FIELD_ACTOR_USER_ID = "actorUserId";
     private static final String FIELD_ASSIGNEE_ID = "assigneeId";
     private static final String FIELD_REPORTER_ID = "reporterId";
@@ -43,7 +42,8 @@ class NotificationFactoryTest {
     private static final String FIELD_LINK_TYPE = "linkType";
     private static final String FIELD_WATCHER_IDS = "watcherIds";
     private static final String FIELD_BODY = "body";
-
+    private static final String FIELD_UPLOADED_BY = "uploadedBy";
+    private static final String FIELD_FILE_NAME = "fileName";
     private static final String LINK_TYPE_BLOCKS = "BLOCKS";
 
     @Mock
@@ -87,6 +87,10 @@ class NotificationFactoryTest {
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_LINK_CREATED));
         Mockito.lenient().when(notificationMapper.toIssueLinkDeleted(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_LINK_DELETED));
+        Mockito.lenient().when(notificationMapper.toAttachmentAdded(any(), any(), any(), any()))
+                .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_ATTACHMENT_ADDED));
+        Mockito.lenient().when(notificationMapper.toAttachmentDeleted(any(), any(), any(), any()))
+                .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_ATTACHMENT_DELETED));
     }
 
     // ==================== ISSUE_COMMENT_CREATED ====================
@@ -96,10 +100,10 @@ class NotificationFactoryTest {
     class CommentCreatedTests {
 
         @Test
-        @DisplayName("Уведомляет watchers, исключая автора комментария\"")
+        @DisplayName("Уведомляет наблюдателей, исключая автора комментария")
         void shouldNotifyWatchersExceptAuthor() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA, userB, actorId);
 
@@ -110,10 +114,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если watchers пуст")
+        @DisplayName("Возвращает пустой список, если наблюдателей нет")
         void shouldReturnEmptyOnEmptyWatchers() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload);
 
@@ -127,7 +131,7 @@ class NotificationFactoryTest {
         @DisplayName("Возвращает пустой список, если поле watcherIds отсутствует")
         void shouldReturnEmptyWhenWatcherIdsMissing() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
 
             List<Notification> result = notificationFactory.create(
@@ -137,10 +141,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если authorUserId отсутствует")
+        @DisplayName("Возвращает пустой список, если actorUserId отсутствует")
         void shouldReturnEmptyWhenAuthorMissing() {
             ObjectNode payload = createBasePayload();
-            payload.putNull(FIELD_AUTHOR_USER_ID);
+            payload.putNull(FIELD_ACTOR_USER_ID);
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA, userB);
 
@@ -151,10 +155,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Дедуплицирует повторяющихся watchers")
+        @DisplayName("Убирает дубликаты среди наблюдателей")
         void shouldDeduplicateWatchers() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA, userA, userA, userB);
 
@@ -168,7 +172,7 @@ class NotificationFactoryTest {
         @DisplayName("Пропускает некорректный UUID в watcherIds без падения")
         void shouldSkipInvalidUuid() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             ArrayNode watchers = objectMapper.createArrayNode();
             watchers.add(userA.toString());
@@ -183,10 +187,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если автор — единственный watcher")
+        @DisplayName("Возвращает пустой список, если автор — единственный наблюдатель")
         void shouldReturnEmptyWhenAuthorIsOnlyWatcher() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, actorId);
 
@@ -197,10 +201,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Создаёт уведомление типа ISSUE_COMMENT_CREATED с правильным sourceEventId")
+        @DisplayName("Создаёт уведомление ISSUE_COMMENT_CREATED с правильным sourceEventId")
         void shouldHaveCorrectTypeAndSourceEventId() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA);
 
@@ -217,14 +221,14 @@ class NotificationFactoryTest {
     // ==================== Типы уведомлений ====================
 
     @Nested
-    @DisplayName("Notification types")
+    @DisplayName("Типы уведомлений")
     class NotificationTypesTests {
 
         @Test
         @DisplayName("ISSUE_COMMENT_CREATED создаёт уведомление ISSUE_COMMENT_CREATED")
         void shouldHaveCorrectTypeForCommentCreated() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA);
 
@@ -334,7 +338,7 @@ class NotificationFactoryTest {
     class TransitionedTests {
 
         @Test
-        @DisplayName("Уведомляет watchers и assignee, исключая actor")
+        @DisplayName("Уведомляет наблюдателей и исполнителя, исключая актора")
         void shouldNotifyWatchersAndAssigneeExceptActor() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -348,7 +352,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Не дублирует assignee, если он же является watcher")
+        @DisplayName("Не дублирует исполнителя, если он же наблюдатель")
         void shouldNotDuplicateAssigneeAndWatcher() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -362,7 +366,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если единственный получатель — actor")
+        @DisplayName("Возвращает пустой список, если единственный получатель — актор")
         void shouldReturnEmptyWhenOnlyActor() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -387,7 +391,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет всех watchers, если actor отсутствует")
+        @DisplayName("Уведомляет всех наблюдателей, если актор отсутствует")
         void shouldNotifyAllWhenActorNull() {
             ObjectNode payload = createBasePayload();
             payload.putNull(FIELD_ACTOR_USER_ID);
@@ -408,7 +412,7 @@ class NotificationFactoryTest {
     class AssignedTests {
 
         @Test
-        @DisplayName("Уведомляет нового assignee и watchers, исключая actor")
+        @DisplayName("Уведомляет нового исполнителя и наблюдателей, исключая актора")
         void shouldNotifyAssigneeAndWatchers() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -436,7 +440,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Не уведомляет actor, если он сам назначил себя")
+        @DisplayName("Не уведомляет актора, если он сам назначил себя")
         void shouldNotNotifyActorIfSelfAssigned() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -450,7 +454,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет watchers, если assignee — это actor")
+        @DisplayName("Уведомляет наблюдателей, если исполнитель — это актор")
         void shouldNotifyWatchersWhenAssigneeIsActor() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -464,7 +468,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Дедуплицирует assignee, если он же в watchers")
+        @DisplayName("Убирает дубликат исполнителя, если он же в наблюдателях")
         void shouldDedupAssigneeInWatchers() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -478,7 +482,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Создаёт уведомление типа ISSUE_ASSIGNED")
+        @DisplayName("Создаёт уведомление ISSUE_ASSIGNED")
         void shouldHaveCorrectType() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -500,7 +504,7 @@ class NotificationFactoryTest {
     class UpdatedTests {
 
         @Test
-        @DisplayName("Уведомляет watchers и assignee, исключая actor")
+        @DisplayName("Уведомляет наблюдателей и исполнителя, исключая актора")
         void shouldNotifyWatchersAndAssigneeExceptActor() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -514,7 +518,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет всех watchers, если actor отсутствует")
+        @DisplayName("Уведомляет всех наблюдателей, если актор отсутствует")
         void shouldNotifyAllWhenActorNull() {
             ObjectNode payload = createBasePayload();
             payload.putNull(FIELD_ACTOR_USER_ID);
@@ -549,7 +553,7 @@ class NotificationFactoryTest {
     class LinkCreatedTests {
 
         @Test
-        @DisplayName("Уведомляет watchers обеих задач, исключая actor")
+        @DisplayName("Уведомляет наблюдателей обеих задач, исключая актора")
         void shouldNotifyWatchersExceptActor() {
             ObjectNode payload = createLinkPayload();
             payload.put(FIELD_CREATED_BY, actorId.toString());
@@ -562,7 +566,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет всех watchers, если createdBy отсутствует")
+        @DisplayName("Уведомляет всех наблюдателей, если createdBy отсутствует")
         void shouldNotifyAllWatchersWhenActorNull() {
             ObjectNode payload = createLinkPayload();
             payload.putNull(FIELD_CREATED_BY);
@@ -575,7 +579,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если watchers пуст")
+        @DisplayName("Возвращает пустой список, если наблюдателей нет")
         void shouldReturnEmptyWhenWatchersEmpty() {
             ObjectNode payload = createLinkPayload();
             payload.put(FIELD_CREATED_BY, actorId.toString());
@@ -588,7 +592,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Дедуплицирует watchers, попавших в обе задачи")
+        @DisplayName("Убирает дубликаты наблюдателей, попавших в обе задачи")
         void shouldDeduplicateWatchersBetweenIssues() {
             ObjectNode payload = createLinkPayload();
             payload.put(FIELD_CREATED_BY, actorId.toString());
@@ -608,7 +612,7 @@ class NotificationFactoryTest {
     class LinkDeletedTests {
 
         @Test
-        @DisplayName("Уведомляет watchers, исключая actor")
+        @DisplayName("Уведомляет наблюдателей, исключая актора")
         void shouldNotifyWatchersExceptActor() {
             ObjectNode payload = createLinkPayload();
             payload.put(FIELD_DELETED_BY, actorId.toString());
@@ -621,7 +625,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет всех watchers, если deletedBy отсутствует")
+        @DisplayName("Уведомляет всех наблюдателей, если deletedBy отсутствует")
         void shouldNotifyAllWatchersWhenActorNull() {
             ObjectNode payload = createLinkPayload();
             payload.putNull(FIELD_DELETED_BY);
@@ -634,7 +638,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если watchers пуст")
+        @DisplayName("Возвращает пустой список, если наблюдателей нет")
         void shouldReturnEmptyWhenWatchersEmpty() {
             ObjectNode payload = createLinkPayload();
             payload.put(FIELD_DELETED_BY, actorId.toString());
@@ -654,7 +658,7 @@ class NotificationFactoryTest {
     class IssueCreatedTests {
 
         @Test
-        @DisplayName("Уведомляет reporter и assignee, если они разные")
+        @DisplayName("Уведомляет автора и исполнителя, если они разные")
         void shouldNotifyReporterAndAssignee() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_REPORTER_ID, userA.toString());
@@ -667,7 +671,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Дедуплицирует уведомление, если reporter == assignee")
+        @DisplayName("Убирает дубликат уведомления, если автор совпадает с исполнителем")
         void shouldDeduplicateReporterAssignee() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_REPORTER_ID, userA.toString());
@@ -680,7 +684,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Уведомляет только reporter, если assignee отсутствует")
+        @DisplayName("Уведомляет только автора, если исполнитель отсутствует")
         void shouldNotifyOnlyReporter() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_REPORTER_ID, userA.toString());
@@ -713,7 +717,7 @@ class NotificationFactoryTest {
     class IssueDeletedTests {
 
         @Test
-        @DisplayName("Уведомляет assignee, исключая actor")
+        @DisplayName("Уведомляет исполнителя, исключая актора")
         void shouldNotifyAssigneeExceptActor() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -726,7 +730,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если actor == assignee")
+        @DisplayName("Возвращает пустой список, если актор совпадает с исполнителем")
         void shouldReturnEmptyWhenActorIsAssignee() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -755,11 +759,11 @@ class NotificationFactoryTest {
     // ==================== Общие крайние случаи ====================
 
     @Nested
-    @DisplayName("Edge cases")
+    @DisplayName("Крайние случаи")
     class EdgeCases {
 
         @Test
-        @DisplayName("returns empty for unsupported event type")
+        @DisplayName("Возвращает пустой список для неподдерживаемого типа события")
         void shouldReturnEmptyForUnsupportedEvent() {
             ObjectNode payload = createBasePayload();
 
@@ -770,29 +774,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("returns empty for ISSUE_WATCHED (not in scope)")
-        void shouldSkipIssueWatched() {
-            ObjectNode payload = createBasePayload();
-
-            List<Notification> result = notificationFactory.create(
-                    event(EventType.ISSUE_WATCHED, payload), eventId);
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        @DisplayName("returns empty for ISSUE_UNWATCHED (not in scope)")
-        void shouldSkipIssueUnwatched() {
-            ObjectNode payload = createBasePayload();
-
-            List<Notification> result = notificationFactory.create(
-                    event(EventType.ISSUE_UNWATCHED, payload), eventId);
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        @DisplayName("does not throw on empty payload")
+        @DisplayName("Не падает на пустом payload")
         void shouldNotThrowOnEmptyPayload() {
             ObjectNode payload = objectMapper.createObjectNode();
 
@@ -803,7 +785,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("does not throw on watcherIds as non-array node")
+        @DisplayName("Не падает, если watcherIds — не массив")
         void shouldNotThrowWhenWatcherIdsIsNotArray() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -817,7 +799,7 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("does not throw on null value inside watcherIds")
+        @DisplayName("Не падает на null внутри watcherIds")
         void shouldNotThrowOnNullInWatcherIds() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -834,10 +816,10 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("all created notifications have sourceEventId = event.id()")
+        @DisplayName("Все созданные уведомления имеют sourceEventId = event.id()")
         void allNotificationsHaveSourceEventId() {
             ObjectNode payload = createBasePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatcherIds(payload, userA, userB);
 
@@ -847,6 +829,53 @@ class NotificationFactoryTest {
             assertThat(result)
                     .isNotEmpty()
                     .allMatch(n -> eventId.equals(n.getSourceEventId()));
+        }
+    }
+
+    @Nested
+    @DisplayName("ISSUE_ATTACHMENT_ADDED")
+    class AttachmentAddedTests {
+
+        @Test
+        @DisplayName("Уведомляет наблюдателей, исключая загрузившего (uploadedBy)")
+        void shouldNotifyWatchersExceptUploader() {
+            ObjectNode payload = createBasePayload();
+            payload.put(FIELD_UPLOADED_BY, actorId.toString());
+            payload.put(FIELD_FILE_NAME, "report.pdf");
+            setWatcherIds(payload, userA, userB, actorId);
+
+            List<Notification> result = notificationFactory.create(
+                    event(EventType.ISSUE_ATTACHMENT_ADDED, payload), eventId);
+
+            assertUserIds(result, userA, userB);
+            assertThat(result).allMatch(n ->
+                    n.getNotificationType() == NotificationType.ISSUE_ATTACHMENT_ADDED);
+        }
+
+        @Test
+        @DisplayName("Возвращает пустой список, если нет fileName")
+        void shouldReturnEmptyWhenFileNameMissing() {
+            ObjectNode payload = createBasePayload();
+            payload.put(FIELD_UPLOADED_BY, actorId.toString());
+            setWatcherIds(payload, userA);
+
+            List<Notification> result = notificationFactory.create(
+                    event(EventType.ISSUE_ATTACHMENT_ADDED, payload), eventId);
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Возвращает пустой список, если нет watcherIds")
+        void shouldReturnEmptyWhenNoWatchers() {
+            ObjectNode payload = createBasePayload();
+            payload.put(FIELD_UPLOADED_BY, actorId.toString());
+            payload.put(FIELD_FILE_NAME, "report.pdf");
+
+            List<Notification> result = notificationFactory.create(
+                    event(EventType.ISSUE_ATTACHMENT_ADDED, payload), eventId);
+
+            assertThat(result).isEmpty();
         }
     }
 

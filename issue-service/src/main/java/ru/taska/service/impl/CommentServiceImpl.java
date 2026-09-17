@@ -345,7 +345,7 @@ public class CommentServiceImpl implements CommentService {
     private ObjectNode createCommentPayload(UUID commentId, UUID authorUserId, String body, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("commentId", commentId.toString());
-        node.put("authorUserId", authorUserId.toString());
+        node.put("actorUserId", authorUserId.toString());
         node.put("body", body);
         node.set("watcherIds", objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
