@@ -146,6 +146,14 @@ enum NotificationKind {
    * Уведомление об удалении комментария под задачей
    */
   NOTIFICATION_KIND_ISSUE_COMMENT_DELETED = 20;
+  /**
+   * Уведомление о разблокировке пользователя
+   */
+  NOTIFICATION_KIND_ISSUE_ATTACHMENT_ADDED = 21;
+  /**
+   * Уведомление о разблокировке пользователя
+   */
+  NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED = 22;
 }
 
 /**
