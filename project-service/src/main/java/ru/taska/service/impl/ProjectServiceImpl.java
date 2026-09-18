@@ -138,7 +138,8 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public Mono<Project> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
-                                       Optional<String> name, Optional<String> description, Optional<String> color) {
+                                       Optional<String> name, Optional<String> description, boolean clearDescription,
+                                       Optional<String> color, boolean clearColor) {
         return projectRepository.findById(projectId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
@@ -155,15 +156,19 @@ public class ProjectServiceImpl implements ProjectService {
                                 return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Only project ADMIN can update the project"));
                             }
 
-                            if (name.isEmpty() && description.isEmpty() && color.isEmpty()) {
+                            if (name.isEmpty() && description.isEmpty() && !clearDescription
+                                    && color.isEmpty() && !clearColor) {
                                 log.info("[{}][{}] Empty PATCH for project {}, nothing to update", requestId, nodeId, projectId);
                                 return Mono.just(project);
                             }
 
+                            String newDescription = clearDescription ? null : description.orElse(project.getDescription());
+                            String newColor = clearColor ? null : color.orElse(project.getColor());
+
                             Project updatedProject = project.toBuilder()
                                     .name(name.orElse(project.getName()))
-                                    .description(description.orElse(project.getDescription()))
-                                    .color(color.orElse(project.getColor()))
+                                    .description(newDescription)
+                                    .color(newColor)
                                     .build();
 
                             return projectRepository.save(updatedProject)

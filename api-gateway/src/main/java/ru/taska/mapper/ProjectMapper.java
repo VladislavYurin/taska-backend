@@ -11,15 +11,20 @@ import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.api.project.v1.UpdateProjectRequestBody;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Component
 @RequiredArgsConstructor
@@ -40,15 +45,9 @@ public class ProjectMapper {
         restDto.setCreatedBy(protoDto.getCreatedBy());
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
-        if (protoDto.hasArchivedAt()){
-            restDto.setArchivedAt(toOffsetDateTime(protoDto.getArchivedAt()));
-        }
-        if (protoDto.hasDescription()) {
-            restDto.setDescription(protoDto.getDescription());
-        }
-        if (protoDto.hasColor()) {
-            restDto.setColor(protoDto.getColor());
-        }
+        setIfPresent(protoDto::hasArchivedAt, () -> toOffsetDateTime(protoDto.getArchivedAt()), restDto::setArchivedAt);
+        setIfPresent(protoDto::hasDescription, protoDto::getDescription, restDto::setDescription);
+        setIfPresent(protoDto::hasColor, protoDto::getColor, restDto::setColor);
         return restDto;
     }
 
@@ -92,6 +91,33 @@ public class ProjectMapper {
         restDto.setUserId(protoDto.getChangedMemberId());
         restDto.setRole(toRestProjectRole(protoDto.getRole()));
         return restDto;
+    }
+
+    /// REST TO gRPC Dto
+
+    /**
+     * Собирает Builder тела gRPC-запроса на обновление проекта (PATCH-семантика).
+     * name/description/color устанавливаются только если переданы в requestDto (Optional-поля);
+     * clearColor/clearDescription — прямая безусловная передача boolean, не Optional-паттерн.
+     */
+    public UpdateProjectRequestBody.Builder toGrpcUpdateProjectRequestBody(
+            String projectId,
+            UpdateProjectRequestDto requestDto,
+            boolean clearColor,
+            boolean clearDescription,
+            String actorUserId
+    ) {
+        UpdateProjectRequestBody.Builder body = UpdateProjectRequestBody.newBuilder()
+                .setProjectId(projectId)
+                .setActorUserId(actorUserId)
+                .setClearColor(clearColor)
+                .setClearDescription(clearDescription);
+
+        setIfPresent(requestDto.getName(), body::setName);
+        setIfPresent(requestDto.getDescription(), body::setDescription);
+        setIfPresent(requestDto.getColor(), body::setColor);
+
+        return body;
     }
 
     /// REST строка -> ProjectRole Enum grpc
@@ -139,5 +165,23 @@ public class ProjectMapper {
         }
         return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
                 .atOffset(ZoneOffset.UTC);
+    }
+
+    /**
+     * Устанавливает значение в билдер, если объект не null.
+     */
+    private static <T> void setIfPresent(T value, Consumer<T> setter) {
+        if (value != null) {
+            setter.accept(value);
+        }
+    }
+
+    /**
+     * Устанавливает значение в билдер, если объект есть в protoDto.
+     */
+    private static <T> void setIfPresent(BooleanSupplier hasCheck, Supplier<T> getter, Consumer<T> setter) {
+        if (hasCheck.getAsBoolean()) {
+            setter.accept(getter.get());
+        }
     }
 }

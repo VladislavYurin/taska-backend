@@ -51,7 +51,8 @@ public interface ProjectService {
 
     /**
      * Обновляет проект - имя, описание, цвет. Обновляются только переданные (непустые Optional) поля,
-     * отсутствующие поля остаются без изменений.
+     * отсутствующие поля остаются без изменений. Флаги clearDescription/clearColor позволяют явно
+     * сбросить description/color в null (отличается от "поле не передано").
      *
      * @param requestId - айди запроса.
      * @param nodeId - айди узла.
@@ -59,10 +60,13 @@ public interface ProjectService {
      * @param actorUserId - айди пользователя, выполняющего изменение проекта (должен быть ADMIN проекта).
      * @param name - новое имя проекта, если передано.
      * @param description - новое описание проекта, если передано.
+     * @param clearDescription - если true, описание явно сбрасывается в null (приоритетнее description).
      * @param color - новый цвет проекта (HEX), если передан.
+     * @param clearColor - если true, цвет явно сбрасывается в null (приоритетнее color).
      * @return Mono<{@link Project}> с обновлёнными данными проекта.
      */
     Mono<Project> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId, Optional<String> name,
-                                 Optional<String> description, Optional<String> color);
+                                 Optional<String> description, boolean clearDescription,
+                                 Optional<String> color, boolean clearColor);
 
 }

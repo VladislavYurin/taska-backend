@@ -273,46 +273,51 @@ public class GrpcProjectService {
             timer = "project-service_update-project_grpc_timer")
     public Mono<ProjectResponse> updateProject(Mono<UpdateProjectRequest> request) {
         return request
-                .flatMap(req -> Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getRequestId(), "header.requestId"
-                        ),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getNodeId(), "header.nodeId"
-                        ),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                req.getBody().getProjectId(), "body.projectId"
-                        ),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                req.getBody().getActorUserId(), "body.actorUserId"
-                        ),
-                        req.getBody().hasName()
-                                ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getName(), "body.name").map(Optional::of)
-                                : Mono.just(Optional.<String>empty()),
-                        req.getBody().hasDescription()
-                                ? Mono.just(Optional.of(req.getBody().getDescription()))
-                                : Mono.just(Optional.<String>empty()),
-                        req.getBody().hasColor()
-                                ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getColor(), "body.color").map(Optional::of)
-                                : Mono.just(Optional.<String>empty())
-                ))
-                .flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    UUID projectId = t.getT3();
-                    UUID actorUserId = t.getT4();
-                    Optional<String> name = t.getT5();
-                    Optional<String> description = t.getT6();
-                    Optional<String> color = t.getT7();
+                .flatMap(req -> {
+                    boolean clearColor = req.getBody().getClearColor();
+                    boolean clearDescription = req.getBody().getClearDescription();
 
-                    log.info("[{}][{}] Received request to updateProject: projectId={}, actorUserId={}",
-                            requestId, nodeId, projectId, actorUserId);
+                    return Mono.zip(
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                    req.getHeader().getRequestId(), "header.requestId"
+                            ),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                    req.getHeader().getNodeId(), "header.nodeId"
+                            ),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                    req.getBody().getProjectId(), "body.projectId"
+                            ),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                    req.getBody().getActorUserId(), "body.actorUserId"
+                            ),
+                            req.getBody().hasName()
+                                    ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                            req.getBody().getName(), "body.name").map(Optional::of)
+                                    : Mono.just(Optional.<String>empty()),
+                            (req.getBody().hasDescription() && !clearDescription)
+                                    ? Mono.just(Optional.of(req.getBody().getDescription()))
+                                    : Mono.just(Optional.<String>empty()),
+                            (req.getBody().hasColor() && !clearColor)
+                                    ? GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                            req.getBody().getColor(), "body.color").map(Optional::of)
+                                    : Mono.just(Optional.<String>empty())
+                    ).flatMap(t -> {
+                        String requestId = t.getT1();
+                        String nodeId = t.getT2();
+                        UUID projectId = t.getT3();
+                        UUID actorUserId = t.getT4();
+                        Optional<String> name = t.getT5();
+                        Optional<String> description = t.getT6();
+                        Optional<String> color = t.getT7();
 
-                    return projectService.updateProject(
-                            requestId, nodeId, projectId, actorUserId, name, description, color
-                    );
+                        log.info("[{}][{}] Received request to updateProject: projectId={}, actorUserId={}",
+                                requestId, nodeId, projectId, actorUserId);
+
+                        return projectService.updateProject(
+                                requestId, nodeId, projectId, actorUserId,
+                                name, description, clearDescription, color, clearColor
+                        );
+                    });
                 })
                 .map(projectMapper::toProjectResponse);
     }

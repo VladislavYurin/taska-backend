@@ -85,29 +85,23 @@ public class GrpcProjectServiceClient {
      * Вызов обновления проекта (PATCH-семантика)
      * @param projectId идентификатор проекта
      * @param request поля для обновления (name/description/color, все опциональны)
+     * @param clearColor если true — явный сброс color в null (независимо от request.getColor())
+     * @param clearDescription если true — явный сброс description в null (независимо от request.getDescription())
      * @param context контекст запроса
      * @return Rest DTO обновлённого проекта
      */
     public Mono<ProjectResponseDto> updateProject(
             String projectId,
             Mono<UpdateProjectRequestDto> request,
+            boolean clearColor,
+            boolean clearDescription,
             GatewayContext context
     ) {
         log.info("[{}] Calling updateProject", context.requestId());
 
         return request.flatMap(requestDto -> {
-                    UpdateProjectRequestBody.Builder body = UpdateProjectRequestBody.newBuilder()
-                            .setProjectId(projectId)
-                            .setActorUserId(context.userContext().userId());
-                    if (requestDto.getName() != null) {
-                        body.setName(requestDto.getName());
-                    }
-                    if (requestDto.getDescription() != null) {
-                        body.setDescription(requestDto.getDescription());
-                    }
-                    if (requestDto.getColor() != null) {
-                        body.setColor(requestDto.getColor());
-                    }
+                    UpdateProjectRequestBody.Builder body = projectMapper.toGrpcUpdateProjectRequestBody(
+                            projectId, requestDto, clearColor, clearDescription, context.userContext().userId());
 
                     return dynamicStub().updateProject(
                             UpdateProjectRequest.newBuilder()

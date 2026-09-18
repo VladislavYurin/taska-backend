@@ -244,7 +244,7 @@ class ProjectServiceImplTest {
                 .thenReturn(Mono.error(new OptimisticLockingFailureException("Project was concurrently modified")));
 
         StepVerifier.create(projectService.updateProject(requestId, nodeId, projectId, actorUserId,
-                        Optional.of("New name"), Optional.empty(), Optional.empty()))
+                        Optional.of("New name"), Optional.empty(), false, Optional.empty(), false))
                 .expectErrorSatisfies(throwable -> {
                     Assertions.assertInstanceOf(DomainException.class, throwable);
                     DomainException exception = (DomainException) throwable;

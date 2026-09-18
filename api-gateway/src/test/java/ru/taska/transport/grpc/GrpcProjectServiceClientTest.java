@@ -142,6 +142,10 @@ public class GrpcProjectServiceClientTest {
         var grpcResponse = ProjectResponse.getDefaultInstance();
         var restResponse = new ProjectResponseDto();
 
+        Mockito.when(projectMapper.toGrpcUpdateProjectRequestBody(
+                        Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenCallRealMethod();
+
         Mockito.when(stub.updateProject(Mockito.any(UpdateProjectRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
@@ -149,7 +153,7 @@ public class GrpcProjectServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), context))
+        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), false, false, context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -168,9 +172,45 @@ public class GrpcProjectServiceClientTest {
         Assertions.assertThat(request.getBody().getDescription()).isEqualTo("New description");
         Assertions.assertThat(request.getBody().hasColor()).isTrue();
         Assertions.assertThat(request.getBody().getColor()).isEqualTo("#0052CC");
+        Assertions.assertThat(request.getBody().getClearColor()).isFalse();
+        Assertions.assertThat(request.getBody().getClearDescription()).isFalse();
 
         Mockito.verify(projectMapper, Mockito.times(1))
                 .toRestProjectResponse(grpcResponse);
+    }
+
+    @Test
+    @DisplayName("clearColor/clearDescription=true должны попасть в protobuf-билдер независимо от значений полей DTO")
+    void updateProject_shouldSetClearFlagsOnGrpcRequest() {
+        // given
+        var restRequest = new UpdateProjectRequestDto();
+
+        var grpcResponse = ProjectResponse.getDefaultInstance();
+
+        Mockito.when(projectMapper.toGrpcUpdateProjectRequestBody(
+                        Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenCallRealMethod();
+
+        Mockito.when(stub.updateProject(Mockito.any(UpdateProjectRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(projectMapper.toRestProjectResponse(grpcResponse))
+                .thenReturn(new ProjectResponseDto());
+
+        // when
+        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), true, true, context))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        // then
+        var captor = ArgumentCaptor.forClass(UpdateProjectRequest.class);
+        Mockito.verify(stub).updateProject(captor.capture());
+
+        var body = captor.getValue().getBody();
+        Assertions.assertThat(body.getClearColor()).isTrue();
+        Assertions.assertThat(body.getClearDescription()).isTrue();
+        Assertions.assertThat(body.hasColor()).isFalse();
+        Assertions.assertThat(body.hasDescription()).isFalse();
     }
 
     @Test
@@ -182,6 +222,10 @@ public class GrpcProjectServiceClientTest {
 
         var grpcResponse = ProjectResponse.getDefaultInstance();
 
+        Mockito.when(projectMapper.toGrpcUpdateProjectRequestBody(
+                        Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenCallRealMethod();
+
         Mockito.when(stub.updateProject(Mockito.any(UpdateProjectRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
@@ -189,7 +233,7 @@ public class GrpcProjectServiceClientTest {
                 .thenReturn(new ProjectResponseDto());
 
         // when
-        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), context))
+        StepVerifier.create(client.updateProject(PROJECT_ID, Mono.just(restRequest), false, false, context))
                 .expectNextCount(1)
                 .verifyComplete();
 
