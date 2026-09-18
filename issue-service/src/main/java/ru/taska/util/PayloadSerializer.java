@@ -25,6 +25,7 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class PayloadSerializer {
     private static final String ASSIGNEE = "assigneeId";
+    private static final String REPORTER = "reporterId";
     private static final String PREVIOUS_ASSIGNEE_ID = "previousAssigneeId";
     private static final String OLD_SUMMARY = "oldSummary";
     private static final String NEW_SUMMARY = "newSummary";
@@ -44,6 +45,7 @@ public class PayloadSerializer {
     private static final String DELETED_BY = "deletedBy";
     private static final String ATTACHMENT_ID = "attachmentId";
     private static final String ISSUE_ID = "issueId";
+    private static final String ISSUE_KEY = "issueKey";
     private static final String UPLOADED_BY = "uploadedBy";
     private static final String FILE_NAME = "fileName";
     private static final String CONTENT_TYPE = "contentType";
@@ -77,7 +79,18 @@ public class PayloadSerializer {
         if (issue == null) {
             return objectMapper.createObjectNode();
         }
-        return objectMapper.valueToTree(issue);
+        ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
+
+        if (issue.getReporterId() != null) {
+            node.put(REPORTER, issue.getReporterId().toString());
+        }
+
+        if (issue.getAssigneeId() != null) {
+            node.put(ASSIGNEE, issue.getAssigneeId().toString());
+        }
+
+        return node;
     }
 
     /**
@@ -88,12 +101,14 @@ public class PayloadSerializer {
      * @return Mono<{@link JsonNode}> исторические данные.
      */
     public JsonNode createIssueAssignedPayload(
+            Issue issue,
             UUID previousAssigneeId,
             UUID newAssigneeId,
             UUID actorUserId,
             List<UUID> watcherIds
     ) {
         ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
 
         if (previousAssigneeId != null) {
             node.put(PREVIOUS_ASSIGNEE_ID, previousAssigneeId.toString());
@@ -152,6 +167,7 @@ public class PayloadSerializer {
         }
 
         ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
 
         if (actorUserId != null) {
             node.put(ACTOR_USER_ID, actorUserId.toString());
@@ -263,6 +279,7 @@ public class PayloadSerializer {
      * @return Mono<{@link JsonNode}> исторические данные.
      */
     public JsonNode createTransitionedPayload(
+            Issue issue,
             String sourceStatus,
             String targetStatus,
             UUID transitionId,
@@ -271,6 +288,7 @@ public class PayloadSerializer {
             List<UUID> watcherIds
     ) {
         ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
 
         if (actorUserId != null) {
             node.put(ACTOR_USER_ID, actorUserId.toString());
@@ -298,8 +316,15 @@ public class PayloadSerializer {
      * @param deletedAt время удаления.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
-    public JsonNode createIssueDeletedPayload(IssueEventType type, Instant deletedAt, UUID actorUserId, UUID assigneeId) {
+    public JsonNode createIssueDeletedPayload(
+            Issue issue,
+            IssueEventType type,
+            Instant deletedAt,
+            UUID actorUserId,
+            UUID assigneeId
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
 
         if (actorUserId != null) {
             node.put(ACTOR_USER_ID, actorUserId.toString());
@@ -322,23 +347,24 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с данными о созданной связи между задачами.
      *
-     * @param sourceIssueId идентификатор исходной задачи.
+     * @param sourceIssue   исходная задача.
      * @param targetIssueId идентификатор целевой задачи.
      * @param linkType      тип создаваемой связи.
      * @param actorUserId   идентификатор пользователя, создавшего связь.
      * @return исторические данные.
      */
     public JsonNode createIssueLinkCreatedPayload(
-            UUID sourceIssueId,
+            Issue sourceIssue,
             UUID targetIssueId,
             IssueLinkType linkType,
             UUID actorUserId,
             List<UUID> watcherIds
     ) {
         var node = objectMapper.createObjectNode();
+        putIssueFields(node, sourceIssue);
 
-        if (sourceIssueId != null) {
-            node.put(SOURCE_ISSUE_ID, sourceIssueId.toString());
+        if (sourceIssue.getId() != null) {
+            node.put(SOURCE_ISSUE_ID, sourceIssue.getId().toString());
         } else {
             node.putNull(SOURCE_ISSUE_ID);
         }
@@ -368,23 +394,24 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с данными об удаленной связи между задачами.
      *
-     * @param sourceIssueId идентификатор исходной задачи.
+     * @param sourceIssue   исходная задача.
      * @param targetIssueId идентификатор целевой задачи.
      * @param linkType      тип удаляемой связи.
      * @param actorUserId   идентификатор пользователя, удаляющего связь.
      * @return исторические данные.
      */
     public JsonNode createIssueLinkDeletedPayload(
-            UUID sourceIssueId,
+            Issue sourceIssue,
             UUID targetIssueId,
             IssueLinkType linkType,
             UUID actorUserId,
             List<UUID> watcherIds
     ) {
         var node = objectMapper.createObjectNode();
+        putIssueFields(node, sourceIssue);
 
-        if (sourceIssueId != null) {
-            node.put(SOURCE_ISSUE_ID, sourceIssueId.toString());
+        if (sourceIssue.getId() != null) {
+            node.put(SOURCE_ISSUE_ID, sourceIssue.getId().toString());
         } else {
             node.putNull(SOURCE_ISSUE_ID);
         }
@@ -452,32 +479,52 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с данными о подписке на задачу.
      *
-     * @param issueId       идентификатор задачи.
-     * @param projectId     идентификатор проекта.
+     * @param issue         измененная задача.
      * @param watcherUserId идентификатор подписчика.
      * @param actorUserId   идентификатор пользователя, оформившего подписку.
      * @return данные события подписки.
      */
-    public JsonNode createIssueWatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
-        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    public JsonNode createIssueWatchedPayload(
+            Issue issue,
+            UUID watcherUserId,
+            UUID actorUserId
+    ) {
+        ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
+        node.put(WATCHER_USER_ID, watcherUserId.toString());
+        node.put(ACTOR_USER_ID, actorUserId.toString());
+
+        return node;
     }
 
     /**
      * Создает {@link JsonNode} с данными об отписке от задачи.
      *
-     * @param issueId       идентификатор задачи.
-     * @param projectId     идентификатор проекта.
+     * @param issue         измененная задача.
      * @param watcherUserId идентификатор отписанного пользователя.
      * @param actorUserId   идентификатор пользователя, выполнившего отписку.
      * @return данные события отписки.
      */
-    public JsonNode createIssueUnwatchedPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
-        return createWatcherPayload(issueId, projectId, watcherUserId, actorUserId);
+    public JsonNode createIssueUnwatchedPayload(
+            Issue issue,
+            UUID watcherUserId,
+            UUID actorUserId
+    ) {
+        ObjectNode node = objectMapper.createObjectNode();
+        putIssueFields(node, issue);
+        node.put(WATCHER_USER_ID, watcherUserId.toString());
+        node.put(ACTOR_USER_ID, actorUserId.toString());
+
+        return node;
     }
 
-    public JsonNode createLabelAddedPayload(ProjectLabels label, UUID issueId, UUID addedBy) {
+    public JsonNode createLabelAddedPayload(
+            Issue issue,
+            ProjectLabels label,
+            UUID addedBy
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
-        node.put(ISSUE_ID, issueId.toString());
+        putIssueFields(node, issue);
         node.put(LABEL_NAME, label.getName());
         node.put(CREATED_BY, addedBy.toString());
         return node;
@@ -486,26 +533,43 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с данными об удаленной метке с задачи.
      *
+     * @param issue измененная задача.
      * @param label удаленная метка
-     * @param issueId идентификатор задачи
      * @param removedBy пользователь, удаливший метку
      * @return {@link JsonNode} с метаданными метки
      */
-    public JsonNode createLabelRemovedPayload(ProjectLabels label, UUID issueId, UUID removedBy) {
+    public JsonNode createLabelRemovedPayload(
+            Issue issue,
+            ProjectLabels label,
+            UUID removedBy
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
-        node.put(ISSUE_ID, issueId.toString());
+        putIssueFields(node, issue);
         node.put(LABEL_NAME, label.getName());
         node.put(DELETED_BY, removedBy.toString());
         return node;
     }
-    private ObjectNode createWatcherPayload(UUID issueId, UUID projectId, UUID watcherUserId, UUID actorUserId) {
-        ObjectNode node = objectMapper.createObjectNode();
 
-        node.put(ISSUE_ID, issueId.toString());
-        node.put(PROJECT_ID, projectId.toString());
-        node.put(WATCHER_USER_ID, watcherUserId.toString());
-        node.put(ACTOR_USER_ID, actorUserId.toString());
-
-        return node;
+    /**
+     * Кладёт в payload три поля задачи: issueId, issueKey, projectId.
+     * Используется во всех issue-событиях, чтобы notification-service
+     * мог построить ссылку и показать пользователю читаемый ключ.
+     *
+     * @param node  JSON-объект, в который кладём поля
+     * @param issue задача-источник. Если null — ничего не кладём
+     */
+    private void putIssueFields(ObjectNode node, Issue issue) {
+        if (issue == null) {
+            return;
+        }
+        if (issue.getId() != null) {
+            node.put(ISSUE_ID, issue.getId().toString());
+        }
+        if (issue.getIssueKey() != null) {
+            node.put(ISSUE_KEY, issue.getIssueKey());
+        }
+        if (issue.getProjectId() != null) {
+            node.put(PROJECT_ID, issue.getProjectId().toString());
+        }
     }
 }

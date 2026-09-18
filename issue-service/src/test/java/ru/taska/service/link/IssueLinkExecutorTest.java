@@ -14,16 +14,13 @@ import org.springframework.dao.DuplicateKeyException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.*;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
+import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
@@ -45,6 +42,17 @@ class IssueLinkExecutorTest {
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
     public static final IssueLinkType LINK_TYPE = IssueLinkType.RELATES_TO;
+    private static final Issue ISSUE = Issue.builder()
+            .id(SOURCE_ISSUE_ID)
+            .projectId(PROJECT_ID)
+            .issueNumber(1)
+            .issueKey("ABC-1")
+            .issueType(IssueType.TASK)
+            .summary("Test")
+            .statusKey("TODO")
+            .priority(IssuePriority.MEDIUM)
+            .version(1)
+            .build();
 
     @Mock
     private IssueLinkRepository issueLinkRepository;
@@ -104,7 +112,7 @@ class IssueLinkExecutorTest {
                 .thenReturn(Mono.just(link));
 
         Mockito.when(payloadSerializer.createIssueLinkCreatedPayload(
-                        Mockito.any(UUID.class),
+                        Mockito.any(Issue.class),
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
                         Mockito.any(UUID.class),
@@ -136,7 +144,7 @@ class IssueLinkExecutorTest {
                         REQUEST_ID,
                         NODE_ID,
                         PROJECT_ID,
-                        SOURCE_ISSUE_ID,
+                        ISSUE,
                         TARGET_ISSUE_ID,
                         LINK_TYPE,
                         ACTOR_USER_ID
@@ -166,7 +174,7 @@ class IssueLinkExecutorTest {
 
         Mockito.verify(payloadSerializer)
                 .createIssueLinkCreatedPayload(
-                        Mockito.eq(SOURCE_ISSUE_ID),
+                        Mockito.eq(ISSUE),
                         Mockito.eq(TARGET_ISSUE_ID),
                         Mockito.eq(LINK_TYPE),
                         Mockito.eq(ACTOR_USER_ID),
@@ -193,7 +201,7 @@ class IssueLinkExecutorTest {
                         REQUEST_ID,
                         NODE_ID,
                         PROJECT_ID,
-                        SOURCE_ISSUE_ID,
+                        ISSUE,
                         TARGET_ISSUE_ID,
                         LINK_TYPE,
                         ACTOR_USER_ID
@@ -234,7 +242,7 @@ class IssueLinkExecutorTest {
                 .thenReturn(Mono.just(deletedLink));
 
         Mockito.when(payloadSerializer.createIssueLinkDeletedPayload(
-                        Mockito.any(UUID.class),
+                        Mockito.any(Issue.class),
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
                         Mockito.any(UUID.class),
@@ -262,7 +270,7 @@ class IssueLinkExecutorTest {
                 ))
                 .thenReturn(Mono.just(outboxEvent));
 
-        StepVerifier.create(executor.executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID))
+        StepVerifier.create(executor.executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID, ISSUE))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getId()).isEqualTo(LINK_ID);
                     Assertions.assertThat(result.getProjectId()).isEqualTo(PROJECT_ID);
@@ -278,7 +286,7 @@ class IssueLinkExecutorTest {
 
         Mockito.verify(payloadSerializer)
                 .createIssueLinkDeletedPayload(
-                        Mockito.eq(SOURCE_ISSUE_ID),
+                        Mockito.eq(ISSUE),
                         Mockito.eq(TARGET_ISSUE_ID),
                         Mockito.eq(LINK_TYPE),
                         Mockito.eq(ACTOR_USER_ID),
@@ -298,10 +306,10 @@ class IssueLinkExecutorTest {
     @Test
     @DisplayName("Должен выбросить исключение DomainException со статусом NOT_FOUND, если связь не была найдена")
     void executeLinkDeletion_shouldThrowsException_whenLinkNotFound() {
-        Mockito.when(issueLinkRepository.softDelete(Mockito.any(UUID.class)))
+        Mockito.when(issueLinkRepository.softDelete(link.getId()))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(executor.executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID))
+        StepVerifier.create(executor.executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID, ISSUE))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     var ex = (DomainException) error;

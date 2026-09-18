@@ -11,6 +11,9 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.domain.Issue;
+import ru.taska.domain.IssuePriority;
+import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWatcher;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -33,6 +36,17 @@ class IssueWatcherExecutorTest {
     private static final UUID WATCHER_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
+    private static final Issue ISSUE = Issue.builder()
+            .id(ISSUE_ID)
+            .projectId(PROJECT_ID)
+            .issueNumber(1)
+            .issueKey("ABC-1")
+            .issueType(IssueType.TASK)
+            .summary("Test")
+            .statusKey("TODO")
+            .priority(IssuePriority.MEDIUM)
+            .version(1)
+            .build();
 
     @Mock
     private IssueWatcherRepository issueWatcherRepository;
@@ -70,7 +84,7 @@ class IssueWatcherExecutorTest {
         Mockito.when(issueWatcherRepository.insertIfAbsent(ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(watcher));
         Mockito.when(payloadSerializer.createIssueWatchedPayload(
-                        ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .thenReturn(payload);
         Mockito.when(outboxEventService.saveOutboxEvent(
                         REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID,
@@ -78,7 +92,7 @@ class IssueWatcherExecutorTest {
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(executor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .expectNext(watcher)
                 .verifyComplete();
 
@@ -98,7 +112,7 @@ class IssueWatcherExecutorTest {
                 .thenReturn(Mono.just(watcher));
 
         StepVerifier.create(executor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .expectNext(watcher)
                 .verifyComplete();
 
@@ -112,7 +126,7 @@ class IssueWatcherExecutorTest {
         Mockito.when(issueWatcherRepository.deleteByIssueIdAndUserId(ISSUE_ID, WATCHER_USER_ID))
                 .thenReturn(Mono.just(1L));
         Mockito.when(payloadSerializer.createIssueUnwatchedPayload(
-                        ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .thenReturn(payload);
         Mockito.when(outboxEventService.saveOutboxEvent(
                         REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID,
@@ -120,7 +134,7 @@ class IssueWatcherExecutorTest {
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(executor.executeUnwatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .assertNext(removed -> Assertions.assertThat(removed).isTrue())
                 .verifyComplete();
 
@@ -135,7 +149,7 @@ class IssueWatcherExecutorTest {
                 .thenReturn(Mono.just(0L));
 
         StepVerifier.create(executor.executeUnwatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, WATCHER_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, ISSUE, WATCHER_USER_ID, ACTOR_USER_ID))
                 .assertNext(removed -> Assertions.assertThat(removed).isFalse())
                 .verifyComplete();
 

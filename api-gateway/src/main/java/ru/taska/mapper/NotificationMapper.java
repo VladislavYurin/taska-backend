@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,6 +24,7 @@ import java.util.UUID;
  * {@code NOTIFICATION_KIND_ISSUE_ASSIGNED} преобразуется в {@code ISSUE_ASSIGNED}.
  */
 @Component
+@Slf4j
 public class NotificationMapper {
 
     /**
@@ -63,12 +65,37 @@ public class NotificationMapper {
         dto.setNotificationType(toRestNotificationType(source.getNotificationType()));
         dto.setTitle(source.getTitle());
         dto.setBody(source.getBody());
-        dto.setLink(source.getLink());
+        dto.setIssueId(parseNullableUuid(source.getIssueId(), "issueId"));
+        dto.setIssueKey(nullIfBlank(source.getIssueKey()));
+        dto.setProjectId(parseNullableUuid(source.getProjectId(), "projectId"));
         dto.setCreatedAt(toOffsetDateTime(source.getCreatedAt()));
         dto.setReadAt(source.hasReadAt() ? toOffsetDateTime(source.getReadAt()) : null);
         dto.setSourceEventId(parseUuid(source.getSourceEventId(), "sourceEventId"));
 
         return dto;
+    }
+
+    /**
+     * Возвращает null для пустой строки. Используется для опциональных String-полей
+     */
+    private String nullIfBlank(String value) {
+        return (value == null || value.isBlank()) ? null : value;
+    }
+
+    /**
+     * Парсит UUID с допуском пустой строки -> null.
+     * Используется для опциональных полей
+     */
+    private UUID parseNullableUuid(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            log.warn("Invalid {} received from notification-service: {}", fieldName, value);
+            return null;
+        }
     }
 
     /**

@@ -209,7 +209,7 @@ public class LabelServiceImpl implements LabelService {
                                                         IssueLabels issueLabels = mapper.toEntity(requestDto);
                                                         return issueLabelsRepository.save(issueLabels)
                                                                 .then(Mono.defer(() -> {
-                                                                    JsonNode payload = payloadSerializer.createLabelAddedPayload(label, requestDto.issueId(),requestDto.actorUserId());
+                                                                    JsonNode payload = payloadSerializer.createLabelAddedPayload(issue, label, requestDto.actorUserId());
                                                                     return issueHistoryService.saveIssueHistory(
                                                                                     requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_ADDED, payload)
                                                                             .then(outboxEventService.saveOutboxEvent(
@@ -267,7 +267,7 @@ public class LabelServiceImpl implements LabelService {
                                                 }
                                                 return issueLabelsRepository.deleteByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
                                                         .then(Mono.defer(() -> {
-                                                            JsonNode payload = payloadSerializer.createLabelRemovedPayload(label, requestDto.issueId(),requestDto.actorUserId());
+                                                            JsonNode payload = payloadSerializer.createLabelRemovedPayload(issue, label, requestDto.actorUserId());
                                                             return issueHistoryService.saveIssueHistory(
                                                                             requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_REMOVED, payload)
                                                                     .then(outboxEventService.saveOutboxEvent(

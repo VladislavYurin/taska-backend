@@ -67,7 +67,9 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         Mockito.when(issueRepository.softDeleteAndReturn(localIssueId))
                 .thenReturn(Mono.just(mockIssue));
 
-        Mockito.when(payloadSerializer.createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID)))
+        Mockito.when(payloadSerializer.createIssueDeletedPayload(
+                Mockito.any(), Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID))
+                )
                 .thenReturn(payload);
 
         Mockito.when(issueHistoryService.saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload))
@@ -91,7 +93,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles
         );
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
-        Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
+        Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.any(), Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
         Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload);
         Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, AggregateType.ISSUE, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
         Mockito.verifyNoMoreInteractions(issueRepository, issueHistoryService, outboxEventService, projectRoleChecker, payloadSerializer);

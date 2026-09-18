@@ -71,17 +71,17 @@ class NotificationFactoryTest {
         userC = UUID.randomUUID();
 
         // По умолчанию: любой вызов mapper возвращает Notification с userId из аргумента
-        Mockito.lenient().when(notificationMapper.toIssueAssigned(any(), any()))
+        Mockito.lenient().when(notificationMapper.toIssueAssigned(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_ASSIGNED));
-        Mockito.lenient().when(notificationMapper.toIssueTransitioned(any(), any()))
+        Mockito.lenient().when(notificationMapper.toIssueTransitioned(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_TRANSITIONED));
-        Mockito.lenient().when(notificationMapper.toIssueUpdated(any(), any()))
+        Mockito.lenient().when(notificationMapper.toIssueUpdated(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_UPDATED));
-        Mockito.lenient().when(notificationMapper.toIssueCreated(any(), any()))
+        Mockito.lenient().when(notificationMapper.toIssueCreated(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_CREATED));
-        Mockito.lenient().when(notificationMapper.toIssueDeleted(any(), any()))
+        Mockito.lenient().when(notificationMapper.toIssueDeleted(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_DELETED));
-        Mockito.lenient().when(notificationMapper.toCommentCreated(any(), any(), any()))
+        Mockito.lenient().when(notificationMapper.toCommentCreated(any(), any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_COMMENT_CREATED));
         Mockito.lenient().when(notificationMapper.toIssueLinkCreated(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_LINK_CREATED));

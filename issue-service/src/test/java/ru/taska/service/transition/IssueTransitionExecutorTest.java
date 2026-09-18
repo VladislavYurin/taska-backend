@@ -118,6 +118,7 @@ class IssueTransitionExecutorTest {
                         Mockito.any(),
                         Mockito.any(),
                         Mockito.any(),
+                        Mockito.any(),
                         Mockito.anyList()
                 ))
                 .thenReturn(payload);
@@ -154,6 +155,7 @@ class IssueTransitionExecutorTest {
         Mockito.verify(issueRepository, Mockito.times(1)).changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
         Mockito.verify(payloadSerializer)
                 .createTransitionedPayload(
+                        Mockito.any(),
                         Mockito.eq(SOURCE_STATUS_KEY),
                         Mockito.eq(TARGET_STATUS_KEY),
                         Mockito.eq(TRANSITION_ID),

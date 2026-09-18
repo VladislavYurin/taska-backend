@@ -81,7 +81,7 @@ public class CommentServiceImpl implements CommentService {
                                                                         authorUserId,
                                                                         IssueEventType.COMMENT_CREATED,
                                                                         EventType.ISSUE_COMMENT_CREATED,
-                                                                        createCommentPayload(savedComment.getId(), authorUserId, body, watcherIds)
+                                                                        createCommentPayload(savedComment.getId(), authorUserId, body, watcherIds, issue)
                                                                 )
                                                                 .thenReturn(savedComment)
                                                         )
@@ -130,7 +130,7 @@ public class CommentServiceImpl implements CommentService {
                                             )))
                                             .flatMap(savedComment -> {
                                                 ObjectNode payload = createUpdatePayload(
-                                                        commentId, oldBody, body, actorUserId
+                                                        commentId, oldBody, body, actorUserId, issue
                                                 );
                                                 return saveHistoryAndOutbox(
                                                         requestId,
@@ -182,7 +182,7 @@ public class CommentServiceImpl implements CommentService {
                                                     "Comment not found or already deleted"
                                             )))
                                             .flatMap(deletedComment -> {
-                                                ObjectNode payload = createDeletePayload(commentId, actorUserId, comment.getBody());
+                                                ObjectNode payload = createDeletePayload(commentId, actorUserId, comment.getBody(), issue);
                                                 return saveHistoryAndOutbox(
                                                         requestId,
                                                         nodeId,
@@ -342,35 +342,61 @@ public class CommentServiceImpl implements CommentService {
     /**
      * Создает payload для создания комментария.
      */
-    private ObjectNode createCommentPayload(UUID commentId, UUID authorUserId, String body, List<UUID> watcherIds) {
+    private ObjectNode createCommentPayload(
+            UUID commentId,
+            UUID authorUserId,
+            String body,
+            List<UUID> watcherIds,
+            Issue issue
+            ) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("commentId", commentId.toString());
         node.put("authorUserId", authorUserId.toString());
         node.put("body", body);
         node.set("watcherIds", objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
+        node.put("issueId", issue.getId().toString());
+        node.put("issueKey", issue.getIssueKey());
+        node.put("projectId", issue.getProjectId().toString());
         return node;
     }
 
     /**
      * Создает payload для обновления комментария.
      */
-    private ObjectNode createUpdatePayload(UUID commentId, String oldBody, String newBody, UUID actorUserId) {
+    private ObjectNode createUpdatePayload(
+            UUID commentId,
+            String oldBody,
+            String newBody,
+            UUID actorUserId,
+            Issue issue
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("commentId", commentId.toString());
         node.put("oldBody", oldBody);
         node.put("newBody", newBody);
         node.put("actorUserId", actorUserId.toString());
+        node.put("issueId", issue.getId().toString());
+        node.put("issueKey", issue.getIssueKey());
+        node.put("projectId", issue.getProjectId().toString());
         return node;
     }
 
     /**
      * Создает payload для удаления комментария.
      */
-    private ObjectNode createDeletePayload(UUID commentId, UUID actorUserId, String body) {
+    private ObjectNode createDeletePayload(
+            UUID commentId,
+            UUID actorUserId,
+            String body,
+            Issue issue
+    ) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("commentId", commentId.toString());
         node.put("actorUserId", actorUserId.toString());
         node.put("body", body);
+        node.put("issueId", issue.getId().toString());
+        node.put("issueKey", issue.getIssueKey());
+        node.put("projectId", issue.getProjectId().toString());
         return node;
     }
 

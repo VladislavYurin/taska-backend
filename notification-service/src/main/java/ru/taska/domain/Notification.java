@@ -56,10 +56,25 @@ public class Notification {
     private String body;
 
     /**
-     * Ссылка на связанный ресурс в UI (например /projects/ABC/issues/ABC-123)
+     * Идентификатор задачи, к которой относится уведомление.
+     * Null для не-issue уведомлений (USER_INVITED, MEMBER_ADDED и т.д.).
      */
-    @Column("link")
-    private String link;
+    @Column("issue_id")
+    private UUID issueId;
+
+    /**
+     * Человекочитаемый ключ задачи (например, ABC-123).
+     * Null для не-issue уведомлений.
+     */
+    @Column("issue_key")
+    private String issueKey;
+
+    /**
+     * Идентификатор проекта задачи.
+     * Null для не-issue уведомлений.
+     */
+    @Column("project_id")
+    private UUID projectId;
 
     /**
      * Время создания уведомления.

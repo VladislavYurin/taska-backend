@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.Notification;
 import ru.taska.event.EventType;
+import ru.taska.event.IssueInfo;
 import ru.taska.event.TaskaEvent;
 import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.JsonNode;
@@ -70,11 +71,16 @@ public class NotificationFactory {
             log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
             return List.of();
         }
+
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
         Set<UUID> recipients = resolveRecipients(actorUserId, List.of(assigneeId), watcherIds);
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueAssigned(event, userId));
+            notifications.add(notificationMapper.toIssueAssigned(event, userId, issueInfo));
         }
 
         return notifications;
@@ -90,6 +96,11 @@ public class NotificationFactory {
             return List.of();
         }
 
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
+
         Set<UUID> recipients = resolveRecipients(
                 actorUserId,
                 assigneeId != null ? List.of(assigneeId) : List.of(),
@@ -98,7 +109,7 @@ public class NotificationFactory {
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueTransitioned(event, userId));
+            notifications.add(notificationMapper.toIssueTransitioned(event, userId, issueInfo));
         }
         return notifications;
     }
@@ -112,14 +123,19 @@ public class NotificationFactory {
             return List.of();
         }
 
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
+
         List<Notification> notifications = new ArrayList<>();
 
         if (reporterId != null) {
-            notifications.add(notificationMapper.toIssueCreated(event, reporterId));
+            notifications.add(notificationMapper.toIssueCreated(event, reporterId, issueInfo));
         }
 
         if (assigneeId != null && !assigneeId.equals(reporterId) ) {
-            notifications.add(notificationMapper.toIssueCreated(event, assigneeId));
+            notifications.add(notificationMapper.toIssueCreated(event, assigneeId, issueInfo));
         }
 
         return notifications;
@@ -135,6 +151,10 @@ public class NotificationFactory {
             return List.of();
         }
 
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
         Set<UUID> recipients = resolveRecipients(
                 actorUserId,
                 assigneeId != null ? List.of(assigneeId) : List.of(),
@@ -143,7 +163,7 @@ public class NotificationFactory {
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueUpdated(event, userId));
+            notifications.add(notificationMapper.toIssueUpdated(event, userId, issueInfo));
         }
         return notifications;
     }
@@ -157,6 +177,10 @@ public class NotificationFactory {
             return List.of();
         }
 
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
         Set<UUID> recipients = new LinkedHashSet<>();
         if (assigneeId != null && !assigneeId.equals(actorUserId)) {
             recipients.add(assigneeId);
@@ -164,18 +188,22 @@ public class NotificationFactory {
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueDeleted(event, userId));
+            notifications.add(notificationMapper.toIssueDeleted(event, userId, issueInfo));
         }
         return notifications;
     }
 
     private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID createdBy  = extractUuid(payload, "createdBy");
-        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
         UUID targetIssueId = extractUuid(payload, "targetIssueId");
         String linkType = extractString(payload, "linkType");
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
 
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
 
@@ -186,7 +214,7 @@ public class NotificationFactory {
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
             notifications.add(notificationMapper.toIssueLinkCreated(
-                    event, userId, sourceIssueId, targetIssueId, linkType, linkId
+                    event, userId, issueInfo, targetIssueId, linkType, linkId
             ));
         }
         return notifications;
@@ -194,11 +222,15 @@ public class NotificationFactory {
 
     private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID deletedBy  = extractUuid(payload, "deletedBy");
-        UUID sourceIssueId = extractUuid(payload, "sourceIssueId");
         UUID targetIssueId = extractUuid(payload, "targetIssueId");
         String linkType = extractString(payload, "linkType");
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
 
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
 
@@ -209,7 +241,7 @@ public class NotificationFactory {
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
             notifications.add(notificationMapper.toIssueLinkDeleted(
-                    event, userId, sourceIssueId, targetIssueId, linkType, linkId
+                    event, userId, issueInfo, targetIssueId, linkType, linkId
             ));
         }
         return notifications;
@@ -225,12 +257,17 @@ public class NotificationFactory {
             return List.of();
         }
 
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
+
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
         recipients.remove(authorUserId);
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toCommentCreated(event, userId, body));
+            notifications.add(notificationMapper.toCommentCreated(event, userId, issueInfo, body));
         }
         return notifications;
     }
@@ -313,31 +350,47 @@ public class NotificationFactory {
         }
     }
 
+    /**
+     * Извлекает из payload события информацию о задаче.
+     */
+    private IssueInfo extractIssueInfo(JsonNode payload) {
+        UUID issueId = extractUuid(payload, "issueId");
+        String issueKey = extractString(payload, "issueKey");
+        UUID projectId = extractUuid(payload, "projectId");
+        return new IssueInfo(issueId, issueKey, projectId);
+    }
+
     private List<Notification> buildLabelAdded(TaskaEvent event, JsonNode payload, UUID eventId) {
 
-        UUID issueId = extractUuid(payload, "issueId");
         UUID addedBy = extractUuid(payload, "createdBy");
         String labelName = extractString(payload, "labelName");
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
 
-        if (issueId == null || addedBy == null || labelName == null) {
+        if (addedBy == null || labelName == null || issueInfo.issueId() == null) {
             log.warn("LabelAdded event missing required fields, eventId={}", eventId);
             return List.of();
         }
 
-        return List.of(notificationMapper.toLabelAdded(event, issueId, addedBy, labelName));
+        return List.of(notificationMapper.toLabelAdded(event, addedBy, issueInfo, labelName));
     }
 
     private List<Notification> buildLabelRemoved(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID issueId = extractUuid(payload, "issueId");
         UUID removedBy = extractUuid(payload, "deletedBy");
         String labelName = extractString(payload, "labelName");
+        IssueInfo issueInfo = extractIssueInfo(payload);
+        if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
+            return List.of();
+        }
 
-        if (issueId == null || removedBy == null || labelName == null) {
+        if (removedBy == null || labelName == null || issueInfo.issueId() == null) {
             log.warn("LabelRemoved event missing required fields, eventId={}", eventId);
             return List.of();
         }
 
-        return List.of(notificationMapper.toLabelRemoved(event, issueId, removedBy, labelName));
+        return List.of(notificationMapper.toLabelRemoved(event, removedBy, issueInfo, labelName));
     }
 
     /**
@@ -442,5 +495,18 @@ public class NotificationFactory {
             }
         }
         return result;
+    }
+
+    /**
+     * Проверяет, что payload содержит issue-информацию.
+     * Если нет — логирует и возвращает true (сигнал «скипнуть создание уведомления»).
+     */
+    private boolean skipIfNoIssueInfo(IssueInfo issueInfo, TaskaEvent event, UUID eventId) {
+        if (!issueInfo.hasAnyField()) {
+            log.warn("Event without issue info, skipping. eventType={}, eventId={}, aggregateId={}",
+                    event.eventType(), eventId, event.aggregateId());
+            return true;
+        }
+        return false;
     }
 }

@@ -2968,8 +2968,16 @@ components:
           type: string
         body:
           type: string
-        link:
+        issueId:
           type: string
+          format: uuid
+          nullable: true
+        issueKey:
+          type: string
+          nullable: true
+        projectId:
+          type: string
+          format: uuid
           nullable: true
         createdAt:
           type: string
