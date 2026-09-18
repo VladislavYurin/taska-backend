@@ -8,20 +8,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 public abstract class AbstractIT {
 
-    /**
-     * Порт, на котором в тестах поднимается реальный gRPC-сервер project-service.
-     * Используется тестами, стучащимися в него напрямую через {@code ManagedChannel}
-     * (например, {@code UpdateProjectGrpcServerIT}).
-     *
-     * <p>Не задаётся через {@code @DynamicPropertySource}: в используемой версии
-     * spring-grpc-server-spring-boot-autoconfigure {@code spring.grpc.server.port},
-     * в отличие от {@code spring.grpc.server.address}, не подхватывается из динамических
-     * тестовых свойств и сервер всегда поднимается на дефолтном порту библиотеки — 9090
-     * (проверено эмпирически). Совпадает с портом, на котором уже поднимает свой gRPC-сервер
-     * {@code auth-service} в своих тестах (см. {@code auth-service/.../AbstractIT.java}).</p>
-     */
-    protected static final int GRPC_SERVER_PORT = 9090;
-
     static {
         System.setProperty("java.net.preferIPv4Stack", "true");
     }
@@ -61,6 +47,6 @@ public abstract class AbstractIT {
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
 
-        registry.add("spring.grpc.server.address", () -> "127.0.0.1");
+        registry.add("spring.grpc.server.address", () -> "127.0.0.1:0");
     }
 }
