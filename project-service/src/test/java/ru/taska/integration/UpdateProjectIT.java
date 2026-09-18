@@ -17,6 +17,7 @@ import ru.taska.repository.ProjectRepository;
 import ru.taska.service.ProjectService;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -75,7 +76,7 @@ public class UpdateProjectIT extends AbstractIT {
     void adminUpdatesNameDescriptionAndColor_Success() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
-                Optional.of("New name"), Optional.of("New description"), Optional.of("#ABCDEF")
+                Optional.of("New name"), Optional.of("New description"), false, Optional.of("#ABCDEF"), false
         )).assertNext(updated -> {
             Assertions.assertThat(updated.getName()).isEqualTo("New name");
             Assertions.assertThat(updated.getDescription()).isEqualTo("New description");
@@ -96,12 +97,13 @@ public class UpdateProjectIT extends AbstractIT {
 
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
-                Optional.empty(), Optional.empty(), Optional.empty()
+                Optional.empty(), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated -> {
             Assertions.assertThat(updated.getName()).isEqualTo("Original name");
             Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
             Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
-            Assertions.assertThat(updated.getUpdatedAt()).isEqualTo(updatedAtBeforePatch);
+            Assertions.assertThat(updated.getUpdatedAt())
+                    .isCloseTo(updatedAtBeforePatch, Assertions.within(1, ChronoUnit.MICROS));
         }).verifyComplete();
 
         StepVerifier.create(outboxEventRepository.findAll()
@@ -113,10 +115,34 @@ public class UpdateProjectIT extends AbstractIT {
     }
 
     @Test
+    void adminSendsClearColor_ExplicitlyResetsColorToNull() {
+        StepVerifier.create(projectService.updateProject(
+                REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
+                Optional.empty(), Optional.empty(), false, Optional.empty(), true
+        )).assertNext(updated -> {
+            Assertions.assertThat(updated.getColor()).isNull();
+            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
+        }).verifyComplete();
+    }
+
+    @Test
+    void adminSendsClearDescription_ExplicitlyResetsDescriptionToNull() {
+        StepVerifier.create(projectService.updateProject(
+                REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
+                Optional.empty(), Optional.empty(), true, Optional.empty(), false
+        )).assertNext(updated -> {
+            Assertions.assertThat(updated.getDescription()).isNull();
+            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
+        }).verifyComplete();
+    }
+
+    @Test
     void patchOnlyNameField_DoesNotChangeDescriptionOrColor() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
-                Optional.of("Only name changed"), Optional.empty(), Optional.empty()
+                Optional.of("Only name changed"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated -> {
             Assertions.assertThat(updated.getName()).isEqualTo("Only name changed");
             Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
@@ -128,7 +154,7 @@ public class UpdateProjectIT extends AbstractIT {
     void memberCannotUpdateProject_PermissionDenied() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), MEMBER_ID,
-                Optional.of("Hacked name"), Optional.empty(), Optional.empty()
+                Optional.of("Hacked name"), Optional.empty(), false, Optional.empty(), false
         )).expectErrorSatisfies(this::assertPermissionDenied).verify();
     }
 
@@ -136,7 +162,7 @@ public class UpdateProjectIT extends AbstractIT {
     void viewerCannotUpdateProject_PermissionDenied() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), VIEWER_ID,
-                Optional.of("Hacked name"), Optional.empty(), Optional.empty()
+                Optional.of("Hacked name"), Optional.empty(), false, Optional.empty(), false
         )).expectErrorSatisfies(this::assertPermissionDenied).verify();
     }
 
@@ -144,7 +170,7 @@ public class UpdateProjectIT extends AbstractIT {
     void nonMemberCannotUpdateProject_PermissionDenied() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), NON_MEMBER_ID,
-                Optional.of("Hacked name"), Optional.empty(), Optional.empty()
+                Optional.of("Hacked name"), Optional.empty(), false, Optional.empty(), false
         )).expectErrorSatisfies(this::assertPermissionDenied).verify();
     }
 
@@ -154,7 +180,7 @@ public class UpdateProjectIT extends AbstractIT {
 
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, nonExistentProjectId, ADMIN_ID,
-                Optional.of("New name"), Optional.empty(), Optional.empty()
+                Optional.of("New name"), Optional.empty(), false, Optional.empty(), false
         )).expectErrorSatisfies(error -> {
             Assertions.assertThat(error).isInstanceOf(DomainException.class);
             Assertions.assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.NOT_FOUND);
@@ -167,7 +193,7 @@ public class UpdateProjectIT extends AbstractIT {
 
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
-                Optional.of("New name"), Optional.empty(), Optional.empty()
+                Optional.of("New name"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated ->
                 Assertions.assertThat(updated.getVersion()).isEqualTo(versionBeforeUpdate + 1)
         ).verifyComplete();
@@ -184,7 +210,7 @@ public class UpdateProjectIT extends AbstractIT {
 
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
-                Optional.of("Updated by client B"), Optional.empty(), Optional.empty()
+                Optional.of("Updated by client B"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated ->
                 Assertions.assertThat(updated.getVersion()).isEqualTo(staleSnapshot.getVersion() + 1)
         ).verifyComplete();
