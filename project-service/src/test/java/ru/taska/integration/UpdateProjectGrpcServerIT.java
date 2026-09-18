@@ -5,11 +5,11 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.grpc.test.autoconfigure.LocalGrpcPort;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
@@ -37,8 +37,8 @@ import java.util.UUID;
  */
 class UpdateProjectGrpcServerIT extends AbstractIT {
 
-    private static ManagedChannel channel;
-    private static ReactorProjectServiceGrpc.ReactorProjectServiceStub stub;
+    private ManagedChannel channel;
+    private ReactorProjectServiceGrpc.ReactorProjectServiceStub stub;
 
     private static final String REQUEST_ID = "req-grpc-001";
     private static final String NODE_ID = "project-service";
@@ -50,18 +50,23 @@ class UpdateProjectGrpcServerIT extends AbstractIT {
     @Autowired
     private ProjectMemberRepository projectMemberRepository;
 
+    @LocalGrpcPort
+    private int grpcPort;
+
     private Project project;
 
-    @BeforeAll
-    static void setUpChannel() {
-        channel = ManagedChannelBuilder.forAddress("localhost", GRPC_SERVER_PORT)
+    @BeforeEach
+    void setUpChannel() {
+        Assertions.assertThat(grpcPort).isNotEqualTo(9090);
+
+        channel = ManagedChannelBuilder.forAddress("localhost", grpcPort)
                 .usePlaintext()
                 .build();
         stub = ReactorProjectServiceGrpc.newReactorStub(channel);
     }
 
-    @AfterAll
-    static void tearDownChannel() {
+    @AfterEach
+    void tearDownChannel() {
         if (channel != null && !channel.isShutdown()) {
             channel.shutdown();
         }
