@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- changeset taska:0005-optimize-unread-notifications-index
+-- changeset taska:0007-optimize-unread-notifications-index
 -- comment: Оптимизация частичного индекса для непрочитанных уведомлений
 
 DROP INDEX IF EXISTS taska.notifications_user_unread_idx;

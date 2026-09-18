@@ -15,6 +15,8 @@ import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueLink;
+import ru.taska.domain.IssuePriority;
+import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.IssueLinkInfoDto;
@@ -41,6 +43,17 @@ class IssueLinkServiceImplTest {
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
     private static final String DELETED_AT = "2007-01-01T01:00:00Z";
+    private static final Issue ISSUE = Issue.builder()
+            .id(SOURCE_ISSUE_ID)
+            .projectId(PROJECT_ID)
+            .issueNumber(1)
+            .issueKey("ABC-1")
+            .issueType(IssueType.TASK)
+            .summary("Test")
+            .statusKey("TODO")
+            .priority(IssuePriority.MEDIUM)
+            .version(1)
+            .build();
 
     @Mock
     private IssueLinkExecutor executor;
@@ -170,11 +183,14 @@ class IssueLinkServiceImplTest {
         Mockito.when(issueRepository.findIssueLinkInfo(Mockito.any(UUID.class), Mockito.any(UUID.class)))
                 .thenReturn(Flux.just(sourceLinkInfo, targetLinkInfo));
 
+        Mockito.when(issueRepository.findActiveById(Mockito.any(UUID.class)))
+                .thenReturn(Mono.just(ISSUE));
+
         Mockito.when(executor.executeLinkCreation(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(UUID.class),
+                        Mockito.any(Issue.class),
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
                         Mockito.any(UUID.class)
@@ -208,7 +224,7 @@ class IssueLinkServiceImplTest {
                 REQUEST_ID,
                 NODE_ID,
                 PROJECT_ID,
-                SOURCE_ISSUE_ID,
+                ISSUE,
                 TARGET_ISSUE_ID,
                 IssueLinkType.RELATES_TO,
                 ACTOR_USER_ID
@@ -323,11 +339,15 @@ class IssueLinkServiceImplTest {
         Mockito.when(issueLinkRepository.findActiveByIdAndIssueId(Mockito.any(UUID.class), Mockito.any(UUID.class)))
                 .thenReturn(Mono.just(link));
 
+        Mockito.when(issueRepository.findById(Mockito.any(UUID.class)))
+                .thenReturn(Mono.just(ISSUE));
+
         Mockito.when(executor.executeLinkDeletion(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(UUID.class)
+                        Mockito.any(UUID.class),
+                        Mockito.any(Issue.class)
                 ))
                 .thenReturn(Mono.just(deletedLink));
 
@@ -350,7 +370,7 @@ class IssueLinkServiceImplTest {
                 .verifyComplete();
 
     Mockito.verify(issueLinkRepository).findActiveByIdAndIssueId(LINK_ID, SOURCE_ISSUE_ID);
-        Mockito.verify(executor).executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID);
+        Mockito.verify(executor).executeLinkDeletion(REQUEST_ID, NODE_ID, link.getId(), ACTOR_USER_ID, ISSUE);
     }
 
     @Test

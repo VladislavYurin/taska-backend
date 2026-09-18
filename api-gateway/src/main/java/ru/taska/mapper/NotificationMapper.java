@@ -24,8 +24,8 @@ import java.util.UUID;
  * Наружу не отдаётся технический gRPC-префикс {@code NOTIFICATION_KIND_}, только
  * frontend-friendly значения {@code notificationType} из OpenAPI контракта.
  */
-@Slf4j
 @Component
+@Slf4j
 public class NotificationMapper {
 
     private static final String NOTIFICATION_KIND_PREFIX = "NOTIFICATION_KIND_";
@@ -62,12 +62,37 @@ public class NotificationMapper {
         dto.setNotificationType(toRestNotificationType(source.getNotificationType()));
         dto.setTitle(source.getTitle());
         dto.setBody(source.getBody());
-        dto.setLink(source.getLink());
+        dto.setIssueId(parseNullableUuid(source.getIssueId(), "issueId"));
+        dto.setIssueKey(nullIfBlank(source.getIssueKey()));
+        dto.setProjectId(parseNullableUuid(source.getProjectId(), "projectId"));
         dto.setCreatedAt(toOffsetDateTime(source.getCreatedAt()));
         dto.setReadAt(source.hasReadAt() ? toOffsetDateTime(source.getReadAt()) : null);
         dto.setSourceEventId(parseUuid(source.getSourceEventId(), "sourceEventId"));
 
         return dto;
+    }
+
+    /**
+     * Возвращает null для пустой строки. Используется для опциональных String-полей
+     */
+    private String nullIfBlank(String value) {
+        return (value == null || value.isBlank()) ? null : value;
+    }
+
+    /**
+     * Парсит UUID с допуском пустой строки -> null.
+     * Используется для опциональных полей
+     */
+    private UUID parseNullableUuid(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            log.warn("Invalid {} received from notification-service: {}", fieldName, value);
+            return null;
+        }
     }
 
     /**

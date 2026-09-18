@@ -1,10 +1,10 @@
 package ru.taska.repository.builder;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.repository.criteria.SearchCriteria;
 
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
 @Component
 public class SearchQueryBuilder {
