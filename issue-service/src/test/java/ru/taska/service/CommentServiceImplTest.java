@@ -129,8 +129,13 @@ class CommentServiceImplTest {
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // removeIssueLabelRoles
                 Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listIssueLabelRoles
 
-                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER)   // searchIssueRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER),   // searchIssueRoles
 
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // addWorklogRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER, ProjectRole.VIEWER), // listWorklogRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER), // updateWorklogRoles
+                Set.of(ProjectRole.ADMIN), // manageWorklogRoles
+                Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER) // deleteWorklogRoles
         );
 
         lenient().when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
