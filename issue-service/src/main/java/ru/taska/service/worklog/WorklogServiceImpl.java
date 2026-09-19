@@ -21,6 +21,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Реализация {@link WorklogService}: валидирует вход, проверяет наличие задачи
+ * и права пользователя, затем делегирует изменения в {@link WorklogExecutor}.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -53,7 +57,6 @@ public class WorklogServiceImpl implements WorklogService {
                 ));
     }
 
-
     @Override
     public Mono<Worklog> updateIssueWorklog(
             String requestId,
@@ -80,7 +83,6 @@ public class WorklogServiceImpl implements WorklogService {
                                 worklogExecutor.executeUpdate(requestId, nodeId, issueId, worklogId, actorUserId, worklogDto)
                         )));
     }
-
 
     @Override
     public Mono<List<Worklog>> listIssueWorklog(
@@ -119,6 +121,7 @@ public class WorklogServiceImpl implements WorklogService {
                 });
     }
 
+    /** Проверяет, что запись относится к указанной задаче, иначе {@code NOT_FOUND}. */
     private Mono<Void> validateWorklogBelongsToIssue(String requestId, String nodeId, UUID issueId, Worklog worklog) {
         if (!worklog.getIssueId().equals(issueId)) {
             log.warn("[{}][{}] Issue {} doesnt belongs to worklog {}", requestId, nodeId, issueId, worklog.getId());
@@ -131,7 +134,7 @@ public class WorklogServiceImpl implements WorklogService {
         return Mono.empty();
     }
 
-
+    /** Ищет неудалённую запись по id, иначе {@code NOT_FOUND}. */
     private Mono<Worklog> findActiveWorklog(String requestId, String nodeId, UUID worklogId) {
         return worklogRepository.findActiveById(worklogId)
                 .switchIfEmpty(Mono.defer(() -> {
@@ -144,6 +147,7 @@ public class WorklogServiceImpl implements WorklogService {
                 }));
     }
 
+    /** Ищет неудалённую задачу по id, иначе {@code NOT_FOUND}. */
     private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {
         return issueRepository.findActiveById(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
@@ -156,36 +160,43 @@ public class WorklogServiceImpl implements WorklogService {
                 }));
     }
 
+    /** Проверяет поля при обновлении: заданные значения должны быть корректными. */
     private Mono<Void> validateUpdateDto(UpdateWorklogDto dto) {
+        if (dto.spentMinutes() == null && dto.workDate() == null && dto.comment() == null) {
+            return Mono.error(new DomainException(
+                    DomainStatus.INVALID_ARGUMENT,
+                    "No data provided for update"
+            ));
+        }
         if (dto.spentMinutes() != null && dto.spentMinutes() <= 0) {
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "spentMinutes must be greater than 0"
+                    "SpentMinutes must be greater than 0"
             ));
         }
-
         int maxFutureDays = issueProperties.maxFutureDays();
         if (dto.workDate() != null && dto.workDate().isAfter(LocalDate.now().plusDays(maxFutureDays))) {
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "workDate is too far in the future"
+                    "WorkDate is too far in the future"
             ));
         }
         return Mono.empty();
     }
 
+    /** Проверяет поля при создании: {@code spentMinutes} и {@code workDate} обязательны. */
     private Mono<Void> validateCreateDto(CreateWorklogDto dto) {
         if (dto.spentMinutes() == null || dto.spentMinutes() <= 0) {
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "spentMinutes must be greater than 0"
+                    "SpentMinutes must be greater than 0"
             ));
         }
 
         if (dto.workDate() == null) {
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "workDate must be not null"
+                    "WorkDate must be not null"
             ));
         }
 
@@ -193,7 +204,7 @@ public class WorklogServiceImpl implements WorklogService {
         if (dto.workDate().isAfter(LocalDate.now().plusDays(maxFutureDays))) {
             return Mono.error(new DomainException(
                     DomainStatus.INVALID_ARGUMENT,
-                    "workDate is too far in the future"
+                    "WorkDate is too far in the future"
             ));
         }
 

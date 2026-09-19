@@ -129,7 +129,7 @@ class WorklogServiceImplTest {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
                     Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getMessage()).contains("spentMinutes must be greater than 0");
+                    Assertions.assertThat(ex.getMessage()).contains("SpentMinutes must be greater than 0");
                 })
                 .verify();
 
@@ -147,7 +147,7 @@ class WorklogServiceImplTest {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
                     Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getMessage()).contains("workDate is too far in the future");
+                    Assertions.assertThat(ex.getMessage()).contains("WorkDate is too far in the future");
                 })
                 .verify();
 
@@ -326,7 +326,7 @@ class WorklogServiceImplTest {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
                     Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getMessage()).contains("spentMinutes must be greater than 0");
+                    Assertions.assertThat(ex.getMessage()).contains("SpentMinutes must be greater than 0");
                 })
                 .verify();
 
@@ -345,7 +345,7 @@ class WorklogServiceImplTest {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
                     Assertions.assertThat(ex.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getMessage()).contains("workDate is too far in the future");
+                    Assertions.assertThat(ex.getMessage()).contains("WorkDate is too far in the future");
                 })
                 .verify();
     }

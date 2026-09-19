@@ -229,9 +229,7 @@ public final class GrpcRequestValidators {
             return Mono.just(Optional.empty());
         }
         if (value == null || value <= 0) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+            return mustBePositive(fieldName);
         }
         return Mono.just(Optional.of(value));
     }
@@ -432,9 +430,7 @@ public final class GrpcRequestValidators {
      */
     public static Mono<Long> requirePositiveOrInvalidArgument(long value, String fieldName) {
         if (value <= 0) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+            return mustBePositive(fieldName);
         }
         return Mono.just(value);
     }
@@ -448,9 +444,7 @@ public final class GrpcRequestValidators {
      */
     public static Mono<Integer> requirePositiveOrInvalidArgument(int value, String fieldName) {
         if (value <= 0) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                    .withDescription(fieldName + " must be positive")
-                    .asRuntimeException());
+            return mustBePositive(fieldName);
         }
 
         return Mono.just(value);
@@ -513,5 +507,11 @@ public final class GrpcRequestValidators {
         }
         return parseLocalDateOrInvalidArgument(rawDate,fieldName)
                 .map(Optional::of);
+    }
+
+    private static <T> Mono<T> mustBePositive(String fieldName) {
+        return Mono.error(Status.INVALID_ARGUMENT
+                .withDescription(fieldName + " must be positive")
+                .asRuntimeException());
     }
 }
