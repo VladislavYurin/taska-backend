@@ -10,6 +10,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.NotificationsApi;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.mapper.NotificationMapper;
 import ru.taska.transport.grpc.GrpcNotificationServiceClient;
@@ -105,6 +106,20 @@ public class NotificationController implements NotificationsApi {
                                     )
                             );
                         })
+        );
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Mono<ResponseEntity<ReadAllNotificationsResponseDto>> markAllNotificationsAsRead(
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, PROTECTED, context ->
+                grpcNotificationServiceClient
+                        .markAllAsRead(context)
+                        .map(ResponseEntity::ok)
         );
     }
 }

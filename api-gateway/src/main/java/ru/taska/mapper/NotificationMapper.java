@@ -5,10 +5,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -42,6 +44,7 @@ public class NotificationMapper {
                         .map(this::toRestResponse)
                         .toList()
         );
+        dto.setUnreadCount(source.getUnreadCount());
 
         return dto;
     }
@@ -105,6 +108,10 @@ public class NotificationMapper {
                 }
             }
         };
+    }
+
+    public ReadAllNotificationsResponseDto toRestReadAllNotificationsResponse(MarkAllAsReadResponse response) {
+        return new ReadAllNotificationsResponseDto(response.getUpdatedCount());
     }
 
     /**

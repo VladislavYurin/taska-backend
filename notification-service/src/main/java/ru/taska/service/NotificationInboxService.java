@@ -1,8 +1,8 @@
 package ru.taska.service;
 
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
+import ru.taska.domain.NotificationListResult;
 
 import java.util.UUID;
 
@@ -39,9 +39,9 @@ public interface NotificationInboxService {
      * @param unreadOnly если {@code true} — вернуть только непрочитанные.
      * @param pageSize   желаемое количество уведомлений на страницу.
      * @param offset     смещение от начала списка.
-     * @return {@link Flux} уведомлений пользователя (возможно пустой).
+     * @return {@link Mono} уведомлений пользователя (возможно пустой).
      */
-    Flux<Notification> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset);
+    Mono<NotificationListResult> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset);
 
     /**
      * Помечает уведомление пользователя как прочитанное.
@@ -58,4 +58,16 @@ public interface NotificationInboxService {
      *         если уведомление не найдено или не принадлежит пользователю.
      */
     Mono<Notification> markAsRead(UUID notificationId, UUID userId);
+
+    /**
+     * Помечает все непрочитанные уведомления пользователя как прочитанные.
+     *
+     * <p>Операция ограничена {@code userId} и является идемпотентной:
+     * уже прочитанные уведомления не изменяются.</p>
+     *
+     * @param userId идентификатор пользователя-владельца уведомлений.
+     * @return {@link Mono} с количеством уведомлений, которые были
+     *         помечены прочитанными.
+     */
+    Mono<Long> markAllAsRead(UUID userId);
 }

@@ -7,12 +7,16 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
 import ru.taska.api.notification.v1.ListNotificationsRequestBody;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadRequest;
+import ru.taska.api.notification.v1.MarkAllAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.MarkAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadResponse;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
+import ru.taska.mapper.NotificationMapper;
 
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +37,7 @@ public class GrpcNotificationServiceClient {
 
     private final ReactorNotificationServiceGrpc.ReactorNotificationServiceStub notificationServiceStub;
     private final GrpcClientProperties properties;
+    private final NotificationMapper notificationMapper;
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final long DEFAULT_OFFSET = 0L;
@@ -96,6 +101,23 @@ public class GrpcNotificationServiceClient {
                 .build();
 
         return stubWithDeadline().markAsRead(request);
+    }
+
+    /**
+     * Отмечает все уведомления текущего аутентифицированного пользователя как прочитанные.
+     */
+    public Mono<ReadAllNotificationsResponseDto> markAllAsRead(
+            GatewayContext context
+    ) {
+        MarkAllAsReadRequest request = MarkAllAsReadRequest.newBuilder()
+                .setHeader(toHeader(context))
+                .setBody(MarkAllAsReadRequestBody.newBuilder()
+                        .setUserId(context.userContext().userId())
+                        .build())
+                .build();
+
+        return stubWithDeadline().markAllAsRead(request)
+                .map(notificationMapper::toRestReadAllNotificationsResponse);
     }
 
     /**
