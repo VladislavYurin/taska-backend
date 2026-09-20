@@ -29,6 +29,9 @@ class NotificationInboxServiceImplTest {
     private static final int PAGE_SIZE = 20;
     private static final long OFFSET = 0;
 
+    // Намеренно больше размера страницы: счётчик считается по всем уведомлениям, а не по странице
+    private static final long UNREAD_COUNT = 42L;
+
     @Mock
     private NotificationRepository notificationRepository;
 
@@ -41,13 +44,21 @@ class NotificationInboxServiceImplTest {
 
         Mockito.when(notificationRepository.findUnreadByUserId(USER_ID, PAGE_SIZE, OFFSET))
                 .thenReturn(Flux.just(notification));
+        Mockito.when(notificationRepository.countUnreadByUserId(USER_ID))
+                .thenReturn(Mono.just(UNREAD_COUNT));
 
         StepVerifier.create(notificationInboxService.listNotifications(USER_ID, true, PAGE_SIZE, OFFSET))
-                .expectNext(notification)
+                .assertNext(result -> {
+                    Assertions.assertThat(result.notifications()).containsExactly(notification);
+                    Assertions.assertThat(result.unreadCount()).isEqualTo(UNREAD_COUNT);
+                })
                 .verifyComplete();
 
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .findUnreadByUserId(USER_ID, PAGE_SIZE, OFFSET);
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .countUnreadByUserId(USER_ID);
 
         Mockito.verify(notificationRepository, Mockito.never())
                 .findAllByUserId(
@@ -63,13 +74,21 @@ class NotificationInboxServiceImplTest {
 
         Mockito.when(notificationRepository.findAllByUserId(USER_ID, PAGE_SIZE, OFFSET))
                 .thenReturn(Flux.just(notification));
+        Mockito.when(notificationRepository.countUnreadByUserId(USER_ID))
+                .thenReturn(Mono.just(UNREAD_COUNT));
 
         StepVerifier.create(notificationInboxService.listNotifications(USER_ID, false, PAGE_SIZE, OFFSET))
-                .expectNext(notification)
+                .assertNext(result -> {
+                    Assertions.assertThat(result.notifications()).containsExactly(notification);
+                    Assertions.assertThat(result.unreadCount()).isEqualTo(UNREAD_COUNT);
+                })
                 .verifyComplete();
 
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .findAllByUserId(USER_ID, PAGE_SIZE, OFFSET);
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .countUnreadByUserId(USER_ID);
 
         Mockito.verify(notificationRepository, Mockito.never())
                 .findUnreadByUserId(
@@ -77,6 +96,51 @@ class NotificationInboxServiceImplTest {
                         ArgumentMatchers.anyInt(),
                         ArgumentMatchers.anyLong()
                 );
+    }
+
+    @Test
+    void shouldReturnEmptyListWithZeroUnreadCountWhenNoNotifications() {
+        Mockito.when(notificationRepository.findAllByUserId(USER_ID, PAGE_SIZE, OFFSET))
+                .thenReturn(Flux.empty());
+        Mockito.when(notificationRepository.countUnreadByUserId(USER_ID))
+                .thenReturn(Mono.just(0L));
+
+        StepVerifier.create(notificationInboxService.listNotifications(USER_ID, false, PAGE_SIZE, OFFSET))
+                .assertNext(result -> {
+                    Assertions.assertThat(result.notifications()).isEmpty();
+                    Assertions.assertThat(result.unreadCount()).isZero();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldUseDefaultPageSizeWhenPageSizeIsNotPositive() {
+        Mockito.when(notificationRepository.findAllByUserId(USER_ID, 20, OFFSET))
+                .thenReturn(Flux.empty());
+        Mockito.when(notificationRepository.countUnreadByUserId(USER_ID))
+                .thenReturn(Mono.just(0L));
+
+        StepVerifier.create(notificationInboxService.listNotifications(USER_ID, false, 0, OFFSET))
+                .assertNext(result -> Assertions.assertThat(result.notifications()).isEmpty())
+                .verifyComplete();
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .findAllByUserId(USER_ID, 20, OFFSET);
+    }
+
+    @Test
+    void shouldCapPageSizeAndResetNegativeOffset() {
+        Mockito.when(notificationRepository.findAllByUserId(USER_ID, 100, 0L))
+                .thenReturn(Flux.empty());
+        Mockito.when(notificationRepository.countUnreadByUserId(USER_ID))
+                .thenReturn(Mono.just(0L));
+
+        StepVerifier.create(notificationInboxService.listNotifications(USER_ID, false, 1000, -10L))
+                .assertNext(result -> Assertions.assertThat(result.notifications()).isEmpty())
+                .verifyComplete();
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .findAllByUserId(USER_ID, 100, 0L);
     }
 
     @Test
@@ -155,6 +219,51 @@ class NotificationInboxServiceImplTest {
 
         Mockito.verify(notificationRepository, Mockito.times(1))
                 .findByIdAndUserId(NOTIFICATION_ID, USER_ID);
+    }
+
+    @Test
+    void shouldMarkAllNotificationsAsRead() {
+        Mockito.when(notificationRepository.markAllAsRead(
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                ))
+                .thenReturn(Mono.just(3L));
+
+        StepVerifier.create(notificationInboxService.markAllAsRead(USER_ID))
+                .expectNext(3L)
+                .verifyComplete();
+
+        Mockito.verify(notificationRepository, Mockito.times(1))
+                .markAllAsRead(
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                );
+    }
+
+    @Test
+    void shouldReturnZeroWhenThereAreNoUnreadNotifications() {
+        Mockito.when(notificationRepository.markAllAsRead(
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                ))
+                .thenReturn(Mono.just(0L));
+
+        StepVerifier.create(notificationInboxService.markAllAsRead(USER_ID))
+                .expectNext(0L)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldPropagateErrorWhenMarkAllAsReadFails() {
+        Mockito.when(notificationRepository.markAllAsRead(
+                        ArgumentMatchers.eq(USER_ID),
+                        ArgumentMatchers.any(Instant.class)
+                ))
+                .thenReturn(Mono.error(new IllegalStateException("db is down")));
+
+        StepVerifier.create(notificationInboxService.markAllAsRead(USER_ID))
+                .expectError(IllegalStateException.class)
+                .verify();
     }
 
     private Notification notification(Instant readAt) {

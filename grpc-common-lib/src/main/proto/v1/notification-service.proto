@@ -33,6 +33,12 @@ service NotificationService {
    */
   rpc MarkAsRead(MarkAsReadRequest)
       returns (MarkAsReadResponse);
+
+  /**
+   * Помечает все уведомления пользователя как прочитанные.
+   */
+  rpc MarkAllAsRead(MarkAllAsReadRequest)
+      returns (MarkAllAsReadResponse);
 }
 
 /**
@@ -216,6 +222,11 @@ message ListNotificationsResponse {
    * Если уведомлений нет, вернется пустой список.
    */
   repeated NotificationResponse notifications = 1;
+
+  /**
+   * Количество всех непрочитанных уведомлений у пользователя.
+   */
+  int64 unread_count = 2;
 }
 
 /**
@@ -319,4 +330,36 @@ message NotificationResponse {
    * Например, event id из Kafka.
    */
   string source_event_id = 9;
+}
+
+/**
+ * Бизнес-данные запроса MarkAllAsRead.
+ */
+message MarkAllAsReadRequest {
+  /**
+   * Общий технический заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Бизнес-данные запроса.
+   */
+  MarkAllAsReadRequestBody body = 2;
+}
+
+message MarkAllAsReadRequestBody {
+  /**
+   * Идентификатор пользователя, чьи уведомления нужно пометить прочитанными.
+   */
+  string user_id = 1;
+}
+
+/**
+ * Ответ после отметки всех уведомлений прочитанными.
+ */
+message MarkAllAsReadResponse {
+  /**
+   * Количество помеченных прочитанными уведомлений.
+   */
+  int64 updated_count = 1;
 }
