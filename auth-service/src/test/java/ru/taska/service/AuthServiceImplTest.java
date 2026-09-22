@@ -316,8 +316,8 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION  &&
-                                    error.getMessage().equals("Email and password are required")
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED  &&
+                                    error.getMessage().equals("Invalid credentials")
                     )
                     .verify();
         }
