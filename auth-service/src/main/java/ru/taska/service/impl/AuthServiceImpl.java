@@ -3,6 +3,7 @@ package ru.taska.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -56,7 +57,23 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final PasswordValidator passwordValidator;
     private final JwtValidator jwtValidator;
+
+    /**
+     * Транзакционный оператор с propagation REQUIRES_NEW.
+     *
+     * <p>Явно указан через {@link Qualifier}, потому что в контексте два бина
+     * {@link TransactionalOperator}:
+     * <ul>
+     *   <li>{@code transactionalOperator} — PROPAGATION_REQUIRED;</li>
+     *   <li>{@code requiresNewTransactionalOperator} — PROPAGATION_REQUIRES_NEW.</li>
+     * </ul>
+     *
+     * <p>{@code @Qualifier} копируется Lombok'ом с поля на параметр конструктора
+     * благодаря {@code lombok.config} в корне модуля.
+     */
+    @Qualifier("requiresNewTransactionalOperator")
     private final TransactionalOperator requiresNewTransactionalOperator;
+
     /**
      * {@inheritDoc}
      */
@@ -73,7 +90,7 @@ public class AuthServiceImpl implements AuthService {
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
                 .flatMap(user -> credentialRepository
                         .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
-                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Email and password are required")))
+                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
                         .flatMap( credential ->{
 
                             if (user.getStatus() == UserStatus.BLOCKED || user.getStatus() == UserStatus.INVITED) {
