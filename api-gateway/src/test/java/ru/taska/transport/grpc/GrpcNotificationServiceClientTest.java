@@ -79,7 +79,7 @@ public class GrpcNotificationServiceClientTest {
     }
 
     @Test
-    @DisplayName("listNotifications должен собрать request с userId из GatewayContext")
+    @DisplayName("listNotifications должен собрать request с userId из GatewayContext и вернуть REST DTO")
     void listNotifications_validParams_buildsCorrectRequestAndReturnsResponse() {
         ListNotificationsResponse response = ListNotificationsResponse.newBuilder()
                 .addNotifications(notification())
@@ -91,7 +91,7 @@ public class GrpcNotificationServiceClientTest {
 
         StepVerifier.create(client.listNotifications(context, true, 20, 0L))
                 .assertNext(result -> {
-                    Assertions.assertThat(result.getNotificationsList()).hasSize(1);
+                    Assertions.assertThat(result.getItems()).hasSize(1);
                     Assertions.assertThat(result.getUnreadCount()).isEqualTo(5);
                 })
                 .verifyComplete();
@@ -121,7 +121,7 @@ public class GrpcNotificationServiceClientTest {
 
         StepVerifier.create(client.listNotifications(context, null, null, null))
                 .assertNext(result -> {
-                    Assertions.assertThat(result.getNotificationsList()).isEmpty();
+                    Assertions.assertThat(result.getItems()).isEmpty();
                     Assertions.assertThat(result.getUnreadCount()).isZero();
                 })
                 .verifyComplete();
@@ -138,7 +138,7 @@ public class GrpcNotificationServiceClientTest {
     }
 
     @Test
-    @DisplayName("markAsRead должен собрать request с notificationId и userId из GatewayContext")
+    @DisplayName("markAsRead должен собрать request с notificationId и userId из GatewayContext и вернуть REST DTO")
     void markAsRead_validParams_buildsCorrectRequestAndReturnsResponse() {
         String notificationId = UUID.randomUUID().toString();
 
@@ -150,7 +150,7 @@ public class GrpcNotificationServiceClientTest {
                 .thenReturn(Mono.just(response));
 
         StepVerifier.create(client.markAsRead(context, notificationId))
-                .assertNext(result -> Assertions.assertThat(result.getNotification().getId()).isNotBlank())
+                .assertNext(result -> Assertions.assertThat(result.getId()).isNotNull())
                 .verifyComplete();
 
         ArgumentCaptor<MarkAsReadRequest> captor = ArgumentCaptor.forClass(MarkAsReadRequest.class);
