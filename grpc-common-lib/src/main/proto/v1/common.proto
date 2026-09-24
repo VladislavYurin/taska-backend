@@ -44,3 +44,24 @@ message UserContext {
   UserStatus status = 5;
   GlobalRoleProto global_role = 6;
 }
+
+/**
+ * Обёртки для полей PATCH-запросов с семантикой JSON Merge Patch.
+ * Поле-обёртка не установлено в запросе — значение не менять.
+ * Поле-обёртка установлено, is_null == true — очистить (NULL в БД).
+ * Поле-обёртка установлено, is_null == false — установить value.
+ */
+message NullableString {
+  bool is_null = 1;
+  string value = 2;
+}
+
+message NullableDouble {
+  bool is_null = 1;
+  double value = 2;
+}
+
+message NullableInt32 {
+  bool is_null = 1;
+  int32 value = 2;
+}

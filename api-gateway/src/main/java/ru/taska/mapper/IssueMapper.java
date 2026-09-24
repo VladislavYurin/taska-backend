@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.common.v1.NullableDouble;
+import ru.taska.api.common.v1.NullableInt32;
+import ru.taska.api.common.v1.NullableString;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
@@ -24,6 +27,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueRequestBody;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
@@ -59,6 +64,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -282,7 +288,10 @@ public class IssueMapper {
             case "LOW" -> IssuePriority.ISSUE_PRIORITY_LOW;
             case "MEDIUM" -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case "HIGH" -> IssuePriority.ISSUE_PRIORITY_HIGH;
-            default -> IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unknown issue priority: " + restIssuePriority
+            );
         };
     }
 
@@ -459,6 +468,153 @@ public class IssueMapper {
                                  .setHeader(buildGrpcHeader(context))
                                  .setBody(bodyBuilder.build())
                                  .build();
+    }
+
+    /**
+     * Создает gRPC запрос для частичного обновления задачи (PATCH).
+     *
+     * <p>Семантика JSON Merge Patch: отсутствие ключа в {@code body} — поле не трогать,
+     * {@code body.get(key) == null} — поле явно очищено.</p>
+     */
+    public PatchIssueRequest toPatchIssueRequest(
+            String issueId,
+            String ifMatchVersion,
+            Map<String, Object> body,
+            GatewayContext context
+    ) {
+        PatchIssueRequestBody.Builder bodyBuilder = PatchIssueRequestBody.newBuilder()
+                .setIssueId(issueId)
+                .setActorUserId(context.userContext().userId())
+                .setVersion(parseIfMatchVersion(ifMatchVersion));
+
+        if (body.containsKey("summary")) {
+            bodyBuilder.setSummary(requireStringValue(body.get("summary"), "summary"));
+        }
+
+        if (body.containsKey("priority")) {
+            bodyBuilder.setPriority(toGrpcIssuePriority(requireStringValue(body.get("priority"), "priority")));
+        }
+
+        if (body.containsKey("description")) {
+            bodyBuilder.setDescription(toNullableString(body.get("description"), "description"));
+        }
+
+        if (body.containsKey("assigneeId")) {
+            bodyBuilder.setAssigneeId(toNullableString(body.get("assigneeId"), "assigneeId"));
+        }
+
+        if (body.containsKey("storyPoints")) {
+            bodyBuilder.setStoryPoints(toNullableDouble(body.get("storyPoints")));
+        }
+
+        if (body.containsKey("startDate")) {
+            bodyBuilder.setStartDate(toNullableString(body.get("startDate"), "startDate"));
+        }
+
+        if (body.containsKey("dueDate")) {
+            bodyBuilder.setDueDate(toNullableString(body.get("dueDate"), "dueDate"));
+        }
+
+        if (body.containsKey("originalEstimateMinutes")) {
+            bodyBuilder.setOriginalEstimateMinutes(toNullableInt32(body.get("originalEstimateMinutes")));
+        }
+
+        if (body.containsKey("remainingEstimateMinutes")) {
+            bodyBuilder.setRemainingEstimateMinutes(toNullableInt32(body.get("remainingEstimateMinutes")));
+        }
+
+        return PatchIssueRequest.newBuilder()
+                .setHeader(buildGrpcHeader(context))
+                .setBody(bodyBuilder.build())
+                .build();
+    }
+
+    /**
+     * Принимает версию как голым числом ({@code 3}), так и в формате ETag ({@code "3"}).
+     */
+    private int parseIfMatchVersion(String ifMatchVersion) {
+        String version = ifMatchVersion.trim();
+        if (version.length() >= 2 && version.startsWith("\"") && version.endsWith("\"")) {
+            version = version.substring(1, version.length() - 1);
+        }
+        try {
+            return Integer.parseInt(version);
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "If-Match header must contain a valid integer issue version");
+        }
+    }
+
+    private String requireStringValue(Object raw, String fieldName) {
+        if (raw == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " cannot be cleared");
+        }
+        if (!(raw instanceof String value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a string");
+        }
+        return value;
+    }
+
+    private NullableString toNullableString(Object raw, String fieldName) {
+        if (raw == null) {
+            return NullableString.newBuilder().setIsNull(true).build();
+        }
+        if (!(raw instanceof String value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a string");
+        }
+        return NullableString.newBuilder().setValue(value).build();
+    }
+
+    private NullableDouble toNullableDouble(Object raw) {
+        if (raw == null) {
+            return NullableDouble.newBuilder().setIsNull(true).build();
+        }
+        if (!(raw instanceof Number number)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "storyPoints must be a number");
+        }
+        return NullableDouble.newBuilder().setValue(number.doubleValue()).build();
+    }
+
+    private NullableInt32 toNullableInt32(Object raw) {
+        if (raw == null) {
+            return NullableInt32.newBuilder().setIsNull(true).build();
+        }
+        if (!(raw instanceof Number number)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "estimate fields must be numbers");
+        }
+        return NullableInt32.newBuilder().setValue(number.intValue()).build();
+    }
+
+    /**
+     * Безопасно преобразует строку в IssuePriorityDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssuePriorityDto safeParsePriority(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssuePriorityDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid priority value: {}, ignoring", value);
+            return null;
+        }
+    }
+
+    /**
+     * Безопасно преобразует строку в IssueTypeDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssueTypeDto safeParseIssueType(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssueTypeDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid issueType value: {}, ignoring", value);
+            return null;
+        }
     }
 
     /**
