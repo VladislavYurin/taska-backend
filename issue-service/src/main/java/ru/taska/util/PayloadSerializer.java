@@ -118,7 +118,9 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с измененными данными при обновлении задачи.
      *
-     * @param issue          измененная задача.
+     * @param issue          задача до изменения, источник старых значений полей.
+     * @param actorUserId    идентификатор инициатора изменения.
+     * @param assigneeId     исполнитель задачи после изменения, получатель уведомления об изменении.
      * @param newSummary     новое краткое описание задачи.
      * @param newDescription новое полное описание задачи.
      * @param newPriority    новый приоритет задачи.
@@ -127,6 +129,7 @@ public class PayloadSerializer {
     public JsonNode createIssueUpdatedPayload(
             Issue issue,
             UUID actorUserId,
+            UUID assigneeId,
             String newSummary,
             String newDescription,
             IssuePriority newPriority,
@@ -139,7 +142,7 @@ public class PayloadSerializer {
     ) {
 
         boolean nothingChanged = newSummary.equals(issue.getSummary())
-                && newDescription.equals(issue.getDescription())
+                && Objects.equals(newDescription, issue.getDescription())
                 && newPriority.equals(issue.getPriority())
                 && Objects.equals(storyPoints, issue.getStoryPoints())
                 && Objects.equals(startDate, issue.getStartDate())
@@ -159,8 +162,8 @@ public class PayloadSerializer {
             node.putNull(ACTOR_USER_ID);
         }
 
-        if (issue.getAssigneeId() != null) {
-            node.put(ASSIGNEE, issue.getAssigneeId().toString());
+        if (assigneeId != null) {
+            node.put(ASSIGNEE, assigneeId.toString());
         } else {
             node.putNull(ASSIGNEE);
         }
@@ -170,7 +173,7 @@ public class PayloadSerializer {
             node.put(NEW_SUMMARY, newSummary);
         }
 
-        if (!newDescription.equals(issue.getDescription())) {
+        if (!Objects.equals(newDescription, issue.getDescription())) {
             node.put(OLD_DESCRIPTION, issue.getDescription());
             node.put(NEW_DESCRIPTION, newDescription);
         }

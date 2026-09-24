@@ -28,6 +28,8 @@ import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
+import java.util.Map;
+
 /**
  * REST-контроллер для работы с задачами.
  * Делегирует обработку запросов {@link GatewayRequestExecutor}
@@ -95,7 +97,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Назначает исполнителя задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<IssueResponseDto>> assignIssue(
             String issueId,
@@ -110,7 +115,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Обновляет основные поля задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<UpdateIssueResponseDto>> updateIssue(
             String issueId,
@@ -120,6 +128,21 @@ public class IssueController implements IssueApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 issueClient.updateIssue(issueId, request, context)
                         .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Частично обновляет задачу (PATCH) с оптимистичной блокировкой по версии (заголовок If-Match).
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> patchIssue(
+            String issueId,
+            String ifMatch,
+            Mono<Map<String, Object>> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.patchIssue(issueId, ifMatch, request, context)
         );
     }
 

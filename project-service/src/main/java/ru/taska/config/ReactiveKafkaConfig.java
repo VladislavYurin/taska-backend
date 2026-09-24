@@ -1,23 +1,26 @@
 package ru.taska.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Map;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.kafka.sender.KafkaSender;
+import reactor.kafka.sender.MicrometerProducerListener;
 import reactor.kafka.sender.SenderOptions;
 
 @Configuration
 public class ReactiveKafkaConfig {
 
     @Bean
-    public KafkaSender<String, String> kafkaSender(KafkaProperties properties) {
+    public KafkaSender<String, String> kafkaSender(KafkaProperties properties, MeterRegistry meterRegistry) {
         Map<String, Object> props = properties.buildProducerProperties();
         SenderOptions<String, String> senderOptions = SenderOptions.create(props);
 
         senderOptions = senderOptions
                 .stopOnError(false)
-                .maxInFlight(256);
+                .maxInFlight(256)
+                .producerListener(new MicrometerProducerListener(meterRegistry));
 
         return KafkaSender.create(senderOptions);
     }

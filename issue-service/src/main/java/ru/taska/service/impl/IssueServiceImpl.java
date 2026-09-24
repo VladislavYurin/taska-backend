@@ -2,7 +2,6 @@ package ru.taska.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -17,7 +16,6 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
@@ -270,7 +268,7 @@ public class IssueServiceImpl implements IssueService {
                             .collectList()
                             .flatMap(watcherIds -> {
                                 JsonNode payload = payloadSerializer.createIssueUpdatedPayload(
-                                        updatingIssue, actorUserId, summary, description, priority,
+                                        updatingIssue, actorUserId, updatingIssue.getAssigneeId(), summary, description, priority,
                                         storyPoints, startDate, dueDate,
                                         originalEstimateMinutes, remainingEstimateMinutes,
                                         watcherIds
@@ -304,7 +302,6 @@ public class IssueServiceImpl implements IssueService {
                             });
                 });
     }
-
 
     @Override
     public Mono<Issue> deleteIssue(String requestId,

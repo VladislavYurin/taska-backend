@@ -95,6 +95,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
                 Mockito.any(Issue.class),
                 Mockito.eq(ACTOR_USER_ID),
+                Mockito.any(),
                 Mockito.eq(newSummary),
                 Mockito.eq(newDescription),
                 Mockito.eq(newPriority),
@@ -152,6 +153,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
                 Mockito.any(Issue.class),
                 Mockito.eq(ACTOR_USER_ID),
+                Mockito.any(),
                 Mockito.eq(sameSummary),
                 Mockito.eq(sameDescription),
                 Mockito.eq(samePriority),
