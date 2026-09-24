@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import nullable.NullableField;
+import ru.taska.util.StoryPointsNormalizer;
 
 /**
  * Изменения задачи из PATCH-запроса.
@@ -37,7 +38,7 @@ public record IssuePatch(
                 .priority(priority.orElse(issue.getPriority()))
                 .description(description.orElse(issue.getDescription()))
                 .assigneeId(assigneeId.orElse(issue.getAssigneeId()))
-                .storyPoints(storyPoints.orElse(issue.getStoryPoints()))
+                .storyPoints(StoryPointsNormalizer.normalize(storyPoints.orElse(issue.getStoryPoints())))
                 .startDate(startDate.orElse(issue.getStartDate()))
                 .dueDate(dueDate.orElse(issue.getDueDate()))
                 .originalEstimateMinutes(originalEstimateMinutes.orElse(issue.getOriginalEstimateMinutes()))
