@@ -12,6 +12,7 @@ import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.PatchIssueResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
@@ -26,6 +27,7 @@ import ru.taska.domain.IssueLinkViewType;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
+import ru.taska.domain.PatchIssueResult;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.labels.ProjectLabels;
@@ -231,6 +233,13 @@ public class IssueMapper {
         }
 
         return builder.build();
+    }
+
+    public PatchIssueResponse toPatchIssueResponseProto(PatchIssueResult result) {
+        return PatchIssueResponse.newBuilder()
+                .setVersionConflict(result.versionConflict())
+                .setIssue(toIssueProto(result.issue()))
+                .build();
     }
 
     public IssueLinkResponse toIssueLinkProto(IssueLink link, UUID issueId) {

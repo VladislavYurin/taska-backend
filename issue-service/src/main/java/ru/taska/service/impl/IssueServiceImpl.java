@@ -2,7 +2,6 @@ package ru.taska.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -17,7 +16,6 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
@@ -43,6 +41,7 @@ import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.util.PayloadSerializer;
 import ru.taska.util.RequestHasher;
+import ru.taska.util.StoryPointsNormalizer;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -132,7 +131,7 @@ public class IssueServiceImpl implements IssueService {
                                             .reporterId(reporterId)
                                             .statusKey(INIT_STATUS)
                                             .version(INIT_VERSION)
-                                            .storyPoints(storyPoints)
+                                            .storyPoints(StoryPointsNormalizer.normalize(storyPoints))
                                             .startDate(startDate)
                                             .dueDate(dueDate)
                                             .originalEstimateMinutes(originalEstimateMinutes)
@@ -237,6 +236,8 @@ public class IssueServiceImpl implements IssueService {
             Integer originalEstimateMinutes,
             Integer remainingEstimateMinutes
     ) {
+        BigDecimal normalizedStoryPoints = StoryPointsNormalizer.normalize(storyPoints);
+
         return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
@@ -270,8 +271,8 @@ public class IssueServiceImpl implements IssueService {
                             .collectList()
                             .flatMap(watcherIds -> {
                                 JsonNode payload = payloadSerializer.createIssueUpdatedPayload(
-                                        updatingIssue, actorUserId, summary, description, priority,
-                                        storyPoints, startDate, dueDate,
+                                        updatingIssue, actorUserId, updatingIssue.getAssigneeId(), summary, description, priority,
+                                        normalizedStoryPoints, startDate, dueDate,
                                         originalEstimateMinutes, remainingEstimateMinutes,
                                         watcherIds
                                 );
@@ -286,7 +287,7 @@ public class IssueServiceImpl implements IssueService {
                                 updatingIssue.setPriority(priority);
                                 updatingIssue.setUpdatedAt(Instant.now());
                                 updatingIssue.setVersion(updatingIssue.getVersion() + 1);
-                                updatingIssue.setStoryPoints(storyPoints);
+                                updatingIssue.setStoryPoints(normalizedStoryPoints);
                                 updatingIssue.setStartDate(startDate);
                                 updatingIssue.setDueDate(dueDate);
                                 updatingIssue.setOriginalEstimateMinutes(originalEstimateMinutes);
@@ -304,7 +305,6 @@ public class IssueServiceImpl implements IssueService {
                             });
                 });
     }
-
 
     @Override
     public Mono<Issue> deleteIssue(String requestId,

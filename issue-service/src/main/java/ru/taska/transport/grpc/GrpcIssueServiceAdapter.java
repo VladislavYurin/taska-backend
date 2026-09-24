@@ -46,6 +46,8 @@ import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
 import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
@@ -110,6 +112,13 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
         return grpcIssueService.updateIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
     }
+
+    @Override
+    public Mono<PatchIssueResponse> patchIssue(Mono<PatchIssueRequest> request) {
+        return grpcIssueService.patchIssue(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("patchIssue"));
+    }
+
     @Override
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
         return grpcIssueService.transitionIssue(request)

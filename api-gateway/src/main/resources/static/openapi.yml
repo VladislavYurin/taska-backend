@@ -697,6 +697,8 @@ paths:
 
     put:
       summary: Обновляет основные поля задачи
+      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      deprecated: true
       operationId: updateIssue
       tags:
         - issue
@@ -754,9 +756,74 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+    patch:
+      summary: Частично обновляет задачу с оптимистичной блокировкой по версии
+      description: |
+        Поля, которые можно передать: summary, description, priority, assigneeId, storyPoints, startDate, 
+        dueDate, originalEstimateMinutes, remainingEstimateMinutes
+        Все поля PatchIssueRequestDto необязательные. Отсутствие поля в теле запроса — не изменять значение.
+        Явно переданный null — очистить значение (для полей, допускающих NULL в БД;
+        summary и priority очищены быть не могут).
+        Заголовок If-Match должен содержать текущую версию задачи (Issue.version).
+        Если версия не совпадает с версией в БД, изменения не применяются и возвращается 409
+        с актуальным состоянием задачи.
+      operationId: patchIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: If-Match
+          in: header
+          required: true
+          description: |
+            Версия задачи для оптимистичной блокировки (Issue.version).
+            Принимается как число (3), так и в формате ETag в кавычках ("3").
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchIssueRequestDto'
+
+      responses:
+        '200':
+          description: Задача успешно обновлена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        '409':
+          description: >-
+            Версия из If-Match не совпадает с текущей версией задачи в БД (конфликт
+            конкурентного изменения). Тело ответа содержит актуальное состояние задачи.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/issues/{issueId}/assignee:
     put:
       summary: Назначает исполнителя задачи
+      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      deprecated: true
       operationId: assignIssue
       tags:
         - issue
@@ -2646,6 +2713,18 @@ components:
           format: int32
           description: Оставшееся время в минутах
           minimum: 0
+
+    PatchIssueRequestDto:
+      type: object
+      description: |
+        Частичное обновление задачи (JSON Merge Patch). Все поля необязательные.
+        Отсутствие поля — не изменять. Явный null — очистить значение.
+        Поддерживаемые поля: summary (string, нельзя очистить), description (string|null),
+        priority (string, нельзя очистить), assigneeId (string|null),
+        storyPoints (number|null), startDate (string yyyy-MM-dd|null),
+        dueDate (string yyyy-MM-dd|null), originalEstimateMinutes (integer|null),
+        remainingEstimateMinutes (integer|null).
+      additionalProperties: true
 
     UpdateIssueResponseDto:
       type: object
