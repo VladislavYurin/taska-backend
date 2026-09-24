@@ -81,7 +81,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                     Assertions.assertThat(result.getDescription()).isEqualTo(newDescription);
                     Assertions.assertThat(result.getPriority()).isEqualTo(newPriority);
                     Assertions.assertThat(result.getVersion()).isEqualTo(2);
-                    Assertions.assertThat(result.getStoryPoints()).isEqualTo(STORY_POINTS);
+                    Assertions.assertThat(result.getStoryPoints()).isEqualByComparingTo(STORY_POINTS);
                     Assertions.assertThat(result.getStartDate()).isEqualTo(START_DATE);
                     Assertions.assertThat(result.getDueDate()).isEqualTo(DUE_DATE);
                     Assertions.assertThat(result.getOriginalEstimateMinutes()).isEqualTo(ORIGINAL_ESTIMATE_MINUTES);
@@ -99,7 +99,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                 Mockito.eq(newSummary),
                 Mockito.eq(newDescription),
                 Mockito.eq(newPriority),
-                Mockito.eq(STORY_POINTS),
+                Mockito.argThat(storyPoints -> storyPoints.compareTo(STORY_POINTS) == 0),
                 Mockito.eq(START_DATE),
                 Mockito.eq(DUE_DATE),
                 Mockito.eq(ORIGINAL_ESTIMATE_MINUTES),

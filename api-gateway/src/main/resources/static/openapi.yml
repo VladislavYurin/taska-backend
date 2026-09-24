@@ -759,6 +759,8 @@ paths:
     patch:
       summary: Частично обновляет задачу с оптимистичной блокировкой по версии
       description: |
+        Поля, которые можно передать: summary, description, priority, assigneeId, storyPoints, startDate, 
+        dueDate, originalEstimateMinutes, remainingEstimateMinutes
         Все поля PatchIssueRequestDto необязательные. Отсутствие поля в теле запроса — не изменять значение.
         Явно переданный null — очистить значение (для полей, допускающих NULL в БД;
         summary и priority очищены быть не могут).
