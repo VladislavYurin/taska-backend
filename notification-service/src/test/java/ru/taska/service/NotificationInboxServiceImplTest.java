@@ -164,7 +164,6 @@ class NotificationInboxServiceImplTest {
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
                 .title("Test notification")
                 .body("Test body")
-                .link("/test")
                 .createdAt(Instant.parse("2026-05-27T09:00:00Z"))
                 .readAt(readAt)
                 .sourceEventId(SOURCE_EVENT_ID)

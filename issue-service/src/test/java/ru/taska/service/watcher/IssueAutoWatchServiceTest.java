@@ -46,14 +46,14 @@ class IssueAutoWatchServiceTest {
 
         Mockito.when(issueProperties.autoWatch()).thenReturn(IssueProperties.AutoWatch.enabled());
         Mockito.when(issueWatcherExecutor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, REPORTER_ID, REPORTER_ID))
+                        REQUEST_ID, NODE_ID, issue, REPORTER_ID, REPORTER_ID))
                 .thenReturn(Mono.just(IssueWatcher.builder().id(UUID.randomUUID()).build()));
 
         StepVerifier.create(autoWatchService.watchReporterOnCreate(REQUEST_ID, NODE_ID, issue))
                 .verifyComplete();
 
         Mockito.verify(issueWatcherExecutor).executeWatch(
-                REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, REPORTER_ID, REPORTER_ID);
+                REQUEST_ID, NODE_ID, issue, REPORTER_ID, REPORTER_ID);
     }
 
     @Test
@@ -84,7 +84,7 @@ class IssueAutoWatchServiceTest {
 
         Mockito.when(issueProperties.autoWatch()).thenReturn(IssueProperties.AutoWatch.enabled());
         Mockito.when(issueWatcherExecutor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, ASSIGNEE_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, issue, ASSIGNEE_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(IssueWatcher.builder().id(UUID.randomUUID()).build()));
 
         StepVerifier.create(autoWatchService.watchAssigneeOnAssign(
@@ -92,7 +92,7 @@ class IssueAutoWatchServiceTest {
                 .verifyComplete();
 
         Mockito.verify(issueWatcherExecutor).executeWatch(
-                REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, ASSIGNEE_ID, ACTOR_USER_ID);
+                REQUEST_ID, NODE_ID, issue, ASSIGNEE_ID, ACTOR_USER_ID);
     }
 
     @Test

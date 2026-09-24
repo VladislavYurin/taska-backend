@@ -6,10 +6,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.*;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -43,7 +40,7 @@ public class IssueLinkExecutor {
      * @param requestId     идентификатор запроса
      * @param nodeId        идентификатор узла
      * @param projectId     идентификатор проекта
-     * @param sourceIssueId идентификатор исходной задачи
+     * @param sourceIssue   исходная задача
      * @param targetIssueId идентификатор целевой задачи
      * @param linkType      тип устанавливаемой связи
      * @param actorUserId   идентификатор пользователя, устанавливающего связь
@@ -54,14 +51,14 @@ public class IssueLinkExecutor {
             String requestId,
             String nodeId,
             UUID projectId,
-            UUID sourceIssueId,
+            Issue sourceIssue,
             UUID targetIssueId,
             IssueLinkType linkType,
             UUID actorUserId
     ) {
         var link = IssueLink.builder()
                 .projectId(projectId)
-                .sourceIssueId(sourceIssueId)
+                .sourceIssueId(sourceIssue.getId())
                 .targetIssueId(targetIssueId)
                 .linkType(linkType)
                 .createdBy(actorUserId)
@@ -69,15 +66,19 @@ public class IssueLinkExecutor {
 
         return issueLinkRepository.save(link)
                 .onErrorMap(DuplicateKeyException.class,
-                        ex -> new DomainException(DomainStatus.ALREADY_EXISTS, "Issue link already exists")
-                )
+                        ex -> new DomainException(DomainStatus.ALREADY_EXISTS, "Issue link already exists"))
                 .flatMap(savedLink ->
-                        issueWatcherRepository.findUserIdsByIssueIds(List.of(sourceIssueId, targetIssueId))
+                        issueWatcherRepository.findUserIdsByIssueIds(
+                                        List.of(sourceIssue.getId(), targetIssueId))
                                 .distinct()
                                 .collectList()
                                 .flatMap(watcherIds -> {
                                     var payload = payloadSerializer.createIssueLinkCreatedPayload(
-                                            sourceIssueId, targetIssueId, linkType, actorUserId, watcherIds
+                                            sourceIssue,
+                                            targetIssueId,
+                                            linkType,
+                                            actorUserId,
+                                            watcherIds
                                     );
                                     return issueHistoryService.saveIssueHistory(
                                                     requestId,
@@ -105,7 +106,7 @@ public class IssueLinkExecutor {
                                             ))
                                             .doOnSuccess(__ ->
                                                     log.debug("[{}][{}] Link successfully created: source issue id {} -> target issue id {}, link type {}",
-                                                            requestId, nodeId, sourceIssueId, targetIssueId, linkType)
+                                                            requestId, nodeId, sourceIssue.getId(), targetIssueId, linkType)
                                             )
                                             .thenReturn(savedLink);
                                 })
@@ -126,12 +127,12 @@ public class IssueLinkExecutor {
             String requestId,
             String nodeId,
             UUID linkId,
-            UUID actorUserId
+            UUID actorUserId,
+            Issue sourceIssue
     ) {
         return issueLinkRepository.softDelete(linkId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue link not found or was already deleted: id={}", requestId, nodeId, linkId);
-
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue link not found or was already deleted"));
                 }))
                 .flatMap(deletedLink ->
@@ -140,10 +141,11 @@ public class IssueLinkExecutor {
                                 .collectList()
                                 .flatMap(watcherIds -> {
                                     var payload = payloadSerializer.createIssueLinkDeletedPayload(
-                                            deletedLink.getSourceIssueId(),
+                                            sourceIssue,
                                             deletedLink.getTargetIssueId(),
                                             deletedLink.getLinkType(),
-                                            actorUserId, watcherIds
+                                            actorUserId,
+                                            watcherIds
                                     );
 
                                     return issueHistoryService.saveIssueHistory(
@@ -173,7 +175,8 @@ public class IssueLinkExecutor {
                                             .doOnSuccess(__ ->
                                                     log.debug("[{}][{}] Link successfully deleted: id={}",
                                                             requestId, nodeId, deletedLink.getId()
-                                                    ))
+                                                    )
+                                            )
                                             .thenReturn(deletedLink);
                                 })
                 );

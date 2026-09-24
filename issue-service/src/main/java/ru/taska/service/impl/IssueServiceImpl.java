@@ -201,6 +201,7 @@ public class IssueServiceImpl implements IssueService {
                                         .collectList()
                                         .flatMap(watcherIds -> {
                                             JsonNode payload = payloadSerializer.createIssueAssignedPayload(
+                                                    savedIssue,
                                                     previousAssigneeId,
                                                     assigneeId,
                                                     actorUserId,
@@ -258,12 +259,12 @@ public class IssueServiceImpl implements IssueService {
                                 DomainStatus.INVALID_ARGUMENT,
                                 "Due date: " + startDate + " must be after Start date: " + updatingIssue.getDueDate()
                         );
-                    };
+                    }
 
                     if (updatingIssue.getStartDate() != null && dueDate != null && dueDate.isBefore(updatingIssue.getStartDate())) {
                         log.warn("Due date: [{}] must be after Start date: [{}]", dueDate, updatingIssue.getStartDate());
                         throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Due date: "+ dueDate + " must be after Start date: " + updatingIssue.getStartDate());
-                    };
+                    }
 
 
                     return issueWatcherRepository.findUserIdsByIssueId(issueId)
@@ -325,7 +326,13 @@ public class IssueServiceImpl implements IssueService {
                             .thenReturn(issue);
                 })
                 .flatMap(deletedIssue -> {
-                    JsonNode payload = payloadSerializer.createIssueDeletedPayload(IssueEventType.DELETED, deletedIssue.getDeletedAt(), actorUserId, deletedIssue.getAssigneeId());
+                    JsonNode payload = payloadSerializer.createIssueDeletedPayload(
+                            deletedIssue,
+                            IssueEventType.DELETED,
+                            deletedIssue.getDeletedAt(),
+                            actorUserId,
+                            deletedIssue.getAssigneeId()
+                    );
                     return issueHistoryService.saveIssueHistory(requestId, nodeId, deletedIssue.getId(), actorUserId, IssueEventType.DELETED, payload)
                             .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
                                     deletedIssue.getId(), EventType.ISSUE_DELETED, payload))

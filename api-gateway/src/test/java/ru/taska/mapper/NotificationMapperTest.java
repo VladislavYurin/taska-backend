@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("NotificationMapper Tests")
 class NotificationMapperTest {
 
+    private static final UUID ISSUE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private final NotificationMapper mapper = new NotificationMapper();
 
     @Test
@@ -35,7 +37,9 @@ class NotificationMapperTest {
                 .setNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED)
                 .setTitle("Вас назначили исполнителем")
                 .setBody("Вы назначены исполнителем задачи TASKA-12")
-                .setLink("/projects/TASKA/issues/TASKA-12")
+                .setIssueId(ISSUE_ID.toString())
+                .setIssueKey("TASKA-12")
+                .setProjectId(PROJECT_ID.toString())
                 .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
                 .setReadAt(timestamp("2026-07-06T12:00:00Z"))
                 .setSourceEventId(sourceEventId.toString())
@@ -47,7 +51,9 @@ class NotificationMapperTest {
         assertThat(result.getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
         assertThat(result.getTitle()).isEqualTo("Вас назначили исполнителем");
         assertThat(result.getBody()).isEqualTo("Вы назначены исполнителем задачи TASKA-12");
-        assertThat(result.getLink()).isEqualTo("/projects/TASKA/issues/TASKA-12");
+        assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
+        assertThat(result.getIssueKey()).isEqualTo("TASKA-12");
+        assertThat(result.getProjectId()).isEqualTo(PROJECT_ID);
         assertThat(result.getCreatedAt()).isEqualTo(offsetDateTime("2026-07-06T11:30:00Z"));
         assertThat(result.getReadAt()).isEqualTo(offsetDateTime("2026-07-06T12:00:00Z"));
         assertThat(result.getSourceEventId()).isEqualTo(sourceEventId);
@@ -203,5 +209,18 @@ class NotificationMapperTest {
     void toRestNotificationType_unknownType_returnsString() {
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
                 .isEqualTo("UNSPECIFIED");
+    }
+
+    @Test
+    void parseNullableUuid_shouldReturnNullForInvalidValue() {
+        NotificationResponse source = NotificationResponse.newBuilder()
+                .setId(UUID.randomUUID().toString())
+                .setIssueId("not-a-uuid")
+                .setSourceEventId(UUID.randomUUID().toString())
+                .build();
+
+        NotificationResponseDto dto = mapper.toRestResponse(source);
+
+        assertThat(dto.getIssueId()).isNull();
     }
 }

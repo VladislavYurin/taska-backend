@@ -294,12 +294,12 @@ message NotificationResponse {
   string body = 5;
 
   /**
-   * Ссылка для перехода в UI.
-   *
-   * Например: /projects/ABC/issues/ABC-123
-   * Может быть пустой строкой, если ссылки нет.
+   * Поле link было удалено в TAS-184. Вместо него — структурированные
+   * поля issue_id, issue_key, project_id, из которых клиент сам строит URL.
+   * Номер 6 и имя "link" зарезервированы, чтобы их случайно не переиспользовали
    */
-  string link = 6;
+  reserved 6;
+  reserved "link";
 
   /**
    * Время создания уведомления.
@@ -319,4 +319,23 @@ message NotificationResponse {
    * Например, event id из Kafka.
    */
   string source_event_id = 9;
+
+
+  /**
+   * Идентификатор задачи, к которой относится уведомление.
+   * Пустая строка для не-issue уведомлений (USER_INVITED, MEMBER_ADDED и т.д.).
+   */
+  string issue_id = 10;
+
+  /**
+   * Человекочитаемый ключ задачи (например, ABC-123).
+   * Пустая строка для не-issue уведомлений.
+   */
+  string issue_key = 11;
+
+  /**
+   * Идентификатор проекта задачи.
+   * Пустая строка для не-issue уведомлений.
+   */
+  string project_id = 12;
 }

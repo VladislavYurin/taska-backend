@@ -92,9 +92,20 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                             .thenReturn(projectId);
                 })
                 .flatMap(projectId ->
-                        Mono.defer(() ->
-                                executor.executeLinkCreation(requestId, nodeId, projectId, sourceIssueId, targetIssueId, linkType, actorUserId)
-                        )
+                        issueRepository.findActiveById(sourceIssueId)
+                                .switchIfEmpty(Mono.error(new DomainException(
+                                        DomainStatus.NOT_FOUND, "Source issue not found")))
+                                .flatMap(sourceIssue ->
+                                        Mono.defer(() -> executor.executeLinkCreation(
+                                                requestId,
+                                                nodeId,
+                                                projectId,
+                                                sourceIssue,
+                                                targetIssueId,
+                                                linkType,
+                                                actorUserId
+                                        ))
+                                )
                 );
     }
 
@@ -125,9 +136,18 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                             .thenReturn(link);
                 })
                 .flatMap(link ->
-                        Mono.defer(() ->
-                                executor.executeLinkDeletion(requestId, nodeId, link.getId(), actorUserId)
-                        )
+                        issueRepository.findById(link.getSourceIssueId())
+                                .switchIfEmpty(Mono.error(new DomainException(
+                                        DomainStatus.NOT_FOUND, "Source issue not found")))
+                                .flatMap(sourceIssue ->
+                                        Mono.defer(() -> executor.executeLinkDeletion(
+                                                requestId,
+                                                nodeId,
+                                                link.getId(),
+                                                actorUserId,
+                                                sourceIssue
+                                        ))
+                                )
                 );
     }
 

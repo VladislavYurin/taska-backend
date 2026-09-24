@@ -58,6 +58,8 @@ class NotificationControllerWebTestClientTest {
     private static final String TOKEN = "valid-access-token";
     private static final String REQUEST_ID = "req-notifications";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String ISSUE_ID = "00000000-0000-0000-0000-000000000002";
+    private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000003";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -391,7 +393,9 @@ class NotificationControllerWebTestClientTest {
                 .setNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED)
                 .setTitle("Вас назначили исполнителем")
                 .setBody("Вы назначены исполнителем задачи TASKA-12")
-                .setLink("/projects/TASKA/issues/TASKA-12")
+                .setIssueId(ISSUE_ID)
+                .setIssueKey("TASKA-12")
+                .setProjectId(PROJECT_ID)
                 .setSourceEventId("15cc2395-1a23-4159-ae40-e058a7ab4131")
                 .build();
     }
@@ -403,7 +407,9 @@ class NotificationControllerWebTestClientTest {
         dto.setNotificationType("ISSUE_ASSIGNED");
         dto.setTitle("Вас назначили исполнителем");
         dto.setBody("Вы назначены исполнителем задачи TASKA-12");
-        dto.setLink("/projects/TASKA/issues/TASKA-12");
+        dto.setIssueId(UUID.fromString(ISSUE_ID));
+        dto.setIssueKey("TASKA-12");
+        dto.setProjectId(UUID.fromString(PROJECT_ID));
         dto.setCreatedAt(OffsetDateTime.parse("2026-07-06T11:30:00Z"));
         dto.setReadAt(null);
         dto.setSourceEventId(UUID.fromString("15cc2395-1a23-4159-ae40-e058a7ab4131"));

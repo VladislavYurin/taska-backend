@@ -157,7 +157,6 @@ class GrpcNotificationServiceTest {
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
                 .title("Issue assigned")
                 .body("You have a new issue")
-                .link("/issues/TAS-35")
                 .createdAt(CREATED_AT)
                 .readAt(readAt)
                 .sourceEventId(SOURCE_EVENT_ID)

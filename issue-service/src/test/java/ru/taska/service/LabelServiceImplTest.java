@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
+import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.labels.LabelCommands;
@@ -231,7 +232,7 @@ class LabelServiceImplTest {
         Mockito.when(mapper.toEntity(any(LabelCommands.AddIssueLabelRequestDto.class))).thenReturn(issueLabel);
         Mockito.when(issueLabelsRepository.save(any(IssueLabels.class))).thenReturn(Mono.just(issueLabel));
 
-        Mockito.when(payloadSerializer.createLabelAddedPayload(any(ProjectLabels.class),any(UUID.class), any(UUID.class)))
+        Mockito.when(payloadSerializer.createLabelAddedPayload(any(Issue.class), any(ProjectLabels.class), any(UUID.class)))
                 .thenReturn(mockPayload);
 
         Mockito.when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(), any(), any(), any()))
@@ -435,7 +436,7 @@ class LabelServiceImplTest {
         Mockito.when(issueLabelsRepository.deleteByIssueIdAndLabelId(any(), any()))
                 .thenReturn(Mono.empty());
 
-        Mockito.when(payloadSerializer.createLabelRemovedPayload(any(ProjectLabels.class),any(UUID.class), any(UUID.class)))
+        Mockito.when(payloadSerializer.createLabelRemovedPayload(any(Issue.class), any(ProjectLabels.class), any(UUID.class)))
                 .thenReturn(mockPayload);
         Mockito.when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(), any(), any(), any()))
                 .thenReturn(Mono.empty());
