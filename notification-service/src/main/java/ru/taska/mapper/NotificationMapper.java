@@ -2,16 +2,20 @@ package ru.taska.mapper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.config.props.NotificationProperties;
 import ru.taska.domain.Notification;
+import ru.taska.domain.NotificationListResult;
 import ru.taska.domain.NotificationType;
 import ru.taska.event.TaskaEvent;
 import com.google.protobuf.Timestamp;
 
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -201,6 +205,17 @@ public class NotificationMapper {
         return builder.build();
     }
 
+    public ListNotificationsResponse toListNotificationsResponse(NotificationListResult result) {
+        List<NotificationResponse> protoNotifications = result.notifications().stream()
+                .map(this::toNotificationProto)
+                .toList();
+
+        return ListNotificationsResponse.newBuilder()
+                .addAllNotifications(protoNotifications)
+                    .setUnreadCount(result.unreadCount())
+                .build();
+    }
+
     public Notification toLabelAdded(TaskaEvent event, UUID issueId, UUID userId, String labelName) {
         return Notification.builder()
                 .userId(userId)
@@ -304,6 +319,13 @@ public class NotificationMapper {
                 .link("/issues/" + event.aggregateId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
+                .build();
+    }
+
+    public MarkAllAsReadResponse toMarkAllAsReadResponse(Long count) {
+        return MarkAllAsReadResponse
+                .newBuilder()
+                .setUpdatedCount(count)
                 .build();
     }
 

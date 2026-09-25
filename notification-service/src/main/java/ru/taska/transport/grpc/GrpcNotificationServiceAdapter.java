@@ -6,6 +6,8 @@ import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadRequest;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.MarkAsReadResponse;
 import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
@@ -26,5 +28,11 @@ public class GrpcNotificationServiceAdapter extends ReactorNotificationServiceGr
     public Mono<MarkAsReadResponse> markAsRead(Mono<MarkAsReadRequest> request) {
         return grpcNotificationService.markAsRead(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("markAsRead"));
+    }
+
+    @Override
+    public Mono<MarkAllAsReadResponse> markAllAsRead(Mono<MarkAllAsReadRequest> request) {
+        return grpcNotificationService.markAllAsRead(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("markAllAsRead"));
     }
 }

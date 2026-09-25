@@ -7,22 +7,25 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.NotificationServiceApplication;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.notification.v1.ListNotificationsRequestBody;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
+import ru.taska.api.notification.v1.MarkAllAsReadRequest;
+import ru.taska.api.notification.v1.MarkAllAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadRequestBody;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.Notification;
+import ru.taska.domain.NotificationListResult;
 import ru.taska.domain.NotificationType;
 import ru.taska.service.NotificationInboxService;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @SpringBootTest(
@@ -53,6 +56,8 @@ class GrpcNotificationServiceIntegrationTest {
     private static final int PAGE_SIZE = 20;
     private static final long OFFSET = 0;
 
+    private static final long UNREAD_COUNT = 42L;
+
     @MockitoBean
     private NotificationInboxService notificationInboxService;
 
@@ -62,11 +67,12 @@ class GrpcNotificationServiceIntegrationTest {
     @Test
     void shouldListNotificationsThroughSpringContext() {
         Mockito.when(notificationInboxService.listNotifications(USER_ID, true, PAGE_SIZE, OFFSET))
-                .thenReturn(Flux.just(notification(null)));
+                .thenReturn(Mono.just(new NotificationListResult(List.of(notification(null)), UNREAD_COUNT)));
 
         StepVerifier.create(grpcNotificationService.listNotifications(Mono.just(listRequest(true))))
                 .assertNext(response -> {
                     Assertions.assertEquals(1, response.getNotificationsCount());
+                    Assertions.assertEquals(UNREAD_COUNT, response.getUnreadCount());
 
                     NotificationResponse item = response.getNotifications(0);
 
@@ -121,6 +127,33 @@ class GrpcNotificationServiceIntegrationTest {
         Mockito.verifyNoInteractions(notificationInboxService);
     }
 
+    @Test
+    void shouldMarkAllNotificationsAsReadThroughSpringContext() {
+        Mockito.when(notificationInboxService.markAllAsRead(USER_ID))
+                .thenReturn(Mono.just(3L));
+
+        StepVerifier.create(grpcNotificationService.markAllAsRead(Mono.just(markAllAsReadRequest(
+                        USER_ID.toString()
+                ))))
+                .assertNext(response -> Assertions.assertEquals(3L, response.getUpdatedCount()))
+                .verifyComplete();
+
+        Mockito.verify(notificationInboxService)
+                .markAllAsRead(USER_ID);
+    }
+
+    @Test
+    void shouldReturnInvalidArgumentWhenUserIdIsInvalidOnMarkAllAsRead() {
+        StepVerifier.create(grpcNotificationService.markAllAsRead(Mono.just(markAllAsReadRequest(
+                        "not-a-uuid"
+                ))))
+                .expectErrorMatches(error -> error instanceof StatusRuntimeException statusException
+                        && statusException.getStatus().getCode() == Status.Code.INVALID_ARGUMENT)
+                .verify();
+
+        Mockito.verifyNoInteractions(notificationInboxService);
+    }
+
     private static ListNotificationsRequest listRequest(boolean unreadOnly) {
         return ListNotificationsRequest.newBuilder()
                 .setHeader(header())
@@ -138,6 +171,15 @@ class GrpcNotificationServiceIntegrationTest {
                 .setHeader(header())
                 .setBody(MarkAsReadRequestBody.newBuilder()
                         .setNotificationId(notificationId)
+                        .setUserId(userId)
+                        .build())
+                .build();
+    }
+
+    private static MarkAllAsReadRequest markAllAsReadRequest(String userId) {
+        return MarkAllAsReadRequest.newBuilder()
+                .setHeader(header())
+                .setBody(MarkAllAsReadRequestBody.newBuilder()
                         .setUserId(userId)
                         .build())
                 .build();

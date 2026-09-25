@@ -16,6 +16,8 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.notification.v1.ListNotificationsRequest;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadRequest;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.MarkAsReadRequest;
 import ru.taska.api.notification.v1.MarkAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
@@ -26,6 +28,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.mapper.NotificationMapper;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -71,21 +74,26 @@ public class GrpcNotificationServiceClientTest {
         );
 
         context = new GatewayContext(REQUEST_ID, NODE_ID, userContext);
-        client = new GrpcNotificationServiceClient(notificationServiceStub, properties);
+        // NotificationMapper без зависимостей, поэтому используем настоящий
+        client = new GrpcNotificationServiceClient(notificationServiceStub, properties, new NotificationMapper());
     }
 
     @Test
-    @DisplayName("listNotifications должен собрать request с userId из GatewayContext")
+    @DisplayName("listNotifications должен собрать request с userId из GatewayContext и вернуть REST DTO")
     void listNotifications_validParams_buildsCorrectRequestAndReturnsResponse() {
         ListNotificationsResponse response = ListNotificationsResponse.newBuilder()
                 .addNotifications(notification())
+                .setUnreadCount(5)
                 .build();
 
         Mockito.when(notificationServiceStub.listNotifications(ArgumentMatchers.any(ListNotificationsRequest.class)))
                 .thenReturn(Mono.just(response));
 
         StepVerifier.create(client.listNotifications(context, true, 20, 0L))
-                .assertNext(result -> Assertions.assertThat(result.getNotificationsList()).hasSize(1))
+                .assertNext(result -> {
+                    Assertions.assertThat(result.getItems()).hasSize(1);
+                    Assertions.assertThat(result.getUnreadCount()).isEqualTo(5);
+                })
                 .verifyComplete();
 
         ArgumentCaptor<ListNotificationsRequest> captor = ArgumentCaptor.forClass(ListNotificationsRequest.class);
@@ -112,7 +120,10 @@ public class GrpcNotificationServiceClientTest {
                 .thenReturn(Mono.just(response));
 
         StepVerifier.create(client.listNotifications(context, null, null, null))
-                .assertNext(result -> Assertions.assertThat(result.getNotificationsList()).isEmpty())
+                .assertNext(result -> {
+                    Assertions.assertThat(result.getItems()).isEmpty();
+                    Assertions.assertThat(result.getUnreadCount()).isZero();
+                })
                 .verifyComplete();
 
         ArgumentCaptor<ListNotificationsRequest> captor = ArgumentCaptor.forClass(ListNotificationsRequest.class);
@@ -127,7 +138,7 @@ public class GrpcNotificationServiceClientTest {
     }
 
     @Test
-    @DisplayName("markAsRead должен собрать request с notificationId и userId из GatewayContext")
+    @DisplayName("markAsRead должен собрать request с notificationId и userId из GatewayContext и вернуть REST DTO")
     void markAsRead_validParams_buildsCorrectRequestAndReturnsResponse() {
         String notificationId = UUID.randomUUID().toString();
 
@@ -139,7 +150,7 @@ public class GrpcNotificationServiceClientTest {
                 .thenReturn(Mono.just(response));
 
         StepVerifier.create(client.markAsRead(context, notificationId))
-                .assertNext(result -> Assertions.assertThat(result.getNotification().getId()).isNotBlank())
+                .assertNext(result -> Assertions.assertThat(result.getId()).isNotNull())
                 .verifyComplete();
 
         ArgumentCaptor<MarkAsReadRequest> captor = ArgumentCaptor.forClass(MarkAsReadRequest.class);
@@ -153,6 +164,47 @@ public class GrpcNotificationServiceClientTest {
         Assertions.assertThat(request.getBody().getUserId()).isEqualTo(USER_ID);
 
         Mockito.verify(notificationServiceStub).withDeadlineAfter(5000L, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    @DisplayName("markAllAsRead должен собрать request с userId из GatewayContext и вернуть REST DTO")
+    void markAllAsRead_validParams_buildsCorrectRequestAndReturnsMappedResponse() {
+        MarkAllAsReadResponse response = MarkAllAsReadResponse.newBuilder()
+                .setUpdatedCount(40L)
+                .build();
+
+        Mockito.when(notificationServiceStub.markAllAsRead(ArgumentMatchers.any(MarkAllAsReadRequest.class)))
+                .thenReturn(Mono.just(response));
+
+        StepVerifier.create(client.markAllAsRead(context))
+                .assertNext(result -> Assertions.assertThat(result.getUpdatedCount()).isEqualTo(40L))
+                .verifyComplete();
+
+        ArgumentCaptor<MarkAllAsReadRequest> captor = ArgumentCaptor.forClass(MarkAllAsReadRequest.class);
+        Mockito.verify(notificationServiceStub).markAllAsRead(captor.capture());
+
+        MarkAllAsReadRequest request = captor.getValue();
+
+        Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
+        Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().getUserId()).isEqualTo(USER_ID);
+
+        Mockito.verify(notificationServiceStub).withDeadlineAfter(5000L, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    @DisplayName("markAllAsRead должен вернуть updatedCount = 0, если непрочитанных нет")
+    void markAllAsRead_nothingToMark_returnsZero() {
+        MarkAllAsReadResponse response = MarkAllAsReadResponse.newBuilder()
+                .setUpdatedCount(0L)
+                .build();
+
+        Mockito.when(notificationServiceStub.markAllAsRead(ArgumentMatchers.any(MarkAllAsReadRequest.class)))
+                .thenReturn(Mono.just(response));
+
+        StepVerifier.create(client.markAllAsRead(context))
+                .assertNext(result -> Assertions.assertThat(result.getUpdatedCount()).isEqualTo(0L))
+                .verifyComplete();
     }
 
     @Test
@@ -187,6 +239,24 @@ public class GrpcNotificationServiceClientTest {
                 .expectErrorMatches(error ->
                         error instanceof StatusRuntimeException
                                 && ((StatusRuntimeException) error).getStatus().getCode() == Status.Code.DEADLINE_EXCEEDED
+                )
+                .verify();
+    }
+
+    @Test
+    @DisplayName("markAllAsRead должен пробросить ошибку, если notification-service вернул UNAVAILABLE")
+    void markAllAsRead_downstreamUnavailable_propagatesError() {
+        StatusRuntimeException grpcError = Status.UNAVAILABLE
+                .withDescription("notification-service unavailable")
+                .asRuntimeException();
+
+        Mockito.when(notificationServiceStub.markAllAsRead(ArgumentMatchers.any(MarkAllAsReadRequest.class)))
+                .thenReturn(Mono.error(grpcError));
+
+        StepVerifier.create(client.markAllAsRead(context))
+                .expectErrorMatches(error ->
+                        error instanceof StatusRuntimeException
+                                && ((StatusRuntimeException) error).getStatus().getCode() == Status.Code.UNAVAILABLE
                 )
                 .verify();
     }

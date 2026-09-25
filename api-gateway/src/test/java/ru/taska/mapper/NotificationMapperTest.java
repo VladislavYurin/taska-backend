@@ -7,10 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -26,7 +28,7 @@ class NotificationMapperTest {
 
     @Test
     @DisplayName("Должен корректно маппить уведомление с readAt в REST DTO")
-    void toRestResponse_notificationWithReadAt_mapsAllFields() {
+    void toNotificationResponseDto_notificationWithReadAt_mapsAllFields() {
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
 
@@ -41,7 +43,7 @@ class NotificationMapperTest {
                 .setSourceEventId(sourceEventId.toString())
                 .build();
 
-        NotificationResponseDto result = mapper.toRestResponse(source);
+        NotificationResponseDto result = mapper.toNotificationResponseDto(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
         assertThat(result.getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
@@ -55,7 +57,7 @@ class NotificationMapperTest {
 
     @Test
     @DisplayName("Должен возвращать readAt=null для непрочитанного уведомления")
-    void toRestResponse_unreadNotification_mapsReadAtAsNull() {
+    void toNotificationResponseDto_unreadNotification_mapsReadAtAsNull() {
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
 
@@ -68,7 +70,7 @@ class NotificationMapperTest {
                 .setSourceEventId(sourceEventId.toString())
                 .build();
 
-        NotificationResponseDto result = mapper.toRestResponse(source);
+        NotificationResponseDto result = mapper.toNotificationResponseDto(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
         assertThat(result.getNotificationType()).isEqualTo("ISSUE_CREATED");
@@ -77,21 +79,34 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("Должен маппить список уведомлений в items")
-    void toRestListResponse_mapsNotificationsToItems() {
+    @DisplayName("Должен маппить список уведомлений в items и переносить unreadCount")
+    void toNotificationListResponseDto_mapsNotificationsToItemsAndUnreadCount() {
         NotificationResponse first = notification(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED);
         NotificationResponse second = notification(NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED);
 
         ListNotificationsResponse source = ListNotificationsResponse.newBuilder()
                 .addNotifications(first)
                 .addNotifications(second)
+                .setUnreadCount(2)
                 .build();
 
-        NotificationListResponseDto result = mapper.toRestListResponse(source);
+        NotificationListResponseDto result = mapper.toNotificationListResponseDto(source);
 
         assertThat(result.getItems()).hasSize(2);
         assertThat(result.getItems().get(0).getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
         assertThat(result.getItems().get(1).getNotificationType()).isEqualTo("PROJECT_CREATED");
+        assertThat(result.getUnreadCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Должен вернуть пустой список и нулевой unreadCount, если уведомлений нет")
+    void toNotificationListResponseDto_noNotifications_returnsEmptyItemsAndZeroUnreadCount() {
+        ListNotificationsResponse source = ListNotificationsResponse.newBuilder().build();
+
+        NotificationListResponseDto result = mapper.toNotificationListResponseDto(source);
+
+        assertThat(result.getItems()).isEmpty();
+        assertThat(result.getUnreadCount()).isZero();
     }
 
     @Test
@@ -119,8 +134,96 @@ class NotificationMapperTest {
                 .isEqualTo("MEMBER_UPDATED");
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED))
                 .isEqualTo("MEMBER_REMOVED");
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_ADDED))
+                .isEqualTo("LABEL_ADDED");
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED))
+                .isEqualTo("LABEL_REMOVED");
+    }
+
+    @Test
+    @DisplayName("Должен вернуть имя без префикса для известного, но не замапленного явно notificationType")
+    void toRestNotificationType_unknownNamedType_returnsNameWithoutPrefix() {
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
                 .isEqualTo("UNSPECIFIED");
+    }
+
+    @Test
+    @DisplayName("Должен вернуть UNKNOWN для UNRECOGNIZED notificationType, не выбрасывая исключение")
+    void toRestNotificationType_unrecognizedType_returnsUnknown() {
+        assertThat(mapper.toRestNotificationType(NotificationKind.UNRECOGNIZED))
+                .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("Должен возвращать UNKNOWN для UNRECOGNIZED при маппинге уведомления целиком")
+    void toNotificationResponseDto_unrecognizedType_mapsNotificationTypeAsUnknown() {
+        NotificationResponse source = NotificationResponse.newBuilder()
+                .setId(UUID.randomUUID().toString())
+                .setNotificationTypeValue(9999) // несуществующий номер enum — protobuf вернёт UNRECOGNIZED
+                .setTitle("title")
+                .setBody("body")
+                .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
+                .setSourceEventId(UUID.randomUUID().toString())
+                .build();
+
+        NotificationResponseDto result = mapper.toNotificationResponseDto(source);
+
+        assertThat(result.getNotificationType()).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("Должен маппить MarkAllAsReadResponse в updatedCount")
+    void toReadAllNotificationsResponseDto_mapsUpdatedCount() {
+        MarkAllAsReadResponse source = MarkAllAsReadResponse.newBuilder()
+                .setUpdatedCount(40L)
+                .build();
+
+        ReadAllNotificationsResponseDto result = mapper.toReadAllNotificationsResponseDto(source);
+
+        assertThat(result.getUpdatedCount()).isEqualTo(40L);
+    }
+
+    @Test
+    @DisplayName("Должен вернуть BAD_GATEWAY при некорректном id от notification-service")
+    void toNotificationResponseDto_invalidId_throwsBadGateway() {
+        NotificationResponse source = NotificationResponse.newBuilder()
+                .setId("invalid-uuid")
+                .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
+                .setSourceEventId(UUID.randomUUID().toString())
+                .build();
+
+        Assertions.assertThatThrownBy(() -> mapper.toNotificationResponseDto(source))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> {
+                    ResponseStatusException exception = (ResponseStatusException) error;
+
+                    Assertions.assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                    Assertions.assertThat(exception.getReason())
+                            .isEqualTo("Invalid id received from notification-service");
+                });
+    }
+
+    @Test
+    @DisplayName("Должен вернуть BAD_GATEWAY при некорректном sourceEventId от notification-service")
+    void toNotificationResponseDto_invalidSourceEventId_throwsBadGateway() {
+        NotificationResponse source = NotificationResponse.newBuilder()
+                .setId(UUID.randomUUID().toString())
+                .setNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED)
+                .setTitle("title")
+                .setBody("body")
+                .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
+                .setSourceEventId("invalid-uuid")
+                .build();
+
+        Assertions.assertThatThrownBy(() -> mapper.toNotificationResponseDto(source))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> {
+                    ResponseStatusException exception = (ResponseStatusException) error;
+
+                    Assertions.assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                    Assertions.assertThat(exception.getReason())
+                            .isEqualTo("Invalid sourceEventId received from notification-service");
+                });
     }
 
     private NotificationResponse notification(NotificationKind kind) {
@@ -144,64 +247,5 @@ class NotificationMapperTest {
 
     private OffsetDateTime offsetDateTime(String value) {
         return OffsetDateTime.ofInstant(Instant.parse(value), ZoneOffset.UTC);
-    }
-
-    @Test
-    @DisplayName("Должен вернуть BAD_GATEWAY при некорректном id от notification-service")
-    void toRestResponse_invalidId_throwsBadGateway() {
-        NotificationResponse source = NotificationResponse.newBuilder()
-                .setId("invalid-uuid")
-                .setSourceEventId(UUID.randomUUID().toString())
-                .build();
-
-        Assertions.assertThatThrownBy(() -> mapper.toRestResponse(source))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> {
-                    ResponseStatusException exception =
-                            (ResponseStatusException) error;
-
-                    Assertions.assertThat(exception.getStatusCode())
-                            .isEqualTo(HttpStatus.BAD_GATEWAY);
-
-                    Assertions.assertThat(exception.getReason())
-                            .isEqualTo(
-                                    "Invalid id received from notification-service"
-                            );
-                });
-    }
-
-    @Test
-    @DisplayName("Должен вернуть BAD_GATEWAY при некорректном sourceEventId от notification-service")
-    void toRestResponse_invalidSourceEventId_throwsBadGateway() {
-        NotificationResponse source = NotificationResponse.newBuilder()
-                .setId(UUID.randomUUID().toString())
-                .setNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED)
-                .setTitle("title")
-                .setBody("body")
-                .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
-                .setSourceEventId("invalid-uuid")
-                .build();
-
-        Assertions.assertThatThrownBy(() -> mapper.toRestResponse(source))
-                .isInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> {
-                    ResponseStatusException exception =
-                            (ResponseStatusException) error;
-
-                    Assertions.assertThat(exception.getStatusCode())
-                            .isEqualTo(HttpStatus.BAD_GATEWAY);
-
-                    Assertions.assertThat(exception.getReason())
-                            .isEqualTo(
-                                    "Invalid sourceEventId received from notification-service"
-                            );
-                });
-    }
-
-    @Test
-    @DisplayName("Должен вернуть строку для неизвестного notificationType")
-    void toRestNotificationType_unknownType_returnsString() {
-        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
-                .isEqualTo("UNSPECIFIED");
     }
 }

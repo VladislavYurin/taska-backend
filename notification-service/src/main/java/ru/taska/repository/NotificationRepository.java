@@ -1,5 +1,6 @@
 package ru.taska.repository;
 
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
@@ -21,6 +22,8 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
             """)
     Flux<Notification> findUnreadByUserId(UUID userId, int limit, long offset);
 
+    Mono<Long> countByUserIdAndReadAtIsNull(UUID userId);
+
     @Query("""
             SELECT *
             FROM taska.notifications
@@ -41,14 +44,22 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
             """)
     Mono<Notification> markAsRead(UUID notificationId, UUID userId, Instant readAt);
 
+    @Modifying
+    @Query("""
+            UPDATE taska.notifications
+            SET read_at = :readAt
+            WHERE user_id = :userId AND read_at IS NULL
+            """)
+    Mono<Long> markAllAsRead(UUID userId, Instant readAt);
+
     /**
      * Находит все уведомления, созданные из указанного события.
      * Используется в тестах и при отладке.
      */
     @Query("""
-        SELECT * FROM taska.notifications
-        WHERE source_event_id = :sourceEventId
-        ORDER BY created_at DESC
-        """)
+            SELECT * FROM taska.notifications
+            WHERE source_event_id = :sourceEventId
+            ORDER BY created_at DESC
+            """)
     Flux<Notification> findAllBySourceEventId(UUID sourceEventId);
 }

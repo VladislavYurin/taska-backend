@@ -173,6 +173,28 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/notifications/read-all:
+    post:
+      summary: Отметка всех уведомлений текущего пользователя как прочитанных
+      description: Операция идемпотентна. При повторном вызове статус ресурсов не меняется, а в ответе возвращается updatedCount равный 0.
+      operationId: markAllNotificationsAsRead
+      tags:
+        - notifications
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: Уведомления успешно отмечены как прочитанные
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadAllNotificationsResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects:
     post:
       summary: Создание проекта
@@ -2941,11 +2963,26 @@ components:
       type: object
       required:
         - items
+        - unreadCount
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/NotificationResponseDto'
+        unreadCount:
+          type: integer
+          format: int64
+          description: Общее количество непрочитанных уведомлений пользователя. Рассчитывается по всем уведомлениям, не зависит от пагинации (pageSize/offset) и флага unreadOnly.
+
+    ReadAllNotificationsResponseDto:
+      type: object
+      required:
+        - updatedCount
+      properties:
+        updatedCount:
+          type: integer
+          format: int64
+          description: Количество уведомлений, статус которых был изменен на прочитанный в рамках текущего запроса. При повторном вызове возвращает 0.
 
     NotificationResponseDto:
       type: object
