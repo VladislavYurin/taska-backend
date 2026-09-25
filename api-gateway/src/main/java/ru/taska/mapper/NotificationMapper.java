@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,10 +24,12 @@ import java.util.UUID;
  * Наружу не отдаётся технический gRPC-префикс {@code NOTIFICATION_KIND_}, только
  * frontend-friendly значения {@code notificationType} из OpenAPI контракта.
  */
+@Slf4j
 @Component
 public class NotificationMapper {
 
     private static final String NOTIFICATION_KIND_PREFIX = "NOTIFICATION_KIND_";
+    private static final String UNKNOWN_NOTIFICATION_TYPE = "UNKNOWN";
 
     /**
      * Список уведомлений всегда возвращается в поле {@code items}, даже если он пуст.
@@ -56,7 +59,7 @@ public class NotificationMapper {
         NotificationResponseDto dto = new NotificationResponseDto();
 
         dto.setId(parseUuid(source.getId(), "id"));
-        dto.setNotificationType(toNotificationType(source.getNotificationType()));
+        dto.setNotificationType(toRestNotificationType(source.getNotificationType()));
         dto.setTitle(source.getTitle());
         dto.setBody(source.getBody());
         dto.setLink(source.getLink());
@@ -69,8 +72,14 @@ public class NotificationMapper {
 
     /**
      * Отсекает технический префикс {@code NOTIFICATION_KIND_} у enum-константы.
+     * <p>
+     * Неизвестные и нераспознанные (например, {@code UNRECOGNIZED} — новый kind,
+     * ещё не задеплоенный на стороне gateway) значения не роняют запрос, а
+     * логируются и отдаются как {@value #UNKNOWN_NOTIFICATION_TYPE}, чтобы
+     * появление нового типа уведомления на notification-service не приводило
+     * к 502 на весь список для пользователя.
      */
-    public String toNotificationType(NotificationKind source) {
+    public String toRestNotificationType(NotificationKind source) {
         return switch (source) {
             case NOTIFICATION_KIND_ISSUE_ASSIGNED -> "ISSUE_ASSIGNED";
             case NOTIFICATION_KIND_ISSUE_TRANSITIONED -> "ISSUE_TRANSITIONED";
@@ -85,13 +94,17 @@ public class NotificationMapper {
             case NOTIFICATION_KIND_MEMBER_REMOVED -> "MEMBER_REMOVED";
             case NOTIFICATION_KIND_LABEL_ADDED -> "LABEL_ADDED";
             case NOTIFICATION_KIND_LABEL_REMOVED -> "LABEL_REMOVED";
+            case UNRECOGNIZED -> {
+                log.warn("Received UNRECOGNIZED NotificationKind from notification-service, " +
+                        "gateway proto is likely outdated");
+                yield UNKNOWN_NOTIFICATION_TYPE;
+            }
             default -> {
                 String name = source.name();
-                if (name.startsWith(NOTIFICATION_KIND_PREFIX)) {
-                    yield name.substring(NOTIFICATION_KIND_PREFIX.length());
-                } else {
-                    yield name;
-                }
+                log.warn("Received unmapped NotificationKind={} from notification-service", name);
+                yield name.startsWith(NOTIFICATION_KIND_PREFIX)
+                        ? name.substring(NOTIFICATION_KIND_PREFIX.length())
+                        : name;
             }
         };
     }

@@ -31,7 +31,7 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
         int normalizedPageSize = normalizePageSize(pageSize);
         long normalizedOffset = Math.max(offset, 0);
 
-        Mono<Long> unreadCountMono = notificationRepository.countUnreadByUserId(userId);
+        Mono<Long> unreadCountMono = notificationRepository.countByUserIdAndReadAtIsNull(userId);
 
         Mono<List<Notification>> notificationsMono = unreadOnly
                 ? notificationRepository.findUnreadByUserId(userId, normalizedPageSize, normalizedOffset).collectList()

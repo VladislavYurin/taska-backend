@@ -22,13 +22,7 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
             """)
     Flux<Notification> findUnreadByUserId(UUID userId, int limit, long offset);
 
-    @Query("""
-            SELECT COUNT(*)
-            FROM taska.notifications
-            WHERE user_id = :userId
-              AND read_at IS NULL
-            """)
-    Mono<Long> countUnreadByUserId(UUID userId);
+    Mono<Long> countByUserIdAndReadAtIsNull(UUID userId);
 
     @Query("""
             SELECT *
