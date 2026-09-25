@@ -111,40 +111,64 @@ class NotificationMapperTest {
 
     @Test
     @DisplayName("Должен маппить все notificationType без protobuf prefix")
-    void toNotificationType_mapsAllSupportedTypes() {
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED))
+    void toRestNotificationType_mapsAllSupportedTypes() {
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED))
                 .isEqualTo("ISSUE_ASSIGNED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_TRANSITIONED))
                 .isEqualTo("ISSUE_TRANSITIONED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_CREATED))
                 .isEqualTo("ISSUE_CREATED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_UPDATED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_UPDATED))
                 .isEqualTo("ISSUE_UPDATED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_DELETED))
                 .isEqualTo("ISSUE_DELETED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_USER_INVITED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_USER_INVITED))
                 .isEqualTo("USER_INVITED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_USER_ACTIVATED))
                 .isEqualTo("USER_ACTIVATED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_PROJECT_CREATED))
                 .isEqualTo("PROJECT_CREATED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_ADDED))
                 .isEqualTo("MEMBER_ADDED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_UPDATED))
                 .isEqualTo("MEMBER_UPDATED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_MEMBER_REMOVED))
                 .isEqualTo("MEMBER_REMOVED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_ADDED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_ADDED))
                 .isEqualTo("LABEL_ADDED");
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED))
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED))
                 .isEqualTo("LABEL_REMOVED");
     }
 
     @Test
-    @DisplayName("Должен вернуть строку для неизвестного notificationType")
-    void toNotificationType_unknownType_returnsString() {
-        assertThat(mapper.toNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
+    @DisplayName("Должен вернуть имя без префикса для известного, но не замапленного явно notificationType")
+    void toRestNotificationType_unknownNamedType_returnsNameWithoutPrefix() {
+        assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
                 .isEqualTo("UNSPECIFIED");
+    }
+
+    @Test
+    @DisplayName("Должен вернуть UNKNOWN для UNRECOGNIZED notificationType, не выбрасывая исключение")
+    void toRestNotificationType_unrecognizedType_returnsUnknown() {
+        assertThat(mapper.toRestNotificationType(NotificationKind.UNRECOGNIZED))
+                .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("Должен возвращать UNKNOWN для UNRECOGNIZED при маппинге уведомления целиком")
+    void toNotificationResponseDto_unrecognizedType_mapsNotificationTypeAsUnknown() {
+        NotificationResponse source = NotificationResponse.newBuilder()
+                .setId(UUID.randomUUID().toString())
+                .setNotificationTypeValue(9999) // несуществующий номер enum — protobuf вернёт UNRECOGNIZED
+                .setTitle("title")
+                .setBody("body")
+                .setCreatedAt(timestamp("2026-07-06T11:30:00Z"))
+                .setSourceEventId(UUID.randomUUID().toString())
+                .build();
+
+        NotificationResponseDto result = mapper.toNotificationResponseDto(source);
+
+        assertThat(result.getNotificationType()).isEqualTo("UNKNOWN");
     }
 
     @Test
