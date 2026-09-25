@@ -96,7 +96,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_generatesValidUuidKey() throws Exception {
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
         PresignedUploadResult result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
@@ -107,7 +107,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_generatesDifferentKeyOnEachCall() throws Exception {
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
         PresignedUploadResult result1 = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L).block();
@@ -120,7 +120,7 @@ class S3StorageClientTest {
 
     @Test
     void createPresignedUploadUrl_returnsUrlAndKey() throws Exception {
-        String expectedUrl = "http://minio:9000/test-bucket/key?X-Amz-Signature=abc";
+        String expectedUrl = "http://rustfs:9000/test-bucket/key?X-Amz-Signature=abc";
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
         when(presigned.url()).thenReturn(new URL(expectedUrl));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
@@ -134,7 +134,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_usesConfiguredTtl() throws Exception {
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
 
         ArgumentCaptor<PutObjectPresignRequest> captor = ArgumentCaptor.forClass(PutObjectPresignRequest.class);
         when(s3Presigner.presignPutObject(captor.capture())).thenReturn(presigned);
@@ -149,7 +149,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedDownloadUrl_returnsUrlForExistingObject() throws Exception {
         String objectKey = UUID.randomUUID().toString();
-        String expectedUrl = "http://minio:9000/test-bucket/" + objectKey + "?X-Amz-Signature=abc";
+        String expectedUrl = "http://rustfs:9000/test-bucket/" + objectKey + "?X-Amz-Signature=abc";
 
         when(s3AsyncClient.headObject(any(HeadObjectRequest.class)))
                 .thenReturn(CompletableFuture.completedFuture(HeadObjectResponse.builder().build()));
@@ -177,7 +177,7 @@ class S3StorageClientTest {
         when(s3AsyncClient.headObject(any(HeadObjectRequest.class)))
                 .thenReturn(CompletableFuture.completedFuture(HeadObjectResponse.builder().build()));
         PresignedGetObjectRequest presigned = mock(PresignedGetObjectRequest.class);
-        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
 
         ArgumentCaptor<GetObjectPresignRequest> captor = ArgumentCaptor.forClass(GetObjectPresignRequest.class);
         when(s3Presigner.presignGetObject(captor.capture())).thenReturn(presigned);
@@ -298,7 +298,7 @@ class S3StorageClientTest {
     @Test
     void createPresignedUploadUrl_succeedsWhenFileSizeEqualsLimit() throws Exception {
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
-        when(presigned.url()).thenReturn(new URL("http://minio:9000/test-bucket/key?sig=abc"));
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
         when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
 
         assertThatNoException().isThrownBy(() -> storageClient.createPresignedUploadUrl(
