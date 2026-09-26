@@ -6,12 +6,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 
 import java.net.URI;
 
@@ -27,14 +27,19 @@ public abstract class AbstractIT {
     private static final String STORAGE_SECRET_KEY = "123";
     private static final String STORAGE_REGION = "us-east-1";
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_CONTAINER_VERSION);
+    protected static final PostgreSQLContainer<?> postgres =
+            new PostgreSQLContainer<>(POSTGRES_CONTAINER_VERSION);
 
-    @Container
-    static GenericContainer<?> rustfs = new GenericContainer<>(RUSTFS_CONTAINER_VERSION)
-            .withExposedPorts(9000, 9001)
-            .withEnv("RUSTFS_ACCESS_KEY", STORAGE_ACCESS_KEY)
-            .withEnv("RUSTFS_SECRET_KEY", STORAGE_SECRET_KEY);
+    protected static final GenericContainer<?> rustfs =
+            new GenericContainer<>(RUSTFS_CONTAINER_VERSION)
+                    .withExposedPorts(9000, 9001)
+                    .withEnv("RUSTFS_ACCESS_KEY", STORAGE_ACCESS_KEY)
+                    .withEnv("RUSTFS_SECRET_KEY", STORAGE_SECRET_KEY);
+
+    static {
+        postgres.start();
+        rustfs.start();
+    }
 
     private static String storageEndpoint() {
         return "http://" + rustfs.getHost() + ":" + rustfs.getMappedPort(9000);
@@ -56,7 +61,7 @@ public abstract class AbstractIT {
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
 
-        registry.add("spring.grpc.server.port", () -> "0");
+        registry.add("spring.grpc.server.port", () -> "9090");
 
         // RustFS / storage
         registry.add("storage.endpoint", AbstractIT::storageEndpoint);
@@ -80,7 +85,13 @@ public abstract class AbstractIT {
                 .forcePathStyle(true)
                 .build()) {
 
-            adminClient.createBucket(b -> b.bucket(BUCKET_NAME));
+            // bucket теперь общий для всех IT-классов (контейнер один на весь прогон),
+            // поэтому второй и последующий классы получат "already exists" - это ок.
+            try {
+                adminClient.createBucket(b -> b.bucket(BUCKET_NAME));
+            } catch (BucketAlreadyOwnedByYouException ignored) {
+                // bucket уже создан предыдущим тестовым классом
+            }
         }
     }
 }
