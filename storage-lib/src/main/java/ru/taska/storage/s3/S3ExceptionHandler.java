@@ -11,7 +11,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.util.function.Function;
 
 /**
- * Централизованный обработчик ошибок S3/MinIO.
+ * Централизованный обработчик ошибок S3.
  */
 @Slf4j
 public final class S3ExceptionHandler {

@@ -89,7 +89,7 @@ class S3StorageClientIT extends AbstractIT {
 
     @Test
     void getObject_returnsContentForExistingObject() {
-        byte[] content = "hello from minio".getBytes();
+        byte[] content = "hello from storage".getBytes();
         String objectKey = storageClient.putObject(
                 new ByteArrayInputStream(content), "image/jpeg", content.length).block();
 
