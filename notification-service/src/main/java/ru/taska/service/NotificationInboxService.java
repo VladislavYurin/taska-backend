@@ -39,7 +39,8 @@ public interface NotificationInboxService {
      * @param unreadOnly если {@code true} — вернуть только непрочитанные.
      * @param pageSize   желаемое количество уведомлений на страницу.
      * @param offset     смещение от начала списка.
-     * @return {@link Mono} уведомлений пользователя (возможно пустой).
+     * @return {@link Mono} уведомлений пользователя (возможно пустой),
+     * также кол-во непрочитанных.
      */
     Mono<NotificationListResult> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset);
 
