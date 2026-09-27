@@ -4,14 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Notification;
+import ru.taska.domain.NotificationListResult;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.NotificationRepository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -26,15 +27,18 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
 
     @Override
     @Transactional(readOnly = true)
-    public Flux<Notification> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset) {
+    public Mono<NotificationListResult> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset) {
         int normalizedPageSize = normalizePageSize(pageSize);
         long normalizedOffset = Math.max(offset, 0);
 
-        if (unreadOnly) {
-            return notificationRepository.findUnreadByUserId(userId, normalizedPageSize, normalizedOffset);
-        }
+        Mono<Long> unreadCountMono = notificationRepository.countByUserIdAndReadAtIsNull(userId);
 
-        return notificationRepository.findAllByUserId(userId, normalizedPageSize, normalizedOffset);
+        Mono<List<Notification>> notificationsMono = unreadOnly
+                ? notificationRepository.findUnreadByUserId(userId, normalizedPageSize, normalizedOffset).collectList()
+                : notificationRepository.findAllByUserId(userId, normalizedPageSize, normalizedOffset).collectList();
+
+        return Mono.zip(notificationsMono, unreadCountMono)
+                        .map(tuple -> new NotificationListResult(tuple.getT1(), tuple.getT2()));
     }
 
     @Override
@@ -56,6 +60,14 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
                 ))
                 .doOnError(ex ->
                         log.error("Failed during invocation markAsRead for notification with: id={}, message={}", notificationId, ex.getMessage())
+                );
+    }
+
+    @Override
+    public Mono<Long> markAllAsRead(UUID userId) {
+        return notificationRepository.markAllAsRead(userId, Instant.now())
+                .doOnSuccess(markedCount ->
+                        log.debug("Notifications markAllAsRead successfully: userId={}, markedCount={}", userId, markedCount)
                 );
     }
 

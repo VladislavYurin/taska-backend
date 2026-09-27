@@ -1,14 +1,17 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -16,47 +19,43 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
- * Компонент-маппер для преобразования моделей уведомлений между gRPC и REST слоями API Gateway.
+ * Маппер моделей уведомлений между gRPC и REST слоями API Gateway.
  * <p>
- * Преобразует Protobuf сообщения notification-service в REST DTO, которые возвращаются frontend-клиенту.
- * Также очищает gRPC-специфичные enum-префиксы, например
- * {@code NOTIFICATION_KIND_ISSUE_ASSIGNED} преобразуется в {@code ISSUE_ASSIGNED}.
+ * Наружу не отдаётся технический gRPC-префикс {@code NOTIFICATION_KIND_}, только
+ * frontend-friendly значения {@code notificationType} из OpenAPI контракта.
  */
+@Slf4j
 @Component
 public class NotificationMapper {
 
+    private static final String NOTIFICATION_KIND_PREFIX = "NOTIFICATION_KIND_";
+    private static final String UNKNOWN_NOTIFICATION_TYPE = "UNKNOWN";
+
     /**
-     * Преобразует gRPC ответ со списком уведомлений в REST DTO ответа.
-     * <p>
-     * В REST API список уведомлений всегда возвращается внутри поля {@code items}.
-     * Даже если уведомлений нет, клиент получает пустой список, а не ошибку 404.
-     *
-     * @param source ответ {@link ListNotificationsResponse}, полученный от notification-service
-     * @return заполненный REST DTO {@link NotificationListResponseDto} со списком уведомлений
+     * Список уведомлений всегда возвращается в поле {@code items}, даже если он пуст.
      */
-    public NotificationListResponseDto toRestListResponse(ListNotificationsResponse source) {
+    public NotificationListResponseDto toNotificationListResponseDto(ListNotificationsResponse source) {
         NotificationListResponseDto dto = new NotificationListResponseDto();
 
         dto.setItems(
                 source.getNotificationsList().stream()
-                        .map(this::toRestResponse)
+                        .map(this::toNotificationResponseDto)
                         .toList()
         );
+        dto.setUnreadCount(source.getUnreadCount());
 
         return dto;
     }
 
+    public ReadAllNotificationsResponseDto toReadAllNotificationsResponseDto(MarkAllAsReadResponse source) {
+        return new ReadAllNotificationsResponseDto(source.getUpdatedCount());
+    }
+
     /**
-     * Преобразует одно gRPC уведомление в REST DTO.
-     * <p>
-     * Строковые идентификаторы из Protobuf контракта приводятся к {@link UUID}.
-     * Временные метки Protobuf {@link Timestamp} преобразуются в {@link OffsetDateTime} в UTC.
-     * Для непрочитанных уведомлений поле {@code readAt} остаётся {@code null}.
-     *
-     * @param source gRPC объект {@link NotificationResponse}, полученный от notification-service
-     * @return заполненный REST DTO {@link NotificationResponseDto} для ответа frontend-клиенту
+     * Строковые id из Protobuf контракта приводятся к {@link UUID}, {@code readAt}
+     * для непрочитанного уведомления остаётся {@code null}.
      */
-    public NotificationResponseDto toRestResponse(NotificationResponse source) {
+    public NotificationResponseDto toNotificationResponseDto(NotificationResponse source) {
         NotificationResponseDto dto = new NotificationResponseDto();
 
         dto.setId(parseUuid(source.getId(), "id"));
@@ -72,14 +71,13 @@ public class NotificationMapper {
     }
 
     /**
-     * Преобразует тип уведомления из Protobuf enum в REST string
-     * В случае отсутствия значения в Protobuf enum возвращает
+     * Отсекает технический префикс {@code NOTIFICATION_KIND_} у enum-константы.
      * <p>
-     * REST API не должен отдавать наружу технический gRPC-префикс {@code NOTIFICATION_KIND_},
-     * поэтому значения приводятся к frontend-friendly формату из OpenAPI контракта.
-     *
-     * @param source тип уведомления {@link NotificationKind} из gRPC контракта
-     * @return String - rest представление NotificationType
+     * Неизвестные и нераспознанные (например, {@code UNRECOGNIZED} — новый kind,
+     * ещё не задеплоенный на стороне gateway) значения не роняют запрос, а
+     * логируются и отдаются как {@value #UNKNOWN_NOTIFICATION_TYPE}, чтобы
+     * появление нового типа уведомления на notification-service не приводило
+     * к 502 на весь список для пользователя.
      */
     public String toRestNotificationType(NotificationKind source) {
         return switch (source) {
@@ -96,23 +94,21 @@ public class NotificationMapper {
             case NOTIFICATION_KIND_MEMBER_REMOVED -> "MEMBER_REMOVED";
             case NOTIFICATION_KIND_LABEL_ADDED -> "LABEL_ADDED";
             case NOTIFICATION_KIND_LABEL_REMOVED -> "LABEL_REMOVED";
+            case UNRECOGNIZED -> {
+                log.warn("Received UNRECOGNIZED NotificationKind from notification-service, " +
+                        "gateway proto is likely outdated");
+                yield UNKNOWN_NOTIFICATION_TYPE;
+            }
             default -> {
                 String name = source.name();
-                if (name.startsWith("NOTIFICATION_KIND_")) {
-                    yield name.substring("NOTIFICATION_KIND_".length());
-                } else {
-                    yield name;
-                }
+                log.warn("Received unmapped NotificationKind={} from notification-service", name);
+                yield name.startsWith(NOTIFICATION_KIND_PREFIX)
+                        ? name.substring(NOTIFICATION_KIND_PREFIX.length())
+                        : name;
             }
         };
     }
 
-    /**
-     * Преобразует Protobuf timestamp в {@link OffsetDateTime} с UTC offset.
-     *
-     * @param source временная метка из Protobuf сообщения
-     * @return дата и время в формате UTC для REST ответа
-     */
     private OffsetDateTime toOffsetDateTime(Timestamp source) {
         Instant instant = Instant.ofEpochSecond(source.getSeconds(), source.getNanos());
         return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
@@ -120,17 +116,17 @@ public class NotificationMapper {
 
     private UUID parseUuid(String value, String fieldName) {
         if (value == null || value.isBlank()) {
-            throw invalidDownstreamUuid(fieldName, null);
+            throw invalidDownstreamField(fieldName, null);
         }
 
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException exception) {
-            throw invalidDownstreamUuid(fieldName, exception);
+            throw invalidDownstreamField(fieldName, exception);
         }
     }
 
-    private ResponseStatusException invalidDownstreamUuid(
+    private ResponseStatusException invalidDownstreamField(
             String fieldName,
             Throwable cause
     ) {
