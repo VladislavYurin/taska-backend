@@ -16,6 +16,24 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Фабрика уведомлений: по доменному событию строит список сущностей
+ * {@link Notification}, которые нужно создать.
+ *
+ * <p>Класс инкапсулирует правила маршрутизации: какой тип события каким
+ * получателям порождает уведомления. Для событий с несколькими получателями
+ * (например, задача создана/обновлена/удалена) возвращается несколько
+ * уведомлений, при этом дублирующиеся получатели отсекаются.</p>
+ *
+ * <p>Фабрика не выполняет никаких побочных эффектов: не сохраняет
+ * уведомления в БД и не отправляет email. Сохранение и доставка —
+ * ответственность {@link NotificationEventHandler}.</p>
+ *
+ * <p>Если в payload-е события отсутствуют обязательные поля или они
+ * некорректны, метод логирует предупреждение и возвращает пустой список,
+ * не прерывая обработку события.</p>
+ */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -23,6 +41,19 @@ public class NotificationFactory {
 
     private final NotificationMapper notificationMapper;
 
+    /**
+     * Строит уведомления по доменному событию.
+     *
+     * <p>Неподдерживаемые типы событий пропускаются с логированием
+     * и возвратом пустого списка.</p>
+     *
+     * @param event   доменное событие.
+     * @param eventId идентификатор события (используется как
+     *                {@code sourceEventId} уведомлений для трассировки
+     *                и дедупликации).
+     * @return список уведомлений к созданию; пустой список, если событие
+     *         не предполагает уведомлений или payload некорректен.
+     */
     public List<Notification> create(TaskaEvent event, UUID eventId) {
         JsonNode payload = event.payload();
         EventType type = EventType.fromValue(event.eventType());
@@ -49,6 +80,8 @@ public class NotificationFactory {
             case USER_BLOCKED -> buildUserBlocked(event, payload, eventId);
             case USER_UNBLOCKED -> buildUserUnblocked(event, payload, eventId);
             case ISSUE_COMMENT_CREATED -> buildIssueCommentCreated(event, payload, eventId);
+            case ISSUE_ATTACHMENT_ADDED  -> buildAttachmentAdded(event,payload,eventId);
+            case ISSUE_ATTACHMENT_DELETED -> buildAttachmentDeleted(event,payload,eventId);
             default -> {
                 log.info("Skip unsupported eventType={} eventId={}", event.eventType(), eventId);
                 yield List.of();
@@ -177,6 +210,11 @@ public class NotificationFactory {
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
+        if (sourceIssueId == null) {
+            log.warn("IssueLinkCreated event without sourceIssueId, eventId={}", eventId);
+            return List.of();
+        }
+
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
 
         if (createdBy != null) {
@@ -200,6 +238,11 @@ public class NotificationFactory {
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
+        if (sourceIssueId == null) {
+            log.warn("IssueLinkDeleted event without sourceIssueId, eventId={}", eventId);
+            return List.of();
+        }
+
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
 
         if (deletedBy != null) {
@@ -216,17 +259,17 @@ public class NotificationFactory {
     }
 
     private List<Notification> buildIssueCommentCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID authorUserId = extractUuid(payload, "authorUserId");
+        UUID actorUserId = extractUuid(payload, "actorUserId");
         String body = extractString(payload, "body");
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
-        if (authorUserId == null) {
-            log.warn("CommentCreated event without authorUserId, eventId={}", eventId);
+        if (actorUserId == null) {
+            log.warn("CommentCreated event without actorUserId, eventId={}", eventId);
             return List.of();
         }
 
         Set<UUID> recipients = new LinkedHashSet<>(watcherIds);
-        recipients.remove(authorUserId);
+        recipients.remove(actorUserId);
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
@@ -368,6 +411,45 @@ public class NotificationFactory {
         }
 
         return List.of(notificationMapper.toUserUnblocked(event, userId, reason));
+    }
+
+    private List<Notification> buildAttachmentAdded (TaskaEvent event, JsonNode payload, UUID eventId){
+        UUID actorUserId = extractUuid(payload,"uploadedBy");
+        UUID issueId = extractUuid(payload,"issueId");
+        String fileName = extractString(payload,"fileName");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        if (issueId == null || fileName == null || actorUserId == null) {
+            log.warn("AttachmentAdded event missing required fields, eventId={}", eventId);
+            return List.of();
+        }
+
+        Set<UUID> recipients = resolveRecipients(actorUserId, List.of(), watcherIds);
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toAttachmentAdded(event, userId, issueId, fileName));
+        }
+        return notifications;
+    }
+    private List<Notification> buildAttachmentDeleted (TaskaEvent event, JsonNode payload, UUID eventId){
+        UUID actorUserId = extractUuid(payload,"deletedBy");
+        UUID issueId = extractUuid(payload,"issueId");
+        String fileName = extractString(payload,"fileName");
+        List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
+
+        if (issueId == null || fileName == null || actorUserId == null) {
+            log.warn("AttachmentDeleted event missing required fields, eventId={}", eventId);
+            return List.of();
+        }
+
+        Set<UUID> recipients = resolveRecipients(actorUserId, List.of(), watcherIds);
+
+        List<Notification> notifications = new ArrayList<>(recipients.size());
+        for (UUID userId : recipients) {
+            notifications.add(notificationMapper.toAttachmentDeleted(event, userId, issueId, fileName));
+        }
+        return notifications;
     }
 
     /**

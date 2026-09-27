@@ -307,6 +307,30 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toAttachmentAdded(TaskaEvent event, UUID userId, UUID issueId, String fileName) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_ATTACHMENT_ADDED)
+                .title("Добавлено вложение")
+                .body("К задаче " + issueId + " добавлено вложение \"" + fileName + "\"")
+                .link("/issues/" + issueId)
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toAttachmentDeleted(TaskaEvent event, UUID userId, UUID issueId, String fileName) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_ATTACHMENT_DELETED)
+                .title("Удалено вложение")
+                .body("Из задачи " + issueId + " удалено вложение \"" + fileName + "\"")
+                .link("/issues/" + issueId)
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     private NotificationKind toProtoNotificationKind(NotificationType domain) {
         if (domain == null) {
             return NotificationKind.NOTIFICATION_KIND_UNSPECIFIED;
@@ -333,6 +357,8 @@ public class NotificationMapper {
             case ISSUE_COMMENT_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_CREATED;
             case ISSUE_COMMENT_UPDATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED;
             case ISSUE_COMMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_DELETED;
+            case ISSUE_ATTACHMENT_ADDED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ATTACHMENT_ADDED;
+            case ISSUE_ATTACHMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED;
         };
     }
 

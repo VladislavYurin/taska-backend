@@ -229,7 +229,7 @@ public class PayloadSerializer {
                 node.putNull(NEW_STORY_POINTS);
             }
 
-        };
+        }
 
         if (!Objects.equals(startDate, issue.getStartDate())) {
             if (issue.getStartDate() != null) {
@@ -243,7 +243,7 @@ public class PayloadSerializer {
             } else {
                 node.putNull(NEW_START_DATE);
             }
-        };
+        }
 
         if (!Objects.equals(dueDate, issue.getDueDate())) {
             if (issue.getDueDate() != null) {
@@ -257,7 +257,7 @@ public class PayloadSerializer {
             } else {
                 node.putNull(NEW_DUE_DATE);
             }
-        };
+        }
 
         if (!Objects.equals(originalEstimateMinutes, issue.getOriginalEstimateMinutes())) {
             if (issue.getOriginalEstimateMinutes() != null) {
@@ -271,7 +271,7 @@ public class PayloadSerializer {
             } else {
                 node.putNull(NEW_ORIGINAL_ESTIMATE_MINUTES);
             }
-        };
+        }
 
         if (!Objects .equals(remainingEstimateMinutes, issue.getRemainingEstimateMinutes())) {
             if (issue.getRemainingEstimateMinutes() != null) {
@@ -285,7 +285,7 @@ public class PayloadSerializer {
             } else {
                 node.putNull(NEW_REMAINING_ESTIMATE_MINUTES);
             }
-        };
+        }
         node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
@@ -452,7 +452,7 @@ public class PayloadSerializer {
      * @param attachment сохранённое вложение.
      * @return {@link JsonNode} с метаданными загрузки.
      */
-    public JsonNode createAttachmentUploadedPayload(IssueAttachment attachment) {
+    public JsonNode createAttachmentUploadedPayload(IssueAttachment attachment, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
@@ -463,6 +463,7 @@ public class PayloadSerializer {
         node.put(SIZE_BYTES, attachment.getSizeBytes());
         node.put(CREATED_AT, attachment.getCreatedAt().toString());
 
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 
@@ -473,7 +474,7 @@ public class PayloadSerializer {
      * @param deletedByUserId идентификатор пользователя, выполнившего удаление.
      * @return {@link JsonNode} с метаданными удаления.
      */
-    public JsonNode createAttachmentDeletedPayload(IssueAttachment attachment, UUID deletedByUserId) {
+    public JsonNode createAttachmentDeletedPayload(IssueAttachment attachment, UUID deletedByUserId, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
@@ -482,6 +483,7 @@ public class PayloadSerializer {
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());
 
+        node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
         return node;
     }
 
