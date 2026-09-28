@@ -110,7 +110,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(executor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, ACTOR_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, issue, ACTOR_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(watcher));
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(3L));
 
@@ -123,7 +123,7 @@ class IssueWatcherServiceImplTest {
 
         Mockito.verify(allowedRoles).watchIssueRoles();
         Mockito.verify(executor).executeWatch(
-                REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, ACTOR_USER_ID, ACTOR_USER_ID);
+                REQUEST_ID, NODE_ID, issue, ACTOR_USER_ID, ACTOR_USER_ID);
     }
 
     @Test
@@ -136,7 +136,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, manageRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(executor.executeWatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, TARGET_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, issue, TARGET_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(targetWatcher));
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(1L));
 
@@ -187,7 +187,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, watchRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(executor.executeUnwatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, ACTOR_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, issue, ACTOR_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(true));
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(2L));
 
@@ -207,7 +207,7 @@ class IssueWatcherServiceImplTest {
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, manageRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(executor.executeUnwatch(
-                        REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, TARGET_USER_ID, ACTOR_USER_ID))
+                        REQUEST_ID, NODE_ID, issue, TARGET_USER_ID, ACTOR_USER_ID))
                 .thenReturn(Mono.just(true));
         Mockito.when(issueWatcherRepository.countByIssueId(ISSUE_ID)).thenReturn(Mono.just(0L));
 
@@ -222,7 +222,7 @@ class IssueWatcherServiceImplTest {
         Mockito.verify(allowedRoles).manageWatchersRoles();
         Mockito.verify(allowedRoles, Mockito.never()).watchIssueRoles();
         Mockito.verify(executor).executeUnwatch(
-                REQUEST_ID, NODE_ID, ISSUE_ID, PROJECT_ID, TARGET_USER_ID, ACTOR_USER_ID);
+                REQUEST_ID, NODE_ID, issue, TARGET_USER_ID, ACTOR_USER_ID);
     }
 
     @Test

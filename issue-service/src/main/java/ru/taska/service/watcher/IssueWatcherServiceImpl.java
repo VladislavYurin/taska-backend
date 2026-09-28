@@ -54,7 +54,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                                 .thenReturn(issue)
                 )
                 .flatMap(issue -> Mono.defer(() -> executor.executeWatch(
-                        requestId, nodeId, issueId, issue.getProjectId(), watcherUserId, actorUserId
+                        requestId, nodeId, issue, watcherUserId, actorUserId
                 )))
                 .flatMap(watcher -> issueWatcherRepository.countByIssueId(issueId)
                         .map(count -> new WatchIssueResult(watcher, count))
@@ -76,7 +76,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                                 .thenReturn(issue)
                 )
                 .flatMap(issue -> Mono.defer(() -> executor.executeUnwatch(
-                        requestId, nodeId, issueId, issue.getProjectId(), watcherUserId, actorUserId
+                        requestId, nodeId, issue, watcherUserId, actorUserId
                 )))
                 .flatMap(removed -> issueWatcherRepository.countByIssueId(issueId)
                         .map(count -> new UnwatchIssueResult(removed, count))
