@@ -330,7 +330,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"}",
+          "expr": "max by (version) (app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"} and timestamp(app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"}) > time() - 60)",
           "instant": true,
           "legendFormat": "{{version}}",
           "range": false,
@@ -391,7 +391,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"}",
+          "expr": "app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"} and timestamp(app_info{job=~\"$service\", environment=~\"$environment\", version=~\"$version\"}) > time() - 60",
           "instant": true,
           "legendFormat": "{{commit}}",
           "range": false,
@@ -453,7 +453,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "process_start_time_seconds{environment=~\"$environment\", job=~\"$service\", version=~\"$version\"} * 1000",
+          "expr": "(process_start_time_seconds{environment=~\"$environment\", job=~\"$service\", version=~\"$version\"} and timestamp(process_start_time_seconds{environment=~\"$environment\", job=~\"$service\", version=~\"$version\"}) > time() - 60) * 1000",
           "instant": true,
           "legendFormat": "{{instance}}",
           "range": false,
