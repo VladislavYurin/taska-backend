@@ -148,8 +148,6 @@ services:
     networks:
       - taskanetwork
       - public
-    env_file:
-      - .env
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Монтируем файл конфигурации. (:ro) Режим read-only. Prometheus не сможет случайно испортить ваш файл конфигурации.
       - prometheus_data:/prometheus
