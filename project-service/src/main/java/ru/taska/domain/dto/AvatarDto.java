@@ -1,18 +1,19 @@
 package ru.taska.domain.dto;
 
-import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Value;
+import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
 
+@EqualsAndHashCode(callSuper = true)
 @Value
-@Builder
-public class AvatarDto {
+@SuperBuilder
+public class AvatarDto extends BaseAvatarDto{
     UUID id;
     UUID userId;
     String objectKey;
     String fileName;
     String contentType;
     Long sizeBytes;
-    String downloadUrl;
 }

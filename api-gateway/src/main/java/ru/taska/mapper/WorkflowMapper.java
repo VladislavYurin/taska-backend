@@ -1,5 +1,6 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
@@ -15,7 +16,9 @@ import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.domain.dto.WorkflowTransitionDto;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 
@@ -61,21 +64,6 @@ public class WorkflowMapper {
     }
 
     /**
-     * Преобразует тип задачи REST API в соответствующее
-     * перечисление gRPC-контракта.
-     *
-     * @param issueTypeDto тип задачи из REST API
-     * @return соответствующее значение {@link IssueType}
-     */
-    public IssueType toGrpcIssueType(IssueTypeDto issueTypeDto) {
-        return switch (issueTypeDto) {
-            case TASK -> IssueType.ISSUE_TYPE_TASK;
-            case BUG -> IssueType.ISSUE_TYPE_BUG;
-            case STORY -> IssueType.ISSUE_TYPE_STORY;
-        };
-    }
-
-    /**
      * Преобразует ответ gRPC сервиса Workflow в REST DTO формата ответа.
      *
      * @param workflowResponse полученный от gRPC-сервиса объект {@link WorkflowResponse} с данными структуры процессов
@@ -87,8 +75,8 @@ public class WorkflowMapper {
         dto.setId(UUID.fromString(workflowResponse.getId()));
         dto.setName(workflowResponse.getName());
         dto.setVersion(workflowResponse.getVersion());
-        dto.setCreatedAt(OffsetDateTime.parse(workflowResponse.getCreatedAt()));
-        dto.setUpdatedAt(OffsetDateTime.parse(workflowResponse.getUpdatedAt()));
+        dto.setCreatedAt(toOffsetDateTime(workflowResponse.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(workflowResponse.getUpdatedAt()));
 
         dto.setStatuses(
                 workflowResponse.getStatusesList()
@@ -121,8 +109,8 @@ public class WorkflowMapper {
         dto.setName(status.getName());
         dto.setCategory(toRestStatusCategory(status.getCategory()));
         dto.setSortOrder(status.getSortOrder());
-        dto.setCreatedAt(OffsetDateTime.parse(status.getCreatedAt()));
-        dto.setUpdatedAt(OffsetDateTime.parse(status.getUpdatedAt()));
+        dto.setCreatedAt(toOffsetDateTime(status.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(status.getUpdatedAt()));
 
         return dto;
     }
@@ -161,10 +149,34 @@ public class WorkflowMapper {
         dto.setToStatusId(UUID.fromString(transition.getToStatusId()));
         dto.setName(transition.getName());
         dto.setSortOrder(transition.getSortOrder());
-        dto.setCreatedAt(OffsetDateTime.parse(transition.getCreatedAt()));
-        dto.setUpdatedAt(OffsetDateTime.parse(transition.getUpdatedAt()));
+        dto.setCreatedAt(toOffsetDateTime(transition.getCreatedAt()));
+        dto.setUpdatedAt(toOffsetDateTime(transition.getUpdatedAt()));
 
         return dto;
     }
 
+    /// ================ UTILITY ====================
+
+    public OffsetDateTime toOffsetDateTime(Timestamp timestamp) {
+        if (timestamp == null) {
+            return null;
+        }
+        return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
+                .atOffset(ZoneOffset.UTC);
+    }
+
+    /**
+     * Преобразует тип задачи REST API в соответствующее
+     * перечисление gRPC-контракта.
+     *
+     * @param issueTypeDto тип задачи из REST API
+     * @return соответствующее значение {@link IssueType}
+     */
+    public IssueType toGrpcIssueType(IssueTypeDto issueTypeDto) {
+        return switch (issueTypeDto) {
+            case TASK -> IssueType.ISSUE_TYPE_TASK;
+            case BUG -> IssueType.ISSUE_TYPE_BUG;
+            case STORY -> IssueType.ISSUE_TYPE_STORY;
+        };
+    }
 }
