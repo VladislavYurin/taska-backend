@@ -3,6 +3,7 @@ syntax = "proto3";
 package ru.taska.workflow.v1;
 
 import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.workflow.v1";
@@ -98,12 +99,12 @@ message WorkflowResponse {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 4;
+  google.protobuf.Timestamp created_at = 4;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 5;
+  google.protobuf.Timestamp updated_at = 5;
 
   /**
    * Статусы workflow.
@@ -147,12 +148,12 @@ message WorkflowStatus {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 6;
+  google.protobuf.Timestamp created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 7;
+  google.protobuf.Timestamp updated_at = 7;
 }
 
 message WorkflowTransition {
@@ -185,12 +186,12 @@ message WorkflowTransition {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 6;
+  google.protobuf.Timestamp created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 7;
+  google.protobuf.Timestamp updated_at = 7;
 }
 
 message ValidateTransitionRequest {

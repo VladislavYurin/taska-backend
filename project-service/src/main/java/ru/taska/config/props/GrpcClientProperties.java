@@ -6,7 +6,9 @@ import java.time.Duration;
 
 @ConfigurationProperties("grpc.client")
 public record GrpcClientProperties(
-        ExternalService authService
+        ExternalService authService,
+        ExternalService issueService,
+        ExternalService workFlowService
 ) {
     public record ExternalService(
             String host,
