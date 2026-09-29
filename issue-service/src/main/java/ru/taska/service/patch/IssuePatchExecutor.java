@@ -140,7 +140,7 @@ public class IssuePatchExecutor {
         }
 
         JsonNode payload = payloadSerializer.createIssueAssignedPayload(
-                previousAssigneeId, savedIssue.getAssigneeId(), actorUserId, watcherIds);
+                savedIssue, previousAssigneeId, savedIssue.getAssigneeId(), actorUserId, watcherIds);
 
         return issueHistoryService.saveIssueHistory(requestId, nodeId, savedIssue.getId(),
                         actorUserId, IssueEventType.ASSIGNED, payload)

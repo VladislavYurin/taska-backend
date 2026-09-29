@@ -238,7 +238,7 @@ class IssuePatchExecutorTest {
         Assertions.assertThat(writes).containsExactly(SAVE, OUTBOX_UPDATED, HISTORY_UPDATED);
         Assertions.assertThat(payloads.get(OUTBOX_UPDATED)).isNotEmpty().isSameAs(payloads.get(HISTORY_UPDATED));
         Mockito.verify(payloadSerializer, Mockito.never()).createIssueAssignedPayload(
-                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyList());
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyList());
         Mockito.verifyNoInteractions(issueAutoWatchService);
     }
 
@@ -296,7 +296,7 @@ class IssuePatchExecutorTest {
 
         Assertions.assertThat(writes).containsExactly(SAVE, HISTORY_ASSIGNED, OUTBOX_ASSIGNED, WATCH_ASSIGNEE);
         Mockito.verify(payloadSerializer).createIssueAssignedPayload(
-                previousAssigneeId, newAssigneeId, ACTOR_USER_ID, WATCHER_IDS);
+                savedIssue, previousAssigneeId, newAssigneeId, ACTOR_USER_ID, WATCHER_IDS);
         Assertions.assertThat(payloads.get(HISTORY_ASSIGNED)).isSameAs(payloads.get(OUTBOX_ASSIGNED));
         Mockito.verify(issueAutoWatchService).watchAssigneeOnAssign(REQUEST_ID, NODE_ID, savedIssue, ACTOR_USER_ID);
     }
@@ -374,7 +374,7 @@ class IssuePatchExecutorTest {
 
         Assertions.assertThat(writes).containsExactly(SAVE, OUTBOX_UPDATED);
         Mockito.verify(payloadSerializer, Mockito.never()).createIssueAssignedPayload(
-                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyList());
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.anyList());
         Mockito.verifyNoInteractions(issueAutoWatchService);
     }
 
