@@ -54,6 +54,20 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toIssueUnassigned(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_ASSIGNED)
+                .title("Исполнитель снят с задачи")
+                .body("С задачи " + displayKey(issueInfo) + " снят исполнитель")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toIssueTransitioned(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)

@@ -73,6 +73,8 @@ class NotificationFactoryTest {
         // По умолчанию: любой вызов mapper возвращает Notification с userId из аргумента
         Mockito.lenient().when(notificationMapper.toIssueAssigned(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_ASSIGNED));
+        Mockito.lenient().when(notificationMapper.toIssueUnassigned(any(), any(), any()))
+                .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_ASSIGNED));
         Mockito.lenient().when(notificationMapper.toIssueTransitioned(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_TRANSITIONED));
         Mockito.lenient().when(notificationMapper.toIssueUpdated(any(), any(), any()))
@@ -426,12 +428,27 @@ class NotificationFactoryTest {
         }
 
         @Test
-        @DisplayName("Возвращает пустой список, если assigneeId отсутствует")
-        void shouldReturnEmptyWhenAssigneeMissing() {
+        @DisplayName("Уведомляет наблюдателей, исключая актора, если исполнитель снят (assigneeId = null)")
+        void shouldNotifyWatchersWhenAssigneeRemoved() {
             ObjectNode payload = createBasePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.putNull(FIELD_ASSIGNEE_ID);
-            setWatcherIds(payload, userB);
+            setWatcherIds(payload, userB, userC, actorId);
+
+            List<Notification> result = notificationFactory.create(
+                    event(EventType.ISSUE_ASSIGNED, payload), eventId);
+
+            assertUserIds(result, userB, userC);
+            Mockito.verify(notificationMapper, Mockito.times(2)).toIssueUnassigned(any(), any(), any());
+            Mockito.verify(notificationMapper, Mockito.never()).toIssueAssigned(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("Возвращает пустой список, если assigneeId отсутствует и наблюдателей нет")
+        void shouldReturnEmptyWhenAssigneeRemovedAndNoWatchers() {
+            ObjectNode payload = createBasePayload();
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
+            payload.putNull(FIELD_ASSIGNEE_ID);
 
             List<Notification> result = notificationFactory.create(
                     event(EventType.ISSUE_ASSIGNED, payload), eventId);
