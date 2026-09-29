@@ -19,6 +19,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
@@ -27,8 +28,6 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
-
-import java.util.Map;
 
 /**
  * REST-контроллер для работы с задачами.
@@ -138,7 +137,7 @@ public class IssueController implements IssueApi {
     public Mono<ResponseEntity<IssueResponseDto>> patchIssue(
             String issueId,
             String ifMatch,
-            Mono<Map<String, Object>> request,
+            Mono<PatchIssueRequestDto> request,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->

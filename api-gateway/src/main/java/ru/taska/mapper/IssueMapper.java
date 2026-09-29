@@ -52,6 +52,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -65,7 +66,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -474,13 +474,13 @@ public class IssueMapper {
     /**
      * Создает gRPC запрос для частичного обновления задачи (PATCH).
      *
-     * <p>Семантика JSON Merge Patch: отсутствие ключа в {@code body} — поле не трогать,
-     * {@code body.get(key) == null} — поле явно очищено.</p>
+     * <p>Семантика JSON Merge Patch: поле, отсутствующее в теле, не трогается,
+     * поле, явно переданное как {@code null}, очищается.</p>
      */
     public PatchIssueRequest toPatchIssueRequest(
             String issueId,
             String ifMatchVersion,
-            Map<String, Object> body,
+            PatchIssueRequestDto body,
             GatewayContext context
     ) {
         PatchIssueRequestBody.Builder bodyBuilder = PatchIssueRequestBody.newBuilder()
@@ -488,40 +488,42 @@ public class IssueMapper {
                 .setActorUserId(context.userContext().userId())
                 .setVersion(parseIfMatchVersion(ifMatchVersion));
 
-        if (body.containsKey("summary")) {
-            bodyBuilder.setSummary(requireStringValue(body.get("summary"), "summary"));
+        if (body.getSummary().present()) {
+            bodyBuilder.setSummary(requireNotCleared(body.getSummary().value(), "summary"));
         }
 
-        if (body.containsKey("priority")) {
-            bodyBuilder.setPriority(toGrpcIssuePriority(requireStringValue(body.get("priority"), "priority")));
+        if (body.getPriority().present()) {
+            bodyBuilder.setPriority(toGrpcIssuePriority(requireNotCleared(body.getPriority().value(), "priority")));
         }
 
-        if (body.containsKey("description")) {
-            bodyBuilder.setDescription(toNullableString(body.get("description"), "description"));
+        if (body.getDescription().present()) {
+            bodyBuilder.setDescription(toNullableString(body.getDescription().value()));
         }
 
-        if (body.containsKey("assigneeId")) {
-            bodyBuilder.setAssigneeId(toNullableString(body.get("assigneeId"), "assigneeId"));
+        if (body.getAssigneeId().present()) {
+            bodyBuilder.setAssigneeId(toNullableString(body.getAssigneeId().value()));
         }
 
-        if (body.containsKey("storyPoints")) {
-            bodyBuilder.setStoryPoints(toNullableDouble(body.get("storyPoints")));
+        if (body.getStoryPoints().present()) {
+            bodyBuilder.setStoryPoints(toNullableDouble(body.getStoryPoints().value()));
         }
 
-        if (body.containsKey("startDate")) {
-            bodyBuilder.setStartDate(toNullableString(body.get("startDate"), "startDate"));
+        if (body.getStartDate().present()) {
+            bodyBuilder.setStartDate(toNullableString(body.getStartDate().value()));
         }
 
-        if (body.containsKey("dueDate")) {
-            bodyBuilder.setDueDate(toNullableString(body.get("dueDate"), "dueDate"));
+        if (body.getDueDate().present()) {
+            bodyBuilder.setDueDate(toNullableString(body.getDueDate().value()));
         }
 
-        if (body.containsKey("originalEstimateMinutes")) {
-            bodyBuilder.setOriginalEstimateMinutes(toNullableInt32(body.get("originalEstimateMinutes"), "originalEstimateMinutes"));
+        if (body.getOriginalEstimateMinutes().present()) {
+            bodyBuilder.setOriginalEstimateMinutes(
+                    toNullableMinutes(body.getOriginalEstimateMinutes().value(), "originalEstimateMinutes"));
         }
 
-        if (body.containsKey("remainingEstimateMinutes")) {
-            bodyBuilder.setRemainingEstimateMinutes(toNullableInt32(body.get("remainingEstimateMinutes"), "remainingEstimateMinutes"));
+        if (body.getRemainingEstimateMinutes().present()) {
+            bodyBuilder.setRemainingEstimateMinutes(
+                    toNullableMinutes(body.getRemainingEstimateMinutes().value(), "remainingEstimateMinutes"));
         }
 
         return PatchIssueRequest.newBuilder()
@@ -546,51 +548,39 @@ public class IssueMapper {
         }
     }
 
-    private String requireStringValue(Object raw, String fieldName) {
-        if (raw == null) {
+    private <T> T requireNotCleared(T value, String fieldName) {
+        if (value == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " cannot be cleared");
-        }
-        if (!(raw instanceof String value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a string");
         }
         return value;
     }
 
-    private NullableString toNullableString(Object raw, String fieldName) {
-        if (raw == null) {
+    private NullableString toNullableString(Object value) {
+        if (value == null) {
             return NullableString.newBuilder().setIsNull(true).build();
         }
-        if (!(raw instanceof String value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a string");
-        }
-        return NullableString.newBuilder().setValue(value).build();
+        return NullableString.newBuilder().setValue(value.toString()).build();
     }
 
-    private NullableDouble toNullableDouble(Object raw) {
-        if (raw == null) {
+    private NullableDouble toNullableDouble(Double value) {
+        if (value == null) {
             return NullableDouble.newBuilder().setIsNull(true).build();
         }
-        if (!(raw instanceof Number number)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "storyPoints must be a number");
-        }
-        return NullableDouble.newBuilder().setValue(number.doubleValue()).build();
+        return NullableDouble.newBuilder().setValue(value).build();
     }
 
     /**
      * Оценки времени передаются целым числом минут: дробные, отрицательные и не влезающие в int32
      * значения отклоняются, а не округляются молча.
      */
-    private NullableInt32 toNullableInt32(Object raw, String fieldName) {
+    private NullableInt32 toNullableMinutes(BigDecimal raw, String fieldName) {
         if (raw == null) {
             return NullableInt32.newBuilder().setIsNull(true).build();
         }
-        if (!(raw instanceof Number number)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a number");
-        }
         int value;
         try {
-            value = new BigDecimal(number.toString()).intValueExact();
-        } catch (ArithmeticException | NumberFormatException e) {
+            value = raw.intValueExact();
+        } catch (ArithmeticException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be an integer number of minutes");
         }
         if (value < 0) {

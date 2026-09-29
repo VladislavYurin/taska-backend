@@ -2,6 +2,7 @@ package ru.taska.controller;
 
 import io.grpc.Status;
 import java.time.LocalDate;
+import nullable.NullableField;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -40,6 +42,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
@@ -673,7 +676,7 @@ class IssueControllerTest {
     void patchIssue_shouldPassBodyWithExplicitNulls() {
         mockAuthenticatedUser();
 
-        var capturedBody = new AtomicReference<Map<String, Object>>();
+        var capturedBody = new AtomicReference<PatchIssueRequestDto>();
 
         Mockito.when(issueClient.patchIssue(
                         Mockito.eq(ISSUE_ID),
@@ -681,7 +684,7 @@ class IssueControllerTest {
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)
                 ))
-                .thenAnswer(invocation -> invocation.<Mono<Map<String, Object>>>getArgument(2)
+                .thenAnswer(invocation -> invocation.<Mono<PatchIssueRequestDto>>getArgument(2)
                         .map(body -> {
                             capturedBody.set(body);
                             return ResponseEntity.ok(new IssueResponseDto());
@@ -698,12 +701,45 @@ class IssueControllerTest {
                 .exchange()
                 .expectStatus().isOk();
 
-        Assertions.assertThat(capturedBody.get())
-                .containsEntry("summary", SUMMARY)
-                .containsEntry("description", null)
-                .containsEntry("storyPoints", 3)
-                .doesNotContainKey("assigneeId")
-                .hasSize(3);
+        var body = capturedBody.get();
+        Assertions.assertThat(body.getSummary()).isEqualTo(NullableField.of(SUMMARY));
+        Assertions.assertThat(body.getDescription()).isEqualTo(NullableField.of(null));
+        Assertions.assertThat(body.getStoryPoints()).isEqualTo(NullableField.of(3.0));
+        Assertions.assertThat(body.getAssigneeId().present()).isFalse();
+        Assertions.assertThat(body.getPriority().present()).isFalse();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "{\"priority\": \"URGENT\"}",
+            "{\"dueDate\": \"2026-13-45\"}"
+    })
+    @DisplayName("PATCH: должен вернуть 400 Bad Request, если тело не соответствует схеме PatchIssueRequestDto")
+    void patchIssue_shouldThrowsExceptionAndStatus400_whenBodyDoesNotMatchSchema(String json) {
+        mockAuthenticatedUser();
+
+        // тело десериализуется лениво — при подписке на Mono внутри клиента
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenAnswer(invocation -> invocation.<Mono<PatchIssueRequestDto>>getArgument(2)
+                        .map(body -> ResponseEntity.ok(new IssueResponseDto())));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(json)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
     }
 
     @Test

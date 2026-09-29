@@ -2741,12 +2741,51 @@ components:
       description: |
         Частичное обновление задачи (JSON Merge Patch). Все поля необязательные.
         Отсутствие поля — не изменять. Явный null — очистить значение.
-        Поддерживаемые поля: summary (string, нельзя очистить), description (string|null),
-        priority (string, нельзя очистить), assigneeId (string|null),
-        storyPoints (number|null), startDate (string yyyy-MM-dd|null),
-        dueDate (string yyyy-MM-dd|null), originalEstimateMinutes (integer|null),
-        remainingEstimateMinutes (integer|null).
-      additionalProperties: true
+        summary и priority очищены быть не могут.
+        В коде отображается на собственный класс ru.taska.domain.dto.PatchIssueRequestDto
+        (schemaMappings в openapi-generator), который различает отсутствующее поле и явный null.
+      properties:
+        summary:
+          type: string
+          description: Краткое описание задачи. Не может быть null.
+        description:
+          type: string
+          nullable: true
+          description: Подробное описание задачи
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        assigneeId:
+          type: string
+          nullable: true
+          description: Идентификатор исполнителя
+        storyPoints:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: Оценка сложности задачи в story points
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Первоначальная оценка времени в минутах
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Оставшееся время в минутах
 
     UpdateIssueResponseDto:
       type: object

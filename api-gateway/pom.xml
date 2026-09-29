@@ -136,6 +136,10 @@
                             <generatorName>spring</generatorName>
                             <apiPackage>ru.taska.api</apiPackage>
                             <modelPackage>ru.taska.domain.dto</modelPackage>
+                            <!-- PATCH-тело пишется вручную: сгенерированный класс не отличает отсутствующее поле от явного null -->
+                            <schemaMappings>
+                                <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
+                            </schemaMappings>
                             <configOptions>
                                 <interfaceOnly>true</interfaceOnly>
                                 <reactive>true</reactive>

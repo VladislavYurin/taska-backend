@@ -55,13 +55,13 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @ExtendWith(MockitoExtension.class)
@@ -353,7 +353,8 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC patchIssue и вернуть ответ со статусом 200")
     void patchIssue_shouldCallStubAndReturnOk() {
-        Map<String, Object> restRequest = Map.of("summary", SUMMARY);
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
         var grpcRequest = PatchIssueRequest.getDefaultInstance();
         var grpcIssue = IssueResponse.newBuilder().setId(ISSUE_ID).build();
         var grpcResponse = PatchIssueResponse.newBuilder()
@@ -388,7 +389,8 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вернуть статус 409 и актуальную задачу, если gRPC patchIssue вернул конфликт версий")
     void patchIssue_shouldReturnConflict_whenVersionConflict() {
-        Map<String, Object> restRequest = Map.of("summary", SUMMARY);
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
         var grpcRequest = PatchIssueRequest.getDefaultInstance();
         var grpcIssue = IssueResponse.newBuilder().setId(ISSUE_ID).build();
         var grpcResponse = PatchIssueResponse.newBuilder()
@@ -415,13 +417,18 @@ class GrpcIssueServiceClientTest {
     }
 
     @Test
-    @DisplayName("Должен вызвать gRPC patchIssue с пустой картой полей, если тело запроса пустое")
-    void patchIssue_shouldPassEmptyMap_whenRequestMonoIsEmpty() {
+    @DisplayName("Должен вызвать gRPC patchIssue с пустым DTO (все поля отсутствуют), если тело запроса пустое")
+    void patchIssue_shouldPassEmptyDto_whenRequestMonoIsEmpty() {
         var grpcRequest = PatchIssueRequest.getDefaultInstance();
         var grpcResponse = PatchIssueResponse.getDefaultInstance();
         var restResponse = new IssueResponseDto();
 
-        Mockito.when(issueMapper.toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, Map.of(), context))
+        Mockito.when(issueMapper.toPatchIssueRequest(
+                       Mockito.eq(ISSUE_ID),
+                       Mockito.eq(IF_MATCH_VERSION),
+                       Mockito.any(PatchIssueRequestDto.class),
+                       Mockito.eq(context)
+               ))
                .thenReturn(grpcRequest);
 
         Mockito.when(stub.patchIssue(grpcRequest))
@@ -434,14 +441,18 @@ class GrpcIssueServiceClientTest {
                     .assertNext(response -> Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK))
                     .verifyComplete();
 
+        var bodyCaptor = ArgumentCaptor.forClass(PatchIssueRequestDto.class);
         Mockito.verify(issueMapper, Mockito.times(1))
-               .toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, Map.of(), context);
+               .toPatchIssueRequest(Mockito.eq(ISSUE_ID), Mockito.eq(IF_MATCH_VERSION), bodyCaptor.capture(), Mockito.eq(context));
+        Assertions.assertThat(bodyCaptor.getValue().getSummary().present()).isFalse();
+        Assertions.assertThat(bodyCaptor.getValue().getDescription().present()).isFalse();
     }
 
     @Test
     @DisplayName("Не должен вызывать gRPC patchIssue, если маппер отклонил запрос")
     void patchIssue_shouldNotCallStub_whenMapperThrows() {
-        Map<String, Object> restRequest = Map.of("summary", SUMMARY);
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
         var error = new ResponseStatusException(HttpStatus.BAD_REQUEST, "summary must be a string");
 
         Mockito.when(issueMapper.toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, restRequest, context))
