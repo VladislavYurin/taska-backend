@@ -65,9 +65,6 @@ public class WorkflowProtoMapper {
     }
 
     private Instant parseInstant(Timestamp time) {
-        if (time == null || (time.getSeconds() == 0 && time.getNanos() == 0)) {
-            return null;
-        }
         return Instant.ofEpochSecond(time.getSeconds(), time.getNanos());
     }
 

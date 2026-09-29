@@ -44,11 +44,11 @@ grpc:
       deadlineDuration: ${AUTH_GRPC_DEADLINE:3000ms}
     issue-service:
       host: ${ISSUE_GRPC_HOST:localhost}
-      port: ${ISSUE_GRPC_PORT:9091}
+      port: ${ISSUE_GRPC_PORT:9094}
       deadlineDuration: ${ISSUE_GRPC_DEADLINE:3000ms}
     work-flow-service:
       host: ${WORKFLOW_GRPC_HOST:localhost}
-      port: ${WORKFLOW_GRPC_PORT:9091}
+      port: ${WORKFLOW_GRPC_PORT:9093}
       deadlineDuration: ${WORKFLOW_GRPC_DEADLINE:3000ms}
 
 management:
