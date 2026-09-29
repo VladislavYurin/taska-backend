@@ -193,6 +193,8 @@ public class IssueServiceImpl implements IssueService {
 
                     UUID previousAssigneeId = assignedIssue.getAssigneeId();
                     assignedIssue.setAssigneeId(assigneeId);
+                    assignedIssue.setUpdatedAt(Instant.now());
+                    assignedIssue.setVersion(assignedIssue.getVersion() + 1);
 
                     return issueRepository.save(assignedIssue)
                             .flatMap(savedIssue ->
