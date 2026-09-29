@@ -12,16 +12,10 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.admin.v1.Catalog;
-import ru.taska.api.admin.v1.GetCatalogRequest;
-import ru.taska.api.admin.v1.GetCatalogResponse;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
+import ru.taska.api.admin.v1.*;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
@@ -31,6 +25,7 @@ import ru.taska.mapper.AdminUserManagementMapper;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GrpcAdminServiceClient Tests")
@@ -391,5 +386,165 @@ class GrpcAdminServiceClientTest {
         Assertions.assertThat(request.getBody().hasSort()).isFalse();
         Assertions.assertThat(request.getBody().hasOrder()).isFalse();
         Assertions.assertThat(request.getBody().getFiltersMap()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC listAuditEntries с всеми фильтрами")
+    void shouldListAuditEntriesWithAllFilters() {
+        // given
+        GatewayContext context = createContext();
+        UUID actorUserId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        String createdAtFrom = "2024-01-01T00:00:00Z";
+        String createdAtTo = "2024-12-31T23:59:59Z";
+
+        ListAuditEntriesResponse grpcResponse = ListAuditEntriesResponse.newBuilder().build();
+        ListAuditEntriesResponseDto restResponse = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminServiceStub.listAuditEntries(Mockito.any(ListAuditEntriesRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestListAuditEntriesResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        // when
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+                actorUserId.toString(),
+                "action",
+                "targetService",
+                "targetTable",
+                "targetId",
+                requestId.toString(),
+                createdAtFrom,
+                createdAtTo,
+                2,
+                25,
+                context
+        );
+
+        // then
+        StepVerifier.create(result)
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<ListAuditEntriesRequest> captor = ArgumentCaptor.forClass(ListAuditEntriesRequest.class);
+        Mockito.verify(adminServiceStub).listAuditEntries(captor.capture());
+
+        ListAuditEntriesRequest request = captor.getValue();
+
+        // Проверяем все фильтры
+        Assertions.assertThat(request.getBody().getAction()).isEqualTo("action");
+        Assertions.assertThat(request.getBody().getTargetService()).isEqualTo("targetService");
+        Assertions.assertThat(request.getBody().getTargetTable()).isEqualTo("targetTable");
+        Assertions.assertThat(request.getBody().getTargetId()).isEqualTo("targetId");
+        Assertions.assertThat(request.getBody().getRequestId()).isEqualTo(requestId.toString());
+        Assertions.assertThat(request.getBody().getCreatedAtFrom()).isEqualTo(createdAtFrom);
+        Assertions.assertThat(request.getBody().getCreatedAtTo()).isEqualTo(createdAtTo);
+
+        // Проверяем пагинацию
+        Assertions.assertThat(request.getBody().getPage()).isEqualTo(2);
+        Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(25);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC listAuditEntries с частичными фильтрами (action и targetService)")
+    void shouldListAuditEntriesWithPartialFilters() {
+        GatewayContext context = createContext();
+
+        ListAuditEntriesResponse grpcResponse = ListAuditEntriesResponse.newBuilder().build();
+        ListAuditEntriesResponseDto restResponse = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminServiceStub.listAuditEntries(Mockito.any(ListAuditEntriesRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestListAuditEntriesResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+                null,
+                "UPDATE",
+                "order-service",
+                null,
+                null,
+                null,
+                null,
+                null,
+                3,
+                10,
+                context
+        );
+
+        StepVerifier.create(result)
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<ListAuditEntriesRequest> captor = ArgumentCaptor.forClass(ListAuditEntriesRequest.class);
+        Mockito.verify(adminServiceStub).listAuditEntries(captor.capture());
+
+        ListAuditEntriesRequest request = captor.getValue();
+
+        Assertions.assertThat(request.getBody().hasAction()).isTrue();
+        Assertions.assertThat(request.getBody().getAction()).isEqualTo("UPDATE");
+        Assertions.assertThat(request.getBody().hasTargetService()).isTrue();
+        Assertions.assertThat(request.getBody().getTargetService()).isEqualTo("order-service");
+
+        Assertions.assertThat(request.getBody().hasActorUserId()).isFalse();
+        Assertions.assertThat(request.getBody().hasTargetTable()).isFalse();
+        Assertions.assertThat(request.getBody().hasTargetId()).isFalse();
+        Assertions.assertThat(request.getBody().hasRequestId()).isFalse();
+        Assertions.assertThat(request.getBody().hasCreatedAtFrom()).isFalse();
+        Assertions.assertThat(request.getBody().hasCreatedAtTo()).isFalse();
+
+        Assertions.assertThat(request.getBody().getPage()).isEqualTo(3);
+        Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC listAuditEntries с пустыми фильтрами")
+    void shouldListAuditEntriesWithEmptyFilters() {
+        GatewayContext context = createContext();
+
+        ListAuditEntriesResponse grpcResponse = ListAuditEntriesResponse.newBuilder().build();
+        ListAuditEntriesResponseDto restResponse = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminServiceStub.listAuditEntries(Mockito.any(ListAuditEntriesRequest.class)))
+                .thenReturn(Mono.just(grpcResponse));
+        Mockito.when(mapper.toRestListAuditEntriesResponse(grpcResponse))
+                .thenReturn(restResponse);
+
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20,
+                context
+        );
+
+        StepVerifier.create(result)
+                .expectNext(restResponse)
+                .verifyComplete();
+
+        ArgumentCaptor<ListAuditEntriesRequest> captor = ArgumentCaptor.forClass(ListAuditEntriesRequest.class);
+        Mockito.verify(adminServiceStub).listAuditEntries(captor.capture());
+
+        ListAuditEntriesRequest request = captor.getValue();
+
+        Assertions.assertThat(request.getBody().hasActorUserId()).isFalse();
+        Assertions.assertThat(request.getBody().hasAction()).isFalse();
+        Assertions.assertThat(request.getBody().hasTargetService()).isFalse();
+        Assertions.assertThat(request.getBody().hasTargetTable()).isFalse();
+        Assertions.assertThat(request.getBody().hasTargetId()).isFalse();
+        Assertions.assertThat(request.getBody().hasRequestId()).isFalse();
+        Assertions.assertThat(request.getBody().hasCreatedAtFrom()).isFalse();
+        Assertions.assertThat(request.getBody().hasCreatedAtTo()).isFalse();
+
+        Assertions.assertThat(request.getBody().hasPage()).isTrue();
+        Assertions.assertThat(request.getBody().getPage()).isEqualTo(0);
+        Assertions.assertThat(request.getBody().hasPageSize()).isTrue();
+        Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(20);
     }
 }

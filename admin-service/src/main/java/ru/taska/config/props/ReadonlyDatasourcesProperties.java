@@ -37,4 +37,6 @@ public record ReadonlyDatasourcesProperties(
             @DefaultValue("10") int maxIdleTimeMinutes
     ) {
     }
+
+
 }

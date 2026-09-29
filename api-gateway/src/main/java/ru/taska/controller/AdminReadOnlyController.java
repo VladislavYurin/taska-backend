@@ -7,14 +7,9 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
-import ru.taska.domain.dto.MetadataResponse;
-import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
-import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
-import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.*;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
-import ru.taska.domain.dto.RetryOutboxEventRequestDto;
-import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 
 import java.util.Map;
 import java.util.Set;
@@ -114,9 +109,9 @@ public class AdminReadOnlyController implements AdminApi {
      * Actor context формируется из проверенного GatewayContext и не принимается
      * от REST-клиента.
      *
-     * @param service сервис-владелец outbox
-     * @param eventId идентификатор outbox-события
-     * @param request запрос с обязательной причиной retry
+     * @param service  сервис-владелец outbox
+     * @param eventId  идентификатор outbox-события
+     * @param request  запрос с обязательной причиной retry
      * @param exchange текущий HTTP exchange
      * @return состояние outbox-события после retry
      */
@@ -138,6 +133,37 @@ public class AdminReadOnlyController implements AdminApi {
                                 context
                         ))
                         .map(ResponseEntity::ok)
+        );
+    }
+
+    @Override
+    public Mono<ResponseEntity<ListAuditEntriesResponseDto>> listAuditEntries(
+            Integer page,
+            Integer pageSize,
+            String actorUserId,
+            String action,
+            String targetService,
+            String targetTable,
+            String targetId,
+            String requestId,
+            String createdAtFrom,
+            String createdAtTo,
+            ServerWebExchange exchange) {
+
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.listAuditEntity(
+                        actorUserId,
+                        action,
+                        targetService,
+                        targetTable,
+                        targetId,
+                        requestId,
+                        createdAtFrom,
+                        createdAtTo,
+                        page,
+                        pageSize,
+                        context
+                ).map(ResponseEntity::ok)
         );
     }
 }

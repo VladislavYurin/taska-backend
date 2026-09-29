@@ -28,10 +28,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
-import ru.taska.domain.dto.MetadataResponse;
-import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
-import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
-import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.*;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -496,13 +493,184 @@ class AdminReadOnlyControllerTest {
                 .expectHeader().exists("X-Request-Id");
     }
 
+    // ==================== ТЕСТЫ listEntity ====================
+
+    @Test
+    @DisplayName("listTableRows: должен вернуть ReadOnlyTableRowsResponseDto и статус 200")
+    void list_audit_entity_shouldReturnResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminClient.listAuditEntity(
+                        Mockito.eq("actorUserId"),
+                        Mockito.eq("action"),
+                        Mockito.eq("targetService"),
+                        Mockito.eq("targetTable"),
+                        Mockito.eq("targetId"),
+                        Mockito.eq("requestId"),
+                        Mockito.eq("createdAtFrom"),
+                        Mockito.eq("createdAtTo"),
+                        Mockito.eq(1),
+                        Mockito.eq(20),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/readonly/audit-entries")
+                        .queryParam("actorUserId", "actorUserId")
+                        .queryParam("action", "action")
+                        .queryParam("targetService", "targetService")
+                        .queryParam("targetTable", "targetTable")
+                        .queryParam("targetId", "targetId")
+                        .queryParam("requestId", "requestId")
+                        .queryParam("createdAtFrom", "createdAtFrom")
+                        .queryParam("createdAtTo", "createdAtTo")
+                        .queryParam("created_at", "created_at")
+                        .queryParam("page", 1)
+                        .queryParam("pageSize", 20)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(ListAuditEntriesResponseDto.class).isEqualTo(response);
+    }
+
+    @Test
+    @DisplayName("listAuditEntries: должен передать фильтр actorUserId")
+    void listAuditEntries_shouldPassActorUserIdFilter() {
+        mockAuthenticatedUser();
+
+        var response = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminClient.listAuditEntity(
+                        Mockito.eq("actorUserId"),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(1),
+                        Mockito.eq(20),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/readonly/audit-entries")
+                        .queryParam("actorUserId", "actorUserId")
+                        .queryParam("page", 1)
+                        .queryParam("pageSize", 20)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(ListAuditEntriesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(adminClient).listAuditEntity(
+                Mockito.eq("actorUserId"),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq(1),
+                Mockito.eq(20),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("listAuditEntries: должен передать комбинированные фильтры")
+    void listAuditEntries_shouldPassCombinedFilters() {
+        mockAuthenticatedUser();
+
+        var response = new ListAuditEntriesResponseDto();
+
+        Mockito.when(adminClient.listAuditEntity(
+                        Mockito.eq("actorUserId"),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq("createdAtFrom"),
+                        Mockito.eq("createdAtTo"),
+                        Mockito.eq(1),
+                        Mockito.eq(20),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/readonly/audit-entries")
+                        .queryParam("actorUserId", "actorUserId")
+                        .queryParam("createdAtFrom", "createdAtFrom")
+                        .queryParam("createdAtTo", "createdAtTo")
+                        .queryParam("page", 1)
+                        .queryParam("pageSize", 20)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(ListAuditEntriesResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(adminClient).listAuditEntity(
+                Mockito.eq("actorUserId"),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq("createdAtFrom"),
+                Mockito.eq("createdAtTo"),
+                Mockito.eq(1),
+                Mockito.eq(20),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("listAuditEntries: должен вернуть 404 при ошибке gRPC NOT_FOUND")
+    void listAuditEntries_shouldReturn404_whenGrpcReturnsNotFound() {
+        mockAuthenticatedUser();
+
+        Mockito.when(adminClient.listAuditEntity(
+                        Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found")));
+
+        webTestClient.get()
+                .uri("/api/v1/readonly/audit-entries")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
     // ==================== HELPER METHODS ====================
 
     private static Stream<Arguments> listTableRowsArguments() {
         return Stream.of(
                 Arguments.of(
                         "с параметрами по умолчанию",
-                        (Consumer<UriBuilder>) builder -> {},
+                        (Consumer<UriBuilder>) builder -> {
+                        },
                         0,
                         20,
                         null,

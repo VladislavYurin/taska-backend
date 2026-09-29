@@ -2036,6 +2036,104 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/readonly/audit-entries:
+    get:
+      summary: Получение списка аудит-записей (только для GLOBAL_ADMIN)
+      operationId: listAuditEntries
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-based)
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          description: Page size (1-100)
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: actorUserId
+          in: query
+          description: Фильтр по ID актора
+          required: false
+          schema:
+            type: string
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по типу операции
+        - name: targetService
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по целевому сервису
+        - name: targetTable
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по целевой таблице
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID целевого объекта
+        - name: requestId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID запроса
+        - name: createdAtFrom
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по началу периода
+        - name: createdAtTo
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по концу периода
+      responses:
+        '200':
+          description: Данные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAuditEntriesResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+
   /api/v1/readonly/{service}/{table}/{id}:
     get:
       summary: Получение одной строки таблицы по ID (только для GLOBAL_ADMIN)
@@ -3019,6 +3117,46 @@ components:
           type: object
           additionalProperties: true
           description: Строка таблицы
+
+    ListAuditEntriesResponseDto:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntryDto'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfoDto'
+
+    AuditEntryDto:
+      type: object
+      properties:
+        actorUserId:
+          type: string
+          format: uuid
+        actorLogin:
+          type: string
+        action:
+          type: string
+        targetService:
+          type: string
+        targetTable:
+          type: string
+        targetId:
+          type: string
+        oldValue:
+          type: string  # changed from object to string
+          description: JSON string representation of old value
+        newValue:
+          type: string  # changed from object to string
+          description: JSON string representation of new value
+        reason:
+          type: string
+        requestId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     PaginationInfoDto:
       type: object
