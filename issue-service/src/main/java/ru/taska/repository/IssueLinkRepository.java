@@ -5,6 +5,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueLink;
+import ru.taska.domain.projection.IssueLinkDetail;
 
 import java.util.UUID;
 
@@ -54,4 +55,24 @@ public interface IssueLinkRepository extends ReactiveCrudRepository<IssueLink, U
             RETURNING *
             """)
     Mono<IssueLink> softDelete(UUID id);
+
+    @Query("""
+    SELECT
+        il.*             AS link,
+        other.id         AS target_id,
+        other.issue_key  AS target_issue_key,
+        other.summary    AS target_summary,
+        other.project_id AS target_project_id,
+        other.status_key AS target_status_key
+    FROM taska.issue_links il
+    JOIN taska.issues other
+        ON other.id = CASE
+            WHEN il.source_issue_id = :issueId THEN il.target_issue_id
+            ELSE il.source_issue_id
+        END
+    WHERE (il.source_issue_id = :issueId OR il.target_issue_id = :issueId)
+      AND il.deleted_at IS NULL
+      AND other.deleted_at IS NULL
+    """)
+    Flux<IssueLinkDetail> findIssueLinksWithOtherIssues(UUID issueId);
 }

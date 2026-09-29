@@ -30,6 +30,7 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
@@ -45,13 +46,15 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
-import ru.taska.exception.DomainException;
 import ru.taska.filter.BearerTokenExtractor;
 import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
+import ru.taska.mapper.IssueAttachmentMapper;
 import ru.taska.mapper.IssueMapper;
+import ru.taska.mapper.IssueWatcherMapper;
+import ru.taska.mapper.UserProfileMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
@@ -68,7 +71,10 @@ import java.util.stream.Stream;
         BearerTokenExtractor.class,
         GatewayErrorHandler.class,
         RestErrorMapper.class,
-        IssueMapper.class
+        IssueMapper.class,
+        UserProfileMapper.class,
+        IssueAttachmentMapper.class,
+        IssueWatcherMapper.class
 })
 class IssueControllerTest {
 
@@ -354,13 +360,13 @@ class IssueControllerTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть ответ с телом IssueWithHistoryResponseDto и статусом 200")
+    @DisplayName("Должен вернуть ответ с телом IssueDetailsWithHistoryResponseDto и статусом 200")
     void getIssue_shouldReturnsResponseAndStatus200() {
         mockAuthenticatedUser();
 
-        var response = new IssueWithHistoryResponseDto();
+        var response = new IssueDetailsWithHistoryResponseDto();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
         webTestClient.get()
@@ -369,10 +375,10 @@ class IssueControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().exists("X-Request-Id")
-                .expectBody(IssueWithHistoryResponseDto.class).isEqualTo(response);
+                .expectBody(IssueDetailsWithHistoryResponseDto.class).isEqualTo(response);
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -380,7 +386,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus404_whenIssueNotFound() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Not Found")));
 
         webTestClient.get()
@@ -394,7 +400,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -402,7 +408,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus403_whenPermissionDenied() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied")));
 
         webTestClient.get()
@@ -416,7 +422,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -433,7 +439,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient, Mockito.never())
-                .getIssue(Mockito.any(), Mockito.any());
+                .getIssueDetails(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -441,7 +447,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus503_whenDownstreamUnavailable() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
 
         webTestClient.get()
@@ -457,7 +463,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus504_whenDeadlineExceeded() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
 
         webTestClient.get()

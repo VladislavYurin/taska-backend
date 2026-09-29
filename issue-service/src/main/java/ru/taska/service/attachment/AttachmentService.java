@@ -1,5 +1,6 @@
 package ru.taska.service.attachment;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.AttachmentDownloadUrlDto;
 import ru.taska.domain.AttachmentDto;
@@ -64,7 +65,7 @@ public interface AttachmentService {
      * @param actorUserId идентификатор пользователя, запрашивающего список.
      * @return Mono со списком вложений.
      */
-    Mono<List<AttachmentDto>> listAttachments(
+    Flux<AttachmentDto> listAttachments(
             String requestId,
             String nodeId,
             UUID issueId,

@@ -9,8 +9,6 @@ import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.AssignIssueRequestBody;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueLinkRequestBody;
-import ru.taska.api.issue.v1.CreateIssueRequest;
-import ru.taska.api.issue.v1.CreateIssueRequestBody;
 import ru.taska.api.issue.v1.DeleteIssueLinkBody;
 import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
@@ -25,8 +23,6 @@ import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
-import ru.taska.api.issue.v1.UpdateIssueRequest;
-import ru.taska.api.issue.v1.UpdateIssueRequestBody;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
@@ -35,6 +31,7 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
@@ -64,19 +61,19 @@ public class GrpcIssueServiceClient {
     private final GrpcClientProperties properties;
 
     /**
-     * Получает задачу вместе с историей изменений.
+     * Получает задачу вместе подробными данными и историей изменений.
      *
      * @param issueId идентификатор задачи
      * @param context контекст запроса
      * @return задача с историей изменений
      */
-    public Mono<IssueWithHistoryResponseDto> getIssue(
+    public Mono<IssueDetailsWithHistoryResponseDto> getIssueDetails(
             String issueId,
             GatewayContext context
     ) {
-        log.info("[{}] Calling getIssue", context.requestId());
+        log.info("[{}] Calling getIssueDetails", context.requestId());
 
-        return dynamicStub().getIssue(
+        return dynamicStub().getIssueDetails(
                         GetIssueRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -87,7 +84,7 @@ public class GrpcIssueServiceClient {
                                 )
                                 .build()
                 )
-                .map(issueMapper::toRestIssueWithHistoryResponse);
+                .map(issueMapper::toRestIssueDetailsWithHistoryResponseDto);
     }
 
     /**

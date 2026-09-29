@@ -23,6 +23,16 @@ public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatc
     Flux<IssueWatcher> findByIssueId(UUID issueId, int limit, long offset);
 
     /**
+     * Возвращает подписчиков задачи, отсортированных по дате подписки (сначала новые).
+     */
+    @Query("""
+            SELECT * FROM taska.issue_watchers
+            WHERE issue_id = :issueId
+            ORDER BY created_at DESC
+            """)
+    Flux<IssueWatcher> findByIssueId(UUID issueId);
+
+    /**
      * Проверяет, подписан ли пользователь на задачу.
      */
     @Query("""

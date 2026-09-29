@@ -4,6 +4,7 @@ package ru.taska.issue.v1;
 
 import "v1/common.proto";
 import "google/protobuf/timestamp.proto";
+import "v1/issue-attachment.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.issue.v1";
@@ -16,8 +17,8 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_ASSIGNED = 3;
   ISSUE_EVENT_TYPE_TRANSITIONED = 4;
   ISSUE_EVENT_TYPE_DELETED = 5;
-  ISSUE_LINK_EVENT_TYPE_CREATED = 6;
-  ISSUE_LINK_EVENT_TYPE_DELETED = 7;
+  ISSUE_EVENT_TYPE_LINK_CREATED = 6;
+  ISSUE_EVENT_TYPE_LINK_DELETED = 7;
   ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED = 8;
   ISSUE_EVENT_TYPE_ATTACHMENT_DELETED = 9;
   ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
@@ -72,6 +73,11 @@ service IssueService {
    */
   rpc GetIssue(GetIssueRequest)
       returns (IssueWithHistoryResponse);
+
+  /**
+   * Возвращает подробные данные задачи по идентификатору
+   */
+  rpc GetIssueDetails (GetIssueRequest) returns (GetIssueDetailsResponse);
 
   /**
    * Мягкое удаление задачи.
@@ -1389,6 +1395,11 @@ message IssueLinkResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 8;
+
+  /**
+  * Целевая связанная задача.
+  */
+  optional TargetIssueResponse target = 9;
 }
 
 message DeleteIssueLinkResponse {
@@ -1526,6 +1537,11 @@ message IssueCommentResponse {
    * Версия комментария.
    */
   int32 version = 8;
+
+  /**
+   * Автор комментария
+   */
+  optional ru.taska.common.v1.UserSummaryResponse author = 9;
 }
 
 /**
@@ -1753,6 +1769,16 @@ message IssueWatcherResponse {
    * Идентификатор пользователя, создавшего подписку.
    */
   string created_by = 6;
+
+  /**
+   * Отображаемое имя пользователя.
+   */
+  optional string display_name = 7;
+
+  /**
+   * Ссылка на аватар пользователя.
+   */
+  optional string avatar_url = 8;
 }
 
 /**
@@ -2084,4 +2110,216 @@ message ListIssuesForBoardResponse {
    * Список задач.
    */
   repeated IssueBoardResponse issues = 1;
+}
+
+/**
+ * Агрегированные данные о задаче с историей.
+ */
+message GetIssueDetailsResponse {
+  /**
+   * Детализированная информация о задаче.
+   */
+  IssueDetailsResponse issue = 1;
+
+  /**
+   * История изменений задачи.
+   */
+  repeated IssueHistoryResponse history = 2;
+}
+
+/**
+ * Детализированные данные задачи с агрегированными связями.
+ */
+message IssueDetailsResponse {
+  /**
+   * Уникальный идентификатор задачи (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта (UUID).
+   */
+  string project_id = 2;
+
+  /**
+   * Порядковый номер задачи в проекте.
+   */
+  int64 issue_number = 3;
+
+  /**
+   * Уникальный ключ задачи (например, API-12).
+   */
+  string issue_key = 4;
+
+  /**
+   * Тип задачи (TASK, BUG, EPIC и т.д.).
+   */
+  IssueType issue_type = 5;
+
+  /**
+   * Краткое наименование задачи.
+   */
+  string summary = 6;
+
+  /**
+   * Подробное описание задачи.
+   */
+  optional string description = 7;
+
+  /**
+   * Текущий статус задачи.
+   */
+  string status = 8;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 9;
+
+  /**
+   * Исполнитель задачи.
+   */
+  ru.taska.common.v1.UserSummaryResponse assignee = 10;
+
+  /**
+   * Автор задачи.
+   */
+  ru.taska.common.v1.UserSummaryResponse reporter = 11;
+
+  /**
+   * Идентификатор исполнителя задачи.
+   */
+  optional string assignee_id = 12;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
+  string reporter_id = 13;
+
+  /**
+   * Дата и время создания задачи (ISO-8601 UTC).
+   */
+  google.protobuf.Timestamp created_at = 14;
+
+  /**
+   * Дата и время последнего обновления задачи (ISO-8601 UTC).
+   */
+  google.protobuf.Timestamp updated_at = 15;
+
+  /**
+   * Версия оптимистичной блокировки.
+   */
+  int32 version = 16;
+
+  /**
+   * Метки задачи.
+   */
+  optional ListLabelsResponse labels = 17;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 18;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 19;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 20;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 21;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 22;
+
+  /**
+   * Список наблюдателей задачи.
+   */
+  optional ListIssueWatchersResponse watchers = 23;
+
+  /**
+   * Флаг, отслеживает ли текущий пользователь эту задачу.
+   */
+  bool is_watching = 24;
+
+  /**
+   * Список связанных задач.
+   */
+  optional ListIssueLinksResponse links = 25;
+
+  /**
+   * Список вложений задачи.
+   */
+  optional ru.taska.issue.attachment.v1.ListAttachmentsResponse attachments = 26;
+
+  /**
+   * Общее количество комментариев к задаче.
+   */
+  int64 comment_count = 27;
+}
+
+/**
+ * Метка (тег) задачи.
+ */
+message IssueLabelResponse {
+  /**
+   * Идентификатор метки (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Название метки.
+   */
+  string name = 2;
+
+  /**
+   * Цвет метки в формате HEX.
+   */
+  string color = 3;
+}
+
+message ListLabelsResponse {
+  /**
+   * Список меток, привязанных к задаче.
+   */
+  repeated IssueLabelResponse labels = 1;
+}
+
+/**
+ * Краткая информация о целевой связанной задаче.
+ */
+message TargetIssueResponse {
+  /**
+   * Идентификатор целевой задачи (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Ключ целевой задачи (например, API-7).
+   */
+  string issue_key = 2;
+
+  /**
+   * Название целевой задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Идентификатор проекта целевой задачи (UUID).
+   */
+  string project_id = 4;
+
+  /**
+   * Ключ статуса целевой задачи.
+   */
+  string status_key = 5;
 }

@@ -1,20 +1,21 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
-import java.time.LocalDate;
-import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
+import ru.taska.api.issue.v1.IssueBoardResponse;
+import ru.taska.api.issue.v1.IssueDetailsResponse;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
+import ru.taska.api.issue.v1.IssueLabelResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueLinkType;
 import ru.taska.api.issue.v1.IssuePriority;
@@ -28,14 +29,17 @@ import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
 import ru.taska.api.issue.v1.SearchIssuesResponse;
+import ru.taska.api.issue.v1.TargetIssueResponse;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequestBody;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
-import ru.taska.domain.dto.CreateIssueRequestDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardUserDto;
+import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsResponseDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLabelResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
@@ -49,19 +53,19 @@ import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
+import ru.taska.domain.dto.TargetIssueDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
@@ -70,6 +74,9 @@ import java.util.stream.Collectors;
 public class IssueMapper {
 
     private final ObjectMapper objectMapper;
+    private final UserProfileMapper userProfileMapper;
+    private final IssueAttachmentMapper attachmentMapper;
+    private final IssueWatcherMapper watcherMapper;
 
     public IssueResponseDto toRestIssueResponse(IssueResponse protoDto) {
         var restDto = new IssueResponseDto();
@@ -94,11 +101,11 @@ public class IssueMapper {
         );
 
         // Optional поля:
-        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
-        setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
-        setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
-        setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
-        setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
+        MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        MappingUtils.setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
+        MappingUtils.setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
+        MappingUtils.setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
+        MappingUtils.setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
 
         return restDto;
     }
@@ -143,7 +150,7 @@ public class IssueMapper {
         restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
         restDto.setAssigneeId(protoDto.getAssigneeId());
-        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
 
         return restDto;
     }
@@ -169,11 +176,11 @@ public class IssueMapper {
         restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
 
         // Optional поля:
-        setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
-        setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
-        setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
-        setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
-        setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
+        MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        MappingUtils.setIfPresent(protoDto::hasStartDate, () -> LocalDate.parse(protoDto.getStartDate()), restDto::setStartDate);
+        MappingUtils.setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
+        MappingUtils.setIfPresent(protoDto::hasOriginalEstimateMinutes, protoDto::getOriginalEstimateMinutes, restDto::setOriginalEstimateMinutes);
+        MappingUtils.setIfPresent(protoDto::hasRemainingEstimateMinutes, protoDto::getRemainingEstimateMinutes, restDto::setRemainingEstimateMinutes);
 
         return restDto;
     }
@@ -228,17 +235,16 @@ public class IssueMapper {
         restDto.setCreatedBy(protoDto.getCreatedBy());
         restDto.setCreatedAt(this.toOffsetDateTime(protoDto.getCreatedAt()));
 
+        if (protoDto.hasTarget()) {
+            restDto.target(toTargetIssueDto(protoDto.getTarget()));
+        }
         return restDto;
     }
 
     public ListIssueLinksResponseDto toRestListIssueLinkResponse(ListIssueLinksResponse protoDto) {
         var restDto = new ListIssueLinksResponseDto();
 
-        restDto.setItems(
-                protoDto.getIssueLinksList().stream()
-                        .map(this::toRestIssueLinkResponse)
-                        .toList()
-        );
+        restDto.setItems(toRestIssueLinksResponseList(protoDto));
 
         return restDto;
     }
@@ -322,8 +328,8 @@ public class IssueMapper {
             case ISSUE_EVENT_TYPE_ASSIGNED -> "ASSIGNED";
             case ISSUE_EVENT_TYPE_TRANSITIONED -> "TRANSITIONED";
             case ISSUE_EVENT_TYPE_DELETED -> "DELETED";
-            case ISSUE_LINK_EVENT_TYPE_CREATED -> "LINK_CREATED";
-            case ISSUE_LINK_EVENT_TYPE_DELETED -> "LINK_DELETED";
+            case ISSUE_EVENT_TYPE_LINK_CREATED -> "LINK_CREATED";
+            case ISSUE_EVENT_TYPE_LINK_DELETED -> "LINK_DELETED";
             case ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED -> "ATTACHMENT_UPLOADED";
             case ISSUE_EVENT_TYPE_ATTACHMENT_DELETED -> "ATTACHMENT_DELETED";
             case ISSUE_EVENT_TYPE_COMMENT_CREATED -> "COMMENT_CREATED";
@@ -368,17 +374,17 @@ public class IssueMapper {
                 SearchIssuesRequestBody.newBuilder()
                         .setActorUserId(context.userContext().userId());
 
-        setIfPresent(request.getQuery(), bodyBuilder::setQuery);
-        setIfPresent(request.getProjectId(), bodyBuilder::setProjectId);
-        setIfPresent(request.getStatusKey(), bodyBuilder::setStatusKey);
-        setIfPresent(request.getAssigneeId(), bodyBuilder::setAssigneeId);
-        setIfPresent(request.getReporterId(), bodyBuilder::setReporterId);
+        MappingUtils.setIfPresent(request.getQuery(), bodyBuilder::setQuery);
+        MappingUtils.setIfPresent(request.getProjectId(), bodyBuilder::setProjectId);
+        MappingUtils.setIfPresent(request.getStatusKey(), bodyBuilder::setStatusKey);
+        MappingUtils.setIfPresent(request.getAssigneeId(), bodyBuilder::setAssigneeId);
+        MappingUtils.setIfPresent(request.getReporterId(), bodyBuilder::setReporterId);
 
-        setIfPresent(request.getPriority(),this::toGrpcIssuePriority,bodyBuilder::setPriority);
-        setIfPresent(request.getIssueType(),this::toGrpcIssueType,bodyBuilder::setIssueType);
+        MappingUtils.setIfPresent(request.getPriority(),this::toGrpcIssuePriority,bodyBuilder::setPriority);
+        MappingUtils.setIfPresent(request.getIssueType(),this::toGrpcIssueType,bodyBuilder::setIssueType);
 
-        setIfPresent(request.getPage(), bodyBuilder::setPage);
-        setIfPresent(request.getPageSize(), bodyBuilder::setPageSize);
+        MappingUtils.setIfPresent(request.getPage(), bodyBuilder::setPage);
+        MappingUtils.setIfPresent(request.getPageSize(), bodyBuilder::setPageSize);
 
         return SearchIssuesRequest.newBuilder()
                                   .setHeader(buildGrpcHeader(context))
@@ -421,11 +427,11 @@ public class IssueMapper {
                    .setPriority(toGrpcIssuePriority(request.getPriority()))
                    .setReporterId(context.userContext().userId());
 
-        setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
-        setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
-        setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
-        setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
-        setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
+        MappingUtils.setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
+        MappingUtils.setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
+        MappingUtils.setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
+        MappingUtils.setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
+        MappingUtils.setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
 
         return CreateIssueRequest.newBuilder()
                                  .setHeader(buildGrpcHeader(context))
@@ -449,16 +455,128 @@ public class IssueMapper {
                    .setDescription(request.getDescription())
                    .setPriority(toGrpcIssuePriority(request.getPriority()));
 
-        setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
-        setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
-        setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
-        setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
-        setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
+        MappingUtils.setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
+        MappingUtils.setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
+        MappingUtils.setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
+        MappingUtils.setIfPresent(request.getOriginalEstimateMinutes(), bodyBuilder::setOriginalEstimateMinutes);
+        MappingUtils.setIfPresent(request.getRemainingEstimateMinutes(), bodyBuilder::setRemainingEstimateMinutes);
 
         return UpdateIssueRequest.newBuilder()
                                  .setHeader(buildGrpcHeader(context))
                                  .setBody(bodyBuilder.build())
                                  .build();
+    }
+
+
+
+    public IssueDetailsWithHistoryResponseDto toRestIssueDetailsWithHistoryResponseDto(
+            GetIssueDetailsResponse response
+    ) {
+        if (response == null) {
+            return null;
+        }
+
+        IssueDetailsResponseDto restIssue = new IssueDetailsResponseDto();
+        IssueDetailsResponse protoIssue = response.getIssue();
+
+        restIssue.setId(UUID.fromString(protoIssue.getId()));
+        restIssue.setProjectId(UUID.fromString(protoIssue.getProjectId()));
+        restIssue.setIssueNumber(protoIssue.getIssueNumber());
+        restIssue.setIssueKey(protoIssue.getIssueKey());
+        restIssue.setSummary(protoIssue.getSummary());
+        restIssue.setStatus(protoIssue.getStatus());
+        restIssue.setVersion(protoIssue.getVersion());
+        restIssue.setCommentCount(protoIssue.getCommentCount());
+        restIssue.setIsWatching(protoIssue.getIsWatching());
+        restIssue.reporterId(UUID.fromString(protoIssue.getReporterId()));
+        if (protoIssue.hasAssigneeId()) {
+            restIssue.assigneeId(UUID.fromString(protoIssue.getAssigneeId()));
+        }
+
+        restIssue.setPriority(toIssuePriorityDto(protoIssue.getPriority()));
+        restIssue.setIssueType(toIssueTypeDto(protoIssue.getIssueType()));
+        restIssue.setCreatedAt(MappingUtils.toOffsetDateTime(protoIssue.getCreatedAt()));
+        restIssue.setUpdatedAt(MappingUtils.toOffsetDateTime(protoIssue.getUpdatedAt()));
+
+        MappingUtils.setIfPresent(protoIssue::hasDescription, protoIssue::getDescription, restIssue::setDescription);
+        MappingUtils.setIfPresent(protoIssue::hasStoryPoints, protoIssue::getStoryPoints, restIssue::setStoryPoints);
+        MappingUtils.setIfPresent(protoIssue::hasOriginalEstimateMinutes, protoIssue::getOriginalEstimateMinutes, restIssue::setOriginalEstimateMinutes);
+        MappingUtils.setIfPresent(protoIssue::hasRemainingEstimateMinutes, protoIssue::getRemainingEstimateMinutes, restIssue::setRemainingEstimateMinutes);
+        MappingUtils.setIfPresent(protoIssue::hasStartDate, () -> LocalDate.parse(protoIssue.getStartDate()), restIssue::setStartDate);
+        MappingUtils.setIfPresent(protoIssue::hasDueDate, () -> LocalDate.parse(protoIssue.getDueDate()), restIssue::setDueDate);
+
+        MappingUtils.setIfPresent(protoIssue::hasAssignee, () -> userProfileMapper.toUserSummaryDto(protoIssue.getAssignee()), restIssue::setAssignee);
+        MappingUtils.setIfPresent(protoIssue::hasReporter, () -> userProfileMapper.toUserSummaryDto(protoIssue.getReporter()), restIssue::setReporter);
+
+        if (protoIssue.hasLabels()) {
+            restIssue.setLabels(toIssueLabelListResponse(protoIssue));
+        }
+        if (protoIssue.hasWatchers()) {
+            restIssue.setWatchers(watcherMapper.toRestIssueWatcherResponseList(protoIssue.getWatchers()));
+        }
+        if (protoIssue.hasLinks()) {
+            restIssue.setLinks(toRestIssueLinksResponseList(protoIssue.getLinks()));
+        }
+        if (protoIssue.hasAttachments()) {
+            restIssue.setAttachments(attachmentMapper.toRestIssueAttachmentList(protoIssue.getAttachments()));
+        }
+
+        IssueDetailsWithHistoryResponseDto detailsWithHistoryResponseDto = new IssueDetailsWithHistoryResponseDto();
+        detailsWithHistoryResponseDto.setIssue(restIssue);
+        detailsWithHistoryResponseDto.setHistory(response.getHistoryList().stream().map(this::toRestIssueHistoryResponse).toList());
+        return detailsWithHistoryResponseDto;
+    }
+
+    private @NonNull List<IssueLabelResponseDto> toIssueLabelListResponse(IssueDetailsResponse protoIssue) {
+        return protoIssue.getLabels().getLabelsList().stream().map(this::toIssueLabelResponseDto).toList();
+    }
+
+    private @NonNull List<IssueLinkResponseDto> toRestIssueLinksResponseList(ListIssueLinksResponse protoIssue) {
+        return protoIssue.getIssueLinksList().stream().map(this::toRestIssueLinkResponse).toList();
+    }
+
+    private IssueTypeDto toIssueTypeDto(IssueType issueType) {
+        return switch (issueType) {
+            case ISSUE_TYPE_TASK -> IssueTypeDto.TASK;
+            case ISSUE_TYPE_BUG -> IssueTypeDto.BUG;
+            case ISSUE_TYPE_STORY -> IssueTypeDto.STORY;
+            case ISSUE_TYPE_UNSPECIFIED, UNRECOGNIZED -> null;
+        };
+    }
+
+    private IssuePriorityDto toIssuePriorityDto(IssuePriority priority) {
+        return switch (priority) {
+                case ISSUE_PRIORITY_LOW -> IssuePriorityDto.LOW;
+                case ISSUE_PRIORITY_MEDIUM -> IssuePriorityDto.MEDIUM;
+                case ISSUE_PRIORITY_HIGH -> IssuePriorityDto.HIGH;
+                default -> null;
+        };
+    }
+
+    private IssueLabelResponseDto toIssueLabelResponseDto(IssueLabelResponse proto) {
+        if (proto == null)
+            return null;
+
+        IssueLabelResponseDto dto = new IssueLabelResponseDto();
+        dto.setId(UUID.fromString(proto.getId()));
+        dto.setName(proto.getName());
+        dto.setColor(proto.getColor());
+
+        return dto;
+    }
+
+    private TargetIssueDto toTargetIssueDto(TargetIssueResponse proto) {
+        if (proto == null)
+            return null;
+
+        TargetIssueDto dto = new TargetIssueDto();
+        dto.setId(UUID.fromString(proto.getId()));
+        dto.setProjectId(UUID.fromString(proto.getProjectId()));
+        dto.setIssueKey(proto.getIssueKey());
+        dto.setSummary(proto.getSummary());
+        dto.setStatusKey(proto.getStatusKey());
+
+        return dto;
     }
 
     /**
@@ -485,51 +603,6 @@ public class IssueMapper {
                 .issueType(issueType)
                 .page(page != null ? page : 0)
                 .pageSize(pageSize != null ? pageSize : 20);
-    }
-
-    /**
-     * Устанавливает значение в билдер, если строка не null и не пустая.
-     */
-    private static void setIfPresent(String value, Consumer<String> setter) {
-        if (value != null && !value.isBlank()) {
-            setter.accept(value);
-        }
-    }
-
-    /**
-     * Устанавливает значение в билдер, если объект не null.
-     */
-    private static <T> void setIfPresent(T value, Consumer<T> setter) {
-        if (value != null) {
-            setter.accept(value);
-        }
-    }
-
-    /**
-     * Устанавливает значение с преобразованием, если строка не null и не пустая.
-     */
-    private static <T> void setIfPresent(String value, Function<String, T> converter, Consumer<T> setter) {
-        if (value != null && !value.isBlank()) {
-            setter.accept(converter.apply(value));
-        }
-    }
-
-    /**
-     * Устанавливает значение в билдер, если объект есть в protoDto.
-     */
-    private static  <T> void setIfPresent(BooleanSupplier hasCheck, Supplier<T> getter, Consumer<T> setter) {
-        if (hasCheck.getAsBoolean()) {
-            setter.accept(getter.get());
-        }
-    }
-
-    /**
-     * Устанавливает значение с преобразованием, если объект не null.
-     */
-    private static <T, R> void setIfPresent(T value, Function<T, R> converter, Consumer<R> setter) {
-        if (value != null) {
-            setter.accept(converter.apply(value));
-        }
     }
 
     public Object parsePayload(String payload) {

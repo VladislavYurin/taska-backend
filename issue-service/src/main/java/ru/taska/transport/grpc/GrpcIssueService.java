@@ -4,7 +4,6 @@ import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
 import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
 
 import exception.GrpcExceptionHandler;
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -26,6 +25,7 @@ import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
@@ -50,12 +50,15 @@ import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.exception.DomainException;
+import ru.taska.mapper.IssueDetailsMapper;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
+import ru.taska.service.IssueDetailsService;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
+import ru.taska.transport.grpc.dto.ValidatedIssueRequest;
 import validator.GrpcRequestValidators;
 
 @Slf4j
@@ -69,6 +72,8 @@ public class GrpcIssueService {
     private final IssueMapper issueMapper;
     private final LabelService labelService;
     private final LabelMapper labelMapper;
+    private final IssueDetailsService issueDetailsService;
+    private final IssueDetailsMapper issueDetailsMapper;
 
     @TrackMetrics(counter = "issue-service_create-issue_grpc_counter",
             timer = "issue-service_create-issue_grpc_timer")
@@ -217,6 +222,33 @@ public class GrpcIssueService {
                                     )
                                     .doOnError(logOnError(requestId, nodeId, "getIssue"));
                         }));
+    }
+
+    @TrackMetrics(counter = "issue-service_get-issue-details_grpc_counter",
+            timer = "issue-service_get-issue-details_grpc_timer")
+    public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
+        return request.flatMap(this::handleGetIssueDetails);
+    }
+
+    private Mono<GetIssueDetailsResponse> handleGetIssueDetails(GetIssueRequest req) {
+        return IssueGrpcRequestValidators.validateIssueScopedRequest(
+                        req.getHeader(), req.getBody().getIssueId(), req.getBody().getActorUserId())
+                .doOnError(StatusRuntimeException.class,
+                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getIssueDetails"))
+                .flatMap(this::fetchIssueDetails);
+    }
+
+    private Mono<GetIssueDetailsResponse> fetchIssueDetails(ValidatedIssueRequest validated) {
+        log.info("[{}][{}] getIssueDetails: issueId={}, actorUserId={}",
+                validated.requestId(), validated.nodeId(), validated.issueId(), validated.actorUserId());
+
+        return issueDetailsService.getIssueDetails(
+                        validated.requestId(), validated.nodeId(), validated.issueId(), validated.actorUserId())
+                .map(issueDetailsMapper::toProto)
+                .doOnSuccess(response ->
+                        log.info("[{}][{}] getIssueDetails: successfully found, issueId={}, actorUserId={}",
+                                validated.requestId(), validated.nodeId(), validated.issueId(), validated.actorUserId()))
+                .doOnError(logOnError(validated.requestId(), validated.nodeId(), "getIssueDetails"));
     }
 
     @TrackMetrics(counter = "issue-service_list-issues_grpc_counter",

@@ -8,6 +8,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueComment;
+import ru.taska.domain.dto.IssueCommentWithAuthor;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
@@ -21,13 +22,17 @@ import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.CommentService;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
+import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -44,6 +49,7 @@ public class CommentServiceImpl implements CommentService {
     private final OutboxEventService outboxEventService;
     private final ProjectRoleChecker projectRoleChecker;
     private final ObjectMapper objectMapper;
+    private final GrpcAuthServiceClient authServiceClient;
 
     @Override
     @Transactional
@@ -204,7 +210,7 @@ public class CommentServiceImpl implements CommentService {
     }
 
     @Override
-    public Mono<PageResult<IssueComment>> listComments(
+    public Mono<PageResult<IssueCommentWithAuthor>> listComments(
             String requestId,
             String nodeId,
             UUID issueId,
@@ -232,8 +238,7 @@ public class CommentServiceImpl implements CommentService {
                                 .take(resolvedPageSize)
                                 .collectList()
                 ))
-                .map(t -> new PageResult<>(t.getT2(), t.getT1()))
-                .doOnSuccess(result -> {
+                .flatMap(t -> enrichWithAuthors(t.getT2(), t.getT1(), requestId, nodeId)).doOnSuccess(result -> {
                     assert result != null;
                     log.info("[{}][{}] Found {} comments for issue {}",
                             requestId, nodeId, result.totalCount(), issueId);
@@ -244,6 +249,27 @@ public class CommentServiceImpl implements CommentService {
     }
 
     // ==================== ПРИВАТНЫЕ МЕТОДЫ ====================
+
+    private Mono<PageResult<IssueCommentWithAuthor>> enrichWithAuthors(
+            List<IssueComment> comments, long totalCount, String requestId, String nodeId
+    ) {
+        Set<UUID> authorIds = comments.stream()
+                .map(IssueComment::getAuthorUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        return Mono.just(authorIds)
+                .filter(ids -> !comments.isEmpty() && !ids.isEmpty())
+                .flatMap(ids -> authServiceClient.getUserProfiles(ids, requestId, nodeId))
+                .onErrorReturn(Collections.emptyMap())
+                .map(profiles -> comments.stream()
+                        .map(c -> new IssueCommentWithAuthor(c, profiles.get(c.getAuthorUserId())))
+                        .toList())
+                .switchIfEmpty(Mono.fromSupplier(() -> comments.stream()
+                        .map(c -> new IssueCommentWithAuthor(c, null))
+                        .toList()))
+                .map(dtos -> new PageResult<>(dtos, totalCount));
+    }
 
     /**
      * Проверяет права пользователя в проекте.

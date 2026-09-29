@@ -7,6 +7,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
 import ru.taska.domain.dto.IssueLinkInfoDto;
+import ru.taska.domain.projection.IssueCoreDetails;
 
 import java.util.UUID;
 
@@ -123,4 +124,29 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             String statusKey,
             UUID assigneeId
     );
+
+    /**
+     * Возвращает задачу по её уникальному идентификатору с количеством комментариев.
+     * @param issueId
+     * @return {@link Mono}, содержащий {@link IssueCoreDetails} с данными задачи и числом комментариев
+     */
+    @Query("""
+        SELECT 
+            i.* AS issue, 
+            COALESCE(COUNT(c.id), 0) AS comment_count,
+            COALESCE(
+                EXISTS (
+                    SELECT 1
+                    FROM taska.issue_watchers w
+                    WHERE w.issue_id = i.id
+                      AND w.user_id = :actorUserId
+                ),
+                false
+            ) AS is_watching
+        FROM taska.issues i
+        LEFT JOIN taska.issue_comments c ON c.issue_id = i.id
+        WHERE i.id = :issueId
+        GROUP BY i.id
+    """)
+    Mono<IssueCoreDetails> findIssueCoreDetails(UUID issueId, UUID actorUserId);
 }

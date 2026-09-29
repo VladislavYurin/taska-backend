@@ -11,9 +11,12 @@ import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.dto.UnwatchIssueResult;
+import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.dto.WatchIssueResult;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -56,6 +59,29 @@ public class IssueWatcherMapper {
         return GetIssueWatchStateResponse.newBuilder()
                 .setWatchedByMe(state.watchedByMe())
                 .setWatchersCount((int) state.watchersCount())
+                .build();
+    }
+
+    public IssueWatcherResponse toWatcherProto(IssueWatcher watcher, Map<UUID, UserSummary> profiles) {
+        IssueWatcherResponse.Builder builder = toWatcherProto(watcher).toBuilder();
+
+        UserSummary summary = profiles.get(watcher.getUserId());
+        if (summary != null) {
+            builder.setDisplayName(summary.displayName());
+            if (summary.avatarUrl() != null) {
+                builder.setAvatarUrl(summary.avatarUrl());
+            }
+        } else {
+            builder.setDisplayName("Unknown user");
+        }
+
+        return builder.build();
+    }
+
+    public ListIssueWatchersResponse toListWatchersResponse(List<IssueWatcher> watchers, Map<UUID, UserSummary> profiles) {
+        return ListIssueWatchersResponse.newBuilder()
+                .addAllWatchers(watchers.stream().map(watcher -> toWatcherProto(watcher, profiles)).toList())
+                .setTotalCount(watchers.size())
                 .build();
     }
 
