@@ -59,6 +59,7 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -516,11 +517,11 @@ public class IssueMapper {
         }
 
         if (body.containsKey("originalEstimateMinutes")) {
-            bodyBuilder.setOriginalEstimateMinutes(toNullableInt32(body.get("originalEstimateMinutes")));
+            bodyBuilder.setOriginalEstimateMinutes(toNullableInt32(body.get("originalEstimateMinutes"), "originalEstimateMinutes"));
         }
 
         if (body.containsKey("remainingEstimateMinutes")) {
-            bodyBuilder.setRemainingEstimateMinutes(toNullableInt32(body.get("remainingEstimateMinutes")));
+            bodyBuilder.setRemainingEstimateMinutes(toNullableInt32(body.get("remainingEstimateMinutes"), "remainingEstimateMinutes"));
         }
 
         return PatchIssueRequest.newBuilder()
@@ -575,14 +576,27 @@ public class IssueMapper {
         return NullableDouble.newBuilder().setValue(number.doubleValue()).build();
     }
 
-    private NullableInt32 toNullableInt32(Object raw) {
+    /**
+     * Оценки времени передаются целым числом минут: дробные, отрицательные и не влезающие в int32
+     * значения отклоняются, а не округляются молча.
+     */
+    private NullableInt32 toNullableInt32(Object raw, String fieldName) {
         if (raw == null) {
             return NullableInt32.newBuilder().setIsNull(true).build();
         }
         if (!(raw instanceof Number number)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "estimate fields must be numbers");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be a number");
         }
-        return NullableInt32.newBuilder().setValue(number.intValue()).build();
+        int value;
+        try {
+            value = new BigDecimal(number.toString()).intValueExact();
+        } catch (ArithmeticException | NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be an integer number of minutes");
+        }
+        if (value < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must not be negative");
+        }
+        return NullableInt32.newBuilder().setValue(value).build();
     }
 
     /**

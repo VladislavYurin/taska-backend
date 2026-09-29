@@ -736,11 +736,11 @@ class IssueMapperTest {
     }
 
     @Test
-    @DisplayName("PATCH: должен отбрасывать дробную часть у оценок времени в минутах")
-    void toPatchIssueRequest_shouldTruncateFractionalEstimates() {
+    @DisplayName("PATCH: должен принимать оценки времени, переданные числом с нулевой дробной частью")
+    void toPatchIssueRequest_shouldAcceptWholeFloatingEstimates() {
         Map<String, Object> source = Map.of(
-                "originalEstimateMinutes", 90.9,
-                "remainingEstimateMinutes", 30.1
+                "originalEstimateMinutes", 90.0,
+                "remainingEstimateMinutes", 30L
         );
 
         var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT).getBody();
@@ -1065,7 +1065,11 @@ class IssueMapperTest {
                 Arguments.of("startDate", 20260901),
                 Arguments.of("dueDate", false),
                 Arguments.of("originalEstimateMinutes", "480"),
-                Arguments.of("remainingEstimateMinutes", Map.of())
+                Arguments.of("originalEstimateMinutes", 90.9),
+                Arguments.of("originalEstimateMinutes", -1),
+                Arguments.of("remainingEstimateMinutes", Map.of()),
+                Arguments.of("remainingEstimateMinutes", 30.1),
+                Arguments.of("remainingEstimateMinutes", 3_000_000_000L)
         );
     }
 
