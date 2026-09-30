@@ -71,8 +71,6 @@ public class IssueWatcherMapper {
             if (summary.avatarUrl() != null) {
                 builder.setAvatarUrl(summary.avatarUrl());
             }
-        } else {
-            builder.setDisplayName("Unknown user");
         }
 
         return builder.build();

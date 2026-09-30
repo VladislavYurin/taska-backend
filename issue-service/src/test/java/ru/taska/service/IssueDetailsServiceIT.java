@@ -158,6 +158,24 @@ public class IssueDetailsServiceIT extends AbstractIT {
     }
 
     @Test
+    @DisplayName("Корректно считает commentCount при наличии удаленных комментариев")
+    void shouldCountCommentsCorrectlyWhenCommentsWasDeleted() {
+        IssueComment comment = insertComment(UUID.randomUUID());
+        insertComment(UUID.randomUUID());
+        insertComment(UUID.randomUUID());
+
+        comment.setDeletedAt(Instant.now());
+        issueCommentRepository.save(comment).block();
+
+        Mono<IssueDetailsAggregate> result =
+                issueDetailsService.getIssueDetails(REQUEST_ID, NODE_ID, issueId, actorUserId);
+
+        StepVerifier.create(result)
+                .assertNext(aggregate -> Assertions.assertEquals(2L, aggregate.issueCore().commentCount()))
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("Корректно определяет isWatching=true, если актор в числе наблюдателей задачи")
     void shouldReportIsWatchingTrueWhenActorIsWatcher() {
         insertWatcher(actorUserId);
@@ -261,15 +279,16 @@ public class IssueDetailsServiceIT extends AbstractIT {
         return issueRepository.save(issue).block();
     }
 
-    private void insertComment(UUID authorId) {
+    private IssueComment insertComment(UUID authorId) {
         IssueComment issueComment = IssueComment.builder()
                 .issueId(issueId)
                 .authorUserId(authorId)
                 .body("Test comment")
                 .projectId(projectId)
                 .createdAt(Instant.now())
+                .version(1)
                 .build();
-        issueCommentRepository.save(issueComment).block();
+        return issueCommentRepository.save(issueComment).block();
     }
 
     private void insertWatcher(UUID userId) {

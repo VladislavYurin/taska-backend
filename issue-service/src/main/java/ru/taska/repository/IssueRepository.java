@@ -133,18 +133,15 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
     @Query("""
         SELECT 
             i.* AS issue, 
-            COALESCE(COUNT(c.id), 0) AS comment_count,
-            COALESCE(
-                EXISTS (
+            COUNT(c.id) AS comment_count,
+            EXISTS (
                     SELECT 1
                     FROM taska.issue_watchers w
                     WHERE w.issue_id = i.id
                       AND w.user_id = :actorUserId
-                ),
-                false
-            ) AS is_watching
+                ) AS is_watching
         FROM taska.issues i
-        LEFT JOIN taska.issue_comments c ON c.issue_id = i.id
+        LEFT JOIN taska.issue_comments c ON c.issue_id = i.id AND c.deleted_at IS NULL
         WHERE i.id = :issueId AND i.deleted_at IS NULL
         GROUP BY i.id
     """)
