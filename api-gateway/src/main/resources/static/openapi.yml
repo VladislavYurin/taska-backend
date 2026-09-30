@@ -3694,9 +3694,9 @@ components:
         sizeBytes:
           type: integer
           format: int64
-          description: Размер файла в байтах (макс. 5 MB)
+          description: Размер файла в байтах (макс. 2 MB)
           minimum: 1
-          maximum: 5242880
+          maximum: 2097152
           example: 120000
 
     CreateAvatarUploadUrlResponseDto:

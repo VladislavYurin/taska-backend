@@ -1,7 +1,6 @@
 package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
@@ -43,7 +42,7 @@ public class UserProfileController implements UserProfileApi {
     ) {
         return executor.execute(exchange,EndpointSecurity.PROTECTED,context->
                 grpcClient.createAvatarUploadUrl(requestDto,context)
-                        .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+                        .map(ResponseEntity::ok)
         );
     }
 
