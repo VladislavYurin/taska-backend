@@ -145,7 +145,7 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             ) AS is_watching
         FROM taska.issues i
         LEFT JOIN taska.issue_comments c ON c.issue_id = i.id
-        WHERE i.id = :issueId
+        WHERE i.id = :issueId AND i.deleted_at IS NULL
         GROUP BY i.id
     """)
     Mono<IssueCoreDetails> findIssueCoreDetails(UUID issueId, UUID actorUserId);

@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkViewType;
@@ -13,17 +14,29 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 public final class IssueMapperUtils {
     public static UserSummaryResponse resolveUser(UUID userId, Map<UUID, UserSummary> profiles) {
-        if (userId == null)
+        if (userId == null) {
             return null;
-        UserSummary s = profiles.get(userId);
-        var b = UserSummaryResponse.newBuilder()
-                .setId(userId.toString())
-                .setDisplayName(s != null ? s.displayName() : "Unknown user");
-        if (s != null && s.avatarUrl() != null)
-            b.setAvatarUrl(s.avatarUrl());
-        return b.build();
+        }
+
+        UserSummary profile = profiles.get(userId);
+
+        UserSummaryResponse.Builder builder = UserSummaryResponse.newBuilder()
+                .setId(userId.toString());
+        if (profile == null) {
+            log.warn("User profile not found: userId={}", userId);
+            return builder.build();
+        }
+
+        builder.setDisplayName(profile.displayName());
+
+        if (profile.avatarUrl() != null) {
+            builder.setAvatarUrl(profile.avatarUrl());
+        }
+
+        return builder.build();
     }
 
     public static IssueLinkViewType resolveViewType(IssueLinkDetail linkDetail, UUID issueId) {

@@ -143,8 +143,7 @@ class IssueDetailsServiceImplTest {
                         ArgumentMatchers.any(Mono.class), ArgumentMatchers.any(Function.class)))
                 .thenReturn(Mono.just(core));
 
-        // сам issueRepository.findIssueCoreDetails по-прежнему вызывается сервисом —
-        // именно этот Mono передаётся первым аргументом в guard
+
         Mockito.when(issueRepository.findIssueCoreDetails(issueId, actorUserId))
                 .thenReturn(Mono.just(core));
     }

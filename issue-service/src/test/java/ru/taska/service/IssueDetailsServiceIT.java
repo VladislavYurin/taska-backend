@@ -81,7 +81,7 @@ public class IssueDetailsServiceIT extends AbstractIT {
         reporterId = UUID.randomUUID();
         actorUserId = UUID.randomUUID();
 
-        issueId = insertIssue("Test", 1);
+        issueId = insertIssue("Test", 1).getId();
 
         Mockito.lenient().when(labelService.getLabels(
                         ArgumentMatchers.eq(REQUEST_ID), ArgumentMatchers.eq(NODE_ID),
@@ -201,7 +201,7 @@ public class IssueDetailsServiceIT extends AbstractIT {
     @Test
     @DisplayName("Корректно возвращает связаную задачу")
     void shouldReturnLinkedIssuesCorrectly() {
-        UUID newIssueId = insertIssue("second issue", 2);
+        UUID newIssueId = insertIssue("second issue", 2).getId();
 
         insertIssueLink(newIssueId);
 
@@ -224,9 +224,27 @@ public class IssueDetailsServiceIT extends AbstractIT {
                 .verifyComplete();
     }
 
+    @Test
+    @DisplayName("Пробрасывает NOT_FOUND, если задача с указанным id есть в БД, но задан deleted_at")
+    void shouldPropagateNotFoundWhenIssueWasDeleted() {
+        Issue newIssue = insertIssue("second issue", 2);
+
+        newIssue.setDeletedAt(Instant.now());
+        issueRepository.save(newIssue).block();
+
+        Mono<IssueDetailsAggregate> result =
+                issueDetailsService.getIssueDetails(REQUEST_ID, NODE_ID, newIssue.getId(), actorUserId);
+
+        StepVerifier.create(result)
+                .expectErrorMatches(error ->
+                        error instanceof DomainException domainException
+                                && domainException.getStatus() == DomainStatus.NOT_FOUND)
+                .verify();
+    }
+
     // ---------- сидинг тестовых данных напрямую через DatabaseClient ----------
 
-    private UUID insertIssue(String key, int number) {
+    private Issue insertIssue(String key, int number) {
         Issue issue = Issue.builder()
                 .projectId(projectId)
                 .reporterId(reporterId)
@@ -238,8 +256,9 @@ public class IssueDetailsServiceIT extends AbstractIT {
                 .createdAt(Instant.now())
                 .statusKey("TODO")
                 .version(1)
+                .timeSpentMinutes(3)
                 .build();
-        return issueRepository.save(issue).block().getId();
+        return issueRepository.save(issue).block();
     }
 
     private void insertComment(UUID authorId) {
