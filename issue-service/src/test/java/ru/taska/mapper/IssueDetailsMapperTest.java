@@ -143,7 +143,7 @@ class IssueDetailsMapperTest {
         ListIssueWatchersResponse watchersResponse = response.getIssue().getWatchers();
         Assertions.assertEquals(2, watchersResponse.getWatchersCount());
         Assertions.assertEquals("John Doe", watchersResponse.getWatchers(0).getDisplayName());
-        Assertions.assertEquals("Unknown user", watchersResponse.getWatchers(1).getDisplayName());
+        Assertions.assertEquals("", watchersResponse.getWatchers(1).getDisplayName());
 
         ListIssueLinksResponse linksResponse = response.getIssue().getLinks();
         Assertions.assertEquals(1, linksResponse.getIssueLinksCount());
