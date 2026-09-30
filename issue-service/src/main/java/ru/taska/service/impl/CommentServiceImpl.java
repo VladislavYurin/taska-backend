@@ -1,9 +1,12 @@
 package ru.taska.service.impl;
 
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
@@ -21,13 +24,9 @@ import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.CommentService;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
-
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -38,15 +37,16 @@ public class CommentServiceImpl implements CommentService {
 
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
-    private final IssueWatcherRepository issueWatcherRepository;
     private final IssueCommentRepository commentRepository;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final ObjectMapper objectMapper;
+    private final TransactionalOperator transactionalOperator;
+    private final IssueWatcherRepository issueWatcherRepository;
 
     @Override
-    @Transactional
+    //Transactional
     public Mono<IssueComment> addComment(
             String requestId,
             String nodeId,
@@ -54,50 +54,48 @@ public class CommentServiceImpl implements CommentService {
             UUID authorUserId,
             String body
     ) {
-        return findIssueWithLock(requestId, nodeId, issueId)
-                .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();
-
-                    return checkPermissions(requestId, nodeId, projectId, authorUserId)
-                            .thenReturn(issue);
-                })
-                .flatMap(issue ->
-                        buildAndSaveComment(
-                                requestId,
-                                nodeId,
-                                issueId,
-                                issue.getProjectId(),
-                                authorUserId,
-                                body
-                        )
-                                .flatMap(savedComment ->
-                                                ///loadWatcherIds вызывается в той же транзакции, что и сохранение outbox — чтобы snapshot был консистентен.
-                                                loadWatcherIds(issueId)
-                                                        .flatMap(watcherIds ->
-                                                                saveHistoryAndOutbox(
-                                                                        requestId,
-                                                                        nodeId,
-                                                                        issue,
-                                                                        authorUserId,
-                                                                        IssueEventType.COMMENT_CREATED,
-                                                                        EventType.ISSUE_COMMENT_CREATED,
-                                                                        createCommentPayload(savedComment.getId(), authorUserId, body, watcherIds, issue)
-                                                                )
-                                                                .thenReturn(savedComment)
-                                                        )
+        return findIssueAndCheckAccess(requestId, nodeId, issueId, authorUserId)
+                .then(
+                        findIssueWithLock(requestId, nodeId, issueId)
+                                .flatMap(issue ->
+                                                 buildAndSaveComment(
+                                                         requestId,
+                                                         nodeId,
+                                                         issueId,
+                                                         issue.getProjectId(),
+                                                         authorUserId,
+                                                         body
+                                                 )
+                                                         .flatMap(savedComment ->
+                                                                          ///loadWatcherIds вызывается в той же транзакции, что и сохранение outbox — чтобы snapshot был консистентен.
+                                                                          loadWatcherIds(issueId)
+                                                                                  .flatMap(watcherIds ->
+                                                                                                   saveHistoryAndOutbox(
+                                                                                                           requestId,
+                                                                                                           nodeId,
+                                                                                                           issue,
+                                                                                                           authorUserId,
+                                                                                                           IssueEventType.COMMENT_CREATED,
+                                                                                                           EventType.ISSUE_COMMENT_CREATED,
+                                                                                                           createCommentPayload(savedComment.getId(), authorUserId, body, watcherIds, issue)
+                                                                                                   )
+                                                                                                           .thenReturn(savedComment)
+                                                                                  )
+                                                         )
                                 )
-                )
-                .doOnSuccess(comment -> {
-                    assert comment != null;
-                    log.info("[{}][{}] Comment added: {}", requestId, nodeId, comment.getId());
-                })
-                .doOnError(e ->
-                        log.error("[{}][{}] Failed to add comment: {}", requestId, nodeId, e.getMessage())
-                );
+                                .as(transactionalOperator::transactional)
+                                .doOnSuccess(comment -> {
+                                    assert comment != null;
+                                    log.info("[{}][{}] Comment added: {}", requestId, nodeId, comment.getId());
+                                })
+                                .doOnError(e ->
+                                                   log.error("[{}][{}] Failed to add comment: {}", requestId, nodeId, e.getMessage())
+                                ));
+
     }
 
     @Override
-    @Transactional
+    //Transactional
     public Mono<IssueComment> updateComment(
             String requestId,
             String nodeId,
@@ -108,52 +106,50 @@ public class CommentServiceImpl implements CommentService {
     ) {
         log.debug("[{}][{}] Updating comment: {}", requestId, nodeId, commentId);
 
-        return findIssueWithLock(requestId, nodeId, issueId)
-                .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();
+        return findIssueAndCheckAccess(requestId, nodeId, issueId, actorUserId)
+                .then(
+                        findIssueWithLock(requestId, nodeId, issueId)
+                                .flatMap(issue ->
+                                                 findActiveComment(requestId, nodeId, commentId, issueId, actorUserId)
+                                                         .flatMap(comment -> {
+                                                             int currentVersion = comment.getVersion();
+                                                             String oldBody = comment.getBody();
 
-                    return checkPermissions(requestId, nodeId, projectId, actorUserId)
-                            .thenReturn(issue);
-                })
-                .flatMap(issue ->
-                        findActiveComment(requestId, nodeId, commentId, issueId, actorUserId)
-                                .flatMap(comment -> {
-                                    int currentVersion = comment.getVersion();
-                                    String oldBody = comment.getBody();
-
-                                    return commentRepository.updateWithVersionCheckAndAuthor(
-                                                    commentId, body, currentVersion, actorUserId
-                                            )
-                                            .switchIfEmpty(Mono.error(new DomainException(
-                                                    DomainStatus.FAILED_PRECONDITION,
-                                                    "Comment was modified by another user. Please refresh and try again."
-                                            )))
-                                            .flatMap(savedComment -> {
-                                                ObjectNode payload = createUpdatePayload(
-                                                        commentId, oldBody, body, actorUserId, issue
-                                                );
-                                                return saveHistoryAndOutbox(
-                                                        requestId,
-                                                        nodeId,
-                                                        issue,
-                                                        actorUserId,
-                                                        IssueEventType.COMMENT_UPDATED,
-                                                        EventType.ISSUE_COMMENT_UPDATED,
-                                                        payload
-                                                ).thenReturn(savedComment);
-                                            });
-                                })
-                )
-                .doOnSuccess(comment ->
-                        log.info("[{}][{}] Comment updated: {}", requestId, nodeId, commentId)
-                )
-                .doOnError(e ->
-                        log.error("[{}][{}] Failed to update comment: {}", requestId, nodeId, e.getMessage())
+                                                             return commentRepository.updateWithVersionCheckAndAuthor(
+                                                                                             commentId, body, currentVersion, actorUserId
+                                                                                     )
+                                                                                     .switchIfEmpty(Mono.error(new DomainException(
+                                                                                             DomainStatus.FAILED_PRECONDITION,
+                                                                                             "Comment was modified by another user. Please refresh and try again."
+                                                                                     )))
+                                                                                     .flatMap(savedComment -> {
+                                                                                         ObjectNode payload = createUpdatePayload(
+                                                                                                 commentId, oldBody, body, actorUserId, issue
+                                                                                         );
+                                                                                         return saveHistoryAndOutbox(
+                                                                                                 requestId,
+                                                                                                 nodeId,
+                                                                                                 issue,
+                                                                                                 actorUserId,
+                                                                                                 IssueEventType.COMMENT_UPDATED,
+                                                                                                 EventType.ISSUE_COMMENT_UPDATED,
+                                                                                                 payload
+                                                                                         ).thenReturn(savedComment);
+                                                                                     });
+                                                         })
+                                )
+                                .as(transactionalOperator::transactional)
+                                .doOnSuccess(comment ->
+                                                     log.info("[{}][{}] Comment updated: {}", requestId, nodeId, commentId)
+                                )
+                                .doOnError(e ->
+                                                   log.error("[{}][{}] Failed to update comment: {}", requestId, nodeId, e.getMessage())
+                                )
                 );
     }
 
     @Override
-    @Transactional
+    //Transactional
     public Mono<IssueComment> deleteComment(
             String requestId,
             String nodeId,
@@ -163,44 +159,38 @@ public class CommentServiceImpl implements CommentService {
     ) {
         log.debug("[{}][{}] Deleting comment: {}", requestId, nodeId, commentId);
 
-        return findIssueWithLock(requestId, nodeId, issueId)
-                .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();
-                    return checkPermissions(requestId, nodeId, projectId, actorUserId)
-                            .thenReturn(issue);
-                })
-                .flatMap(issue ->
-                        findActiveComment(requestId, nodeId, commentId, issueId, actorUserId)
-                                .flatMap(comment -> {
-                                    int currentVersion = comment.getVersion();
-
-                                    return commentRepository.softDeleteWithVersionCheck(
-                                                    commentId, currentVersion
-                                            )
-                                            .switchIfEmpty(Mono.error(new DomainException(
-                                                    DomainStatus.NOT_FOUND,
-                                                    "Comment not found or already deleted"
-                                            )))
-                                            .flatMap(deletedComment -> {
-                                                ObjectNode payload = createDeletePayload(commentId, actorUserId, comment.getBody(), issue);
-                                                return saveHistoryAndOutbox(
-                                                        requestId,
-                                                        nodeId,
-                                                        issue,
-                                                        actorUserId,
-                                                        IssueEventType.COMMENT_DELETED,
-                                                        EventType.ISSUE_COMMENT_DELETED,
-                                                        payload
-                                                ).thenReturn(deletedComment);
-                                            });
-                                })
-                )
-                .doOnSuccess(comment ->
-                        log.info("[{}][{}] Comment deleted: {}", requestId, nodeId, commentId)
-                )
-                .doOnError(e ->
-                        log.error("[{}][{}] Failed to delete comment v2: {}", requestId, nodeId, e.getMessage())
+        return findIssueAndCheckAccess(requestId, nodeId, issueId, actorUserId)
+                .then(
+                        findIssueWithLock(requestId, nodeId, issueId)
+                                .flatMap(issue ->
+                                                 findActiveComment(requestId, nodeId, commentId, issueId, actorUserId)
+                                                         .flatMap(comment -> {
+                                                             int currentVersion = comment.getVersion();
+                                                             return commentRepository.softDeleteWithVersionCheck(commentId, currentVersion)
+                                                                                     .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Comment not found or already deleted")))
+                                                                                     .flatMap(deletedComment -> {
+                                                                                         ObjectNode payload = createDeletePayload(commentId, actorUserId, comment.getBody(), issue);
+                                                                                         return saveHistoryAndOutbox(
+                                                                                                 requestId,
+                                                                                                 nodeId,
+                                                                                                 issue,
+                                                                                                 actorUserId,
+                                                                                                 IssueEventType.COMMENT_DELETED,
+                                                                                                 EventType.ISSUE_COMMENT_DELETED,
+                                                                                                 payload
+                                                                                         ).thenReturn(deletedComment);
+                                                                                     });
+                                                         })
+                                )
+                                .as(transactionalOperator::transactional)
+                                .doOnSuccess(comment ->
+                                                     log.info("[{}][{}] Comment deleted: {}", requestId, nodeId, commentId)
+                                )
+                                .doOnError(e ->
+                                                   log.error("[{}][{}] Failed to delete comment v2: {}", requestId, nodeId, e.getMessage())
+                                )
                 );
+
     }
 
     @Override
@@ -219,12 +209,7 @@ public class CommentServiceImpl implements CommentService {
         log.debug("[{}][{}] Listing comments for issue: {}, page={}, size={}",
                 requestId, nodeId, issueId, resolvedPage, resolvedPageSize);
 
-        return findIssue(requestId, nodeId, issueId)
-                .flatMap(issue -> {
-                    UUID projectId = issue.getProjectId();
-                    return checkPermissions(requestId, nodeId, projectId, actorUserId)
-                            .thenReturn(issue);
-                })
+        return findIssueAndCheckAccess(requestId, nodeId, issueId, actorUserId)
                 .then(Mono.zip(
                         commentRepository.countActiveByIssueId(issueId),
                         commentRepository.findActiveByIssueIdOrderByCreatedAtDesc(issueId)
@@ -246,25 +231,6 @@ public class CommentServiceImpl implements CommentService {
     // ==================== ПРИВАТНЫЕ МЕТОДЫ ====================
 
     /**
-     * Проверяет права пользователя в проекте.
-     */
-    private Mono<Void> checkPermissions(String requestId, String nodeId, UUID projectId, UUID userId) {
-        Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().commentRoles();
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, userId, allowedRoles);
-    }
-
-    /**
-     * Находит задачу по ID. Если не найдена — выбрасывает исключение.
-     */
-    private Mono<Issue> findIssue(String requestId, String nodeId, UUID issueId) {
-        return issueRepository.findActiveById(issueId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("[{}][{}] Issue not found: {}", requestId, nodeId, issueId);
-                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
-                }));
-    }
-
-    /**
      * Находит задачу по ID с блокировкой. Если не найдена — выбрасывает исключение.
      */
     private Mono<Issue> findIssueWithLock(String requestId, String nodeId, UUID issueId) {
@@ -273,6 +239,30 @@ public class CommentServiceImpl implements CommentService {
                     log.warn("[{}][{}] Issue not found: {}", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
                 }));
+    }
+
+    /**
+     * Находит задачу по ID и проверяет доступность(подходящая роль, проект не удален) проекта.
+     * Если не найдена или проект недоступен — выбрасывает исключение.
+     */
+    private Mono<Issue> findIssueAndCheckAccess(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID userId
+    ) {
+        return issueRepository.findActiveById(issueId)
+                              .switchIfEmpty(Mono.defer(() -> {
+                                  log.warn("[{}][{}]Issue with id: {} was not found", requestId, nodeId, issueId);
+                                  return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                                                                        "Issue with id: " + issueId + " was not found"));
+                              }))
+                              .flatMap(issue -> {
+                                  Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().commentRoles();
+                                  UUID projectId = issue.getProjectId();
+                                  return projectAccessibility.check(requestId, nodeId, projectId, userId, allowedRoles)
+                                                             .thenReturn(issue);
+                              });
     }
 
     /**

@@ -8,11 +8,9 @@ import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
+import ru.taska.api.project.v1.DeleteProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
-import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
@@ -43,6 +41,12 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     }
 
     @Override
+    public Mono<ProjectResponse> deleteProject(Mono<DeleteProjectRequest> request) {
+        return grpcProjectService.deleteProject(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProject"));
+    }
+
+    @Override
     public Mono<ListMyProjectsResponse> listMyProjects(Mono<ListMyProjectsRequest> request) {
         return grpcProjectService.listMyProjects(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listMyProjects"));
@@ -64,17 +68,6 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<ChangeProjectMemberRoleResponse> changeProjectMemberRole(Mono<ChangeProjectMemberRoleRequest> request) {
         return grpcProjectService.changeProjectMemberRole(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));
-    }
-    @Override
-    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole (Mono<CheckProjectMemberRoleRequest> request) {
-        return grpcProjectService.checkProjectMemberRole(request)
-                .transform(GrpcExceptionHandler.withErrorHandling("checkProjectRole"));
-    }
-
-    @Override
-    public Mono<ProjectKeyResponse> getProjectKeyInternal(Mono<GetProjectKeyInternalRequest> request) {
-        return grpcProjectService.getProjectKeyInternal(request)
-                .transform(GrpcExceptionHandler.withErrorHandling("getProjectKeyInternal"));
     }
 
     @Override

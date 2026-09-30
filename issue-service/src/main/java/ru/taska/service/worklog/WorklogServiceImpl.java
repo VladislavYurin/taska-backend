@@ -14,7 +14,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.WorklogRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -31,7 +31,7 @@ import java.util.UUID;
 public class WorklogServiceImpl implements WorklogService {
     private final WorklogRepository worklogRepository;
     private final IssueRepository issueRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final IssueProperties issueProperties;
     private final WorklogExecutor worklogExecutor;
 
@@ -47,7 +47,7 @@ public class WorklogServiceImpl implements WorklogService {
                 .then(findActiveIssue(requestId, nodeId, issueId))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().addWorklogRoles();
-                    return projectRoleChecker.checkProjectRole(
+                    return projectAccessibility.check(
                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
                     );
 
@@ -76,7 +76,7 @@ public class WorklogServiceImpl implements WorklogService {
                                     issueProperties.allowedRoles().manageWorklogRoles();
 
                             return validateWorklogBelongsToIssue(requestId, nodeId, issueId, worklog)
-                                    .then(projectRoleChecker.checkProjectRole(
+                                    .then(projectAccessibility.check(
                                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles));
                         })
                         .then(Mono.defer(() ->
@@ -95,8 +95,8 @@ public class WorklogServiceImpl implements WorklogService {
                 .flatMap(issue -> {
                     var allowedRoles = issueProperties.allowedRoles().listWorklogRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .then(worklogRepository.findActiveByIssueId(issue.getId()).collectList());
+                    return projectAccessibility.check(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                                               .then(worklogRepository.findActiveByIssueId(issue.getId()).collectList());
                 });
     }
 
@@ -116,8 +116,8 @@ public class WorklogServiceImpl implements WorklogService {
                             issueProperties.allowedRoles().manageWorklogRoles();
 
                     return validateWorklogBelongsToIssue(requestId, nodeId, issueId,  worklog)
-                            .then(projectRoleChecker.checkProjectRole(requestId, nodeId, worklog.getProjectId(), actorUserId, allowedRoles)
-                            .then(worklogExecutor.executeDelete(requestId, nodeId, issueId, worklogId, actorUserId)));
+                            .then(projectAccessibility.check(requestId, nodeId, worklog.getProjectId(), actorUserId, allowedRoles)
+                                                      .then(worklogExecutor.executeDelete(requestId, nodeId, issueId, worklogId, actorUserId)));
                 });
     }
 

@@ -6,6 +6,7 @@ import ru.taska.domain.Project;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 
 import java.util.UUID;
+import ru.taska.domain.ProjectRole;
 
 public interface ProjectService {
 
@@ -39,10 +40,17 @@ public interface ProjectService {
     Flux<ProjectCheckMembershipDto> listMyProjects(String requestId, String nodeId, UUID userId);
 
     /**
-     * Возвращает ключ проекта по Id (без проверки прав).
-     * Используется ТОЛЬКО для внутренних вызовов из других сервисов, которые уже проверили права доступа.
-     * @param projectId айди проекта
-     * @return Mono с ключом проекта
+     * Мягкое удаление проекта, установка поля archived_at в БД.
+     *
+     * @param requestId   айди запроса
+     * @param nodeId      айди узла
+     * @param projectId  айди проекта
+     * @param userId      айди юзера, удаляющего проект
+     * @return Mono<{@link Project}> с данными созданного проекта
      */
-    Mono<String> getProjectKeyByIdInternal(UUID projectId);
+    Mono<Project> softDeleteProject(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId);
 }

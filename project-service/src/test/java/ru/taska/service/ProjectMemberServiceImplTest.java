@@ -26,6 +26,7 @@ import ru.taska.repository.ProjectRepository;
 import ru.taska.service.impl.ProjectMemberServiceImpl;
 import ru.taska.service.impl.validator.ProjectMemberValidatorImpl;
 import ru.taska.service.validator.ProjectMemberValidator;
+import ru.taska.service.validator.ProjectValidator;
 import ru.taska.transport.grpc.client.GrpcAuthServiceClient;
 
 import java.time.Instant;
@@ -43,6 +44,9 @@ class ProjectMemberServiceImplTest {
 
     @Mock
     private ProjectRepository projectRepository;
+
+    @Mock
+    private ProjectValidator projectValidator;
 
     @Mock
     private GrpcAuthServiceClient grpcAuthServiceClient;
@@ -91,11 +95,14 @@ class ProjectMemberServiceImplTest {
 
         ProjectMemberValidator projectMemberValidator = new ProjectMemberValidatorImpl(projectMemberRepository);
 
+        Mockito.lenient().when(projectValidator.isArchived(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+
         projectMemberService = new ProjectMemberServiceImpl(
                 projectMemberRepository,
                 projectRepository,
                 outboxEventService,
                 projectMemberValidator,
+                projectValidator,
                 grpcAuthServiceClient
         );
     }

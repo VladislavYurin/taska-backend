@@ -17,10 +17,10 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueWatcherService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.util.Set;
 import java.util.UUID;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 /**
  * Оркестратор для работы с подписчиками задачи, реализующий {@link IssueWatcherService}.
@@ -33,7 +33,7 @@ import java.util.UUID;
 public class IssueWatcherServiceImpl implements IssueWatcherService {
 
     private final IssueRepository issueRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final IssueProperties issueProperties;
     private final IssueWatcherRepository issueWatcherRepository;
     private final IssueWatcherExecutor executor;
@@ -100,8 +100,8 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listWatchersRoles();
 
-                    return projectRoleChecker
-                            .checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                    return projectAccessibility
+                            .check(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .then(Mono.defer(() -> Mono.zip(
                                     issueWatcherRepository.countByIssueId(issueId),
                                     issueWatcherRepository.findByIssueId(issueId, resolvedPageSize, offset)
@@ -127,8 +127,8 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listWatchersRoles();
 
-                    return projectRoleChecker
-                            .checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles);
+                    return projectAccessibility
+                            .check(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles);
                 })
                 .then(Mono.zip(
                         issueWatcherRepository.existsByIssueIdAndUserId(issueId, actorUserId),
@@ -176,7 +176,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 ? issueProperties.allowedRoles().watchIssueRoles()
                 : issueProperties.allowedRoles().manageWatchersRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles);
+        return projectAccessibility.check(requestId, nodeId, projectId, actorUserId, allowedRoles).then();
     }
 
     private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {

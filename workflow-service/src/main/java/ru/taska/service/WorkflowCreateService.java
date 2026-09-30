@@ -1,9 +1,14 @@
 package ru.taska.service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.WorkflowProperties;
 import ru.taska.domain.WorkflowAggregate;
@@ -20,13 +25,7 @@ import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowBindingRepository;
 import ru.taska.repository.WorkflowRepository;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 @Service
 @RequiredArgsConstructor
@@ -41,29 +40,32 @@ public class WorkflowCreateService {
     private final StatusRepository statusRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowBindingRepository bindingRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final WorkflowProperties workflowProperties;
+    private final TransactionalOperator transactionalOperator;
 
-    @Transactional
+    //Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
-        return projectRoleChecker.checkProjectRole(
-                        requestId,
-                        nodeId,
-                        dto.getProjectId(),
-                        actorUserId,
-                        workflowProperties.allowedRoles().createWorkflowRoles()
-                )
-                .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
-                .flatMap(violations -> handleViolations(violations, requestId, nodeId))
-                .then(Mono.defer(() -> {
-                    List<String> issueTypeNames = dto.getIssueTypes().stream().map(Enum::name).toList();
-                    return bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(), issueTypeNames).collectList();
-                }))
-                .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))
-                .then(Mono.defer(() -> createWorkflow(dto)
-                        .doOnSuccess(aggregate ->
-                                log.info("[{}][{}] Workflow successfully created: name={}", requestId, nodeId, dto.getName()))
-                ));
+        return projectAccessibility.check(
+                                           requestId,
+                                           nodeId,
+                                           dto.getProjectId(),
+                                           actorUserId,
+                                           workflowProperties.allowedRoles().createWorkflowRoles()
+                                   )
+                                   .then(Mono.fromCallable(() -> creationValidator.validateDto(dto))
+                                             .flatMap(violations -> handleViolations(violations, requestId, nodeId))
+                                             .then(Mono.defer(() -> {
+                                                 List<String> issueTypeNames = dto.getIssueTypes().stream().map(Enum::name).toList();
+                                                 return bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(), issueTypeNames).collectList();
+                                             }))
+                                             .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))
+                                             .then(Mono.defer(() -> createWorkflow(dto)
+                                                           .as(transactionalOperator::transactional)
+                                                   )
+                                             ))
+                                   .doOnSuccess(aggregate ->
+                                                        log.info("[{}][{}] Workflow successfully created: name={}", requestId, nodeId, dto.getName()));
     }
 
     private Mono<Void> checkNoExistingBindings(List<WorkflowBindingEntity> existingBindings, WorkflowCreationDto dto,

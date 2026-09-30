@@ -25,11 +25,11 @@ import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.link.IssueLinkService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 public class IssueLinkServiceIT extends AbstractIT {
 
@@ -40,7 +40,7 @@ public class IssueLinkServiceIT extends AbstractIT {
     private static final String NODE_ID = "issue-service";
 
     @MockitoBean
-    private ProjectRoleChecker projectRoleChecker;
+    private ProjectAccessibility projectAccessibility;
 
     @Autowired
     private IssueLinkService issueLinkService;
@@ -64,7 +64,7 @@ public class IssueLinkServiceIT extends AbstractIT {
         issueLinkRepository.deleteAll().block();
         issueRepository.deleteAll().block();
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectAccessibility.check(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),

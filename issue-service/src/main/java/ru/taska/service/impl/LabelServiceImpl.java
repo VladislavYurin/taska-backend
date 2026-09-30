@@ -1,9 +1,12 @@
 package ru.taska.service.impl;
 
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IssueEventType;
@@ -23,12 +26,9 @@ import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.LabelService;
 import ru.taska.service.OutboxEventService;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
-
-import java.util.Set;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -40,44 +40,43 @@ public class LabelServiceImpl implements LabelService {
     private final IssueLabelsRepository issueLabelsRepository;
     private final IssueRepository issueRepository;
     private final LabelMapper mapper;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
+    private final TransactionalOperator transactionalOperator;
 
     /**
      * Возвращает DTO createProjectLabel
      */
     @Override
-    @Transactional
+    //Transactional
     public Mono<LabelResponses.ProjectLabelInfo> createProjectLabel(
             String requestId,
             String nodeId,
             LabelCommands.CreateProjectLabelRequestDto requestDto
     ) {
-
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-
-                .then(Mono.defer(() -> validateLabelNameUniqueness(requestDto.projectId(), requestDto.name())))
-                .then(Mono.defer(() -> {
-                    ProjectLabels label = mapper.toEntity(requestDto);
-                    return projectLabelsRepository.save(label);
-                }))
-
-                .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(labelInfo ->
-                        log.debug("Created project label: id={}, projectId={}, name={}", labelInfo.id(), labelInfo.projectId(), labelInfo.name())
-                );
-
+        return projectAccessibility.check(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+                                   .then(Mono.defer(() -> validateLabelNameUniqueness(requestDto.projectId(), requestDto.name()))
+                                             .then(Mono.defer(() -> {
+                                                 ProjectLabels label = mapper.toEntity(requestDto);
+                                                 return projectLabelsRepository.save(label);
+                                             }))
+                                             .as(transactionalOperator::transactional)
+                                   )
+                                   .map(mapper::toProjectLabelInfo)
+                                   .doOnSuccess(labelInfo ->
+                                                        log.debug("Created project label: id={}, projectId={}, name={}", labelInfo.id(), labelInfo.projectId(), labelInfo.name())
+                                   );
     }
 
     /**
      * Возвращает DTO updateProjectLabel
      */
     @Override
-    @Transactional
+    //Transactional
     public Mono<LabelResponses.ProjectLabelInfo> updateProjectLabel(
             String requestId,
             String nodeId,
@@ -85,36 +84,39 @@ public class LabelServiceImpl implements LabelService {
     ) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateProjectLabelRoles();
+        return projectAccessibility.check(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+                                   .then(
+                                           projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                                                                  .switchIfEmpty(Mono.error(new DomainException(
+                                                                          DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
+                                                                  )))
+                                                                  .flatMap(label -> {
+                                                                      if (!label.getProjectId().equals(requestDto.projectId())) {
+                                                                          return Mono.error(new DomainException(
+                                                                                  DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project"
+                                                                          ));
+                                                                      }
+                                                                      return validateLabelNameUniquenessForUpdate(requestDto.projectId(), requestDto.name(), requestDto.labelId())
+                                                                              .then(Mono.fromCallable(() -> {
+                                                                                  mapper.updateEntity(label, requestDto);
+                                                                                  return label;
+                                                                              }))
+                                                                              .flatMap(projectLabelsRepository::save);
+                                                                  })
+                                                                  .as(transactionalOperator::transactional)
+                                   )
+                                   .map(mapper::toProjectLabelInfo)
+                                   .doOnSuccess(labelInfo ->
+                                                        log.debug("Updated project label: id={}, name={}", labelInfo.id(), labelInfo.name())
+                                   );
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
-                .switchIfEmpty(Mono.error(new DomainException(
-                        DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
-                )))
-                .flatMap(label -> {
-                    if (!label.getProjectId().equals(requestDto.projectId())) {
-                        return Mono.error(new DomainException(
-                                DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project"
-                        ));
-                    }
-                    return validateLabelNameUniquenessForUpdate(requestDto.projectId(), requestDto.name(), requestDto.labelId())
-                            .then(Mono.fromCallable(() -> {
-                                mapper.updateEntity(label, requestDto);
-                                return label;
-                            }))
-                            .flatMap(projectLabelsRepository::save);
-                })
-                .map(mapper::toProjectLabelInfo)
-                .doOnSuccess(labelInfo ->
-                        log.debug("Updated project label: id={}, name={}", labelInfo.id(), labelInfo.name())
-                );
     }
 
     /**
      * Возвращает DTO deleteProjectLabel
      */
     @Override
-    @Transactional
+    //Transactional
     public Mono<LabelResponses.DeleteProjectLabelResponseDto> deleteProjectLabel(
             String requestId,
             String nodeId,
@@ -122,28 +124,27 @@ public class LabelServiceImpl implements LabelService {
     ) {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteProjectLabelRoles();
-
-        return projectRoleChecker.checkProjectRole(
-                        requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
-                        .switchIfEmpty(Mono.error(new DomainException(
-                        DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
-                        )))
-                        .flatMap(label -> {
-                            if (!label.getProjectId().equals(requestDto.projectId())) {
-                                return Mono.error(new DomainException(
-                                        DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project")
-                                );
-                            }
-                            return projectLabelsRepository.softDelete(requestDto.labelId())
-                                    .thenReturn(LabelResponses.DeleteProjectLabelResponseDto.of(
-                                            requestDto.labelId(), requestDto.projectId()
-                                    ));
-                        })
-                )
-                .doOnSuccess(dto ->
-                        log.debug("Deleted project label: id={}, projectId={}", dto.labelId(), dto.projectId())
-                );
+        return projectAccessibility.check(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+                                   .then(
+                                           projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                                                                  .switchIfEmpty(Mono.error(new DomainException(
+                                                                          DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
+                                                                  )))
+                                                                  .flatMap(label -> {
+                                                                      if (!label.getProjectId().equals(requestDto.projectId())) {
+                                                                          return Mono.error(new DomainException(
+                                                                                  DomainStatus.FAILED_PRECONDITION, "Label does not belong to this project")
+                                                                          );
+                                                                      }
+                                                                      return projectLabelsRepository.softDelete(requestDto.labelId())
+                                                                                                    .thenReturn(LabelResponses.DeleteProjectLabelResponseDto.of(
+                                                                                                            requestDto.labelId(), requestDto.projectId()
+                                                                                                    ));
+                                                                  })
+                                                                  .as(transactionalOperator::transactional)
+                                   )
+                                   .doOnSuccess(dto ->
+                                                        log.debug("Deleted project label: id={}, projectId={}", dto.labelId(), dto.projectId()));
     }
 
     /**
@@ -158,13 +159,13 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(
+        return projectAccessibility.check(
                         requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
-                .then(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(requestDto.projectId())
+                                   .then(projectLabelsRepository.findByProjectIdAndDeletedAtIsNull(requestDto.projectId())
                         .collectList()
                         .map(mapper::toListProjectLabelResponseDto)
                 )
-                .doOnSuccess(dto ->
+                                   .doOnSuccess(dto ->
                         log.debug("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
                 );
 
@@ -174,7 +175,7 @@ public class LabelServiceImpl implements LabelService {
      * Возвращает DTO addIssueLabel
      */
     @Override
-    @Transactional
+    //Transactional
     public Mono<LabelResponses.AddIssueLabelResponseDto> addIssueLabel(
             String requestId,
             String nodeId,
@@ -188,58 +189,57 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
-                                        .switchIfEmpty(Mono.error(new DomainException(
-                                                DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
-                                        )))
-                                        .flatMap(label -> {
-                                            if (!label.getProjectId().equals(issue.getProjectId())) {
-                                                return Mono.error(new DomainException(
-                                                        DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
-                                                ));
-                                            }
-                                            return issueLabelsRepository.existsByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
-                                                    .flatMap(exists -> {
-                                                        if (exists) {
-                                                            return Mono.error(new DomainException(
-                                                                    DomainStatus.ALREADY_EXISTS, "Label already added to this issue"
-                                                            ));
-                                                        }
-                                                        IssueLabels issueLabels = mapper.toEntity(requestDto);
-                                                        return issueLabelsRepository.save(issueLabels)
-                                                                .then(Mono.defer(() -> {
-                                                                    JsonNode payload = payloadSerializer.createLabelAddedPayload(issue, label, requestDto.actorUserId());
-                                                                    return issueHistoryService.saveIssueHistory(
-                                                                                    requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_ADDED, payload)
-                                                                            .then(outboxEventService.saveOutboxEvent(
-                                                                                    requestId, nodeId, AggregateType.ISSUE, requestDto.issueId(), EventType.ISSUE_LABEL_ADDED, payload)
-                                                                            )
-
-                                                                            .thenReturn(LabelResponses.AddIssueLabelResponseDto
-                                                                                    .of(requestDto.issueId(), requestDto.labelId(), requestDto.actorUserId())
-                                                                            );
-                                                                }));
-                                                    });
-                                        })
-                                )
-                )
-                .doOnSuccess(dto ->
-                        log.debug("Added label {} to issue {}", dto.labelId(), dto.issueId())
-                );
+                        projectAccessibility.check(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                                            .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                                                                         .switchIfEmpty(Mono.error(new DomainException(
+                                                                                 DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
+                                                                         )))
+                                                                         .flatMap(label -> {
+                                                                             if (!label.getProjectId().equals(issue.getProjectId())) {
+                                                                                 return Mono.error(new DomainException(
+                                                                                         DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
+                                                                                 ));
+                                                                             }
+                                                                             return issueLabelsRepository.existsByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
+                                                                                                         .flatMap(exists -> {
+                                                                                                             if (exists) {
+                                                                                                                 return Mono.error(new DomainException(
+                                                                                                                         DomainStatus.ALREADY_EXISTS, "Label already added to this issue"
+                                                                                                                 ));
+                                                                                                             }
+                                                                                                             IssueLabels issueLabels = mapper.toEntity(requestDto);
+                                                                                                             return issueLabelsRepository.save(issueLabels)
+                                                                                                                                         .then(Mono.defer(() -> {
+                                                                                                                                             JsonNode payload = payloadSerializer.createLabelAddedPayload(issue, label,requestDto.actorUserId());
+                                                                                                                                             return issueHistoryService.saveIssueHistory(
+                                                                                                                                                                               requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_ADDED, payload)
+                                                                                                                                                                       .then(outboxEventService.saveOutboxEvent(
+                                                                                                                                                                               requestId, nodeId, AggregateType.ISSUE, requestDto.issueId(), EventType.ISSUE_LABEL_ADDED, payload)
+                                                                                                                                                                       )
+                                                                                                                                                                       .thenReturn(
+                                                                                                                                                                               LabelResponses.AddIssueLabelResponseDto.of(requestDto.issueId(), requestDto.labelId(), requestDto.actorUserId())
+                                                                                                                                                                       );
+                                                                                                                                         }));
+                                                                                                         });
+                                                                         })
+                                            )
+                                            .as(transactionalOperator::transactional)
+                                            )
+                              .doOnSuccess(dto ->
+                                                   log.debug("Added label {} to issue {}", dto.labelId(), dto.issueId())
+                              );
     }
 
     /**
      * Возвращает DTO removeIssueLabel
      */
     @Override
-    @Transactional
+    //Transactional
     public Mono<LabelResponses.RemoveIssueLabelResponseDto> removeIssueLabel(
             String requestId,
             String nodeId,
             LabelCommands.RemoveIssueLabelRequestDto requestDto
     ) {
-
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().removeIssueLabelRoles();
 
         return issueRepository.findActiveById(requestDto.issueId())
@@ -247,37 +247,41 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
-                                .switchIfEmpty(Mono.error(new DomainException(
-                                        DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
-                                )))
-                                .flatMap(label -> {
-                                    if (!label.getProjectId().equals(issue.getProjectId())) {
-                                        return Mono.error(new DomainException(
-                                                DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
-                                        ));
-                                    }
-                                    return issueLabelsRepository.existsByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
-                                            .flatMap(exist -> {
-                                                if (!exist) {
-                                                    return Mono.error(new DomainException(
-                                                            DomainStatus.NOT_FOUND, "Label not attached to this issue"
-                                                    ));
-                                                }
-                                                return issueLabelsRepository.deleteByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
-                                                        .then(Mono.defer(() -> {
-                                                            JsonNode payload = payloadSerializer.createLabelRemovedPayload(issue, label, requestDto.actorUserId());
-                                                            return issueHistoryService.saveIssueHistory(
-                                                                            requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_REMOVED, payload)
-                                                                    .then(outboxEventService.saveOutboxEvent(
-                                                                            requestId, nodeId, AggregateType.ISSUE, requestDto.issueId(), EventType.ISSUE_LABEL_REMOVED, payload)
-                                                                    )
-                                                                    .thenReturn(LabelResponses.RemoveIssueLabelResponseDto.of(requestDto.issueId(), requestDto.labelId()));
-                                                        }));
-                                            });
+                        projectAccessibility.check(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                                            .then(
+                                                    projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
+                                                                           .switchIfEmpty(Mono.error(new DomainException(
+                                                                                   DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
+                                                                           )))
+                                                                           .flatMap(label -> {
+                                                                               if (!label.getProjectId().equals(issue.getProjectId())) {
+                                                                                   return Mono.error(new DomainException(
+                                                                                           DomainStatus.FAILED_PRECONDITION, "Label does not belong to issue's project"
+                                                                                   ));
+                                                                               }
+                                                                               return issueLabelsRepository.existsByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
+                                                                                                           .flatMap(exist -> {
+                                                                                                               if (!exist) {
+                                                                                                                   return Mono.error(new DomainException(
+                                                                                                                           DomainStatus.NOT_FOUND, "Label not attached to this issue"
+                                                                                                                   ));
+                                                                                                               }
+                                                                                                               return issueLabelsRepository.deleteByIssueIdAndLabelId(requestDto.issueId(), requestDto.labelId())
+                                                                                                                                           .then(Mono.defer(() -> {
+                                                                                                                                               JsonNode payload = payloadSerializer.createLabelRemovedPayload(issue, label,requestDto.actorUserId());
+                                                                                                                                               return issueHistoryService.saveIssueHistory(
+                                                                                                                                                                                 requestId, nodeId, requestDto.issueId(), requestDto.actorUserId(), IssueEventType.LABEL_REMOVED, payload)
+                                                                                                                                                                         .then(outboxEventService.saveOutboxEvent(
+                                                                                                                                                                                 requestId, nodeId, AggregateType.ISSUE, requestDto.issueId(), EventType.ISSUE_LABEL_REMOVED, payload)
+                                                                                                                                                                         )
+                                                                                                                                                                         .thenReturn(LabelResponses.RemoveIssueLabelResponseDto.of(requestDto.issueId(), requestDto.labelId()));
+                                                                                                                                           }));
+                                                                                                           });
 
-                                })
+                                                                           })
+                                                                           .as(transactionalOperator::transactional)
+                                            )
+
                 )
                 .doOnSuccess(dto ->
                         log.debug("Removed label {} from issue {}", dto.labelId(), dto.issueId())
@@ -301,9 +305,9 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(
+                        projectAccessibility.check(
                                         requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
-                                .then(issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
+                                            .then(issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
                                         .collectList()
                                         .map(mapper::toListIssueLabelResponseDto)
                                 )

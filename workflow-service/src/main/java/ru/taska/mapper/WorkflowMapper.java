@@ -6,6 +6,7 @@ import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.api.workflow.v1.WorkflowTransition;
 import ru.taska.api.workflow.v1.StatusCategory;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.ProjectRole;
 import ru.taska.domain.WorkflowAggregate;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;

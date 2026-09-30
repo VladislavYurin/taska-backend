@@ -1,5 +1,7 @@
 package ru.taska.integration;
 
+import static org.mockito.ArgumentMatchers.any;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -13,10 +15,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
-import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
-import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ProjectKeyResponse;
+import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.IdempotencyKey;
@@ -57,17 +58,11 @@ class IdempotencyKeyIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
-        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
-                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                        .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                        .setIsMember(true)
-                        .setProjectExists(true)
-                        .build()));
-
-        Mockito.when(projectServiceStub.getProjectKeyInternal(Mockito.any(GetProjectKeyInternalRequest.class)))
-                .thenReturn(Mono.just(ProjectKeyResponse.newBuilder()
-                        .setProjectKey("TSK")
-                        .build()));
+        Mockito.when(projectServiceStub.getProject(any(GetProjectRequest.class)))
+               .thenReturn(Mono.just(ProjectResponse.newBuilder()
+                                                    .setProjectKey("TSK")
+                                                    .setCurrentUserRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                                                    .build()));
 
         outboxEventRepository.deleteAll()
                 .then(idempotencyKeyRepository.deleteAll())

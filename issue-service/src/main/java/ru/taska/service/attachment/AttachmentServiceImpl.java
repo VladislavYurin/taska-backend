@@ -15,11 +15,11 @@ import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
-import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 @Slf4j
 @Service
@@ -29,7 +29,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
     private final IssueAttachmentRepository issueAttachmentRepository;
-    private final ProjectRoleChecker projectRoleChecker;
+    private final ProjectAccessibility projectAccessibility;
     private final StorageClient storageClient;
     private final AttachmentTransactionExecutor transactionExecutor;
 
@@ -110,7 +110,7 @@ public class AttachmentServiceImpl implements AttachmentService {
                             ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
                             : issueProperties.allowedRoles().deleteAttachmentRoles();
                     return findActiveIssueProjectId(requestId, nodeId, attachment.getIssueId())
-                            .flatMap(projectId -> projectRoleChecker.checkProjectRole(
+                            .flatMap(projectId -> projectAccessibility.check(
                                     requestId, nodeId, projectId, actorUserId, roles
                             ))
                             .thenReturn(attachment);
@@ -168,7 +168,7 @@ public class AttachmentServiceImpl implements AttachmentService {
             String requestId, String nodeId, UUID issueId, UUID actorUserId,
             Set<ProjectRole> allowedRoles) {
         return findActiveIssueProjectId(requestId, nodeId, issueId)
-                .flatMap(projectId -> projectRoleChecker.checkProjectRole(
+                .flatMap(projectId -> projectAccessibility.check(
                         requestId, nodeId, projectId, actorUserId,
                         allowedRoles
                 ))
