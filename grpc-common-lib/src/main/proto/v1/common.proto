@@ -44,3 +44,12 @@ message UserContext {
   UserStatus status = 5;
   GlobalRoleProto global_role = 6;
 }
+
+/**
+ * Краткая информация о пользователе.
+ */
+message UserSummaryResponse {
+  string id = 1;
+  string display_name = 2;
+  optional string avatar_url = 3;
+}

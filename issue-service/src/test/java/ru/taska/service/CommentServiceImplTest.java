@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,11 +16,13 @@ import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueComment;
+import ru.taska.domain.dto.IssueCommentWithAuthor;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.UserSummary;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -28,11 +31,12 @@ import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.impl.CommentServiceImpl;
+import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,6 +45,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,6 +73,9 @@ class CommentServiceImplTest {
     @Mock
     private ProjectRoleChecker projectRoleChecker;
 
+    @Mock
+    private GrpcAuthServiceClient authServiceClient;
+
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -85,6 +93,7 @@ class CommentServiceImplTest {
     private IssueComment comment;
     private IssueHistory issueHistory;
     private OutboxEvent outboxEvent;
+    private UserSummary authorSummary;
 
     @BeforeEach
     void setUp() {
@@ -184,6 +193,9 @@ class CommentServiceImplTest {
                 .aggregateId(issueId)
                 .eventType("COMMENT_CREATED")
                 .build();
+
+        // Создание объекта с автором комментария
+        authorSummary = new UserSummary(actorUserId, "Comment Author", "/test/avatar.png");
     }
 
     // ==================== ТЕСТЫ ДЛЯ addComment ====================
@@ -497,8 +509,11 @@ class CommentServiceImplTest {
         when(commentRepository.findActiveByIssueIdOrderByCreatedAtDesc(issueId))
                 .thenReturn(Flux.just(comment));
 
+        when(authServiceClient.getUserProfiles(Mockito.anySet(), Mockito.any(), Mockito.anyString()))
+                .thenReturn(Mono.just(Map.of(actorUserId, authorSummary)));
+
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -509,7 +524,11 @@ class CommentServiceImplTest {
 
         // Assert
         StepVerifier.create(result)
-                .expectNextMatches(pageResult -> pageResult.totalCount() == 1)
+                .consumeNextWith(pageResult -> {
+                    Assertions.assertEquals(1, pageResult.totalCount());
+
+                    Assertions.assertEquals(authorSummary, pageResult.items().get(0).author());
+                })
                 .verifyComplete();
 
         verify(issueRepository).findActiveById(issueId);
@@ -518,6 +537,7 @@ class CommentServiceImplTest {
         );
         verify(commentRepository).countActiveByIssueId(issueId);
         verify(commentRepository).findActiveByIssueIdOrderByCreatedAtDesc(issueId);
+        verify(authServiceClient).getUserProfiles(Set.of(actorUserId), requestId, nodeId);
     }
 
     @Test
@@ -537,7 +557,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -552,6 +572,8 @@ class CommentServiceImplTest {
                 .verifyComplete();
 
         verify(commentRepository).findActiveByIssueIdOrderByCreatedAtDesc(issueId);
+
+        verifyNoInteractions(authServiceClient);
     }
 
     @Test
@@ -574,7 +596,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -603,7 +625,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -621,5 +643,49 @@ class CommentServiceImplTest {
                     assert ex.getMessage().contains("Issue not found");
                 })
                 .verify();
+
+        verifyNoInteractions(authServiceClient);
+
+    }
+
+    @Test
+    @DisplayName("listComments: должен вернуть комментарий с author = null, если gRPC сервис профилей упал с ошибкой")
+    void listComments_grpcAuthServiceError_returnsCommentWithNullAuthor() {
+        UUID authorId = UUID.randomUUID();
+
+        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
+
+        when(issueRepository.findActiveById(issueId))
+                .thenReturn(Mono.just(issue));
+
+        when(commentRepository.countActiveByIssueId(issueId))
+                .thenReturn(Mono.just(1L));
+
+        when(commentRepository.findActiveByIssueIdOrderByCreatedAtDesc(issueId))
+                .thenReturn(Flux.just(comment));
+
+        when(authServiceClient.getUserProfiles(eq(Set.of(authorId)), eq(requestId), eq(nodeId)))
+                .thenReturn(Mono.error(new RuntimeException("gRPC service unavailable")));
+
+        // Act
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
+                requestId,
+                nodeId,
+                issueId,
+                actorUserId,
+                0,
+                10
+        );
+
+        // Assert
+        StepVerifier.create(result)
+                .consumeNextWith(pageResult -> {
+                    Assertions.assertEquals(1, pageResult.totalCount());
+
+                    IssueCommentWithAuthor commentWithAuthor = pageResult.items().get(0);
+                    Assertions.assertNull(commentWithAuthor.author());
+                })
+                .verifyComplete();
     }
 }

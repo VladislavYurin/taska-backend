@@ -23,6 +23,7 @@ import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.IssueLinkType;
@@ -45,6 +46,7 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssueResponseDto;
@@ -55,9 +57,6 @@ import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
-
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 @ExtendWith(MockitoExtension.class)
 class GrpcIssueServiceClientTest {
@@ -116,22 +115,22 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC getIssue и вернуть ответ")
     void getIssue_shouldCallStubAndReturnMappedResponse() {
-        var grpcResponse = IssueWithHistoryResponse.getDefaultInstance();
-        var restResponse = new IssueWithHistoryResponseDto();
+        var grpcResponse = GetIssueDetailsResponse.getDefaultInstance();
+        var restResponse = new IssueDetailsWithHistoryResponseDto();
 
-        Mockito.when(stub.getIssue(Mockito.any(GetIssueRequest.class)))
+        Mockito.when(stub.getIssueDetails(Mockito.any(GetIssueRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
-        Mockito.when(issueMapper.toRestIssueWithHistoryResponse(grpcResponse))
+        Mockito.when(issueMapper.toRestIssueDetailsWithHistoryResponseDto(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.getIssue(ISSUE_ID, context))
+        StepVerifier.create(client.getIssueDetails(ISSUE_ID, context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
         var captor = ArgumentCaptor.forClass(GetIssueRequest.class);
 
-        Mockito.verify(stub).getIssue(captor.capture());
+        Mockito.verify(stub).getIssueDetails(captor.capture());
 
         var request = captor.getValue();
 
@@ -141,7 +140,7 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
 
         Mockito.verify(issueMapper, Mockito.times(1))
-                .toRestIssueWithHistoryResponse(grpcResponse);
+                .toRestIssueDetailsWithHistoryResponseDto(grpcResponse);
     }
 
     @Test

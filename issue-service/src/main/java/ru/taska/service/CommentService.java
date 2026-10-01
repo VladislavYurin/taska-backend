@@ -1,8 +1,8 @@
 package ru.taska.service;
 
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueComment;
+import ru.taska.domain.dto.IssueCommentWithAuthor;
 import ru.taska.domain.PageResult;
 
 import java.util.UUID;
@@ -79,7 +79,7 @@ public interface CommentService {
      * @param pageSize     размер страницы
      * @return Mono с результатом пагинации
      */
-    Mono<PageResult<IssueComment>> listComments(
+    Mono<PageResult<IssueCommentWithAuthor>> listComments(
             String requestId,
             String nodeId,
             UUID issueId,

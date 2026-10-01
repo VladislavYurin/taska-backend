@@ -2,9 +2,12 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueEventType;
 import ru.taska.domain.IssueHistory;
@@ -22,6 +25,7 @@ import java.util.UUID;
 public class IssueHistoryServiceImpl implements IssueHistoryService {
 
     private final IssueHistoryRepository issueHistoryRepository;
+    private final IssueProperties issueProperties;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -53,6 +57,21 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
 
         log.debug("[{}][{}] Save modified history for issue: {}", requestId, nodeId, issueId);
         return issueHistoryRepository.save(issueHistory);
+    }
+
+    @Override
+    public Flux<IssueHistory> getHistory(String requestId, String nodeId, UUID issueId) {
+        log.info("[{}][{}] Getting issue history: issueId={}", requestId, nodeId, issueId);
+
+        return issueHistoryRepository
+                .findByIssueIdOrderByOccurredAtDesc(issueId, Limit.of(issueProperties.card().maxHistorySize()))
+                .doOnError(error -> log.error(
+                        "[{}][{}] Failed to get issue history: issueId={}",
+                        requestId,
+                        nodeId,
+                        issueId,
+                        error
+                ));
     }
 }
 

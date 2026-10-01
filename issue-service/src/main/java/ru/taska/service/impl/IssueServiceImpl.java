@@ -79,6 +79,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueAutoWatchService issueAutoWatchService;
     private final IssueLabelsRepository issueLabelsRepository;
     private final IssueWatcherRepository issueWatcherRepository;
+    private final IssueAccessGuard issueAccessGuard;
 
     @Override
     @Transactional
@@ -755,5 +756,17 @@ public class IssueServiceImpl implements IssueService {
                                         .toList();
                             });
                 });
+    }
+
+    @Override
+    public Mono<Issue> getIssueByKey(String requestId, String nodeId, String issueKey, UUID actorUserId) {
+        log.info("[{}][{}] getIssueByKey: issueKey={}, actorUserId={}",
+                requestId, nodeId, issueKey, actorUserId);
+
+        return issueAccessGuard.verifyReadAccess(
+                requestId, nodeId, issueKey, actorUserId,
+                issueRepository.findActiveByKeyIgnoreCase(issueKey),
+                Issue::getProjectId
+        );
     }
 }

@@ -4,6 +4,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkType;
+import ru.taska.domain.projection.IssueLinkDetails;
 
 import java.util.UUID;
 
@@ -22,6 +23,22 @@ public interface IssueLinkService {
      * @return список связей
      */
     Flux<IssueLink> listIssueLinks(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId
+    );
+
+    /**
+     * Возвращает все связи задачи с дополнительной информацией о связанной задаче.
+     *
+     @param requestId идентификатор запроса
+      * @param nodeId идентификатор узла
+     * @param issueId идентификатор задачи
+     * @param actorUserId пользователь, получающий список связей
+     * @return список связей
+     */
+    Flux<IssueLinkDetails> listIssueLinksDetails(
             String requestId,
             String nodeId,
             UUID issueId,

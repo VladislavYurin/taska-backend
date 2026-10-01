@@ -9,6 +9,7 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkType;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.dto.IssueLinkInfoDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -62,6 +63,17 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .doOnComplete(() ->
                         log.debug("[{}][{}] Links successfully found for issue: issueId={}", requestId, nodeId, issueId)
                 );
+    }
+
+    @Override
+    public Flux<IssueLinkDetails> listIssueLinksDetails(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
+        log.info("[{}][{}] listIssueLinksDetails: issueId={}, actorUserId={}",
+                requestId, nodeId, issueId, actorUserId);
+
+        return issueLinkRepository.findIssueLinksWithOtherIssues(issueId)
+                .doOnComplete(() ->
+                        log.info("[{}][{}] listIssueLinksDetails: completed, issueId={}",
+                                requestId, nodeId, issueId));
     }
 
     /**

@@ -151,4 +151,12 @@ public interface IssueService {
             List<UUID> labelIds,
             Integer pageSizePerColumn
     );
+
+
+    Mono<Issue> getIssueByKey(
+            String requestId,
+            String nodeId,
+            String issueKey,
+            UUID actorUserId
+    );
 }

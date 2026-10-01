@@ -1,19 +1,24 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.InjectMocks;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.taska.api.common.v1.UserSummaryResponse;
+import ru.taska.api.issue.attachment.v1.AttachmentResponse;
+import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
+import ru.taska.api.issue.v1.IssueDetailsResponse;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
@@ -23,26 +28,42 @@ import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueType;
+import ru.taska.api.issue.v1.IssueWatcherResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
+import ru.taska.api.issue.v1.ListIssueWatchersResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsResponseDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
+import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssueWatcherResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+@ExtendWith(MockitoExtension.class)
 class IssueMapperTest {
 
+    public static final String PAYLOAD = """
+            {
+              "oldStatus":"TODO",
+              "newStatus":"IN_PROGRESS"
+            }
+            """;
     private static final String ISSUE_ID = "00000000-0000-0000-0000-000000000001";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000002";
     private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000003";
@@ -66,7 +87,17 @@ class IssueMapperTest {
     private static final Integer REMAINING_ESTIMATE_MINUTES = 240;
     private static final String START_DATE = LocalDate.of(2026, 9, 1).toString();
     private static final String DUE_DATE = LocalDate.of(2026, 9, 10).toString();
-    private final IssueMapper mapper = new IssueMapper(new ObjectMapper());
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+    @Spy
+    private UserProfileMapper userProfileMapper = new UserProfileMapper();
+    @Spy
+    private IssueWatcherMapper watcherMapper = new IssueWatcherMapper();
+    @Spy
+    private IssueAttachmentMapper attachmentMapper = new IssueAttachmentMapper(userProfileMapper);
+    @InjectMocks
+    private IssueMapper mapper;
 
     @Test
     @DisplayName("Должен корректно преобразовать IssueResponse(gRPC DTO) в IssueResponseDto(REST DTO) без Optional полей")
@@ -188,19 +219,12 @@ class IssueMapperTest {
                 .setSeconds(1)
                 .build();
 
-        var payload = """
-                {
-                  "oldStatus":"TODO",
-                  "newStatus":"IN_PROGRESS"
-                }
-                """;
-
         var source = IssueHistoryResponse.newBuilder()
                 .setId(HISTORY_ID)
                 .setEventType(IssueEventType.ISSUE_EVENT_TYPE_CREATED)
                 .setActorUserId(USER_ID)
                 .setOccurredAt(occurredAt)
-                .setPayload(payload)
+                .setPayload(PAYLOAD)
                 .build();
 
 
@@ -861,5 +885,190 @@ class IssueMapperTest {
                 Arguments.of(IssueLinkTypeDto.BLOCKS, IssueLinkType.ISSUE_LINK_TYPE_BLOCKS),
                 Arguments.of(IssueLinkTypeDto.DUPLICATES, IssueLinkType.ISSUE_LINK_TYPE_DUPLICATES)
         );
+    }
+
+    @Nested
+    @DisplayName("Тесты маппинга IssueMapper")
+    class IssueMapperNestedTests {
+
+        @Test
+        @DisplayName("Успешный маппинг полных данных из gRPC Response в REST DTO")
+        void shouldMapFullResponseToRestDtoSuccessfully() {
+            Instant now = Instant.parse("2026-09-17T10:00:00Z");
+            Timestamp timestamp = Timestamp.newBuilder()
+                    .setSeconds(now.getEpochSecond())
+                    .setNanos(now.getNano())
+                    .build();
+
+            UserSummaryResponse assigneeResponse = UserSummaryResponse.newBuilder()
+                    .setId(ASSIGNEE_ID)
+                    .setDisplayName("John Doe")
+                    .setAvatarUrl("https://example.com/avatar.png")
+                    .build();
+
+            IssueWatcherResponse watcherResponse = IssueWatcherResponse.newBuilder()
+                    .setId(String.valueOf(UUID.randomUUID()))
+                    .setIssueId(ISSUE_ID)
+                    .setUserId(USER_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setCreatedBy(ASSIGNEE_ID)
+                    .setDisplayName("Watcher User")
+                    .build();
+
+            ListIssueWatchersResponse listIssueWatchersResponse = ListIssueWatchersResponse.newBuilder()
+                    .addWatchers(watcherResponse)
+                    .build();
+
+            AttachmentResponse attachmentResponse = AttachmentResponse.newBuilder()
+                    .setId(String.valueOf(UUID.randomUUID()))
+                    .setFileName("document.pdf")
+                    .setSizeBytes(1024L)
+                    .setContentType("application/pdf")
+                    .setCreatedAt(timestamp)
+                    .setUploadedBy(ASSIGNEE_ID)
+                    .setUploadedByUser(assigneeResponse)
+                    .setIssueId(ISSUE_ID)
+                    .build();
+
+            ListAttachmentsResponse listAttachmentsResponse = ListAttachmentsResponse.newBuilder()
+                    .addAttachments(attachmentResponse)
+                    .build();
+
+            IssueDetailsResponse issueDetailsResponse = IssueDetailsResponse.newBuilder()
+                    .setId(ISSUE_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setIssueNumber(ISSUE_NUMBER)
+                    .setIssueKey(ISSUE_KEY)
+                    .setSummary(SUMMARY)
+                    .setDescription(DESCRIPTION)
+                    .setStatus(STATUS_KEY)
+                    .setVersion(VERSION)
+                    .setCommentCount(2)
+                    .setIsWatching(true)
+                    .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
+                    .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                    .setCreatedAt(timestamp)
+                    .setUpdatedAt(timestamp)
+                    .setStoryPoints(STORY_POINTS)
+                    .setOriginalEstimateMinutes(ORIGINAL_ESTIMATE_MINUTES)
+                    .setRemainingEstimateMinutes(REMAINING_ESTIMATE_MINUTES)
+                    .setStartDate(START_DATE)
+                    .setDueDate(DUE_DATE)
+                    .setAssignee(assigneeResponse)
+                    .setWatchers(listIssueWatchersResponse)
+                    .setAttachments(listAttachmentsResponse)
+                    .setReporterId(UUID.randomUUID().toString())
+                    .build();
+
+            IssueHistoryResponse historyResponse = IssueHistoryResponse.newBuilder()
+                    .setId(HISTORY_ID)
+                    .setEventType(IssueEventType.ISSUE_EVENT_TYPE_UPDATED)
+                    .setActorUserId(USER_ID)
+                    .setOccurredAt(timestamp)
+                    .setPayload(PAYLOAD)
+                    .build();
+
+            GetIssueDetailsResponse response = GetIssueDetailsResponse.newBuilder()
+                    .setIssue(issueDetailsResponse)
+                    .addHistory(historyResponse)
+                    .build();
+
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(response);
+
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getIssue());
+
+            IssueDetailsResponseDto issueDto = result.getIssue();
+            Assertions.assertEquals(UUID.fromString(ISSUE_ID), issueDto.getId());
+            Assertions.assertEquals(UUID.fromString(PROJECT_ID), issueDto.getProjectId());
+            Assertions.assertEquals(ISSUE_NUMBER, issueDto.getIssueNumber());
+            Assertions.assertEquals(ISSUE_KEY, issueDto.getIssueKey());
+            Assertions.assertEquals(SUMMARY, issueDto.getSummary());
+            Assertions.assertEquals(DESCRIPTION, issueDto.getDescription());
+            Assertions.assertEquals(STATUS_KEY, issueDto.getStatus());
+            Assertions.assertEquals(VERSION, issueDto.getVersion());
+            Assertions.assertEquals(2, issueDto.getCommentCount());
+            Assertions.assertTrue(issueDto.getIsWatching());
+            Assertions.assertEquals(STORY_POINTS, issueDto.getStoryPoints());
+            Assertions.assertEquals(ORIGINAL_ESTIMATE_MINUTES, issueDto.getOriginalEstimateMinutes());
+            Assertions.assertEquals(REMAINING_ESTIMATE_MINUTES, issueDto.getRemainingEstimateMinutes());
+            Assertions.assertEquals(LocalDate.parse(START_DATE), issueDto.getStartDate());
+            Assertions.assertEquals(LocalDate.parse(DUE_DATE), issueDto.getDueDate());
+
+            OffsetDateTime expectedTime = now.atOffset(ZoneOffset.UTC);
+            Assertions.assertEquals(expectedTime, issueDto.getCreatedAt());
+            Assertions.assertEquals(expectedTime, issueDto.getUpdatedAt());
+
+            Assertions.assertNotNull(issueDto.getAssignee());
+            Assertions.assertEquals(UUID.fromString(ASSIGNEE_ID), issueDto.getAssignee().getId());
+
+            Assertions.assertEquals(1, issueDto.getWatchers().size());
+            IssueWatcherResponseDto watcherDto = issueDto.getWatchers().get(0);
+            Assertions.assertEquals(UUID.fromString(USER_ID), watcherDto.getUserId());
+
+            Assertions.assertEquals(1, issueDto.getAttachments().size());
+            Assertions.assertEquals("document.pdf", issueDto.getAttachments().get(0).getFileName());
+
+            Assertions.assertEquals(1, result.getHistory().size());
+            IssueHistoryResponseDto historyDto = result.getHistory().get(0);
+            Assertions.assertEquals(HISTORY_ID, historyDto.getId());
+            Assertions.assertEquals("UPDATED", historyDto.getEventType());
+            Assertions.assertEquals(USER_ID, historyDto.getActorUserId());
+            Assertions.assertEquals(expectedTime, historyDto.getOccurredAt());
+            Assertions.assertNotNull(historyDto.getPayload());
+        }
+
+        @Test
+        @DisplayName("Возврат null при передаче null в качестве ответа")
+        void shouldReturnNullWhenResponseIsNull() {
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(null);
+            Assertions.assertNull(result);
+        }
+
+        @Test
+        @DisplayName("Корректная обработка отсутствующих опциональных полей задачи")
+        void shouldMapIssueWithoutOptionalFields() {
+            Instant now = Instant.parse("2026-09-17T10:00:00Z");
+            Timestamp timestamp = Timestamp.newBuilder()
+                    .setSeconds(now.getEpochSecond())
+                    .setNanos(now.getNano())
+                    .build();
+
+            IssueDetailsResponse issueDetailsResponse = IssueDetailsResponse.newBuilder()
+                    .setId(ISSUE_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setIssueNumber(ISSUE_NUMBER)
+                    .setIssueKey(ISSUE_KEY)
+                    .setSummary(SUMMARY)
+                    .setStatus(STATUS_KEY)
+                    .setVersion(VERSION)
+                    .setCommentCount(0)
+                    .setIsWatching(false)
+                    .setCreatedAt(timestamp)
+                    .setUpdatedAt(timestamp)
+                    .setReporterId(UUID.randomUUID().toString())
+                    .build();
+
+            GetIssueDetailsResponse response = GetIssueDetailsResponse.newBuilder()
+                    .setIssue(issueDetailsResponse)
+                    .build();
+
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(response);
+
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getIssue());
+
+            IssueDetailsResponseDto issueDto = result.getIssue();
+            Assertions.assertNull(issueDto.getDescription());
+            Assertions.assertNull(issueDto.getStoryPoints());
+            Assertions.assertNull(issueDto.getOriginalEstimateMinutes());
+            Assertions.assertNull(issueDto.getRemainingEstimateMinutes());
+            Assertions.assertNull(issueDto.getStartDate());
+            Assertions.assertNull(issueDto.getDueDate());
+            Assertions.assertNull(issueDto.getAssignee());
+            Assertions.assertNull(issueDto.getReporter());
+            Assertions.assertTrue(issueDto.getWatchers().isEmpty());
+            Assertions.assertTrue(issueDto.getAttachments().isEmpty());
+        }
     }
 }

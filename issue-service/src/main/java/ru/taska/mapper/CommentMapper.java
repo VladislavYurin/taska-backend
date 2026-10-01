@@ -9,6 +9,7 @@ import ru.taska.api.issue.v1.IssueCommentResponse;
 import ru.taska.api.issue.v1.ListIssueCommentsResponse;
 import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
 import ru.taska.domain.IssueComment;
+import ru.taska.domain.dto.IssueCommentWithAuthor;
 import ru.taska.domain.PageResult;
 
 import java.time.Instant;
@@ -16,6 +17,8 @@ import java.time.Instant;
 @Component
 @RequiredArgsConstructor
 public class CommentMapper {
+
+    private final UserDetailsMapper userDetailsMapper;
 
     public IssueCommentResponse toCommentProto(IssueComment comment) {
         return IssueCommentResponse.newBuilder()
@@ -28,6 +31,16 @@ public class CommentMapper {
                 .setUpdatedAt(toTimestamp(comment.getUpdatedAt()))
                 .setVersion(comment.getVersion())
                 .build();
+    }
+
+    public IssueCommentResponse toCommentProto(IssueCommentWithAuthor comment) {
+        IssueCommentResponse.Builder builder = toCommentProto(comment.comment()).toBuilder();
+
+        if (comment.author() != null) {
+            builder.setAuthor(userDetailsMapper.toResponse(comment.author()));
+        }
+
+        return builder.build();
     }
 
     public AddIssueCommentResponse toAddCommentResponse(IssueComment comment) {
@@ -48,7 +61,7 @@ public class CommentMapper {
                 .build();
     }
 
-    public ListIssueCommentsResponse toListCommentsResponse(PageResult<IssueComment> page) {
+    public ListIssueCommentsResponse toListCommentsResponse(PageResult<IssueCommentWithAuthor> page) {
         return ListIssueCommentsResponse.newBuilder()
                 .addAllComments(page.items().stream().map(this::toCommentProto).toList())
                 .setTotalCount((int) page.totalCount())

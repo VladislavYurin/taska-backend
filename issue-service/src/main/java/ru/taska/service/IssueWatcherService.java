@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.PageResult;
@@ -46,6 +47,16 @@ public interface IssueWatcherService {
             UUID actorUserId,
             Integer page,
             Integer pageSize
+    );
+
+    /**
+     * Возвращает список подписчиков задачи
+     */
+    Flux<IssueWatcher> listIssueWatchers(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId
     );
 
     /**

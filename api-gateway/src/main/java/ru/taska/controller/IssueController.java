@@ -12,6 +12,7 @@ import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
@@ -46,12 +47,23 @@ public class IssueController implements IssueApi {
      * Возвращает задачу вместе с историей изменений.
      */
     @Override
-    public Mono<ResponseEntity<IssueWithHistoryResponseDto>> getIssue(
+    public Mono<ResponseEntity<IssueDetailsWithHistoryResponseDto>> getIssue(
             String issueId,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.getIssue(issueId, context)
+                issueClient.getIssueDetails(issueId, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Возвращает задачу по ключу.
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> getIssueByKey(String issueKey, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.getIssueByKey(issueKey, context)
                         .map(ResponseEntity::ok)
         );
     }

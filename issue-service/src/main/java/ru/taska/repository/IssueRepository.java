@@ -7,6 +7,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Issue;
 import ru.taska.domain.dto.IssueLinkInfoDto;
+import ru.taska.domain.projection.IssueCoreDetails;
 
 import java.util.UUID;
 
@@ -123,4 +124,41 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             String statusKey,
             UUID assigneeId
     );
+
+    /**
+     * Возвращает данные, необходимые для формирования основной части информации о задаче.
+     * <p>
+     * Помимо самой задачи содержит количество неудалённых комментариев
+     * и флаг того, что текущий пользователь отслеживает задачу.
+     *
+     * @param issueId идентификатор задачи
+     * @param actorUserId идентификатор пользователя, для которого определяется
+     *                    статус отслеживания
+     *
+     * @return данные задачи, количество комментариев и флаг отслеживания
+     */
+    @Query("""
+        SELECT 
+            i.* AS issue, 
+            COUNT(c.id) AS comment_count,
+            EXISTS (
+                    SELECT 1
+                    FROM taska.issue_watchers w
+                    WHERE w.issue_id = i.id
+                      AND w.user_id = :actorUserId
+                ) AS is_watching
+        FROM taska.issues i
+        LEFT JOIN taska.issue_comments c ON c.issue_id = i.id AND c.deleted_at IS NULL
+        WHERE i.id = :issueId AND i.deleted_at IS NULL
+        GROUP BY i.id
+    """)
+    Mono<IssueCoreDetails> findIssueCoreDetails(UUID issueId, UUID actorUserId);
+
+    @Query("""
+        SELECT *
+        FROM taska.issues
+        WHERE UPPER(issue_key) = UPPER(:issueKey)
+          AND deleted_at IS NULL
+        """)
+    Mono<Issue> findActiveByKeyIgnoreCase(String issueKey);
 }

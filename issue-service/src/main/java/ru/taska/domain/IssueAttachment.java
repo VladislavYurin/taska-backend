@@ -1,5 +1,7 @@
 package ru.taska.domain;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -18,6 +20,8 @@ import java.util.UUID;
  */
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Table(name = "issue_attachments", schema = "taska")
 public class IssueAttachment {
 

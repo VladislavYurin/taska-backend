@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.IssueEventType;
@@ -168,6 +169,23 @@ public class LabelServiceImpl implements LabelService {
                         log.debug("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
                 );
 
+    }
+
+    @Override
+    public Flux<LabelResponses.ProjectLabelInfo> getLabels(
+            String requestId,
+            String nodeId,
+            LabelCommands.ListIssueLabelsRequestDto requestDto
+    ) {
+        log.info(
+                "[{}][{}] Getting issue labels: issueId={}",
+                requestId,
+                nodeId,
+                requestDto.issueId()
+        );
+
+        return issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
+                .map(mapper::toProjectLabelInfo);
     }
 
     /**

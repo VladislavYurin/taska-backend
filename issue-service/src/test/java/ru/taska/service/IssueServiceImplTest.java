@@ -18,6 +18,7 @@ import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
+import ru.taska.service.impl.IssueAccessGuard;
 import ru.taska.service.impl.IssueServiceImpl;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
@@ -65,6 +66,9 @@ public class IssueServiceImplTest {
 
     @Mock
     protected IssueTransitionValidator validator;
+
+    @Mock
+    protected IssueAccessGuard issueAccessGuard;
 
     @Mock
     protected ru.taska.service.watcher.IssueAutoWatchService issueAutoWatchService;

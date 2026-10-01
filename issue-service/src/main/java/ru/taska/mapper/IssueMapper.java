@@ -254,7 +254,7 @@ public class IssueMapper {
     public DeleteIssueLinkResponse toDeleteIssueLinkProto(IssueLink link) {
         return DeleteIssueLinkResponse.newBuilder()
                 .setLinkId(link.getId().toString())
-                .setEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED)
+                .setEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_DELETED)
                 .build();
     }
 
@@ -311,8 +311,8 @@ public class IssueMapper {
             case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
             case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
             case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
-            case LINK_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_CREATED;
-            case LINK_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED;
+            case LINK_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_CREATED;
+            case LINK_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_DELETED;
             case ATTACHMENT_UPLOADED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED;
             case ATTACHMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_DELETED;
 
