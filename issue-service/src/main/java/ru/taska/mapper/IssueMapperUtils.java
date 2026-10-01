@@ -6,7 +6,7 @@ import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkViewType;
 import ru.taska.domain.dto.UserSummary;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/** * Утилиты для преобразования доменных моделей задач в protobuf-модели. */
 @Slf4j
 public final class IssueMapperUtils {
     public static UserSummaryResponse resolveUser(UUID userId, Map<UUID, UserSummary> profiles) {
@@ -39,7 +40,7 @@ public final class IssueMapperUtils {
         return builder.build();
     }
 
-    public static IssueLinkViewType resolveViewType(IssueLinkDetail linkDetail, UUID issueId) {
+    public static IssueLinkViewType resolveViewType(IssueLinkDetails linkDetail, UUID issueId) {
         IssueLink link = linkDetail.link();
         var isSourceIssue = link.getSourceIssueId().equals(issueId);
 
@@ -60,7 +61,17 @@ public final class IssueMapperUtils {
         };
     }
 
-    public static ru.taska.api.issue.v1.IssueLinkViewType resolveViewTypeToProto(IssueLinkDetail link, UUID issueId) {
+    /**
+     * Определяет тип отображения связи относительно текущей задачи
+     * и преобразует его в protobuf-тип.
+     * <p>Метод используется при маппинге {@link IssueLinkDetails} в
+     * {@code IssueLinkResponse} для заполнения поля {@code viewLinkType}.</p>
+     *
+     * @param link детали связи между задачами
+     * @param issueId идентификатор текущей задачи
+     * @return protobuf-тип отображения связи относительно текущей задачи
+     */
+    public static ru.taska.api.issue.v1.IssueLinkViewType resolveViewTypeToProto(IssueLinkDetails link, UUID issueId) {
         return toProtoIssueLinkViewType(resolveViewType(link, issueId));
     }
 

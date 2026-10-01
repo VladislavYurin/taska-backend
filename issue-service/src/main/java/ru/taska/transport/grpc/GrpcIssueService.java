@@ -59,6 +59,7 @@ import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.dto.ValidatedIssueRequest;
+import ru.taska.transport.grpc.validator.IssueGrpcRequestValidators;
 import validator.GrpcRequestValidators;
 
 @Slf4j

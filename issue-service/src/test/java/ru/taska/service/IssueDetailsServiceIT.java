@@ -22,7 +22,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.projection.TargetIssue;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.exception.DomainException;
@@ -228,13 +228,13 @@ public class IssueDetailsServiceIT extends AbstractIT {
 
         StepVerifier.create(result)
                 .assertNext(aggregate -> {
-                    IssueLinkDetail issueLinkDetail = aggregate.links().items().getFirst();
+                    IssueLinkDetails issueLinkDetails = aggregate.links().items().getFirst();
 
-                    IssueLink link = issueLinkDetail.link();
+                    IssueLink link = issueLinkDetails.link();
                     Assertions.assertEquals(issueId, link.getSourceIssueId());
                     Assertions.assertEquals(newIssueId, link.getTargetIssueId());
 
-                    TargetIssue target = issueLinkDetail.target();
+                    TargetIssue target = issueLinkDetails.target();
                     Assertions.assertNotNull(target);
                     Assertions.assertEquals(newIssueId, target.id());
                     Assertions.assertEquals(projectId, target.projectId());

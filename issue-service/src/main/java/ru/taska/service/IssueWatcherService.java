@@ -52,7 +52,12 @@ public interface IssueWatcherService {
     /**
      * Возвращает список подписчиков задачи
      */
-    Flux<IssueWatcher> listIssueWatchers(String requestId, String nodeId, UUID issueId, UUID actorUserId);
+    Flux<IssueWatcher> listIssueWatchers(
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId
+    );
 
     /**
      * Возвращает watchedByMe и watchersCount для текущего пользователя.

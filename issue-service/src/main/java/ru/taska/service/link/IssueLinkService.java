@@ -4,7 +4,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueLink;
 import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 
 import java.util.UUID;
 
@@ -38,7 +38,7 @@ public interface IssueLinkService {
      * @param actorUserId пользователь, получающий список связей
      * @return список связей
      */
-    Flux<IssueLinkDetail> listIssueLinksDetails(
+    Flux<IssueLinkDetails> listIssueLinksDetails(
             String requestId,
             String nodeId,
             UUID issueId,

@@ -5,7 +5,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.IssueLink;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 
 import java.util.UUID;
 
@@ -74,5 +74,5 @@ public interface IssueLinkRepository extends ReactiveCrudRepository<IssueLink, U
       AND il.deleted_at IS NULL
       AND other.deleted_at IS NULL
     """)
-    Flux<IssueLinkDetail> findIssueLinksWithOtherIssues(UUID issueId);
+    Flux<IssueLinkDetails> findIssueLinksWithOtherIssues(UUID issueId);
 }

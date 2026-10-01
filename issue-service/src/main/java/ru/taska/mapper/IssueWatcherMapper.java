@@ -62,6 +62,17 @@ public class IssueWatcherMapper {
                 .build();
     }
 
+    /**
+     * Преобразует наблюдателя задачи в protobuf-модель и дополняет её данными
+     * профиля пользователя.
+     * <p>
+     * Идентификатор пользователя берётся из {@link IssueWatcher}, а отображаемое
+     * имя и URL аватара — из переданных профилей.<
+     *
+     * @param watcher наблюдатель задачи
+     * @param profiles профили пользователей, связанные с наблюдателями
+     * @return protobuf-представление наблюдателя с данными профиля
+     */
     public IssueWatcherResponse toWatcherProto(IssueWatcher watcher, Map<UUID, UserSummary> profiles) {
         IssueWatcherResponse.Builder builder = toWatcherProto(watcher).toBuilder();
 
@@ -76,6 +87,14 @@ public class IssueWatcherMapper {
         return builder.build();
     }
 
+    /**
+     * Преобразует список наблюдателей задачи в protobuf-модель и дополняет
+     * каждого наблюдателя данными профиля пользователя.
+     *
+     * @param watchers список наблюдателей задачи
+     * @param profiles профили пользователей, связанные с наблюдателями
+     * @return protobuf-представление списка наблюдателей с общим количеством
+     */
     public ListIssueWatchersResponse toListWatchersResponse(List<IssueWatcher> watchers, Map<UUID, UserSummary> profiles) {
         return ListIssueWatchersResponse.newBuilder()
                 .addAllWatchers(watchers.stream().map(watcher -> toWatcherProto(watcher, profiles)).toList())

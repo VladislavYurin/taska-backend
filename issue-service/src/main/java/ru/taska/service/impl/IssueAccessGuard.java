@@ -14,6 +14,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
+/**
+ * Проверяет существование задачи и наличие у пользователя права на её просмотр.
+ *
+ * <p>Использует идентификатор проекта задачи для проверки роли пользователя
+ * через {@link ProjectRoleChecker}.</p>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -23,13 +29,24 @@ public class IssueAccessGuard {
     private final ProjectRoleChecker projectRoleChecker;
 
     /**
-     * Проверяет, что задача существует (issueLookup вернул значение) и что
-     * actorUserId обладает одной из разрешённых для чтения задачи ролей
-     * в проекте, к которому она относится.
-     * <p>
-     * Тип проверяемого значения не фиксирован — подходит и для {@code Issue},
-     * и для {@code IssueCoreDetails}: вызывающая сторона сама указывает,
-     * как извлечь из него projectId.
+     * Проверяет существование задачи и наличие у пользователя права на её просмотр.
+     *
+     * <p>Если задача не найдена, возвращает {@link DomainStatus#NOT_FOUND}.
+     * После получения задачи определяется её проект и проверяется роль пользователя.
+     * При успешной проверке возвращает исходные данные задачи без изменений.</p>
+     *
+     * <p>{@code issueLookup} — это источник данных задачи, а не сам объект задачи.
+     * Он передаётся вызывающей стороной, поскольку guard не отвечает за получение
+     * данных из конкретного источника.
+     *
+     * @param requestId идентификатор запроса
+     * @param nodeId идентификатор узла сервиса
+     * @param issueId идентификатор задачи
+     * @param actorUserId идентификатор пользователя, выполняющего запрос
+     * @param issueLookup источник данных задачи
+     * @param projectIdExtractor функция извлечения идентификатора проекта из данных задачи
+     * @param <T> тип данных задачи
+     * @return исходные данные задачи после успешной проверки доступа
      */
     public <T> Mono<T> verifyReadAccess(
             String requestId, String nodeId, UUID issueId, UUID actorUserId,

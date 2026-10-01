@@ -127,15 +127,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 actorUserId
         );
 
-        return issueWatcherRepository.findByIssueId(issueId)
-                .doOnError(error -> log.error(
-                        "[{}][{}] Failed to get issue watchers: issueId={}, actorUserId={}",
-                        requestId,
-                        nodeId,
-                        issueId,
-                        actorUserId,
-                        error
-                ));
+        return issueWatcherRepository.findByIssueId(issueId);
     }
 
     @Override

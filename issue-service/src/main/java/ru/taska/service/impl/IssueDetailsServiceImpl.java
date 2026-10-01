@@ -11,7 +11,7 @@ import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
 import ru.taska.domain.projection.IssueCoreDetails;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
@@ -47,23 +47,28 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
 
     @Override
     public Mono<IssueDetailsAggregate> getIssueDetails(
-            String requestId, String nodeId, UUID issueId, UUID actorUserId
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId
     ) {
         log.info("[{}][{}] getIssueDetails: issueId={}, actorUserId={}",
                 requestId, nodeId, issueId, actorUserId);
 
-        return verifyAccessAndFetchCore(requestId, nodeId, issueId, actorUserId)
-                .flatMap(core -> fetchCollateralSources(requestId, nodeId, issueId, actorUserId, core))
-                .flatMap(sources -> resolveProfiles(sources.extractUserIds(), requestId, nodeId)
+        return verifyAccessAndFetchCoreDetails(requestId, nodeId, issueId, actorUserId)
+                .flatMap(core -> fetchIssueDetailsSources(requestId, nodeId, issueId, actorUserId, core))
+                .flatMap(sources -> getProfiles(sources.extractUserIds(), requestId, nodeId)
                         .map(sources::withProfiles));
     }
 
     /**
-     * Проверяет существование задачи и доступ actorUserId по роли, отдаёт core-данные.
-     * Fail-fast: если задача не найдена или доступ запрещён — остальные 5 источников
-     * (labels/watchers/attachments/links/history) вообще не запрашиваются.
+     * Проверяет существование задачи и доступ {@code actorUserId} по роли
+     * и возвращает основные данные задачи.
+     *
+     * <p>При отсутствии задачи или запрете доступа выполнение завершается с ошибкой,
+     * остальные источники данных не запрашиваются.</p>
      */
-    private Mono<IssueCoreDetails> verifyAccessAndFetchCore(
+    private Mono<IssueCoreDetails> verifyAccessAndFetchCoreDetails(
             String requestId, String nodeId, UUID issueId, UUID actorUserId
     ) {
         return issueAccessGuard.verifyReadAccess(
@@ -77,25 +82,25 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
      * Параллельно загружает сопутствующие данные задачи (не влияющие на доступ)
      * и собирает их вместе с уже провалидированным core в {@link IssueDetailsSources}.
      */
-    private Mono<IssueDetailsSources> fetchCollateralSources(
+    private Mono<IssueDetailsSources> fetchIssueDetailsSources(
             String requestId, String nodeId, UUID issueId, UUID actorUserId, IssueCoreDetails core
     ) {
         LabelCommands.ListIssueLabelsRequestDto labelsRequest =
                 new LabelCommands.ListIssueLabelsRequestDto(issueId, actorUserId);
 
-        Mono<FetchResult<LabelResponses.ProjectLabelInfo>> labels = fetchResilient(
+        Mono<FetchResult<LabelResponses.ProjectLabelInfo>> labels = fetchWithFallback(
                 labelService.getLabels(requestId, nodeId, labelsRequest),
                 requestId, nodeId, issueId, "labels");
 
-        Mono<FetchResult<IssueWatcher>> watchers = fetchResilient(
+        Mono<FetchResult<IssueWatcher>> watchers = fetchWithFallback(
                 watcherService.listIssueWatchers(requestId, nodeId, issueId, actorUserId),
                 requestId, nodeId, issueId, "watchers");
 
-        Mono<FetchResult<AttachmentDto>> attachments = fetchResilient(
+        Mono<FetchResult<AttachmentDto>> attachments = fetchWithFallback(
                 attachmentService.listAttachments(requestId, nodeId, issueId, actorUserId),
                 requestId, nodeId, issueId, "attachments");
 
-        Mono<FetchResult<IssueLinkDetail>> links = fetchResilient(
+        Mono<FetchResult<IssueLinkDetails>> links = fetchWithFallback(
                 issueLinkService.listIssueLinksDetails(requestId, nodeId, issueId, actorUserId),
                 requestId, nodeId, issueId, "links");
 
@@ -110,8 +115,28 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
 
     }
 
-    private <T> Mono<FetchResult<T>> fetchResilient(
-            Flux<T> source, String requestId, String nodeId, UUID issueId, String sourceName
+    /**
+     * Загружает данные из источника и преобразует результат в {@link FetchResult}.
+     *
+     * <p>При успешной загрузке все элементы собираются в список и возвращаются
+     * как успешный результат. При ошибке она логируется, а вместо неё возвращается
+     * {@link FetchResult#failed()}, что позволяет продолжить обработку остальных
+     * источников данных.</p>
+     *
+     * @param source источник данных
+     * @param requestId идентификатор запроса
+     * @param nodeId идентификатор узла сервиса
+     * @param issueId идентификатор задачи
+     * @param sourceName название источника данных для логирования
+     * @param <T> тип элементов источника
+     * @return результат загрузки данных
+     */
+    private <T> Mono<FetchResult<T>> fetchWithFallback(
+            Flux<T> source,
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            String sourceName
     ) {
         return source.collectList()
                 .map(FetchResult::<T>ok)
@@ -119,7 +144,7 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
                 .onErrorReturn(FetchResult.failed());
     }
 
-    private Mono<Map<UUID, UserSummary>> resolveProfiles(
+    private Mono<Map<UUID, UserSummary>> getProfiles(
             Set<UUID> userIds, String requestId, String nodeId
     ) {
         if (userIds.isEmpty()) {

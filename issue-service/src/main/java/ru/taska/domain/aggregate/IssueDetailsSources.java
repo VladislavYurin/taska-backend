@@ -7,7 +7,7 @@ import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.util.FetchResult;
 import ru.taska.domain.projection.IssueCoreDetails;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.dto.labels.LabelResponses;
 
@@ -29,7 +29,7 @@ public record IssueDetailsSources(
         FetchResult<LabelResponses.ProjectLabelInfo> labels,
         FetchResult<IssueWatcher> watchers,
         FetchResult<AttachmentDto> attachments,
-        FetchResult<IssueLinkDetail> links,
+        FetchResult<IssueLinkDetails> links,
         List<IssueHistory> history
 ) {
 
@@ -66,7 +66,7 @@ public record IssueDetailsSources(
     }
 
     /**
-     * Достраивает финальный агрегат, добавляя резолвленные профили.
+     * Достраивает финальный агрегат, добавляя профили, полученные из auth-service.
      */
     public IssueDetailsAggregate withProfiles(Map<UUID, UserSummary> profiles) {
         return new IssueDetailsAggregate(

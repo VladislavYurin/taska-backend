@@ -185,14 +185,7 @@ public class LabelServiceImpl implements LabelService {
         );
 
         return issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
-                .map(mapper::toProjectLabelInfo)
-                .doOnError(error -> log.error(
-                        "[{}][{}] Failed to get issue labels: issueId={}",
-                        requestId,
-                        nodeId,
-                        requestDto.issueId(),
-                        error
-                ));
+                .map(mapper::toProjectLabelInfo);
     }
 
     /**

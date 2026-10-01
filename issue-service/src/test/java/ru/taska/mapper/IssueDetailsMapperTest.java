@@ -21,7 +21,7 @@ import ru.taska.domain.IssueWatcher;
 import ru.taska.domain.util.FetchResult;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
 import ru.taska.domain.projection.IssueCoreDetails;
-import ru.taska.domain.projection.IssueLinkDetail;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.projection.TargetIssue;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.dto.labels.LabelResponses;
@@ -115,13 +115,13 @@ class IssueDetailsMapperTest {
         link.setSourceIssueId(issueId);
         link.setTargetIssueId(targetIssue.id());
 
-        IssueLinkDetail issueLinkDetail = new IssueLinkDetail(link, targetIssue);
+        IssueLinkDetails issueLinkDetails = new IssueLinkDetails(link, targetIssue);
 
         LabelResponses.ProjectLabelInfo label = new LabelResponses.ProjectLabelInfo(UUID.randomUUID(), projectId, "bug", "#FF0000", userId1, Instant.now(), null);
 
         IssueDetailsAggregate aggregate = new IssueDetailsAggregate(
                 core, FetchResult.ok(List.of(label)),
-                FetchResult.ok(List.of(w1, w2)), FetchResult.ok(attachments), FetchResult.ok(List.of(issueLinkDetail)),
+                FetchResult.ok(List.of(w1, w2)), FetchResult.ok(attachments), FetchResult.ok(List.of(issueLinkDetails)),
                 List.of(history), profiles
         );
 

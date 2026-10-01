@@ -21,9 +21,9 @@ import ru.taska.domain.AttachmentDto;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueHistory;
 import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.projection.IssueLinkDetails;
 import ru.taska.domain.util.FetchResult;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
-import ru.taska.domain.projection.IssueLinkDetail;
 import ru.taska.domain.projection.TargetIssue;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.dto.labels.LabelResponses;
@@ -67,20 +67,32 @@ public abstract class IssueDetailsMapper {
             Issue core,
             FetchResult<LabelResponses.ProjectLabelInfo> labels,
             FetchResult<IssueWatcher> watchers,
-            FetchResult<IssueLinkDetail> links,
+            FetchResult<IssueLinkDetails> links,
             FetchResult<AttachmentDto> attachments,
             Map<UUID, UserSummary> profiles,
             boolean isWatching,
             long commentCount
     );
 
+    /**
+     * Дополняет {@link IssueDetailsResponse.Builder} данными, которые требуют
+     * дополнительной обработки после основного маппинга MapStruct.
+     *
+     * <p>Метод вызывается MapStruct автоматически после выполнения
+     * {@code toIssueDetails(...)}. Для каждого источника данные добавляются
+     * только при успешной загрузке ({@link FetchResult#available()}).
+     * Если источник недоступен, соответствующее поле не заполняется.</p>
+     *
+     * <p>Данные наблюдателей и вложений дополнительно обогащаются профилями
+     * пользователей.</p>
+     */
     @AfterMapping
     protected void mapCollections(
             @MappingTarget IssueDetailsResponse.Builder builder,
             Issue issue,
             FetchResult<LabelResponses.ProjectLabelInfo> labels,
             FetchResult<IssueWatcher> watchers,
-            FetchResult<IssueLinkDetail> links,
+            FetchResult<IssueLinkDetails> links,
             FetchResult<AttachmentDto> attachments,
             Map<UUID, UserSummary> profiles
     ) {
@@ -115,13 +127,13 @@ public abstract class IssueDetailsMapper {
             target = "viewLinkType",
             expression = "java(IssueMapperUtils.resolveViewTypeToProto(link, issueId))"
     )
-    abstract IssueLinkResponse toLinkProto(IssueLinkDetail link, @Context UUID issueId);
+    abstract IssueLinkResponse toLinkProto(IssueLinkDetails link, @Context UUID issueId);
 
     abstract TargetIssueResponse toTargetProto(TargetIssue target);
 
-    abstract List<IssueLinkResponse> toLinkResponses(List<IssueLinkDetail> links, @Context UUID issueId);
+    abstract List<IssueLinkResponse> toLinkResponses(List<IssueLinkDetails> links, @Context UUID issueId);
 
-    protected ListIssueLinksResponse toLinkList(List<IssueLinkDetail> links, @Context UUID issueId) {
+    protected ListIssueLinksResponse toLinkList(List<IssueLinkDetails> links, @Context UUID issueId) {
         return ListIssueLinksResponse.newBuilder()
                 .addAllIssueLinks(toLinkResponses(links, issueId))
                 .build();

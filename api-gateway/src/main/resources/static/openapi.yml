@@ -2608,26 +2608,9 @@ components:
 
     IssueDetailsResponseDto:
       type: object
-      required:
-        - id
-        - projectId
-        - issueNumber
-        - issueKey
-        - issueType
-        - summary
-        - status
-        - priority
-        - assignee
-        - reporter
-        - createdAt
-        - updatedAt
-        - version
-        - labels
-        - watchers
-        - isWatching
-        - links
-        - attachments
-        - commentCount
+      required: [id, projectId, issueNumber, issueKey, issueType, summary, status,
+                 priority, reporter, createdAt, updatedAt, version, labels, watchers,
+                 isWatching, links, attachments, commentCount]
       properties:
         id:
           type: string
@@ -2916,8 +2899,6 @@ components:
         createdAt:
           type: string
           format: date-time
-        linkType:
-          $ref: '#/components/schemas/IssueLinkTypeDto'
         target:
           $ref: '#/components/schemas/TargetIssueDto'
 
