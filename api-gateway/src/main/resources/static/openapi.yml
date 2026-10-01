@@ -776,6 +776,36 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/issues/by-key/{issueKey}:
+    get:
+      summary: Возвращает задачу по ключу (без projectId)
+      operationId: getIssueByKey
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueKey
+          in: path
+          required: true
+          schema:
+            type: string
+            example: API-12
+
+      responses:
+        '200':
+          description: Задача найдена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/issues/{issueId}/assignee:
     put:
       summary: Назначает исполнителя задачи

@@ -24,6 +24,7 @@ import ru.taska.api.issue.v1.DeleteIssueWorklogRequest;
 import ru.taska.api.issue.v1.DeleteIssueWorklogResponse;
 import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.GetIssueByKeyRequest;
 import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.GetIssueWatchStateRequest;
@@ -92,6 +93,12 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
         return grpcIssueService.getIssueDetails(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssueDetails"));
+    }
+
+    @Override
+    public Mono<IssueResponse> getIssueByKey(Mono<GetIssueByKeyRequest> request) {
+        return grpcIssueService.getIssueByKey(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getIssueByKey"));
     }
 
     @Override

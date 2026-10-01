@@ -41,7 +41,7 @@ public class IssueAccessGuard {
      *
      * @param requestId идентификатор запроса
      * @param nodeId идентификатор узла сервиса
-     * @param issueId идентификатор задачи
+     * @param identifier идентификатор задачи(id или ключ)
      * @param actorUserId идентификатор пользователя, выполняющего запрос
      * @param issueLookup источник данных задачи
      * @param projectIdExtractor функция извлечения идентификатора проекта из данных задачи
@@ -49,13 +49,13 @@ public class IssueAccessGuard {
      * @return исходные данные задачи после успешной проверки доступа
      */
     public <T> Mono<T> verifyReadAccess(
-            String requestId, String nodeId, UUID issueId, UUID actorUserId,
+            String requestId, String nodeId, Object identifier, UUID actorUserId,
             Mono<T> issueLookup, Function<T, UUID> projectIdExtractor
     ) {
         return issueLookup
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("[{}][{}] Issue with id: {} was not found", requestId, nodeId, issueId);
-                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + issueId));
+                    log.warn("[{}][{}] Issue with id: {} was not found", requestId, nodeId, identifier);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found: " + identifier));
                 }))
                 .flatMap(value -> {
                     UUID projectId = projectIdExtractor.apply(value);

@@ -6,8 +6,11 @@ import org.junit.jupiter.api.Test;
 import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
 import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.IssueDetailsResponse;
+import ru.taska.api.issue.v1.IssueLabelResponse;
+import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssueWatchersResponse;
+import ru.taska.api.issue.v1.ListLabelsResponse;
 import ru.taska.domain.AttachmentDto;
 import ru.taska.domain.Issue;
 import ru.taska.domain.IssueAttachment;
@@ -36,11 +39,12 @@ import java.util.UUID;
 class IssueDetailsMapperTest {
 
     public static final long COMMENT_COUNT = 3L;
+    public static final String STATUS_KEY = "IN_PROGRESS";
     private IssueDetailsMapper mapper;
 
     @BeforeEach
     void setUp() {
-        IssueDetailsMapperImpl impl = new IssueDetailsMapperImpl();
+        IssueDetailsMapper impl = new IssueDetailsMapperImpl();
         impl.issueWatcherMapper = new IssueWatcherMapper();
         impl.attachmentMapper = new AttachmentMapper();
         mapper = impl;
@@ -101,7 +105,7 @@ class IssueDetailsMapperTest {
 
         Issue issue = core.issue();
         IssueWatcher w1 = createWatcher(issueId, issue.getProjectId(), userId1);
-        IssueWatcher w2 = createWatcher(issueId, issue.getProjectId(), UUID.randomUUID());
+        IssueWatcher w2 = createWatcher(issueId, issue.getProjectId(), userId2);
 
         IssueHistory history = createHistory(issueId, userId2);
 
@@ -110,10 +114,15 @@ class IssueDetailsMapperTest {
         );
         IssueLink link = new IssueLink();
 
+        Instant linkCreatedAt = Instant.parse("2026-09-01T10:15:30Z");
+
         link.setId(UUID.randomUUID());
         link.setLinkType(IssueLinkType.BLOCKS);
         link.setSourceIssueId(issueId);
         link.setTargetIssueId(targetIssue.id());
+        link.setProjectId(projectId);
+        link.setCreatedAt(linkCreatedAt);
+        link.setCreatedBy(userId1);
 
         IssueLinkDetails issueLinkDetails = new IssueLinkDetails(link, targetIssue);
 
@@ -127,30 +136,93 @@ class IssueDetailsMapperTest {
 
         GetIssueDetailsResponse response = mapper.toProto(aggregate);
 
-        Assertions.assertEquals(issue.getId().toString(), response.getIssue().getId());
-        Assertions.assertEquals(user1.displayName(), response.getIssue().getAssignee().getDisplayName());
-        Assertions.assertEquals(user2.displayName(), response.getIssue().getReporter().getDisplayName());
+        IssueDetailsResponse issueResponse = response.getIssue();
 
-        ListAttachmentsResponse attachmentsResponse = response.getIssue().getAttachments();
+        // Issue
+        Assertions.assertEquals(issue.getId().toString(), issueResponse.getId());
+        Assertions.assertEquals(issue.getProjectId().toString(), issueResponse.getProjectId());
+        Assertions.assertEquals(issue.getIssueNumber().longValue(), issueResponse.getIssueNumber());
+        Assertions.assertEquals(issue.getIssueKey(), issueResponse.getIssueKey());
+        Assertions.assertEquals(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK, issueResponse.getIssueType());
+        Assertions.assertEquals(issue.getSummary(), issueResponse.getSummary());
+        Assertions.assertEquals(issue.getDescription(), issueResponse.getDescription());
+        Assertions.assertEquals(issue.getStatusKey(), issueResponse.getStatus());
+        Assertions.assertEquals(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH, issueResponse.getPriority());
+
+        // Users
+        Assertions.assertEquals(user1.displayName(), issueResponse.getAssignee().getDisplayName());
+        Assertions.assertEquals(user2.displayName(), issueResponse.getReporter().getDisplayName());
+
+        Assertions.assertEquals(userId1.toString(), issueResponse.getAssigneeId());
+        Assertions.assertEquals(userId2.toString(), issueResponse.getReporterId());
+
+        // Dates / estimates
+        Assertions.assertEquals(IssueMapperUtils.map(issue.getCreatedAt()), issueResponse.getCreatedAt());
+        Assertions.assertEquals(IssueMapperUtils.map(issue.getUpdatedAt()), issueResponse.getUpdatedAt());
+
+        Assertions.assertEquals(issue.getVersion(), issueResponse.getVersion());
+        Assertions.assertEquals(issue.getStoryPoints().doubleValue(), issueResponse.getStoryPoints());
+        Assertions.assertEquals(issue.getStartDate().toString(), issueResponse.getStartDate());
+        Assertions.assertEquals(issue.getDueDate().toString(), issueResponse.getDueDate());
+        Assertions.assertEquals(
+                issue.getOriginalEstimateMinutes(),
+                issueResponse.getOriginalEstimateMinutes()
+        );
+        Assertions.assertEquals(
+                issue.getRemainingEstimateMinutes(),
+                issueResponse.getRemainingEstimateMinutes()
+        );
+
+        // Watching
+        Assertions.assertTrue(issueResponse.getIsWatching());
+        Assertions.assertEquals(COMMENT_COUNT, issueResponse.getCommentCount());
+
+        // Attachments
+        ListAttachmentsResponse attachmentsResponse = issueResponse.getAttachments();
         Assertions.assertEquals(2, attachmentsResponse.getAttachmentsCount());
         Assertions.assertEquals("file1.png", attachmentsResponse.getAttachments(0).getFileName());
         Assertions.assertEquals(user1.displayName(), attachmentsResponse.getAttachments(0).getUploadedByUser().getDisplayName());
         Assertions.assertEquals("file2.pdf", attachmentsResponse.getAttachments(1).getFileName());
 
-        Assertions.assertEquals(1, response.getIssue().getLabels().getLabelsCount());
-        Assertions.assertEquals("bug", response.getIssue().getLabels().getLabels(0).getName());
+        // Labels
+        ListLabelsResponse labelsResponse = issueResponse.getLabels();
+        Assertions.assertEquals(1, labelsResponse.getLabelsCount());
 
-        ListIssueWatchersResponse watchersResponse = response.getIssue().getWatchers();
+        IssueLabelResponse labelResponse = labelsResponse.getLabels(0);
+        Assertions.assertEquals(label.id().toString(), labelResponse.getId());
+        Assertions.assertEquals(label.name(), labelResponse.getName());
+        Assertions.assertEquals(label.color(), labelResponse.getColor());
+
+        // Watchers
+        ListIssueWatchersResponse watchersResponse = issueResponse.getWatchers();
         Assertions.assertEquals(2, watchersResponse.getWatchersCount());
-        Assertions.assertEquals("John Doe", watchersResponse.getWatchers(0).getDisplayName());
-        Assertions.assertEquals("", watchersResponse.getWatchers(1).getDisplayName());
 
-        ListIssueLinksResponse linksResponse = response.getIssue().getLinks();
+        Assertions.assertEquals(user1.id().toString(), watchersResponse.getWatchers(0).getUserId());
+        Assertions.assertEquals(user1.displayName(), watchersResponse.getWatchers(0).getDisplayName());
+        Assertions.assertEquals(user1.avatarUrl(), watchersResponse.getWatchers(0).getAvatarUrl());
+
+        Assertions.assertEquals(user2.id().toString(), watchersResponse.getWatchers(1).getUserId());
+        Assertions.assertEquals(user2.displayName(), watchersResponse.getWatchers(1).getDisplayName());
+        Assertions.assertEquals("", watchersResponse.getWatchers(1).getAvatarUrl());
+
+        // Links
+        ListIssueLinksResponse linksResponse = issueResponse.getLinks();
         Assertions.assertEquals(1, linksResponse.getIssueLinksCount());
-        Assertions.assertEquals("API-7", linksResponse.getIssueLinks(0).getTarget().getIssueKey());
-        Assertions.assertEquals(projectId.toString(), linksResponse.getIssueLinks(0).getTarget().getProjectId());
-        Assertions.assertEquals(targetIssue.id().toString(), linksResponse.getIssueLinks(0).getTarget().getId());
 
+        IssueLinkResponse linkResponse = linksResponse.getIssueLinks(0);
+
+        Assertions.assertEquals(link.getId().toString(), linkResponse.getId());
+        Assertions.assertEquals(link.getProjectId().toString(), linkResponse.getProjectId());
+        Assertions.assertEquals(link.getSourceIssueId().toString(), linkResponse.getSourceIssueId());
+        Assertions.assertEquals(link.getTargetIssueId().toString(), linkResponse.getTargetIssueId());
+        Assertions.assertEquals(link.getCreatedBy().toString(), linkResponse.getCreatedBy());
+        Assertions.assertEquals(IssueMapperUtils.map(linkCreatedAt), linkResponse.getCreatedAt());
+
+        Assertions.assertEquals("API-7", linkResponse.getTarget().getIssueKey());
+        Assertions.assertEquals(projectId.toString(), linkResponse.getTarget().getProjectId());
+        Assertions.assertEquals(targetIssue.id().toString(), linkResponse.getTarget().getId());
+
+        // History
         Assertions.assertEquals(1, response.getHistoryCount());
     }
 
@@ -163,7 +235,7 @@ class IssueDetailsMapperTest {
         issue.setIssueType(IssueType.TASK);
         issue.setSummary("Summary");
         issue.setDescription("Description");
-        issue.setStatusKey("IN_PROGRESS");
+        issue.setStatusKey(STATUS_KEY);
         issue.setPriority(IssuePriority.HIGH);
         issue.setAssigneeId(assigneeId);
         issue.setReporterId(reporterId);

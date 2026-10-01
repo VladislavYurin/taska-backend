@@ -80,6 +80,10 @@ service IssueService {
   rpc GetIssueDetails (GetIssueRequest) returns (GetIssueDetailsResponse);
 
   /**
+   * Возвращает задачу по ключу
+   */
+  rpc GetIssueByKey(GetIssueByKeyRequest) returns (IssueResponse);
+  /**
    * Мягкое удаление задачи.
    */
   rpc DeleteIssue(DeleteIssueRequest)
@@ -2322,4 +2326,14 @@ message TargetIssueResponse {
    * Ключ статуса целевой задачи.
    */
   string status_key = 5;
+}
+
+message GetIssueByKeyRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetIssueByKeyRequestBody body = 2;
+}
+
+message GetIssueByKeyRequestBody {
+  string issue_key = 1;
+  string actor_user_id = 2;
 }

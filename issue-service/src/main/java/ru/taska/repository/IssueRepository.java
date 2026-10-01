@@ -153,4 +153,12 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
         GROUP BY i.id
     """)
     Mono<IssueCoreDetails> findIssueCoreDetails(UUID issueId, UUID actorUserId);
+
+    @Query("""
+        SELECT *
+        FROM taska.issues
+        WHERE UPPER(issue_key) = UPPER(:issueKey)
+          AND deleted_at IS NULL
+        """)
+    Mono<Issue> findActiveByKeyIgnoreCase(String issueKey);
 }

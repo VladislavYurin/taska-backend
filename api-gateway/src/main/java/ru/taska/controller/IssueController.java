@@ -58,6 +58,17 @@ public class IssueController implements IssueApi {
     }
 
     /**
+     * Возвращает задачу по ключу.
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> getIssueByKey(String issueKey, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.getIssueByKey(issueKey, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
      * Возвращает список задач проекта с учётом фильтров и пагинации.
      */
     @Override

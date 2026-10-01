@@ -13,6 +13,8 @@ import ru.taska.api.issue.v1.DeleteIssueLinkBody;
 import ru.taska.api.issue.v1.DeleteIssueLinkRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequestBody;
+import ru.taska.api.issue.v1.GetIssueByKeyRequest;
+import ru.taska.api.issue.v1.GetIssueByKeyRequestBody;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.GetIssueRequestBody;
 import ru.taska.api.issue.v1.ListIssueLinksRequest;
@@ -85,6 +87,30 @@ public class GrpcIssueServiceClient {
                                 .build()
                 )
                 .map(issueMapper::toRestIssueDetailsWithHistoryResponseDto);
+    }
+
+    /**
+     * Получает задачу по ключу через gRPC и преобразует результат в REST DTO.
+     *
+     * @param issueKey ключ задачи
+     * @param context контекст текущего запроса
+     * @return {@link Mono} с данными задачи
+     */
+    public Mono<IssueResponseDto> getIssueByKey(String issueKey, GatewayContext context) {
+        log.info("[{}] Calling getIssueByKey", context.requestId());
+
+        return dynamicStub().getIssueByKey(
+                        GetIssueByKeyRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(
+                                        GetIssueByKeyRequestBody.newBuilder()
+                                                .setIssueKey(issueKey)
+                                                .setActorUserId(context.userContext().userId())
+                                                .build()
+                                )
+                                .build()
+                )
+                .map(issueMapper::toRestIssueResponse);
     }
 
     /**

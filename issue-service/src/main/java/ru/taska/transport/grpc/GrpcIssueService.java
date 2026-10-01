@@ -25,6 +25,7 @@ import ru.taska.api.issue.v1.DeleteIssueRequest;
 import ru.taska.api.issue.v1.DeleteIssueResponse;
 import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.GetIssueByKeyRequest;
 import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.IssuePriority;
@@ -58,6 +59,7 @@ import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
 import ru.taska.service.transition.IssueTransitionService;
+import ru.taska.transport.grpc.dto.ValidatedIssueByKeyRequest;
 import ru.taska.transport.grpc.dto.ValidatedIssueRequest;
 import ru.taska.transport.grpc.validator.IssueGrpcRequestValidators;
 import validator.GrpcRequestValidators;
@@ -250,6 +252,33 @@ public class GrpcIssueService {
                         log.info("[{}][{}] getIssueDetails: successfully found, issueId={}, actorUserId={}",
                                 validated.requestId(), validated.nodeId(), validated.issueId(), validated.actorUserId()))
                 .doOnError(logOnError(validated.requestId(), validated.nodeId(), "getIssueDetails"));
+    }
+
+    @TrackMetrics(counter = "issue-service_get-issue-by-key_grpc_counter",
+            timer = "issue-service_get-issue-by-key_grpc_timer")
+    public Mono<IssueResponse> getIssueByKey(Mono<GetIssueByKeyRequest> request) {
+        return request.flatMap(this::handleGetIssueByKey);
+    }
+
+    private Mono<IssueResponse> handleGetIssueByKey(GetIssueByKeyRequest req) {
+        return IssueGrpcRequestValidators.validateIssueKeyScopedRequest(
+                        req.getHeader(), req.getBody().getIssueKey(), req.getBody().getActorUserId())
+                .doOnError(StatusRuntimeException.class,
+                        logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "getIssueByKey"))
+                .flatMap(this::fetchIssueByKey);
+    }
+
+    private Mono<IssueResponse> fetchIssueByKey(ValidatedIssueByKeyRequest validated) {
+        log.info("[{}][{}] getIssueByKey: issueKey={}, actorUserId={}",
+                validated.requestId(), validated.nodeId(), validated.issueKey(), validated.actorUserId());
+
+        return issueService.getIssueByKey(
+                        validated.requestId(), validated.nodeId(), validated.issueKey(), validated.actorUserId())
+                .map(issueMapper::toIssueProto)
+                .doOnSuccess(response ->
+                        log.info("[{}][{}] getIssueByKey: successfully found, issueKey={}, actorUserId={}",
+                                validated.requestId(), validated.nodeId(), validated.issueKey(), validated.actorUserId()))
+                .doOnError(logOnError(validated.requestId(), validated.nodeId(), "getIssueByKey"));
     }
 
     @TrackMetrics(counter = "issue-service_list-issues_grpc_counter",
