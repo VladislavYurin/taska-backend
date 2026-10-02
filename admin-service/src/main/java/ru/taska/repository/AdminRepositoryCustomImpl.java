@@ -55,35 +55,30 @@ public class AdminRepositoryCustomImpl implements AdminRepositoryCustom {
     private Criteria buildCriteria(FilterAuditDTO filter) {
         Criteria criteria = Criteria.empty();
 
-        Optional.ofNullable(filter.actorUserId())
-                .ifPresent(id -> criteria.and("actor_user_id").is(id));
-
-        Optional.ofNullable(filter.action())
-                .filter(s -> !s.isEmpty())
-                .ifPresent(action -> criteria.and("action").is(action));
-
-        Optional.ofNullable(filter.targetService())
-                .filter(s -> !s.isEmpty())
-                .ifPresent(service -> criteria.and("target_service").is(service));
-
-        Optional.ofNullable(filter.targetTable())
-                .filter(s -> !s.isEmpty())
-                .ifPresent(table -> criteria.and("target_table").is(table));
-
-        Optional.ofNullable(filter.targetId())
-                .filter(s -> !s.isEmpty())
-                .ifPresent(id -> criteria.and("target_id").is(id));
-
-        Optional.ofNullable(filter.requestId())
-                .filter(s -> !s.isEmpty())
-                .ifPresent(requestId -> criteria.and("request_id").is(requestId));
-
-        Optional.ofNullable(filter.createdAtFrom())
-                .ifPresent(from -> criteria.and("created_at").greaterThanOrEquals(from));
-
-        Optional.ofNullable(filter.createdAtTo())
-                .ifPresent(to -> criteria.and("created_at").lessThanOrEquals(to));
-
+        if (filter.actorUserId() != null) {
+            criteria = criteria.and("actor_user_id").is(filter.actorUserId());
+        }
+        if (filter.action() != null && !filter.action().isEmpty()) {
+            criteria = criteria.and("action").is(filter.action());
+        }
+        if (filter.targetService() != null && !filter.targetService().isEmpty()) {
+            criteria = criteria.and("target_service").is(filter.targetService());
+        }
+        if (filter.targetTable() != null && !filter.targetTable().isEmpty()) {
+            criteria = criteria.and("target_table").is(filter.targetTable());
+        }
+        if (filter.targetId() != null && !filter.targetId().isEmpty()) {
+            criteria = criteria.and("target_id").is(filter.targetId());
+        }
+        if (filter.requestId() != null && !filter.requestId().isEmpty()) {
+            criteria = criteria.and("request_id").is(filter.requestId());
+        }
+        if (filter.createdAtFrom() != null) {
+            criteria = criteria.and("created_at").greaterThanOrEquals(filter.createdAtFrom());
+        }
+        if (filter.createdAtTo() != null) {
+            criteria = criteria.and("created_at").lessThanOrEquals(filter.createdAtTo());
+        }
         return criteria;
     }
 }

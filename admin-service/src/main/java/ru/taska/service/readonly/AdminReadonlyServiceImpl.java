@@ -8,6 +8,7 @@ import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PageResult;
 import ru.taska.dto.*;
+import ru.taska.entity.AuditLog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.AuditLogMapper;
@@ -135,47 +136,22 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         long resolvedOffset = (long) resolvedPage * resolvedPageSize;
         int resolvedLimit = resolvedPageSize;
 
-        log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, from: {}, to: {}, page: {}, size: {}",
+        log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, requestId: {}, from: {}, to: {}, page: {}, size: {}",
                 filterAuditDTO.actorUserId(),
                 filterAuditDTO.action(),
                 filterAuditDTO.targetService(),
                 filterAuditDTO.targetTable(),
                 filterAuditDTO.targetId(),
+                filterAuditDTO.requestId(),
                 filterAuditDTO.createdAtFrom(),
                 filterAuditDTO.createdAtTo(),
                 resolvedPage,
                 resolvedPageSize);
 
-        return Mono.zip(
+         return Mono.zip(
                         auditLogRepository.findByFilter(filterAuditDTO,
                                         resolvedLimit, resolvedOffset)
-                                .map(auditLog -> {
-                                    Map<String, Object> oldValue = convertJsonNodeToMap(auditLog.getOldValue());
-                                    Map<String, Object> newValue = convertJsonNodeToMap(auditLog.getNewValue());
-
-                                    if (oldValue != null || newValue != null) {
-                                        List<Map<String, Object>> rows = new ArrayList<>();
-                                        if (oldValue != null) rows.add(oldValue);
-                                        if (newValue != null) rows.add(newValue);
-
-                                        List<Map<String, Object>> maskedRows = maskService.maskSensitiveData(
-                                                rows,
-                                                auditLog.getTargetService(),
-                                                auditLog.getTargetTable(),
-                                                auditLog.getRequestId(),
-                                                "audit-log-read"
-                                        );
-
-                                        int index = 0;
-                                        if (oldValue != null && index < maskedRows.size()) {
-                                            auditLog.setOldValue(convertMapToJsonNode(maskedRows.get(index++)));
-                                        }
-                                        if (newValue != null && index < maskedRows.size()) {
-                                            auditLog.setNewValue(convertMapToJsonNode(maskedRows.get(index)));
-                                        }
-                                    }
-                                    return auditLogMapper.toResponseDto(auditLog);
-                                })
+                                .flatMap(this::maskAndMapAuditLog)
                                 .collectList(),
                         auditLogRepository.countByFilter(filterAuditDTO)
                 )
@@ -195,6 +171,59 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                 });
     }
 
+    /**
+     * Маскирует sensitive-данные в old/new значениях аудит-лога и преобразует в DTO.
+     */
+    private Mono<AuditEntriesResponseDto> maskAndMapAuditLog(AuditLog auditLog) {
+        Map<String, Object> oldValue = convertJsonNodeToMap(auditLog.getOldValue());
+        Map<String, Object> newValue = convertJsonNodeToMap(auditLog.getNewValue());
+
+        // Маскируем oldValue
+        Mono<Map<String, Object>> oldValueMono = oldValue != null
+                ? Mono.just(maskService.maskSensitiveDataForAudit(
+                oldValue,
+                auditLog.getTargetService(),
+                auditLog.getTargetTable(),
+                auditLog.getRequestId(),
+                "audit-log-read"
+        ))
+                : Mono.just(null);
+
+        // Маскируем newValue
+        Mono<Map<String, Object>> newValueMono = newValue != null
+                ? Mono.just(maskService.maskSensitiveDataForAudit(
+                newValue,
+                auditLog.getTargetService(),
+                auditLog.getTargetTable(),
+                auditLog.getRequestId(),
+                "audit-log-read"
+        ))
+                : Mono.just(null);
+
+        // Объединяем результаты и создаем DTO
+        return Mono.zip(oldValueMono, newValueMono)
+                .map(tuple -> {
+                    Map<String, Object> maskedOldValue = tuple.getT1();
+                    Map<String, Object> maskedNewValue = tuple.getT2();
+
+                    // Обновляем old/new значения
+                    if (maskedOldValue != null) {
+                        auditLog.setOldValue(convertMapToJsonNode(maskedOldValue));
+                    } else {
+                        auditLog.setOldValue(null);
+                    }
+
+                    if (maskedNewValue != null) {
+                        auditLog.setNewValue(convertMapToJsonNode(maskedNewValue));
+                    } else {
+                        auditLog.setNewValue(null);
+                    }
+
+                    return auditLogMapper.toResponseDto(auditLog);
+                });
+    }
+
+
     private boolean isFilterEmpty(FilterAuditDTO filterAuditDTO) {
         return filterAuditDTO == null ||
                (filterAuditDTO.actorUserId() == null &&
@@ -202,6 +231,7 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                 filterAuditDTO.targetService() == null &&
                 filterAuditDTO.targetTable() == null &&
                 filterAuditDTO.targetId() == null &&
+                filterAuditDTO.requestId() == null &&
                 filterAuditDTO.createdAtFrom() == null &&
                 filterAuditDTO.createdAtTo() == null);
     }

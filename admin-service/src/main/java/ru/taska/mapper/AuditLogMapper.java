@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.taska.api.admin.v1.ListAuditEntriesResponse;
 import ru.taska.api.admin.v1.ListAuditEntry;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class AuditLogMapper {
 
     /**
@@ -98,7 +100,12 @@ public class AuditLogMapper {
         }
 
         if (pageResult.pageSize() != null) {
-            builder.setPageSize(pageResult.pageSize());
+            if (pageResult.pageSize() <= 0) {
+                log.warn("Invalid pageSize {} in audit page result, defaulting to 0", pageResult.pageSize());
+                builder.setPageSize(0);
+            } else {
+                builder.setPageSize(pageResult.pageSize());
+            }
         } else {
             builder.setPageSize(0);
         }
@@ -108,6 +115,7 @@ public class AuditLogMapper {
             totalPages = (int) Math.ceil((double) pageResult.totalCount() / pageResult.pageSize());
             builder.setTotalPages(totalPages);
         } else {
+            log.warn("Invalid or missing pageSize, cannot calculate totalPages");
             builder.setTotalPages(0);
         }
 

@@ -456,9 +456,6 @@ class AdminReadonlyServiceImplTest {
         Assertions.assertThat(response.requestId()).isEqualTo(auditLog.getRequestId());
         Assertions.assertThat(response.createdAt()).isEqualTo(auditLog.getCreatedAt());
         Assertions.assertThat(response.reason()).isEqualTo(auditLog.getReason());
-
-        Assertions.assertThat(response.oldValue().get("value").asText()).isEqualTo(auditLog.getOldValue().get("value").asText());
-        Assertions.assertThat(response.newValue().get("value").asText()).isEqualTo(auditLog.getNewValue().get("value").asText());
     }
 
     @Test

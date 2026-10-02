@@ -364,13 +364,14 @@ public class GrpcAdminReadonlyService {
                             String targetId = req.getBody().getTargetId();
                             String bodyRequestId = req.getBody().getRequestId();
 
-                            log.info("[{}][{}] listAuditEntries: actorUserId={}, action={}, targetService={}, targetTable={}, targetId={}, createdAtFrom={}, createdAtTo={}, page={}, pageSize={}",
+                            log.info("[{}][{}] listAuditEntries: actorUserId={}, action={}, targetService={}, targetTable={}, targetId={}, bodyRequestId={}, createdAtFrom={}, createdAtTo={}, page={}, pageSize={}",
                                     requestId, nodeId,
                                     actorUserId,
                                     action,
                                     targetService,
                                     targetTable,
                                     targetId,
+                                    bodyRequestId,
                                     createdAtFrom,
                                     createdAtTo,
                                     page,
@@ -378,7 +379,7 @@ public class GrpcAdminReadonlyService {
                             );
                             return adminReadonlyService.listAuditEntries(
                                             auditLogMapper.toFilterDTO(actorUserId, action, targetService,
-                                                    targetTable, targetId, requestId, createdAtFrom, createdAtTo),
+                                                    targetTable, targetId, bodyRequestId, createdAtFrom, createdAtTo),
                                             page,
                                             pageSize
                                     )

@@ -280,35 +280,48 @@ public class AdminDataMapper {
         AuditEntryDto dto = new AuditEntryDto();
 
         if (grpcAuditEntry.hasActorUserId()) {
-            dto.setActorUserId(UUID.fromString(grpcAuditEntry.getActorUserId()));
+            String actorUserId = grpcAuditEntry.getActorUserId();
+            if (actorUserId != null && !actorUserId.isEmpty()) {
+                dto.setActorUserId(UUID.fromString(actorUserId));
+            }
         }
+
         if (grpcAuditEntry.hasActorLogin()) {
             dto.setActorLogin(grpcAuditEntry.getActorLogin());
         }
+
         if (grpcAuditEntry.hasAction()) {
             dto.setAction(grpcAuditEntry.getAction());
         }
+
         if (grpcAuditEntry.hasTargetService()) {
             dto.setTargetService(grpcAuditEntry.getTargetService());
         }
+
         if (grpcAuditEntry.hasTargetTable()) {
             dto.setTargetTable(grpcAuditEntry.getTargetTable());
         }
+
         if (grpcAuditEntry.hasTargetId()) {
             dto.setTargetId(grpcAuditEntry.getTargetId());
         }
+
         if (grpcAuditEntry.hasOldValue()) {
             dto.setOldValue(grpcAuditEntry.getOldValue());
         }
+
         if (grpcAuditEntry.hasNewValue()) {
             dto.setNewValue(grpcAuditEntry.getNewValue());
         }
+
         if (grpcAuditEntry.hasReason()) {
             dto.setReason(grpcAuditEntry.getReason());
         }
+
         if (grpcAuditEntry.hasRequestId()) {
             dto.setRequestId(grpcAuditEntry.getRequestId());
         }
+
         if (grpcAuditEntry.hasCreatedAt()) {
             dto.setCreatedAt(OffsetDateTime.ofInstant(
                     Instant.ofEpochSecond(

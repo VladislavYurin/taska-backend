@@ -129,14 +129,23 @@ class AdminReadOnlyServiceIT extends AbstractIT {
 
         StepVerifier.create(adminReadonlyService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
-                        && de.getStatus() == DomainStatus.NOT_FOUND)
+                                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
     }
 
-  /*  @Test
+    @Test
     void listAuditEntries_withAllFilters_returnsMatchingEntry() {
-        UUID actorUserId = UUID.randomUUID();
-        FilterAuditDTO filterDTO = new FilterAuditDTO(actorUserId, "action", "targetService", "targetTable", "00000000-0000-0000-0000-000000000001", "requestId", Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2024-01-31T23:59:59.999999999Z")
+        UUID actorUserId = UUID.fromString(FIXTURE_USER_ID);
+
+        FilterAuditDTO filterDTO = new FilterAuditDTO(
+                actorUserId,
+                "action",
+                FIXTURE_SERVICE,
+                FIXTURE_TABLE,
+                "00000000-0000-0000-0000-000000000001",
+                "requestId",
+                Instant.parse("2024-01-01T00:00:00Z"),
+                Instant.parse("2024-01-31T23:59:59.999999999Z")
         );
 
         StepVerifier.create(adminReadonlyService.listAuditEntries(filterDTO, 0, 10))
@@ -147,17 +156,19 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                     AuditEntriesResponseDto entry = response.items().getFirst();
 
                     Assertions.assertThat(entry.actorUserId()).isEqualTo(actorUserId);
+                    Assertions.assertThat(entry.actorLogin()).isEqualTo(FIXTURE_USER_LOGIN);
                     Assertions.assertThat(entry.action()).isEqualTo("action");
-                    Assertions.assertThat(entry.targetService()).isEqualTo("targetService");
-                    Assertions.assertThat(entry.targetTable()).isEqualTo("targetTable");
+                    Assertions.assertThat(entry.targetService()).isEqualTo(FIXTURE_SERVICE);
+                    Assertions.assertThat(entry.targetTable()).isEqualTo(FIXTURE_TABLE);
                     Assertions.assertThat(entry.targetId()).isEqualTo("00000000-0000-0000-0000-000000000001");
                     Assertions.assertThat(entry.requestId()).isEqualTo("requestId");
-                    Assertions.assertThat(entry.createdAt()).isEqualTo(Instant.parse("2024-01-01T00:00:00Z"));
+                    Assertions.assertThat(entry.createdAt()).isEqualTo(Instant.parse("2024-01-15T12:00:00Z"));
                     Assertions.assertThat(entry.reason()).isEqualTo("test-reason");
                     Assertions.assertThat(entry.oldValue().get("name").asText()).isEqualTo("old-name");
                     Assertions.assertThat(entry.newValue().get("name").asText()).isEqualTo("new-name");
                 })
                 .verifyComplete();
-    }*/
+    }
+
 
 }
