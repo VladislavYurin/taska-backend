@@ -669,6 +669,7 @@ class AdminReadOnlyControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+    }
     @Test
     @DisplayName("retryOutboxEvent: должен успешно перезапустить событие и вернуть 200 OK")
     void retryOutboxEvent_ShouldReturn200_WhenSuccess() {
