@@ -1,25 +1,15 @@
 package ru.taska.transport.grpc;
 
+import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.annotation.TrackMetrics;
-import ru.taska.api.admin.v1.GetCatalogRequest;
-import ru.taska.api.admin.v1.GetCatalogResponse;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
-import ru.taska.api.admin.v1.GetTableRowByIdRequest;
-import ru.taska.api.admin.v1.GetTableRowByIdResponse;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.RetryOutboxEventRequest;
-import ru.taska.api.admin.v1.RetryOutboxEventResponse;
+import ru.taska.api.admin.v1.*;
 import ru.taska.dto.ListTableRowsRequestDto;
-import ru.taska.mapper.ListTableRowsMapper;
-import ru.taska.mapper.MetadataCatalogMapper;
-import ru.taska.mapper.OutboxRetryMapper;
-import ru.taska.mapper.ProblematicOutboxEventMapper;
+import ru.taska.exception.DomainException;
+import ru.taska.mapper.*;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 import ru.taska.service.OutboxRetryService;
@@ -28,6 +18,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import validator.GrpcRequestValidators;
 
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static ru.taska.transport.grpc.logging.GrpcAdminLogging.logOnError;
@@ -42,6 +35,7 @@ public class GrpcAdminReadonlyService {
     private final MetadataCatalogMapper mapper;
     private final AdminReadonlyService adminReadonlyService;
     private final ListTableRowsMapper listTableRowsMapper;
+    private final AuditLogMapper auditLogMapper;
     private final ProblematicOutboxEventService problematicOutboxEventService;
     private final ProblematicOutboxEventMapper problematicOutboxEventMapper;
     private final OutboxRetryService outboxRetryService;
@@ -317,5 +311,87 @@ public class GrpcAdminReadonlyService {
                                     ))
                                     .map(outboxRetryMapper::toRetryOutboxEventResponse);
                         }));
+    }
+
+    @TrackMetrics(counter = "admin-service_list_audit_entries_grpc_counter",
+            timer = "admin-service_list_audit_entries_grpc_timer")
+    public Mono<ListAuditEntriesResponse> listAuditEntries(Mono<ListAuditEntriesRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getRequestId(), "header.requestId"
+                                ),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getHeader().getNodeId(), "header.nodeId"
+                                ),
+                                GrpcRequestValidators.requireStartDateBeforeDueDate(
+                                        req.getBody().hasCreatedAtFrom(), req.getBody().getCreatedAtFrom(),
+                                        req.getBody().hasCreatedAtTo(), req.getBody().getCreatedAtTo(),
+                                        "body.createdAtFrom", "body.createdAtTo"
+                                )
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(
+                                        req.getHeader().getRequestId(),
+                                        req.getHeader().getNodeId(),
+                                        "listAuditEntries")
+                        )
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+
+                            Instant createdAtFrom = t.getT3().getFirst()
+                                    .map(date -> date.atStartOfDay().toInstant(ZoneOffset.UTC))
+                                    .orElse(null);
+                            Instant createdAtTo = t.getT3().getLast()
+                                    .map(date -> date.atTime(LocalTime.MAX).toInstant(ZoneOffset.UTC))
+                                    .orElse(null);
+
+                            Integer pageSize = req.getBody().hasPageSize()
+                                    ? req.getBody().getPageSize()
+                                    : null;
+                            Integer page = req.getBody().hasPage()
+                                    ? req.getBody().getPage()
+                                    : null;
+
+                            UUID actorUserId = req.getBody().hasActorUserId()
+                                    ? UUID.fromString(req.getBody().getActorUserId())
+                                    : null;
+
+                            String action = req.getBody().getAction();
+                            String targetService = req.getBody().getTargetService();
+                            String targetTable = req.getBody().getTargetTable();
+                            String targetId = req.getBody().getTargetId();
+                            String bodyRequestId = req.getBody().getRequestId();
+
+                            log.info("[{}][{}] listAuditEntries: actorUserId={}, action={}, targetService={}, targetTable={}, targetId={}, bodyRequestId={}, createdAtFrom={}, createdAtTo={}, page={}, pageSize={}",
+                                    requestId, nodeId,
+                                    actorUserId,
+                                    action,
+                                    targetService,
+                                    targetTable,
+                                    targetId,
+                                    bodyRequestId,
+                                    createdAtFrom,
+                                    createdAtTo,
+                                    page,
+                                    pageSize
+                            );
+                            return adminReadonlyService.listAuditEntries(
+                                            auditLogMapper.toFilterDTO(actorUserId, action, targetService,
+                                                    targetTable, targetId, bodyRequestId, createdAtFrom, createdAtTo),
+                                            page,
+                                            pageSize
+                                    )
+                                    .doOnSuccess(e ->
+                                            log.info("[{}][{}] listAuditEntries: successfully retrieved",
+                                                    requestId, nodeId)
+                                    )
+                                    .doOnError(DomainException.class,
+                                            logOnError(requestId, nodeId, "listAuditEntries")
+                                    );
+
+                        })
+                        .map(auditLogMapper::toAuditProto));
     }
 }

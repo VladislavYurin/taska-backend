@@ -325,4 +325,81 @@ public class SensitiveDataMaskService {
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
     }
+
+    /**
+     * Маскирует sensitive-значения в old/new данных аудит-лога.
+     * Применяет те же правила, что и TAS-104 для обычных строк таблицы.
+     * Журнал аудита не должен стать обходным путём к скрытым данным.
+     *
+     * @param rowMap     old/new значение из аудит-лога (ключ - имя колонки)
+     * @param serviceKey ключ сервиса из конфигурации
+     * @param tableName  имя таблицы
+     * @param requestId  идентификатор запроса (для логирования)
+     * @param nodeId     идентификатор узла (для логирования)
+     * @return замаскированная Map с теми же ключами
+     */
+    public Map<String, Object> maskSensitiveDataForAudit(
+            Map<String, Object> rowMap,
+            String serviceKey,
+            String tableName,
+            String requestId,
+            String nodeId
+    ) {
+        Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey, tableName);
+        Map<String, Map<String, MaskType>> sensitiveJsonFields = getSensitiveJsonFields(serviceKey, tableName);
+
+        if (sensitiveColumns.isEmpty() && sensitiveJsonFields.isEmpty()) {
+            return rowMap;
+        }
+
+        if (!sensitiveColumns.isEmpty()) {
+            log.info("[{}][{}] Masking sensitive columns {} in audit data for table {}.{}",
+                    requestId, nodeId, sensitiveColumns.keySet(), serviceKey, tableName);
+        }
+        if (!sensitiveJsonFields.isEmpty()) {
+            log.info("[{}][{}] Masking sensitive JSON fields in audit data for table {}.{}",
+                    requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
+        }
+
+        return maskRowForAudit(rowMap, sensitiveColumns, sensitiveJsonFields);
+    }
+
+    /**
+     * Маскирует old/new данные аудит-лога.
+     * Использует те же правила маскирования, что и для обычных строк таблицы.
+     */
+    private Map<String, Object> maskRowForAudit(
+            Map<String, Object> rowMap,
+            Map<String, MaskType> sensitiveColumns,
+            Map<String, Map<String, MaskType>> sensitiveJsonFields
+    ) {
+        if (rowMap == null) {
+            return null;
+        }
+
+        Map<String, Object> maskedRow = new HashMap<>();
+        for (var entry : rowMap.entrySet()) {
+            String columnName = entry.getKey();
+            Object value = entry.getValue();
+
+            // Проверяем sensitive колонки (те же правила, что и в maskRow)
+            MaskType columnMaskType = sensitiveColumns.get(columnName);
+            if (columnMaskType != null) {
+                switch (columnMaskType) {
+                    case HIDE -> { /* колонка не попадает в ответ */ }
+                    case MASK_PARTIAL -> maskedRow.put(columnName, maskPartial(value));
+                    case MASK_FULL -> maskedRow.put(columnName, FULLY_MASKED_VALUE);
+                }
+            } else {
+                // Проверяем sensitive JSON-поля в значении
+                Map<String, MaskType> fieldNameMaskTypeMap = sensitiveJsonFields.get(columnName);
+                if (fieldNameMaskTypeMap != null && value != null) {
+                    maskedRow.put(columnName, getMaskedJson(columnName, value, fieldNameMaskTypeMap));
+                } else {
+                    maskedRow.put(columnName, value);
+                }
+            }
+        }
+        return maskedRow;
+    }
 }

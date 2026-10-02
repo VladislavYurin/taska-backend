@@ -7,22 +7,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import com.google.protobuf.Timestamp;
-import ru.taska.api.admin.v1.Catalog;
-import ru.taska.api.admin.v1.ColumnMetadata;
-import ru.taska.api.admin.v1.GetCatalogResponse;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
-import ru.taska.api.admin.v1.ListTableRowsResponse;
-import ru.taska.api.admin.v1.MetaInfo;
-import ru.taska.api.admin.v1.PaginationInfo;
-import ru.taska.api.admin.v1.ProblematicEventCountsByService;
-import ru.taska.api.admin.v1.Row;
-import ru.taska.api.admin.v1.ServiceMetadata;
-import ru.taska.api.admin.v1.TableMetadata;
-import ru.taska.api.admin.v1.Value;
+import ru.taska.api.admin.v1.*;
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
+
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 class AdminDataMapperTest {
@@ -620,4 +612,148 @@ class AdminDataMapperTest {
                 Arguments.of(1, 100, 50L, 1, false, false)  // Одна страница
         );
     }
+
+    @Test
+    @DisplayName("Должен корректно преобразовать ListEntityResponse в ListEntityResponseResponseDto")
+    void toRestListEntityResponse_shouldCorrectMapsAllFields() {
+        UUID actorUserId = UUID.randomUUID();
+
+        var source = ListAuditEntriesResponse.newBuilder()
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(actorUserId.toString())
+                        .setActorLogin("test-login")
+                        .setAction("CREATE")
+                        .setTargetService("test-service")
+                        .setTargetTable("test-table")
+                        .setTargetId("12345")
+                        .setOldValue("{\"name\": \"old\"}")
+                        .setNewValue("{\"name\": \"new\"}")
+                        .setReason("test-reason")
+                        .setRequestId("RequestId")
+                        .setCreatedAt(Timestamp.newBuilder()
+                                .setSeconds(Instant.parse("2024-06-15T12:00:00Z").getEpochSecond())
+                                .setNanos(Instant.parse("2024-06-15T12:00:00Z").getNano())
+                                .build())
+                        .build())
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(actorUserId.toString())
+                        .setActorLogin("test-login2")
+                        .setAction("UPDATE")
+                        .setTargetService("test-service2")
+                        .setTargetTable("test-table2")
+                        .setTargetId("67890")
+                        .setOldValue("{\"name\": \"old2\"}")
+                        .setNewValue("{\"name\": \"new2\"}")
+                        .setReason("test-reason2")
+                        .setRequestId("RequestId")
+                        .setCreatedAt(Timestamp.newBuilder()
+                                .setSeconds(Instant.parse("2024-06-15T12:00:00Z").getEpochSecond())
+                                .setNanos(Instant.parse("2024-06-15T12:00:00Z").getNano())
+                                .build())
+                        .build())
+                .build();
+
+        ListAuditEntriesResponseDto result = mapper.toRestListAuditEntriesResponse(source);
+
+        Assertions.assertNotNull(result);
+
+        Assertions.assertNotNull(result.getEntries());
+        Assertions.assertEquals(2, result.getEntries().size());
+
+        var firstEntry = result.getEntries().getFirst();
+        Assertions.assertEquals(actorUserId, firstEntry.getActorUserId());
+        Assertions.assertEquals("test-login", firstEntry.getActorLogin());
+        Assertions.assertEquals("CREATE", firstEntry.getAction());
+        Assertions.assertEquals("test-service", firstEntry.getTargetService());
+        Assertions.assertEquals("test-table", firstEntry.getTargetTable());
+        Assertions.assertEquals("12345", firstEntry.getTargetId());
+        Assertions.assertEquals("{\"name\": \"old\"}", firstEntry.getOldValue());
+        Assertions.assertEquals("{\"name\": \"new\"}", firstEntry.getNewValue());
+        Assertions.assertEquals("test-reason", firstEntry.getReason());
+        Assertions.assertEquals("RequestId", firstEntry.getRequestId());
+        Assertions.assertEquals(OffsetDateTime.ofInstant(Instant.parse("2024-06-15T12:00:00Z"), ZoneOffset.UTC), firstEntry.getCreatedAt());
+
+        var secondEntry = result.getEntries().get(1);
+        Assertions.assertEquals(actorUserId, secondEntry.getActorUserId());
+        Assertions.assertEquals("test-login2", secondEntry.getActorLogin());
+        Assertions.assertEquals("UPDATE", secondEntry.getAction());
+        Assertions.assertEquals("test-service2", secondEntry.getTargetService());
+        Assertions.assertEquals("test-table2", secondEntry.getTargetTable());
+        Assertions.assertEquals("67890", secondEntry.getTargetId());
+        Assertions.assertEquals("{\"name\": \"old2\"}", secondEntry.getOldValue());
+        Assertions.assertEquals("{\"name\": \"new2\"}", secondEntry.getNewValue());
+        Assertions.assertEquals("test-reason2", secondEntry.getReason());
+        Assertions.assertEquals("RequestId", secondEntry.getRequestId());
+        Assertions.assertEquals(OffsetDateTime.ofInstant(Instant.parse("2024-06-15T12:00:00Z"), ZoneOffset.UTC), secondEntry.getCreatedAt());
+    }
+
+    @ParameterizedTest
+    @MethodSource("paginationArguments")
+    @DisplayName("Должен корректно маппить все варианты пагинации")
+    void toRestListAuditEntriesResponse_shouldCorrectMapPagination(
+            int currentPage,
+            int pageSize,
+            long totalRows,
+            int totalPages,
+            boolean hasNext,
+            boolean hasPrev
+    ) {
+
+        UUID actorUserId = UUID.randomUUID();
+
+        var source = ListAuditEntriesResponse.newBuilder()
+                .setCurrentPage(currentPage)
+                .setPageSize(pageSize)
+                .setTotalRows(totalRows)
+                .setTotalPages(totalPages)
+                .setHasNext(hasNext)
+                .setHasPrev(hasPrev)
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(actorUserId.toString())
+                        .setActorLogin("test-login")
+                        .setAction("CREATE")
+                        .setTargetService("test-service")
+                        .setTargetTable("test-table")
+                        .setTargetId("12345")
+                        .setOldValue("{\"name\": \"old\"}")
+                        .setNewValue("{\"name\": \"new\"}")
+                        .setReason("test-reason")
+                        .setRequestId("RequestId")
+                        .setCreatedAt(Timestamp.newBuilder()
+                                .setSeconds(Instant.parse("2024-06-15T12:00:00Z").getEpochSecond())
+                                .setNanos(Instant.parse("2024-06-15T12:00:00Z").getNano())
+                                .build())
+                        .build())
+                .build();
+
+        ListAuditEntriesResponseDto result = mapper.toRestListAuditEntriesResponse(source);
+
+        Assertions.assertNotNull(result);
+
+        Assertions.assertNotNull(result.getEntries());
+        Assertions.assertEquals(1, result.getEntries().size());
+
+        var entry = result.getEntries().getFirst();
+        Assertions.assertEquals(actorUserId, entry.getActorUserId());
+        Assertions.assertEquals("test-login", entry.getActorLogin());
+        Assertions.assertEquals("CREATE", entry.getAction());
+        Assertions.assertEquals("test-service", entry.getTargetService());
+        Assertions.assertEquals("test-table", entry.getTargetTable());
+        Assertions.assertEquals("12345", entry.getTargetId());
+        Assertions.assertEquals("{\"name\": \"old\"}", entry.getOldValue());
+        Assertions.assertEquals("{\"name\": \"new\"}", entry.getNewValue());
+        Assertions.assertEquals("test-reason", entry.getReason());
+        Assertions.assertEquals("RequestId", entry.getRequestId());
+        Assertions.assertEquals(OffsetDateTime.ofInstant(Instant.parse("2024-06-15T12:00:00Z"), ZoneOffset.UTC), entry.getCreatedAt());
+
+        var pagination = result.getPagination();
+        Assertions.assertNotNull(pagination, "Пагинация должна быть не null");
+        Assertions.assertEquals(currentPage, pagination.getCurrentPage());
+        Assertions.assertEquals(pageSize, pagination.getPageSize());
+        Assertions.assertEquals(totalRows, pagination.getTotalRows());
+        Assertions.assertEquals(totalPages, pagination.getTotalPages());
+        Assertions.assertEquals(hasNext, pagination.getHasNext());
+        Assertions.assertEquals(hasPrev, pagination.getHasPrev());
+    }
 }
+

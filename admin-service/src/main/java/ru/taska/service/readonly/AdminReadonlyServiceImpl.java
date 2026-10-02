@@ -6,19 +6,25 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
-import ru.taska.dto.FilterOperatorsDto;
-import ru.taska.dto.GetTableRowByIdRequestDto;
-import ru.taska.dto.GetTableRowByIdResponseDto;
-import ru.taska.dto.ListTableRowsRequestDto;
-import ru.taska.dto.ListTableRowsResponseDto;
+import ru.taska.domain.PageResult;
+import ru.taska.dto.*;
+import ru.taska.entity.AuditLog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.AuditLogMapper;
+import ru.taska.repository.AuditLogRepository;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
 
 @Slf4j
 @Service
@@ -31,6 +37,9 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
     private final ReadOnlyRepository readOnlyRepository;
     private final ReadOnlyQueryBuilder queryBuilder;
     private final FilterParser filterParser;
+    private final AuditLogRepository auditLogRepository;
+    private final AuditLogMapper auditLogMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     public Mono<ListTableRowsResponseDto> listTableRows(ListTableRowsRequestDto requestDto, String requestId, String nodeId) {
@@ -53,30 +62,30 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                     metadataService.getTableColumns(serviceKey, tableName),
                     metadataService.getPrimaryKeyColumn(serviceKey, tableName)
             ).flatMap(tuple -> {
-                        Map<String, DbColumnType> columnTypes = tuple.getT1();
-                        String primaryKeyColumn = tuple.getT2();
+                Map<String, DbColumnType> columnTypes = tuple.getT1();
+                String primaryKeyColumn = tuple.getT2();
 
-                        PageableListQueries safeQuery = queryBuilder.buildSafePageableListQueries(
-                                serviceKey, schema, tableName, page, pageSize, sort, order, filters, columnTypes, primaryKeyColumn
+                PageableListQueries safeQuery = queryBuilder.buildSafePageableListQueries(
+                        serviceKey, schema, tableName, page, pageSize, sort, order, filters, columnTypes, primaryKeyColumn
+                );
+
+                List<String> columnNames = List.copyOf(columnTypes.keySet());
+
+                return readOnlyRepository.executeQuery(serviceKey, safeQuery.selectQuery().parameterizedQuery(), safeQuery.selectQuery().params())
+                        .collectList()
+                        .flatMap(rows ->
+                                readOnlyRepository.countRows(serviceKey, safeQuery.countQuery().parameterizedQuery(), safeQuery.countQuery().params())
+                                        .map(total -> {
+                                            List<Map<String, Object>> maskedRows = maskService.maskSensitiveData(
+                                                    rows, serviceKey, tableName, requestId, nodeId
+                                            );
+                                            return new ListTableRowsResponseDto(
+                                                    maskedRows, total, page, pageSize,
+                                                    columnNames, serviceKey, tableName
+                                            );
+                                        })
                         );
-
-                        List<String> columnNames = List.copyOf(columnTypes.keySet());
-
-                        return readOnlyRepository.executeQuery(serviceKey, safeQuery.selectQuery().parameterizedQuery(), safeQuery.selectQuery().params())
-                                .collectList()
-                                .flatMap(rows ->
-                                    readOnlyRepository.countRows(serviceKey, safeQuery.countQuery().parameterizedQuery(), safeQuery.countQuery().params())
-                                            .map(total -> {
-                                                List<Map<String, Object>> maskedRows = maskService.maskSensitiveData(
-                                                        rows, serviceKey, tableName, requestId, nodeId
-                                                );
-                                                return new ListTableRowsResponseDto(
-                                                        maskedRows, total, page, pageSize,
-                                                        columnNames, serviceKey, tableName
-                                                );
-                                            })
-                                );
-                    });
+            });
         });
     }
 
@@ -114,6 +123,139 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         });
     }
 
+    @Override
+    public Mono<PageResult<AuditEntriesResponseDto>> listAuditEntries(FilterAuditDTO filterAuditDTO, Integer page, Integer pageSize) {
+        if (isFilterEmpty(filterAuditDTO)) {
+            return Mono.error(new DomainException(
+                    DomainStatus.INVALID_ARGUMENT,
+                    "At least one filter parameter must be specified"
+            ));
+        }
+        int resolvedPage = normalizePage(page);
+        int resolvedPageSize = normalizePageSize(pageSize);
+        long resolvedOffset = (long) resolvedPage * resolvedPageSize;
+        int resolvedLimit = resolvedPageSize;
+
+        log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, requestId: {}, from: {}, to: {}, page: {}, size: {}",
+                filterAuditDTO.actorUserId(),
+                filterAuditDTO.action(),
+                filterAuditDTO.targetService(),
+                filterAuditDTO.targetTable(),
+                filterAuditDTO.targetId(),
+                filterAuditDTO.requestId(),
+                filterAuditDTO.createdAtFrom(),
+                filterAuditDTO.createdAtTo(),
+                resolvedPage,
+                resolvedPageSize);
+
+         return Mono.zip(
+                        auditLogRepository.findByFilter(filterAuditDTO,
+                                        resolvedLimit, resolvedOffset)
+                                .flatMap(this::maskAndMapAuditLog)
+                                .collectList(),
+                        auditLogRepository.countByFilter(filterAuditDTO)
+                )
+                .map(tuple -> {
+                    List<AuditEntriesResponseDto> auditLogs = tuple.getT1();
+                    Long count = tuple.getT2();
+
+                    log.debug("Found {} audit entries out of {} total", auditLogs.size(), count);
+                    return new PageResult<>(auditLogs,
+                            count,
+                            resolvedPage,
+                            resolvedPageSize);
+                })
+                .onErrorResume(ex -> {
+                    log.error("Error fetching audit entries", ex);
+                    return Mono.error(ex);
+                });
+    }
+
+    /**
+     * Маскирует sensitive-данные в old/new значениях аудит-лога и преобразует в DTO.
+     */
+    private Mono<AuditEntriesResponseDto> maskAndMapAuditLog(AuditLog auditLog) {
+        Map<String, Object> oldValue = convertJsonNodeToMap(auditLog.getOldValue());
+        Map<String, Object> newValue = convertJsonNodeToMap(auditLog.getNewValue());
+
+        // Маскируем oldValue
+        Mono<Map<String, Object>> oldValueMono = oldValue != null
+                ? Mono.just(maskService.maskSensitiveDataForAudit(
+                oldValue,
+                auditLog.getTargetService(),
+                auditLog.getTargetTable(),
+                auditLog.getRequestId(),
+                "audit-log-read"
+        ))
+                : Mono.just(null);
+
+        // Маскируем newValue
+        Mono<Map<String, Object>> newValueMono = newValue != null
+                ? Mono.just(maskService.maskSensitiveDataForAudit(
+                newValue,
+                auditLog.getTargetService(),
+                auditLog.getTargetTable(),
+                auditLog.getRequestId(),
+                "audit-log-read"
+        ))
+                : Mono.just(null);
+
+        // Объединяем результаты и создаем DTO
+        return Mono.zip(oldValueMono, newValueMono)
+                .map(tuple -> {
+                    Map<String, Object> maskedOldValue = tuple.getT1();
+                    Map<String, Object> maskedNewValue = tuple.getT2();
+
+                    // Обновляем old/new значения
+                    if (maskedOldValue != null) {
+                        auditLog.setOldValue(convertMapToJsonNode(maskedOldValue));
+                    } else {
+                        auditLog.setOldValue(null);
+                    }
+
+                    if (maskedNewValue != null) {
+                        auditLog.setNewValue(convertMapToJsonNode(maskedNewValue));
+                    } else {
+                        auditLog.setNewValue(null);
+                    }
+
+                    return auditLogMapper.toResponseDto(auditLog);
+                });
+    }
+
+
+    private boolean isFilterEmpty(FilterAuditDTO filterAuditDTO) {
+        return filterAuditDTO == null ||
+               (filterAuditDTO.actorUserId() == null &&
+                filterAuditDTO.action() == null &&
+                filterAuditDTO.targetService() == null &&
+                filterAuditDTO.targetTable() == null &&
+                filterAuditDTO.targetId() == null &&
+                filterAuditDTO.requestId() == null &&
+                filterAuditDTO.createdAtFrom() == null &&
+                filterAuditDTO.createdAtTo() == null);
+    }
+
+    private Map<String, Object> convertJsonNodeToMap(JsonNode jsonNode) {
+        if (jsonNode == null || jsonNode.isNull() || jsonNode.isMissingNode()) {
+            return null;
+        }
+        if (!jsonNode.isObject()) {
+            log.warn("Expected JSON object but got: {}", jsonNode.getNodeType());
+            return null;
+        }
+        return objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {
+        });
+    }
+
+    private JsonNode convertMapToJsonNode(Map<String, Object> map) {
+        if (map == null) {
+            return null;
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.valueToTree(map);
+    }
+
     private int normalizePage(Integer page) {
         int defaultPage = catalogProperties.pagination().defaultPage();
         if (page != null && page < 0) {
@@ -145,3 +287,5 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         return serviceProps.schema();
     }
 }
+
+
