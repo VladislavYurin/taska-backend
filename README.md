@@ -57,8 +57,8 @@ flowchart LR
     ADMIN -. read-only .-> ISSUE_DB
     ADMIN -. read-only .-> NOTIFICATION_DB
 
-    AUTH --> MINIO[(MinIO: avatars)]
-    ISSUE --> MINIO_ATTACH[(MinIO: attachments)]
+    AUTH --> RUSTFS[(RustFS: avatars)]
+    ISSUE --> RUSTFS_ATTACH[(RustFS: attachments)]
 ```
 
 Внешнему клиенту нужен только `api-gateway`. HTTP-порты остальных сервисов предназначены прежде всего для Actuator; бизнес-контракты между сервисами опубликованы в `grpc-common-lib/src/main/proto`.
@@ -88,7 +88,7 @@ flowchart LR
 - Spring gRPC, Protocol Buffers и Reactor gRPC;
 - Kafka в KRaft-режиме;
 - Liquibase;
-- MinIO / AWS SDK v2;
+- RustFS / AWS SDK v2;
 - Prometheus, Grafana, Loki и Promtail;
 - JUnit 6, Mockito и Testcontainers.
 
@@ -159,7 +159,7 @@ docker compose logs --tail=100 api-gateway
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
-Команда `docker compose down -v` дополнительно удаляет PostgreSQL, Kafka, Grafana, Prometheus и MinIO volumes. Используйте её только для осознанного полного сброса локальных данных.
+Команда `docker compose down -v` дополнительно удаляет PostgreSQL, Kafka, Grafana, Prometheus и RustFS volumes. Используйте её только для осознанного полного сброса локальных данных.
 
 ## Локальные адреса
 
@@ -183,18 +183,18 @@ curl http://127.0.0.1:8080/actuator/health
 
 ### Инфраструктура
 
-| Компонент | Адрес |
-|---|---|
-| Swagger UI | [http://127.0.0.1:8080/swagger-ui.html](http://127.0.0.1:8080/swagger-ui.html) |
-| OpenAPI YAML | [http://127.0.0.1:8080/openapi.yml](http://127.0.0.1:8080/openapi.yml) |
-| Kafka UI | [http://127.0.0.1:8088](http://127.0.0.1:8088) |
-| Grafana | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
-| Prometheus | [http://127.0.0.1:9090](http://127.0.0.1:9090) |
-| Loki | `http://127.0.0.1:3100` |
-| MinIO API / Console | `http://127.0.0.1:9000` / [http://127.0.0.1:9001](http://127.0.0.1:9001) |
-| pgAdmin | [http://127.0.0.1:5050](http://127.0.0.1:5050) |
-| Kafka broker | `127.0.0.1:9092` |
-| PostgreSQL DB | `127.0.0.1:5433`–`5438` |
+| Компонент            | Адрес |
+|----------------------|---|
+| Swagger UI           | [http://127.0.0.1:8080/swagger-ui.html](http://127.0.0.1:8080/swagger-ui.html) |
+| OpenAPI YAML         | [http://127.0.0.1:8080/openapi.yml](http://127.0.0.1:8080/openapi.yml) |
+| Kafka UI             | [http://127.0.0.1:8088](http://127.0.0.1:8088) |
+| Grafana              | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
+| Prometheus           | [http://127.0.0.1:9090](http://127.0.0.1:9090) |
+| Loki                 | `http://127.0.0.1:3100` |
+| RustFS API / Console | `http://127.0.0.1:9000` / [http://127.0.0.1:9001](http://127.0.0.1:9001) |
+| pgAdmin              | [http://127.0.0.1:5050](http://127.0.0.1:5050) |
+| Kafka broker         | `127.0.0.1:9092` |
+| PostgreSQL DB        | `127.0.0.1:5433`–`5438` |
 
 PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue`, `notification`, `admin`.
 
@@ -220,10 +220,10 @@ PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue
 
 Перед запуском вне локальной машины обязательно:
 
-- заменить `JWT_SECRET`, `ADMIN_PASS`, пароли PostgreSQL, MinIO, Grafana и pgAdmin на уникальные секреты;
+- заменить `JWT_SECRET`, `ADMIN_PASS`, пароли PostgreSQL, RustFS, Grafana и pgAdmin на уникальные секреты;
 - задать SMTP credentials только через secret storage или переменные окружения, не коммитить их в Git;
 - создать для `ADMIN_RO_*` отдельных PostgreSQL-пользователей только с правом `SELECT`; локальный пользователь `taska` не является read-only;
-- не публиковать наружу gRPC, PostgreSQL, Kafka, MinIO API, Loki, Prometheus, pgAdmin и Kafka UI;
+- не публиковать наружу gRPC, PostgreSQL, Kafka, RustFS API, Loki, Prometheus, pgAdmin и Kafka UI;
 - ограничить `GATEWAY_CORS_ALLOWED_ORIGINS` доверенными HTTPS-origin;
 - защитить внутреннюю сеть и межсервисный gRPC (mTLS или service identity), поскольку пользовательский контекст передаётся внутренними запросами;
 - хранить `.env` вне репозитория и ротировать секрет сразу после подозрения на раскрытие;
@@ -243,7 +243,7 @@ Kafka topics:
 
 После исчерпания consumer retries сообщение направляется в topic `<source-topic>.DLT`.
 
-`minio-init` создаёт buckets:
+`rustfs-init` создаёт buckets:
 
 | Bucket | Содержимое |
 |---|---|

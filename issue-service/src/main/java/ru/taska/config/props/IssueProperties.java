@@ -14,7 +14,8 @@ public record IssueProperties(
         IdempotencyKeyTtl idempotencyKeyTtl,
         RetryConfig retry,
         AutoWatch autoWatch,
-        Search search
+        Search search,
+        Integer maxFutureDays
 ) {
 
     public record AllowedRoles(
@@ -43,7 +44,12 @@ public record IssueProperties(
             Set<ProjectRole> addIssueLabelRoles,        // MEMBER+
             Set<ProjectRole> removeIssueLabelRoles,     // MEMBER+
             Set<ProjectRole> listIssueLabelRoles,        // VIEWER+
-            Set<ProjectRole> searchIssueRoles
+            Set<ProjectRole> searchIssueRoles,
+            Set<ProjectRole> addWorklogRoles,
+            Set<ProjectRole> listWorklogRoles,
+            Set<ProjectRole> updateWorklogRoles,
+            Set<ProjectRole> manageWorklogRoles,
+            Set<ProjectRole> deleteWorklogRoles
     ) {
     }
 

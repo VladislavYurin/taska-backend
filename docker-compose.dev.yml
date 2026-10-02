@@ -37,7 +37,7 @@ services:
       - .env.docker.example
     profiles: [infra]
 
-  minio:
+  rustfs:
     env_file:
       - .env.docker.example
     profiles: [infra]
@@ -45,7 +45,7 @@ services:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"
 
-  minio-init:
+  rustfs-init:
     env_file:
       - .env.docker.example
     profiles: [infra]

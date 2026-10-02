@@ -2,16 +2,21 @@ package ru.taska.mapper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import ru.taska.api.notification.v1.ListNotificationsResponse;
+import ru.taska.api.notification.v1.MarkAllAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.config.props.NotificationProperties;
 import ru.taska.domain.Notification;
+import ru.taska.domain.NotificationListResult;
 import ru.taska.domain.NotificationType;
+import ru.taska.event.IssueInfo;
 import ru.taska.event.TaskaEvent;
 import com.google.protobuf.Timestamp;
 
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -21,56 +26,71 @@ public class NotificationMapper {
     private final NotificationProperties notificationProperties;
     private final String ETC_SIGN = "...";
 
-    public Notification toIssueCreated(TaskaEvent event, UUID userId) {
+    public Notification toIssueCreated(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_CREATED)
                 .title("Новая задача")
-                .body("Создана новая задача " + event.aggregateId())
+                .body("Создана новая задача " + displayKey(issueInfo))
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
     }
 
-    public Notification toIssueAssigned(TaskaEvent event, UUID assigneeId) {
+    public Notification toIssueAssigned(TaskaEvent event, UUID assigneeId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(assigneeId)
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
                 .title("Новая задача назначена на вас")
-                .body("Вам назначена задача " + event.aggregateId())
+                .body("Вам назначена задача " + displayKey(issueInfo))
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
     }
 
-    public Notification toIssueTransitioned(TaskaEvent event, UUID userId) {
+    public Notification toIssueTransitioned(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_TRANSITIONED)
                 .title("Статус задачи изменён")
-                .body("Статус задачи " + event.aggregateId() + " был изменён")
+                .body("Статус задачи " + displayKey(issueInfo) + " был изменён")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
     }
 
-    public Notification toIssueUpdated(TaskaEvent event, UUID userId) {
+    public Notification toIssueUpdated(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_UPDATED)
                 .title("Задача обновлена")
-                .body("Задача обновлена " + event.aggregateId())
+                .body("Задача обновлена " + displayKey(issueInfo))
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
     }
 
-    public Notification toIssueDeleted(TaskaEvent event, UUID userId) {
+    public Notification toIssueDeleted(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_DELETED)
                 .title("Задача удалена")
-                .body("Задача удалена " + event.aggregateId())
+                .body("Задача удалена " + displayKey(issueInfo))
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -79,7 +99,7 @@ public class NotificationMapper {
     public Notification toIssueLinkCreated(
             TaskaEvent event,
             UUID userId,
-            UUID sourceIssueId,
+            IssueInfo issueInfo,
             UUID targetIssueId,
             String linkType,
             UUID linkId
@@ -88,8 +108,12 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_CREATED)
                 .title("Для задачи установлена новая связь")
-                .body("Установлена новая связь %s (%s) для задачи %s с задачей %s."
-                        .formatted(linkId, linkType, sourceIssueId, targetIssueId))
+                .body("Для задачи " + displayKey(issueInfo)
+                        + " установлена связь \"" + linkType + "\" с задачей "
+                        + targetIssueId + ".")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -98,7 +122,7 @@ public class NotificationMapper {
     public Notification toIssueLinkDeleted(
             TaskaEvent event,
             UUID userId,
-            UUID sourceIssueId,
+            IssueInfo issueInfo,
             UUID targetIssueId,
             String linkType,
             UUID linkId
@@ -106,9 +130,13 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_DELETED)
-                .title("Связь удалена из задачи")
-                .body("Была удалена связь %s (%s) между задачами %s и %s."
-                        .formatted(linkId, linkType, sourceIssueId, targetIssueId))
+                .title("Для задачи удалена связь")
+                .body("Для задачи " + displayKey(issueInfo)
+                        + " удалена связь \"" + linkType + "\" с задачей "
+                        + targetIssueId + ".")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -187,8 +215,10 @@ public class NotificationMapper {
                 .setNotificationType(toProtoNotificationKind(notification.getNotificationType()))
                 .setTitle(toStringOrEmpty(notification.getTitle()))
                 .setBody(toStringOrEmpty(notification.getBody()))
-                .setLink(toStringOrEmpty(notification.getLink()))
-                .setSourceEventId(toStringOrEmpty(notification.getSourceEventId()));
+                .setSourceEventId(toStringOrEmpty(notification.getSourceEventId()))
+                .setIssueId(toStringOrEmpty(notification.getIssueId()))
+                .setIssueKey(toStringOrEmpty(notification.getIssueKey()))
+                .setProjectId(toStringOrEmpty(notification.getProjectId()));
 
         if (notification.getCreatedAt() != null) {
             builder.setCreatedAt(toTimestamp(notification.getCreatedAt()));
@@ -201,25 +231,50 @@ public class NotificationMapper {
         return builder.build();
     }
 
-    public Notification toLabelAdded(TaskaEvent event, UUID issueId, UUID userId, String labelName) {
-        return Notification.builder()
+    public ListNotificationsResponse toListNotificationsResponse(NotificationListResult result) {
+        List<NotificationResponse> protoNotifications = result.notifications().stream()
+                .map(this::toNotificationProto)
+                .toList();
+
+        return ListNotificationsResponse.newBuilder()
+                .addAllNotifications(protoNotifications)
+                    .setUnreadCount(result.unreadCount())
+                .build();
+    }
+
+    public Notification toLabelAdded(
+            TaskaEvent event,
+            UUID userId,
+            IssueInfo issueInfo,
+            String labelName
+    ) {        return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.LABEL_ADDED)
                 .title("Метка добавлена к задаче")
-                .body("К задаче " + issueId + " добавлена метка \"" + labelName + "\"")
-                .link("/issues/" + issueId)
+                .body("К задаче " + displayKey(issueInfo)
+                        + " добавлена метка \"" + labelName + "\"")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
     }
 
-    public Notification toLabelRemoved(TaskaEvent event, UUID issueId, UUID userId, String labelName) {
+    public Notification toLabelRemoved(
+            TaskaEvent event,
+            UUID userId,
+            IssueInfo issueInfo,
+            String labelName) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.LABEL_REMOVED)
                 .title("Метка удалена из задачи")
-                .body("Из задачи " + issueId + " удалена метка \"" + labelName + "\"")
-                .link("/issues/" + issueId)
+                .body("Из задачи " + displayKey(issueInfo)
+                        + " удалена метка \"" + labelName + "\"")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -258,6 +313,7 @@ public class NotificationMapper {
     public Notification toCommentCreated(
             TaskaEvent event,
             UUID userId,
+            IssueInfo issueInfo,
             String body
     ) {
         int maxCommentBodyLength = notificationProperties.comment().maxShownBodyLength();
@@ -270,8 +326,11 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_CREATED)
                 .title("Новый комментарий")
-                .body("Новый комментарий к задаче " + event.aggregateId() + ": " + preview)
-                .link("/issues/" + event.aggregateId())
+                .body("Новый комментарий к задаче " + displayKey(issueInfo)
+                        + ": " + preview)
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -279,14 +338,17 @@ public class NotificationMapper {
 
     public Notification toCommentUpdated(
             TaskaEvent event,
-            UUID userId
+            UUID userId,
+            IssueInfo issueInfo
     ) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_UPDATED)
                 .title("Комментарий обновлён")
-                .body("Комментарий к задаче " + event.aggregateId() + " был обновлён")
-                .link("/issues/" + event.aggregateId())
+                .body("Комментарий к задаче " + displayKey(issueInfo) + " был обновлён")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -294,14 +356,64 @@ public class NotificationMapper {
 
     public Notification toCommentDeleted(
             TaskaEvent event,
-            UUID userId
+            UUID userId,
+            IssueInfo issueInfo
     ) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_DELETED)
                 .title("Комментарий удалён")
-                .body("Комментарий к задаче " + event.aggregateId() + " был удалён")
-                .link("/issues/" + event.aggregateId())
+                .body("Комментарий к задаче " + displayKey(issueInfo) + " был удалён")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public MarkAllAsReadResponse toMarkAllAsReadResponse(Long count) {
+        return MarkAllAsReadResponse
+                .newBuilder()
+                .setUpdatedCount(count)
+                .build();
+    }
+
+    public Notification toAttachmentAdded(
+            TaskaEvent event,
+            UUID userId,
+            IssueInfo issueInfo,
+            String fileName
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_ATTACHMENT_ADDED)
+                .title("Добавлено вложение")
+                .body("К задаче " + displayKey(issueInfo)
+                + " добавлено вложение \"" + fileName + "\"")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
+    public Notification toAttachmentDeleted(
+            TaskaEvent event,
+            UUID userId,
+            IssueInfo issueInfo,
+            String fileName
+    ) {
+        return Notification.builder()
+                .userId(userId)
+                .notificationType(NotificationType.ISSUE_ATTACHMENT_DELETED)
+                .title("Удалено вложение")
+                .body("Из задачи " + displayKey(issueInfo)
+                        + " удалено вложение \"" + fileName + "\"")
+                .issueId(issueInfo.issueId())
+                .issueKey(issueInfo.issueKey())
+                .projectId(issueInfo.projectId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -333,6 +445,8 @@ public class NotificationMapper {
             case ISSUE_COMMENT_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_CREATED;
             case ISSUE_COMMENT_UPDATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED;
             case ISSUE_COMMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_DELETED;
+            case ISSUE_ATTACHMENT_ADDED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ATTACHMENT_ADDED;
+            case ISSUE_ATTACHMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED;
         };
     }
 
@@ -345,5 +459,15 @@ public class NotificationMapper {
 
     private String toStringOrEmpty(Object value) {
         return value == null ? "" : value.toString();
+    }
+
+    /**
+     * Возвращает читаемый ключ задачи для текста уведомления
+     */
+    private String displayKey(IssueInfo issueInfo) {
+        if (issueInfo.issueKey() != null && !issueInfo.issueKey().isBlank()) {
+            return issueInfo.issueKey();
+        }
+        return issueInfo.issueId().toString();
     }
 }

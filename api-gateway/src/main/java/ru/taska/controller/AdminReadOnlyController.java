@@ -61,7 +61,7 @@ public class AdminReadOnlyController implements AdminApi {
             Integer page,
             Integer pageSize,
             String sort,
-            String order,
+            SortOrderDto order,
             Map<String, String> ignoredFilters,
             ServerWebExchange exchange) {
 
@@ -117,7 +117,7 @@ public class AdminReadOnlyController implements AdminApi {
      */
     @Override
     public Mono<ResponseEntity<RetryOutboxEventResponseDto>> retryOutboxEvent(
-            String service,
+            OutboxServiceTypeDto service,
             UUID eventId,
             Mono<RetryOutboxEventRequestDto> request,
             ServerWebExchange exchange

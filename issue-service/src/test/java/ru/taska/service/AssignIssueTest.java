@@ -69,6 +69,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.when(payloadSerializer.createIssueAssignedPayload(
                         Mockito.any(),
+                        Mockito.any(),
                         Mockito.eq(ASSIGNEE_ID),
                         Mockito.eq(ACTOR_USER_ID),
                         Mockito.anyList()
@@ -101,6 +102,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
 
         Mockito.verify(payloadSerializer).createIssueAssignedPayload(
+                Mockito.any(),
                 Mockito.any(),
                 Mockito.eq(ASSIGNEE_ID),
                 Mockito.eq(ACTOR_USER_ID),

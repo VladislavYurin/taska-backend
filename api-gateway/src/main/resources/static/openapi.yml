@@ -173,6 +173,28 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/notifications/read-all:
+    post:
+      summary: Отметка всех уведомлений текущего пользователя как прочитанных
+      description: Операция идемпотентна. При повторном вызове статус ресурсов не меняется, а в ответе возвращается updatedCount равный 0.
+      operationId: markAllNotificationsAsRead
+      tags:
+        - notifications
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: Уведомления успешно отмечены как прочитанные
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadAllNotificationsResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects:
     post:
       summary: Создание проекта
@@ -880,15 +902,13 @@ paths:
           required: false
           description: Фильтр по приоритету (LOW, MEDIUM, HIGH)
           schema:
-            type: string
-            enum: [ LOW, MEDIUM, HIGH ]
+            $ref: '#/components/schemas/IssuePriorityDto'
         - name: issueType
           in: query
           required: false
           description: Фильтр по типу задачи (TASK, BUG, STORY)
           schema:
-            type: string
-            enum: [ TASK, BUG, STORY ]
+            $ref: '#/components/schemas/IssueTypeDto'
         - name: page
           in: query
           required: false
@@ -1984,9 +2004,7 @@ paths:
           in: query
           required: false
           schema:
-            type: string
-            enum: [ asc, desc ]
-            default: asc
+            $ref: '#/components/schemas/SortOrderDto'
         - name: filter
           in: query
           required: false
@@ -2251,11 +2269,7 @@ paths:
           required: true
           description: Сервис-владелец outbox-события
           schema:
-            type: string
-            enum:
-              - auth
-              - project
-              - issue
+            $ref: '#/components/schemas/OutboxServiceTypeDto'
 
         - name: eventId
           in: path
@@ -2538,6 +2552,14 @@ components:
         newPassword:
           type: string
 
+    GlobalRoleTypeDto:
+      type: string
+      description: Глобальная роль пользователя
+      enum:
+        - GLOBAL_ADMIN
+        - USER
+        - UNSPECIFIED
+
     ValidateAccessTokenResponseDto:
       type: object
       properties:
@@ -2552,8 +2574,7 @@ components:
         status:
           type: string
         globalRole:
-          type: string
-          enum: [GLOBAL_ADMIN, USER, UNSPECIFIED]
+          $ref: '#/components/schemas/GlobalRoleTypeDto'
 
     CreateIssueRequestDto:
       type: object
@@ -3040,11 +3061,26 @@ components:
       type: object
       required:
         - items
+        - unreadCount
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/NotificationResponseDto'
+        unreadCount:
+          type: integer
+          format: int64
+          description: Общее количество непрочитанных уведомлений пользователя. Рассчитывается по всем уведомлениям, не зависит от пагинации (pageSize/offset) и флага unreadOnly.
+
+    ReadAllNotificationsResponseDto:
+      type: object
+      required:
+        - updatedCount
+      properties:
+        updatedCount:
+          type: integer
+          format: int64
+          description: Количество уведомлений, статус которых был изменен на прочитанный в рамках текущего запроса. При повторном вызове возвращает 0.
 
     NotificationResponseDto:
       type: object
@@ -3067,8 +3103,16 @@ components:
           type: string
         body:
           type: string
-        link:
+        issueId:
           type: string
+          format: uuid
+          nullable: true
+        issueKey:
+          type: string
+          nullable: true
+        projectId:
+          type: string
+          format: uuid
           nullable: true
         createdAt:
           type: string
@@ -3095,6 +3139,14 @@ components:
         - MEMBER_ADDED
         - MEMBER_UPDATED
         - MEMBER_REMOVED
+
+    SortOrderDto:
+      type: string
+      description: Порядок сортировки
+      enum:
+        - asc
+        - desc
+      default: asc
 
     ReadOnlyTableRowsResponseDto:
       type: object
@@ -3281,6 +3333,14 @@ components:
           items:
             $ref: '#/components/schemas/ProjectResponseDto'
 
+    ProjectMemberRoleDto:
+      type: string
+      description: Роль участника проекта
+      enum:
+        - ADMIN
+        - MEMBER
+        - VIEWER
+
     AddProjectMemberRequestDto:
       type: object
       required: [userId,role]
@@ -3288,16 +3348,14 @@ components:
         userId:
           type: string
         role:
-          type: string
-          enum: [ADMIN, MEMBER, VIEWER]
+          $ref: '#/components/schemas/ProjectMemberRoleDto'
 
     ChangeProjectMemberRoleRequestDto:
       type: object
       required: [role]
       properties:
         role:
-          type: string
-          enum: [ ADMIN, MEMBER, VIEWER ]
+          $ref: '#/components/schemas/ProjectMemberRoleDto'
 
     ProjectMemberResponseDto:
       type: object
@@ -3720,6 +3778,14 @@ components:
           type: integer
           format: int64
 
+    OutboxServiceTypeDto:
+      type: string
+      description: Сервис-владелец outbox-события
+      enum:
+        - auth
+        - project
+        - issue
+
     RetryOutboxEventRequestDto:
       type: object
       required:
@@ -3766,9 +3832,9 @@ components:
         sizeBytes:
           type: integer
           format: int64
-          description: Размер файла в байтах (макс. 5 MB)
+          description: Размер файла в байтах (макс. 2 MB)
           minimum: 1
-          maximum: 5242880
+          maximum: 2097152
           example: 120000
 
     CreateAvatarUploadUrlResponseDto:
