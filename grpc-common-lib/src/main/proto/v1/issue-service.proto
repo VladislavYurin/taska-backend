@@ -86,6 +86,12 @@ service IssueService {
       returns (UpdateIssueResponse);
 
   /**
+   * Частичное обновление задачи (PATCH) с оптимистичной блокировкой по версии.
+   */
+  rpc PatchIssue(PatchIssueRequest)
+      returns (PatchIssueResponse);
+
+  /**
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
    */
   rpc ListIssues(ListIssuesRequest)
@@ -551,6 +557,95 @@ message UpdateIssueRequestBody {
    * Оставшееся время в минутах.
    */
   optional int32 remaining_estimate_minutes = 11;
+}
+
+message PatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  PatchIssueRequestBody body = 2;
+}
+
+message PatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор инициатора.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Версия задачи для оптимистичной блокировки (значение заголовка If-Match).
+   */
+  int32 version = 3;
+
+  /**
+   * Краткое описание задачи (не может быть очищено, NOT NULL в БД).
+   * Отсутствие поля — не изменять.
+   */
+  optional string summary = 4;
+
+  /**
+   * Приоритет задачи (не может быть очищен, NOT NULL в БД).
+   * Отсутствие поля — не изменять.
+   */
+  optional IssuePriority priority = 5;
+
+  /**
+   * Подробное описание задачи. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString description = 6;
+
+  /**
+   * Идентификатор исполнителя. Отсутствие поля — не изменять, is_null=true — снять исполнителя.
+   */
+  ru.taska.common.v1.NullableString assignee_id = 7;
+
+  /**
+   * Story points задачи. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableDouble story_points = 8;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd). Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString start_date = 9;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd). Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString due_date = 10;
+
+  /**
+   * Исходная оценка времени в минутах. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableInt32 original_estimate_minutes = 11;
+
+  /**
+   * Оставшееся время в минутах. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableInt32 remaining_estimate_minutes = 12;
+}
+
+message PatchIssueResponse {
+  /**
+   * Признак конфликта версий: version из If-Match не совпал с текущей версией в БД.
+   * true — изменения не применены, issue содержит актуальное состояние задачи.
+   */
+  bool version_conflict = 1;
+
+  /**
+   * Актуальное состояние задачи после операции (либо после неудачной попытки применить изменения).
+   */
+  IssueResponse issue = 2;
 }
 
 message ListIssuesRequest {

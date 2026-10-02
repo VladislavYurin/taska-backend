@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.common.v1.NullableDouble;
+import ru.taska.api.common.v1.NullableInt32;
+import ru.taska.api.common.v1.NullableString;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
@@ -24,6 +27,8 @@ import ru.taska.api.issue.v1.IssueType;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueRequestBody;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.SearchIssuesRequestBody;
@@ -47,6 +52,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -54,6 +60,7 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -282,7 +289,10 @@ public class IssueMapper {
             case "LOW" -> IssuePriority.ISSUE_PRIORITY_LOW;
             case "MEDIUM" -> IssuePriority.ISSUE_PRIORITY_MEDIUM;
             case "HIGH" -> IssuePriority.ISSUE_PRIORITY_HIGH;
-            default -> IssuePriority.ISSUE_PRIORITY_UNSPECIFIED;
+            default -> throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unknown issue priority: " + restIssuePriority
+            );
         };
     }
 
@@ -459,6 +469,156 @@ public class IssueMapper {
                                  .setHeader(buildGrpcHeader(context))
                                  .setBody(bodyBuilder.build())
                                  .build();
+    }
+
+    /**
+     * Создает gRPC запрос для частичного обновления задачи (PATCH).
+     *
+     * <p>Семантика JSON Merge Patch: поле, отсутствующее в теле, не трогается,
+     * поле, явно переданное как {@code null}, очищается.</p>
+     */
+    public PatchIssueRequest toPatchIssueRequest(
+            String issueId,
+            String ifMatchVersion,
+            PatchIssueRequestDto body,
+            GatewayContext context
+    ) {
+        PatchIssueRequestBody.Builder bodyBuilder = PatchIssueRequestBody.newBuilder()
+                .setIssueId(issueId)
+                .setActorUserId(context.userContext().userId())
+                .setVersion(parseIfMatchVersion(ifMatchVersion));
+
+        if (body.getSummary().present()) {
+            bodyBuilder.setSummary(requireNotCleared(body.getSummary().value(), "summary"));
+        }
+
+        if (body.getPriority().present()) {
+            bodyBuilder.setPriority(toGrpcIssuePriority(requireNotCleared(body.getPriority().value(), "priority")));
+        }
+
+        if (body.getDescription().present()) {
+            bodyBuilder.setDescription(toNullableString(body.getDescription().value()));
+        }
+
+        if (body.getAssigneeId().present()) {
+            bodyBuilder.setAssigneeId(toNullableString(body.getAssigneeId().value()));
+        }
+
+        if (body.getStoryPoints().present()) {
+            bodyBuilder.setStoryPoints(toNullableDouble(body.getStoryPoints().value()));
+        }
+
+        if (body.getStartDate().present()) {
+            bodyBuilder.setStartDate(toNullableString(body.getStartDate().value()));
+        }
+
+        if (body.getDueDate().present()) {
+            bodyBuilder.setDueDate(toNullableString(body.getDueDate().value()));
+        }
+
+        if (body.getOriginalEstimateMinutes().present()) {
+            bodyBuilder.setOriginalEstimateMinutes(
+                    toNullableMinutes(body.getOriginalEstimateMinutes().value(), "originalEstimateMinutes"));
+        }
+
+        if (body.getRemainingEstimateMinutes().present()) {
+            bodyBuilder.setRemainingEstimateMinutes(
+                    toNullableMinutes(body.getRemainingEstimateMinutes().value(), "remainingEstimateMinutes"));
+        }
+
+        return PatchIssueRequest.newBuilder()
+                .setHeader(buildGrpcHeader(context))
+                .setBody(bodyBuilder.build())
+                .build();
+    }
+
+    /**
+     * Принимает версию как голым числом ({@code 3}), так и в формате ETag ({@code "3"}).
+     */
+    private int parseIfMatchVersion(String ifMatchVersion) {
+        String version = ifMatchVersion.trim();
+        if (version.length() >= 2 && version.startsWith("\"") && version.endsWith("\"")) {
+            version = version.substring(1, version.length() - 1);
+        }
+        try {
+            return Integer.parseInt(version);
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "If-Match header must contain a valid integer issue version");
+        }
+    }
+
+    private <T> T requireNotCleared(T value, String fieldName) {
+        if (value == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " cannot be cleared");
+        }
+        return value;
+    }
+
+    private NullableString toNullableString(Object value) {
+        if (value == null) {
+            return NullableString.newBuilder().setIsNull(true).build();
+        }
+        return NullableString.newBuilder().setValue(value.toString()).build();
+    }
+
+    private NullableDouble toNullableDouble(Double value) {
+        if (value == null) {
+            return NullableDouble.newBuilder().setIsNull(true).build();
+        }
+        return NullableDouble.newBuilder().setValue(value).build();
+    }
+
+    /**
+     * Оценки времени передаются целым числом минут: дробные, отрицательные и не влезающие в int32
+     * значения отклоняются, а не округляются молча.
+     */
+    private NullableInt32 toNullableMinutes(BigDecimal raw, String fieldName) {
+        if (raw == null) {
+            return NullableInt32.newBuilder().setIsNull(true).build();
+        }
+        int value;
+        try {
+            value = raw.intValueExact();
+        } catch (ArithmeticException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must be an integer number of minutes");
+        }
+        if (value < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " must not be negative");
+        }
+        return NullableInt32.newBuilder().setValue(value).build();
+    }
+
+    /**
+     * Безопасно преобразует строку в IssuePriorityDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssuePriorityDto safeParsePriority(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssuePriorityDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid priority value: {}, ignoring", value);
+            return null;
+        }
+    }
+
+    /**
+     * Безопасно преобразует строку в IssueTypeDto.
+     * Возвращает null если строка null или невалидна.
+     */
+    public IssueTypeDto safeParseIssueType(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return IssueTypeDto.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid issueType value: {}, ignoring", value);
+            return null;
+        }
     }
 
     /**

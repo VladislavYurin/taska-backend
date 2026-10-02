@@ -4,13 +4,13 @@ import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
 import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
 
 import exception.GrpcExceptionHandler;
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +39,8 @@ import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
 import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
 import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
@@ -48,6 +50,8 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
+import nullable.NullableFieldParsers;
+import ru.taska.domain.IssuePatch;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
@@ -55,6 +59,7 @@ import ru.taska.mapper.LabelMapper;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
+import ru.taska.service.patch.IssuePatchService;
 import ru.taska.service.transition.IssueTransitionService;
 import validator.GrpcRequestValidators;
 
@@ -66,6 +71,7 @@ public class GrpcIssueService {
     private final IssueService issueService;
     private final IssueWatcherService issueWatcherService;
     private final IssueTransitionService issueTransitionService;
+    private final IssuePatchService issuePatchService;
     private final IssueMapper issueMapper;
     private final LabelService labelService;
     private final LabelMapper labelMapper;
@@ -467,6 +473,91 @@ public class GrpcIssueService {
                                                     startDate, dueDate, originalEstimateMinutes, remainingEstimateMinutes);
                 })
                 .map(issueMapper::toUpdateIssueProto);
+    }
+
+    /**
+     * Частично обновляет задачу (PATCH) с оптимистичной блокировкой по версии.
+     *
+     * @param request {@link Mono} с запросом {@link PatchIssueRequest}.
+     * @return {@link Mono} с ответом {@link PatchIssueResponse}. {@code version_conflict == true} —
+     * версия из {@code If-Match} не совпала с текущей версией задачи в БД, изменения не применены,
+     * {@code issue} содержит текущее (неизменённое) состояние задачи. {@code version_conflict == false} —
+     * изменения применены, {@code issue} содержит уже обновлённое состояние задачи.
+     */
+    @TrackMetrics(counter = "issue-service_patch-issue_grpc_counter",
+            timer = "issue-service_patch-issue_grpc_timer")
+    public Mono<PatchIssueResponse> patchIssue(Mono<PatchIssueRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueId(), "body.issueId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
+                                        GrpcRequestValidators.requirePositiveOrInvalidArgument(req.getBody().getVersion(), "body.version"),
+                                        validateIfPresent(req.getBody().hasSummary(), () ->
+                                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getSummary(), "body.summary")),
+                                        validateIfPresent(req.getBody().hasPriority(), () ->
+                                                GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getPriority(), "body.priority"))
+                                ),
+                                Mono.zip(
+                                        NullableFieldParsers.parseNullableString(req.getBody().hasDescription(), req.getBody().getDescription()),
+                                        NullableFieldParsers.parseNullableUuid(req.getBody().hasAssigneeId(), req.getBody().getAssigneeId(), "body.assigneeId"),
+                                        NullableFieldParsers.parseNullableNonNegativeBigDecimal(req.getBody().hasStoryPoints(), req.getBody().getStoryPoints(), "body.storyPoints"),
+                                        NullableFieldParsers.parseNullableDate(req.getBody().hasStartDate(), req.getBody().getStartDate(), "body.startDate"),
+                                        NullableFieldParsers.parseNullableDate(req.getBody().hasDueDate(), req.getBody().getDueDate(), "body.dueDate"),
+                                        NullableFieldParsers.parseNullableNonNegativeInt32(req.getBody().hasOriginalEstimateMinutes(), req.getBody().getOriginalEstimateMinutes(), "body.originalEstimateMinutes"),
+                                        NullableFieldParsers.parseNullableNonNegativeInt32(req.getBody().hasRemainingEstimateMinutes(), req.getBody().getRemainingEstimateMinutes(), "body.remainingEstimateMinutes")
+                                )
+                        )
+                        .doOnError(StatusRuntimeException.class, logValidationError(
+                                req.getHeader().getRequestId(), req.getHeader().getNodeId(), "patchIssue"
+                        ))
+                        .flatMap(t -> {
+                            String requestId = t.getT1().getT1();
+                            String nodeId = t.getT1().getT2();
+                            UUID issueId = t.getT1().getT3();
+                            UUID actorUserId = t.getT1().getT4();
+                            int version = t.getT1().getT5().intValue();
+                            IssuePatch patch = new IssuePatch(
+                                    t.getT1().getT6(),
+                                    t.getT1().getT7().map(issueMapper::toDomainIssuePriority),
+                                    t.getT2().getT1(),
+                                    t.getT2().getT2(),
+                                    t.getT2().getT3(),
+                                    t.getT2().getT4(),
+                                    t.getT2().getT5(),
+                                    t.getT2().getT6(),
+                                    t.getT2().getT7()
+                            );
+
+                            log.info("[{}][{}] patchIssue: issueId={}, actorUserId={}, ifMatchVersion={}",
+                                    requestId, nodeId, issueId, actorUserId, version);
+
+                            return issuePatchService.patchIssue(requestId, nodeId, issueId, actorUserId, version, patch)
+                                    .doOnNext(result -> log.info("[{}][{}] patchIssue: issueId={}, versionConflict={}",
+                                            requestId, nodeId, issueId, result.versionConflict()))
+                                    .doOnError(DomainException.class, logOnError(requestId, nodeId, "patchIssue"));
+                        }))
+                .map(issueMapper::toPatchIssueResponseProto);
+    }
+
+    /**
+     * Если поле не пришло — возвращает {@link Optional#empty()} без вызова {@code validatedValueSupplier}.
+     * Если пришло — вызывает {@code validatedValueSupplier} и оборачивает результат в {@link Optional}.
+     * Используется для полей patch запроса которые не могут быть null.
+     *
+     * @param present  пришло ли поле в запросе
+     * @param validatedValueSupplier проверка/парсинг значения поля; вызывается только если {@code present == true}
+     * @param <T>      тип значения после проверки
+     * @return {@link Optional#empty()}, если поле не пришло; иначе {@link Optional} со значением
+     * или ошибка из {@code validatedValueSupplier}
+     */
+    private static <T> Mono<Optional<T>> validateIfPresent(boolean present, Supplier<Mono<T>> validatedValueSupplier) {
+        if (!present) {
+            return Mono.just(Optional.empty());
+        }
+        return validatedValueSupplier.get().map(Optional::of);
     }
 
     /**

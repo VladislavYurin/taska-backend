@@ -4,6 +4,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -56,6 +57,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
         Issue existingIssue = new Issue();
         existingIssue.setId(ISSUE_ID);
         existingIssue.setProjectId(PROJECT_ID);
+        existingIssue.setVersion(1);
 
         Issue updatedIssue = new Issue();
         updatedIssue.setId(ISSUE_ID);
@@ -99,7 +101,12 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
-        Mockito.verify(issueRepository).save(Mockito.any(Issue.class));
+        ArgumentCaptor<Issue> savedIssueCaptor = ArgumentCaptor.forClass(Issue.class);
+        Mockito.verify(issueRepository).save(savedIssueCaptor.capture());
+        Issue savedIssue = savedIssueCaptor.getValue();
+        Assertions.assertThat(savedIssue.getAssigneeId()).isEqualTo(ASSIGNEE_ID);
+        Assertions.assertThat(savedIssue.getVersion()).isEqualTo(2);
+        Assertions.assertThat(savedIssue.getUpdatedAt()).isNotNull();
 
         Mockito.verify(payloadSerializer).createIssueAssignedPayload(
                 Mockito.any(),
