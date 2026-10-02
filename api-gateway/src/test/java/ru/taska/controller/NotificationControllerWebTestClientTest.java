@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -19,8 +18,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
-import ru.taska.api.notification.v1.ListNotificationsResponse;
-import ru.taska.api.notification.v1.MarkAsReadResponse;
 import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.GatewayUserContext;
@@ -28,6 +25,7 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -35,7 +33,6 @@ import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
-import ru.taska.mapper.NotificationMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcNotificationServiceClient;
 
@@ -58,15 +55,14 @@ class NotificationControllerWebTestClientTest {
     private static final String TOKEN = "valid-access-token";
     private static final String REQUEST_ID = "req-notifications";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String ISSUE_ID = "00000000-0000-0000-0000-000000000002";
+    private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000003";
 
     @Autowired
     private WebTestClient webTestClient;
 
     @MockitoBean
     private GrpcNotificationServiceClient grpcNotificationServiceClient;
-
-    @MockitoBean
-    private NotificationMapper notificationMapper;
 
     @MockitoBean
     private GrpcAuthServiceClient grpcAuthServiceClient;
@@ -87,10 +83,6 @@ class NotificationControllerWebTestClientTest {
     void listNotifications_success_returns200AndItems() {
         mockAuthenticatedUser();
 
-        ListNotificationsResponse grpcResponse = ListNotificationsResponse.newBuilder()
-                .addNotifications(notification())
-                .build();
-
         NotificationListResponseDto restResponse = new NotificationListResponseDto();
         restResponse.setItems(List.of(restNotification()));
 
@@ -100,10 +92,7 @@ class NotificationControllerWebTestClientTest {
                         ArgumentMatchers.eq(20),
                         ArgumentMatchers.eq(0L)
                 ))
-                .thenReturn(Mono.just(grpcResponse));
-
-        Mockito.when(notificationMapper.toRestListResponse(grpcResponse))
-                .thenReturn(restResponse);
+                .thenReturn(Mono.just(restResponse));
 
         webTestClient.get()
                 .uri("/api/v1/notifications?unreadOnly=false&pageSize=20&offset=0")
@@ -131,8 +120,6 @@ class NotificationControllerWebTestClientTest {
     void listNotifications_unreadOnly_returns200() {
         mockAuthenticatedUser();
 
-        ListNotificationsResponse grpcResponse = ListNotificationsResponse.newBuilder().build();
-
         NotificationListResponseDto restResponse = new NotificationListResponseDto();
         restResponse.setItems(List.of());
 
@@ -142,10 +129,7 @@ class NotificationControllerWebTestClientTest {
                         ArgumentMatchers.eq(20),
                         ArgumentMatchers.eq(0L)
                 ))
-                .thenReturn(Mono.just(grpcResponse));
-
-        Mockito.when(notificationMapper.toRestListResponse(grpcResponse))
-                .thenReturn(restResponse);
+                .thenReturn(Mono.just(restResponse));
 
         webTestClient.get()
                 .uri("/api/v1/notifications?unreadOnly=true&pageSize=20&offset=0")
@@ -180,10 +164,6 @@ class NotificationControllerWebTestClientTest {
 
         UUID notificationId = UUID.fromString("906b9963-9511-4508-b546-d398f62f5765");
 
-        MarkAsReadResponse grpcResponse = MarkAsReadResponse.newBuilder()
-                .setNotification(notification())
-                .build();
-
         NotificationResponseDto restResponse = restNotification();
         restResponse.setReadAt(OffsetDateTime.parse("2026-07-06T12:00:00Z"));
 
@@ -191,10 +171,7 @@ class NotificationControllerWebTestClientTest {
                         ArgumentMatchers.any(),
                         ArgumentMatchers.eq(notificationId.toString())
                 ))
-                .thenReturn(Mono.just(grpcResponse));
-
-        Mockito.when(notificationMapper.toRestResponse(grpcResponse.getNotification()))
-                .thenReturn(restResponse);
+                .thenReturn(Mono.just(restResponse));
 
         webTestClient.patch()
                 .uri("/api/v1/notifications/{notificationId}/read", notificationId)
@@ -211,6 +188,32 @@ class NotificationControllerWebTestClientTest {
         Mockito.verify(grpcNotificationServiceClient).markAsRead(
                 ArgumentMatchers.argThat(context -> USER_ID.equals(context.userContext().userId())),
                 ArgumentMatchers.eq(notificationId.toString())
+        );
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/notifications/read-all - успешная отметка всех прочитанными")
+    void markAllNotificationsAsRead_success_returns200() {
+        mockAuthenticatedUser();
+
+        ReadAllNotificationsResponseDto restResponse = new ReadAllNotificationsResponseDto();
+        restResponse.setUpdatedCount(5L);
+
+        Mockito.when(grpcNotificationServiceClient.markAllAsRead(ArgumentMatchers.any()))
+                .thenReturn(Mono.just(restResponse));
+
+        webTestClient.post()
+                .uri("/api/v1/notifications/read-all")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                .header("X-Request-Id", "req-mark-all-read")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("X-Request-Id", "req-mark-all-read")
+                .expectBody()
+                .jsonPath("$.updatedCount").isEqualTo(5);
+
+        Mockito.verify(grpcNotificationServiceClient).markAllAsRead(
+                ArgumentMatchers.argThat(context -> USER_ID.equals(context.userContext().userId()))
         );
     }
 
@@ -391,7 +394,9 @@ class NotificationControllerWebTestClientTest {
                 .setNotificationType(NotificationKind.NOTIFICATION_KIND_ISSUE_ASSIGNED)
                 .setTitle("Вас назначили исполнителем")
                 .setBody("Вы назначены исполнителем задачи TASKA-12")
-                .setLink("/projects/TASKA/issues/TASKA-12")
+                .setIssueId(ISSUE_ID)
+                .setIssueKey("TASKA-12")
+                .setProjectId(PROJECT_ID)
                 .setSourceEventId("15cc2395-1a23-4159-ae40-e058a7ab4131")
                 .build();
     }
@@ -403,46 +408,13 @@ class NotificationControllerWebTestClientTest {
         dto.setNotificationType("ISSUE_ASSIGNED");
         dto.setTitle("Вас назначили исполнителем");
         dto.setBody("Вы назначены исполнителем задачи TASKA-12");
-        dto.setLink("/projects/TASKA/issues/TASKA-12");
+        dto.setIssueId(UUID.fromString(ISSUE_ID));
+        dto.setIssueKey("TASKA-12");
+        dto.setProjectId(UUID.fromString(PROJECT_ID));
         dto.setCreatedAt(OffsetDateTime.parse("2026-07-06T11:30:00Z"));
         dto.setReadAt(null);
         dto.setSourceEventId(UUID.fromString("15cc2395-1a23-4159-ae40-e058a7ab4131"));
 
         return dto;
-    }
-
-    @Test
-    @DisplayName("PATCH /api/v1/notifications/{notificationId}/read - пустой ответ downstream возвращает 502")
-    void markNotificationAsRead_missingNotification_returnsBadGateway() {
-        mockAuthenticatedUser();
-
-        UUID notificationId = UUID.randomUUID();
-
-        MarkAsReadResponse grpcResponse = MarkAsReadResponse.newBuilder()
-                .build();
-
-        Mockito.when(grpcNotificationServiceClient.markAsRead(
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.eq(notificationId.toString())
-                ))
-                .thenReturn(Mono.just(grpcResponse));
-
-        webTestClient.patch()
-                .uri("/api/v1/notifications/{notificationId}/read", notificationId)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
-                .header("X-Request-Id", "req-empty-notification")
-                .exchange()
-                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
-                .expectHeader().valueEquals(
-                        "X-Request-Id",
-                        "req-empty-notification"
-                )
-                .expectBody()
-                .jsonPath("$.code").isEqualTo("BAD_GATEWAY")
-                .jsonPath("$.message")
-                .isEqualTo("Invalid response from notification-service");
-
-        Mockito.verify(notificationMapper, Mockito.never())
-                .toRestResponse(ArgumentMatchers.any());
     }
 }

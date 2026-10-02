@@ -18,8 +18,8 @@ public enum EventType {
     ISSUE_DELETED("IssueDeleted"),
     ISSUE_LINK_CREATED("IssueLinkCreated"),
     ISSUE_LINK_DELETED("IssueLinkDeleted"),
-    ATTACHMENT_ADDED("AttachmentAdded"),
-    ATTACHMENT_DELETED("AttachmentDeleted"),
+    ISSUE_ATTACHMENT_ADDED ("AttachmentAdded"),
+    ISSUE_ATTACHMENT_DELETED("AttachmentDeleted"),
     USER_INVITED("UserInvited"),
     PROJECT_CREATED("ProjectCreated"),
     MEMBER_ADDED("MemberAdded"),
@@ -34,6 +34,9 @@ public enum EventType {
     ISSUE_UNWATCHED("IssueUnwatched"),
     ISSUE_LABEL_ADDED("LabelAdded"),
     ISSUE_LABEL_REMOVED("LabelRemoved"),
+    WORKLOG_ADDED("WorklogAdded"),
+    WORKLOG_UPDATED("WorklogUpdated"),
+    WORKLOG_DELETED("WorklogDeleted"),
     USER_BLOCKED("UserBlocked"),
     USER_UNBLOCKED("UserUnblocked");
 

@@ -35,7 +35,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("NotificationEventHandlerImpl")
+@DisplayName("NotificationEventHandlerImpl: обработка событий и рассылка уведомлений")
 class NotificationEventHandlerTest {
 
     private static final UUID EVENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -82,11 +82,11 @@ class NotificationEventHandlerTest {
     // ==================== Happy path ====================
 
     @Nested
-    @DisplayName("Happy path")
+    @DisplayName("Успешный сценарий")
     class HappyPathTests {
 
         @Test
-        @DisplayName("saves ProcessedEvent, notifications, and sends emails")
+        @DisplayName("Сохраняет ProcessedEvent и уведомления, отправляет письма")
         void shouldSaveAndSendForFirstDelivery() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -104,7 +104,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("saves ProcessedEvent with correct eventId and sourceType")
+        @DisplayName("Сохраняет ProcessedEvent с правильными eventId и sourceType")
         void shouldSaveProcessedEventWithSourceType() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -123,7 +123,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("creates two notifications and sends two emails for transitioned event")
+        @DisplayName("Создаёт два уведомления и отправляет два письма для события смены статуса")
         void shouldCreateTwoNotificationsForTransitioned() throws Exception {
             TaskaEvent event = issueTransitionedEvent();
 
@@ -139,7 +139,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("does not save notifications when factory returns empty list")
+        @DisplayName("Не сохраняет уведомления, если фабрика вернула пустой список")
         void shouldNotSaveWhenFactoryReturnsEmpty() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -153,7 +153,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("sends email for exactly the saved notification")
+        @DisplayName("Отправляет письмо именно по сохранённому уведомлению")
         void shouldSendEmailForSavedNotification() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -172,7 +172,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("ProcessedEvent is saved before notifications")
+        @DisplayName("ProcessedEvent сохраняется раньше уведомлений")
         void shouldSaveProcessedEventBeforeNotifications() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -192,11 +192,11 @@ class NotificationEventHandlerTest {
     // ==================== Дедупликация ====================
 
     @Nested
-    @DisplayName("Deduplication")
+    @DisplayName("Дедупликация")
     class DeduplicationTests {
 
         @Test
-        @DisplayName("skips duplicate event (ProcessedEvent already exists)")
+        @DisplayName("Пропускает повторное событие (ProcessedEvent уже существует)")
         void shouldSkipDuplicateEvent() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -212,7 +212,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("does not duplicate on repeated delivery")
+        @DisplayName("Не создаёт дубликаты при повторной доставке")
         void shouldNotCreateDuplicatesOnRepeatedDelivery() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -234,7 +234,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("swallows DuplicateKeyException from notificationRepository.save (idempotency by unique index)")
+        @DisplayName("Проглатывает DuplicateKeyException от notificationRepository.save (идемпотентность по уникальному индексу)")
         void shouldSwallowDuplicateKeyFromNotificationSave() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -257,11 +257,11 @@ class NotificationEventHandlerTest {
     // ==================== Обработка ошибок ====================
 
     @Nested
-    @DisplayName("Error handling")
+    @DisplayName("Обработка ошибок")
     class ErrorHandlingTests {
 
         @Test
-        @DisplayName("skips null event")
+        @DisplayName("Пропускает null-событие")
         void shouldSkipNullEvent() {
             handler.handle(null).block();
 
@@ -273,7 +273,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("skips event with null id")
+        @DisplayName("Пропускает событие с null id")
         void shouldSkipEventWithNullId() throws Exception {
             TaskaEvent event = TaskaEvent.builder()
                     .id(null)
@@ -291,7 +291,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("completes successfully when email sending fails")
+        @DisplayName("Завершается успешно, если отправка письма упала")
         void shouldCompleteWhenEmailFails() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -309,7 +309,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("fails when notificationRepository.save fails")
+        @DisplayName("Падает, если notificationRepository.save упал")
         void shouldFailWhenNotificationSaveFails() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
@@ -327,7 +327,7 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("does not save ProcessedEvent when transaction fails")
+        @DisplayName("Не сохраняет ProcessedEvent, если транзакция падает")
         void shouldNotCompleteWhenNotificationSaveFails() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 

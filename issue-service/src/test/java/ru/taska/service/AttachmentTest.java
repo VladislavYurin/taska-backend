@@ -22,6 +22,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.attachment.AttachmentServiceImpl;
 import ru.taska.service.attachment.AttachmentTransactionExecutor;
 import ru.taska.storage.client.StorageClient;
@@ -44,6 +45,9 @@ public class AttachmentTest {
 
     @Mock
     private IssueAttachmentRepository issueAttachmentRepository;
+
+    @Mock
+    private IssueWatcherRepository issueWatcherRepository;
 
     @Mock
     private ProjectRoleChecker projectRoleChecker;
@@ -86,7 +90,7 @@ public class AttachmentTest {
     @BeforeEach
     void setUp() {
         AttachmentTransactionExecutor transactionExecutor = new AttachmentTransactionExecutor(
-                issueAttachmentRepository, issueHistoryService, outboxEventService, payloadSerializer);
+                issueAttachmentRepository,issueWatcherRepository, issueHistoryService, outboxEventService, payloadSerializer);
         attachmentService = new AttachmentServiceImpl(issueProperties, issueRepository, issueAttachmentRepository,
                 projectRoleChecker, storageClient, transactionExecutor);
 
@@ -112,6 +116,9 @@ public class AttachmentTest {
         Mockito.lenient()
                 .when(storageClient.validateAndGetUploadedObjectMetadata(Mockito.anyString()))
                 .thenReturn(Mono.empty());
+
+        Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
+                .thenReturn(Flux.empty());
     }
 
     // ===== createUploadUrl =====
@@ -200,12 +207,12 @@ public class AttachmentTest {
                 .thenReturn(Mono.just(new StoredObjectMetadata(CHECKSUM, SIZE_BYTES)));
         Mockito.when(issueAttachmentRepository.save(Mockito.any(IssueAttachment.class)))
                 .thenReturn(Mono.just(savedAttachment));
-        Mockito.when(payloadSerializer.createAttachmentUploadedPayload(savedAttachment))
+        Mockito.when(payloadSerializer.createAttachmentUploadedPayload(Mockito.eq(savedAttachment), Mockito.anyList()))
                 .thenReturn(payload);
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_UPLOADED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ISSUE_ATTACHMENT_ADDED , payload))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.createPresignedDownloadUrl(OBJECT_KEY))
                 .thenReturn(Mono.just(DOWNLOAD_URL));
@@ -228,7 +235,7 @@ public class AttachmentTest {
         Mockito.verify(issueHistoryService).saveIssueHistory(
                 REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_UPLOADED, payload);
         Mockito.verify(outboxEventService).saveOutboxEvent(
-                REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_ADDED, payload);
+                REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ISSUE_ATTACHMENT_ADDED , payload);
         Mockito.verify(storageClient).createPresignedDownloadUrl(OBJECT_KEY);
     }
 
@@ -515,12 +522,13 @@ public class AttachmentTest {
 
         Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
                 .thenReturn(Mono.just(deletedAttachment));
-        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID)))
+        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(
+                        Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID), Mockito.anyList()))
                 .thenReturn(payload);
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ISSUE_ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))
@@ -556,12 +564,13 @@ public class AttachmentTest {
 
         Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
                 .thenReturn(Mono.just(deletedAttachment));
-        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID)))
+        Mockito.when(payloadSerializer.createAttachmentDeletedPayload(
+                        Mockito.eq(deletedAttachment), Mockito.eq(ACTOR_USER_ID), Mockito.anyList()))
                 .thenReturn(payload);
         Mockito.when(issueHistoryService.saveIssueHistory(
                         REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID, IssueEventType.ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
-        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ATTACHMENT_DELETED, payload))
+        Mockito.when(outboxEventService.saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE, ISSUE_ID, EventType.ISSUE_ATTACHMENT_DELETED, payload))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))

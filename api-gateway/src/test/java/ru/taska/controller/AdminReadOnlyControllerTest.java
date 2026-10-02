@@ -29,6 +29,14 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.*;
+import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.OutboxServiceTypeDto;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
+import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -124,7 +132,7 @@ class AdminReadOnlyControllerTest {
                         Mockito.eq(1),
                         Mockito.eq(20),
                         Mockito.eq("created_at"),
-                        Mockito.eq("desc"),
+                        Mockito.eq(SortOrderDto.DESC),
                         Mockito.anyMap(),
                         Mockito.any(GatewayContext.class)
                 ))
@@ -155,7 +163,7 @@ class AdminReadOnlyControllerTest {
             Integer expectedPage,
             Integer expectedPageSize,
             String expectedSort,
-            String expectedOrder
+            SortOrderDto expectedOrder
     ) {
         mockAuthenticatedUser();
 
@@ -219,7 +227,7 @@ class AdminReadOnlyControllerTest {
                 Mockito.eq(0),
                 Mockito.eq(20),
                 Mockito.isNull(),
-                Mockito.eq("asc"),
+                Mockito.eq(SortOrderDto.ASC),
                 filterCaptor.capture(),
                 Mockito.any(GatewayContext.class)
         );
@@ -661,6 +669,57 @@ class AdminReadOnlyControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+    @Test
+    @DisplayName("retryOutboxEvent: должен успешно перезапустить событие и вернуть 200 OK")
+    void retryOutboxEvent_ShouldReturn200_WhenSuccess() {
+        mockAuthenticatedUser();
+
+        OutboxServiceTypeDto service = OutboxServiceTypeDto.AUTH;
+        UUID eventId = UUID.randomUUID();
+
+        RetryOutboxEventRequestDto requestDto = new RetryOutboxEventRequestDto();
+        requestDto.setReason("test reason");
+
+        RetryOutboxEventResponseDto responseDto = new RetryOutboxEventResponseDto();
+
+        Mockito.when(adminClient.retryOutboxEvent(
+                        Mockito.eq(service),
+                        Mockito.eq(eventId),
+                        Mockito.any(RetryOutboxEventRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                        )
+                )
+                .thenReturn(Mono.just(responseDto));
+
+        webTestClient.post()
+                .uri("/api/v1/admin/outbox/{service}/{eventId}/retry", "auth", eventId)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestDto)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(RetryOutboxEventResponseDto.class)
+                .isEqualTo(responseDto);
+
+        Mockito.verify(adminClient)
+                .retryOutboxEvent(
+                        Mockito.eq(service), Mockito.eq(eventId),
+                        Mockito.any(RetryOutboxEventRequestDto.class),
+                        Mockito.any(GatewayContext.class)
+                );
+    }
+
+    @Test
+    void retryOutboxEvent_ShouldReturn400_WhenServiceIsInvalid() {
+        mockAuthenticatedUser();
+
+        webTestClient.post()
+                .uri("/api/v1/admin/outbox/{service}/{eventId}/retry", "unknown", UUID.randomUUID())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isBadRequest();
     }
 
     // ==================== HELPER METHODS ====================
@@ -674,7 +733,7 @@ class AdminReadOnlyControllerTest {
                         0,
                         20,
                         null,
-                        "asc"
+                        SortOrderDto.ASC
                 ),
                 Arguments.of(
                         "с пагинацией",
@@ -684,7 +743,7 @@ class AdminReadOnlyControllerTest {
                         2,
                         50,
                         null,
-                        "asc"
+                        SortOrderDto.ASC
                 ),
                 Arguments.of(
                         "с сортировкой",
@@ -694,7 +753,7 @@ class AdminReadOnlyControllerTest {
                         0,
                         20,
                         "created_at",
-                        "desc"
+                        SortOrderDto.DESC
                 ),
                 Arguments.of(
                         "со всеми параметрами",
@@ -706,7 +765,7 @@ class AdminReadOnlyControllerTest {
                         3,
                         100,
                         "updated_at",
-                        "asc"
+                        SortOrderDto.ASC
                 )
         );
     }

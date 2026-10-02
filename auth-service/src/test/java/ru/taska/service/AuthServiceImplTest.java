@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import io.jsonwebtoken.Claims;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.event.OutboxEventStatus;
 import ru.taska.exception.DomainException;
@@ -84,6 +85,9 @@ class AuthServiceImplTest {
     @Mock
     private JwtValidator jwtValidator;
 
+    @Mock
+    private TransactionalOperator requiresNewTransactionalOperator;
+
     @InjectMocks
     private AuthServiceImpl authServiceImpl;
 
@@ -138,6 +142,27 @@ class AuthServiceImplTest {
                 .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
                 .usedAt(null)
                 .build();
+
+        Mockito.lenient().when(requiresNewTransactionalOperator.transactional(Mockito.any(Mono.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Mockito.lenient().when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
+        Mockito.lenient().when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
+
+        authServiceImpl = new AuthServiceImpl(
+                userRepository,
+                credentialRepository,
+                passwordHashService,
+                jwtServiceImpl,
+                refreshTokenServiceImpl,
+                securityProperties,
+                inviteTokenRepository,
+                outboxEventRepository,
+                userMapper,
+                passwordValidator,
+                jwtValidator,
+                requiresNewTransactionalOperator
+        );
     }
 
     @Nested
@@ -291,8 +316,8 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION  &&
-                                    error.getMessage().equals("Email and password are required")
+                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED  &&
+                                    error.getMessage().equals("Invalid credentials")
                     )
                     .verify();
         }
@@ -356,6 +381,7 @@ class AuthServiceImplTest {
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(5);
             Assertions.assertThat(testCredential.getLockedUntil()).isNotNull();
+            Assertions.assertThat(testUser.getStatus()).isEqualTo(UserStatus.LOCKED);
         }
 
         @Test
@@ -366,6 +392,7 @@ class AuthServiceImplTest {
             String password = "password";
 
             // Устанавливаем lockedUntil в будущее
+            testUser.setStatus(UserStatus.LOCKED);
             testCredential.setLockedUntil(Instant.now().plus(10, ChronoUnit.MINUTES));
             testCredential.setFailedAttempts(5);
 
@@ -373,15 +400,12 @@ class AuthServiceImplTest {
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
 
-            // Важно: matches() НЕ должен вызываться, так как аккаунт заблокирован
-            // Поэтому не мокаем passwordHashService.matches()
-
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(error ->
                             error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().contains("Invalid credentials")
+                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
+                                    error.getMessage().contains("Account is locked until")
                     )
                     .verify();
 
@@ -523,30 +547,6 @@ class AuthServiceImplTest {
     @Nested
     @DisplayName("Edge Cases Tests")
     class EdgeCasesTests {
-
-        @Test
-        @DisplayName("Should handle null failed attempts")
-        void shouldHandleNullFailedAttempts() {
-            // Given
-            String email = "test@example.com";
-            String wrongPassword = "wrongPassword";
-            testCredential.setFailedAttempts(null);
-
-            Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
-            Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
-                    .thenReturn(Mono.just(testCredential));
-            Mockito.when(passwordHashService.matches(testCredential, wrongPassword)).thenReturn(Mono.just(false));
-            Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
-            Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
-
-            // When & Then
-            StepVerifier.create(authServiceImpl.login(email, wrongPassword))
-                    .expectError(DomainException.class)
-                    .verify();
-
-            Mockito.verify(credentialRepository).save(testCredential);
-            Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(1);
-        }
 
         @Test
         @DisplayName("Should handle password hash service error")

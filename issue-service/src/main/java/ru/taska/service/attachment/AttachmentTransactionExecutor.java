@@ -10,6 +10,7 @@ import ru.taska.domain.IssueEventType;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.repository.IssueAttachmentRepository;
+import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
 import ru.taska.storage.dto.StoredObjectMetadata;
@@ -26,6 +27,7 @@ import java.util.UUID;
 public class AttachmentTransactionExecutor {
 
     private final IssueAttachmentRepository issueAttachmentRepository;
+    private final IssueWatcherRepository issueWatcherRepository;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
@@ -45,14 +47,17 @@ public class AttachmentTransactionExecutor {
                         IssueAttachment.createNewAttachment(issueId, actorUserId, objectKey, fileName,
                                 contentType, metadata.sizeBytes(), metadata.checksum())
                 )
-                .flatMap(savedAttachment -> {
-                    var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment);
-                    return issueHistoryService.saveIssueHistory(requestId, nodeId, issueId, actorUserId,
-                                    IssueEventType.ATTACHMENT_UPLOADED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
-                                    issueId, EventType.ATTACHMENT_ADDED, payload))
-                            .thenReturn(savedAttachment);
-                });
+                .flatMap(savedAttachment ->
+                        issueWatcherRepository.findUserIdsByIssueId(issueId).distinct().collectList()
+                        .flatMap(watchersIds->{
+                            var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment,watchersIds);
+                            return issueHistoryService.saveIssueHistory(requestId, nodeId, issueId, actorUserId,
+                                            IssueEventType.ATTACHMENT_UPLOADED, payload)
+                                    .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
+                                            issueId, EventType.ISSUE_ATTACHMENT_ADDED , payload))
+                                    .thenReturn(savedAttachment);
+                        })
+                );
     }
 
     @Transactional
@@ -63,13 +68,16 @@ public class AttachmentTransactionExecutor {
             IssueAttachment attachment
     ) {
         return issueAttachmentRepository.softDelete(attachment.getId())
-                .flatMap(deleted -> {
-                    var payload = payloadSerializer.createAttachmentDeletedPayload(deleted, actorUserId);
-                    return issueHistoryService.saveIssueHistory(requestId, nodeId, deleted.getIssueId(),
-                                    actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
-                            .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
-                                    deleted.getIssueId(), EventType.ATTACHMENT_DELETED, payload));
-                })
+                .flatMap(deleted ->
+                        issueWatcherRepository.findUserIdsByIssueId(attachment.getIssueId()).distinct().collectList()
+                        .flatMap(watchersIds-> {
+                            var payload = payloadSerializer.createAttachmentDeletedPayload(deleted, actorUserId, watchersIds);
+                            return issueHistoryService.saveIssueHistory(requestId, nodeId, deleted.getIssueId(),
+                                            actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
+                                    .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
+                                            deleted.getIssueId(), EventType.ISSUE_ATTACHMENT_DELETED, payload));
+                        })
+                )
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Attachment already deleted (race condition): attachmentId={}",
                             requestId, nodeId, attachment.getId());

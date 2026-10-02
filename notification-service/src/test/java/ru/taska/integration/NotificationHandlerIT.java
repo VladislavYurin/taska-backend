@@ -26,7 +26,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("NotificationHandler IT")
+@DisplayName("NotificationHandler: интеграционные тесты")
 class NotificationHandlerIT extends AbstractIT {
 
     // ==================== Поля payload ====================
@@ -75,11 +75,11 @@ class NotificationHandlerIT extends AbstractIT {
     // ==================== Happy path ====================
 
     @Nested
-    @DisplayName("Happy path")
+    @DisplayName("Успешный сценарий")
     class HappyPathTests {
 
         @Test
-        @DisplayName("ISSUE_UPDATED notifies watchers + assignee, excludes actor")
+        @DisplayName("ISSUE_UPDATED уведомляет наблюдателей и исполнителя, исключая актора")
         void shouldNotifyWatchersAndAssigneeOnUpdated() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -98,7 +98,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ISSUE_COMMENT_CREATED notifies watchers, excludes author")
+        @DisplayName("ISSUE_COMMENT_CREATED уведомляет наблюдателей, исключая автора")
         void shouldNotifyWatchersExceptAuthorOnCommentCreated() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -117,7 +117,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ISSUE_TRANSITIONED notifies watchers + assignee, excludes actor")
+        @DisplayName("ISSUE_TRANSITIONED уведомляет наблюдателей и исполнителя, исключая актора")
         void shouldNotifyWatchersAndAssigneeOnTransitioned() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -136,7 +136,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ISSUE_ASSIGNED notifies assignee + watchers, excludes actor")
+        @DisplayName("ISSUE_ASSIGNED уведомляет исполнителя и наблюдателей, исключая актора")
         void shouldNotifyAssigneeAndWatchersOnAssigned() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -154,7 +154,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ISSUE_LINK_CREATED notifies watchers, excludes actor")
+        @DisplayName("ISSUE_LINK_CREATED уведомляет наблюдателей, исключая актора")
         void shouldNotifyWatchersOnLinkCreated() {
             ObjectNode payload = linkPayload();
             payload.put(FIELD_CREATED_BY, actorId.toString());
@@ -171,7 +171,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ISSUE_LINK_DELETED notifies watchers, excludes actor")
+        @DisplayName("ISSUE_LINK_DELETED уведомляет наблюдателей, исключая актора")
         void shouldNotifyWatchersOnLinkDeleted() {
             ObjectNode payload = linkPayload();
             payload.put(FIELD_DELETED_BY, actorId.toString());
@@ -191,11 +191,11 @@ class NotificationHandlerIT extends AbstractIT {
     // ==================== Дедупликация ====================
 
     @Nested
-    @DisplayName("Deduplication")
+    @DisplayName("Дедупликация")
     class DeduplicationTests {
 
         @Test
-        @DisplayName("second delivery of same eventId does not create new notifications")
+        @DisplayName("Повторная доставка того же eventId не создаёт новые уведомления")
         void shouldNotCreateDuplicatesOnDuplicateEvent() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -214,7 +214,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("duplicate assignee+watcher is deduplicated")
+        @DisplayName("Дубликат исполнителя и наблюдателя устраняется")
         void shouldDedupAssigneeAndWatcher() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
@@ -230,7 +230,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("ProcessedEvent is saved with correct eventId and sourceType")
+        @DisplayName("ProcessedEvent сохраняется с правильными eventId и sourceType")
         void shouldSaveProcessedEvent() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -249,7 +249,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("unique index rejects same (source_event_id, user_id)")
+        @DisplayName("Уникальный индекс отклоняет повтор (source_event_id, user_id)")
         void shouldRejectDuplicateSourceEventAndUser() {
             // Прямая попытка вставить два уведомления с одинаковым (source_event_id, user_id)
             // Проверяет, что индекс из миграции 0004 реально работает.
@@ -274,14 +274,14 @@ class NotificationHandlerIT extends AbstractIT {
         }
     }
 
-    // ==================== Пустые watchers ====================
+    // ==================== Пустые наблюдатели ====================
 
     @Nested
-    @DisplayName("Empty watchers")
+    @DisplayName("Пустые наблюдатели")
     class EmptyWatchersTests {
 
         @Test
-        @DisplayName("empty watchers list does not fail")
+        @DisplayName("Пустой список наблюдателей не приводит к ошибке")
         void shouldNotFailOnEmptyWatchers() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -298,7 +298,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("missing watcherIds field does not fail")
+        @DisplayName("Отсутствие поля watcherIds не приводит к ошибке")
         void shouldNotFailWhenWatchersMissing() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -312,7 +312,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("all watchers are the actor — no notifications, event is processed")
+        @DisplayName("Все наблюдатели — актор: уведомлений нет, событие обработано")
         void shouldNotCreateNotificationsWhenAllWatchersAreActor() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -331,11 +331,11 @@ class NotificationHandlerIT extends AbstractIT {
     // ==================== Типы уведомлений ====================
 
     @Nested
-    @DisplayName("Notification types and fields")
+    @DisplayName("Типы и поля уведомлений")
     class NotificationFieldsTests {
 
         @Test
-        @DisplayName("created notifications have correct type and sourceEventId")
+        @DisplayName("Созданные уведомления имеют правильный тип и sourceEventId")
         void shouldCreateNotificationsWithCorrectTypeAndSourceEventId() {
             ObjectNode payload = basePayload();
             payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
@@ -357,7 +357,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("findAllBySourceEventId returns only notifications of that event")
+        @DisplayName("findAllBySourceEventId возвращает только уведомления этого события")
         void shouldFindBySourceEventId() {
             // Событие 1
             UUID eventId1 = UUID.randomUUID();
@@ -407,7 +407,7 @@ class NotificationHandlerIT extends AbstractIT {
         }
 
         @Test
-        @DisplayName("two different events with same recipient create two notifications")
+        @DisplayName("Два разных события с одним получателем создают два уведомления")
         void shouldCreateTwoNotificationsForTwoEvents() {
             UUID eventId1 = UUID.randomUUID();
             UUID eventId2 = UUID.randomUUID();
@@ -443,6 +443,42 @@ class NotificationHandlerIT extends AbstractIT {
             assertThat(all).extracting(Notification::getSourceEventId)
                     .containsExactlyInAnyOrder(eventId1, eventId2);
         }
+    }
+
+    @Test
+    @DisplayName("ISSUE_ATTACHMENT_ADDED уведомляет наблюдателей, исключая загрузившего")
+    void shouldNotifyWatchersExceptUploaderOnAttachmentAdded() {
+        ObjectNode payload = basePayload();
+        payload.put("uploadedBy", actorId.toString());
+        payload.put("fileName", "report.pdf");
+        setWatchers(payload, userA, userB, actorId);
+
+        TaskaEvent event = event(EventType.ISSUE_ATTACHMENT_ADDED, payload);
+
+        StepVerifier.create(handler.handle(event)).verifyComplete();
+
+        List<Notification> all = notificationRepository.findAll().collectList().block();
+        assertThat(all).hasSize(2);
+        assertThat(all).extracting(Notification::getUserId)
+                .containsExactlyInAnyOrder(userA, userB)
+                .doesNotContain(actorId);
+    }
+
+    @Test
+    @DisplayName("ISSUE_ATTACHMENT_DELETED уведомляет наблюдателей, исключая удалившего")
+    void shouldNotifyWatchersExceptDeleterOnAttachmentDeleted() {
+        ObjectNode payload = basePayload();
+        payload.put("deletedBy", actorId.toString());
+        payload.put("fileName", "report.pdf");
+        setWatchers(payload, userA, actorId);
+
+        TaskaEvent event = event(EventType.ISSUE_ATTACHMENT_DELETED, payload);
+
+        StepVerifier.create(handler.handle(event)).verifyComplete();
+
+        List<Notification> all = notificationRepository.findAll().collectList().block();
+        assertThat(all).hasSize(1);
+        assertThat(all.get(0).getUserId()).isEqualTo(userA);
     }
 
     // ==================== Helpers ====================

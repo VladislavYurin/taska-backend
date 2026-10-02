@@ -23,8 +23,8 @@ public class StorageProperties {
 
     /**
      * Адрес сервера хранилища, на который клиент отправляет запросы.
-     * Для MinIO в Docker — это адрес контейнера, например {@code http://minio:9000}.
-     * Для AWS S3 не нужен: SDK определяет адрес сам по региону.
+     * Для S3-compatible storage в Docker — например {@code http://rustfs:9000}.
+     * Для AWS S3 endpoint может не требоваться: SDK определяет его по региону.
      */
     @NotBlank
     private String endpoint;
@@ -47,9 +47,9 @@ public class StorageProperties {
     private String secretKey;
 
     /**
-     * Регион хранилища.
-     * MinIO игнорирует это значение, но AWS SDK требует его указать.
-     * Для MinIO можно использовать любую строку, например {@code us-east-1}.
+     * Регион S3-compatible хранилища.
+     * AWS SDK требует указать регион.
+     * Для RustFS можно использовать {@code us-east-1}.
      */
     @NotBlank
     private String region;

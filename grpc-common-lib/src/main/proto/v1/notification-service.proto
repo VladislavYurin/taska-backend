@@ -33,6 +33,12 @@ service NotificationService {
    */
   rpc MarkAsRead(MarkAsReadRequest)
       returns (MarkAsReadResponse);
+
+  /**
+   * Помечает все уведомления пользователя как прочитанные.
+   */
+  rpc MarkAllAsRead(MarkAllAsReadRequest)
+      returns (MarkAllAsReadResponse);
 }
 
 /**
@@ -146,6 +152,14 @@ enum NotificationKind {
    * Уведомление об удалении комментария под задачей
    */
   NOTIFICATION_KIND_ISSUE_COMMENT_DELETED = 20;
+  /**
+   * Уведомление о разблокировке пользователя
+   */
+  NOTIFICATION_KIND_ISSUE_ATTACHMENT_ADDED = 21;
+  /**
+   * Уведомление о разблокировке пользователя
+   */
+  NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED = 22;
 }
 
 /**
@@ -216,6 +230,11 @@ message ListNotificationsResponse {
    * Если уведомлений нет, вернется пустой список.
    */
   repeated NotificationResponse notifications = 1;
+
+  /**
+   * Количество всех непрочитанных уведомлений у пользователя.
+   */
+  int64 unread_count = 2;
 }
 
 /**
@@ -294,12 +313,12 @@ message NotificationResponse {
   string body = 5;
 
   /**
-   * Ссылка для перехода в UI.
-   *
-   * Например: /projects/ABC/issues/ABC-123
-   * Может быть пустой строкой, если ссылки нет.
+   * Поле link было удалено в TAS-184. Вместо него — структурированные
+   * поля issue_id, issue_key, project_id, из которых клиент сам строит URL.
+   * Номер 6 и имя "link" зарезервированы, чтобы их случайно не переиспользовали
    */
-  string link = 6;
+  reserved 6;
+  reserved "link";
 
   /**
    * Время создания уведомления.
@@ -319,4 +338,55 @@ message NotificationResponse {
    * Например, event id из Kafka.
    */
   string source_event_id = 9;
+
+
+  /**
+   * Идентификатор задачи, к которой относится уведомление.
+   * Пустая строка для не-issue уведомлений (USER_INVITED, MEMBER_ADDED и т.д.).
+   */
+  string issue_id = 10;
+
+  /**
+   * Человекочитаемый ключ задачи (например, ABC-123).
+   * Пустая строка для не-issue уведомлений.
+   */
+  string issue_key = 11;
+
+  /**
+   * Идентификатор проекта задачи.
+   * Пустая строка для не-issue уведомлений.
+   */
+  string project_id = 12;
+}
+
+/**
+ * Бизнес-данные запроса MarkAllAsRead.
+ */
+message MarkAllAsReadRequest {
+  /**
+   * Общий технический заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Бизнес-данные запроса.
+   */
+  MarkAllAsReadRequestBody body = 2;
+}
+
+message MarkAllAsReadRequestBody {
+  /**
+   * Идентификатор пользователя, чьи уведомления нужно пометить прочитанными.
+   */
+  string user_id = 1;
+}
+
+/**
+ * Ответ после отметки всех уведомлений прочитанными.
+ */
+message MarkAllAsReadResponse {
+  /**
+   * Количество помеченных прочитанными уведомлений.
+   */
+  int64 updated_count = 1;
 }

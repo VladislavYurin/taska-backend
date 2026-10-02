@@ -76,8 +76,7 @@ public class IssueAutoWatchService {
         return issueWatcherExecutor.executeWatch(
                         requestId,
                         nodeId,
-                        issue.getId(),
-                        issue.getProjectId(),
+                        issue,
                         watcherUserId,
                         actorUserId
                 )
