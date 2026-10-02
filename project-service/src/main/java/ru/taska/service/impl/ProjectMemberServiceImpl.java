@@ -196,7 +196,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private ProjectMemberDetailsDto buildProjectMemberDetailsDto(ProjectMemberDto member, UserDetails user) {
         var builder = ProjectMemberDetailsDto.builder()
                 .userId(member.userId())
-                .role(member.role());
+                .role(member.role())
+                .addedAt(member.addedAt());
 
         if (user != null) {
             builder.displayName(user.getDisplayName())

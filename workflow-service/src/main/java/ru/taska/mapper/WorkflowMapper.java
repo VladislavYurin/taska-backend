@@ -1,5 +1,6 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
 import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.api.workflow.v1.WorkflowStatus;
@@ -11,6 +12,8 @@ import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowEntity;
 
+import java.time.Instant;
+
 @Component
 public class WorkflowMapper {
 
@@ -20,8 +23,8 @@ public class WorkflowMapper {
                 .setId(entity.getId().toString())
                 .setName(entity.getName())
                 .setVersion(entity.getVersion())
-                .setCreatedAt(entity.getCreatedAt().toString())
-                .setUpdatedAt(entity.getUpdatedAt().toString())
+                .setCreatedAt(toTimestampFromInstant(entity.getCreatedAt()))
+                .setUpdatedAt(toTimestampFromInstant(entity.getUpdatedAt()))
                 .addAllStatuses(aggregate.statuses().stream().map(this::toWorkflowStatusProto).toList())
                 .addAllTransitions(aggregate.transitions().stream().map(this::toWorkflowTransitionProto).toList())
                 .build();
@@ -43,8 +46,8 @@ public class WorkflowMapper {
                 .setName(status.getName())
                 .setCategory(toProtoStatusCategory(status.getCategory()))
                 .setSortOrder(status.getSortOrder())
-                .setCreatedAt(status.getCreatedAt().toString())
-                .setUpdatedAt(status.getUpdatedAt().toString())
+                .setCreatedAt(toTimestampFromInstant(status.getCreatedAt()))
+                .setUpdatedAt(toTimestampFromInstant(status.getUpdatedAt()))
                 .build();
     }
 
@@ -64,8 +67,18 @@ public class WorkflowMapper {
                 .setToStatusId(transition.getToStatusId().toString())
                 .setName(transition.getName())
                 .setSortOrder(transition.getSortOrder())
-                .setCreatedAt(transition.getCreatedAt().toString())
-                .setUpdatedAt(transition.getUpdatedAt().toString())
+                .setCreatedAt(toTimestampFromInstant(transition.getCreatedAt()))
+                .setUpdatedAt(toTimestampFromInstant(transition.getUpdatedAt()))
+                .build();
+    }
+
+    private Timestamp toTimestampFromInstant(Instant instant) {
+        if (instant == null) {
+            return Timestamp.getDefaultInstance();
+        }
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
                 .build();
     }
 }
