@@ -137,8 +137,9 @@ public class GrpcIssueWorklogService {
                             Integer spentMinutes = t.getT6().orElse(null);
                             LocalDate workDate = t.getT7().orElse(null);
 
-                            String rawComment = req.getBody().hasComment() ? req.getBody().getComment() : null;
-                            String comment = (rawComment != null && !rawComment.isBlank()) ? rawComment.trim() : null;
+                            String comment = req.getBody().hasComment()
+                                    ? req.getBody().getComment().trim()
+                                    : null;
 
                             log.info("[{}][{}] updateIssueWorklog: issueId={}, spentMinutes={}, workDate={}",
                                     requestId, nodeId, issueId, spentMinutes, workDate);
