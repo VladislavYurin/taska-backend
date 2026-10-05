@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.domain.util;
 
 import java.util.List;
 

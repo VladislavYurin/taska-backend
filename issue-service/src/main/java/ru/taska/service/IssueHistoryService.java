@@ -2,9 +2,9 @@ package ru.taska.service;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
 import tools.jackson.databind.JsonNode;
 
 import java.util.UUID;

@@ -1,4 +1,6 @@
-package ru.taska.domain;
+package ru.taska.domain.dto;
+
+import ru.taska.domain.entity.IssueAttachment;
 
 /**
  * Промежуточный класс для передачи данных от сервисного слоя к grpc-слою.

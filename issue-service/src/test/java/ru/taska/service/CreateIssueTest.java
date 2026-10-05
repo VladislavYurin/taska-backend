@@ -8,11 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IdempotencyKey;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IdempotencyKey;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.event.AggregateType;
 import ru.taska.util.RequestHasher;
 

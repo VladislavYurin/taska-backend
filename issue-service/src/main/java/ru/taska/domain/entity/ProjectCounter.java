@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.domain.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

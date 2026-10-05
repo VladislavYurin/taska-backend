@@ -5,8 +5,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
-import ru.taska.domain.dto.IssueLinkInfoDto;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.projection.IssueLinkInfoDto;
 import ru.taska.domain.projection.IssueCoreDetails;
 
 import java.util.UUID;

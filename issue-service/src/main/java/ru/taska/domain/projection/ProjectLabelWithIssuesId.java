@@ -1,6 +1,6 @@
-package ru.taska.domain.dto.labels;
+package ru.taska.domain.projection;
 
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.time.Instant;
 import java.util.UUID;

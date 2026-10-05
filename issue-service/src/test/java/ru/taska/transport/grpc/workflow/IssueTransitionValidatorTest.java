@@ -15,7 +15,7 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
 import ru.taska.api.workflow.v1.ValidateTransitionResponseBody;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueMapper;

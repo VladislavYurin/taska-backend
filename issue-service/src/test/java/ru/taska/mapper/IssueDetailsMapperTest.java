@@ -11,16 +11,17 @@ import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssueWatchersResponse;
 import ru.taska.api.issue.v1.ListLabelsResponse;
-import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.aggregate.IssueDetailsSources;
+import ru.taska.domain.dto.AttachmentDto;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.entity.IssueWatcher;
 import ru.taska.domain.util.FetchResult;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
 import ru.taska.domain.projection.IssueCoreDetails;
@@ -64,9 +65,10 @@ class IssueDetailsMapperTest {
         UUID reporterId = UUID.randomUUID();
 
         IssueCoreDetails core = createCoreDetails(issueId, null, reporterId);
+        IssueDetailsSources issueDetailsSources = new IssueDetailsSources(core, FetchResult.failed(), FetchResult.failed(),
+                FetchResult.failed(), FetchResult.failed(), null);
         IssueDetailsAggregate aggregate =
-                new IssueDetailsAggregate(core, FetchResult.failed(), FetchResult.failed(),
-                        FetchResult.failed(), FetchResult.failed(), null, Collections.emptyMap());
+                new IssueDetailsAggregate(issueDetailsSources, Collections.emptyMap());
 
         GetIssueDetailsResponse response = mapper.toProto(aggregate);
 
@@ -128,11 +130,10 @@ class IssueDetailsMapperTest {
 
         LabelResponses.ProjectLabelInfo label = new LabelResponses.ProjectLabelInfo(UUID.randomUUID(), projectId, "bug", "#FF0000", userId1, Instant.now(), null);
 
-        IssueDetailsAggregate aggregate = new IssueDetailsAggregate(
-                core, FetchResult.ok(List.of(label)),
+        IssueDetailsSources issueDetailsSources = new IssueDetailsSources(core, FetchResult.ok(List.of(label)),
                 FetchResult.ok(List.of(w1, w2)), FetchResult.ok(attachments), FetchResult.ok(List.of(issueLinkDetails)),
-                List.of(history), profiles
-        );
+                List.of(history));
+        IssueDetailsAggregate aggregate = new IssueDetailsAggregate(issueDetailsSources, profiles);
 
         GetIssueDetailsResponse response = mapper.toProto(aggregate);
 

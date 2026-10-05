@@ -1047,6 +1047,7 @@ class IssueMapperTest {
                     .setCreatedAt(timestamp)
                     .setUpdatedAt(timestamp)
                     .setReporterId(UUID.randomUUID().toString())
+                    .setIssueType(IssueType.ISSUE_TYPE_TASK)
                     .build();
 
             GetIssueDetailsResponse response = GetIssueDetailsResponse.newBuilder()

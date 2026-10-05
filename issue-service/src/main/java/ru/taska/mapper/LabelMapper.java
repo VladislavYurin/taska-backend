@@ -17,8 +17,8 @@ import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
-import ru.taska.domain.labels.IssueLabels;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.time.Instant;
 import java.util.List;

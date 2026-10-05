@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.domain.aggregate;
 
 /**
  * Тип связи между задачами для отображения при чтении (включает в себя направленные и обратные связи).

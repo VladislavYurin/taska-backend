@@ -8,13 +8,13 @@ import org.mockito.Mockito;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.labels.IssueWithLabels;
-import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.projection.ProjectLabelWithIssuesId;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.time.Instant;
 import java.util.Set;

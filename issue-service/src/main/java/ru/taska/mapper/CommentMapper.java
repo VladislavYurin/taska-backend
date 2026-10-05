@@ -8,9 +8,9 @@ import ru.taska.api.issue.v1.DeleteIssueCommentResponse;
 import ru.taska.api.issue.v1.IssueCommentResponse;
 import ru.taska.api.issue.v1.ListIssueCommentsResponse;
 import ru.taska.api.issue.v1.UpdateIssueCommentResponse;
-import ru.taska.domain.IssueComment;
+import ru.taska.domain.entity.IssueComment;
 import ru.taska.domain.dto.IssueCommentWithAuthor;
-import ru.taska.domain.PageResult;
+import ru.taska.domain.util.PageResult;
 
 import java.time.Instant;
 

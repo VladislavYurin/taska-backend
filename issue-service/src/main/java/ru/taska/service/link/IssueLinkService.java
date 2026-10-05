@@ -2,8 +2,8 @@ package ru.taska.service.link;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueLinkType;
 import ru.taska.domain.projection.IssueLinkDetails;
 
 import java.util.UUID;

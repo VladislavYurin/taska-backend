@@ -13,13 +13,14 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.ProjectLabels;
+import ru.taska.domain.util.PageResult;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
@@ -416,7 +417,7 @@ class LabelServiceIT extends AbstractIT {
         mockProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
 
         // Act
-        Mono<ru.taska.domain.PageResult<IssueWithLabels>> result = issueService.listIssues(
+        Mono<PageResult<IssueWithLabels>> result = issueService.listIssues(
                 REQUEST_ID, NODE_ID, PROJECT_ID, VIEWER_ID,
                 null, null, label1.getId(), 0, 10
         );

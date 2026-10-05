@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.domain.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,6 +11,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import ru.taska.domain.IssueType;
 
 import java.time.Instant;
 import java.util.UUID;

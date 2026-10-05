@@ -2,7 +2,7 @@ package ru.taska.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
@@ -11,19 +11,18 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.IdempotencyKey;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IdempotencyKey;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWatcher;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.PageResult;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.util.PageResult;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.labels.IssueWithLabels;
-import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.projection.ProjectLabelWithIssuesId;
+import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -764,7 +763,10 @@ public class IssueServiceImpl implements IssueService {
                 requestId, nodeId, issueKey, actorUserId);
 
         return issueAccessGuard.verifyReadAccess(
-                requestId, nodeId, issueKey, actorUserId,
+                requestId,
+                nodeId,
+                issueKey,
+                actorUserId,
                 issueRepository.findActiveByKeyIgnoreCase(issueKey),
                 Issue::getProjectId
         );

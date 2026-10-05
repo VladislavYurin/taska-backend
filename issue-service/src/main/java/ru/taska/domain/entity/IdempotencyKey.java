@@ -1,4 +1,4 @@
-package ru.taska.domain;
+package ru.taska.domain.entity;
 
 import org.springframework.data.annotation.CreatedDate;
 import tools.jackson.databind.JsonNode;

@@ -5,10 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.AttachmentDto;
+import ru.taska.domain.dto.AttachmentDto;
 import ru.taska.domain.aggregate.IssueDetailsSources;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueWatcher;
 import ru.taska.domain.aggregate.IssueDetailsAggregate;
 import ru.taska.domain.projection.IssueCoreDetails;
 import ru.taska.domain.projection.IssueLinkDetails;
@@ -58,7 +58,7 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
         return verifyAccessAndFetchCoreDetails(requestId, nodeId, issueId, actorUserId)
                 .flatMap(core -> fetchIssueDetailsSources(requestId, nodeId, issueId, actorUserId, core))
                 .flatMap(sources -> getProfiles(sources.extractUserIds(), requestId, nodeId)
-                        .map(sources::withProfiles));
+                        .map(profiles -> new IssueDetailsAggregate(sources, profiles)));
     }
 
     /**
@@ -69,10 +69,16 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
      * остальные источники данных не запрашиваются.</p>
      */
     private Mono<IssueCoreDetails> verifyAccessAndFetchCoreDetails(
-            String requestId, String nodeId, UUID issueId, UUID actorUserId
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId
     ) {
         return issueAccessGuard.verifyReadAccess(
-                requestId, nodeId, issueId, actorUserId,
+                requestId,
+                nodeId,
+                issueId,
+                actorUserId,
                 issueRepository.findIssueCoreDetails(issueId, actorUserId),
                 details -> details.issue().getProjectId()
         );
@@ -80,10 +86,14 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
 
     /**
      * Параллельно загружает сопутствующие данные задачи (не влияющие на доступ)
-     * и собирает их вместе с уже провалидированным core в {@link IssueDetailsSources}.
+     * и собирает их вместе с уже проверенными основными данными задачи в {@link IssueDetailsSources}.
      */
     private Mono<IssueDetailsSources> fetchIssueDetailsSources(
-            String requestId, String nodeId, UUID issueId, UUID actorUserId, IssueCoreDetails core
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            UUID actorUserId,
+            IssueCoreDetails core
     ) {
         LabelCommands.ListIssueLabelsRequestDto labelsRequest =
                 new LabelCommands.ListIssueLabelsRequestDto(issueId, actorUserId);
@@ -145,7 +155,9 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
     }
 
     private Mono<Map<UUID, UserSummary>> getProfiles(
-            Set<UUID> userIds, String requestId, String nodeId
+            Set<UUID> userIds,
+            String requestId,
+            String nodeId
     ) {
         if (userIds.isEmpty()) {
             return Mono.just(Map.of());
@@ -155,7 +167,10 @@ public class IssueDetailsServiceImpl implements IssueDetailsService {
     }
 
     private Consumer<Throwable> logSourceError(
-            String requestId, String nodeId, UUID issueId, String sourceName
+            String requestId,
+            String nodeId,
+            UUID issueId,
+            String sourceName
     ) {
         return e -> log.error(
                 "[{}][{}] getIssueDetails: failed to load {}, issueId={}, error={}",

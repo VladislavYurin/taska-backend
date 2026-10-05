@@ -1,7 +1,7 @@
 package ru.taska.domain.projection;
 
 import org.springframework.data.relational.core.mapping.Embedded;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 
 /**
  * Основные данные задачи, необходимые для формирования детальной информации.

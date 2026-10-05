@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
@@ -49,8 +49,12 @@ public class IssueAccessGuard {
      * @return исходные данные задачи после успешной проверки доступа
      */
     public <T> Mono<T> verifyReadAccess(
-            String requestId, String nodeId, Object identifier, UUID actorUserId,
-            Mono<T> issueLookup, Function<T, UUID> projectIdExtractor
+            String requestId,
+            String nodeId,
+            Object identifier,
+            UUID actorUserId,
+            Mono<T> issueLookup,
+            Function<T, UUID> projectIdExtractor
     ) {
         return issueLookup
                 .switchIfEmpty(Mono.defer(() -> {

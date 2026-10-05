@@ -2,11 +2,10 @@ package ru.taska.service.attachment;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.AttachmentDownloadUrlDto;
-import ru.taska.domain.AttachmentDto;
+import ru.taska.domain.dto.AttachmentDownloadUrlDto;
+import ru.taska.domain.dto.AttachmentDto;
 import ru.taska.storage.dto.PresignedUploadResult;
 
-import java.util.List;
 import java.util.UUID;
 
 /**

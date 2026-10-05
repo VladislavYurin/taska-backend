@@ -1,8 +1,8 @@
 package ru.taska.mapper;
 
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueLinkViewType;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.aggregate.IssueLinkViewType;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 
 public final class ProtoEnumMapper {

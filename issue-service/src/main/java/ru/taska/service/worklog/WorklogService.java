@@ -1,7 +1,7 @@
 package ru.taska.service.worklog;
 
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Worklog;
+import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
 import ru.taska.domain.dto.UpdateWorklogDto;
 

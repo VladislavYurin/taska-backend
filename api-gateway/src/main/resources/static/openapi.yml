@@ -2639,8 +2639,7 @@ components:
     IssueDetailsResponseDto:
       type: object
       required: [id, projectId, issueNumber, issueKey, issueType, summary, status,
-                 priority, reporter, createdAt, updatedAt, version, labels, watchers,
-                 isWatching, links, attachments, commentCount]
+                 priority, reporter, createdAt, updatedAt, version, isWatching, commentCount]
       properties:
         id:
           type: string

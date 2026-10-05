@@ -1,4 +1,4 @@
-package ru.taska.domain.labels;
+package ru.taska.domain.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Table(name = "project_labels",schema = "taska")
-public class ProjectLabels {
+public class  ProjectLabels {
 
     /**
      * Идентификатор связи метки и проекта

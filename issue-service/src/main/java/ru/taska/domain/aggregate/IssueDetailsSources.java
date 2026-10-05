@@ -1,10 +1,10 @@
 package ru.taska.domain.aggregate;
 
-import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.dto.AttachmentDto;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueWatcher;
 import ru.taska.domain.util.FetchResult;
 import ru.taska.domain.projection.IssueCoreDetails;
 import ru.taska.domain.projection.IssueLinkDetails;
@@ -63,14 +63,5 @@ public record IssueDetailsSources(
         }
 
         return userIds;
-    }
-
-    /**
-     * Достраивает финальный агрегат, добавляя профили, полученные из auth-service.
-     */
-    public IssueDetailsAggregate withProfiles(Map<UUID, UserSummary> profiles) {
-        return new IssueDetailsAggregate(
-                issueCore, labels, watchers, attachments, links, history, profiles
-        );
     }
 }

@@ -1,7 +1,7 @@
 package ru.taska.domain.projection;
 
 import org.springframework.data.relational.core.mapping.Embedded;
-import ru.taska.domain.IssueLink;
+import ru.taska.domain.entity.IssueLink;
 
 /**
  * Данные связи задачи с целевой задачей.

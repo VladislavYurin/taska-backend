@@ -12,7 +12,7 @@ import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.ListIssueLinksRequest;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
-import ru.taska.domain.IssueLinkType;
+import ru.taska.domain.entity.IssueLinkType;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.service.link.IssueLinkService;

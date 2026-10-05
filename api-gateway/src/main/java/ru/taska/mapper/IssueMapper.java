@@ -540,7 +540,10 @@ public class IssueMapper {
             case ISSUE_TYPE_TASK -> IssueTypeDto.TASK;
             case ISSUE_TYPE_BUG -> IssueTypeDto.BUG;
             case ISSUE_TYPE_STORY -> IssueTypeDto.STORY;
-            case ISSUE_TYPE_UNSPECIFIED, UNRECOGNIZED -> null;
+            default ->  throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unknown issue type: " + issueType
+            );
         };
     }
 

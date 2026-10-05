@@ -1,8 +1,10 @@
-package ru.taska.domain;
+package ru.taska.domain.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.util.Collections;
 import java.util.List;

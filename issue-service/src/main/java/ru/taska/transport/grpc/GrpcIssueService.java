@@ -230,10 +230,10 @@ public class GrpcIssueService {
     @TrackMetrics(counter = "issue-service_get-issue-details_grpc_counter",
             timer = "issue-service_get-issue-details_grpc_timer")
     public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
-        return request.flatMap(this::handleGetIssueDetails);
+        return request.flatMap(this::validateAndFetchIssueDetails);
     }
 
-    private Mono<GetIssueDetailsResponse> handleGetIssueDetails(GetIssueRequest req) {
+    private Mono<GetIssueDetailsResponse> validateAndFetchIssueDetails(GetIssueRequest req) {
         return IssueGrpcRequestValidators.validateIssueScopedRequest(
                         req.getHeader(), req.getBody().getIssueId(), req.getBody().getActorUserId())
                 .doOnError(StatusRuntimeException.class,
@@ -257,10 +257,10 @@ public class GrpcIssueService {
     @TrackMetrics(counter = "issue-service_get-issue-by-key_grpc_counter",
             timer = "issue-service_get-issue-by-key_grpc_timer")
     public Mono<IssueResponse> getIssueByKey(Mono<GetIssueByKeyRequest> request) {
-        return request.flatMap(this::handleGetIssueByKey);
+        return request.flatMap(this::validateAndFetchIssueByKey);
     }
 
-    private Mono<IssueResponse> handleGetIssueByKey(GetIssueByKeyRequest req) {
+    private Mono<IssueResponse> validateAndFetchIssueByKey(GetIssueByKeyRequest req) {
         return IssueGrpcRequestValidators.validateIssueKeyScopedRequest(
                         req.getHeader(), req.getBody().getIssueKey(), req.getBody().getActorUserId())
                 .doOnError(StatusRuntimeException.class,
@@ -514,7 +514,7 @@ public class GrpcIssueService {
                     UUID actorUserId = t.getT1().getT4();
                     String summary = t.getT1().getT5();
                     String description = t.getT1().getT6();
-                    ru.taska.domain.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT1().getT7());
+                    ru.taska.domain.entity.IssuePriority priority = issueMapper.toDomainIssuePriority(t.getT1().getT7());
                     BigDecimal storyPoints = t.getT2().getT1().orElse(null);
                     LocalDate startDate = t.getT2().getT2().getFirst().orElse(null);
                     LocalDate dueDate = t.getT2().getT2().getLast().orElse(null);
@@ -970,7 +970,7 @@ public class GrpcIssueService {
                                     IssuePriority protoPriority = enums.getT1().orElse(null);
                                     IssueType protoIssueType = enums.getT2().orElse(null);
 
-                                    ru.taska.domain.IssuePriority priority = protoPriority != null
+                                    ru.taska.domain.entity.IssuePriority priority = protoPriority != null
                                             ? issueMapper.toDomainIssuePriority(protoPriority)
                                             : null;
 

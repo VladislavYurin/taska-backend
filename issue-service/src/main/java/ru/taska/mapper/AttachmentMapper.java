@@ -7,9 +7,9 @@ import ru.taska.api.issue.attachment.v1.AttachmentResponse;
 import ru.taska.api.issue.attachment.v1.CreateAttachmentUploadUrlResponse;
 import ru.taska.api.issue.attachment.v1.GetAttachmentDownloadUrlResponse;
 import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
-import ru.taska.domain.AttachmentDownloadUrlDto;
-import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.IssueAttachment;
+import ru.taska.domain.dto.AttachmentDownloadUrlDto;
+import ru.taska.domain.dto.AttachmentDto;
+import ru.taska.domain.entity.IssueAttachment;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.storage.dto.PresignedUploadResult;
 
