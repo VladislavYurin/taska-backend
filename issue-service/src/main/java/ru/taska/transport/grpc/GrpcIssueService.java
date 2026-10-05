@@ -234,6 +234,10 @@ public class GrpcIssueService {
                         }));
     }
 
+    // TODO: Вынести валидацию gRPC-запросов в отдельный слой
+    //       и заменить Tuple на именованные Validated*Request,
+    //       чтобы разделить этапы валидации и обработки запроса.
+
     @TrackMetrics(counter = "issue-service_get-issue-details_grpc_counter",
             timer = "issue-service_get-issue-details_grpc_timer")
     public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
