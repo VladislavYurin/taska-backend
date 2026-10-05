@@ -147,12 +147,12 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
 
                                 UserCredentialStateResponseDto.CredentialState oldState = UserCredentialStateResponseDto.CredentialState.builder()
                                         .failedAttempts(credential.getFailedAttempts())
-                                        .lockedUntil(credential.getLockedUntil())
+                                        .lockedUntil(user.getLockedUntil())
                                         .lastFailedAt(credential.getLastFailedAt())
                                         .build();
 
                                 credential.setFailedAttempts(0);
-                                credential.setLockedUntil(null);
+                                user.setLockedUntil(null);
                                 credential.setLastFailedAt(null);
 
                                 user.setStatus(UserStatus.ACTIVE);
