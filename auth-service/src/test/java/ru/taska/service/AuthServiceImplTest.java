@@ -6,7 +6,10 @@ import ru.taska.entity.OutboxEvent;
 import ru.taska.event.OutboxEventStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
@@ -16,7 +19,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -88,8 +90,11 @@ class AuthServiceImplTest {
     @Mock
     private TransactionalOperator requiresNewTransactionalOperator;
 
-    @InjectMocks
-    private AuthServiceImpl authServiceImpl;
+    @Mock
+    private AccountLockService accountLockService;
+
+    @Mock
+    private Clock clock;
 
     private UUID testUserId;
     private User testUser;
@@ -99,6 +104,9 @@ class AuthServiceImplTest {
     private InviteToken testInviteToken;
     private String testRawToken;
     private String testTokenHash;
+    private AuthServiceImpl authServiceImpl;
+
+    private final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
 
     @BeforeEach
     void setUp() {
@@ -110,7 +118,9 @@ class AuthServiceImplTest {
                 .id(testUserId)
                 .email("test@example.com")
                 .login("testuser")
+                .displayName("Test User")
                 .status(UserStatus.ACTIVE)
+                .lockedUntil(null)
                 .build();
 
         testCredential = Credential.builder()
@@ -119,7 +129,6 @@ class AuthServiceImplTest {
                 .secretHash("hashedPassword123")
                 .algo(HashingAlgorithm.BCRYPT)
                 .failedAttempts(0)
-                .lockedUntil(null)
                 .build();
 
         testAuthResponse = AuthResponseDto.builder()
@@ -149,6 +158,9 @@ class AuthServiceImplTest {
         Mockito.lenient().when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
         Mockito.lenient().when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
 
+        Mockito.lenient().when(clock.instant()).thenReturn(NOW);
+        Mockito.lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+
         authServiceImpl = new AuthServiceImpl(
                 userRepository,
                 credentialRepository,
@@ -161,6 +173,8 @@ class AuthServiceImplTest {
                 userMapper,
                 passwordValidator,
                 jwtValidator,
+                accountLockService,
+                clock,
                 requiresNewTransactionalOperator
         );
     }
@@ -179,29 +193,28 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
             Mockito.when(passwordHashService.matches(testCredential, password)).thenReturn(Mono.just(true));
+            Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class)))
+                    .thenReturn(Mono.just(testCredential));
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
             Mockito.when(jwtServiceImpl.generateAccessToken(testUser)).thenReturn(Mono.just("access-token-123"));
             Mockito.when(refreshTokenServiceImpl.createRefreshToken(testUser)).thenReturn(Mono.just("refresh-token-456"));
             Mockito.when(jwtServiceImpl.getExpiresIn()).thenReturn(Mono.just(900L));
-            Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
 
-            // When & Then
             StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectNextMatches(response ->
-                            response.getAccessToken().equals("access-token-123") &&
-                                    response.getRefreshToken().equals("refresh-token-456") &&
-                                    response.getExpiresIn().equals(900L)
-                    )
+                    .expectNextMatches(r ->
+                            "access-token-123".equals(r.getAccessToken())
+                                    && "refresh-token-456".equals(r.getRefreshToken())
+                                    && r.getExpiresIn().equals(900L))
                     .verifyComplete();
 
             Mockito.verify(userRepository).findByEmail(email);
-            Mockito.verify(userRepository).findById(testUserId);
             Mockito.verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
+            Mockito.verify(accountLockService).resolveLockState(testUser);
             Mockito.verify(passwordHashService).matches(testCredential, password);
             Mockito.verify(jwtServiceImpl).generateAccessToken(testUser);
             Mockito.verify(refreshTokenServiceImpl).createRefreshToken(testUser);
-            Mockito.verify(credentialRepository, Mockito.times(1)).save(ArgumentMatchers.any(Credential.class));
         }
 
         @Test
@@ -211,11 +224,13 @@ class AuthServiceImplTest {
             String email = "test@example.com";
             String password = "correctPassword";
             testCredential.setFailedAttempts(3);
-            testCredential.setLockedUntil(Instant.now().minus(5, ChronoUnit.MINUTES));
 
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
+
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+
             Mockito.when(passwordHashService.matches(testCredential, password)).thenReturn(Mono.just(true));
             Mockito.when(credentialRepository.save(testCredential)).thenReturn(Mono.just(testCredential));
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
@@ -230,7 +245,7 @@ class AuthServiceImplTest {
 
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(0);
-            Assertions.assertThat(testCredential.getLockedUntil()).isNull();
+            Assertions.assertThat(testUser.getLockedUntil()).isNull();
         }
 
         @Test
@@ -238,21 +253,20 @@ class AuthServiceImplTest {
         void shouldFailWhenUserNotFound() {
             // Given
             String email = "nonexistent@example.com";
-            String password = "password";
 
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+            StepVerifier.create(authServiceImpl.login(email, "password"))
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
             Mockito.verify(userRepository).findByEmail(email);
-            Mockito.verify(credentialRepository, Mockito.never()).findByUserIdAndCredentialType(ArgumentMatchers.any(), ArgumentMatchers.any());
+            Mockito.verify(credentialRepository, Mockito.never())
+                    .findByUserIdAndCredentialType(ArgumentMatchers.any(), ArgumentMatchers.any());
         }
 
         @Test
@@ -260,24 +274,21 @@ class AuthServiceImplTest {
         void shouldFailWhenUserIsBlocked() {
             // Given
             String email = "blocked@example.com";
-            String password = "password";
             testUser.setStatus(UserStatus.BLOCKED);
 
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
 
-
             // When & Then
-            StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+            StepVerifier.create(authServiceImpl.login(email, "password"))
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
-            Mockito.verify(credentialRepository, Mockito.times(1)).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
+            Mockito.verify(accountLockService, Mockito.never()).resolveLockState(ArgumentMatchers.any());
         }
 
         @Test
@@ -292,13 +303,14 @@ class AuthServiceImplTest {
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
             // When & Then
-            StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+            StepVerifier.create(authServiceImpl.login(email, "password"))
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
+
+            Mockito.verify(accountLockService, Mockito.never()).resolveLockState(ArgumentMatchers.any());
         }
 
         @Test
@@ -313,12 +325,11 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.empty());
 
             // When & Then
-            StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED  &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+            StepVerifier.create(authServiceImpl.login(email, "password"))
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
         }
 
@@ -332,26 +343,29 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+
             Mockito.when(passwordHashService.matches(testCredential, wrongPassword)).thenReturn(Mono.just(false));
             Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
             Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
 
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, wrongPassword))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(1);
+            Mockito.verify(userRepository, Mockito.never()).save(ArgumentMatchers.any(User.class));
             Mockito.verify(jwtServiceImpl, Mockito.never()).generateAccessToken(ArgumentMatchers.any());
         }
 
         @Test
-        @DisplayName("Should lock account after max failed attempts")
+        @DisplayName("Should lock account after max failed attempts — lockedUntil on User")
         void shouldLockAccountAfterMaxFailedAttempts() {
             // Given
             String email = "test@example.com";
@@ -361,6 +375,9 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+
             Mockito.when(passwordHashService.matches(testCredential, wrongPassword)).thenReturn(Mono.just(false));
             Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
             Mockito.when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
@@ -371,45 +388,48 @@ class AuthServiceImplTest {
 
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, wrongPassword))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid credentials")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(5);
-            Assertions.assertThat(testCredential.getLockedUntil()).isNotNull();
+            Assertions.assertThat(testUser.getLockedUntil()).isNotNull();
             Assertions.assertThat(testUser.getStatus()).isEqualTo(UserStatus.LOCKED);
+            Assertions.assertThat(testUser.getLockedUntil()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
+            Mockito.verify(userRepository).save(testUser);
         }
 
         @Test
-        @DisplayName("Should fail when account is locked")
-        void shouldFailWhenAccountIsLocked() {
+        @DisplayName("Should fail with PERMISSION_DENIED when account is locked with active window")
+        void shouldFailWhenAccountIsLockedWithActiveWindow() {
             // Given
             String email = "test@example.com";
             String password = "password";
 
-            // Устанавливаем lockedUntil в будущее
-            testUser.setStatus(UserStatus.LOCKED);
-            testCredential.setLockedUntil(Instant.now().plus(10, ChronoUnit.MINUTES));
+            User lockedUser = testUser.toBuilder()
+                    .status(UserStatus.LOCKED)
+                    .lockedUntil(NOW.plus(10, ChronoUnit.MINUTES))
+                    .build();
+
             testCredential.setFailedAttempts(5);
 
-            Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
+            Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(lockedUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
 
-            // When & Then
+            // resolveLockState вернул LOCKED — окно активно
+            Mockito.when(accountLockService.resolveLockState(lockedUser)).thenReturn(Mono.just(lockedUser));
+
             StepVerifier.create(authServiceImpl.login(email, password))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
-                                    error.getMessage().contains("Account is locked until")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.PERMISSION_DENIED
+                                    && e.getMessage().contains("Account is locked until"))
                     .verify();
 
-            // Verify that matches was never called because account is locked
             Mockito.verify(passwordHashService, Mockito.never()).matches(ArgumentMatchers.any(), ArgumentMatchers.anyString());
             Mockito.verify(jwtServiceImpl, Mockito.never()).generateAccessToken(ArgumentMatchers.any());
         }
@@ -419,11 +439,10 @@ class AuthServiceImplTest {
         void shouldFailWhenEmailIsBlank() {
             // When & Then
             StepVerifier.create(authServiceImpl.login("", "password"))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION &&
-                                    error.getMessage().equals("Email and password are required")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.FAILED_PRECONDITION
+                                    && e.getMessage().equals("Email and password are required"))
                     .verify();
 
             Mockito.verify(userRepository, Mockito.never()).findByEmail(ArgumentMatchers.any());
@@ -434,16 +453,103 @@ class AuthServiceImplTest {
         void shouldFailWhenPasswordIsBlank() {
             // When & Then
             StepVerifier.create(authServiceImpl.login("test@example.com", ""))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION &&
-                                    error.getMessage().equals("Email and password are required")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.FAILED_PRECONDITION
+                                    && e.getMessage().equals("Email and password are required"))
                     .verify();
 
             Mockito.verify(userRepository, Mockito.never()).findByEmail(ArgumentMatchers.any());
         }
     }
+
+    @Nested
+    @DisplayName("Locked Account Tests")
+    class LockedAccountTests {
+
+        @Test
+        @DisplayName("login: LOCKED с истёкшим окном → resolveLockState вернул ACTIVE → логин успешен")
+        void login_lockedExpiredWindow_loginSucceeds() {
+            String email = "test@example.com";
+            String password = "correctPassword";
+
+            User lockedStale = testUser.toBuilder()
+                    .status(UserStatus.LOCKED)
+                    .lockedUntil(NOW.minusSeconds(60))
+                    .build();
+            User refreshed = testUser.toBuilder()
+                    .status(UserStatus.ACTIVE)
+                    .lockedUntil(null)
+                    .build();
+
+            Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(lockedStale));
+            Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
+                    .thenReturn(Mono.just(testCredential));
+            Mockito.when(accountLockService.resolveLockState(lockedStale)).thenReturn(Mono.just(refreshed));
+            Mockito.when(passwordHashService.matches(testCredential, password)).thenReturn(Mono.just(true));
+            Mockito.when(credentialRepository.save(testCredential)).thenReturn(Mono.just(testCredential));
+            //  Логика: resolveLockState уже вернул ACTIVE с lockedUntil=null,
+            //  значит needUserSave=false в resetFailedAttempts, save не нужен.
+            //  Раньше висел UnnecessaryStubbingException в strict-Mockito.
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(refreshed));
+            Mockito.when(jwtServiceImpl.generateAccessToken(refreshed)).thenReturn(Mono.just("access"));
+            Mockito.when(refreshTokenServiceImpl.createRefreshToken(refreshed)).thenReturn(Mono.just("refresh"));
+            Mockito.when(jwtServiceImpl.getExpiresIn()).thenReturn(Mono.just(900L));
+
+            StepVerifier.create(authServiceImpl.login(email, password))
+                    .expectNextMatches(r -> "access".equals(r.getAccessToken()))
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("validateAccessToken: LOCKED с активным окном → UserContext (access-токен не отзывается)")
+        void validateAccessToken_lockedActiveWindow_returnsContext() {
+            Claims claims = Mockito.mock(Claims.class);
+            User locked = testUser.toBuilder()
+                    .status(UserStatus.LOCKED)
+                    .lockedUntil(NOW.plusSeconds(600))
+                    .build();
+
+            Mockito.when(jwtValidator.validate("token")).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(locked));
+            Mockito.when(accountLockService.resolveLockState(locked)).thenReturn(Mono.just(locked));
+
+            StepVerifier.create(authServiceImpl.validateAccessToken("token"))
+                    .expectNextMatches(ctx -> ctx.getUserId().equals(testUserId.toString()))
+                    .verifyComplete();
+
+            // Сервис ВСЕГДА дёргает resolveLockState для LOCKED — на read-path
+            // это способ лениво снять истёкший лок.
+            Mockito.verify(accountLockService).resolveLockState(locked);
+        }
+
+        @Test
+        @DisplayName("validateAccessToken: LOCKED с истёкшим окном → access-токен работает, UserContext")
+        void validateAccessToken_lockedExpiredWindow_returnsContext() {
+            Claims claims = Mockito.mock(Claims.class);
+            User lockedStale = testUser.toBuilder()
+                    .status(UserStatus.LOCKED)
+                    .lockedUntil(NOW.minusSeconds(60))
+                    .build();
+            User refreshed = testUser.toBuilder()
+                    .status(UserStatus.ACTIVE)
+                    .lockedUntil(null)
+                    .build();
+
+            Mockito.when(jwtValidator.validate("token")).thenReturn(Mono.just(claims));
+            Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
+            Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(lockedStale));
+            Mockito.when(accountLockService.resolveLockState(lockedStale)).thenReturn(Mono.just(refreshed));
+
+            StepVerifier.create(authServiceImpl.validateAccessToken("token"))
+                    .expectNextMatches(ctx -> ctx.getUserId().equals(testUserId.toString()))
+                    .verifyComplete();
+
+            Mockito.verify(accountLockService).resolveLockState(lockedStale);
+        }
+    }
+
 
     @Nested
     @DisplayName("Refresh Token Tests")
@@ -486,11 +592,10 @@ class AuthServiceImplTest {
 
             // When & Then
             StepVerifier.create(authServiceImpl.refresh(invalidRefreshToken))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.UNAUTHENTICATED &&
-                                    error.getMessage().equals("Invalid or expired refresh token")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("Invalid or expired refresh token"))
                     .verify();
 
             Mockito.verify(userRepository, Mockito.never()).findById((UUID) ArgumentMatchers.any());
@@ -517,14 +622,31 @@ class AuthServiceImplTest {
 
             // When & Then
             StepVerifier.create(authServiceImpl.refresh(refreshToken))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.NOT_FOUND &&
-                                    error.getMessage().equals("User not found")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.NOT_FOUND
+                                    && e.getMessage().equals("User not found"))
                     .verify();
 
             Mockito.verify(userRepository).findById(nonExistentUserId);
+            Mockito.verify(jwtServiceImpl, Mockito.never()).generateAccessToken(ArgumentMatchers.any());
+        }
+
+        @Test
+        @DisplayName("Should propagate UNAUTHENTICATED from validateAndRotate for LOCKED user")
+        void shouldPropagateUnauthenticatedFromRotateForLockedUser() {
+            String refreshToken = "valid-refresh-token";
+
+            // Внутри validateAndRotate лок/статус проверяются — здесь мокаем итоговый отказ
+            Mockito.when(refreshTokenServiceImpl.validateAndRotate(refreshToken))
+                    .thenReturn(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
+
+            StepVerifier.create(authServiceImpl.refresh(refreshToken))
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED)
+                    .verify();
+
             Mockito.verify(jwtServiceImpl, Mockito.never()).generateAccessToken(ArgumentMatchers.any());
         }
 
@@ -533,11 +655,10 @@ class AuthServiceImplTest {
         void shouldFailWhenRefreshTokenIsBlank() {
             // When & Then
             StepVerifier.create(authServiceImpl.refresh(""))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.INVALID_ARGUMENT &&
-                                    error.getMessage().equals("Refresh token cannot be blank")
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.INVALID_ARGUMENT
+                                    && e.getMessage().equals("Refresh token cannot be blank"))
                     .verify();
 
             Mockito.verify(refreshTokenServiceImpl, Mockito.never()).validateAndRotate(ArgumentMatchers.any());
@@ -558,6 +679,7 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
             Mockito.when(passwordHashService.matches(testCredential, password))
                     .thenReturn(Mono.error(new RuntimeException("Hash service error")));
 
@@ -574,17 +696,15 @@ class AuthServiceImplTest {
         void shouldHandleNullEmailAndPassword() {
             // When & Then
             StepVerifier.create(authServiceImpl.login(null, "password"))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.FAILED_PRECONDITION)
                     .verify();
 
             StepVerifier.create(authServiceImpl.login("test@example.com", null))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.FAILED_PRECONDITION
-                    )
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.FAILED_PRECONDITION)
                     .verify();
         }
     }
@@ -1028,8 +1148,8 @@ class AuthServiceImplTest {
         }
 
         @Test
-        @DisplayName("Should return PERMISSION_DENIED when user is blocked")
-        void shouldReturnPermissionDeniedWhenUserIsBlocked() {
+        @DisplayName("Should return UNAUTHENTICATED when user is blocked")
+        void shouldReturnUnauthenticatedWhenUserIsBlocked() {
             // Given
             String accessToken = "valid.jwt.token";
             Claims claims = Mockito.mock(Claims.class);
@@ -1047,10 +1167,9 @@ class AuthServiceImplTest {
             // When & Then
             StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
                     .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
-                                    error.getMessage().equals("User is blocked")
-                    )
+                            error instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && error.getMessage().equals("User not found or inactive"))
                     .verify();
 
             Mockito.verify(jwtValidator).validate(accessToken);
@@ -1058,8 +1177,8 @@ class AuthServiceImplTest {
         }
 
         @Test
-        @DisplayName("Should return PERMISSION_DENIED when user is invited")
-        void shouldReturnPermissionDeniedWhenUserIsInvited() {
+        @DisplayName("Should return UNAUTHENTICATED when user is invited")
+        void shouldReturnUnauthenticatedWhenUserIsInvited() {
             // Given
             String accessToken = "valid.jwt.token";
             Claims claims = Mockito.mock(Claims.class);
@@ -1076,10 +1195,10 @@ class AuthServiceImplTest {
 
             // When & Then
             StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
-                    .expectErrorMatches(error ->
-                            error instanceof DomainException &&
-                                    ((DomainException) error).getStatus() == DomainStatus.PERMISSION_DENIED &&
-                                    error.getMessage().equals("User not activated")
+                    .expectErrorMatches(e ->
+                            e instanceof DomainException de
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
+                                    && e.getMessage().equals("User not found or inactive")
                     )
                     .verify();
 

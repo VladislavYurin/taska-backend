@@ -14,12 +14,14 @@ import ru.taska.entity.UserStatus;
 import ru.taska.repository.RefreshTokenRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.config.JwtProperties;
+import ru.taska.service.AccountLockService;
 import ru.taska.util.DataMaskingHelper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 
@@ -32,6 +34,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final JwtProperties jwtProperties;
+    private final AccountLockService accountLockService;
+    private final Clock clock;
 
     private static final String HASH_ALGORITHM = "SHA-256";
 
@@ -60,12 +64,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             String rawToken = generateRawToken();
             String tokenHash = hashToken(rawToken); // SHA-256, всегда одинаковый для одного токена
 
+            Instant now = Instant.now(clock);
             RefreshToken refreshToken = RefreshToken.builder()
                     .userId(user.getId())
                     .tokenHash(tokenHash)
-                    .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
-                    .createdAt(Instant.now())
+                    .issuedAt(now)
+                    .expiresAt(now.plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
+                    .createdAt(now)
                     .build();
 
             log.debug("Creating refresh token for user: {}", user.getId());
@@ -81,7 +86,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         log.debug("Validating and rotating refresh token: {}", DataMaskingHelper.maskJwt(tokenHash));
 
-        return refreshTokenRepository.findValidToken(tokenHash, Instant.now())
+        Instant now = Instant.now(clock);
+        return refreshTokenRepository.findValidToken(tokenHash, now)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED,
                         "Invalid or expired refresh token")))
                 .flatMap(existingToken ->
@@ -89,13 +95,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                         userRepository.findById(existingToken.getUserId())
                                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                                         "User not found")))
+                                .flatMap(accountLockService::resolveLockState)
                                 .flatMap(user -> {
-                                    if (user.getStatus() == UserStatus.BLOCKED) {
-                                        log.debug("Token refresh FAILED due to user with id={} is blocked: token id={} ", user.getId(),existingToken.getId());
-                                        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
-                                                "invalid credentials"));
+                                    // Проверки статуса — до создания нового токена,
+                                    // чтобы отказ не сжёг старый refresh
+                                    if (user.getStatus() == UserStatus.BLOCKED
+                                            || user.getStatus() == UserStatus.INVITED
+                                            || user.getStatus() == UserStatus.LOCKED) {
+                                        log.debug("Token refresh FAILED for user id={} status={}: token id={}",
+                                                user.getId(), user.getStatus(), existingToken.getId());
+                                        return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED,
+                                                "Invalid credentials"));
                                     }
-
                                     log.debug("Found existing token with id: {}", existingToken.getId());
 
                                     String newRawToken = generateRawToken();
@@ -104,9 +115,9 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                     RefreshToken newRefreshToken = RefreshToken.builder()
                                             .userId(existingToken.getUserId())
                                             .tokenHash(newTokenHash)
-                                            .issuedAt(Instant.now())
-                                            .expiresAt(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
-                                            .createdAt(Instant.now())
+                                            .issuedAt(now)
+                                            .expiresAt(now.plusSeconds(jwtProperties.getRefreshTokenTtl().getSeconds()))
+                                            .createdAt(now)
                                             .build();
 
                                     return refreshTokenRepository.save(newRefreshToken)
@@ -115,7 +126,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                                                 return refreshTokenRepository.markReplacedIfActive(
                                                                 existingToken.getId(),
                                                                 newRefreshToken.getId(),
-                                                                Instant.now())
+                                                                now)
                                                         .doOnSuccess(updated -> log.debug("Revoked old token, rows updated: {}", updated))
                                                         .thenReturn(new RefreshTokenResponseDto(savedNewToken, newRawToken));
                                             });
