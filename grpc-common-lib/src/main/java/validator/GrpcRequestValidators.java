@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -301,38 +300,43 @@ public final class GrpcRequestValidators {
             String fieldNameStart,
             String fieldNameDue) {
 
-        LocalDate startLocalDate;
-        LocalDate dueLocalDate;
+        Mono<Optional<LocalDate>> start = hasValueStart
+                ? parseDateOrInvalidArgument(startDate, fieldNameStart).map(Optional::of)
+                : Mono.just(Optional.empty());
+        Mono<Optional<LocalDate>> due = hasValueDue
+                ? parseDateOrInvalidArgument(dueDate, fieldNameDue).map(Optional::of)
+                : Mono.just(Optional.empty());
 
+        return Mono.zip(start, due)
+                .flatMap(dates -> {
+                    Optional<LocalDate> startLocalDate = dates.getT1();
+                    Optional<LocalDate> dueLocalDate = dates.getT2();
+                    if (startLocalDate.isPresent() && dueLocalDate.isPresent()
+                            && startLocalDate.get().isAfter(dueLocalDate.get())) {
+                        return Mono.error(Status.INVALID_ARGUMENT
+                                                  .withDescription(fieldNameStart + " cannot be later than " + fieldNameDue)
+                                                  .asRuntimeException());
+                    }
+                    return Mono.just(List.of(startLocalDate, dueLocalDate));
+                });
+    }
+
+    /**
+     * Парсит строку как {@link LocalDate} в формате ISO {@code yyyy-MM-dd}.
+     *
+     * @param raw       строковое значение поля
+     * @param fieldName имя поля (используется в сообщении об ошибке)
+     * @return {@link Mono} с {@link LocalDate} или ошибкой {@code INVALID_ARGUMENT},
+     *         если значение не является валидной датой в формате ISO {@code yyyy-MM-dd}
+     */
+    public static Mono<LocalDate> parseDateOrInvalidArgument(String raw, String fieldName) {
         try {
-            startLocalDate = hasValueStart ? LocalDate.parse(startDate) : null;
-            dueLocalDate = hasValueDue ? LocalDate.parse(dueDate) : null;
-        } catch (DateTimeParseException e) {
+            return Mono.just(LocalDate.parse(raw));
+        } catch (DateTimeParseException ex) {
             return Mono.error(Status.INVALID_ARGUMENT
-                                      .withDescription("Invalid date format, expected ISO yyyy-MM-dd: " + e.getParsedString())
+                                      .withDescription(fieldName + " must be a valid ISO date (yyyy-MM-dd)")
                                       .asRuntimeException());
         }
-        List<Optional<LocalDate>> optionalList = new ArrayList<>();
-
-        if (hasValueStart && hasValueDue && startLocalDate.isAfter(dueLocalDate)) {
-            return Mono.error(Status.INVALID_ARGUMENT
-                                      .withDescription(fieldNameStart + " cannot be later than " + fieldNameDue)
-                                      .asRuntimeException());
-        }
-
-        if (hasValueStart) {
-            optionalList.add(Optional.of(startLocalDate));
-        } else {
-            optionalList.add(Optional.empty());
-        }
-
-        if (hasValueDue) {
-            optionalList.add(Optional.of(dueLocalDate));
-        } else {
-            optionalList.add(Optional.empty());
-        }
-
-        return Mono.just(optionalList);
     }
 
     /**

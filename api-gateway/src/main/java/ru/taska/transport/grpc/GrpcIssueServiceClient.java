@@ -41,10 +41,13 @@ import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -241,6 +244,33 @@ public class GrpcIssueServiceClient {
                                        dynamicStub().updateIssue(issueMapper.toUpdateIssueRequest(issueId, requestDto, context))
                       )
                       .map(issueMapper::toRestUpdateResponse);
+    }
+
+    /**
+     * Частично обновляет задачу (PATCH) с оптимистичной блокировкой по версии.
+     *
+     * @param issueId        идентификатор задачи
+     * @param ifMatchVersion версия задачи из заголовка If-Match
+     * @param request        тело запроса (JSON Merge Patch)
+     * @param context        контекст запроса
+     * @return 200 с актуальной задачей при успехе, 409 с актуальной задачей при конфликте версий
+     */
+    public Mono<ResponseEntity<IssueResponseDto>> patchIssue(
+            String issueId,
+            String ifMatchVersion,
+            Mono<PatchIssueRequestDto> request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling patchIssue", context.requestId());
+
+        return request
+                .defaultIfEmpty(new PatchIssueRequestDto())
+                .flatMap(body -> dynamicStub().patchIssue(
+                        issueMapper.toPatchIssueRequest(issueId, ifMatchVersion, body, context)
+                ))
+                .map(response -> ResponseEntity
+                        .status(response.getVersionConflict() ? HttpStatus.CONFLICT : HttpStatus.OK)
+                        .body(issueMapper.toRestIssueResponse(response.getIssue())));
     }
 
     /**

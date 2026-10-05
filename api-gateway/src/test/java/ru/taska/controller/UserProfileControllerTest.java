@@ -60,6 +60,7 @@ class UserProfileControllerTest {
     private static final String FILE_NAME = "avatar.png";
     private static final String CONTENT_TYPE = "image/png";
     private static final long SIZE_BYTES = 120000;
+    private static final long MAX_SIZE_BYTES = 2097152; // storage.max-file-size-bytes в auth-service
     private static final long EXPIRES_IN = 300;
     private static final String UPLOAD_URL = "https://s3.example.com/upload?X-Amz-Algorithm=...";
     private static final String DOWNLOAD_URL = "https://s3.example.com/download?X-Amz-Algorithm=...";
@@ -88,8 +89,8 @@ class UserProfileControllerTest {
     // ==================== ТЕСТЫ createAvatarUploadUrl ====================
 
     @Test
-    @DisplayName("createAvatarUploadUrl: должен вернуть 201 с uploadUrl, objectKey, expiresIn")
-    void createAvatarUploadUrl_shouldReturn201() {
+    @DisplayName("createAvatarUploadUrl: должен вернуть 200 с uploadUrl, objectKey, expiresIn")
+    void createAvatarUploadUrl_shouldReturn200() {
         mockAuthenticatedUser();
 
         CreateAvatarUploadUrlResponseDto response = new CreateAvatarUploadUrlResponseDto();
@@ -114,7 +115,7 @@ class UserProfileControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus().isOk()
                 .expectHeader().exists("X-Request-Id")
                 .expectHeader().contentType(MediaType.APPLICATION_JSON)
                 .expectBody(CreateAvatarUploadUrlResponseDto.class)
@@ -185,13 +186,15 @@ class UserProfileControllerTest {
                         Mockito.any(),
                         Mockito.any(GatewayContext.class)
                 ))
-                .thenReturn(Mono.error(new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "File size exceeds maximum")));
+                .thenAnswer(inv -> {
+                    Mono<CreateAvatarUploadUrlRequestDto> body = inv.getArgument(0);
+                    return body.map(dto -> new CreateAvatarUploadUrlResponseDto());
+                });
 
         CreateAvatarUploadUrlRequestDto request = new CreateAvatarUploadUrlRequestDto();
         request.setFileName(FILE_NAME);
         request.setContentType(CONTENT_TYPE);
-        request.setSizeBytes(10_000_000L);  // 10 MB
+        request.setSizeBytes(MAX_SIZE_BYTES + 1);
 
         webTestClient.post()
                 .uri("/api/v1/users/me/avatar/upload-url")
@@ -200,7 +203,9 @@ class UserProfileControllerTest {
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isBadRequest()
-                .expectHeader().exists("X-Request-Id");
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("INVALID_ARGUMENT");
     }
 
     @Test
@@ -319,6 +324,36 @@ class UserProfileControllerTest {
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectHeader().exists("X-Request-Id");
+    }
+
+    @Test
+    @DisplayName("confirmAvatarUpload: должен вернуть 400 при gRPC ошибке OUT_OF_RANGE (файл больше лимита)")
+    void confirmAvatarUpload_shouldReturn400_whenServiceReturnsOutOfRange() {
+        mockAuthenticatedUser();
+
+        Mockito.when(grpcClient.confirmAvatarUpload(
+                        Mockito.any(),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.OUT_OF_RANGE
+                        .withDescription("File size 3145728 bytes exceeds maximum allowed size of 2097152 bytes")
+                        .asRuntimeException()));
+
+        ConfirmAvatarUploadRequestDto request = new ConfirmAvatarUploadRequestDto();
+        request.setObjectKey(OBJECT_KEY);
+        request.setFileName(FILE_NAME);
+        request.setContentType(CONTENT_TYPE);
+
+        webTestClient.post()
+                .uri("/api/v1/users/me/avatar/confirm")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("OUT_OF_RANGE");
     }
 
     @Test

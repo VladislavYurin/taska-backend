@@ -20,6 +20,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
@@ -107,7 +108,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Назначает исполнителя задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<IssueResponseDto>> assignIssue(
             String issueId,
@@ -122,7 +126,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Обновляет основные поля задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<UpdateIssueResponseDto>> updateIssue(
             String issueId,
@@ -132,6 +139,21 @@ public class IssueController implements IssueApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 issueClient.updateIssue(issueId, request, context)
                         .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Частично обновляет задачу (PATCH) с оптимистичной блокировкой по версии (заголовок If-Match).
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> patchIssue(
+            String issueId,
+            String ifMatch,
+            Mono<PatchIssueRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.patchIssue(issueId, ifMatch, request, context)
         );
     }
 

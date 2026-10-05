@@ -2,6 +2,8 @@ package ru.taska.controller;
 
 import io.grpc.Status;
 import java.time.LocalDate;
+import nullable.NullableField;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -41,6 +45,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
@@ -62,6 +67,7 @@ import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -100,6 +106,7 @@ class IssueControllerTest {
     private static final String STATUS_TODO = "TODO";
     private static final String ISSUE_TYPE_TASK = "TASK";
     private static final String ISSUE_PRIORITY_MEDIUM = "MEDIUM";
+    private static final int ISSUE_VERSION = 3;
     private static final String ISSUE_KEY = "API-12";
     private static final double STORY_POINTS = 5;
     private static final double NEGATIVE_STORY_POINTS = -5;
@@ -634,6 +641,268 @@ class IssueControllerTest {
 
         Mockito.verify(issueClient, Mockito.times(1))
                .updateIssue(Mockito.eq(ISSUE_ID), Mockito.any(Mono.class), Mockito.any(GatewayContext.class));
+    }
+
+    @Test
+    @DisplayName("PATCH: должен вернуть ответ с телом IssueResponseDto и статусом 200")
+    void patchIssue_shouldReturnsResponseAndStatus200() {
+        mockAuthenticatedUser();
+
+        var response = new IssueResponseDto();
+        response.setId(ISSUE_ID);
+        response.setSummary(SUMMARY);
+        response.setVersion(ISSUE_VERSION + 1);
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(ResponseEntity.ok(response)));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(IssueResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(issueClient).patchIssue(
+                Mockito.eq(ISSUE_ID),
+                Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                Mockito.any(Mono.class),
+                Mockito.any(GatewayContext.class)
+        );
+    }
+
+    @Test
+    @DisplayName("PATCH: должен передать в клиент тело запроса с сохранением явных null и без отсутствующих полей")
+    void patchIssue_shouldPassBodyWithExplicitNulls() {
+        mockAuthenticatedUser();
+
+        var capturedBody = new AtomicReference<PatchIssueRequestDto>();
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenAnswer(invocation -> invocation.<Mono<PatchIssueRequestDto>>getArgument(2)
+                        .map(body -> {
+                            capturedBody.set(body);
+                            return ResponseEntity.ok(new IssueResponseDto());
+                        }));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {"summary": "%s", "description": null, "storyPoints": 3}
+                        """.formatted(SUMMARY))
+                .exchange()
+                .expectStatus().isOk();
+
+        var body = capturedBody.get();
+        Assertions.assertThat(body.getSummary()).isEqualTo(NullableField.of(SUMMARY));
+        Assertions.assertThat(body.getDescription()).isEqualTo(NullableField.of(null));
+        Assertions.assertThat(body.getStoryPoints()).isEqualTo(NullableField.of(3.0));
+        Assertions.assertThat(body.getAssigneeId().present()).isFalse();
+        Assertions.assertThat(body.getPriority().present()).isFalse();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "{\"priority\": \"URGENT\"}",
+            "{\"dueDate\": \"2026-13-45\"}"
+    })
+    @DisplayName("PATCH: должен вернуть 400 Bad Request, если тело не соответствует схеме PatchIssueRequestDto")
+    void patchIssue_shouldThrowsExceptionAndStatus400_whenBodyDoesNotMatchSchema(String json) {
+        mockAuthenticatedUser();
+
+        // тело десериализуется лениво — при подписке на Mono внутри клиента
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenAnswer(invocation -> invocation.<Mono<PatchIssueRequestDto>>getArgument(2)
+                        .map(body -> ResponseEntity.ok(new IssueResponseDto())));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(json)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("PATCH: должен вернуть статус 409 Conflict и актуальное состояние задачи при конфликте версий")
+    void patchIssue_shouldReturnsActualIssueAndStatus409_whenVersionConflict() {
+        mockAuthenticatedUser();
+
+        var actualIssue = new IssueResponseDto();
+        actualIssue.setId(ISSUE_ID);
+        actualIssue.setSummary(SUMMARY);
+        actualIssue.setVersion(ISSUE_VERSION + 5);
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(actualIssue)));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(IssueResponseDto.class).isEqualTo(actualIssue);
+    }
+
+    @Test
+    @DisplayName("PATCH: должен выбросить исключение со статусом 400 Bad Request, если не передан заголовок 'If-Match'")
+    void patchIssue_shouldThrowsExceptionAndStatus400_whenIfMatchMissing() {
+        mockAuthenticatedUser();
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .patchIssue(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен выбросить исключение со статусом 400 Bad Request, если клиент отклонил запрос")
+    void patchIssue_shouldThrowsExceptionAndStatus400_whenRequestInvalid() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq("abc"),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "If-Match header must contain a valid integer issue version")));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, "abc")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("PATCH: должен выбросить исключение со статусом 401 Unauthorized если нет токена")
+    void patchIssue_shouldThrowsExceptionAndStatus401_whenJwtTokenMissing() {
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().exists("X-Request-Id")
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .patchIssue(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен выбросить исключение со статусом 404 NotFound, если задача не найдена")
+    void patchIssue_shouldThrowsExceptionAndStatus404_whenIssueNotFound() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.NOT_FOUND.withDescription("Issue not found").asRuntimeException()));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("PATCH: должен выбросить исключение со статусом 503 Unavailable если downstream недоступен")
+    void patchIssue_shouldThrowsExceptionAndStatus503_whenDownstreamUnavailable() {
+        mockAuthenticatedUser();
+
+        Mockito.when(issueClient.patchIssue(
+                        Mockito.eq(ISSUE_ID),
+                        Mockito.eq(String.valueOf(ISSUE_VERSION)),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)
+                ))
+                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+
+        webTestClient.patch()
+                .uri("/api/v1/issues/{issueId}", ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, String.valueOf(ISSUE_VERSION))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("summary", SUMMARY))
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                .expectHeader().exists("X-Request-Id");
     }
 
     @Test

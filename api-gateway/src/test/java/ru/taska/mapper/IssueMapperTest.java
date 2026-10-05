@@ -1,6 +1,13 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,6 +21,9 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.taska.api.common.v1.NullableDouble;
+import ru.taska.api.common.v1.NullableInt32;
+import ru.taska.api.common.v1.NullableString;
 import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.api.issue.attachment.v1.AttachmentResponse;
 import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
@@ -42,6 +52,8 @@ import ru.taska.domain.dto.IssueDetailsResponseDto;
 import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssuePriorityDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.IssueWatcherResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import tools.jackson.databind.JsonNode;
@@ -661,6 +673,147 @@ class IssueMapperTest {
     }
 
     @Test
+    @DisplayName("PATCH: должен корректно преобразовать все переданные поля в PatchIssueRequest(gRPC DTO)")
+    void toPatchIssueRequest_shouldCorrectMapsAllFields() {
+        var source = new PatchIssueRequestDto();
+        source.setSummary(SUMMARY);
+        source.setPriority(IssuePriorityDto.HIGH);
+        source.setDescription(DESCRIPTION);
+        source.setAssigneeId(ASSIGNEE_ID);
+        source.setStoryPoints(STORY_POINTS);
+        source.setStartDate(LocalDate.parse(START_DATE));
+        source.setDueDate(LocalDate.parse(DUE_DATE));
+        source.setOriginalEstimateMinutes(BigDecimal.valueOf(ORIGINAL_ESTIMATE_MINUTES));
+        source.setRemainingEstimateMinutes(BigDecimal.valueOf(REMAINING_ESTIMATE_MINUTES));
+
+        var result = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT);
+        var resultBody = result.getBody();
+
+        Assertions.assertEquals(REQUEST_ID, result.getHeader().getRequestId());
+        Assertions.assertEquals(NODE_ID, result.getHeader().getNodeId());
+        Assertions.assertEquals(ISSUE_ID, resultBody.getIssueId());
+        Assertions.assertEquals(USER_ID, resultBody.getActorUserId());
+        Assertions.assertEquals(VERSION, resultBody.getVersion());
+        Assertions.assertEquals(SUMMARY, resultBody.getSummary());
+        Assertions.assertEquals(IssuePriority.ISSUE_PRIORITY_HIGH, resultBody.getPriority());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(DESCRIPTION).build(), resultBody.getDescription());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(ASSIGNEE_ID).build(), resultBody.getAssigneeId());
+        Assertions.assertEquals(NullableDouble.newBuilder().setValue(STORY_POINTS).build(), resultBody.getStoryPoints());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(START_DATE).build(), resultBody.getStartDate());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(DUE_DATE).build(), resultBody.getDueDate());
+        Assertions.assertEquals(
+                NullableInt32.newBuilder().setValue(ORIGINAL_ESTIMATE_MINUTES).build(),
+                resultBody.getOriginalEstimateMinutes()
+        );
+        Assertions.assertEquals(
+                NullableInt32.newBuilder().setValue(REMAINING_ESTIMATE_MINUTES).build(),
+                resultBody.getRemainingEstimateMinutes()
+        );
+    }
+
+    @Test
+    @DisplayName("PATCH: не должен устанавливать поля, отсутствующие в теле запроса")
+    void toPatchIssueRequest_shouldNotSetAbsentFields() {
+        var result = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), new PatchIssueRequestDto(), CONTEXT);
+        var resultBody = result.getBody();
+
+        Assertions.assertEquals(ISSUE_ID, resultBody.getIssueId());
+        Assertions.assertEquals(USER_ID, resultBody.getActorUserId());
+        Assertions.assertEquals(VERSION, resultBody.getVersion());
+        Assertions.assertFalse(resultBody.hasSummary());
+        Assertions.assertFalse(resultBody.hasPriority());
+        Assertions.assertFalse(resultBody.hasDescription());
+        Assertions.assertFalse(resultBody.hasAssigneeId());
+        Assertions.assertFalse(resultBody.hasStoryPoints());
+        Assertions.assertFalse(resultBody.hasStartDate());
+        Assertions.assertFalse(resultBody.hasDueDate());
+        Assertions.assertFalse(resultBody.hasOriginalEstimateMinutes());
+        Assertions.assertFalse(resultBody.hasRemainingEstimateMinutes());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен помечать is_null для полей, явно переданных как null")
+    void toPatchIssueRequest_shouldSetIsNull_whenFieldsExplicitlyNull() {
+        var source = new PatchIssueRequestDto();
+        source.setDescription(null);
+        source.setAssigneeId(null);
+        source.setStoryPoints(null);
+        source.setStartDate(null);
+        source.setDueDate(null);
+        source.setOriginalEstimateMinutes(null);
+        source.setRemainingEstimateMinutes(null);
+
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT).getBody();
+
+        Assertions.assertFalse(resultBody.hasSummary());
+        Assertions.assertFalse(resultBody.hasPriority());
+        Assertions.assertTrue(resultBody.getDescription().getIsNull());
+        Assertions.assertTrue(resultBody.getAssigneeId().getIsNull());
+        Assertions.assertTrue(resultBody.getStoryPoints().getIsNull());
+        Assertions.assertTrue(resultBody.getStartDate().getIsNull());
+        Assertions.assertTrue(resultBody.getDueDate().getIsNull());
+        Assertions.assertTrue(resultBody.getOriginalEstimateMinutes().getIsNull());
+        Assertions.assertTrue(resultBody.getRemainingEstimateMinutes().getIsNull());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен принимать оценки времени, переданные числом с нулевой дробной частью")
+    void toPatchIssueRequest_shouldAcceptWholeFloatingEstimates() {
+        var source = new PatchIssueRequestDto();
+        source.setOriginalEstimateMinutes(new BigDecimal("90.0"));
+        source.setRemainingEstimateMinutes(BigDecimal.valueOf(30));
+
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT).getBody();
+
+        Assertions.assertEquals(90, resultBody.getOriginalEstimateMinutes().getValue());
+        Assertions.assertEquals(30, resultBody.getRemainingEstimateMinutes().getValue());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен обрезать пробелы в значении If-Match")
+    void toPatchIssueRequest_shouldTrimIfMatchVersion() {
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, " 7 ", new PatchIssueRequestDto(), CONTEXT).getBody();
+
+        Assertions.assertEquals(7, resultBody.getVersion());
+    }
+
+    @ParameterizedTest(name = "If-Match = {0}")
+    @MethodSource("quotedIfMatchArguments")
+    @DisplayName("PATCH: должен принимать If-Match в формате ETag (в кавычках)")
+    void toPatchIssueRequest_shouldStripQuotesFromIfMatchVersion(String ifMatch) {
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, ifMatch, new PatchIssueRequestDto(), CONTEXT).getBody();
+
+        Assertions.assertEquals(3, resultBody.getVersion());
+    }
+
+    @ParameterizedTest(name = "If-Match = \"{0}\"")
+    @MethodSource("invalidIfMatchArguments")
+    @DisplayName("PATCH: должен выбрасывать 400 Bad Request, если If-Match не является целым числом")
+    void toPatchIssueRequest_shouldThrowsException_whenIfMatchInvalid(String ifMatch) {
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toPatchIssueRequest(ISSUE_ID, ifMatch, new PatchIssueRequestDto(), CONTEXT)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidPatchBodyArguments")
+    @DisplayName("PATCH: должен выбрасывать 400 Bad Request при очистке summary/priority или недопустимой оценке времени")
+    void toPatchIssueRequest_shouldThrowsException_whenFieldValueInvalid(Consumer<PatchIssueRequestDto> fill) {
+        var source = new PatchIssueRequestDto();
+        fill.accept(source);
+
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
     @DisplayName("Должен корректно преобразовывать Timestamp(protobuf) в OffsetDataTime")
     void toOffsetDateTime_shouldCorrectConvertTimestamp() {
         var source = Timestamp.newBuilder()
@@ -781,6 +934,18 @@ class IssueMapperTest {
         Assertions.assertEquals(expected, result);
     }
 
+    @ParameterizedTest(name = "priority = \"{0}\"")
+    @MethodSource("unknownIssuePriorityArguments")
+    @DisplayName("Должен выбрасывать 400 Bad Request, если приходит неизвестный REST issuePriority")
+    void toGrpcIssuePriority_shouldThrowsException_whenUnknownIssuePriority(String source) {
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toGrpcIssuePriority(source)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
     @ParameterizedTest
     @MethodSource("restIssuePriorityArguments")
     @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
@@ -848,8 +1013,16 @@ class IssueMapperTest {
         return Stream.of(
                 Arguments.of("LOW", IssuePriority.ISSUE_PRIORITY_LOW),
                 Arguments.of("MEDIUM", IssuePriority.ISSUE_PRIORITY_MEDIUM),
-                Arguments.of("HIGH", IssuePriority.ISSUE_PRIORITY_HIGH),
-                Arguments.of("UNSPECIFIED", IssuePriority.ISSUE_PRIORITY_UNSPECIFIED)
+                Arguments.of("HIGH", IssuePriority.ISSUE_PRIORITY_HIGH)
+        );
+    }
+
+    private static Stream<Arguments> unknownIssuePriorityArguments() {
+        return Stream.of(
+                Arguments.of("UNSPECIFIED"),
+                Arguments.of("URGENT"),
+                Arguments.of("low"),
+                Arguments.of("")
         );
     }
 
@@ -877,6 +1050,39 @@ class IssueMapperTest {
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_LABEL_REMOVED, "LABEL_REMOVED"),
                 Arguments.of(IssueEventType.ISSUE_EVENT_TYPE_UNSPECIFIED, "UNSPECIFIED")
         );
+    }
+
+    private static Stream<Arguments> invalidIfMatchArguments() {
+        return Stream.of(
+                Arguments.of("abc"),
+                Arguments.of(""),
+                Arguments.of("\""),
+                Arguments.of("\"\""),
+                Arguments.of("\"3"),
+                Arguments.of("W/\"3\""),
+                Arguments.of("*"),
+                Arguments.of("1.5")
+        );
+    }
+
+    private static Stream<Arguments> quotedIfMatchArguments() {
+        return Stream.of(
+                Arguments.of("\"3\""),
+                Arguments.of(" \"3\" ")
+        );
+    }
+
+    private static Stream<Arguments> invalidPatchBodyArguments() {
+        return Stream.<Consumer<PatchIssueRequestDto>>of(
+                        dto -> dto.setSummary(null),
+                        dto -> dto.setPriority(null),
+                        dto -> dto.setOriginalEstimateMinutes(BigDecimal.valueOf(-1)),
+                        dto -> dto.setRemainingEstimateMinutes(BigDecimal.valueOf(-30)),
+                        dto -> dto.setOriginalEstimateMinutes(new BigDecimal("90.9")),
+                        dto -> dto.setRemainingEstimateMinutes(new BigDecimal("30.1")),
+                        dto -> dto.setRemainingEstimateMinutes(BigDecimal.valueOf(3_000_000_000L))
+                )
+                .map(Arguments::of);
     }
 
     private static Stream<Arguments> grpcIssueLinkTypeArguments() {

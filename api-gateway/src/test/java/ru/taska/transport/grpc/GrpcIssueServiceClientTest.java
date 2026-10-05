@@ -12,6 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
@@ -35,6 +37,8 @@ import ru.taska.api.issue.v1.ListIssueLinksRequest;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
@@ -53,6 +57,7 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
@@ -74,6 +79,7 @@ class GrpcIssueServiceClientTest {
     public static final String SUMMARY = "Summary-1";
     public static final String DESCRIPTION = "Description-1";
     public static final String STATUS_KEY = "TODO";
+    private static final String IF_MATCH_VERSION = "3";
 
     @Mock
     private ReactorIssueServiceGrpc.ReactorIssueServiceStub stub;
@@ -341,6 +347,122 @@ class GrpcIssueServiceClientTest {
                .toUpdateIssueRequest(ISSUE_ID, restRequest, context);
         Mockito.verify(issueMapper, Mockito.times(1))
                .toRestUpdateResponse(grpcResponse);
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC patchIssue и вернуть ответ со статусом 200")
+    void patchIssue_shouldCallStubAndReturnOk() {
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
+        var grpcRequest = PatchIssueRequest.getDefaultInstance();
+        var grpcIssue = IssueResponse.newBuilder().setId(ISSUE_ID).build();
+        var grpcResponse = PatchIssueResponse.newBuilder()
+                                             .setVersionConflict(false)
+                                             .setIssue(grpcIssue)
+                                             .build();
+        var restResponse = new IssueResponseDto();
+
+        Mockito.when(issueMapper.toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, restRequest, context))
+               .thenReturn(grpcRequest);
+
+        Mockito.when(stub.patchIssue(grpcRequest))
+               .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(issueMapper.toRestIssueResponse(grpcIssue))
+               .thenReturn(restResponse);
+
+        StepVerifier.create(client.patchIssue(ISSUE_ID, IF_MATCH_VERSION, Mono.just(restRequest), context))
+                    .assertNext(response -> {
+                        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+                        Assertions.assertThat(response.getBody()).isSameAs(restResponse);
+                    })
+                    .verifyComplete();
+
+        Mockito.verify(stub, Mockito.times(1)).patchIssue(grpcRequest);
+        Mockito.verify(issueMapper, Mockito.times(1))
+               .toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, restRequest, context);
+        Mockito.verify(issueMapper, Mockito.times(1))
+               .toRestIssueResponse(grpcIssue);
+    }
+
+    @Test
+    @DisplayName("Должен вернуть статус 409 и актуальную задачу, если gRPC patchIssue вернул конфликт версий")
+    void patchIssue_shouldReturnConflict_whenVersionConflict() {
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
+        var grpcRequest = PatchIssueRequest.getDefaultInstance();
+        var grpcIssue = IssueResponse.newBuilder().setId(ISSUE_ID).build();
+        var grpcResponse = PatchIssueResponse.newBuilder()
+                                             .setVersionConflict(true)
+                                             .setIssue(grpcIssue)
+                                             .build();
+        var restResponse = new IssueResponseDto();
+
+        Mockito.when(issueMapper.toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, restRequest, context))
+               .thenReturn(grpcRequest);
+
+        Mockito.when(stub.patchIssue(grpcRequest))
+               .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(issueMapper.toRestIssueResponse(grpcIssue))
+               .thenReturn(restResponse);
+
+        StepVerifier.create(client.patchIssue(ISSUE_ID, IF_MATCH_VERSION, Mono.just(restRequest), context))
+                    .assertNext(response -> {
+                        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                        Assertions.assertThat(response.getBody()).isSameAs(restResponse);
+                    })
+                    .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC patchIssue с пустым DTO (все поля отсутствуют), если тело запроса пустое")
+    void patchIssue_shouldPassEmptyDto_whenRequestMonoIsEmpty() {
+        var grpcRequest = PatchIssueRequest.getDefaultInstance();
+        var grpcResponse = PatchIssueResponse.getDefaultInstance();
+        var restResponse = new IssueResponseDto();
+
+        Mockito.when(issueMapper.toPatchIssueRequest(
+                       Mockito.eq(ISSUE_ID),
+                       Mockito.eq(IF_MATCH_VERSION),
+                       Mockito.any(PatchIssueRequestDto.class),
+                       Mockito.eq(context)
+               ))
+               .thenReturn(grpcRequest);
+
+        Mockito.when(stub.patchIssue(grpcRequest))
+               .thenReturn(Mono.just(grpcResponse));
+
+        Mockito.when(issueMapper.toRestIssueResponse(grpcResponse.getIssue()))
+               .thenReturn(restResponse);
+
+        StepVerifier.create(client.patchIssue(ISSUE_ID, IF_MATCH_VERSION, Mono.empty(), context))
+                    .assertNext(response -> Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK))
+                    .verifyComplete();
+
+        var bodyCaptor = ArgumentCaptor.forClass(PatchIssueRequestDto.class);
+        Mockito.verify(issueMapper, Mockito.times(1))
+               .toPatchIssueRequest(Mockito.eq(ISSUE_ID), Mockito.eq(IF_MATCH_VERSION), bodyCaptor.capture(), Mockito.eq(context));
+        Assertions.assertThat(bodyCaptor.getValue().getSummary().present()).isFalse();
+        Assertions.assertThat(bodyCaptor.getValue().getDescription().present()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Не должен вызывать gRPC patchIssue, если маппер отклонил запрос")
+    void patchIssue_shouldNotCallStub_whenMapperThrows() {
+        var restRequest = new PatchIssueRequestDto();
+        restRequest.setSummary(SUMMARY);
+        var error = new ResponseStatusException(HttpStatus.BAD_REQUEST, "summary must be a string");
+
+        Mockito.when(issueMapper.toPatchIssueRequest(ISSUE_ID, IF_MATCH_VERSION, restRequest, context))
+               .thenThrow(error);
+
+        StepVerifier.create(client.patchIssue(ISSUE_ID, IF_MATCH_VERSION, Mono.just(restRequest), context))
+                    .expectErrorSatisfies(ex -> Assertions.assertThat(ex).isSameAs(error))
+                    .verify();
+
+        Mockito.verify(stub, Mockito.never()).patchIssue(Mockito.any(PatchIssueRequest.class));
+        Mockito.verify(issueMapper, Mockito.never()).toRestIssueResponse(Mockito.any(IssueResponse.class));
     }
 
     @Test

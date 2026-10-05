@@ -100,20 +100,26 @@ public class NotificationFactory {
         UUID actorUserId = extractUuid(payload, "actorUserId");
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
+        // assigneeId == null — исполнитель снят с задачи, уведомляем только watchers
         if (assigneeId == null) {
-            log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
-            return List.of();
+            log.info("IssueAssigned event without assigneeId (assignee removed), eventId={}", eventId);
         }
 
         IssueInfo issueInfo = extractIssueInfo(payload);
         if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
             return List.of();
         }
-        Set<UUID> recipients = resolveRecipients(actorUserId, List.of(assigneeId), watcherIds);
+        Set<UUID> recipients = resolveRecipients(
+                actorUserId,
+                assigneeId != null ? List.of(assigneeId) : List.of(),
+                watcherIds
+        );
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueAssigned(event, userId, issueInfo));
+            notifications.add(assigneeId != null
+                    ? notificationMapper.toIssueAssigned(event, userId, issueInfo)
+                    : notificationMapper.toIssueUnassigned(event, userId, issueInfo));
         }
 
         return notifications;
