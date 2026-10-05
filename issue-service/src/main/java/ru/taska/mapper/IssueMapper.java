@@ -27,7 +27,7 @@ import ru.taska.domain.aggregate.IssueLinkViewType;
 import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.IssueWithHistory;
-import ru.taska.domain.PatchIssueResult;
+import ru.taska.domain.dto.PatchIssueResult;
 import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.entity.ProjectLabels;

@@ -1,4 +1,6 @@
-package ru.taska.domain;
+package ru.taska.domain.dto;
+
+import ru.taska.domain.entity.Issue;
 
 /**
  * Результат PATCH-обновления задачи.

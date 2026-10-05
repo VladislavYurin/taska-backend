@@ -53,7 +53,7 @@ import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
 import nullable.NullableFieldParsers;
-import ru.taska.domain.IssuePatch;
+import ru.taska.domain.dto.IssuePatch;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueDetailsMapper;

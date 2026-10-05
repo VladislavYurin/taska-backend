@@ -1,10 +1,12 @@
-package ru.taska.domain;
+package ru.taska.domain.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import nullable.NullableField;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.util.StoryPointsNormalizer;
 
 /**
