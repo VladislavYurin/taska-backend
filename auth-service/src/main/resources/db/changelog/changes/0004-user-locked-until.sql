@@ -4,7 +4,7 @@
 -- comment: Перенос locked_until из credentials в users
 
 ALTER TABLE taska.users
-    ADD COLUMN locked_until timestamptz NULL;
+    ADD COLUMN IF NOT EXISTS locked_until timestamptz NULL;
 
 -- переносим текущие значения
 UPDATE taska.users u
@@ -14,4 +14,4 @@ WHERE c.user_id = u.id
   AND c.credential_type = 'PASSWORD'
   AND c.locked_until IS NOT NULL;
 
-ALTER TABLE taska.credentials DROP COLUMN locked_until;
+ALTER TABLE taska.credentials DROP COLUMN IF EXISTS locked_until;
