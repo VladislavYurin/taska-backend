@@ -2,7 +2,6 @@ package ru.taska.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.domain.Issue;
@@ -10,6 +9,7 @@ import ru.taska.domain.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
+import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 
 import java.util.List;
@@ -110,7 +110,7 @@ public interface IssueService {
                             Integer remainingEstimateMinutes
     );
 
-    Mono<PageResult<Issue>> searchIssues(
+    Mono<PageResult<IssueWithProject>> searchIssues(
             String requestId,
             String nodeId,
             UUID actorUserId,

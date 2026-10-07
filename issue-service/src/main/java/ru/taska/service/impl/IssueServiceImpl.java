@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,8 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PageResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.aggregate.IssueWithProject;
+import ru.taska.domain.dto.ProjectInfo;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
 import ru.taska.domain.labels.ProjectLabels;
@@ -54,6 +57,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -486,7 +490,7 @@ public class IssueServiceImpl implements IssueService {
 
   ///////////////////////////////////////   Search issues   //////////////////////////
   @Override
-  public Mono<PageResult<Issue>> searchIssues(
+  public Mono<PageResult<IssueWithProject>> searchIssues(
           String requestId,
           String nodeId,
           UUID actorUserId,
@@ -513,24 +517,43 @@ public class IssueServiceImpl implements IssueService {
           ));
       }
 
-      int resolvedPage = validatePage(page);
-      int resolvedPageSize = validatePageSize(pageSize);
-      long offset = (long) resolvedPage * resolvedPageSize;
+      Mono<PageResult<Issue>> issuesPageMono = searchIssuePage(
+              requestId,
+              nodeId,
+              actorUserId,
+              query,
+              projectId,
+              statusKey,
+              assigneeId,
+              reporterId,
+              priority,
+              issueType,
+              page,
+              pageSize
+      );
+      return issuesPageMono.flatMap(pageResult -> enrichWithProjects(requestId, nodeId, pageResult));
+  };
 
-      // Если projectId передан - проверяем доступ к конкретному проекту
-      if (projectId != null) {
-          log.debug("[{}][{}] Searching in specific project: {}", requestId, nodeId, projectId);
-          return searchInSingleProject(requestId, nodeId, actorUserId, query, projectId,
-                  statusKey, assigneeId, reporterId, priority, issueType,
-                  resolvedPageSize, offset);
-      }
 
-      // Если projectId не передан - получаем все проекты пользователя и ищем в них
-      log.info("[{}][{}] Searching in all accessible projects for user: {}", requestId, nodeId, actorUserId);
-      return searchInUserProjects(requestId, nodeId, actorUserId, query,
-              statusKey, assigneeId, reporterId, priority, issueType,
-              resolvedPageSize, offset);
-  }
+    private @NonNull Mono<PageResult<Issue>> searchIssuePage(String requestId, String nodeId, UUID actorUserId, String query, UUID projectId, String statusKey, UUID assigneeId, UUID reporterId, IssuePriority priority, IssueType issueType, Integer page, Integer pageSize) {
+        int resolvedPage = validatePage(page);
+        int resolvedPageSize = validatePageSize(pageSize);
+        long offset = (long) resolvedPage * resolvedPageSize;
+
+        // Если projectId передан - проверяем доступ к конкретному проекту
+        if (projectId != null) {
+            log.debug("[{}][{}] Searching in specific project: {}", requestId, nodeId, projectId);
+            return searchInSingleProject(requestId, nodeId, actorUserId, query, projectId,
+                    statusKey, assigneeId, reporterId, priority, issueType,
+                    resolvedPageSize, offset);
+        }
+
+        // Если projectId не передан - получаем все проекты пользователя и ищем в них
+        log.info("[{}][{}] Searching in all accessible projects for user: {}", requestId, nodeId, actorUserId);
+        return searchInUserProjects(requestId, nodeId, actorUserId, query,
+                statusKey, assigneeId, reporterId, priority, issueType,
+                resolvedPageSize, offset);
+    }
 
     /**
      * Поиск задач в конкретном проекте с проверкой прав.
@@ -757,5 +780,55 @@ public class IssueServiceImpl implements IssueService {
                                         .toList();
                             });
                 });
+    }
+
+    private Mono<PageResult<IssueWithProject>> enrichWithProjects(
+            String requestId,
+            String nodeId,
+            PageResult<Issue> pageResult
+    ) {
+        if (pageResult.items().isEmpty()) {
+            return Mono.just(PageResult.empty());
+        }
+
+        Set<UUID> projectIds = extractProjectIds(pageResult);
+
+        if (projectIds.isEmpty()) {
+            return Mono.just(enrichPage(pageResult, Map.of()));
+        }
+
+        return grpcProjectServiceClient
+                .getProjectInfoBatchInternal(requestId, nodeId, projectIds)
+                .map(projects -> enrichPage(pageResult, projects));
+    }
+
+    private static @NonNull Set<UUID> extractProjectIds(PageResult<Issue> pageResult) {
+        return pageResult.items().stream()
+                .map(Issue::getProjectId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private PageResult<IssueWithProject> enrichPage(
+            PageResult<Issue> pageResult,
+            Map<String, ProjectInfo> projects
+    ) {
+        List<IssueWithProject> items = pageResult.items().stream()
+                .map(issue -> enrichIssue(issue, projects))
+                .toList();
+
+        return new PageResult<>(items, pageResult.totalCount());
+    }
+
+    private IssueWithProject enrichIssue(
+            Issue issue,
+            Map<String, ProjectInfo> projects
+    ) {
+        UUID projectId = issue.getProjectId();
+        ProjectInfo projectInfo = projectId != null
+                ? projects.get(projectId.toString())
+                : null;
+
+        return IssueWithProject.of(issue, projectInfo);
     }
 }

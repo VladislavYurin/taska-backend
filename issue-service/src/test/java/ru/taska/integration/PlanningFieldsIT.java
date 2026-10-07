@@ -247,7 +247,8 @@ class PlanningFieldsIT extends AbstractIT {
         Assertions.assertThat(page).isNotNull();
         Assertions.assertThat(page.items())
                   .isNotEmpty()
-                  .allSatisfy(issue -> {
+                  .allSatisfy(issueWithProject -> {
+                      Issue issue = issueWithProject.issue();
                       if (issue.getProjectId().equals(PROJECT_ID)) {
                           Assertions.assertThat(issue.getStoryPoints()).isNotNull();
                       }

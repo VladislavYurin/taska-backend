@@ -18,6 +18,7 @@ import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
@@ -29,6 +30,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -252,5 +255,71 @@ class ProjectServiceImplTest {
                 .verify();
 
         Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsEmptyMap_WhenProjectsDoNotExistInDb() {
+        // Arrange
+        UUID projectId1 = UUID.randomUUID();
+        UUID projectId2 = UUID.randomUUID();
+        List<UUID> projectIds = List.of(projectId1, projectId2);
+
+        Mockito.when(projectRepository.findProjectInfoByIds(Mockito.anyCollection()))
+                .thenReturn(Flux.empty());
+
+        // Act & Assert
+        StepVerifier.create(projectService.getProjectInfoByIds(projectIds))
+                .assertNext(resultMap -> {
+                    Assertions.assertNotNull(resultMap);
+                    Assertions.assertTrue(resultMap.isEmpty());
+                })
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectInfoByIds(Mockito.argThat(ids ->
+                ids.containsAll(projectIds) && ids.size() == projectIds.size()
+        ));
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsMapWithFoundProjects_WhenSomeProjectsExist() {
+        // Arrange
+        UUID projectId1 = UUID.randomUUID();
+        UUID projectId2 = UUID.randomUUID();
+        List<UUID> projectIds = List.of(projectId1, projectId2);
+
+        ProjectInfo projectInfo1 = new ProjectInfo(projectId1, "PRJ1", "Project 1");
+
+        Mockito.when(projectRepository.findProjectInfoByIds(Mockito.anyCollection()))
+                .thenReturn(Flux.just(projectInfo1));
+
+        // Act & Assert
+        StepVerifier.create(projectService.getProjectInfoByIds(projectIds))
+                .assertNext(resultMap -> {
+                    Assertions.assertNotNull(resultMap);
+                    Assertions.assertEquals(1, resultMap.size());
+                    Assertions.assertTrue(resultMap.containsKey(projectId1));
+                    Assertions.assertFalse(resultMap.containsKey(projectId2));
+
+                    ProjectInfo actualInfo = resultMap.get(projectId1);
+                    Assertions.assertEquals("PRJ1", actualInfo.key());
+                    Assertions.assertEquals("Project 1", actualInfo.name());
+                })
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectInfoByIds(Mockito.anyCollection());
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsEmptyMap_WithoutCallingRepository_WhenInputIsEmptyOrNull() {
+        // Act & Assert для null и пустого списка
+        StepVerifier.create(projectService.getProjectInfoByIds(Collections.emptyList()))
+                .assertNext(resultMap -> Assertions.assertTrue(resultMap.isEmpty()))
+                .verifyComplete();
+
+        StepVerifier.create(projectService.getProjectInfoByIds(null))
+                .assertNext(resultMap -> Assertions.assertTrue(resultMap.isEmpty()))
+                .verifyComplete();
+
+        Mockito.verifyNoInteractions(projectRepository);
     }
 }

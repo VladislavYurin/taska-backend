@@ -2,6 +2,7 @@ package ru.taska.repository;
 
 import org.springframework.data.r2dbc.repository.Query;
 
+import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
@@ -9,6 +10,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Project;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.projection.ProjectInfo;
 
 
 @Repository
@@ -45,4 +47,16 @@ public interface ProjectRepository extends R2dbcRepository<Project, UUID> {
      */
     @Query("SELECT project_key FROM taska.projects WHERE id = :id")
     Mono<String> findProjectKeyById(UUID id);
+
+    /**
+     * Выгружает точечную проекцию ProjectInfo для списка ID проектов.
+     */
+    @Query("""
+        SELECT p.id AS id,
+               p.project_key      AS key,
+               p.name     AS name
+        FROM projects p
+        WHERE p.id IN (:ids)
+        """)
+    Flux<ProjectInfo> findProjectInfoByIds(Collection<UUID> ids);
 }

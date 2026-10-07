@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.IssueApi;
+import ru.taska.controller.utils.EnumFilterUtils;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
@@ -28,6 +29,8 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
+
+import java.util.Collections;
 
 /**
  * REST-контроллер для работы с задачами.
@@ -242,20 +245,31 @@ public class IssueController implements IssueApi {
                         "priority={}, issueType={}, page={}, pageSize={}",
                 query, projectId, statusKey, assigneeId, reporterId, priority, issueType, page, pageSize);
 
-        SearchIssuesRequestDto request = issueMapper.toSearchRequestDto(
-                query,
-                projectId,
-                statusKey,
-                assigneeId,
-                reporterId,
-                priority,
-                issueType,
-                page,
-                pageSize);
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context -> {
+            if (EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
+                return Mono.just(ResponseEntity.ok(emptySearchIssuesResponse()));
+            }
 
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                        issueClient.searchIssues(request, context)
-                                .map(ResponseEntity::ok));
+            SearchIssuesRequestDto request = issueMapper.toSearchRequestDto(
+                    query,
+                    projectId,
+                    statusKey,
+                    assigneeId,
+                    reporterId,
+                    priority,
+                    issueType,
+                    page,
+                    pageSize);
+
+            return issueClient.searchIssues(request, context)
+                    .map(ResponseEntity::ok);
+        });
+    }
+
+    private SearchIssuesResponseDto emptySearchIssuesResponse() {
+        return new SearchIssuesResponseDto()
+                .items(Collections.emptyList())
+                .totalCount(0);
     }
 }
 

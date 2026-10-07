@@ -29,6 +29,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.IssueWithHistory;
 import ru.taska.domain.PatchIssueResult;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.labels.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
@@ -173,14 +174,19 @@ public class IssueMapper {
         return builder.build();
     }
 
-    public IssueShortResponse toIssueShortProto(Issue issue) {
+    public IssueShortResponse toIssueShortProto(IssueWithProject issueWithProject) {
+        Issue issue = issueWithProject.issue();
+
         IssueShortResponse.Builder builder = IssueShortResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "");
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .setProjectId(issue.getProjectId().toString())
+                .setStatusKey(issue.getStatusKey())
+                .setProjectKey(issueWithProject.project().key());
 
         if (issue.getStoryPoints() != null) {
             builder.setStoryPoints(issue.getStoryPoints().doubleValue());

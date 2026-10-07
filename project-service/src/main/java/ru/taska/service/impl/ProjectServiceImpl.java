@@ -11,6 +11,7 @@ import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ProjectMemberRepository;
@@ -23,7 +24,14 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -101,6 +109,32 @@ public class ProjectServiceImpl implements ProjectService {
                 .doOnSuccess(key ->
                         log.debug("Successfully getting project key: {} for projectId: {}", key, projectId)
                 );
+    }
+
+    @Override
+    public Mono<Map<UUID, ProjectInfo>> getProjectInfoByIds(List<UUID> projectIds) {
+        Set<UUID> uniqueIds = extractUniqueIds(projectIds);
+
+        if (uniqueIds.isEmpty()) {
+            return Mono.just(Collections.emptyMap());
+        }
+
+        return projectRepository.findProjectInfoByIds(uniqueIds)
+                .collectMap(
+                        ProjectInfo::id,
+                        Function.identity()
+                )
+                .doOnSuccess(map -> log.debug("Fetched {}/{} project projections from DB", map.size(), uniqueIds.size()));
+    }
+
+    private Set<UUID> extractUniqueIds(List<UUID> projectIds) {
+        if (projectIds == null) {
+            return Collections.emptySet();
+        }
+
+        return projectIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     private ProjectSetting createDefaultProjectSettings(Project project) {

@@ -2672,7 +2672,7 @@ components:
 
     IssueShortResponseDto:
       type: object
-      required: [id, issueKey, summary, issueType, priority, assigneeId]
+      required: [id, issueKey, summary, issueType, priority, assigneeId, projectId, projectKey, statusKey]
       properties:
         id:
           type: string
@@ -2691,6 +2691,15 @@ components:
           format: double
           description: Оценка сложности задачи в story points
           minimum: 0
+        projectId:
+          type: string
+        projectKey:
+          type: string
+          minLength: 1
+          pattern: '^[\x21-\x7E]+$'
+        statusKey:
+          type: string
+
 
     ListIssuesResponseDto:
       type: object

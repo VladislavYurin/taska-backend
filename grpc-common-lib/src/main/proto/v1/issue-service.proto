@@ -926,6 +926,21 @@ message IssueShortResponse {
    * Story points задачи.
    */
   optional double story_points = 7;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 8;
+
+  /**
+   * Ключ проекта.
+   */
+  string project_key = 9;
+
+  /**
+   * Ключ статуса задачи.
+   */
+  string status_key = 10;
 }
 
 message IssueResponse {
