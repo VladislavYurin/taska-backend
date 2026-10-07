@@ -16,7 +16,11 @@ import ru.taska.config.props.MaskType;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PageResult;
-import ru.taska.dto.*;
+import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.dto.ListTableRowsRequestDto;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.FilterAuditDTO;
+import ru.taska.dto.AuditEntriesResponseDto;
 import ru.taska.entity.AuditLog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -35,8 +39,8 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.*;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 
@@ -148,7 +152,7 @@ class AdminReadonlyServiceImplTest {
     void shouldReturnEmptyResponseWhenNoData() {
         when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), anyInt(), anyInt(),
                 Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenReturn(pageableListQueries);
         when(readOnlyRepository.executeQuery(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
@@ -170,7 +174,7 @@ class AdminReadonlyServiceImplTest {
     void shouldPropagateErrorFromQueryBuilder() {
         when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), anyInt(), anyInt(),
                 Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenThrow(new DomainException(DomainStatus.PERMISSION_DENIED, "Table not accessible: " + TEST_TABLE));
 
@@ -306,7 +310,7 @@ class AdminReadonlyServiceImplTest {
                 .expectNextCount(1)
                 .verifyComplete();
 
-        Mockito.verify(maskService).maskSensitiveData(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
+        verify(maskService).maskSensitiveData(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
     }
 
     @Test
@@ -333,7 +337,7 @@ class AdminReadonlyServiceImplTest {
                 .expectNextCount(1)
                 .verifyComplete();
 
-        Mockito.verify(maskService).maskSensitiveData(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
+        verify(maskService).maskSensitiveData(List.of(row), TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id");
     }
 
     @Test
@@ -365,7 +369,7 @@ class AdminReadonlyServiceImplTest {
     private void stubListSuccessPath() {
         when(metadataService.getTableColumns(Mockito.anyString(), Mockito.anyString()))
                 .thenReturn(Mono.just(columnTypes));
-        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyInt(),
+        when(queryBuilder.buildSafePageableListQueries(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), anyInt(), anyInt(),
                 Mockito.anyString(), Mockito.anyString(), Mockito.anyMap(), Mockito.anyMap(), Mockito.anyString()))
                 .thenReturn(pageableListQueries);
         when(readOnlyRepository.executeQuery(Mockito.anyString(), Mockito.anyString(), Mockito.anyList()))
@@ -379,7 +383,7 @@ class AdminReadonlyServiceImplTest {
     private void assertPageAndPageSizePassedToBuilder(int expectedPage, int expectedPageSize) {
         ArgumentCaptor<Integer> pageCaptor = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<Integer> pageSizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.verify(queryBuilder).buildSafePageableListQueries(
+        verify(queryBuilder).buildSafePageableListQueries(
                 eq(TEST_SERVICE),
                 eq(TEST_SCHEMA),
                 eq(TEST_TABLE),
@@ -401,7 +405,7 @@ class AdminReadonlyServiceImplTest {
                 ACTOR_USER_ID, null, null, null, null, null, null, null
         );
 
-        Mockito.when(auditLogRepository.findByFilter(Mockito.any(FilterAuditDTO.class), Mockito.anyInt(), Mockito.anyLong()))
+        Mockito.when(auditLogRepository.findByFilter(Mockito.any(FilterAuditDTO.class), anyInt(), Mockito.anyLong()))
                 .thenReturn(Flux.empty());
         Mockito.when(auditLogRepository.countByFilter(Mockito.any(FilterAuditDTO.class)))
                 .thenReturn(Mono.just(0L));
@@ -421,7 +425,7 @@ class AdminReadonlyServiceImplTest {
         var auditLog = createLog();
         var expectedResponse = getAuditEntriesResponseDto(auditLog);
 
-        Mockito.when(auditLogRepository.findByFilter(Mockito.any(FilterAuditDTO.class), Mockito.anyInt(), Mockito.anyLong()))
+        Mockito.when(auditLogRepository.findByFilter(Mockito.any(FilterAuditDTO.class), anyInt(), Mockito.anyLong()))
                 .thenReturn(Flux.just(auditLog));
         Mockito.when(auditLogRepository.countByFilter(Mockito.any(FilterAuditDTO.class)))
                 .thenReturn(Mono.just(1L));
@@ -459,13 +463,27 @@ class AdminReadonlyServiceImplTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenFilterIsEmpty() {
-        FilterAuditDTO emptyFilter = new FilterAuditDTO(null, null, null, null, null, null, null, null);
+    void shouldReturnAllEntriesWhenFilterIsEmpty() {
+        FilterAuditDTO emptyFilter = FilterAuditDTO.builder().build();
 
-        Assertions.assertThatThrownBy(() ->
-                        adminService.listAuditEntries(emptyFilter, 0, 10).block()
-                ).isInstanceOf(DomainException.class)
-                .hasMessage("At least one filter parameter must be specified");
+        AuditLog auditLog1 = createLog();
+        AuditLog auditLog2 = createLog();
+
+        when(auditLogRepository.findByFilter(any(FilterAuditDTO.class), anyInt(), anyLong()))
+                .thenReturn(Flux.just(auditLog1, auditLog2));
+        when(auditLogRepository.countByFilter(any(FilterAuditDTO.class)))
+                .thenReturn(Mono.just(2L));
+
+        PageResult<AuditEntriesResponseDto> result = adminService.listAuditEntries(emptyFilter, 0, 10).block();
+
+        Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.items()).hasSize(2);
+        Assertions.assertThat(result.totalCount()).isEqualTo(2);
+        Assertions.assertThat(result.page()).isEqualTo(0);
+        Assertions.assertThat(result.pageSize()).isEqualTo(10);
+
+        verify(auditLogRepository).findByFilter(any(FilterAuditDTO.class), eq(10), eq(0L));
+        verify(auditLogRepository).countByFilter(any(FilterAuditDTO.class));
     }
 
     @Test
@@ -478,7 +496,7 @@ class AdminReadonlyServiceImplTest {
                 .thenReturn(expectedResponse);
 
         Mockito.when(auditLogRepository.findByFilter(
-                        Mockito.any(FilterAuditDTO.class), Mockito.anyInt(), Mockito.anyLong()))
+                        Mockito.any(FilterAuditDTO.class), anyInt(), Mockito.anyLong()))
                 .thenReturn(Flux.just(auditLog));
         Mockito.when(auditLogRepository.countByFilter(Mockito.any(FilterAuditDTO.class)))
                 .thenReturn(Mono.just(1L));
@@ -500,17 +518,17 @@ class AdminReadonlyServiceImplTest {
 
     private static AuditLog createLog() {
         AuditLog auditLog = new AuditLog();
-        auditLog.setId(UUID.randomUUID());
-        auditLog.setActorUserId(UUID.randomUUID());
-        auditLog.setActorLogin("login-" + UUID.randomUUID());
-        auditLog.setAction("ACTION_" + UUID.randomUUID());
-        auditLog.setTargetService("service-" + UUID.randomUUID());
-        auditLog.setTargetTable("table-" + UUID.randomUUID());
-        auditLog.setTargetId("target-" + UUID.randomUUID());
-        auditLog.setOldValue(new ObjectMapper().createObjectNode().put("value", "old-" + UUID.randomUUID()));
-        auditLog.setNewValue(new ObjectMapper().createObjectNode().put("value", "new-" + UUID.randomUUID()));
-        auditLog.setReason("reason-" + UUID.randomUUID());
-        auditLog.setRequestId("request-" + UUID.randomUUID());
+        auditLog.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        auditLog.setActorUserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+        auditLog.setActorLogin("test-login");
+        auditLog.setAction("TEST_ACTION");
+        auditLog.setTargetService("test-service");
+        auditLog.setTargetTable("test-table");
+        auditLog.setTargetId("test-target");
+        auditLog.setOldValue(new ObjectMapper().createObjectNode().put("value", "old-value"));
+        auditLog.setNewValue(new ObjectMapper().createObjectNode().put("value", "new-value"));
+        auditLog.setReason("test-reason");
+        auditLog.setRequestId("test-request");
         auditLog.setCreatedAt(Instant.parse("2024-06-15T12:00:00Z"));
         return auditLog;
     }

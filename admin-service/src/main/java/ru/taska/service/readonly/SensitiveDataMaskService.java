@@ -365,27 +365,7 @@ public class SensitiveDataMaskService {
                     requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
         }
 
-        Map<String, Object> maskedRow = new HashMap<>();
-        for (var entry : rowMap.entrySet()) {
-            String columnName = entry.getKey();
-            Object value = entry.getValue();
 
-            MaskType columnMaskType = sensitiveColumns.get(columnName);
-            if (columnMaskType != null) {
-                switch (columnMaskType) {
-                    case HIDE -> { /* колонка не попадает в ответ */ }
-                    case MASK_PARTIAL -> maskedRow.put(columnName, maskPartial(value));
-                    case MASK_FULL -> maskedRow.put(columnName, FULLY_MASKED_VALUE);
-                }
-            } else {
-                Map<String, MaskType> fieldNameMaskTypeMap = sensitiveJsonFields.get(columnName);
-                if (fieldNameMaskTypeMap != null && value != null) {
-                    maskedRow.put(columnName, getMaskedJson(columnName, value, fieldNameMaskTypeMap));
-                } else {
-                    maskedRow.put(columnName, value);
-                }
-            }
-        }
-        return maskedRow;
+        return maskRow(rowMap, sensitiveColumns, sensitiveJsonFields);
     }
 }

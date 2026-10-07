@@ -319,8 +319,8 @@ public class GrpcAdminReadonlyService {
                         }));
     }
 
-    @TrackMetrics(counter = "admin-service_list_audit_entries_grpc_counter",
-            timer = "admin-service_list_audit_entries_grpc_timer")
+    @TrackMetrics(counter = "admin_service_list_audit_entries_grpc_counter",
+            timer = "admin_service_list_audit_entries_grpc_timer")
     public Mono<ListAuditEntriesResponse> listAuditEntries(Mono<ListAuditEntriesRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(

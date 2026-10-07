@@ -2,7 +2,13 @@ package ru.taska.service;
 
 import reactor.core.publisher.Mono;
 import ru.taska.domain.PageResult;
-import ru.taska.dto.*;
+import ru.taska.dto.ListTableRowsResponseDto;
+import ru.taska.dto.ListTableRowsRequestDto;
+import ru.taska.dto.GetTableRowByIdResponseDto;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.AuditEntriesResponseDto;
+import ru.taska.dto.FilterAuditDTO;
+
 
 
 public interface AdminReadonlyService {

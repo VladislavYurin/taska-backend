@@ -7,7 +7,15 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PageResult;
-import ru.taska.dto.*;
+
+import ru.taska.dto.ListTableRowsResponseDto;
+import ru.taska.dto.ListTableRowsRequestDto;
+import ru.taska.dto.FilterOperatorsDto;
+import ru.taska.dto.GetTableRowByIdResponseDto;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.AuditEntriesResponseDto;
+import ru.taska.dto.FilterAuditDTO;
+
 import ru.taska.entity.AuditLog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -123,37 +131,32 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
 
     @Override
     public Mono<PageResult<AuditEntriesResponseDto>> listAuditEntries(FilterAuditDTO filterAuditDTO, Integer page, Integer pageSize) {
-        if (isFilterEmpty(filterAuditDTO)) {
-            return Mono.error(new DomainException(
-                    DomainStatus.INVALID_ARGUMENT,
-                    "At least one filter parameter must be specified"
-            ));
-        }
         int resolvedPage = normalizePage(page);
         int resolvedPageSize = normalizePageSize(pageSize);
         long resolvedOffset = (long) resolvedPage * resolvedPageSize;
 
         log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, requestId: {}, from: {}, to: {}, page: {}, size: {}",
-                filterAuditDTO.actorUserId(),
-                filterAuditDTO.action(),
-                filterAuditDTO.targetService(),
-                filterAuditDTO.targetTable(),
-                filterAuditDTO.targetId(),
-                filterAuditDTO.requestId(),
-                filterAuditDTO.createdAtFrom(),
-                filterAuditDTO.createdAtTo(),
+                filterAuditDTO != null ? filterAuditDTO.actorUserId() : null,
+                filterAuditDTO != null ? filterAuditDTO.action() : null,
+                filterAuditDTO != null ? filterAuditDTO.targetService() : null,
+                filterAuditDTO != null ? filterAuditDTO.targetTable() : null,
+                filterAuditDTO != null ? filterAuditDTO.targetId() : null,
+                filterAuditDTO != null ? filterAuditDTO.requestId() : null,
+                filterAuditDTO != null ? filterAuditDTO.createdAtFrom() : null,
+                filterAuditDTO != null ? filterAuditDTO.createdAtTo() : null,
                 resolvedPage,
                 resolvedPageSize);
 
-         return Mono.zip(
-                         auditLogRepository.findByFilter(filterAuditDTO, resolvedPageSize, resolvedOffset)
-                                 .collectList(),  // собираем список
-                         auditLogRepository.countByFilter(filterAuditDTO)
+        FilterAuditDTO safeFilter = filterAuditDTO != null ? filterAuditDTO : FilterAuditDTO.builder().build();
+
+        return Mono.zip(
+                         auditLogRepository.findByFilter(safeFilter, resolvedPageSize, resolvedOffset)
+                                 .collectList(),
+                         auditLogRepository.countByFilter(safeFilter)
                  )
                  .map(tuple -> {
                      List<AuditLog> auditLogs = tuple.getT1();
                      Long count = tuple.getT2();
-
 
                      List<AuditEntriesResponseDto> maskedLogs = auditLogs.stream()
                              .map(this::maskAndMapAuditLog)
@@ -201,19 +204,6 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         return auditLogMapper.toResponseDto(auditLog);
     }
 
-
-    private boolean isFilterEmpty(FilterAuditDTO filterAuditDTO) {
-        return filterAuditDTO == null ||
-               (filterAuditDTO.actorUserId() == null &&
-                filterAuditDTO.action() == null &&
-                filterAuditDTO.targetService() == null &&
-                filterAuditDTO.targetTable() == null &&
-                filterAuditDTO.targetId() == null &&
-                filterAuditDTO.requestId() == null &&
-                filterAuditDTO.createdAtFrom() == null &&
-                filterAuditDTO.createdAtTo() == null);
-    }
-
     private Map<String, Object> convertJsonNodeToMap(JsonNode jsonNode) {
         if (jsonNode == null || jsonNode.isNull() || jsonNode.isMissingNode()) {
             return null;
@@ -230,7 +220,6 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         if (map == null) {
             return null;
         }
-       // ObjectMapper mapper = new ObjectMapper();
         return objectMapper.valueToTree(map);
     }
 
