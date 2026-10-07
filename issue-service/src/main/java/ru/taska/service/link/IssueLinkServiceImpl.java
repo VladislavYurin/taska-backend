@@ -6,10 +6,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.ProjectRole;
-import ru.taska.domain.dto.IssueLinkInfoDto;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.dto.ProjectRole;
+import ru.taska.domain.projection.IssueLinkDetails;
+import ru.taska.domain.projection.IssueLinkInfoDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
@@ -62,6 +63,17 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .doOnComplete(() ->
                         log.debug("[{}][{}] Links successfully found for issue: issueId={}", requestId, nodeId, issueId)
                 );
+    }
+
+    @Override
+    public Flux<IssueLinkDetails> listIssueLinksDetails(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
+        log.info("[{}][{}] listIssueLinksDetails: issueId={}, actorUserId={}",
+                requestId, nodeId, issueId, actorUserId);
+
+        return issueLinkRepository.findIssueLinksWithOtherIssues(issueId)
+                .doOnComplete(() ->
+                        log.info("[{}][{}] listIssueLinksDetails: completed, issueId={}",
+                                requestId, nodeId, issueId));
     }
 
     /**

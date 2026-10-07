@@ -3,12 +3,13 @@ package ru.taska.service.watcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueWatcher;
-import ru.taska.domain.PageResult;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueWatcher;
+import ru.taska.domain.util.PageResult;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.dto.UnwatchIssueResult;
 import ru.taska.domain.dto.WatchIssueResult;
@@ -114,6 +115,19 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                                 requestId, nodeId, issueId, resolvedPage, resolvedPageSize,
                                 result != null ? result.totalCount() : null)
                 );
+    }
+
+    @Override
+    public Flux<IssueWatcher> listIssueWatchers(String requestId, String nodeId, UUID issueId, UUID actorUserId) {
+        log.info(
+                "[{}][{}] Getting issue watchers: issueId={}, actorUserId={}",
+                requestId,
+                nodeId,
+                issueId,
+                actorUserId
+        );
+
+        return issueWatcherRepository.findByIssueId(issueId);
     }
 
     @Override

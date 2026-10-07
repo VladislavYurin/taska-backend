@@ -3,7 +3,7 @@ package ru.taska.repository;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
-import ru.taska.domain.IssueHistory;
+import ru.taska.domain.entity.IssueHistory;
 
 import java.util.UUID;
 

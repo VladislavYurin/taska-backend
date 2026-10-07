@@ -713,7 +713,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+                $ref: '#/components/schemas/IssueDetailsWithHistoryResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -831,6 +831,36 @@ paths:
           description: >-
             Версия из If-Match не совпадает с текущей версией задачи в БД (конфликт
             конкурентного изменения). Тело ответа содержит актуальное состояние задачи.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/by-key/{issueKey}:
+    get:
+      summary: Возвращает задачу по ключу (без projectId)
+      operationId: getIssueByKey
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueKey
+          in: path
+          required: true
+          schema:
+            type: string
+            example: API-12
+
+      responses:
+        '200':
+          description: Задача найдена
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -2660,6 +2690,151 @@ components:
         payload:
           type: object
 
+    IssueDetailsWithHistoryResponseDto:
+      type: object
+      required:
+        - issue
+        - history
+      properties:
+        issue:
+          $ref: '#/components/schemas/IssueDetailsResponseDto'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueHistoryResponseDto'
+
+    IssueDetailsResponseDto:
+      type: object
+      required: [id, projectId, issueNumber, issueKey, issueType, summary, status,
+                 priority, reporter, createdAt, updatedAt, version, isWatching, commentCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        issueNumber:
+          type: integer
+          format: int64
+        issueKey:
+          type: string
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        summary:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          example: "IN_PROGRESS"
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        assignee:
+          $ref: '#/components/schemas/UserSummaryDto'
+        reporter:
+          $ref: '#/components/schemas/UserSummaryDto'
+        assigneeId:
+          type: string
+          format: uuid
+        reporterId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int32
+        storyPoints:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
+        watchers:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueWatcherResponseDto'
+        isWatching:
+          type: boolean
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLinkResponseDto'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueAttachmentDto'
+        commentCount:
+          type: integer
+          format: int64
+          description: Общее количество комментариев к задаче
+          minimum: 0
+
+    UserSummaryDto:
+      type: object
+      required:
+        - id
+        - displayName
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          format: uri
+
+    TargetIssueDto:
+      type: object
+      required:
+        - id
+        - issueKey
+        - summary
+        - projectId
+        - statusKey
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueKey:
+          type: string
+        summary:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        statusKey:
+          type: string
+
     IssueWithHistoryResponseDto:
       type: object
       properties:
@@ -2880,6 +3055,8 @@ components:
         createdAt:
           type: string
           format: date-time
+        target:
+          $ref: '#/components/schemas/TargetIssueDto'
 
     # ==================== LABELS SCHEMAS ====================
 
@@ -3051,6 +3228,12 @@ components:
           type: string
           format: uuid
           description: Кто создал подписку
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          format: uri
 
     AddIssueWatcherRequestDto:
       type: object
@@ -3505,6 +3688,8 @@ components:
           type: string
           format: uuid
           description: Идентификатор автора комментария
+        author:
+          $ref: '#/components/schemas/UserSummaryDto'
         body:
           type: string
           description: Текст комментария
@@ -3643,6 +3828,8 @@ components:
         createdAt:
           type: string
           format: date-time
+        uploadedByUser:
+          $ref: '#/components/schemas/UserSummaryDto'
 
     IssueAttachmentsResponseDto:
       type: object

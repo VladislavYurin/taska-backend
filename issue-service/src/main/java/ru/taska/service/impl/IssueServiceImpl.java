@@ -2,6 +2,7 @@ package ru.taska.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -11,20 +12,20 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.IdempotencyKey;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IdempotencyKey;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.PageResult;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.util.PageResult;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.ProjectInfo;
 import ru.taska.domain.dto.labels.IssueWithLabels;
-import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.projection.ProjectLabelWithIssuesId;
+import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -82,6 +83,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueAutoWatchService issueAutoWatchService;
     private final IssueLabelsRepository issueLabelsRepository;
     private final IssueWatcherRepository issueWatcherRepository;
+    private final IssueAccessGuard issueAccessGuard;
 
     @Override
     @Transactional
@@ -780,6 +782,21 @@ public class IssueServiceImpl implements IssueService {
                                         .toList();
                             });
                 });
+    }
+
+    @Override
+    public Mono<Issue> getIssueByKey(String requestId, String nodeId, String issueKey, UUID actorUserId) {
+        log.info("[{}][{}] getIssueByKey: issueKey={}, actorUserId={}",
+                requestId, nodeId, issueKey, actorUserId);
+
+        return issueAccessGuard.verifyReadAccess(
+                requestId,
+                nodeId,
+                issueKey,
+                actorUserId,
+                issueRepository.findActiveByKeyIgnoreCase(issueKey),
+                Issue::getProjectId
+        );
     }
 
     private Mono<PageResult<IssueWithProject>> enrichWithProjects(

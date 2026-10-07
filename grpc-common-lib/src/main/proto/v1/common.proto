@@ -65,3 +65,12 @@ message NullableInt32 {
   bool is_null = 1;
   int32 value = 2;
 }
+
+/**
+ * Краткая информация о пользователе.
+ */
+message UserSummaryResponse {
+  string id = 1;
+  string display_name = 2;
+  optional string avatar_url = 3;
+}

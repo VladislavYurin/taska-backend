@@ -20,7 +20,7 @@ import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.test.StepVerifier;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.mapper.OutboxEventMapper;
 import ru.taska.transport.kafka.OutboxEventPublisher;

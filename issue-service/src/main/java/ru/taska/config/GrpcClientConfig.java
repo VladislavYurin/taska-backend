@@ -5,6 +5,7 @@ import io.grpc.ManagedChannelBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
@@ -45,5 +46,21 @@ public class GrpcClientConfig {
     @Bean
     public ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowServiceStub() {
         return ReactorWorkflowServiceGrpc.newReactorStub(workflowManagedChannel());
+    }
+
+    @Bean
+    public ManagedChannel authManagedChannel() {
+        return ManagedChannelBuilder
+                .forAddress(
+                        properties.authService().host(),
+                        properties.authService().port()
+                )
+                .usePlaintext()
+                .build();
+    }
+
+    @Bean
+    public ReactorProfileServiceGrpc.ReactorProfileServiceStub profileServiceStub() {
+        return ReactorProfileServiceGrpc.newReactorStub(authManagedChannel());
     }
 }

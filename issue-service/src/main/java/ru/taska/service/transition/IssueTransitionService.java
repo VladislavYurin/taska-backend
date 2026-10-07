@@ -1,7 +1,7 @@
 package ru.taska.service.transition;
 
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IssueWithHistory;
+import ru.taska.domain.dto.IssueWithHistory;
 
 import java.util.UUID;
 

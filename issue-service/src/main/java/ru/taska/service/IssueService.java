@@ -2,13 +2,14 @@ package ru.taska.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+
 import reactor.core.publisher.Mono;
 import ru.taska.api.issue.v1.IssueBoardResponse;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.PageResult;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.util.PageResult;
 import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 
@@ -150,5 +151,13 @@ public interface IssueService {
             boolean includeDone,
             List<UUID> labelIds,
             Integer pageSizePerColumn
+    );
+
+
+    Mono<Issue> getIssueByKey(
+            String requestId,
+            String nodeId,
+            String issueKey,
+            UUID actorUserId
     );
 }

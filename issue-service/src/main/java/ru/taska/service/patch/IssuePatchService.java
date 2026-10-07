@@ -1,8 +1,8 @@
 package ru.taska.service.patch;
 
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IssuePatch;
-import ru.taska.domain.PatchIssueResult;
+import ru.taska.domain.dto.IssuePatch;
+import ru.taska.domain.dto.PatchIssueResult;
 
 import java.util.UUID;
 

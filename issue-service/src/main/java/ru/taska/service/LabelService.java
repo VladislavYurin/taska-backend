@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
@@ -100,4 +101,16 @@ public interface LabelService {
             LabelCommands.ListProjectLabelsRequestDto requestDto
     );
 
+    /**
+     * Получает список меток, доступных на проекте
+     * @param requestId   айди запроса.
+     * @param nodeId      айди узла.
+     * @param requestDto  dto запроса списка меток проекта
+     * @return dto ответа списка меток проекта
+     */
+    Flux<LabelResponses.ProjectLabelInfo> getLabels(
+            String requestId,
+            String nodeId,
+            LabelCommands.ListIssueLabelsRequestDto requestDto
+    );
 }

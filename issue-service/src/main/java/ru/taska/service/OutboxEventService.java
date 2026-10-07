@@ -1,8 +1,8 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import tools.jackson.databind.JsonNode;

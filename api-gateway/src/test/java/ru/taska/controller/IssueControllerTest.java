@@ -6,11 +6,13 @@ import nullable.NullableField;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -34,6 +36,7 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
@@ -55,7 +58,10 @@ import ru.taska.filter.GatewayContextFactory;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
+import ru.taska.mapper.IssueAttachmentMapper;
 import ru.taska.mapper.IssueMapper;
+import ru.taska.mapper.IssueWatcherMapper;
+import ru.taska.mapper.UserProfileMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
@@ -74,7 +80,10 @@ import java.util.stream.Stream;
         BearerTokenExtractor.class,
         GatewayErrorHandler.class,
         RestErrorMapper.class,
-        IssueMapper.class
+        IssueMapper.class,
+        UserProfileMapper.class,
+        IssueAttachmentMapper.class,
+        IssueWatcherMapper.class
 })
 class IssueControllerTest {
 
@@ -92,12 +101,14 @@ class IssueControllerTest {
     private static final String TARGET_ISSUE_ID = "00000000-0000-0000-0000-000000000006";
     private static final String LINK_ID = "00000000-0000-0000-0000-000000000007";
     private static final String LABEL_ID = "00000000-0000-0000-0000-000000000008";
+    private static final String REPORTER_ID = "00000000-0000-0000-0000-000000000009";
     private static final String SUMMARY = "Summary-1";
     private static final String DESCRIPTION = "Description-1";
     private static final String STATUS_TODO = "TODO";
     private static final String ISSUE_TYPE_TASK = "TASK";
     private static final String ISSUE_PRIORITY_MEDIUM = "MEDIUM";
     private static final int ISSUE_VERSION = 3;
+    private static final String ISSUE_KEY = "API-12";
     private static final double STORY_POINTS = 5;
     private static final double NEGATIVE_STORY_POINTS = -5;
     private static final Integer ORIGINAL_ESTIMATE_MINUTES = 480;
@@ -361,13 +372,13 @@ class IssueControllerTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть ответ с телом IssueWithHistoryResponseDto и статусом 200")
+    @DisplayName("Должен вернуть ответ с телом IssueDetailsWithHistoryResponseDto и статусом 200")
     void getIssue_shouldReturnsResponseAndStatus200() {
         mockAuthenticatedUser();
 
-        var response = new IssueWithHistoryResponseDto();
+        var response = new IssueDetailsWithHistoryResponseDto();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
         webTestClient.get()
@@ -376,10 +387,10 @@ class IssueControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().exists("X-Request-Id")
-                .expectBody(IssueWithHistoryResponseDto.class).isEqualTo(response);
+                .expectBody(IssueDetailsWithHistoryResponseDto.class).isEqualTo(response);
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -387,7 +398,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus404_whenIssueNotFound() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Not Found")));
 
         webTestClient.get()
@@ -401,7 +412,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -409,7 +420,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus403_whenPermissionDenied() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied")));
 
         webTestClient.get()
@@ -423,7 +434,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient)
-                .getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
+                .getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class));
     }
 
     @Test
@@ -440,7 +451,7 @@ class IssueControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(issueClient, Mockito.never())
-                .getIssue(Mockito.any(), Mockito.any());
+                .getIssueDetails(Mockito.any(), Mockito.any());
     }
 
     @Test
@@ -448,7 +459,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus503_whenDownstreamUnavailable() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
 
         webTestClient.get()
@@ -464,7 +475,7 @@ class IssueControllerTest {
     void getIssue_shouldThrowsExceptionAndStatus504_whenDeadlineExceeded() {
         mockAuthenticatedUser();
 
-        Mockito.when(issueClient.getIssue(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
+        Mockito.when(issueClient.getIssueDetails(Mockito.eq(ISSUE_ID), Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
 
         webTestClient.get()
@@ -1596,6 +1607,116 @@ class IssueControllerTest {
 
         Mockito.verify(issueClient, Mockito.never())
                 .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @Nested
+    @DisplayName("Сценарии резолва задачи по ключу")
+    class GetIssueByKey {
+        @Test
+        @DisplayName("Возвращает 200 и IssueResponseDto, если задача по ключу найдена")
+        void shouldReturn200WhenIssueFoundByKey() {
+            mockAuthenticatedUser();
+
+            var response = new IssueResponseDto();
+            response.setId(ISSUE_ID);
+            response.setAssigneeId(ASSIGNEE_ID);
+            response.setIssueKey(ISSUE_KEY);
+            response.projectId(PROJECT_ID);
+            response.reporterId(REPORTER_ID);
+            response.summary(SUMMARY);
+
+            Mockito.when(issueClient.getIssueByKey(
+                            ArgumentMatchers.eq(ISSUE_KEY), ArgumentMatchers.any(GatewayContext.class))
+                    )
+                    .thenReturn(Mono.just(response));
+
+            webTestClient.get()
+                    .uri("/api/v1/issues/by-key/{issueKey}", ISSUE_KEY)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectBody()
+                    .jsonPath("$.id").isEqualTo(ISSUE_ID)
+                    .jsonPath("$.issueKey").isEqualTo(ISSUE_KEY)
+                    .jsonPath("$.projectId").isEqualTo(PROJECT_ID)
+                    .jsonPath("$.assigneeId").isEqualTo(ASSIGNEE_ID)
+                    .jsonPath("$.reporterId").isEqualTo(REPORTER_ID)
+                    .jsonPath("$.summary").isEqualTo(SUMMARY);
+        }
+
+        @Test
+        @DisplayName("Передаёт в grpc-клиент ключ ровно в том регистре, в котором он пришёл в URL")
+        void shouldPassIssueKeyAsReceivedInUrl() {
+            mockAuthenticatedUser();
+
+            String lowerCaseKey = "api-12";
+            var response = new IssueResponseDto();
+            response.setId(ISSUE_ID);
+            response.setAssigneeId(ASSIGNEE_ID);
+            response.setIssueKey(ISSUE_KEY);
+
+            Mockito.when(issueClient.getIssueByKey(
+                            ArgumentMatchers.eq(lowerCaseKey), ArgumentMatchers.any(GatewayContext.class)))
+                    .thenReturn(Mono.just(response));
+
+            webTestClient.get()
+                    .uri("/api/v1/issues/by-key/{issueKey}", lowerCaseKey)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .exchange()
+                    .expectStatus().isOk();
+
+            Mockito.verify(issueClient).getIssueByKey(
+                    ArgumentMatchers.eq(lowerCaseKey), ArgumentMatchers.any(GatewayContext.class));
+        }
+
+        @Test
+        @DisplayName("Возвращает 404, если задача с таким ключом не найдена")
+        void shouldReturn404WhenIssueNotFoundByKey() {
+            mockAuthenticatedUser();
+
+            Mockito.when(issueClient.getIssueByKey(
+                            ArgumentMatchers.eq(ISSUE_KEY), ArgumentMatchers.any(GatewayContext.class)))
+                    .thenReturn(Mono.error(Status.NOT_FOUND
+                            .withDescription("Issue not found: " + ISSUE_KEY)
+                            .asRuntimeException()));
+
+            webTestClient.get()
+                    .uri("/api/v1/issues/by-key/{issueKey}", ISSUE_KEY)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .exchange()
+                    .expectStatus().isNotFound();
+        }
+
+        @Test
+        @DisplayName("Возвращает 403, если у пользователя нет доступа к проекту задачи")
+        void shouldReturn403WhenAccessDenied() {
+            mockAuthenticatedUser();
+
+            Mockito.when(issueClient.getIssueByKey(
+                            ArgumentMatchers.eq(ISSUE_KEY), ArgumentMatchers.any(GatewayContext.class)))
+                    .thenReturn(Mono.error(Status.PERMISSION_DENIED
+                            .withDescription("Access denied")
+                            .asRuntimeException()));
+
+            webTestClient.get()
+                    .uri("/api/v1/issues/by-key/{issueKey}", ISSUE_KEY)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .exchange()
+                    .expectStatus().isForbidden();
+        }
+
+        @Test
+        @DisplayName("Возвращает 401, если запрос пришёл без Authorization-заголовка")
+        void shouldReturn401WhenAuthorizationHeaderMissing() {
+            mockAuthenticatedUser();
+
+            webTestClient.get()
+                    .uri("/api/v1/issues/by-key/{issueKey}", ISSUE_KEY)
+                    .exchange()
+                    .expectStatus().isUnauthorized();
+
+            Mockito.verifyNoInteractions(issueClient);
+        }
     }
 
     private static Stream<Arguments> searchQueryLengths() {
