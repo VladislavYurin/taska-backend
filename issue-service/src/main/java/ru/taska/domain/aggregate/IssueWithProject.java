@@ -1,7 +1,7 @@
 package ru.taska.domain.aggregate;
 
-import ru.taska.domain.Issue;
 import ru.taska.domain.dto.ProjectInfo;
+import ru.taska.domain.entity.Issue;
 
 /**
  * Задача вместе с информацией о проекте, к которому она относится.
