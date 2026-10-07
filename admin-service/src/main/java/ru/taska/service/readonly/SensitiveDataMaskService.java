@@ -345,6 +345,10 @@ public class SensitiveDataMaskService {
             String requestId,
             String nodeId
     ) {
+        if (rowMap == null) {
+            return null;
+        }
+
         Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey, tableName);
         Map<String, Map<String, MaskType>> sensitiveJsonFields = getSensitiveJsonFields(serviceKey, tableName);
 
@@ -361,28 +365,11 @@ public class SensitiveDataMaskService {
                     requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
         }
 
-        return maskRowForAudit(rowMap, sensitiveColumns, sensitiveJsonFields);
-    }
-
-    /**
-     * Маскирует old/new данные аудит-лога.
-     * Использует те же правила маскирования, что и для обычных строк таблицы.
-     */
-    private Map<String, Object> maskRowForAudit(
-            Map<String, Object> rowMap,
-            Map<String, MaskType> sensitiveColumns,
-            Map<String, Map<String, MaskType>> sensitiveJsonFields
-    ) {
-        if (rowMap == null) {
-            return null;
-        }
-
         Map<String, Object> maskedRow = new HashMap<>();
         for (var entry : rowMap.entrySet()) {
             String columnName = entry.getKey();
             Object value = entry.getValue();
 
-            // Проверяем sensitive колонки (те же правила, что и в maskRow)
             MaskType columnMaskType = sensitiveColumns.get(columnName);
             if (columnMaskType != null) {
                 switch (columnMaskType) {
@@ -391,7 +378,6 @@ public class SensitiveDataMaskService {
                     case MASK_FULL -> maskedRow.put(columnName, FULLY_MASKED_VALUE);
                 }
             } else {
-                // Проверяем sensitive JSON-поля в значении
                 Map<String, MaskType> fieldNameMaskTypeMap = sensitiveJsonFields.get(columnName);
                 if (fieldNameMaskTypeMap != null && value != null) {
                     maskedRow.put(columnName, getMaskedJson(columnName, value, fieldNameMaskTypeMap));

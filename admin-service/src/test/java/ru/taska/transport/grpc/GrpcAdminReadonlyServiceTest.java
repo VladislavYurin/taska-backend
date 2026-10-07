@@ -1,6 +1,7 @@
 package ru.taska.transport.grpc;
 
 
+import com.google.protobuf.Timestamp;
 import io.grpc.StatusRuntimeException;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
@@ -292,9 +293,76 @@ class GrpcAdminReadonlyServiceTest {
     void listAuditEntries_Success() {
         ListAuditEntriesRequest request = getListAuditEntriesRequest();
 
+        FilterAuditDTO filterDTO = new FilterAuditDTO(
+                ACTOR_USER_ID,
+                "action",
+                "targetService",
+                "targetTable",
+                "targetId",
+                "requestId",
+                Instant.parse("2024-01-01T00:00:00Z"),
+                Instant.parse("2024-01-31T23:59:59.999999999Z")
+        );
+
+        List<AuditEntriesResponseDto> expectedEntries = List.of(
+                new AuditEntriesResponseDto(
+                        ACTOR_USER_ID,
+                        "actorLogin",
+                        "action",
+                        "targetService",
+                        "targetTable",
+                        "targetId",
+                        null,
+                        null,
+                        "reason",
+                        "requestId",
+                        Instant.parse("2024-01-01T00:00:00Z")
+                )
+        );
+
+        PageResult<AuditEntriesResponseDto> expectedPageResult =
+                new PageResult<>(expectedEntries, 1L, 1, 10);
+
+        ListAuditEntriesResponse expectedResponse = ListAuditEntriesResponse.newBuilder()
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setActorLogin("actorLogin")
+                        .setAction("action")
+                        .setTargetService("targetService")
+                        .setTargetTable("targetTable")
+                        .setTargetId("targetId")
+                        .setReason("reason")
+                        .setRequestId("requestId")
+                        .setCreatedAt(Timestamp.newBuilder()
+                                .setSeconds(Instant.parse("2024-01-01T00:00:00Z").getEpochSecond())
+                                .setNanos(Instant.parse("2024-01-01T00:00:00Z").getNano())
+                                .build())
+                        .build())
+                .setCurrentPage(1)
+                .setPageSize(10)
+                .setTotalRows(1)
+                .setTotalPages(1)
+                .setHasNext(false)
+                .setHasPrev(false)
+                .build();
+
+        Mockito.when(auditLogMapper.toFilterDTO(
+                eq(ACTOR_USER_ID), eq("action"), eq("targetService"),
+                eq("targetTable"), eq("targetId"), eq("requestId"),
+                eq(Instant.parse("2024-01-01T00:00:00Z")),
+                eq(Instant.parse("2024-01-31T23:59:59.999999999Z"))
+        )).thenReturn(filterDTO);
+
+        Mockito.when(adminReadonlyService.listAuditEntries(
+                eq(filterDTO), eq(1), eq(10)
+        )).thenReturn(Mono.just(expectedPageResult));
+
+        Mockito.when(auditLogMapper.toAuditProto(any(PageResult.class)))
+                .thenReturn(expectedResponse);
+
         StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
-                .expectError(NullPointerException.class)
-                .verify();
+                .expectNext(expectedResponse)
+                .verifyComplete();
     }
 
     @Test

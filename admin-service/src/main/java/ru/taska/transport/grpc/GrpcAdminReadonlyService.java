@@ -7,9 +7,15 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.admin.v1.*;
+import ru.taska.dto.FilterAuditDTO;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.exception.DomainException;
-import ru.taska.mapper.*;
+
+import ru.taska.mapper.ListTableRowsMapper;
+import ru.taska.mapper.MetadataCatalogMapper;
+import ru.taska.mapper.OutboxRetryMapper;
+import ru.taska.mapper.ProblematicOutboxEventMapper;
+import ru.taska.mapper.AuditLogMapper;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 import ru.taska.service.OutboxRetryService;
@@ -377,12 +383,20 @@ public class GrpcAdminReadonlyService {
                                     page,
                                     pageSize
                             );
+
+                            FilterAuditDTO filterDTO = auditLogMapper.toFilterDTO(
+                                    actorUserId,
+                                    action,
+                                    targetService,
+                                    targetTable,
+                                    targetId,
+                                    bodyRequestId,
+                                    createdAtFrom,
+                                    createdAtTo
+                            );
+
                             return adminReadonlyService.listAuditEntries(
-                                            auditLogMapper.toFilterDTO(actorUserId, action, targetService,
-                                                    targetTable, targetId, bodyRequestId, createdAtFrom, createdAtTo),
-                                            page,
-                                            pageSize
-                                    )
+                                            filterDTO, page, pageSize)
                                     .doOnSuccess(e ->
                                             log.info("[{}][{}] listAuditEntries: successfully retrieved",
                                                     requestId, nodeId)

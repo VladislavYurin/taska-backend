@@ -20,8 +20,6 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -134,7 +132,6 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         int resolvedPage = normalizePage(page);
         int resolvedPageSize = normalizePageSize(pageSize);
         long resolvedOffset = (long) resolvedPage * resolvedPageSize;
-        int resolvedLimit = resolvedPageSize;
 
         log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, requestId: {}, from: {}, to: {}, page: {}, size: {}",
                 filterAuditDTO.actorUserId(),
@@ -149,21 +146,21 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
                 resolvedPageSize);
 
          return Mono.zip(
-                        auditLogRepository.findByFilter(filterAuditDTO,
-                                        resolvedLimit, resolvedOffset)
-                                .flatMap(this::maskAndMapAuditLog)
-                                .collectList(),
-                        auditLogRepository.countByFilter(filterAuditDTO)
-                )
-                .map(tuple -> {
-                    List<AuditEntriesResponseDto> auditLogs = tuple.getT1();
-                    Long count = tuple.getT2();
+                         auditLogRepository.findByFilter(filterAuditDTO, resolvedPageSize, resolvedOffset)
+                                 .collectList(),  // собираем список
+                         auditLogRepository.countByFilter(filterAuditDTO)
+                 )
+                 .map(tuple -> {
+                     List<AuditLog> auditLogs = tuple.getT1();
+                     Long count = tuple.getT2();
 
-                    log.debug("Found {} audit entries out of {} total", auditLogs.size(), count);
-                    return new PageResult<>(auditLogs,
-                            count,
-                            resolvedPage,
-                            resolvedPageSize);
+
+                     List<AuditEntriesResponseDto> maskedLogs = auditLogs.stream()
+                             .map(this::maskAndMapAuditLog)
+                             .toList();
+
+                     log.debug("Found {} audit entries out of {} total", maskedLogs.size(), count);
+                     return new PageResult<>(maskedLogs, count, resolvedPage, resolvedPageSize);
                 })
                 .onErrorResume(ex -> {
                     log.error("Error fetching audit entries", ex);
@@ -174,53 +171,34 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
     /**
      * Маскирует sensitive-данные в old/new значениях аудит-лога и преобразует в DTO.
      */
-    private Mono<AuditEntriesResponseDto> maskAndMapAuditLog(AuditLog auditLog) {
+    private AuditEntriesResponseDto maskAndMapAuditLog(AuditLog auditLog) {
         Map<String, Object> oldValue = convertJsonNodeToMap(auditLog.getOldValue());
         Map<String, Object> newValue = convertJsonNodeToMap(auditLog.getNewValue());
 
-        // Маскируем oldValue
-        Mono<Map<String, Object>> oldValueMono = oldValue != null
-                ? Mono.just(maskService.maskSensitiveDataForAudit(
+        Map<String, Object> maskedOldValue = oldValue != null
+                ? maskService.maskSensitiveDataForAudit(
                 oldValue,
                 auditLog.getTargetService(),
                 auditLog.getTargetTable(),
                 auditLog.getRequestId(),
                 "audit-log-read"
-        ))
-                : Mono.just(null);
+        )
+                : null;
 
-        // Маскируем newValue
-        Mono<Map<String, Object>> newValueMono = newValue != null
-                ? Mono.just(maskService.maskSensitiveDataForAudit(
+        Map<String, Object> maskedNewValue = newValue != null
+                ? maskService.maskSensitiveDataForAudit(
                 newValue,
                 auditLog.getTargetService(),
                 auditLog.getTargetTable(),
                 auditLog.getRequestId(),
                 "audit-log-read"
-        ))
-                : Mono.just(null);
+        )
+                : null;
 
-        // Объединяем результаты и создаем DTO
-        return Mono.zip(oldValueMono, newValueMono)
-                .map(tuple -> {
-                    Map<String, Object> maskedOldValue = tuple.getT1();
-                    Map<String, Object> maskedNewValue = tuple.getT2();
+        auditLog.setOldValue(convertMapToJsonNode(maskedOldValue));
+        auditLog.setNewValue(convertMapToJsonNode(maskedNewValue));
 
-                    // Обновляем old/new значения
-                    if (maskedOldValue != null) {
-                        auditLog.setOldValue(convertMapToJsonNode(maskedOldValue));
-                    } else {
-                        auditLog.setOldValue(null);
-                    }
-
-                    if (maskedNewValue != null) {
-                        auditLog.setNewValue(convertMapToJsonNode(maskedNewValue));
-                    } else {
-                        auditLog.setNewValue(null);
-                    }
-
-                    return auditLogMapper.toResponseDto(auditLog);
-                });
+        return auditLogMapper.toResponseDto(auditLog);
     }
 
 
@@ -252,8 +230,8 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         if (map == null) {
             return null;
         }
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.valueToTree(map);
+       // ObjectMapper mapper = new ObjectMapper();
+        return objectMapper.valueToTree(map);
     }
 
     private int normalizePage(Integer page) {
