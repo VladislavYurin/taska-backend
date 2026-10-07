@@ -3,7 +3,6 @@ package ru.taska.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
@@ -14,12 +13,12 @@ import ru.taska.repository.UserRepository;
 import java.time.Instant;
 
 /**
- * Управляет состоянием лока аккаунта.
+ * Управляет состоянием LOCKED аккаунта.
  *
  * <p>Единственный источник правды о локе — {@code users.locked_until}.
- * {@link UserStatus#LOCKED} — производное состояние, снимается лениво: при первом
- * обращении к пользователю после истечения окна. Метод {@link #resolveLockState(User)}
- * идемпотентен и безопасен для параллельных вызовов.</p>
+ * {@link UserStatus#LOCKED} — производное состояние, снимается лениво на
+ * write-путях: {@code login} и {@code refresh}.
+ * Read-путь ({@code validateAccessToken}) лок <b>не</b> снимает.</p>
  */
 @Service
 @Slf4j
@@ -27,7 +26,6 @@ import java.time.Instant;
 public class AccountLockService {
 
     private final UserRepository userRepository;
-    private final TransactionalOperator transactionalOperator;
 
     /**
      * Снимает LOCKED, если окно lockedUntil истекло.
@@ -37,7 +35,9 @@ public class AccountLockService {
      *   <li>{@code ACTIVE} — если лок был снят (или его не было);</li>
      *   <li>{@code LOCKED} — если окно ещё активно.</li>
      * </ul>
-     *
+     * <p><b>Вызывается только из транзакционных write-путей</b> ({@code login},
+     * {@code refresh}): сервис не открывает транзакцию сам, атомарность
+     * {@code UPDATE} + {@code SELECT} обеспечивается внешней транзакцией.</p>
      * <p>Не бросает исключений по статусу — решение «пускать или нет» принимает вызывающий.</p>
      *
      * @param user пользователь (может быть устаревшим снимком)
@@ -52,12 +52,10 @@ public class AccountLockService {
             // окно ещё активно — не трогаем
             return Mono.just(user);
         }
-        return transactionalOperator.transactional(
-                userRepository.unlockIfExpired(user.getId())
-                        // UPDATE не сработал: кто-то уже разлочил, либо условие перестало совпадать —
-                        // перечитываем актуальное состояние
-                        .switchIfEmpty(Mono.defer(() -> userRepository.findById(user.getId())))
-                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found")))
-        );
+        return userRepository.unlockIfExpired(user.getId())
+                // UPDATE не сработал: кто-то уже разлочил, либо условие перестало совпадать —
+                // перечитываем актуальное состояние
+                .switchIfEmpty(Mono.defer(() -> userRepository.findById(user.getId())))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found")));
     }
 }

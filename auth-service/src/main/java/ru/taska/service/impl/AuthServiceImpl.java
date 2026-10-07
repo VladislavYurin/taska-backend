@@ -206,7 +206,8 @@ public class AuthServiceImpl implements AuthService {
      *
      * <p>Для {@code LOCKED} access-токен <b>не</b> отзывается: лок — это анти-брутфорс
      * на форме входа, легитимная сессия на другом устройстве не должна страдать.
-     * Лок снимется лениво на ближайшем {@code login} или {@code refresh}.</p>
+     * Метод лок <b>не</b> снимает.
+     * Истёкшее окно снимается на ближайшем {@code login} или {@code refresh}.</p>
      */
     @Override
     public Mono<UserContext> validateAccessToken(String accessToken) {
@@ -242,7 +243,7 @@ public class AuthServiceImpl implements AuthService {
      * <p>Режет только терминальные статусы: {@code BLOCKED} (админский бан) и
      * {@code INVITED} (не завершена активация). {@code LOCKED} не режется — лок
      * это анти-брутфорс формы входа; access-токен легитимной сессии продолжает
-     * работать.
+     * работать.</p>
      */
     private Mono<User> validateUserStatus(User user) {
         return switch (user.getStatus()) {
