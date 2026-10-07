@@ -12,10 +12,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -345,7 +345,7 @@ public class AttachmentTest {
         Mockito.when(storageClient.createPresignedDownloadUrl("key-1")).thenReturn(Mono.just("https://url1"));
         Mockito.when(storageClient.createPresignedDownloadUrl("key-2")).thenReturn(Mono.just("https://url2"));
 
-        StepVerifier.create(attachmentService.listAttachments(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID))
+        StepVerifier.create(attachmentService.listAttachments(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID).collectList())
                 .assertNext(list -> {
                     Assertions.assertEquals(2, list.size());
                     Assertions.assertEquals(attachment1, list.get(0).issueAttachment());
@@ -372,7 +372,7 @@ public class AttachmentTest {
         Mockito.when(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(ISSUE_ID))
                 .thenReturn(Flux.empty());
 
-        StepVerifier.create(attachmentService.listAttachments(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID))
+        StepVerifier.create(attachmentService.listAttachments(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID).collectList())
                 .assertNext(list -> Assertions.assertTrue(list.isEmpty()))
                 .expectComplete()
                 .verify();

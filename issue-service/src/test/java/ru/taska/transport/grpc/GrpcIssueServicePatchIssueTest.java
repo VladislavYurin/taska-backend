@@ -25,15 +25,17 @@ import ru.taska.api.common.v1.NullableInt32;
 import ru.taska.api.common.v1.NullableString;
 import ru.taska.api.issue.v1.PatchIssueRequest;
 import ru.taska.api.issue.v1.PatchIssueRequestBody;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePatch;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.dto.IssuePatch;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.PatchIssueResult;
+import ru.taska.domain.dto.PatchIssueResult;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.IssueDetailsMapper;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
+import ru.taska.service.IssueDetailsService;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
 import ru.taska.service.LabelService;
@@ -82,6 +84,12 @@ class GrpcIssueServicePatchIssueTest {
     @Mock
     private LabelMapper labelMapper;
 
+    @Mock
+    private IssueDetailsService issueDetailsService;
+
+    @Mock
+    private IssueDetailsMapper issueDetailsMapper;
+
     private GrpcIssueService grpcIssueService;
 
     @BeforeEach
@@ -94,7 +102,9 @@ class GrpcIssueServicePatchIssueTest {
                 issuePatchService,
                 new IssueMapper(new ObjectMapper()),
                 labelService,
-                labelMapper
+                labelMapper,
+                issueDetailsService,
+                issueDetailsMapper
         );
     }
 

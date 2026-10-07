@@ -2,8 +2,7 @@ package ru.taska.repository;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.IssueType;
 
 import java.util.List;

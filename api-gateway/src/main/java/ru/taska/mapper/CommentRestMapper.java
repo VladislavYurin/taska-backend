@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class CommentRestMapper {
+    private final UserProfileMapper userProfileMapper;
 
     /**
      * Преобразует gRPC ответ с комментарием в REST DTO.
@@ -43,6 +44,10 @@ public class CommentRestMapper {
         dto.setCreatedAt(toOffsetDateTime(proto.getCreatedAt()));
         dto.setUpdatedAt(toOffsetDateTime(proto.getUpdatedAt()));
         dto.setVersion(proto.getVersion());
+
+        if (proto.hasAuthor()) {
+            dto.setAuthor(userProfileMapper.toUserSummaryDto(proto.getAuthor()));
+        }
 
         return dto;
     }

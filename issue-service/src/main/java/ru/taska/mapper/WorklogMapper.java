@@ -7,7 +7,7 @@ import ru.taska.api.issue.v1.DeleteIssueWorklogResponse;
 import ru.taska.api.issue.v1.ListIssueWorklogsResponse;
 import ru.taska.api.issue.v1.UpdateIssueWorklogResponse;
 import ru.taska.api.issue.v1.WorklogResponse;
-import ru.taska.domain.Worklog;
+import ru.taska.domain.entity.Worklog;
 
 import java.time.Instant;
 import java.util.List;

@@ -10,7 +10,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.IssueType;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.criteria.SearchCriteria;

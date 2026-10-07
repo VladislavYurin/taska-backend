@@ -17,20 +17,20 @@ import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
-import ru.taska.domain.IdempotencyKey;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.IssueLinkViewType;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IdempotencyKey;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.aggregate.IssueLinkViewType;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.PatchIssueResult;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.PatchIssueResult;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.IssueWatchStateDto;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -263,7 +263,7 @@ public class IssueMapper {
     public DeleteIssueLinkResponse toDeleteIssueLinkProto(IssueLink link) {
         return DeleteIssueLinkResponse.newBuilder()
                 .setLinkId(link.getId().toString())
-                .setEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED)
+                .setEventType(ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_DELETED)
                 .build();
     }
 
@@ -320,8 +320,8 @@ public class IssueMapper {
             case ASSIGNED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED;
             case TRANSITIONED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_TRANSITIONED;
             case DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_DELETED;
-            case LINK_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_CREATED;
-            case LINK_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_LINK_EVENT_TYPE_DELETED;
+            case LINK_CREATED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_CREATED;
+            case LINK_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_LINK_DELETED;
             case ATTACHMENT_UPLOADED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED;
             case ATTACHMENT_DELETED -> ru.taska.api.issue.v1.IssueEventType.ISSUE_EVENT_TYPE_ATTACHMENT_DELETED;
 

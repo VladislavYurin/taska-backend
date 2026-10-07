@@ -13,13 +13,13 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
-import ru.taska.domain.labels.IssueLabels;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -222,7 +222,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.addIssueLabelRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -269,7 +269,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.addIssueLabelRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -326,7 +326,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.addIssueLabelRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -426,7 +426,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.removeIssueLabelRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -474,7 +474,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.removeIssueLabelRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -511,7 +511,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listIssueLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));
@@ -553,7 +553,7 @@ class LabelServiceImplTest {
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.listIssueLabelRoles()).thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
 
-        var issue = mock(ru.taska.domain.Issue.class);
+        var issue = mock(ru.taska.domain.entity.Issue.class);
         Mockito.when(issue.getProjectId()).thenReturn(PROJECT_ID);
 
         Mockito.when(issueRepository.findActiveById(any())).thenReturn(Mono.just(issue));

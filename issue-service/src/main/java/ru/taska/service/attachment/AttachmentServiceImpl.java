@@ -3,12 +3,13 @@ package ru.taska.service.attachment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.AttachmentDownloadUrlDto;
-import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.AttachmentDownloadUrlDto;
+import ru.taska.domain.dto.AttachmentDto;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueAttachmentRepository;
@@ -17,7 +18,6 @@ import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -68,7 +68,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     }
 
     @Override
-    public Mono<List<AttachmentDto>> listAttachments(
+    public Flux<AttachmentDto> listAttachments(
             String requestId,
             String nodeId,
             UUID issueId,
@@ -76,11 +76,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     ) {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().viewAttachmentRoles())
-                .then(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
+                .thenMany(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
                         .flatMap(attachment ->
                                 storageClient.createPresignedDownloadUrl(attachment.getObjectKey())
                                         .map(url -> new AttachmentDto(attachment, url)))
-                        .collectList());
+                        );
     }
 
     @Override

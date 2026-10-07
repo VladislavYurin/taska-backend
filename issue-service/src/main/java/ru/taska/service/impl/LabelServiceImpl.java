@@ -4,14 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
-import ru.taska.domain.labels.IssueLabels;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -168,6 +169,23 @@ public class LabelServiceImpl implements LabelService {
                         log.debug("[{}][{}] Found {} labels for project: {}", requestId, nodeId, dto.totalCount(), requestDto.projectId())
                 );
 
+    }
+
+    @Override
+    public Flux<LabelResponses.ProjectLabelInfo> getLabels(
+            String requestId,
+            String nodeId,
+            LabelCommands.ListIssueLabelsRequestDto requestDto
+    ) {
+        log.info(
+                "[{}][{}] Getting issue labels: issueId={}",
+                requestId,
+                nodeId,
+                requestDto.issueId()
+        );
+
+        return issueLabelsRepository.findActiveLabelsByIssueId(requestDto.issueId())
+                .map(mapper::toProjectLabelInfo);
     }
 
     /**
