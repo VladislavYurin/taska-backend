@@ -9,7 +9,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.entity.User;
@@ -37,9 +36,6 @@ class AccountLockServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
-    private TransactionalOperator transactionalOperator;
-
     private AccountLockService accountLockService;
 
     private UUID userId;
@@ -47,12 +43,10 @@ class AccountLockServiceTest {
     @BeforeEach
     void setUp() {
         userId = UUID.randomUUID();
-        Mockito.lenient().when(transactionalOperator.transactional(ArgumentMatchers.any(Mono.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
 
         Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Mono.empty());
 
-        accountLockService = new AccountLockService (userRepository, transactionalOperator);
+        accountLockService = new AccountLockService (userRepository);
     }
 
     private User user(UserStatus status, Instant lockedUntil) {

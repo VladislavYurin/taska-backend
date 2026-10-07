@@ -77,6 +77,27 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 .thenReturn(tokenPair.rawToken));
     }
 
+    /**
+     * Проверяет refresh-токен и, если он валиден, заменяет его.
+     *
+     * <p>Порядок:</p>
+     * <ol>
+     *   <li>найти валидный токен по хэшу (не истёкший, не отозванный);</li>
+     *   <li>загрузить пользователя;</li>
+     *   <li>снять истёкший лок через {@link AccountLockService#resolveLockState(User)}
+     *       — это write-путь, транзакция уже открыта {@code @Transactional};</li>
+     *   <li>проверить статус: {@code BLOCKED}, {@code INVITED}, {@code LOCKED}
+     *       → {@code UNAUTHENTICATED};</li>
+     *   <li>создать новый refresh, пометить старый как заменённый
+     *       ({@code markReplacedIfActive}) — атомарно.</li>
+     * </ol>
+     *
+     * <p>Если любая из проверок падает, старый refresh остаётся валидным:
+     * отказ не должен «сжигать» токен.</p>
+     *
+     * @param rawToken сырой refresh-токен из клиента
+     * @return результат валидации и ротации refresh-токена
+     */
     @Override
     @Transactional
     public Mono<RefreshTokenResponseDto> validateAndRotate(String rawToken) {
