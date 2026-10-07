@@ -20,7 +20,6 @@ import ru.taska.repository.UserRepository;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
