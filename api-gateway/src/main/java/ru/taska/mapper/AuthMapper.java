@@ -23,6 +23,8 @@ import ru.taska.domain.dto.PasswordByTokenRequestDto;
 import ru.taska.domain.dto.RefreshRequestDto;
 import ru.taska.domain.dto.RefreshResponseDto;
 import ru.taska.domain.dto.ValidateAccessTokenResponseDto;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 /**
  * Компонент-маппер для преобразования моделей данных слоя аутентификации.
@@ -155,7 +157,10 @@ public class AuthMapper {
             case USER_STATUS_ACTIVE -> GatewayUserStatus.ACTIVE;
             case USER_STATUS_INVITED -> GatewayUserStatus.INVITED;
             case USER_STATUS_BLOCKED -> GatewayUserStatus.BLOCKED;
-            default -> GatewayUserStatus.UNSPECIFIED;
+            case USER_STATUS_LOCKED -> GatewayUserStatus.LOCKED;
+            case USER_STATUS_UNSPECIFIED -> GatewayUserStatus.UNSPECIFIED;
+            default -> throw new DomainException(DomainStatus.INVALID_ARGUMENT,
+                    "Unknown UserStatus received from Auth service: " + source);
         };
     }
 
@@ -170,7 +175,9 @@ public class AuthMapper {
         return switch (protoGlobalRole) {
             case GLOBAL_ROLE_GLOBAL_ADMIN -> GlobalRole.GLOBAL_ADMIN;
             case GLOBAL_ROLE_USER -> GlobalRole.USER;
-            default -> GlobalRole.UNSPECIFIED;
+            case GLOBAL_ROLE_UNSPECIFIED -> GlobalRole.UNSPECIFIED;
+            default -> throw new DomainException(DomainStatus.INVALID_ARGUMENT,
+                    "Unknown GlobalRole received from Auth service: " + protoGlobalRole);
         };
     }
 }

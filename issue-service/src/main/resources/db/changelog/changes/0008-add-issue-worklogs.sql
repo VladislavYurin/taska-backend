@@ -44,6 +44,9 @@ ALTER TABLE taska.issues
     ADD COLUMN IF NOT EXISTS time_spent_minutes integer NOT NULL DEFAULT 0;
 
 ALTER TABLE taska.issues
+    DROP CONSTRAINT IF EXISTS issues_time_spent_minutes_chk;
+
+ALTER TABLE taska.issues
     ADD CONSTRAINT issues_time_spent_minutes_chk CHECK (time_spent_minutes >= 0);
 
 
