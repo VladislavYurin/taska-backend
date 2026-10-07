@@ -171,6 +171,7 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      RUSTFS_CORS_ALLOWED_ORIGINS: ${STORAGE_CORS_ALLOWED_ORIGINS}
     volumes:
       - rustfs_data:/data
     command: server /data --console-address ":9001"
