@@ -21,10 +21,8 @@ import ru.taska.repository.UserRepository;
 import ru.taska.security.config.JwtProperties;
 import ru.taska.service.AccountLockService;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RefreshTokenServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
-    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
@@ -84,7 +81,7 @@ class RefreshTokenServiceImplTest {
                 .build();
 
         service = new RefreshTokenServiceImpl(
-                refreshTokenRepository, userRepository, jwtProperties, accountLockService, FIXED_CLOCK);
+                refreshTokenRepository, userRepository, jwtProperties, accountLockService);
     }
 
     @Nested

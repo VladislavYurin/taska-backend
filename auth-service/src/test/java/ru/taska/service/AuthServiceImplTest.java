@@ -7,9 +7,7 @@ import ru.taska.event.OutboxEventStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
@@ -93,9 +91,6 @@ class AuthServiceImplTest {
     @Mock
     private AccountLockService accountLockService;
 
-    @Mock
-    private Clock clock;
-
     private UUID testUserId;
     private User testUser;
     private Credential testCredential;
@@ -106,7 +101,7 @@ class AuthServiceImplTest {
     private String testTokenHash;
     private AuthServiceImpl authServiceImpl;
 
-    private final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
+    private final Instant NOW = Instant.now();
 
     @BeforeEach
     void setUp() {
@@ -158,9 +153,6 @@ class AuthServiceImplTest {
         Mockito.lenient().when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
         Mockito.lenient().when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
 
-        Mockito.lenient().when(clock.instant()).thenReturn(NOW);
-        Mockito.lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
-
         authServiceImpl = new AuthServiceImpl(
                 userRepository,
                 credentialRepository,
@@ -174,7 +166,6 @@ class AuthServiceImplTest {
                 passwordValidator,
                 jwtValidator,
                 accountLockService,
-                clock,
                 requiresNewTransactionalOperator
         );
     }
@@ -386,6 +377,7 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                     .thenReturn(Mono.just(testUser));
 
+            Instant before = Instant.now();
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectErrorMatches(e ->
@@ -393,12 +385,17 @@ class AuthServiceImplTest {
                                     && de.getStatus() == DomainStatus.UNAUTHENTICATED
                                     && e.getMessage().equals("Invalid credentials"))
                     .verify();
+            Instant after = Instant.now();
+
+            Duration lock = Duration.ofMinutes(15);
 
             Mockito.verify(credentialRepository).save(testCredential);
             Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(5);
             Assertions.assertThat(testUser.getLockedUntil()).isNotNull();
             Assertions.assertThat(testUser.getStatus()).isEqualTo(UserStatus.LOCKED);
-            Assertions.assertThat(testUser.getLockedUntil()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
+            Assertions.assertThat(testUser.getLockedUntil())
+                    .isAfterOrEqualTo(before.plus(lock))
+                    .isBeforeOrEqualTo(after.plus(lock));
             Mockito.verify(userRepository).save(testUser);
         }
 
@@ -513,15 +510,10 @@ class AuthServiceImplTest {
             Mockito.when(jwtValidator.validate("token")).thenReturn(Mono.just(claims));
             Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(locked));
-            Mockito.when(accountLockService.resolveLockState(locked)).thenReturn(Mono.just(locked));
 
             StepVerifier.create(authServiceImpl.validateAccessToken("token"))
                     .expectNextMatches(ctx -> ctx.getUserId().equals(testUserId.toString()))
                     .verifyComplete();
-
-            // Сервис ВСЕГДА дёргает resolveLockState для LOCKED — на read-path
-            // это способ лениво снять истёкший лок.
-            Mockito.verify(accountLockService).resolveLockState(locked);
         }
 
         @Test
@@ -532,21 +524,14 @@ class AuthServiceImplTest {
                     .status(UserStatus.LOCKED)
                     .lockedUntil(NOW.minusSeconds(60))
                     .build();
-            User refreshed = testUser.toBuilder()
-                    .status(UserStatus.ACTIVE)
-                    .lockedUntil(null)
-                    .build();
 
             Mockito.when(jwtValidator.validate("token")).thenReturn(Mono.just(claims));
             Mockito.when(claims.getSubject()).thenReturn(testUserId.toString());
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(lockedStale));
-            Mockito.when(accountLockService.resolveLockState(lockedStale)).thenReturn(Mono.just(refreshed));
 
             StepVerifier.create(authServiceImpl.validateAccessToken("token"))
                     .expectNextMatches(ctx -> ctx.getUserId().equals(testUserId.toString()))
                     .verifyComplete();
-
-            Mockito.verify(accountLockService).resolveLockState(lockedStale);
         }
     }
 
