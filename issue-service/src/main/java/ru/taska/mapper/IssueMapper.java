@@ -185,8 +185,11 @@ public class IssueMapper {
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
                 .setProjectId(issue.getProjectId().toString())
-                .setStatusKey(issue.getStatusKey())
-                .setProjectKey(issueWithProject.project().key());
+                .setStatusKey(issue.getStatusKey());
+
+        if (issueWithProject.project() != null) {
+            builder.setProjectKey(issueWithProject.project().key());
+        }
 
         if (issue.getStoryPoints() != null) {
             builder.setStoryPoints(issue.getStoryPoints().doubleValue());

@@ -55,7 +55,7 @@ public interface ProjectRepository extends R2dbcRepository<Project, UUID> {
         SELECT p.id AS id,
                p.project_key      AS key,
                p.name     AS name
-        FROM projects p
+        FROM taska.projects p
         WHERE p.id IN (:ids)
         """)
     Flux<ProjectInfo> findProjectInfoByIds(Collection<UUID> ids);
