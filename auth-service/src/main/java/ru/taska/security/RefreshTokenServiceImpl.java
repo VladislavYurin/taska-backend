@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 
@@ -35,7 +34,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final UserRepository userRepository;
     private final JwtProperties jwtProperties;
     private final AccountLockService accountLockService;
-    private final Clock clock;
 
     private static final String HASH_ALGORITHM = "SHA-256";
 
@@ -64,7 +62,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             String rawToken = generateRawToken();
             String tokenHash = hashToken(rawToken); // SHA-256, всегда одинаковый для одного токена
 
-            Instant now = Instant.now(clock);
+            Instant now = Instant.now();
             RefreshToken refreshToken = RefreshToken.builder()
                     .userId(user.getId())
                     .tokenHash(tokenHash)
@@ -86,7 +84,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         log.debug("Validating and rotating refresh token: {}", DataMaskingHelper.maskJwt(tokenHash));
 
-        Instant now = Instant.now(clock);
+        Instant now = Instant.now();
         return refreshTokenRepository.findValidToken(tokenHash, now)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED,
                         "Invalid or expired refresh token")))

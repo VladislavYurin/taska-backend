@@ -34,7 +34,6 @@ import ru.taska.util.JwtValidator;
 import ru.taska.util.PasswordValidator;
 import ru.taska.util.UserStatusMapper;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -74,7 +73,6 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordValidator passwordValidator;
     private final JwtValidator jwtValidator;
     private final AccountLockService accountLockService;
-    private final Clock clock;
 
     /**
      * Транзакционный оператор с propagation REQUIRES_NEW.
@@ -244,9 +242,7 @@ public class AuthServiceImpl implements AuthService {
      * <p>Режет только терминальные статусы: {@code BLOCKED} (админский бан) и
      * {@code INVITED} (не завершена активация). {@code LOCKED} не режется — лок
      * это анти-брутфорс формы входа; access-токен легитимной сессии продолжает
-     * работать. При этом если окно лока истекло, оно снимается лениво через
-     * {@link AccountLockService#resolveLockState(User)}, чтобы статус в БД
-     * устаканивался на read-path.</p>
+     * работать.
      */
     private Mono<User> validateUserStatus(User user) {
         return switch (user.getStatus()) {
@@ -258,9 +254,6 @@ public class AuthServiceImpl implements AuthService {
                 log.warn("User is not activated, userId: {}", user.getId());
                 yield Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "User not found or inactive"));
             }
-            // LOCKED: снимаем лок, если истёк, но не режем доступ, если активен
-            case LOCKED -> accountLockService.resolveLockState(user);
-
             default -> Mono.just(user);
         };
     }
@@ -314,7 +307,7 @@ public class AuthServiceImpl implements AuthService {
     private Mono<Credential> handleFailedAttempt(Credential credential,User user) {
         int newAttempts = credential.getFailedAttempts() + 1;
 
-        Instant now = Instant.now(clock);
+        Instant now = Instant.now();
 
         boolean shouldLock = newAttempts >= securityProperties.getMaxFailedAttempts();
 

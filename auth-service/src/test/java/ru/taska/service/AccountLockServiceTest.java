@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,8 +33,7 @@ import java.util.UUID;
 @DisplayName("AccountLockService Unit Tests")
 class AccountLockServiceTest {
 
-    private static final Instant NOW = Instant.parse("2026-01-01T12:00:00Z");
-    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final Instant NOW = Instant.now();
 
     @Mock
     private UserRepository userRepository;
@@ -43,7 +41,6 @@ class AccountLockServiceTest {
     @Mock
     private TransactionalOperator transactionalOperator;
 
-    @InjectMocks
     private AccountLockService accountLockService;
 
     private UUID userId;
@@ -56,7 +53,7 @@ class AccountLockServiceTest {
 
         Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Mono.empty());
 
-        accountLockService = new AccountLockService(FIXED_CLOCK, userRepository, transactionalOperator);
+        accountLockService = new AccountLockService (userRepository, transactionalOperator);
     }
 
     private User user(UserStatus status, Instant lockedUntil) {

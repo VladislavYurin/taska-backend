@@ -11,7 +11,6 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserRepository;
 
-import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -27,7 +26,6 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class AccountLockService {
 
-    private final Clock clock;
     private final UserRepository userRepository;
     private final TransactionalOperator transactionalOperator;
 
@@ -50,7 +48,7 @@ public class AccountLockService {
             return Mono.just(user);
         }
         Instant until = user.getLockedUntil();
-        if (until != null && until.isAfter(Instant.now(clock))) {
+        if (until != null && until.isAfter(Instant.now())) {
             // окно ещё активно — не трогаем
             return Mono.just(user);
         }
