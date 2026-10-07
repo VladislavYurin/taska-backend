@@ -17,15 +17,13 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserRepository;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * Unit-тесты {@link AccountLockService}.
  *
- * <p>Проверяют ленивое снятие лока: единственный источник правды — {@code users.locked_until}.
- * Тесты детерминированы за счёт {@link Clock#fixed}.</p>
+ * <p>Проверяют ленивое снятие лока: единственный источник правды — {@code users.locked_until}.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("AccountLockService Unit Tests")
