@@ -537,7 +537,20 @@ public class IssueServiceImpl implements IssueService {
   };
 
 
-    private @NonNull Mono<PageResult<Issue>> searchIssuePage(String requestId, String nodeId, UUID actorUserId, String query, UUID projectId, String statusKey, UUID assigneeId, UUID reporterId, IssuePriority priority, IssueType issueType, Integer page, Integer pageSize) {
+    private @NonNull Mono<PageResult<Issue>> searchIssuePage(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            String query,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            Integer page,
+            Integer pageSize
+    ) {
         int resolvedPage = validatePage(page);
         int resolvedPageSize = validatePageSize(pageSize);
         long offset = (long) resolvedPage * resolvedPageSize;
@@ -804,10 +817,6 @@ public class IssueServiceImpl implements IssueService {
             String nodeId,
             PageResult<Issue> pageResult
     ) {
-        if (pageResult.items().isEmpty()) {
-            return Mono.just(PageResult.empty());
-        }
-
         Set<UUID> projectIds = extractProjectIds(pageResult);
 
         if (projectIds.isEmpty()) {

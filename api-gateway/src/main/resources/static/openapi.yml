@@ -2847,7 +2847,7 @@ components:
 
     IssueShortResponseDto:
       type: object
-      required: [id, issueKey, summary, issueType, priority, assigneeId, projectId, projectKey, statusKey]
+      required: [id, issueKey, summary, issueType, priority, assigneeId, statusKey]
       properties:
         id:
           type: string
@@ -2870,8 +2870,6 @@ components:
           type: string
         projectKey:
           type: string
-          minLength: 1
-          pattern: '^[\x21-\x7E]+$'
         statusKey:
           type: string
 

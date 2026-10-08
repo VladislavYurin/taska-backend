@@ -17,6 +17,7 @@ import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
+import ru.taska.domain.dto.ProjectInfo;
 import ru.taska.domain.entity.IdempotencyKey;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssueEventType;
@@ -184,11 +185,12 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .setProjectId(issue.getProjectId().toString())
                 .setStatusKey(issue.getStatusKey());
 
-        if (issueWithProject.project() != null) {
-            builder.setProjectKey(issueWithProject.project().key());
+        ProjectInfo projectInfo = issueWithProject.project();
+        if (projectInfo != null) {
+            builder.setProjectKey(projectInfo.key());
+            builder.setProjectId(projectInfo.id());
         }
 
         if (issue.getStoryPoints() != null) {
