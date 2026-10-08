@@ -361,11 +361,10 @@ public class SensitiveDataMaskService {
                     requestId, nodeId, sensitiveColumns.keySet(), serviceKey, tableName);
         }
         if (!sensitiveJsonFields.isEmpty()) {
-            log.info("[{}][{}] Masking sensitive JSON fields in audit data for table {}.{}",
+            log.info("[{}][{}] Masking sensitive JSON fields {} in audit data for table {}.{}",
                     requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
         }
-
-
         return maskRow(rowMap, sensitiveColumns, sensitiveJsonFields);
     }
+
 }
