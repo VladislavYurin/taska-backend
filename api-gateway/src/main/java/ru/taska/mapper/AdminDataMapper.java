@@ -1,18 +1,47 @@
 package ru.taska.mapper;
 
 import org.springframework.stereotype.Component;
-import ru.taska.api.admin.v1.*;
-import ru.taska.domain.dto.*;
 
-import java.util.*;
+import ru.taska.api.admin.v1.ColumnMetadata;
+import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
+import ru.taska.api.admin.v1.ListAuditEntriesResponse;
+import ru.taska.api.admin.v1.ListAuditEntry;
+import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.api.admin.v1.ProblematicEventCountsByService;
+import ru.taska.api.admin.v1.RetryOutboxEventResponse;
+import ru.taska.api.admin.v1.Row;
+import ru.taska.api.admin.v1.ServiceMetadata;
+import ru.taska.api.admin.v1.TableMetadata;
+import ru.taska.api.admin.v1.Value;
+
+
+
 
 import com.google.protobuf.Timestamp;
+import ru.taska.domain.dto.AuditEntryDto;
+import ru.taska.domain.dto.ColumnMetadataDto;
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
+import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.PaginationInfoDto;
+import ru.taska.domain.dto.ProblematicEventCountsByServiceDto;
 import ru.taska.domain.dto.ProblematicOutboxEventDto;
-import tools.jackson.core.type.TypeReference;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
+import ru.taska.domain.dto.ServiceMetadataDto;
+import ru.taska.domain.dto.TableCapabilitiesDto;
+import ru.taska.domain.dto.TableMetadataDto;
+
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**

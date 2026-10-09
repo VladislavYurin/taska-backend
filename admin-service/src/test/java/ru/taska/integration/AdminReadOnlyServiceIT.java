@@ -4,7 +4,13 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
-import ru.taska.dto.*;
+
+import ru.taska.dto.AuditEntriesResponseDto;
+import ru.taska.dto.FilterAuditDTO;
+import ru.taska.dto.GetTableRowByIdRequestDto;
+import ru.taska.dto.ListTableRowsRequestDto;
+import ru.taska.dto.ServiceDto;
+import ru.taska.dto.TableDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.service.AdminReadonlyService;
@@ -167,6 +173,4 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 })
                 .verifyComplete();
     }
-
-
 }

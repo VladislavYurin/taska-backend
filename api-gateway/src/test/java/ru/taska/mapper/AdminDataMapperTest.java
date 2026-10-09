@@ -7,7 +7,21 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import com.google.protobuf.Timestamp;
-import ru.taska.api.admin.v1.*;
+
+import ru.taska.api.admin.v1.Catalog;
+import ru.taska.api.admin.v1.ColumnMetadata;
+import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
+import ru.taska.api.admin.v1.ListAuditEntriesResponse;
+import ru.taska.api.admin.v1.ListAuditEntry;
+import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.api.admin.v1.MetaInfo;
+import ru.taska.api.admin.v1.PaginationInfo;
+import ru.taska.api.admin.v1.ProblematicEventCountsByService;
+import ru.taska.api.admin.v1.Row;
+import ru.taska.api.admin.v1.ServiceMetadata;
+import ru.taska.api.admin.v1.TableMetadata;
+import ru.taska.api.admin.v1.Value;
 import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 
 import java.time.Instant;

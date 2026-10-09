@@ -7,7 +7,16 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
-import ru.taska.domain.dto.*;
+
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
+import ru.taska.domain.dto.MetadataResponse;
+import ru.taska.domain.dto.OutboxServiceTypeDto;
+import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
+import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
+import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
+import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
 

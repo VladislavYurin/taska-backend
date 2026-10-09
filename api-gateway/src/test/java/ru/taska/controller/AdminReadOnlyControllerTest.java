@@ -28,7 +28,8 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
-import ru.taska.domain.dto.*;
+
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;

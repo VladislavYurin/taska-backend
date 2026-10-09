@@ -12,7 +12,17 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.admin.v1.*;
+
+import ru.taska.api.admin.v1.Catalog;
+import ru.taska.api.admin.v1.GetCatalogRequest;
+import ru.taska.api.admin.v1.GetCatalogResponse;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
+import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
+import ru.taska.api.admin.v1.ListAuditEntriesRequest;
+import ru.taska.api.admin.v1.ListAuditEntriesResponse;
+import ru.taska.api.admin.v1.ListTableRowsRequest;
+import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.ListAuditEntriesResponseDto;
