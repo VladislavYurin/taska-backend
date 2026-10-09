@@ -104,7 +104,7 @@ public class Worklog {
             this.workDate = newWorkDate;
         }
         if (newComment != null) {
-            this.comment = newComment;
+            this.comment = newComment.isBlank() ? null : newComment;
         }
 
         touch();

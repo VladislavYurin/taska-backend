@@ -1042,6 +1042,184 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  # ============ API для worklogs ============
+  /api/v1/projects/{projectId}/issues/{issueId}/worklogs:
+    get:
+      summary: Получение списка worklogs задачи
+      operationId: listIssueWorklogs
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Worklogs задачи получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueWorklogsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      summary: Добавление worklog к задаче
+      operationId: addIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueWorklogRequestDto'
+      responses:
+        '201':
+          description: Worklog добавлен к задаче
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWorklogResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/worklogs/{worklogId}:
+    put:
+      summary: Обновление worklog
+      operationId: updateIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: worklogId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssueWorklogRequestDto'
+      responses:
+        '200':
+          description: Worklog обновлён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWorklogResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление worklog
+      operationId: deleteIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: worklogId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Worklog удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
   # ============ API для issue attachments ============
   /api/v1/projects/{projectId}/issues/{issueId}/attachments:
     get:
@@ -3886,6 +4064,86 @@ components:
           nullable: true
 
     # ======= конец dto для attachments =========
+
+    IssueWorklogResponseDto:
+      type: object
+      required: [id, issueId, projectId, authorUserId, spentMinutes, workDate, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        authorUserId:
+          type: string
+          format: uuid
+        spentMinutes:
+          type: integer
+          format: int32
+        workDate:
+          type: string
+          format: date
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ListIssueWorklogsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueWorklogResponseDto'
+
+    AddIssueWorklogRequestDto:
+      type: object
+      required: [ spentMinutes, workDate ]
+      properties:
+        spentMinutes:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Затраченное время в минутах
+          example: 120
+        workDate:
+          type: string
+          format: date
+          description: Дата, за которую списывается время
+          example: "2026-07-13"
+        comment:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Комментарий к worklog
+          example: "Implemented validation"
+
+    UpdateIssueWorklogRequestDto:
+      type: object
+      properties:
+        spentMinutes:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Затраченное время в минутах
+        workDate:
+          type: string
+          format: date
+          description: Дата, за которую списывается время
+        comment:
+          type: string
+          description: Новый комментарий. Если не передан, не меняется
 
     ProblematicOutboxEventsSummaryResponseDto:
       type: object
