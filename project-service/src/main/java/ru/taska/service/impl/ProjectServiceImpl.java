@@ -35,7 +35,6 @@ import tools.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -194,12 +193,12 @@ public class ProjectServiceImpl implements ProjectService {
                                         return Mono.just(List.of());
                                     });
 
-                    return Mono.zip(membersMono, labelsMono, workflowsMono)
+                    return Mono.zip(labelsMono,workflowsMono, membersMono)
                             .map(tuple -> new ProjectContextDto(
                                     projectDto,
-                                    tuple.getT2(),   // labels
-                                    tuple.getT3(),   // workflows
-                                    tuple.getT1()    // members
+                                    tuple.getT1(),   // labels
+                                    tuple.getT2(),   // workflows
+                                    tuple.getT3()    // members
                             ));
                 });
     }

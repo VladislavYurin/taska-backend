@@ -81,10 +81,78 @@ public interface ProjectMapper {
 
     ProjectShortInfo toProto(ProjectInfo domain);
 
-    /// ───────── ProjectMemberDetailsDto → ProjectMemberDetailsResponse ─────────
-    /// Реализацию MapStruct сгенерирует через uses = {ProjectMemberMapper.class}
+    /**
+     * Маппинг {@link ProjectMemberDetailsDto} → {@link ProjectMemberDetailsResponse}.
+     *
+     * <p>Реализация генерируется MapStruct через {@code uses = ProjectMemberMapper.class}.</p>
+     *
+     * @param dto DTO участника проекта
+     * @return gRPC-ответ с данными участника
+     */
     ProjectMemberDetailsResponse toProjectMemberResponse(ProjectMemberDetailsDto dto);
 
+    /**
+     * Маппинг {@link ProjectLabelDto} → {@link ProjectLabelResponse}.
+     *
+     * <p>Поле {@code id} типа {@link UUID} конвертируется в {@code String}
+     * через {@link #mapUuidToString(UUID)} — MapStruct подхватывает
+     * {@code default}-метод автоматически.</p>
+     *
+     * @param dto DTO метки проекта
+     * @return gRPC-ответ с данными метки
+     */
+    ProjectLabelResponse toProjectLabelResponse(ProjectLabelDto dto);
+
+    /**
+     * Маппинг {@link ProjectWorkflowDto} → {@link ProjectWorkflowEntryResponse}.
+     *
+     * <p>Вложенный {@code workflow} мапится через
+     * {@link #toWorkflowDataResponse(WorkflowDto)} — MapStruct вызывает
+     * его автоматически.</p>
+     *
+     * @param dto DTO workflow, привязанного к типу задачи
+     * @return gRPC-ответ с записью workflow
+     */
+    ProjectWorkflowEntryResponse toProjectWorkflowResponse(ProjectWorkflowDto dto);
+
+    /**
+     * Маппинг {@link WorkflowDto} → {@link WorkflowDataResponse}.
+     *
+     * <p>Списки {@code statuses} и {@code transitions} мапятся через
+     * {@link #toWorkflowStatusResponse(WorkflowStatusDto)} и
+     * {@link #toWorkflowTransitionResponse(WorkflowTransitionDto)}
+     * соответственно. Поля {@code createdAt}/{@code updatedAt} конвертируются
+     * через {@link #mapInstantToTimestamp(Instant)}.</p>
+     *
+     * @param dto DTO workflow с версией, статусами и переходами
+     * @return gRPC-ответ с полными данными workflow
+     */
+    WorkflowDataResponse toWorkflowDataResponse(WorkflowDto dto);
+
+    /**
+     * Маппинг {@link WorkflowStatusDto} → {@link WorkflowStatusResponse}.
+     *
+     * @param dto DTO статуса workflow
+     * @return gRPC-ответ с данными статуса
+     */
+    WorkflowStatusResponse toWorkflowStatusResponse(WorkflowStatusDto dto);
+
+    /**
+     * Маппинг {@link WorkflowTransitionDto} → {@link WorkflowTransitionResponse}.
+     *
+     * @param dto DTO перехода между статусами workflow
+     * @return gRPC-ответ с данными перехода
+     */
+    WorkflowTransitionResponse toWorkflowTransitionResponse(WorkflowTransitionDto dto);
+
+
+    /**
+     * Сборка агрегированного ответа {@link ProjectContextResponse} из
+     * {@link ProjectContextDto}.
+     *
+     * @param dto агрегированный DTO контекста проекта (проект, участники, метки, workflow)
+     * @return gRPC-ответ с полным контекстом проекта
+     */
     default ProjectContextResponse toProjectContextResponse(ProjectContextDto dto) {
         ProjectContextResponse.Builder builder = ProjectContextResponse.newBuilder()
                 .setProject(toProjectResponse(dto.project()));
@@ -118,54 +186,6 @@ public interface ProjectMapper {
                 .build();
     }
 
-    default ProjectLabelResponse toProjectLabelResponse(ProjectLabelDto dto) {
-        return ProjectLabelResponse.newBuilder()
-                .setId(mapUuidToString(dto.id()))
-                .setName(dto.name())
-                .setColor(dto.color())
-                .build();
-    }
-
-    default ProjectWorkflowEntryResponse toProjectWorkflowResponse(ProjectWorkflowDto dto) {
-        return ProjectWorkflowEntryResponse.newBuilder()
-                .setIssueType(dto.issueType())
-                .setWorkflow(toWorkflowDataResponse(dto.workflow()))
-                .build();
-    }
-
-    default WorkflowDataResponse toWorkflowDataResponse(WorkflowDto dto) {
-        WorkflowDataResponse.Builder builder = WorkflowDataResponse.newBuilder()
-                .setId(dto.id())
-                .setName(dto.name())
-                .setVersion(dto.version())
-                .setCreatedAt(mapInstantToTimestamp(dto.createdAt()))
-                .setUpdatedAt(mapInstantToTimestamp(dto.updatedAt()));
-
-        dto.statuses().forEach(s -> builder.addStatuses(toWorkflowStatusResponse(s)));
-        dto.transitions().forEach(t -> builder.addTransitions(toWorkflowTransitionResponse(t)));
-
-        return builder.build();
-    }
-
-    default WorkflowStatusResponse toWorkflowStatusResponse(WorkflowStatusDto dto) {
-        return WorkflowStatusResponse.newBuilder()
-                .setId(dto.id())
-                .setStatusKey(dto.statusKey())
-                .setName(dto.name())
-                .setCategory(dto.category())
-                .setSortOrder(dto.sortOrder())
-                .build();
-    }
-
-    default WorkflowTransitionResponse toWorkflowTransitionResponse(WorkflowTransitionDto dto) {
-        return WorkflowTransitionResponse.newBuilder()
-                .setId(dto.id())
-                .setFromStatusId(dto.fromStatusId())
-                .setToStatusId(dto.toStatusId())
-                .setName(dto.name())
-                .setSortOrder(dto.sortOrder())
-                .build();
-    }
     default GlobalRole toGlobalRole(GlobalRoleProto proto){
         if (proto == null) {
             return GlobalRole.USER;
