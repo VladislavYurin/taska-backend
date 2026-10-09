@@ -21,7 +21,8 @@ jobs:
     if: >-
       vars.AI_REVIEW_ENABLED == 'true' &&
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.labels.*.name, 'ai-review:skip')
     env:
       AI_REVIEW_PROVIDER: ${{ vars.AI_REVIEW_PROVIDER || 'openai' }}
 
@@ -50,9 +51,29 @@ jobs:
               ;;
           esac
 
+      # Collects what the model needs to avoid repeating itself: the commit the
+      # previous review covered, earlier AI threads with their resolve status,
+      # and the Jira issue referenced by the PR title or branch.
+      - name: Prepare review context
+        id: context
+        uses: actions/github-script@v7
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_USERNAME: ${{ vars.JIRA_USERNAME }}
+          JIRA_PROJECT_KEYS: ${{ vars.JIRA_PROJECT_KEYS || 'TAS' }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+          AI_REVIEW_JIRA_IN_PUBLIC_REPO: ${{ vars.AI_REVIEW_JIRA_IN_PUBLIC_REPO }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const prepareReviewContext = require('./.github/codex/scripts/review-context.js');
+            await prepareReviewContext({ github, context, core });
+
       - name: Run Codex review
         id: run_codex
-        if: env.AI_REVIEW_PROVIDER == 'openai'
+        if: steps.context.outputs.skip != 'true' && env.AI_REVIEW_PROVIDER == 'openai'
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -68,7 +89,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
 
       - name: Run DeepSeek review
-        if: env.AI_REVIEW_PROVIDER == 'deepseek'
+        if: steps.context.outputs.skip != 'true' && env.AI_REVIEW_PROVIDER == 'deepseek'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
@@ -81,11 +102,15 @@ jobs:
         run: bash .github/codex/scripts/deepseek-pr-review.sh
 
       - name: Post or update PR review comment
+        if: steps.context.outputs.skip != 'true'
         uses: actions/github-script@v7
         env:
           REVIEW_PROVIDER: ${{ env.AI_REVIEW_PROVIDER }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AI_REVIEW_INLINE_MIN_SEVERITY: ${{ vars.AI_REVIEW_INLINE_MIN_SEVERITY || 'medium' }}
+          AI_REVIEW_MAX_INLINE: ${{ vars.AI_REVIEW_MAX_INLINE || '8' }}
+          AI_REVIEW_AUTO_RESOLVE: ${{ vars.AI_REVIEW_AUTO_RESOLVE || 'false' }}
         with:
           github-token: ${{ github.token }}
           script: |
