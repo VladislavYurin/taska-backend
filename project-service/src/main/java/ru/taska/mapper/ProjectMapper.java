@@ -8,10 +8,13 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ReportingPolicy;
 import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.ProjectShortInfo;
 import ru.taska.domain.Project;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.projection.ProjectInfo;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING,
@@ -77,4 +80,8 @@ public interface ProjectMapper {
     @Mapping(target = "updatedAt", source = "updated_at")
     @Mapping(target = "archivedAt", source = "archived_at")
     Project toProject(ProjectCheckMembershipDto dto);
+
+    Map<String, ProjectShortInfo> toProtoMap(Map<UUID, ProjectInfo> uuidProjectInfoMap);
+
+    ProjectShortInfo toProto(ProjectInfo domain);
 }

@@ -1,5 +1,6 @@
 package ru.taska.transport.grpc;
 
+import java.util.List;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,8 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -280,5 +283,38 @@ public class GrpcProjectService {
                 .map(projectMemberMapper::toProjectMemberResponse)
                 .collectList()
                 .map(p -> ListProjectMemberResponse.newBuilder().addAllMembers(p).build());
+    }
+
+    public Mono<GetProjectInfoBatchInternalResponse> getProjectInfoBatchInternal(Mono<GetProjectInfoBatchInternalRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidListOrInvalidArgument(
+                                req.getBody().getProjectIdsList(), "body.projectIds")
+                ))
+                .flatMap(t -> {
+                    String requestId = t.getT1();
+                    String nodeId = t.getT2();
+                    List<UUID> projectIds = t.getT3();
+
+                    log.info("[{}][{}] GetProjectInfoBatchInternal request for projectId={}", requestId, nodeId, projectIds);
+
+                    if (projectIds.isEmpty()) {
+                        return Mono.just(GetProjectInfoBatchInternalResponse.getDefaultInstance());
+                    }
+
+                    return projectService.getProjectInfoByIds(projectIds)
+                            .map(projectMapper::toProtoMap)
+                            .map(projectInfoMap -> GetProjectInfoBatchInternalResponse.newBuilder()
+                                    .putAllProjects(projectInfoMap)
+                                    .build())
+                            .doOnSuccess(response -> log.debug("[{}][{}] GetProjectInfoBatchInternal success for projectId={}",
+                                    requestId, nodeId, projectIds))
+                            .doOnError(error -> log.warn("[{}][{}] GetProjectInfoBatchInternal failed for projectId={}: {}",
+                                    requestId, nodeId, projectIds, error.getMessage()));
+                });
     }
 }

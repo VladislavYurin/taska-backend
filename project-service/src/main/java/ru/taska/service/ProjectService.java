@@ -4,7 +4,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.Project;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.projection.ProjectInfo;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface ProjectService {
@@ -45,4 +48,6 @@ public interface ProjectService {
      * @return Mono с ключом проекта
      */
     Mono<String> getProjectKeyByIdInternal(UUID projectId);
+
+    Mono<Map<UUID, ProjectInfo>> getProjectInfoByIds(List<UUID> projectIds);
 }

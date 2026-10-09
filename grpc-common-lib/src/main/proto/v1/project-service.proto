@@ -63,6 +63,12 @@ service ProjectService {
    * Используется только сервисами, которые уже проверили права.
    */
   rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
+
+  /**
+   * Внутренний метод. Возвращает информацию по списку ID проектов без проверки прав.
+   * Используется сервисами, которые уже проверили права.
+   */
+  rpc GetProjectInfoBatchInternal (GetProjectInfoBatchInternalRequest) returns (GetProjectInfoBatchInternalResponse);
 }
 
 message CreateProjectRequest {
@@ -232,6 +238,43 @@ message ProjectKeyResponse {
    * Ключ-название проекта
    */
   string project_key = 1;
+}
+
+message GetProjectInfoBatchInternalRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectInfoBatchInternalRequestBody body = 2;
+}
+
+message GetProjectInfoBatchInternalRequestBody {
+  /**
+   * Список уникальных идентификаторов проектов.
+   */
+  repeated string project_ids = 1;
+}
+
+message GetProjectInfoBatchInternalResponse {
+  /**
+   * Отображение ID проекта -> краткая информация о проекте.
+   * Ключ Map: project_id (String)
+   */
+  map<string, ProjectShortInfo> projects = 1;
+}
+
+message ProjectShortInfo {
+  /**
+   * Идентификатор проекта
+   */
+  string id = 1;
+
+  /**
+   * Ключ-название проекта
+   */
+  string key = 2;
+
+  /**
+   * Полное наименование проекта (опционально, заложено на будущее)
+   */
+  string name = 3;
 }
 
 message GetListProjectMemberRequest {

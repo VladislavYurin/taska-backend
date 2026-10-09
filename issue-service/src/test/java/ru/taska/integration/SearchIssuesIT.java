@@ -10,19 +10,26 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
 import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.api.project.v1.ProjectShortInfo;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueService;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
 class SearchIssuesIT extends AbstractIT {
 
+    public static final String PROJECT_KEY_1 = "PRJ1";
+    public static final String PROJECT_KEY_2 = "PRJ2";
     @MockitoBean
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
 
@@ -101,11 +108,34 @@ class SearchIssuesIT extends AbstractIT {
                 .build();
     }
 
+    private void mockGrpcProjectInfoResponse(ProjectShortInfo... projects) {
+        GetProjectInfoBatchInternalResponse.Builder response;
+        response = GetProjectInfoBatchInternalResponse.newBuilder();
+        Arrays.stream(projects)
+                .forEach(project -> response.putProjects(project.getId(), project));
+
+        Mockito.when(projectServiceStub.getProjectInfoBatchInternal( Mockito.any(GetProjectInfoBatchInternalRequest.class)))
+                .thenReturn(Mono.just(response.build()));
+    }
+
+    private ProjectShortInfo projectInfo(UUID projectId, String key, String name) {
+        return ProjectShortInfo.newBuilder()
+                .setId(projectId.toString())
+                .setKey(key)
+                .setName(name)
+                .build();
+    }
+
     // ==================== ТЕСТЫ ====================
 
     @Test
     void shouldSearchIssuesByQueryOnly() {
         String searchQuery = "документ";
+
+        mockGrpcProjectInfoResponse(
+                projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"),
+                projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2")
+        );
 
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
@@ -122,12 +152,15 @@ class SearchIssuesIT extends AbstractIT {
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(3);
                     Assertions.assertThat(result.items())
-                            .extracting(Issue::getSummary)
+                            .extracting(item -> item.issue().getSummary())
                             .containsExactlyInAnyOrder(
                                     "Создать документацию",
                                     "Документация обновлена",
                                     "Документация API завершена"
                             );
+                    Assertions.assertThat(result.items())
+                            .extracting(item -> item.project().key())
+                            .containsExactlyInAnyOrder(PROJECT_KEY_1, PROJECT_KEY_2, PROJECT_KEY_1);
                 })
                 .verifyComplete();
     }
@@ -135,6 +168,8 @@ class SearchIssuesIT extends AbstractIT {
     @Test
     void shouldSearchIssuesByQueryAndProjectId() {
         String searchQuery = "документ";
+
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
 
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
@@ -151,19 +186,24 @@ class SearchIssuesIT extends AbstractIT {
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
                     Assertions.assertThat(result.items())
-                            .extracting(Issue::getSummary)
+                            .extracting(item -> item.issue().getSummary())
                             .containsExactlyInAnyOrder(
                                     "Создать документацию",
                                     "Документация обновлена"
                             );
                     Assertions.assertThat(result.items())
-                            .allMatch(issue -> issue.getProjectId().equals(PROJECT_ID_1));
+                            .allMatch(issue -> issue.issue().getProjectId().equals(PROJECT_ID_1));
+                    Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::project)
+                            .allMatch(project -> project.key().equals(PROJECT_KEY_1));
                 })
                 .verifyComplete();
     }
 
     @Test
     void shouldSearchIssuesByProjectIdOnly() {
+        mockGrpcProjectInfoResponse( projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
                         null,                  // query
@@ -179,16 +219,21 @@ class SearchIssuesIT extends AbstractIT {
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items())
-                            .extracting(Issue::getIssueNumber)
+                            .extracting(item -> item.issue().getIssueNumber())
                             .containsExactlyInAnyOrder(1, 2, 3, 4);
                     Assertions.assertThat(result.items())
-                            .allMatch(issue -> issue.getProjectId().equals(PROJECT_ID_1));
+                            .allMatch(issue -> issue.issue().getProjectId().equals(PROJECT_ID_1));
+                    Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::project)
+                            .allMatch(project -> project.key().equals(PROJECT_KEY_1));
                 })
                 .verifyComplete();
     }
 
     @Test
     void shouldSearchIssuesByProjectIdAndPriority() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
                         null,                  // query
@@ -204,12 +249,17 @@ class SearchIssuesIT extends AbstractIT {
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(2);
                     Assertions.assertThat(result.items())
-                            .extracting(Issue::getIssueNumber)
+                            .extracting(item -> item.issue().getIssueNumber())
                             .containsExactlyInAnyOrder(1, 3);
                     Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::issue)
                             .allMatch(issue -> issue.getPriority() == IssuePriority.HIGH);
                     Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::issue)
                             .allMatch(issue -> issue.getProjectId().equals(PROJECT_ID_1));
+                    Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::project)
+                            .allMatch(project -> project.key().equals(PROJECT_KEY_1));
                 })
                 .verifyComplete();
     }
@@ -217,6 +267,11 @@ class SearchIssuesIT extends AbstractIT {
     @Test
     void shouldSearchIssuesByQueryOnlyWithPagination() {
         String searchQuery = "документ";
+
+        mockGrpcProjectInfoResponse(
+                projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"),
+                projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2")
+        );
 
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
@@ -233,12 +288,17 @@ class SearchIssuesIT extends AbstractIT {
                 .assertNext(result -> {
                     Assertions.assertThat(result.totalCount()).isEqualTo(3);
                     Assertions.assertThat(result.items()).hasSize(2);
+                    Assertions.assertThat(result.items())
+                            .extracting(item -> item.project().key())
+                            .containsExactlyInAnyOrder(PROJECT_KEY_1, PROJECT_KEY_2);
                 })
                 .verifyComplete();
     }
 
     @Test
     void shouldSearchIssuesByProjectIdOnlyWithPagination() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
         StepVerifier.create(issueService.searchIssues(
                         REQUEST_ID, NODE_ID, ACTOR_USER_ID,
                         null,                  // query
@@ -255,7 +315,11 @@ class SearchIssuesIT extends AbstractIT {
                     Assertions.assertThat(result.totalCount()).isEqualTo(4);
                     Assertions.assertThat(result.items()).hasSize(2);
                     Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::issue)
                             .allMatch(issue -> issue.getProjectId().equals(PROJECT_ID_1));
+                    Assertions.assertThat(result.items())
+                            .extracting(IssueWithProject::project)
+                            .allMatch(project -> project.key().equals(PROJECT_KEY_1));
                 })
                 .verifyComplete();
     }

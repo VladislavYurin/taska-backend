@@ -17,6 +17,7 @@ import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
 import ru.taska.api.issue.v1.DeleteIssueLinkResponse;
 import ru.taska.api.workflow.v1.IssueValidateSnapshot;
+import ru.taska.domain.dto.ProjectInfo;
 import ru.taska.domain.entity.IdempotencyKey;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssueEventType;
@@ -29,6 +30,7 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.IssueWithHistory;
 import ru.taska.domain.dto.PatchIssueResult;
 import ru.taska.domain.dto.ProjectRole;
+import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.IssueWatchStateDto;
 import ru.taska.domain.entity.ProjectLabels;
 import tools.jackson.databind.ObjectMapper;
@@ -173,14 +175,23 @@ public class IssueMapper {
         return builder.build();
     }
 
-    public IssueShortResponse toIssueShortProto(Issue issue) {
+    public IssueShortResponse toIssueShortProto(IssueWithProject issueWithProject) {
+        Issue issue = issueWithProject.issue();
+
         IssueShortResponse.Builder builder = IssueShortResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
-                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "");
+                .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
+                .setStatusKey(issue.getStatusKey());
+
+        ProjectInfo projectInfo = issueWithProject.project();
+        if (projectInfo != null) {
+            builder.setProjectKey(projectInfo.key());
+            builder.setProjectId(projectInfo.id());
+        }
 
         if (issue.getStoryPoints() != null) {
             builder.setStoryPoints(issue.getStoryPoints().doubleValue());

@@ -2,12 +2,16 @@ package ru.taska.transport.grpc.project;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleRequestBody;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequestBody;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequestBody;
 import ru.taska.api.project.v1.ProjectKeyResponse;
@@ -16,8 +20,14 @@ import ru.taska.api.project.v1.ListMyProjectsRequestBody;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
+import ru.taska.domain.dto.ProjectInfo;
+import ru.taska.mapper.ProjectClientMapper;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -26,6 +36,7 @@ import java.util.UUID;
 public class GrpcProjectServiceClient {
 
     private final ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
+    private final ProjectClientMapper projectClientMapper;
 
     public Mono<CheckProjectMemberRoleResponse> checkProjectRole(
             String requestId,
@@ -99,5 +110,51 @@ public class GrpcProjectServiceClient {
                         requestId, nodeId, projects.size()))
                 .doOnError(e -> log.error("[{}][{}] listMyProjects failed: {}",
                         requestId, nodeId, e.getMessage()));
+    }
+
+    public Mono<Map<String, ProjectInfo>> getProjectInfoBatchInternal(String requestId,
+                                                                      String nodeId,
+                                                                      Collection<UUID> projectIds) {
+        List<String> formattedProjectIds = getFormattedProjectIds(projectIds);
+
+        if (formattedProjectIds.isEmpty()) {
+            return Mono.just(Collections.emptyMap());
+        }
+
+        log.info("[{}][{}] Calling getProjectInfoBatchInternal with: projectIds={}",
+                requestId, nodeId, formattedProjectIds);
+
+        var request = GetProjectInfoBatchInternalRequest.newBuilder()
+                .setHeader(
+                        Header.newBuilder()
+                                .setRequestId(requestId)
+                                .setNodeId(nodeId)
+                                .build()
+                )
+                .setBody(
+                        GetProjectInfoBatchInternalRequestBody.newBuilder()
+                                .addAllProjectIds(formattedProjectIds)
+                                .build()
+                )
+                .build();
+
+        return projectServiceStub.getProjectInfoBatchInternal(request)
+                .map(GetProjectInfoBatchInternalResponse::getProjectsMap)
+                .map(projectClientMapper::toDomainMap)
+                .doOnSuccess(projectsMap -> log.info("[{}][{}] getProjectInfoBatchInternal: found {} projects for {} requested ids",
+                        requestId, nodeId, projectsMap.size(), formattedProjectIds.size()))
+                .doOnError(e -> log.error("[{}][{}] getProjectInfoBatchInternal failed for projectIds={}: {}",
+                        requestId, nodeId, formattedProjectIds, e.getMessage()));
+    }
+
+    private static @NonNull List<String> getFormattedProjectIds(Collection<UUID> projectIds) {
+        if (projectIds == null || projectIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return projectIds.stream()
+                .filter(Objects::nonNull)
+                .map(UUID::toString)
+                .distinct()
+                .toList();
     }
 }

@@ -10,6 +10,7 @@ import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.IssueWithHistory;
 import ru.taska.domain.util.PageResult;
+import ru.taska.domain.aggregate.IssueWithProject;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 
 import java.util.List;
@@ -110,7 +111,7 @@ public interface IssueService {
                             Integer remainingEstimateMinutes
     );
 
-    Mono<PageResult<Issue>> searchIssues(
+    Mono<PageResult<IssueWithProject>> searchIssues(
             String requestId,
             String nodeId,
             UUID actorUserId,

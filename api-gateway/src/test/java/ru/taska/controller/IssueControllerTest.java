@@ -65,6 +65,7 @@ import ru.taska.mapper.UserProfileMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1581,6 +1582,28 @@ class IssueControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+
+        Mockito.verify(issueClient, Mockito.never())
+                .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть пустой список при неизвестном значении priority")
+    void searchIssues_shouldReturnEmptyResult_whenPriorityIsUnknown() {
+        mockAuthenticatedUser();
+
+        SearchIssuesResponseDto expectedResponse = new SearchIssuesResponseDto(Collections.emptyList(), 0);
+
+        webTestClient.get()
+                .uri(builder -> builder
+                        .path("/api/v1/issues/search")
+                        .queryParam("priority", "URGENT")
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(SearchIssuesResponseDto.class).isEqualTo(expectedResponse);
 
         Mockito.verify(issueClient, Mockito.never())
                 .searchIssues(Mockito.any(), Mockito.any());

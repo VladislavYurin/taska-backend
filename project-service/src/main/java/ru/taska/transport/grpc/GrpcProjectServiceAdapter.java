@@ -12,6 +12,8 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -81,5 +83,11 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<ListProjectMemberResponse> getProjectMembers(Mono<GetListProjectMemberRequest> request) {
         return grpcProjectService.getProjectMembers(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProjectMembers"));
+    }
+
+    @Override
+    public Mono<GetProjectInfoBatchInternalResponse> getProjectInfoBatchInternal(Mono<GetProjectInfoBatchInternalRequest> request) {
+        return grpcProjectService.getProjectInfoBatchInternal(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectInfoBatchInternal"));
     }
 }

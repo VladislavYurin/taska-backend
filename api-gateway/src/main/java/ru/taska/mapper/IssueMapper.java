@@ -160,6 +160,9 @@ public class IssueMapper {
         restDto.setAssigneeId(protoDto.getAssigneeId());
         MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
 
+        restDto.setProjectId(protoDto.getProjectId());
+        restDto.projectKey(protoDto.getProjectKey());
+        restDto.statusKey(protoDto.getStatusKey());
         return restDto;
     }
 
