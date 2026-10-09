@@ -38,59 +38,62 @@ mutation($threadId: ID!) {
   resolveReviewThread(input: { threadId: $threadId }) { thread { id isResolved } }
 }`;
 
-function requireText(value, field, maxLength = 6000) {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`Review field '${field}' must be a non-empty string.`);
+function text(value, maxLength) {
+  if (typeof value === 'string') {
+    return value.trim().slice(0, maxLength);
   }
-
-  return value.trim().slice(0, maxLength);
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === 'string').join('\n').trim().slice(0, maxLength);
+  }
+  return '';
 }
 
-function optionalText(value, field, maxLength = 3000) {
-  if (value === undefined || value === null) {
-    return '';
-  }
-  if (typeof value !== 'string') {
-    throw new Error(`Review field '${field}' must be a string.`);
-  }
-  return value.trim().slice(0, maxLength);
+function positiveLine(value) {
+  const line = typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value;
+  return Number.isInteger(line) && line >= 1 ? line : null;
 }
 
+/**
+ * Validates the model's answer. DeepSeek's JSON mode does not enforce the
+ * schema, so one malformed finding is dropped (with a warning) instead of
+ * failing the whole review; only a non-object answer is fatal.
+ */
 function parseReview(rawReview) {
   const review = JSON.parse(rawReview);
   if (!review || typeof review !== 'object' || Array.isArray(review)) {
     throw new Error('Review output must be a JSON object.');
   }
 
-  if (!Array.isArray(review.manual_checks) || !Array.isArray(review.comments)) {
-    throw new Error("Review fields 'manual_checks' and 'comments' must be arrays.");
-  }
-
-  const comments = review.comments.slice(0, MAX_MODEL_COMMENTS).map((comment, index) => {
+  const warnings = [];
+  const comments = [];
+  const rawComments = Array.isArray(review.comments) ? review.comments : [];
+  rawComments.slice(0, MAX_MODEL_COMMENTS).forEach((comment, index) => {
+    const label = `Review comment ${index + 1}`;
     if (!comment || typeof comment !== 'object' || Array.isArray(comment)) {
-      throw new Error(`Review comment ${index + 1} must be an object.`);
+      warnings.push(`${label} is not an object; dropped.`);
+      return;
     }
-
-    const severity = requireText(comment.severity, `comments[${index}].severity`);
+    const severity = text(comment.severity, 20).toLowerCase();
     if (!SEVERITIES.includes(severity)) {
-      throw new Error(`Unsupported severity '${severity}' in review comment ${index + 1}.`);
+      warnings.push(`${label} has unsupported severity '${severity}'; dropped.`);
+      return;
     }
-
-    const path = requireText(comment.path, `comments[${index}].path`, 300);
-    if (path.includes('\n') || path.startsWith('/') || path.split('/').includes('..')) {
-      throw new Error(`Unsafe path '${path}' in review comment ${index + 1}.`);
+    const path = text(comment.path, 300).replace(/^\.\//, '').replace(/^b\//, '');
+    if (!path || path.includes('\n') || path.startsWith('/') || path.split('/').includes('..')) {
+      warnings.push(`${label} has an unusable path '${path}'; dropped.`);
+      return;
     }
-
-    if (!Number.isInteger(comment.line) || comment.line < 1) {
-      throw new Error(`Review comment ${index + 1} must have a positive integer line.`);
+    const body = text(comment.body, 1200);
+    if (!body) {
+      warnings.push(`${label} has an empty body; dropped.`);
+      return;
     }
-
-    return {
-      severity,
-      path,
-      line: comment.line,
-      body: requireText(comment.body, `comments[${index}].body`, 1200),
-    };
+    const line = positiveLine(comment.line);
+    if (line === null) {
+      // Kept for the summary: it cannot be anchored to a line.
+      warnings.push(`${label} has no valid line (${JSON.stringify(comment.line ?? null)}); listed in the summary only.`);
+    }
+    comments.push({ severity, path, line, body });
   });
 
   // Statuses of earlier findings are advisory: malformed entries are ignored
@@ -104,15 +107,19 @@ function parseReview(rawReview) {
     )
     .map((entry) => ({ id: entry.id, status: entry.status }));
 
+  const manualChecks = (Array.isArray(review.manual_checks) ? review.manual_checks : [])
+    .map((check) => text(check, 300))
+    .filter(Boolean)
+    .slice(0, 10);
+
   return {
-    summary: requireText(review.summary, 'summary'),
-    taskAlignment: optionalText(review.task_alignment, 'task_alignment'),
-    manualChecks: review.manual_checks.slice(0, 10).map((check, index) =>
-      requireText(check, `manual_checks[${index}]`, 300)
-    ),
+    summary: text(review.summary, 6000) || 'Модель не вернула краткое описание.',
+    taskAlignment: text(review.task_alignment, 3000),
+    manualChecks,
     comments,
     previousFindings,
-    tests: requireText(review.tests, 'tests'),
+    tests: text(review.tests, 6000) || 'Модель не оценила тесты.',
+    warnings,
   };
 }
 
@@ -311,7 +318,7 @@ function renderSummary({
     lines.push(...renderDetails(
       `Ещё ${plan.extra.length} без inline-комментария (ниже ${settings.minSeverity}, сверх лимита или вне добавленных строк)`,
       plan.extra.map((comment) =>
-        `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${comment.path}:${comment.line}\` — ${comment.body.replace(/\s*\n\s*/g, ' ')}`
+        `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${comment.path}${comment.line ? `:${comment.line}` : ''}\` — ${comment.body.replace(/\s*\n\s*/g, ' ')}`
       )
     ));
   }
@@ -398,7 +405,7 @@ function collectNotes(open, extra, minSeverity) {
       .filter((finding) => finding.fromSummary)
       .map((finding) => ({ path: finding.path, line: finding.line, severity: finding.severity, text: finding.text })),
     ...extra
-      .filter((comment) => isAtLeast(comment.severity, minSeverity))
+      .filter((comment) => Number.isInteger(comment.line) && isAtLeast(comment.severity, minSeverity))
       .map((comment) => ({ path: comment.path, line: comment.line, severity: comment.severity, text: comment.body })),
   ];
   return notes
@@ -535,6 +542,7 @@ async function publishReview({ github, context, core, env = process.env }) {
   }
 
   const review = parseReview(fs.readFileSync(OUTPUT_FILE, 'utf8'));
+  review.warnings.forEach((warning) => core.warning(warning));
   const state = readState(core);
   const settings = readSettings(env);
   const provider = env.REVIEW_PROVIDER || 'unknown';

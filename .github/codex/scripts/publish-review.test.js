@@ -61,8 +61,11 @@ test('parseReview validates and normalizes the model response', () => {
   const review = parseReview(JSON.stringify({
     summary: ' Summary ',
     task_alignment: ' Покрывает требования. ',
-    manual_checks: ['Run smoke test'],
-    comments: [{ severity: 'high', path: 'src/Foo.java', line: 10, body: 'Fix the race.' }],
+    manual_checks: ['Run smoke test', 42, ''],
+    comments: [
+      { severity: 'high', path: 'src/Foo.java', line: 10, body: 'Fix the race.' },
+      { severity: 'High', path: './src/Bar.java', line: '12', body: 'Numeric string line.' },
+    ],
     previous_findings: [
       { id: 'F1', status: 'fixed' },
       { id: 'F2', status: 'open' },
@@ -74,13 +77,40 @@ test('parseReview validates and normalizes the model response', () => {
 
   assert.equal(review.summary, 'Summary');
   assert.equal(review.taskAlignment, 'Покрывает требования.');
-  assert.equal(review.comments[0].line, 10);
+  assert.deepEqual(review.manualChecks, ['Run smoke test']);
+  assert.deepEqual(review.comments.map((c) => [c.severity, c.path, c.line]), [
+    ['high', 'src/Foo.java', 10],
+    ['high', 'src/Bar.java', 12],
+  ]);
   assert.deepEqual(review.previousFindings, [{ id: 'F1', status: 'fixed' }, { id: 'F2', status: 'open' }]);
-  assert.throws(() => parseReview('{"summary":"broken"}'));
-  assert.throws(() => parseReview(JSON.stringify({
-    summary: 's', manual_checks: [], tests: 't',
-    comments: [{ severity: 'high', path: '../etc/passwd', line: 1, body: 'x' }],
-  })), /Unsafe path/);
+  assert.deepEqual(review.warnings, []);
+  assert.throws(() => parseReview('[]'), /JSON object/);
+  assert.throws(() => parseReview('not json'));
+});
+
+test('parseReview drops malformed findings instead of failing the review', () => {
+  const review = parseReview(JSON.stringify({
+    summary: 's',
+    manual_checks: [],
+    tests: 't',
+    comments: [
+      { severity: 'high', path: 'src/A.java', line: 0, body: 'Line zero: kept for the summary.' },
+      { severity: 'high', path: 'src/A.java', line: null, body: 'No line: kept for the summary.' },
+      { severity: 'blocker', path: 'src/A.java', line: 3, body: 'Unknown severity.' },
+      { severity: 'high', path: '../etc/passwd', line: 1, body: 'Unsafe path.' },
+      { severity: 'high', path: 'src/A.java', line: 4, body: '' },
+      'not an object',
+      { severity: 'low', path: 'src/A.java', line: 5, body: 'Valid.' },
+    ],
+  }));
+
+  assert.deepEqual(review.comments.map((c) => [c.line, c.body]), [
+    [null, 'Line zero: kept for the summary.'],
+    [null, 'No line: kept for the summary.'],
+    [5, 'Valid.'],
+  ]);
+  assert.equal(review.warnings.length, 6);
+  assert.match(review.warnings[0], /no valid line \(0\); listed in the summary only/);
 });
 
 test('parseReview tolerates responses without the new optional fields', () => {
@@ -88,6 +118,16 @@ test('parseReview tolerates responses without the new optional fields', () => {
 
   assert.equal(review.taskAlignment, '');
   assert.deepEqual(review.previousFindings, []);
+  const empty = parseReview('{}');
+  assert.deepEqual(empty.comments, []);
+  assert.match(empty.summary, /не вернула/);
+});
+
+test('planComments lists findings without a line in the summary', () => {
+  const plan = planComments([comment({ line: null, body: 'Проблема в удалённом файле, строки нет.' })], scope());
+
+  assert.deepEqual(plan.extra.map((c) => c.line), [null]);
+  assert.equal(plan.inline.length, 0);
 });
 
 test('readSettings applies defaults and bounds', () => {

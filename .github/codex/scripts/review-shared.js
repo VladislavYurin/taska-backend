@@ -467,6 +467,7 @@ function findSimilarFinding(comment, candidates) {
     const score = similarity(tokens, candidate.tokens ?? tokenize(candidate.text ?? candidate.body));
     const candidateLine = candidate.line ?? candidate.originalLine;
     const nearby = Number.isInteger(candidateLine)
+      && Number.isInteger(comment.line)
       && Math.abs(candidateLine - comment.line) <= NEARBY_LINES;
     const threshold = nearby ? NEARBY_DUPLICATE_SIMILARITY : DUPLICATE_SIMILARITY;
     if (score >= threshold && (!best || score > best.score)) {
