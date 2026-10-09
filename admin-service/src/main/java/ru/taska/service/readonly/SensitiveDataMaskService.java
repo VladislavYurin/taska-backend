@@ -325,4 +325,45 @@ public class SensitiveDataMaskService {
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
     }
+
+    /**
+     * Маскирует sensitive-значения в old/new данных аудит-лога.
+     * Применяет те же правила, что и TAS-104 для обычных строк таблицы.
+     * Журнал аудита не должен стать обходным путём к скрытым данным.
+     *
+     * @param rowMap     old/new значение из аудит-лога (ключ - имя колонки)
+     * @param serviceKey ключ сервиса из конфигурации
+     * @param tableName  имя таблицы
+     * @param requestId  идентификатор запроса (для логирования)
+     * @param nodeId     идентификатор узла (для логирования)
+     * @return замаскированная Map с теми же ключами
+     */
+    public Map<String, Object> maskSensitiveDataForAudit(
+            Map<String, Object> rowMap,
+            String serviceKey,
+            String tableName,
+            String requestId,
+            String nodeId
+    ) {
+        if (rowMap == null) {
+            return null;
+        }
+
+        Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey, tableName);
+        Map<String, Map<String, MaskType>> sensitiveJsonFields = getSensitiveJsonFields(serviceKey, tableName);
+
+        if (sensitiveColumns.isEmpty() && sensitiveJsonFields.isEmpty()) {
+            return rowMap;
+        }
+
+        if (!sensitiveColumns.isEmpty()) {
+            log.info("[{}][{}] Masking sensitive columns {} in audit data for table {}.{}",
+                    requestId, nodeId, sensitiveColumns.keySet(), serviceKey, tableName);
+        }
+        if (!sensitiveJsonFields.isEmpty()) {
+            log.info("[{}][{}] Masking sensitive JSON fields {} in audit data for table {}.{}",
+                    requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
+        }
+        return maskRow(rowMap, sensitiveColumns, sensitiveJsonFields);
+    }
 }
