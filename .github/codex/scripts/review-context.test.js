@@ -231,33 +231,6 @@ test('prepareReviewContext keeps Jira out of public repositories unless enabled'
   assert.equal(privateRepo.requests.length, 1);
 });
 
-test('prepareReviewContext carries findings listed only in the previous summary', async (t) => {
-  const repository = createRepository();
-  t.after(repository.cleanup);
-  const original = numberedLines(30);
-  const baseSha = repository.commit('base', { 'src/A.java': original });
-  repository.git('checkout', '--quiet', '-b', 'feature');
-  const reviewedSha = repository.commit('first', { 'src/A.java': replaceLines(original, { 5: 'feature 5' }) });
-  const headSha = repository.commit('second', { 'src/A.java': replaceLines(original, { 5: 'feature 5', 20: 'feature 20' }) });
-  const note = { path: 'src/A.java', line: 5, severity: 'critical', text: 'SQL-инъекция: параметр сортировки подставляется в запрос без проверки.' };
-
-  await inDirectory(repository.directory, async () => {
-    await prepareReviewContext({
-      github: createGithub({
-        issueComments: [{ id: 1, user: { type: 'Bot' }, body: `<!-- codex-pr-review -->\n${renderState({ sha: reviewedSha, notes: [note] })}` }],
-      }),
-      context: createContext(),
-      core: createCore(),
-      env: { PR_BASE_SHA: baseSha, PR_HEAD_SHA: headSha },
-    });
-    const markdown = fs.readFileSync(path.join('.ai-review', 'context.md'), 'utf8');
-    assert.match(markdown, /### F1 · OPEN · critical · `src\/A\.java:5`\n\nSQL-инъекция[\s\S]*Listed in the previous summary/);
-    const state = JSON.parse(fs.readFileSync(path.join('.ai-review', 'state.json'), 'utf8'));
-    assert.equal(state.findings[0].fromSummary, true);
-    assert.equal(state.findings[0].commentId, null);
-  });
-});
-
 test('prepareReviewContext skips a re-run for a head older than the last reviewed commit', async (t) => {
   const repository = createRepository();
   t.after(repository.cleanup);

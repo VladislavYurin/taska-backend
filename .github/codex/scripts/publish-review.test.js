@@ -6,7 +6,6 @@ const test = require('node:test');
 const publishReview = require('./publish-review');
 const {
   classifyPreviousFindings,
-  collectNotes,
   parseReview,
   planComments,
   readSettings,
@@ -226,21 +225,6 @@ test('classifyPreviousFindings keeps earlier marks and the team\'s reopen decisi
   assert.deepEqual(open.map((f) => f.threadId), ['reopened', 'judged-open']);
 });
 
-test('collectNotes keeps significant summary-only findings for the next run', () => {
-  const notes = collectNotes(
-    [
-      previousFinding({ fromSummary: true, severity: 'critical', text: 'Старая заметка   из сводки.', line: 3 }),
-      previousFinding({ severity: 'critical' }),
-    ],
-    [comment({ severity: 'low', line: 4 }), comment({ severity: 'high', line: 5, body: 'x'.repeat(500) })],
-    'medium'
-  );
-
-  assert.deepEqual(notes.map((note) => [note.severity, note.line]), [['critical', 3], ['high', 5]]);
-  assert.equal(notes[0].text, 'Старая заметка из сводки.');
-  assert.equal(notes[1].text.length, 300);
-});
-
 test('renderSummary links open findings instead of repeating them', () => {
   const open = Array.from({ length: 12 }, (_, index) => previousFinding({
     id: `F${index + 1}`,
@@ -269,7 +253,7 @@ test('renderSummary links open findings instead of repeating them', () => {
   assert.match(body, /\*\*Задача:\*\* \[TAS-198\]\(https:\/\/jira\.example\.dev\/browse\/TAS-198\) — Залоченный аккаунт _\(In Review\)_/);
   assert.match(body, /### Соответствие задаче\nНе реализован отзыв токенов/);
   assert.match(body, /🟠 1 high — опубликованы в diff\./);
-  assert.match(body, /Ещё 1 без inline-комментария/);
+  assert.match(body, /<details><summary>Мелкие замечания \(1\)<\/summary>/);
   assert.match(body, /### Открытые замечания с прошлых ревью \(12\)/);
   assert.match(body, /\[`A\.java:11`\]\(https:\/\/example\.test\/thread-1\) — unlockIfExpired использует now\(\) БД.* 💬/);
   assert.match(body, /<details><summary>Ещё 2<\/summary>[\s\S]*thread-12/);
@@ -302,28 +286,6 @@ async function setUpPublish(t, { review, findings = [], issueComments = [], fail
   const github = createGithub({ issueComments, failResolve });
   return { repository, github, baseSha, headSha, reviewedSha };
 }
-
-test('renderSummary stores pending files and notes and reports partial auto-resolve', () => {
-  const note = { path: 'src/A.java', line: 5, severity: 'high', text: 'Заметка.' };
-  const body = renderSummary({
-    review: { summary: 's', taskAlignment: '', manualChecks: [], tests: 't' },
-    plan: { inline: [], extra: [], duplicates: [], outOfScope: [] },
-    open: [],
-    fixed: [previousFinding({ id: 'F1', autoResolved: true }), previousFinding({ id: 'F2', url: 'https://example.test/2' })],
-    jira: null,
-    provider: 'deepseek',
-    headSha: 'c'.repeat(40),
-    pending: ['src/Big.java', 'src/Huge.java'],
-    notes: [note],
-    mode: 'full',
-    lastReviewedSha: null,
-    settings: { minSeverity: 'medium', maxInline: 8, autoResolve: true },
-  });
-
-  assert.deepEqual(parseState(body), { sha: 'c'.repeat(40), pending: ['src/Big.java', 'src/Huge.java'], notes: [note] });
-  assert.match(body, /2 файлов не попали в ревью и будут проверены при следующем пуше/);
-  assert.match(body, /Часть тредов закрыта автоматически/);
-});
 
 test('renderSummary lists repeats of one finding as a single item', () => {
   const body = renderSummary({
@@ -506,27 +468,76 @@ test('publishReview retries a rejected review one finding at a time', async (t) 
   assert.deepEqual(reviews, [[5, 20], [5], [20]]);
   const summary = github.calls.at(-1)[1].body;
   assert.match(summary, /🟠 1 high — опубликованы в diff/);
-  assert.match(summary, /Ещё 1 без inline-комментария[\s\S]*SQL-инъекция/);
-  // The rejected critical finding is tracked by the next run.
-  assert.deepEqual(parseState(summary).notes.map((note) => [note.severity, note.line]), [['critical', 5]]);
+  // The rejected critical finding is shown in full, not collapsed.
+  assert.match(summary, /🔴 1 critical — только здесь[^\n]*\n\n- 🔴 \*\*\[critical\]\*\* `src\/A\.java:5` — SQL-инъекция[^\n]*GitHub не принял/);
   assert.match(core.warnings[0], /retrying the findings one by one/);
 });
 
-test('publishReview carries files cut from a truncated diff over to the next run', async (t) => {
-  const review = { summary: 'Итог.', manual_checks: [], comments: [], tests: 'Ок.', previous_findings: [] };
-  const { repository, github, baseSha, headSha } = await setUpPublish(t, { review });
-  fs.writeFileSync(path.join(repository.directory, '.ai-review', 'truncated'), 'src/Big.java\nsrc/Huge.java\n');
+test('renderSummary lists files cut from the diff and does not claim "no findings" when some are summary-only', () => {
+  const body = renderSummary({
+    review: { summary: 's', taskAlignment: '', manualChecks: [], tests: 't' },
+    plan: { inline: [], extra: [comment({ severity: 'high', line: 99 })], duplicates: [], outOfScope: [] },
+    open: [],
+    fixed: [],
+    jira: null,
+    provider: 'deepseek',
+    headSha: 'c'.repeat(40),
+    unreviewedFiles: ['src/Big.java'],
+    mode: 'incremental',
+    lastReviewedSha: 'd'.repeat(40),
+    settings: { minSeverity: 'medium', maxInline: 8, autoResolve: false },
+  });
+
+  assert.doesNotMatch(body, /Новых замечаний к изменённым строкам нет/);
+  assert.match(body, /🟠 1 high — только здесь/);
+  assert.match(body, /1 файлов не проверены[\s\S]*- `src\/Big\.java`/);
+  assert.deepEqual(parseState(body), { sha: 'c'.repeat(40) });
+});
+
+test('publishReview keeps a finding open when the model calls it fixed but re-reports it nearby', async (t) => {
+  const review = {
+    summary: 'Итог.', manual_checks: [], tests: 'Ок.',
+    previous_findings: [{ id: 'F1', status: 'fixed' }],
+    comments: [{ severity: 'high', path: 'src/A.java', line: 20, body: CLOCK_SKEW_REWORDED }],
+  };
+  const { repository, github, baseSha, headSha } = await setUpPublish(t, {
+    review,
+    findings: [previousFinding({ line: 18 })],
+  });
 
   await inDirectory(repository.directory, () => publishReview({
     github,
     context: createContext(),
     core: createCore(),
-    env: { PR_BASE_SHA: baseSha, PR_HEAD_SHA: headSha },
+    env: { PR_BASE_SHA: baseSha, PR_HEAD_SHA: headSha, AI_REVIEW_AUTO_RESOLVE: 'true' },
   }));
 
-  const summary = github.calls.at(-1)[1].body;
-  assert.deepEqual(parseState(summary), { sha: headSha, pending: ['src/Big.java', 'src/Huge.java'], notes: [] });
-  assert.match(summary, /2 файлов не попали в ревью/);
+  // No resolve, no ✅ mark: the thread stays open and is listed as such.
+  assert.deepEqual(github.calls.map(([name]) => name), ['issues.createComment']);
+  assert.match(github.calls[0][1].body, /### Открытые замечания с прошлых ревью \(1\)/);
+});
+
+test('publishReview records the auto-resolve on a thread that already has a ✅ mark', async (t) => {
+  const review = {
+    summary: 'Итог.', manual_checks: [], comments: [], tests: 'Ок.',
+    previous_findings: [{ id: 'F1', status: 'fixed' }],
+  };
+  const marked = '<!-- ai-pr-review:aa -->\n✅ _Похоже, исправлено в `abc1234` — можно отметить Resolve._ <!-- ai-review-status -->\n\n🟠 **[high]** Проблема.';
+  const { repository, github, baseSha, headSha } = await setUpPublish(t, {
+    review,
+    findings: [previousFinding({ body: marked })],
+  });
+
+  await inDirectory(repository.directory, () => publishReview({
+    github,
+    context: createContext(),
+    core: createCore(),
+    env: { PR_BASE_SHA: baseSha, PR_HEAD_SHA: headSha, AI_REVIEW_AUTO_RESOLVE: 'true' },
+  }));
+
+  assert.deepEqual(github.calls.map(([name]) => name), ['graphql', 'pulls.updateReviewComment', 'issues.createComment']);
+  assert.match(github.calls[1][1].body, /тред закрыт автоматически/);
+  assert.equal(github.calls[1][1].body.match(/ai-review-status/g).length, 1);
 });
 
 test('publishReview never re-resolves a thread the team reopened', async (t) => {

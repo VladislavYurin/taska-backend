@@ -110,17 +110,40 @@ test('DeepSeek script uses base-ref fallback and writes structured output', (t) 
   assert.equal(fs.readFileSync(path.join(directory, '.ai-review/truncated'), 'utf8'), 'example.txt\nzz-priority.txt\n');
 });
 
-test('DeepSeek script lists only the files cut by the diff limit', (t) => {
+test('DeepSeek script does not report already reviewed context cut by the limit', (t) => {
   const { directory, mockBin } = prepareRepository();
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   fs.mkdirSync(path.join(directory, '.ai-review'));
   fs.writeFileSync(path.join(directory, '.ai-review/priority-files.txt'), 'zz-priority.txt\n');
 
-  // The priority diff is 7 lines: it fits, example.txt that follows does not.
+  // The priority diff is 7 lines and fits; example.txt after it is context.
   const result = runReview(directory, mockBin, { DEEPSEEK_MAX_DIFF_LINES: '8' });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.readFileSync(path.join(directory, '.ai-review/truncated'), 'utf8'), 'example.txt\n');
+  assert.equal(fs.readFileSync(path.join(directory, '.ai-review/truncated'), 'utf8'), '');
+});
+
+test('DeepSeek script shrinks the diff context before cutting files', (t) => {
+  const { directory, mockBin } = prepareRepository();
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const body = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`);
+  fs.writeFileSync(path.join(directory, 'Long.java'), `${body.join('\n')}\n`);
+  git(directory, 'add', '-A');
+  git(directory, 'commit', '--quiet', '--amend', '--no-edit');
+  const head = git(directory, 'rev-parse', 'HEAD');
+  body[99] = 'changed';
+  fs.writeFileSync(path.join(directory, 'Long.java'), `${body.join('\n')}\n`);
+  git(directory, 'add', '-A');
+  git(directory, 'commit', '--quiet', '-m', 'edit');
+  git(directory, 'update-ref', 'refs/remotes/origin/develop', head);
+
+  // With 40 lines of context the change needs ~87 lines, with 10 lines ~27.
+  const result = runReview(directory, mockBin, { DEEPSEEK_MAX_DIFF_LINES: '40' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(path.join(directory, '.ai-review/truncated')), false);
+  const request = JSON.parse(fs.readFileSync(path.join(directory, 'captured-request.json'), 'utf8'));
+  assert.match(request.messages[1].content, /^@@ -90,21 \+90,21 @@/m);
 });
 
 test('DeepSeek script keeps a renamed priority file as a rename', (t) => {

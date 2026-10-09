@@ -3,8 +3,6 @@ const fs = require('node:fs');
 
 const {
   AUTO_RESOLVED_NOTE,
-  MAX_NOTES,
-  MAX_NOTE_LENGTH,
   REOPENED_NOTE,
   REVIEW_MARKER,
   SEVERITIES,
@@ -22,6 +20,7 @@ const {
   renderState,
   setStatusLine,
   severityRank,
+  unquoteGitPath,
 } = require('./review-shared');
 
 const OUTPUT_FILE = 'codex-output.json';
@@ -246,7 +245,7 @@ function findingLink(finding) {
 function groupRepeats(findings) {
   const groups = new Map();
   for (const finding of findings) {
-    const key = finding.id ?? `thread:${finding.threadId}`;
+    const key = finding.id ?? (finding.threadId ? `thread:${finding.threadId}` : finding);
     if (groups.has(key)) {
       groups.get(key).repeats.push(finding);
     } else {
@@ -285,15 +284,15 @@ function renderSummary({
   jira,
   provider,
   headSha,
-  pending = [],
-  notes = [],
+  unreviewedFiles = [],
+  rejected = [],
   mode,
   lastReviewedSha,
   settings,
 }) {
   const lines = [
     REVIEW_MARKER,
-    renderState({ sha: headSha, pending, notes }),
+    renderState({ sha: headSha }),
     '## 🤖 AI-ревью',
   ];
 
@@ -308,19 +307,32 @@ function renderSummary({
     lines.push('', '### Соответствие задаче', review.taskAlignment);
   }
 
+  // Significant findings that could not go inline are shown in full: the
+  // summary is the only place they appear.
+  const significant = plan.extra.filter((comment) => isAtLeast(comment.severity, settings.minSeverity));
+  const minor = plan.extra.filter((comment) => !significant.includes(comment));
+  const renderExtra = (comment) => {
+    const location = `${comment.path}${comment.line ? `:${comment.line}` : ''}`;
+    const note = rejected.includes(comment) ? ' _(GitHub не принял комментарий к этой строке)_' : '';
+    return `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${location}\` — ${comment.body.replace(/\s*\n\s*/g, ' ')}${note}`;
+  };
+
   lines.push('', '### Новые замечания');
-  lines.push(plan.inline.length > 0
-    ? `${severityTally(plan.inline)} — опубликованы в diff.`
-    : mode === 'incremental'
-      ? 'Новых замечаний к изменённым строкам нет.'
-      : 'Замечаний к строкам нет.');
-  if (plan.extra.length > 0) {
-    lines.push(...renderDetails(
-      `Ещё ${plan.extra.length} без inline-комментария (ниже ${settings.minSeverity}, сверх лимита или вне добавленных строк)`,
-      plan.extra.map((comment) =>
-        `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${comment.path}${comment.line ? `:${comment.line}` : ''}\` — ${comment.body.replace(/\s*\n\s*/g, ' ')}`
-      )
-    ));
+  if (plan.inline.length > 0) {
+    lines.push(`${severityTally(plan.inline)} — опубликованы в diff.`);
+  }
+  if (significant.length > 0) {
+    lines.push(
+      `${severityTally(significant)} — только здесь (сверх лимита inline, вне добавленных строк или не приняты GitHub):`,
+      '',
+      ...significant.map(renderExtra)
+    );
+  }
+  if (plan.inline.length === 0 && significant.length === 0) {
+    lines.push(mode === 'incremental' ? 'Новых замечаний к изменённым строкам нет.' : 'Замечаний к строкам нет.');
+  }
+  if (minor.length > 0) {
+    lines.push(...renderDetails(`Мелкие замечания (${minor.length})`, minor.map(renderExtra)));
   }
 
   if (open.length > 0) {
@@ -366,8 +378,12 @@ function renderSummary({
   const duplicatesNote = plan.duplicates.length > 0
     ? ` · отброшено повторов: ${plan.duplicates.length}`
     : '';
-  if (pending.length > 0) {
-    lines.push('', `> ⚠️ Diff не поместился в лимит модели: ${pending.length} файлов не попали в ревью и будут проверены при следующем пуше.`);
+  if (unreviewedFiles.length > 0) {
+    lines.push(
+      '',
+      `> ⚠️ Diff не поместился в лимит модели (\`DEEPSEEK_MAX_DIFF_LINES\`): ${unreviewedFiles.length} файлов не проверены.`,
+      ...renderDetails('Непроверенные файлы', unreviewedFiles.map((path) => `- \`${path}\``))
+    );
   }
   lines.push(
     '',
@@ -381,37 +397,19 @@ function renderSummary({
 function readState(core) {
   if (!fs.existsSync(STATE_FILE)) {
     core.warning(`Review context '${STATE_FILE}' is missing; publishing as a full review without history.`);
-    return { mode: 'full', lastReviewedSha: null, pendingFiles: [], findings: [], jira: null };
+    return { mode: 'full', lastReviewedSha: null, findings: [], jira: null };
   }
   return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
 }
 
-/** Files the DeepSeek script could not fit into the model's diff limit. */
+/** Files under review that the DeepSeek script could not fit into the diff limit. */
 function readTruncatedFiles() {
   if (!fs.existsSync(TRUNCATED_FILE)) {
     return [];
   }
-  return [...new Set(fs.readFileSync(TRUNCATED_FILE, 'utf8').split('\n').filter(Boolean))];
-}
-
-/**
- * Findings that exist only in the summary (over the inline cap, rejected by
- * GitHub, near deleted code) are carried in the summary state, so the next
- * run still tracks them. Minor ones are shown once.
- */
-function collectNotes(open, extra, minSeverity) {
-  const notes = [
-    ...open
-      .filter((finding) => finding.fromSummary)
-      .map((finding) => ({ path: finding.path, line: finding.line, severity: finding.severity, text: finding.text })),
-    ...extra
-      .filter((comment) => Number.isInteger(comment.line) && isAtLeast(comment.severity, minSeverity))
-      .map((comment) => ({ path: comment.path, line: comment.line, severity: comment.severity, text: comment.body })),
-  ];
-  return notes
-    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
-    .slice(0, MAX_NOTES)
-    .map((note) => ({ ...note, text: note.text.replace(/\s+/g, ' ').trim().slice(0, MAX_NOTE_LENGTH) }));
+  return [...new Set(
+    fs.readFileSync(TRUNCATED_FILE, 'utf8').split('\n').filter(Boolean).map(unquoteGitPath)
+  )];
 }
 
 /**
@@ -513,7 +511,12 @@ async function updatePreviousThreads({ github, core, owner, repo, open, fixed, h
         core.warning(`Failed to resolve review thread ${finding.threadId}: ${error.message}`);
       }
     }
-    if (!finding.body.includes(STATUS_LINE_MARKER)) {
+    // A thread closed by the bot must say so: that is how a later manual
+    // reopen is recognised.
+    const needsMark = finding.autoResolved
+      ? !finding.body.includes(AUTO_RESOLVED_NOTE)
+      : !finding.body.includes(STATUS_LINE_MARKER);
+    if (needsMark) {
       const action = finding.autoResolved ? AUTO_RESOLVED_NOTE : 'можно отметить Resolve';
       await updateBody(
         finding,
@@ -552,16 +555,25 @@ async function publishReview({ github, context, core, env = process.env }) {
     throw new Error('PR_BASE_SHA and PR_HEAD_SHA are required to publish a review.');
   }
 
-  const incremental = state.mode === 'incremental';
   const scope = computeReviewScope({
     baseSha,
     headSha,
-    lastReviewedSha: incremental ? state.lastReviewedSha : null,
-    pendingFiles: incremental ? state.pendingFiles ?? [] : [],
+    lastReviewedSha: state.mode === 'incremental' ? state.lastReviewedSha : null,
   });
   const findings = state.findings ?? [];
   const plan = planComments(review.comments, { ...scope, findings, ...settings });
   const { open, fixed } = classifyPreviousFindings(findings, review.previousFindings);
+  // The model may call a finding fixed and report the same problem where the
+  // code moved; the new report was dropped as a repeat, so the old thread
+  // stays open instead of being marked or closed.
+  for (const { previous } of plan.duplicates) {
+    const index = previous ? fixed.indexOf(previous) : -1;
+    if (index !== -1) {
+      fixed.splice(index, 1);
+      previous.status = 'open';
+      open.push(previous);
+    }
+  }
   core.info(
     `AI review plan: ${plan.inline.length} inline, ${plan.extra.length} in summary, `
     + `${plan.duplicates.length} duplicates dropped, ${plan.outOfScope.length} outside the review scope dropped; `
@@ -584,9 +596,6 @@ async function publishReview({ github, context, core, env = process.env }) {
     github, core, owner, repo, open, fixed, headSha, autoResolve: settings.autoResolve,
   });
 
-  // Files cut from a too large diff are reviewed by the next run.
-  const pending = readTruncatedFiles();
-  const notes = collectNotes(open, plan.extra, settings.minSeverity);
   const summaryBody = renderSummary({
     review,
     plan,
@@ -595,8 +604,8 @@ async function publishReview({ github, context, core, env = process.env }) {
     jira: state.jira,
     provider,
     headSha,
-    pending,
-    notes,
+    unreviewedFiles: readTruncatedFiles(),
+    rejected,
     mode: scope.mode,
     lastReviewedSha: scope.lastReviewedSha,
     settings,
@@ -622,7 +631,6 @@ async function publishReview({ github, context, core, env = process.env }) {
 module.exports = publishReview;
 module.exports.classifyPreviousFindings = classifyPreviousFindings;
 module.exports.collectAddedLines = collectAddedLines;
-module.exports.collectNotes = collectNotes;
 module.exports.parseReview = parseReview;
 module.exports.planComments = planComments;
 module.exports.readSettings = readSettings;

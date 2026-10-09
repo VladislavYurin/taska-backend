@@ -97,22 +97,10 @@ test('formatRanges collapses consecutive lines', () => {
 test('review state round-trips through the summary comment', () => {
   const body = `<!-- codex-pr-review -->\n${renderState({ sha: SHA })}\n## AI`;
 
-  assert.deepEqual(parseState(body), { sha: SHA, pending: [], notes: [] });
+  assert.deepEqual(parseState(body), { sha: SHA });
   assert.equal(parseState('<!-- codex-pr-review -->'), null);
   assert.equal(parseState('<!-- ai-review-state:{"sha":"not-a-sha"} -->'), null);
   assert.equal(parseState('<!-- ai-review-state:{broken -->'), null);
-});
-
-test('review state keeps pending files and notes and survives "-->" in their text', () => {
-  const note = { path: 'src/A.java', line: 12, severity: 'high', text: 'Проверка --> удалена, эндпоинт открыт.' };
-  const body = `<!-- codex-pr-review -->\n${renderState({ sha: SHA, pending: ['src/Big--File.java'], notes: [note] })}\n## AI`;
-
-  // One "-->" closes the summary marker, one the state: none leak from the text.
-  assert.equal(body.match(/-->/g).length, 2);
-  assert.deepEqual(parseState(body), { sha: SHA, pending: ['src/Big--File.java'], notes: [note] });
-
-  const tampered = `<!-- ai-review-state:${JSON.stringify({ sha: SHA, pending: [42, ''], notes: [{ path: 'a', line: 'x' }] })} -->`;
-  assert.deepEqual(parseState(tampered), { sha: SHA, pending: [], notes: [] });
 });
 
 test('parseInlineBody strips markers, status line and severity', () => {
@@ -237,32 +225,6 @@ test('computeReviewScope keeps deletions and reverts in an incremental review', 
     assert.deepEqual([...scope.touchedFiles], ['src/A.java']);
     // "line 10" was removed: the gap sits between new lines 9 and 10.
     assert.deepEqual([...scope.deletionRanges.entries()], [['src/A.java', [[9, 10]]]]);
-  });
-});
-
-test('computeReviewScope reviews files left over by a truncated diff in full', async (t) => {
-  const repository = createRepository();
-  t.after(repository.cleanup);
-  const original = numberedLines(10);
-  const baseSha = repository.commit('base', { 'src/A.java': original, 'src/Big.java': original });
-  repository.git('checkout', '--quiet', '-b', 'feature');
-  const reviewedSha = repository.commit('first', {
-    'src/A.java': replaceLines(original, { 2: 'feature' }),
-    'src/Big.java': replaceLines(original, { 4: 'big 4', 5: 'big 5' }),
-  });
-  const headSha = repository.commit('second', { 'src/A.java': replaceLines(original, { 2: 'feature', 8: 'feature 8' }) });
-
-  await inDirectory(repository.directory, () => {
-    const scope = computeReviewScope({
-      baseSha,
-      headSha,
-      lastReviewedSha: reviewedSha,
-      pendingFiles: ['src/Big.java', 'src/NotInPr.java'],
-    });
-    assert.equal(scope.mode, 'incremental');
-    assert.deepEqual([...scope.reviewableLines.get('src/A.java')], [8]);
-    assert.deepEqual([...scope.reviewableLines.get('src/Big.java')], [4, 5]);
-    assert.deepEqual([...scope.changedFiles].sort(), ['src/A.java', 'src/Big.java']);
   });
 });
 

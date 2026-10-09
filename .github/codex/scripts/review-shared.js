@@ -16,9 +16,6 @@ const SEVERITIES = ['critical', 'high', 'medium', 'low'];
 const SEVERITY_ICONS = { critical: '🔴', high: '🟠', medium: '🟡', low: '⚪' };
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
-const MAX_PENDING_FILES = 300;
-const MAX_NOTES = 20;
-const MAX_NOTE_LENGTH = 300;
 
 // Status line texts. The auto-resolve note lets the next run notice a thread
 // that a human reopened after the bot closed it.
@@ -188,7 +185,7 @@ function commitExists(sha) {
  * reviewed commit or older (a re-run of an old workflow run), which needs no
  * review.
  */
-function computeReviewScope({ baseSha, headSha, lastReviewedSha, pendingFiles = [] }) {
+function computeReviewScope({ baseSha, headSha, lastReviewedSha }) {
   const prAddedLines = diffAddedLines(`${baseSha}...${headSha}`);
   const prFiles = diffChangedFiles(`${baseSha}...${headSha}`);
 
@@ -246,18 +243,6 @@ function computeReviewScope({ baseSha, headSha, lastReviewedSha, pendingFiles = 
     }
   }
 
-  // Files the previous run could not send to the model are reviewed in full.
-  for (const path of pendingFiles) {
-    if (!prFiles.has(path)) {
-      continue;
-    }
-    changedFiles.add(path);
-    touchedFiles.add(path);
-    if (prAddedLines.get(path)?.size > 0) {
-      reviewableLines.set(path, prAddedLines.get(path));
-    }
-  }
-
   return {
     mode: 'incremental',
     lastReviewedSha,
@@ -289,21 +274,9 @@ function formatRanges(lines) {
     .join(', ');
 }
 
-/**
- * The hidden state in the summary comment: the last reviewed commit, files
- * that did not fit into the model's diff limit (`pending`, reviewed next
- * time) and findings that exist only in the summary (`notes`, no thread).
- */
-function renderState({ sha, pending = [], notes = [] }) {
-  const state = { sha };
-  if (pending.length > 0) {
-    state.pending = pending.slice(0, MAX_PENDING_FILES);
-  }
-  if (notes.length > 0) {
-    state.notes = notes.slice(0, MAX_NOTES);
-  }
-  // "--" would end the HTML comment early; \u002d is the same JSON string.
-  return `<!-- ai-review-state:${JSON.stringify(state).replace(/--/g, '-\\u002d')} -->`;
+/** The hidden state in the summary comment: the last reviewed commit. */
+function renderState({ sha }) {
+  return `<!-- ai-review-state:${JSON.stringify({ sha })} -->`;
 }
 
 function parseState(body) {
@@ -311,34 +284,14 @@ function parseState(body) {
   if (!match) {
     return null;
   }
-  let state;
   try {
-    state = JSON.parse(match[1]);
+    const state = JSON.parse(match[1]);
+    return state && typeof state.sha === 'string' && SHA_PATTERN.test(state.sha)
+      ? { sha: state.sha }
+      : null;
   } catch {
     return null;
   }
-  if (!state || typeof state.sha !== 'string' || !SHA_PATTERN.test(state.sha)) {
-    return null;
-  }
-  const pending = (Array.isArray(state.pending) ? state.pending : [])
-    .filter((path) => typeof path === 'string' && path.length > 0 && path.length <= 500)
-    .slice(0, MAX_PENDING_FILES);
-  const notes = (Array.isArray(state.notes) ? state.notes : [])
-    .filter((note) =>
-      note
-      && typeof note.path === 'string'
-      && Number.isInteger(note.line)
-      && SEVERITIES.includes(note.severity)
-      && typeof note.text === 'string'
-    )
-    .slice(0, MAX_NOTES)
-    .map((note) => ({
-      path: note.path,
-      line: note.line,
-      severity: note.severity,
-      text: note.text.slice(0, MAX_NOTE_LENGTH),
-    }));
-  return { sha: state.sha, pending, notes };
 }
 
 function isBotAuthor(user) {
@@ -491,8 +444,6 @@ function basename(path) {
 module.exports = {
   AUTO_RESOLVED_NOTE,
   CONTEXT_DIR,
-  MAX_NOTES,
-  MAX_NOTE_LENGTH,
   CONTEXT_FILE,
   INLINE_MARKER_PATTERN,
   PRIORITY_FILES_FILE,

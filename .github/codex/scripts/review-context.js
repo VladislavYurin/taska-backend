@@ -101,28 +101,6 @@ function toPreviousFinding(thread) {
   };
 }
 
-/** Findings listed only in the previous summary (no thread), kept in its state. */
-function toSummaryFinding(note, index) {
-  return {
-    id: null,
-    threadId: null,
-    commentId: null,
-    url: null,
-    body: '',
-    createdAt: `summary-${String(index).padStart(3, '0')}`,
-    path: note.path,
-    line: note.line,
-    originalLine: note.line,
-    isResolved: false,
-    isOutdated: false,
-    reopened: false,
-    fromSummary: true,
-    severity: note.severity,
-    text: note.text,
-    replies: [],
-  };
-}
-
 /**
  * Numbers findings F1..Fn for the prompt: unresolved first (most severe first,
  * those already marked fixed last), then resolved ones, so the cap drops the
@@ -214,9 +192,6 @@ function renderFinding(finding) {
   const repeats = finding.repeats > 0 ? ` · posted ${finding.repeats + 1} times` : '';
   const header = `### ${finding.id} · ${finding.isResolved ? 'RESOLVED' : 'OPEN'} · ${finding.severity} · ${location}${repeats}`;
   const parts = [header, '', clip(finding.text, finding.isResolved ? 300 : MAX_FINDING_LENGTH)];
-  if (finding.fromSummary) {
-    parts.push('', '(Listed in the previous summary without a thread; the line number may have shifted since.)');
-  }
   if (finding.reopened) {
     parts.push('', '(The team reopened this thread after the bot marked it fixed: it stays open whatever you answer.)');
   }
@@ -279,10 +254,8 @@ async function prepareReviewContext({ github, context, core, env = process.env, 
   }
 
   const summaryComment = await findSummaryComment(github, { owner, repo, pullNumber });
-  const previousState = parseState(summaryComment?.body);
-  const lastReviewedSha = previousState?.sha ?? null;
-  const pendingFiles = previousState?.pending ?? [];
-  const scope = computeReviewScope({ baseSha, headSha, lastReviewedSha, pendingFiles });
+  const lastReviewedSha = parseState(summaryComment?.body)?.sha ?? null;
+  const scope = computeReviewScope({ baseSha, headSha, lastReviewedSha });
 
   if (scope.mode === 'stale') {
     core.info(`Commit ${headSha} is already covered by the review of ${lastReviewedSha}; skipping.`);
@@ -296,10 +269,7 @@ async function prepareReviewContext({ github, context, core, env = process.env, 
   }
 
   const threads = await loadReviewThreads(github, { owner, repo, pullNumber });
-  const findings = assignFindingIds([
-    ...threads.map(toPreviousFinding).filter(Boolean),
-    ...(previousState?.notes ?? []).map(toSummaryFinding),
-  ]);
+  const findings = assignFindingIds(threads.map(toPreviousFinding).filter(Boolean));
   const omitted = findings.filter((finding) => !finding.id).length;
   if (omitted > 0) {
     core.info(`${omitted} previous findings are left out of the prompt (cap ${MAX_FINDINGS_IN_PROMPT}).`);
@@ -330,7 +300,6 @@ async function prepareReviewContext({ github, context, core, env = process.env, 
   fs.writeFileSync(STATE_FILE, JSON.stringify({
     mode: scope.mode,
     lastReviewedSha: scope.lastReviewedSha,
-    pendingFiles,
     findings,
     jira: jira ? { key: jira.key, url: jira.url, summary: jira.summary, status: jira.status } : null,
   }, null, 2));

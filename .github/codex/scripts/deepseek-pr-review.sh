@@ -49,13 +49,15 @@ trap 'rm -rf "$temp_dir"' EXIT
 readonly diff_stat_file="$temp_dir/pr-diff-stat.txt"
 readonly diff_files_file="$temp_dir/pr-diff-files.txt"
 readonly full_diff_file="$temp_dir/pr-diff-full.txt"
+readonly scope_diff_file="$temp_dir/pr-diff-scope.txt"
+readonly context_diff_file="$temp_dir/pr-diff-context.txt"
 readonly limited_diff_file="$temp_dir/pr-diff.txt"
 readonly prompt_file="$temp_dir/deepseek-review-prompt.txt"
 readonly request_file="$temp_dir/deepseek-request.json"
 readonly response_file="$temp_dir/deepseek-response.json"
 readonly auth_header_file="$temp_dir/deepseek-auth-header.txt"
 
-git diff --stat "$diff_range" > "$diff_stat_file" \
+git -c core.quotePath=false diff --stat "$diff_range" > "$diff_stat_file" \
   || die "failed to build diff stat for $diff_range"
 git -c core.quotePath=false diff --find-renames --name-status "$diff_range" > "$diff_files_file" \
   || die "failed to list changed files for $diff_range"
@@ -80,25 +82,41 @@ if [[ -s "$AI_REVIEW_PRIORITY_FILES" ]]; then
   done < "$diff_files_file"
 fi
 
-if (( ${#priority_pathspecs[@]} > 0 )); then
-  {
-    git diff --find-renames --unified=40 "$diff_range" -- "${priority_pathspecs[@]}" \
-      && git diff --find-renames --unified=40 "$diff_range" -- "${other_pathspecs[@]}"
-  } > "$full_diff_file" || die "failed to build diff for $diff_range"
-else
-  git diff --find-renames --unified=40 "$diff_range" > "$full_diff_file" \
-    || die "failed to build diff for $diff_range"
-fi
+# Builds the diff with $1 lines of context: the files under review (all of
+# them in a full review), then the already reviewed rest of the PR.
+build_diff() {
+  local context_lines="$1"
+  if (( ${#priority_pathspecs[@]} > 0 )); then
+    git -c core.quotePath=false diff --find-renames --unified="$context_lines" "$diff_range" \
+      -- "${priority_pathspecs[@]}" > "$scope_diff_file" || return 1
+    git -c core.quotePath=false diff --find-renames --unified="$context_lines" "$diff_range" \
+      -- "${other_pathspecs[@]}" > "$context_diff_file" || return 1
+  else
+    git -c core.quotePath=false diff --find-renames --unified="$context_lines" "$diff_range" \
+      > "$scope_diff_file" || return 1
+    : > "$context_diff_file"
+  fi
+  cat "$scope_diff_file" "$context_diff_file" > "$full_diff_file"
+}
+
+count_lines() {
+  wc -l < "$1" | tr -d ' '
+}
 
 [[ -s "$diff_files_file" ]] || die "the pull request diff is empty"
 
-total_diff_lines="$(wc -l < "$full_diff_file" | tr -d ' ')" \
-  || die "failed to count diff lines"
-readonly total_diff_lines
+build_diff 40 || die "failed to build diff for $diff_range"
+total_diff_lines="$(count_lines "$full_diff_file")" || die "failed to count diff lines"
+# A large PR gets less surrounding context rather than losing whole files.
+if (( total_diff_lines > DEEPSEEK_MAX_DIFF_LINES )); then
+  build_diff 10 || die "failed to build diff for $diff_range"
+  total_diff_lines="$(count_lines "$full_diff_file")" || die "failed to count diff lines"
+fi
 sed -n "1,${DEEPSEEK_MAX_DIFF_LINES}p" "$full_diff_file" > "$limited_diff_file"
 
 # Prints the paths of files whose diff does not fit entirely into the first
-# $1 lines of the diff on stdin.
+# $1 lines of the diff on stdin. Deleted files have nothing to review; quoted
+# paths keep git's quoting minus the a/ b/ prefix.
 list_cut_files() {
   awk -v limit="$1" '
     /^diff --git / { count++; start[count] = NR; in_hunk = 0; next }
@@ -107,18 +125,21 @@ list_cut_files() {
     /^rename to / { path[count] = substr($0, 11); next }
     /^\+\+\+ / {
       candidate = substr($0, 5); sub(/\t$/, "", candidate)
-      if (candidate != "/dev/null") { sub(/^b\//, "", candidate); path[count] = candidate }
+      if (candidate == "/dev/null") { deleted[count] = 1 }
+      else { sub(/^b\//, "", candidate); sub(/^"b\//, "\"", candidate); path[count] = candidate }
       next
     }
     /^--- / {
       candidate = substr($0, 5); sub(/\t$/, "", candidate)
-      if (path[count] == "" && candidate != "/dev/null") { sub(/^a\//, "", candidate); path[count] = candidate }
+      if (path[count] == "" && candidate != "/dev/null") {
+        sub(/^a\//, "", candidate); sub(/^"a\//, "\"", candidate); path[count] = candidate
+      }
       next
     }
     END {
       for (i = 1; i <= count; i++) {
         last_line = (i < count) ? start[i + 1] - 1 : NR
-        if (last_line > limit && path[i] != "") print path[i]
+        if (last_line > limit && path[i] != "" && !deleted[i]) print path[i]
       }
     }
   '
@@ -127,10 +148,12 @@ list_cut_files() {
 truncation_notice=""
 rm -f "$AI_REVIEW_TRUNCATED_FILE"
 if (( total_diff_lines > DEEPSEEK_MAX_DIFF_LINES )); then
-  # The publish step carries these files over to the next review.
+  # Only files under review count: the rest of an incremental diff was
+  # reviewed by earlier runs. The scope diff comes first, so its line
+  # numbers match the full diff.
   mkdir -p "$(dirname "$AI_REVIEW_TRUNCATED_FILE")"
-  list_cut_files "$DEEPSEEK_MAX_DIFF_LINES" < "$full_diff_file" > "$AI_REVIEW_TRUNCATED_FILE"
-  truncation_notice="WARNING: the diff was truncated from $total_diff_lines to $DEEPSEEK_MAX_DIFF_LINES lines (files in the review scope come first). Mention this limitation in the summary."
+  list_cut_files "$DEEPSEEK_MAX_DIFF_LINES" < "$scope_diff_file" > "$AI_REVIEW_TRUNCATED_FILE"
+  truncation_notice="WARNING: the diff was truncated from $total_diff_lines to $DEEPSEEK_MAX_DIFF_LINES lines (files under review come first). Mention this limitation in the summary."
   echo "DeepSeek review: $truncation_notice" >&2
 fi
 
