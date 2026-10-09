@@ -108,23 +108,24 @@ public class AuthServiceImpl implements AuthService {
                         credentialRepository
                                 .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
                                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
-                                .flatMap( credential ->{
-
-                                    if (user.getStatus() == UserStatus.BLOCKED || user.getStatus() == UserStatus.INVITED) {
-                                        log.warn("Login attempt for {} user: {}", user.getStatus(), DataMaskingHelper.maskEmail(email));
-                                        return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
-                                    }
-                                    return accountLockService.resolveLockState(user)
-                                            .flatMap(refreshed -> {
-                                                if (refreshed.getStatus() == UserStatus.LOCKED) {
-                                                    log.warn("Login attempt for LOCKED user: {}", DataMaskingHelper.maskEmail(email));
-                                                    return Mono.error(new DomainException(
-                                                            DomainStatus.PERMISSION_DENIED,
-                                                            "Account is locked until " + refreshed.getLockedUntil() + ". Try again later."));
-                                                }
-                                                return authenticate(refreshed, credential, password);
-                                            });
-                                })
+                                .flatMap( credential ->
+                                        accountLockService
+                                                .resolveLockState(user)
+                                                .flatMap(refreshed -> {
+                                                        if (refreshed.getStatus() == UserStatus.LOCKED) {
+                                                            log.warn("Login attempt for LOCKED user: {}", DataMaskingHelper.maskEmail(email));
+                                                            return Mono.error(new DomainException(
+                                                                    DomainStatus.UNAUTHENTICATED,
+                                                                    "Account is locked until " + refreshed.getLockedUntil() + ". Try again later."));
+                                                        }
+                                                        if (refreshed.getStatus() == UserStatus.BLOCKED || refreshed.getStatus() == UserStatus.INVITED) {
+                                                            log.warn("Login attempt for {} user: {}", refreshed.getStatus(), DataMaskingHelper.maskEmail(email));
+                                                            return Mono.error(new DomainException(
+                                                                    DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
+                                                        }
+                                                        return authenticate(refreshed, credential, password);
+                                                })
+                                )
                 );
     }
 
