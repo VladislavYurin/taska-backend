@@ -366,5 +366,4 @@ public class SensitiveDataMaskService {
         }
         return maskRow(rowMap, sensitiveColumns, sensitiveJsonFields);
     }
-
 }
