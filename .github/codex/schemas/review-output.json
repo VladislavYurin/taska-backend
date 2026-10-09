@@ -2,14 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["summary", "manual_checks", "comments", "tests"],
+  "required": ["summary", "task_alignment", "manual_checks", "comments", "previous_findings", "tests"],
   "properties": {
     "summary": {
       "type": "string",
       "minLength": 1
     },
+    "task_alignment": {
+      "type": "string"
+    },
     "manual_checks": {
       "type": "array",
+      "maxItems": 5,
       "items": {
         "type": "string",
         "minLength": 1
@@ -17,7 +21,7 @@
     },
     "comments": {
       "type": "array",
-      "maxItems": 20,
+      "maxItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -38,6 +42,24 @@
           "body": {
             "type": "string",
             "minLength": 1
+          }
+        }
+      }
+    },
+    "previous_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^F[0-9]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open", "fixed"]
           }
         }
       }

@@ -32,13 +32,16 @@ function prepareRepository() {
   git(directory, 'init', '--quiet');
   git(directory, 'config', 'user.email', 'test@example.com');
   git(directory, 'config', 'user.name', 'Test');
+  git(directory, 'config', 'commit.gpgsign', 'false');
   fs.writeFileSync(path.join(directory, 'example.txt'), 'first\n');
-  git(directory, 'add', 'example.txt');
+  fs.writeFileSync(path.join(directory, 'zz-priority.txt'), 'first\n');
+  git(directory, 'add', 'example.txt', 'zz-priority.txt');
   git(directory, 'commit', '--quiet', '-m', 'base');
   const baseSha = git(directory, 'rev-parse', 'HEAD');
   git(directory, 'update-ref', 'refs/remotes/origin/develop', baseSha);
   fs.writeFileSync(path.join(directory, 'example.txt'), 'first\nsecond\nthird\n');
-  git(directory, 'add', 'example.txt');
+  fs.writeFileSync(path.join(directory, 'zz-priority.txt'), 'first\nchanged since last review\n');
+  git(directory, 'add', 'example.txt', 'zz-priority.txt');
   git(directory, 'commit', '--quiet', '-m', 'head');
 
   const mockBin = path.join(directory, 'mock-bin');
@@ -50,6 +53,9 @@ output=""
 while (( $# > 0 )); do
   if [[ "$1" == "--output" ]]; then
     output="$2"
+    shift 2
+  elif [[ "$1" == "--data-binary" ]]; then
+    cp "\${2#@}" "${path.join(directory, 'captured-request.json')}"
     shift 2
   else
     shift
@@ -100,6 +106,69 @@ test('DeepSeek script uses base-ref fallback and writes structured output', (t) 
     'OK'
   );
   assert.match(result.stderr, /diff was truncated/);
+  // With a 1-line limit no file fits: both are left for the next run.
+  assert.equal(fs.readFileSync(path.join(directory, '.ai-review/truncated'), 'utf8'), 'example.txt\nzz-priority.txt\n');
+});
+
+test('DeepSeek script lists only the files cut by the diff limit', (t) => {
+  const { directory, mockBin } = prepareRepository();
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(directory, '.ai-review'));
+  fs.writeFileSync(path.join(directory, '.ai-review/priority-files.txt'), 'zz-priority.txt\n');
+
+  // The priority diff is 7 lines: it fits, example.txt that follows does not.
+  const result = runReview(directory, mockBin, { DEEPSEEK_MAX_DIFF_LINES: '8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(path.join(directory, '.ai-review/truncated'), 'utf8'), 'example.txt\n');
+});
+
+test('DeepSeek script keeps a renamed priority file as a rename', (t) => {
+  const { directory, mockBin } = prepareRepository();
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const body = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`).join('\n');
+  fs.writeFileSync(path.join(directory, 'Old Name.java'), `${body}\n`);
+  git(directory, 'add', '-A');
+  git(directory, 'commit', '--quiet', '--amend', '--no-edit');
+  const head = git(directory, 'rev-parse', 'HEAD');
+  git(directory, 'update-ref', 'refs/remotes/origin/develop', `${head}~1`);
+  // Recreate the base without the file, then rename it with a small edit.
+  git(directory, 'mv', 'Old Name.java', 'New Name.java');
+  fs.writeFileSync(path.join(directory, 'New Name.java'), `${body.replace('line 100', 'changed 100')}\n`);
+  git(directory, 'add', '-A');
+  git(directory, 'commit', '--quiet', '-m', 'rename');
+  git(directory, 'update-ref', 'refs/remotes/origin/develop', head);
+  fs.mkdirSync(path.join(directory, '.ai-review'));
+  fs.writeFileSync(path.join(directory, '.ai-review/priority-files.txt'), 'New Name.java\n');
+
+  const result = runReview(directory, mockBin, { DEEPSEEK_MAX_DIFF_LINES: '1000' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const request = JSON.parse(fs.readFileSync(path.join(directory, 'captured-request.json'), 'utf8'));
+  const diff = request.messages[1].content.split('## Diff\n')[1];
+  assert.match(diff, /^rename from Old Name\.java$/m);
+  assert.doesNotMatch(diff, /^deleted file mode/m);
+  assert.ok(diff.split('\n').length < 200, 'the rename must not be expanded into whole-file hunks');
+  assert.equal(fs.existsSync(path.join(directory, '.ai-review/truncated')), false);
+});
+
+test('DeepSeek script adds the review context and puts files in scope first', (t) => {
+  const { directory, mockBin } = prepareRepository();
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(directory, '.ai-review'));
+  fs.writeFileSync(path.join(directory, '.ai-review/context.md'), '# AI review context\n\nCONTEXT_SENTINEL\n');
+  fs.writeFileSync(path.join(directory, '.ai-review/priority-files.txt'), 'zz-priority.txt\n');
+
+  const result = runReview(directory, mockBin, { DEEPSEEK_MAX_DIFF_LINES: '1000' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const request = JSON.parse(fs.readFileSync(path.join(directory, 'captured-request.json'), 'utf8'));
+  const prompt = request.messages[1].content;
+  assert.match(prompt, /CONTEXT_SENTINEL/);
+  const diff = prompt.slice(prompt.indexOf('## Diff\n'));
+  assert.ok(diff.indexOf('zz-priority.txt') < diff.indexOf('example.txt'), 'priority file must come first');
+  assert.equal(diff.match(/^diff --git a\/zz-priority\.txt/gm).length, 1);
+  assert.equal(diff.match(/^diff --git a\/example\.txt/gm).length, 1);
 });
 
 test('DeepSeek script does not print an API error response body', (t) => {
