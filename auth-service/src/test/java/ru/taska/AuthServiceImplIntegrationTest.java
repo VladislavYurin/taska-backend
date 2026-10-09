@@ -682,7 +682,7 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .satisfies(ex -> {
                     StatusRuntimeException statusEx = (StatusRuntimeException) ex;
                     Assertions.assertThat(statusEx.getStatus().getCode().toString())
-                            .isEqualTo("PERMISSION_DENIED");
+                            .isEqualTo("UNAUTHENTICATED");
                     Assertions.assertThat(statusEx.getStatus().getDescription())
                             .contains("Account is locked until");
                 });

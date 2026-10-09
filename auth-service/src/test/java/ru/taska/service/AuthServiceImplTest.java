@@ -270,6 +270,8 @@ class AuthServiceImplTest {
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+            // Сервис вызывает resolveLockState ДО проверки статуса — мок обязателен
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
 
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, "password"))
@@ -279,7 +281,7 @@ class AuthServiceImplTest {
                                     && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
-            Mockito.verify(accountLockService, Mockito.never()).resolveLockState(ArgumentMatchers.any());
+            Mockito.verify(accountLockService).resolveLockState(testUser);
         }
 
         @Test
@@ -287,12 +289,14 @@ class AuthServiceImplTest {
         void shouldFailWhenUserNotActivated() {
             // Given
             String email = "invited@example.com";
-            String password = "password";
             testUser.setStatus(UserStatus.INVITED);
 
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
+
+            Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+
             // When & Then
             StepVerifier.create(authServiceImpl.login(email, "password"))
                     .expectErrorMatches(e ->
@@ -301,7 +305,7 @@ class AuthServiceImplTest {
                                     && e.getMessage().equals("Invalid credentials"))
                     .verify();
 
-            Mockito.verify(accountLockService, Mockito.never()).resolveLockState(ArgumentMatchers.any());
+            Mockito.verify(accountLockService).resolveLockState(testUser);
         }
 
         @Test
@@ -400,7 +404,7 @@ class AuthServiceImplTest {
         }
 
         @Test
-        @DisplayName("Should fail with PERMISSION_DENIED when account is locked with active window")
+        @DisplayName("Should fail with UNAUTHENTICATED when account is locked with active window")
         void shouldFailWhenAccountIsLockedWithActiveWindow() {
             // Given
             String email = "test@example.com";
@@ -423,7 +427,7 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(e ->
                             e instanceof DomainException de
-                                    && de.getStatus() == DomainStatus.PERMISSION_DENIED
+                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
                                     && e.getMessage().contains("Account is locked until"))
                     .verify();
 
