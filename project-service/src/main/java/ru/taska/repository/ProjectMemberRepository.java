@@ -21,14 +21,20 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
     @Query("UPDATE taska.project_members SET role = :role WHERE user_id = :changedMemberId AND project_id = :projectId")
     Mono<Long> updateRole(UUID changedMemberId, ProjectRole role, UUID projectId);
 
-    @Query("SELECT user_id, role FROM taska.project_members WHERE project_id = :projectId " +
-            "AND (role = 'ADMIN' OR user_id = :actorUserId OR user_id = :changedMemberId) ORDER BY user_id FOR UPDATE")
+    @Query("""
+    SELECT user_id, role, added_at
+    FROM taska.project_members
+    WHERE project_id = :projectId
+        AND (role = 'ADMIN' OR user_id = :actorUserId OR user_id = :changedMemberId)
+    ORDER BY user_id
+    FOR UPDATE
+    """)
     Flux<ProjectMemberDto> getRequiredMembersInProject(UUID actorUserId, UUID changedMemberId, UUID projectId);
 
     Mono<ProjectMember> findByUserIdAndProjectId(UUID userId, UUID projectId);
 
     @Query("""
-    SELECT pm.user_id, pm.role
+    SELECT pm.user_id, pm.role, pm.added_at
     FROM taska.project_members pm
     WHERE pm.project_id = :projectId
       AND EXISTS (
@@ -37,7 +43,7 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
           WHERE requester.project_id = :projectId
             AND requester.user_id = :actorUserId
       )
-    ORDER BY pm.user_id ASC
+    ORDER BY pm.user_id
     """)
     Flux<ProjectMemberDto> findProjectMembers(UUID projectId, UUID actorUserId);
 }

@@ -14,11 +14,13 @@ import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
+import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ListProjectMemberResponse;
+import ru.taska.api.project.v1.ProjectContextResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
@@ -42,6 +44,12 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<ProjectResponse> getProject(Mono<GetProjectRequest> request) {
         return grpcProjectService.getProject(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProject"));
+    }
+
+    @Override
+    public Mono<ProjectContextResponse> getProjectContext(Mono<GetProjectContextRequest> request) {
+        return grpcProjectService.getProjectContext(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectContext"));
     }
 
     @Override
