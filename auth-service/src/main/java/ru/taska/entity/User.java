@@ -71,7 +71,7 @@ public class User {
     private String displayName;
 
     /**
-     * Текущий статус пользователя (INVITED, ACTIVE, BLOCKED).
+     * Текущий статус пользователя (INVITED, ACTIVE, BLOCKED, LOCKED).
      */
     @Column("status")
     @Builder.Default
@@ -90,4 +90,11 @@ public class User {
     @LastModifiedDate
     @Column("updated_at")
     private Instant updatedAt;
+
+    /**
+     * Время, до которого вход в аккаунт заблокирован.
+     * Источник правды для {@link UserStatus#LOCKED}.
+     */
+    @Column("locked_until")
+    private Instant lockedUntil;
 }

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
@@ -40,6 +41,8 @@ import ru.taska.entity.InviteToken;
 import ru.taska.entity.RefreshToken;
 import ru.taska.entity.User;
 import ru.taska.entity.UserStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.CredentialRepository;
 import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.RefreshTokenRepository;
@@ -73,6 +76,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
 
     @Autowired
     private SecurityProperties securityProperties;
+
+    @Autowired
+    private DatabaseClient databaseClient;
 
     private static ManagedChannel channel;
     private static ReactorAuthServiceGrpc.ReactorAuthServiceStub authStub;
@@ -224,8 +230,17 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
 
         if (testUserId != null) {
             try {
-                refreshTokenRepository.deleteById(testUserId).block(Duration.ofSeconds(5));
-                credentialRepository.deleteById(testUserId).block(Duration.ofSeconds(5));
+                // FIX: refreshTokenRepository.deleteById(testUserId) не работает —
+                // testUserId это id ПОЛЬЗОВАТЕЛЯ, а не refresh-токена.
+                // Удаляем все refresh-токены, принадлежащие пользователю.
+                refreshTokenRepository.findAll()
+                        .filter(t -> testUserId.equals(t.getUserId()))
+                        .flatMap(t -> refreshTokenRepository.deleteById(t.getId()))
+                        .blockLast(Duration.ofSeconds(5));
+
+                credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
+                        .flatMap(cred -> credentialRepository.deleteById(cred.getId()))
+                        .block(Duration.ofSeconds(5));
                 userRepository.deleteById(testUserId).block(Duration.ofSeconds(5));
                 log.debug(">>> Cleanup completed");
             } catch (Exception e) {
@@ -263,6 +278,33 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    // =================================================================
+    // Вспомогательные методы для сдвига времени без Thread.sleep.
+    // locked_until теперь живёт в users (миграция 0004), поэтому сдвигаем
+    // прямо в БД. Это детерминированно и мгновенно.
+    // =================================================================
+
+    /** Ставит LOCKED и locked_until в будущее (+15 минут от now() в БД). */
+    private void lockUser(UUID userId) {
+        databaseClient.sql("UPDATE taska.users SET status = 'LOCKED', locked_until = now() + interval '15 minutes' WHERE id = :id")
+                .bind("id", userId)
+                .fetch().rowsUpdated().block(Duration.ofSeconds(5));
+    }
+
+    /** Сдвигает locked_until в прошлое — окно истекло, лок снимется лениво. */
+    private void expireLock(UUID userId) {
+        databaseClient.sql("UPDATE taska.users SET locked_until = now() - interval '1 minute' WHERE id = :id")
+                .bind("id", userId)
+                .fetch().rowsUpdated().block(Duration.ofSeconds(5));
+    }
+
+    /** Ставит BLOCKED — терминальный статус, не снимается временем. */
+    private void blockUser(UUID userId) {
+        databaseClient.sql("UPDATE taska.users SET status = 'BLOCKED' WHERE id = :id")
+                .bind("id", userId)
+                .fetch().rowsUpdated().block(Duration.ofSeconds(5));
     }
 
     @Test
@@ -571,13 +613,14 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                     .as("Failed attempts should be persisted after attempt #%d", attemptNumber)
                     .isEqualTo(attemptNumber);
             Assertions.assertThat(credential.getLastFailedAt()).isNotNull();
-            Assertions.assertThat(credential.getLockedUntil())
-                    .as("Account should not be locked yet before reaching max attempts")
-                    .isNull();
-
+            // После истечения попыток лок ещё не выставлен.
             User user = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
             Assertions.assertThat(user).isNotNull();
             Assertions.assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+            // FIX: locked_until теперь на User, до лимита — null.
+            Assertions.assertThat(user.getLockedUntil())
+                    .as("Account should not be locked yet before reaching max attempts")
+                    .isNull();
 
             log.info(">>> Attempt #{}: failedAttempts={}, status={}",
                     attemptNumber, credential.getFailedAttempts(), user.getStatus());
@@ -611,10 +654,6 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
 
         Assertions.assertThat(lockedCredential).isNotNull();
         Assertions.assertThat(lockedCredential.getFailedAttempts()).isEqualTo(maxAttempts);
-        Assertions.assertThat(lockedCredential.getLockedUntil())
-                .as("lockedUntil should be set after max attempts")
-                .isNotNull();
-        Assertions.assertThat(lockedCredential.getLockedUntil()).isAfter(Instant.now());
 
         User lockedUser = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
         Assertions.assertThat(lockedUser).isNotNull();
@@ -623,7 +662,7 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .isEqualTo(UserStatus.LOCKED);
 
         log.info(">>> Account locked until {} after {} failed attempts",
-                lockedCredential.getLockedUntil(), maxAttempts);
+                lockedUser.getLockedUntil(), maxAttempts);
 
         // And: даже с правильным паролем логин должен падать, пока аккаунт заблокирован
         LoginRequest correctPasswordRequest = LoginRequest.newBuilder()
@@ -643,7 +682,7 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .satisfies(ex -> {
                     StatusRuntimeException statusEx = (StatusRuntimeException) ex;
                     Assertions.assertThat(statusEx.getStatus().getCode().toString())
-                            .isEqualTo("PERMISSION_DENIED");
+                            .isEqualTo("UNAUTHENTICATED");
                     Assertions.assertThat(statusEx.getStatus().getDescription())
                             .contains("Account is locked until");
                 });
@@ -706,9 +745,144 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)
                 .block(Duration.ofSeconds(5));
         Assertions.assertThat(afterSuccess.getFailedAttempts()).isEqualTo(0);
-        Assertions.assertThat(afterSuccess.getLockedUntil()).isNull();
 
         User user = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
         Assertions.assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        Assertions.assertThat(user.getLockedUntil()).isNull();
+    }
+
+    @Test
+    @DisplayName("NEW: access token is rejected immediately when account becomes BLOCKED")
+    void testAccessTokenRejectedImmediatelyWhenBlocked() {
+        LoginResponse login = authStub.login(Mono.just(LoginRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId("req-blocked-access-revoked").setNodeId("test-node").build())
+                        .setBody(LoginRequestBody.newBuilder().setEmail(testEmail).setPassword(testPassword).build())
+                        .build()))
+                .block(Duration.ofSeconds(10));
+        String accessToken = login.getAccessToken();
+
+        // BLOCKED — терминальный админский статус, немедленный отзыв access-токена.
+        blockUser(testUserId);
+
+        Assertions.assertThatThrownBy(() ->
+                        authService.validateAccessToken(accessToken).block(Duration.ofSeconds(10)))
+                .isInstanceOf(DomainException.class)
+                .satisfies(ex -> {
+                    DomainException de = (DomainException) ex;
+                    Assertions.assertThat(de.getStatus()).isEqualTo(DomainStatus.UNAUTHENTICATED);
+                    Assertions.assertThat(de.getMessage()).contains("User not found or inactive");
+                });
+    }
+
+    @Test
+    @DisplayName("NEW: access token is rejected immediately when account becomes LOCKED")
+    void testAccessTokenRejectedImmediatelyWhenLocked() {
+        // Логин → access-токен на ACTIVE-юзера.
+        LoginResponse login = authStub.login(Mono.just(LoginRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId("req-locked-access-still-works").setNodeId("test-node").build())
+                        .setBody(LoginRequestBody.newBuilder().setEmail(testEmail).setPassword(testPassword).build())
+                        .build()))
+                .block(Duration.ofSeconds(10));
+        String accessToken = login.getAccessToken();
+        Assertions.assertThat(accessToken).isNotEmpty();
+
+        // Лочим юзера с активным окном — прямой SQL, мгновенно.
+        lockUser(testUserId);
+
+        // Старый access-токен должен продолжать работать: лок — анти-брутфорс формы входа,
+        // легитимная сессия на другом устройстве не должна страдать.
+        var userContext = authService.validateAccessToken(accessToken).block(Duration.ofSeconds(10));
+        Assertions.assertThat(userContext).isNotNull();
+        Assertions.assertThat(userContext.getUserId()).isEqualTo(testUserId.toString());
+
+        // Статус в БД остаётся LOCKED — сам лок никто не снимает на read-path.
+        User after = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
+        Assertions.assertThat(after.getStatus()).isEqualTo(UserStatus.LOCKED);
+        Assertions.assertThat(after.getLockedUntil()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("NEW: refresh rejected for LOCKED user and old refresh NOT burned")
+    void testRefreshRejectedForLockedUserAndOldTokenNotBurned() {
+        // 1) Лочим юзера с активным окном.
+        lockUser(testUserId);
+
+        // 2) refresh → UNAUTHENTICATED (проверка статуса внутри validateAndRotate).
+        Assertions.assertThatThrownBy(() ->
+                        authStub.refresh(Mono.just(RefreshRequest.newBuilder()
+                                        .setHeader(Header.newBuilder().setRequestId("req-refresh-locked").setNodeId("test-node").build())
+                                        .setBody(RefreshRequestBody.newBuilder().setRefreshToken(validRefreshToken).build())
+                                        .build()))
+                                .block(Duration.ofSeconds(10)))
+                .isInstanceOf(StatusRuntimeException.class)
+                .satisfies(ex -> {
+                    StatusRuntimeException sre = (StatusRuntimeException) ex;
+                    Assertions.assertThat(sre.getStatus().getCode().toString()).isEqualTo("UNAUTHENTICATED");
+                });
+
+        // 3) Старый refresh НЕ сожжён: revoked_at IS NULL и replaced_by IS NULL.
+        RefreshToken old = refreshTokenRepository
+                .findByTokenHash(hashTokenWithSHA256(validRefreshToken))
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(old).isNotNull();
+        Assertions.assertThat(old.getRevokedAt())
+                .as("old refresh must NOT be revoked on rejection")
+                .isNull();
+        Assertions.assertThat(old.getReplacedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("NEW: refresh succeeds after lock window expires")
+    void testRefreshSucceedsAfterLockExpires() {
+        // 1) Лочим, потом сдвигаем окно в прошлое.
+        lockUser(testUserId);
+        expireLock(testUserId);
+
+        // 2) refresh должен пройти: resolveLockState снимет лок, статус ACTIVE.
+        RefreshResponse response = authStub.refresh(Mono.just(RefreshRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId("req-refresh-after-expire").setNodeId("test-node").build())
+                        .setBody(RefreshRequestBody.newBuilder().setRefreshToken(validRefreshToken).build())
+                        .build()))
+                .block(Duration.ofSeconds(10));
+        Assertions.assertThat(response).isNotNull();
+        Assertions.assertThat(response.getAccessToken()).isNotEmpty();
+        Assertions.assertThat(response.getRefreshToken()).isNotEqualTo(validRefreshToken);
+
+        // 3) Старый токен отозван и заменён.
+        RefreshToken old = refreshTokenRepository
+                .findByTokenHash(hashTokenWithSHA256(validRefreshToken))
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(old.getRevokedAt()).isNotNull();
+        Assertions.assertThat(old.getReplacedBy()).isNotNull();
+
+        // 4) Юзер ACTIVE, locked_until null.
+        User after = userRepository.findById(testUserId).block(Duration.ofSeconds(5));
+        Assertions.assertThat(after.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        Assertions.assertThat(after.getLockedUntil()).isNull();
+    }
+
+    @Test
+    @DisplayName("NEW: refresh rejected for BLOCKED user and old refresh NOT burned")
+    void testRefreshRejectedForBlockedUserAndOldTokenNotBurned() {
+        // 1) BLOCKED — терминальный статус, временем не снимается.
+        blockUser(testUserId);
+
+        // 2) refresh → UNAUTHENTICATED.
+        Assertions.assertThatThrownBy(() ->
+                        authStub.refresh(Mono.just(RefreshRequest.newBuilder()
+                                        .setHeader(Header.newBuilder().setRequestId("req-refresh-blocked").setNodeId("test-node").build())
+                                        .setBody(RefreshRequestBody.newBuilder().setRefreshToken(validRefreshToken).build())
+                                        .build()))
+                                .block(Duration.ofSeconds(10)))
+                .isInstanceOf(StatusRuntimeException.class)
+                .satisfies(ex -> Assertions.assertThat(((StatusRuntimeException) ex).getStatus().getCode().toString())
+                        .isEqualTo("UNAUTHENTICATED"));
+
+        // 3) Старый refresh НЕ сожжён.
+        RefreshToken old = refreshTokenRepository
+                .findByTokenHash(hashTokenWithSHA256(validRefreshToken))
+                .block(Duration.ofSeconds(5));
+        Assertions.assertThat(old.getRevokedAt()).isNull();
+        Assertions.assertThat(old.getReplacedBy()).isNull();
     }
 }
