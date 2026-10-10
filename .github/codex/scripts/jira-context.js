@@ -15,6 +15,9 @@ const MAX_DESCRIPTION_LENGTH = 6000;
 const MAX_COMMENTS = 5;
 const MAX_COMMENT_LENGTH = 800;
 const REQUEST_TIMEOUT_MS = 10000;
+// Comments the Jira sync workflow leaves about PRs (jira-sync.js). They carry
+// nothing about the requirements and would push people's comments out.
+const SYNC_COMMENT_PATTERN = /^(Открыт )?\[PR #\d+ «/;
 
 function parseProjectKeys(value) {
   return String(value ?? '')
@@ -170,11 +173,14 @@ function renderIssue(issue, browseUrl) {
     facts.push(`- Подзадачи: ${subtasks.join('; ')}`);
   }
 
-  const comments = (fields.comment?.comments ?? []).slice(-MAX_COMMENTS).map((comment) => {
-    const author = comment.author?.displayName ?? comment.author?.name ?? 'unknown';
-    const date = String(comment.created ?? '').slice(0, 10);
-    return `- ${author} (${date}): ${truncate(comment.body, MAX_COMMENT_LENGTH)}`;
-  });
+  const comments = (fields.comment?.comments ?? [])
+    .filter((comment) => !SYNC_COMMENT_PATTERN.test(String(comment.body ?? '').trim()))
+    .slice(-MAX_COMMENTS)
+    .map((comment) => {
+      const author = comment.author?.displayName ?? comment.author?.name ?? 'unknown';
+      const date = String(comment.created ?? '').slice(0, 10);
+      return `- ${author} (${date}): ${truncate(comment.body, MAX_COMMENT_LENGTH)}`;
+    });
 
   return [
     `## Jira issue ${issue.key}`,

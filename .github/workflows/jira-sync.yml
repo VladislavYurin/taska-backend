@@ -2,7 +2,9 @@ name: Jira sync
 
 on:
   pull_request:
-    types: [ opened, reopened, ready_for_review, closed ]
+    # synchronize and edited catch a PR whose opened event was missed (GitHub
+    # skips runs while a PR conflicts) or whose key was added to the title later.
+    types: [ opened, reopened, ready_for_review, synchronize, edited, closed ]
 
 permissions:
   contents: read
@@ -21,11 +23,12 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
-      # The PR head commit stays fetchable after a merge deletes the branch.
+      # The same commit this workflow file was read from (the PR merge commit,
+      # or the base branch merge commit once merged), so the script always
+      # matches the workflow, even for branches cut before it existed.
       - name: Checkout scripts
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: .github
           persist-credentials: false
 
@@ -41,5 +44,10 @@ jobs:
           JIRA_DONE_BRANCHES: ${{ vars.JIRA_DONE_BRANCHES || 'develop,main,master' }}
         with:
           script: |
-            const syncJiraIssue = require('./.github/codex/scripts/jira-sync.js');
+            const script = './.github/codex/scripts/jira-sync.js';
+            if (!require('fs').existsSync(script)) {
+              core.warning(`${script} is missing in this commit; Jira is not updated.`);
+              return;
+            }
+            const syncJiraIssue = require(script);
             await syncJiraIssue({ context, core });

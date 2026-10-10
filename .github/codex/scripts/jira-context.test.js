@@ -129,6 +129,32 @@ test('loadJiraContext renders the issue as untrusted context', async () => {
   assert.match(jira.markdown, /Аналитик \(2026-09-10\): Токены отзываем сразу\./);
 });
 
+test('loadJiraContext leaves the sync bot comments out of the issue context', async () => {
+  const people = Array.from({ length: 5 }, (_, index) => ({
+    author: { displayName: `Аналитик ${index + 1}` },
+    created: '2026-09-10T10:00:00.000+0300',
+    body: `Уточнение ${index + 1}`,
+  }));
+  const bot = [
+    'Открыт [PR #180 «TAS-198: fix»|https://github.com/acme/taska/pull/180] от dev ({{feature/TAS-198}} → {{develop}}).',
+    '[PR #180 «TAS-198: fix»|https://github.com/acme/taska/pull/180] влит в {{develop}}, merge-коммит {{abc1234}}.',
+  ].map((body) => ({ author: { displayName: 'taska-bot' }, created: '2026-09-11T10:00:00.000+0300', body }));
+  const issue = { ...ISSUE, fields: { ...ISSUE.fields, comment: { comments: [...people, ...bot] } } };
+
+  const jira = await loadJiraContext({
+    env: { JIRA_BASE_URL: 'https://jira.example.dev', JIRA_TOKEN: 'pat' },
+    title: 'TAS-198',
+    branch: '',
+    core: createCore(),
+    fetchImpl: async () => jsonResponse(issue),
+  });
+
+  assert.doesNotMatch(jira.markdown, /taska-bot|PR #180/);
+  for (let index = 1; index <= 5; index += 1) {
+    assert.match(jira.markdown, new RegExp(`Уточнение ${index}`));
+  }
+});
+
 test('loadJiraContext truncates long descriptions', async () => {
   const issue = { ...ISSUE, fields: { ...ISSUE.fields, description: 'x'.repeat(10000) } };
   const jira = await loadJiraContext({

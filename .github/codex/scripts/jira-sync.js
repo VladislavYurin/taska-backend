@@ -27,7 +27,8 @@ function linkText(text) {
 
 /**
  * Decides what a pull request event means for its Jira issue: the status to
- * move it to (if any) and the comment to leave.
+ * move it to (if any) and the comment to leave. Every comment starts with the
+ * PR link: the AI review recognises and skips them (jira-context.js).
  */
 function planSync(payload, settings) {
   const pr = payload.pull_request;
@@ -41,6 +42,14 @@ function planSync(payload, settings) {
   switch (payload.action) {
     case 'opened':
       return { targetStatus: settings.inReviewStatus, message: `Открыт ${prLink}${author} (${branches}).` };
+    // A push or a title edit only stands in for a missed "opened": it acts
+    // once per PR, while the issue has no link to it yet.
+    case 'synchronize':
+      return { targetStatus: settings.inReviewStatus, message: `Открыт ${prLink}${author} (${branches}).`, firstSyncOnly: true };
+    case 'edited':
+      return payload.changes?.title
+        ? { targetStatus: settings.inReviewStatus, message: `Открыт ${prLink}${author} (${branches}).`, firstSyncOnly: true }
+        : null;
     case 'reopened':
       return { targetStatus: settings.inReviewStatus, message: `${prLink} переоткрыт (${branches}).` };
     case 'ready_for_review':
@@ -86,7 +95,14 @@ async function moveIssue(request, key, targetStatus, settings) {
   const transition = transitions.find((item) => sameName(item.to?.name, targetStatus))
     ?? transitions.find((item) => sameName(item.name, targetStatus));
   if (!transition) {
-    return { changed: false, from: current, reason: 'no-transition' };
+    // Jira lists only the transitions this account may perform: an empty
+    // list usually means a missing permission or a misspelled status name.
+    return {
+      changed: false,
+      from: current,
+      reason: 'no-transition',
+      available: transitions.map((item) => item.to?.name ?? item.name),
+    };
   }
   await request({
     method: 'POST',
@@ -96,13 +112,22 @@ async function moveIssue(request, key, targetStatus, settings) {
   return { changed: true, from: current, to: transition.to?.name ?? targetStatus };
 }
 
+function linkGlobalId(repository, pr) {
+  return `github-pr:${repository}#${pr.number}`;
+}
+
+async function isLinked(request, key, globalId) {
+  const links = await request({ path: `rest/api/2/issue/${encodeURIComponent(key)}/remotelink` });
+  return Array.isArray(links) && links.some((link) => link.globalId === globalId);
+}
+
 /** Adds the PR to the issue's links; the globalId makes repeated events update it. */
 function linkPullRequest(request, key, pr, repository) {
   return request({
     method: 'POST',
     path: `rest/api/2/issue/${encodeURIComponent(key)}/remotelink`,
     body: {
-      globalId: `github-pr:${repository}#${pr.number}`,
+      globalId: linkGlobalId(repository, pr),
       application: { type: 'com.github', name: 'GitHub' },
       relationship: 'pull request',
       object: {
@@ -149,6 +174,18 @@ async function syncJiraIssue({ context, core, env = process.env, fetchImpl }) {
   });
   const repository = `${context.repo.owner}/${context.repo.repo}`;
 
+  if (plan.firstSyncOnly) {
+    try {
+      if (await isLinked(request, key, linkGlobalId(repository, pr))) {
+        core.info(`${key} is already linked to PR #${pr.number}; nothing to do.`);
+        return { skipped: 'already-synced', key };
+      }
+    } catch (error) {
+      core.warning(`Could not read the links of ${key}: ${error.message}`);
+      return { skipped: 'unknown-links', key };
+    }
+  }
+
   try {
     await linkPullRequest(request, key, pr, repository);
   } catch (error) {
@@ -159,7 +196,12 @@ async function syncJiraIssue({ context, core, env = process.env, fetchImpl }) {
   if (plan.targetStatus) {
     try {
       move = await moveIssue(request, key, plan.targetStatus, settings);
-      if (!move.changed) {
+      if (move.reason === 'no-transition') {
+        core.warning(
+          `No transition of ${key} from "${move.from}" to "${plan.targetStatus}"; available: `
+          + `${move.available.join(', ') || 'none (does the Jira account have Transition Issues?)'}.`
+        );
+      } else if (!move.changed) {
         core.info(`${key} stays in "${move.from}" (${move.reason}).`);
       }
     } catch (error) {
