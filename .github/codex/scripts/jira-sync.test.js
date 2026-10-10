@@ -189,7 +189,11 @@ test('Jira errors become warnings and the comment is still posted', async () => 
   const jira = createJira({ fail: { 'POST transitions': 400, 'POST remotelink': 500 } });
   const core = createCore();
 
-  await syncJiraIssue({ context: event('opened'), core, env: ENV, fetchImpl: jira.fetchImpl });
+  await syncJiraIssue({ context: event('opened'), core, env: ENV, fetchImpl: jira.fetchImpl, retryDelays: [0, 0] });
+
+  // The link is idempotent, so it was retried; the transition was not.
+  assert.equal(posted(jira, '/remotelink').length, 3);
+  assert.equal(posted(jira, '/transitions').length, 1);
 
   assert.equal(core.warnings.length, 2);
   assert.match(core.warnings[0], /Could not link the PR to TAS-250: Jira responded with HTTP 500/);

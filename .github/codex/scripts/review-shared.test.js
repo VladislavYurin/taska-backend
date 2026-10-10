@@ -113,6 +113,10 @@ test('parseInlineBody strips markers, status line and severity', () => {
 
   assert.deepEqual(parseInlineBody(body), { severity: 'high', text: 'Гонка при обновлении статуса.' });
   assert.deepEqual(parseInlineBody('<!-- ai-pr-review:ab -->\n**[low]** Мелочь.'), { severity: 'low', text: 'Мелочь.' });
+  assert.equal(
+    parseInlineBody('<!-- ai-pr-review:ab -->\n**[high]** Нарушает [TAS-1](https://jira.example.dev/browse/TAS-1).').text,
+    'Нарушает TAS-1.'
+  );
 });
 
 test('setStatusLine adds, replaces and removes the status line', () => {

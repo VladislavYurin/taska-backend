@@ -125,6 +125,7 @@ async function isLinked(request, key, globalId) {
 function linkPullRequest(request, key, pr, repository) {
   return request({
     method: 'POST',
+    idempotent: true,
     path: `rest/api/2/issue/${encodeURIComponent(key)}/remotelink`,
     body: {
       globalId: linkGlobalId(repository, pr),
@@ -146,7 +147,7 @@ function linkPullRequest(request, key, pr, repository) {
  * branch, with a comment either way. Jira failures are warnings, never a
  * failed check.
  */
-async function syncJiraIssue({ context, core, env = process.env, fetchImpl }) {
+async function syncJiraIssue({ context, core, env = process.env, fetchImpl, retryDelays }) {
   const settings = readSyncSettings(env);
   if (!settings.baseUrl || !settings.token) {
     core.info('Jira sync is disabled: JIRA_BASE_URL or JIRA_TOKEN is not set.');
@@ -170,6 +171,7 @@ async function syncJiraIssue({ context, core, env = process.env, fetchImpl }) {
     token: settings.token,
     username: settings.username,
     fetchImpl,
+    retryDelays,
     ...options,
   });
   const repository = `${context.repo.owner}/${context.repo.repo}`;

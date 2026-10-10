@@ -18,7 +18,12 @@ const {
   parseState,
   severityRank,
 } = require('./review-shared');
-const { loadJiraContext } = require('./jira-context');
+const {
+  browseBaseUrl,
+  extractIssueKey,
+  loadJiraContext,
+  parseProjectKeys,
+} = require('./jira-context');
 
 const MAX_FINDINGS_IN_PROMPT = 60;
 const MAX_FINDING_LENGTH = 700;
@@ -291,6 +296,17 @@ async function prepareReviewContext({ github, context, core, env = process.env, 
     ? await loadJiraContext({ env, title: pullRequest.title, branch: pullRequest.head?.ref, core, fetchImpl })
     : null;
 
+  // The issue link needs only the key: it is shown even when the issue
+  // itself could not be or must not be loaded.
+  const issueLinks = {
+    browseUrl: browseBaseUrl(env.JIRA_BASE_URL),
+    projectKeys: parseProjectKeys(env.JIRA_PROJECT_KEYS || 'TAS'),
+  };
+  const issueKey = extractIssueKey([pullRequest.title, pullRequest.head?.ref], issueLinks.projectKeys);
+  const issue = jira
+    ? { key: jira.key, url: jira.url }
+    : issueKey && issueLinks.browseUrl ? { key: issueKey, url: `${issueLinks.browseUrl}${issueKey}` } : null;
+
   fs.mkdirSync(CONTEXT_DIR, { recursive: true });
   fs.writeFileSync(CONTEXT_FILE, renderContext({ scope, findings, jira }));
   fs.writeFileSync(
@@ -302,6 +318,8 @@ async function prepareReviewContext({ github, context, core, env = process.env, 
     lastReviewedSha: scope.lastReviewedSha,
     findings,
     jira: jira ? { key: jira.key, url: jira.url, summary: jira.summary, status: jira.status } : null,
+    issue,
+    issueLinks,
   }, null, 2));
 
   core.info(
