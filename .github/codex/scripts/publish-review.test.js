@@ -287,6 +287,38 @@ async function setUpPublish(t, { review, findings = [], issueComments = [], fail
   return { repository, github, baseSha, headSha, reviewedSha };
 }
 
+test('publishReview links the Jira issue and the keys mentioned by the model', async (t) => {
+  const review = {
+    summary: 'PR закрывает TAS-252 и частично TAS-249.',
+    manual_checks: ['Проверить переход TAS-252 в Done'],
+    tests: 'Тесты есть.',
+    previous_findings: [],
+    comments: [{ severity: 'high', path: 'src/A.java', line: 20, body: 'Ломает сценарий из TAS-249: исключение теряется.' }],
+  };
+  const { repository, github, baseSha, headSha } = await setUpPublish(t, { review });
+  const statePath = path.join(repository.directory, '.ai-review', 'state.json');
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  fs.writeFileSync(statePath, JSON.stringify({
+    ...state,
+    issue: { key: 'TAS-252', url: 'https://jira.example.dev/browse/TAS-252' },
+    issueLinks: { browseUrl: 'https://jira.example.dev/browse/', projectKeys: ['TAS'] },
+  }));
+
+  await inDirectory(repository.directory, () => publishReview({
+    github,
+    context: createContext(),
+    core: createCore(),
+    env: { PR_BASE_SHA: baseSha, PR_HEAD_SHA: headSha },
+  }));
+
+  const inline = github.calls.find(([name]) => name === 'pulls.createReview')[1].comments[0].body;
+  assert.match(inline, /Ломает сценарий из \[TAS-249\]\(https:\/\/jira\.example\.dev\/browse\/TAS-249\)/);
+  const summary = github.calls.at(-1)[1].body;
+  assert.match(summary, /\*\*Задача:\*\* \[TAS-252\]\(https:\/\/jira\.example\.dev\/browse\/TAS-252\)\n/);
+  assert.match(summary, /PR закрывает \[TAS-252\]\(https:\/\/jira\.example\.dev\/browse\/TAS-252\) и частично \[TAS-249\]/);
+  assert.match(summary, /- Проверить переход \[TAS-252\]\(/);
+});
+
 test('renderSummary lists repeats of one finding as a single item', () => {
   const body = renderSummary({
     review: { summary: 's', taskAlignment: '', manualChecks: [], tests: 't' },
