@@ -337,7 +337,15 @@ AI review ведёт одну сводку в PR и не повторяет се
 | `JIRA_USERNAME` | variable | — | только для Jira Cloud: email, тогда `JIRA_TOKEN` — API token |
 | `JIRA_PROJECT_KEYS` | variable | `TAS` | ключи проектов, которые ищутся в заголовке PR и имени ветки |
 
-Тесты скриптов AI review:
+Workflow `Jira sync` двигает задачу из заголовка PR или имени ветки по флоу, если `JIRA_SYNC_ENABLED=true`:
+
+- PR открыт, переоткрыт или выведен из draft — ссылка на PR в связях задачи, перевод в `JIRA_STATUS_IN_REVIEW` (по умолчанию `In Review`) и комментарий;
+- PR влит в ветку из `JIRA_DONE_BRANCHES` (по умолчанию `develop,main,master`) — перевод в `JIRA_STATUS_DONE` (по умолчанию `Done`) и комментарий с merge-коммитом; мерж в другую ветку (stacked PR) задачу не закрывает;
+- PR закрыт без мержа — только комментарий.
+
+Переход ищется по имени целевого статуса; задача из Done обратно не возвращается; draft PR и PR без ключа задачи пропускаются. Используются те же `JIRA_BASE_URL` и `JIRA_TOKEN`, что и в AI review; учётной записи бота нужны права Browse Projects, Transition Issues, Add Comments и Link Issues. Ошибки Jira пишутся warning в лог и не валят проверку.
+
+Тесты скриптов AI review и Jira sync:
 
 ```bash
 node --test .github/codex/scripts/*.test.js

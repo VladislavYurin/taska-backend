@@ -51,25 +51,67 @@ function normalizeBaseUrl(baseUrl) {
   return url;
 }
 
-async function fetchIssue({ baseUrl, token, username, key, fetchImpl = fetch }) {
-  const url = new URL(`rest/api/2/issue/${encodeURIComponent(key)}`, normalizeBaseUrl(baseUrl));
-  url.searchParams.set('fields', ISSUE_FIELDS.join(','));
-
-  // Jira Server/DC personal access tokens use Bearer; Jira Cloud API tokens use Basic.
-  const authorization = username
-    ? `Basic ${Buffer.from(`${username}:${token}`).toString('base64')}`
-    : `Bearer ${token}`;
+/**
+ * Calls the Jira REST API. Jira Server/DC personal access tokens use Bearer;
+ * Jira Cloud API tokens use Basic with the account email as `username`.
+ */
+async function jiraRequest({
+  baseUrl,
+  token,
+  username,
+  method = 'GET',
+  path,
+  searchParams = {},
+  body,
+  fetchImpl = fetch,
+}) {
+  const url = new URL(path, normalizeBaseUrl(baseUrl));
+  for (const [name, value] of Object.entries(searchParams)) {
+    url.searchParams.set(name, value);
+  }
+  const headers = {
+    Accept: 'application/json',
+    Authorization: username
+      ? `Basic ${Buffer.from(`${username}:${token}`).toString('base64')}`
+      : `Bearer ${token}`,
+  };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const response = await fetchImpl(url, {
-    headers: { Accept: 'application/json', Authorization: authorization },
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
     redirect: 'error',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     // The response body is not logged: it may echo request details.
-    throw new Error(`Jira responded with HTTP ${response.status} for ${key}.`);
+    throw Object.assign(
+      new Error(`Jira responded with HTTP ${response.status} to ${method} ${url.pathname}.`),
+      { status: response.status }
+    );
   }
-  return response.json();
+  if (response.status === 204) {
+    return null;
+  }
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function fetchIssue({ baseUrl, token, username, key, fetchImpl = fetch }) {
+  return jiraRequest({
+    baseUrl,
+    token,
+    username,
+    path: `rest/api/2/issue/${encodeURIComponent(key)}`,
+    searchParams: { fields: ISSUE_FIELDS.join(',') },
+    fetchImpl,
+  });
 }
 
 function truncate(text, maxLength) {
@@ -188,7 +230,9 @@ async function loadJiraContext({ env, title, branch, core, fetchImpl }) {
 module.exports = {
   extractIssueKey,
   fetchIssue,
+  jiraRequest,
   loadJiraContext,
+  normalizeBaseUrl,
   parseProjectKeys,
   renderIssue,
 };
