@@ -40,6 +40,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * WebTestClient-тесты для {@link WorklogController}.
@@ -378,16 +380,7 @@ class WorklogControllerTest {
     @DisplayName("updateIssueWorklog: должен вернуть 400 Bad Request при spentMinutes = 0")
     void updateIssueWorklog_shouldReturn400_whenSpentMinutesIsZero() {
         mockAuthenticatedUser();
-
-        Mockito.when(worklogClient.updateIssueWorklog(
-                        Mockito.eq(ISSUE_ID.toString()),
-                        Mockito.eq(WORKLOG_ID.toString()),
-                        Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
-                .thenAnswer(inv -> {
-                    Mono<UpdateIssueWorklogRequestDto> body = inv.getArgument(2);
-                    return body.map(dto -> worklogDto());
-                });
+        var received = mockUpdateWorklogConsumingBody();
 
         webTestClient.put()
                 .uri(WORKLOG_URI, PROJECT_ID, ISSUE_ID, WORKLOG_ID)
@@ -396,7 +389,13 @@ class WorklogControllerTest {
                 .bodyValue("{\"spentMinutes\": 0}")
                 .exchange()
                 .expectStatus().isBadRequest()
-                .expectHeader().exists("X-Request-Id");
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        // Невалидное тело не должно дойти до бизнес-логики клиента
+        Assertions.assertThat(received.get()).isNull();
     }
 
     @Test
@@ -496,6 +495,62 @@ class WorklogControllerTest {
         Mockito.verifyNoInteractions(worklogClient);
     }
 
+    // ============ PUT /worklogs/{worklogId}: comment ============
+
+    @Test
+    @DisplayName("updateIssueWorklog: должен вернуть 400 Bad Request, если comment длиннее 2000 символов")
+    void updateIssueWorklog_shouldReturn400_whenCommentIsTooLong() {
+        mockAuthenticatedUser();
+        var received = mockUpdateWorklogConsumingBody();
+
+        var request = new UpdateIssueWorklogRequestDto();
+        request.setComment("a".repeat(2001));
+
+        webTestClient.put()
+                .uri(WORKLOG_URI, PROJECT_ID, ISSUE_ID, WORKLOG_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        // Невалидное тело не должно дойти до бизнес-логики клиента
+        Assertions.assertThat(received.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("updateIssueWorklog: должен вернуть 200 OK и передать пустой comment как есть (очистка комментария)")
+    void updateIssueWorklog_shouldPassEmptyComment_whenCommentIsCleared() {
+        mockAuthenticatedUser();
+        var received = mockUpdateWorklogConsumingBody(dto -> {
+            var response = worklogDto();
+            response.setComment(null);
+            response.setUpdatedAt(OffsetDateTime.parse("2026-07-13T11:00:00Z"));
+            return response;
+        });
+
+        webTestClient.put()
+                .uri(WORKLOG_URI, PROJECT_ID, ISSUE_ID, WORKLOG_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"comment\": \"\"}")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.id").isEqualTo(WORKLOG_ID.toString())
+                .jsonPath("$.comment").doesNotExist();
+
+        Assertions.assertThat(received.get()).isNotNull();
+        Assertions.assertThat(received.get().getComment()).isEmpty();
+        Assertions.assertThat(received.get().getSpentMinutes()).isNull();
+        Assertions.assertThat(received.get().getWorkDate()).isNull();
+    }
+
     // ============ helpers ============
 
     /**
@@ -544,4 +599,31 @@ class WorklogControllerTest {
         dto.setCreatedAt(OffsetDateTime.parse("2026-07-13T10:00:00Z"));
         return dto;
     }
+
+    /**
+     * Мок клиента update, который подписывается на тело запроса
+     * (иначе валидация {@code @Valid Mono<Dto>} не сработает)
+     * и запоминает DTO, дошедший до клиента.
+     */
+    private AtomicReference<UpdateIssueWorklogRequestDto> mockUpdateWorklogConsumingBody() {
+        return mockUpdateWorklogConsumingBody(dto -> worklogDto());
+    }
+
+    private AtomicReference<UpdateIssueWorklogRequestDto> mockUpdateWorklogConsumingBody(
+            Function<UpdateIssueWorklogRequestDto, IssueWorklogResponseDto> responseFactory) {
+        var received = new AtomicReference<UpdateIssueWorklogRequestDto>();
+
+        Mockito.when(worklogClient.updateIssueWorklog(
+                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(WORKLOG_ID.toString()),
+                        Mockito.any(Mono.class),
+                        Mockito.any(GatewayContext.class)))
+                .thenAnswer(inv -> {
+                    Mono<UpdateIssueWorklogRequestDto> body = inv.getArgument(2);
+                    return body.doOnNext(received::set).map(responseFactory);
+                });
+
+        return received;
+    }
+
 }

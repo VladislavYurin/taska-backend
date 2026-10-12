@@ -4218,6 +4218,7 @@ components:
           description: Дата, за которую списывается время
         comment:
           type: string
+          maxLength: 2000
           description: Новый комментарий. Если не передан, не меняется
 
     ProblematicOutboxEventsSummaryResponseDto:

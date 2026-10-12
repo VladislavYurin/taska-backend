@@ -31,11 +31,11 @@ public class IssueWorklogMapper {
         dto.setProjectId(UUID.fromString(response.getProjectId()));
         dto.setAuthorUserId(UUID.fromString(response.getAuthorUserId()));
         dto.setSpentMinutes(response.getSpentMinutes());
-        dto.setCreatedAt(GrpcMappingUtils.toOffsetDateTime(response.getCreatedAt()));
+        dto.setCreatedAt(MappingUtils.toOffsetDateTime(response.getCreatedAt()));
         dto.setWorkDate(LocalDate.parse(response.getWorkDate()));
 
-        GrpcMappingUtils.setIfPresent(response::hasUpdatedAt, () -> GrpcMappingUtils.toOffsetDateTime(response.getUpdatedAt()), dto::setUpdatedAt);
-        GrpcMappingUtils.setIfPresent(response::hasComment, response::getComment, dto::setComment);
+        MappingUtils.setIfPresent(response::hasUpdatedAt, () -> MappingUtils.toOffsetDateTime(response.getUpdatedAt()), dto::setUpdatedAt);
+        MappingUtils.setIfPresent(response::hasComment, response::getComment, dto::setComment);
 
         return dto;
     }
@@ -62,10 +62,10 @@ public class IssueWorklogMapper {
                 .setSpentMinutes(requestDto.getSpentMinutes())
                 .setWorkDate(requestDto.getWorkDate().toString());
 
-        GrpcMappingUtils.setIfPresent(requestDto.getComment(), requestBodyBuilder::setComment);
+        MappingUtils.setIfPresent(requestDto.getComment(), requestBodyBuilder::setComment);
 
         return AddIssueWorklogRequest.newBuilder()
-                .setHeader(GrpcMappingUtils.buildGrpcHeader(context))
+                .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setBody(requestBodyBuilder.build())
                 .build();
     }
@@ -81,7 +81,7 @@ public class IssueWorklogMapper {
                 .setActorUserId(context.userContext().userId());
 
         return DeleteIssueWorklogRequest.newBuilder()
-                .setHeader(GrpcMappingUtils.buildGrpcHeader(context))
+                .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setBody(requestBodyBuilder.build())
                 .build();
     }
@@ -95,7 +95,7 @@ public class IssueWorklogMapper {
                 .setActorUserId(context.userContext().userId());
 
         return ListIssueWorklogsRequest.newBuilder()
-                .setHeader(GrpcMappingUtils.buildGrpcHeader(context))
+                .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setBody(requestBodyBuilder.build())
                 .build();
     }
@@ -111,8 +111,8 @@ public class IssueWorklogMapper {
                 .setWorklogId(worklogId)
                 .setActorUserId(context.userContext().userId());
 
-        GrpcMappingUtils.setIfPresent(requestDto.getSpentMinutes(), requestBodyBuilder::setSpentMinutes);
-        GrpcMappingUtils.setIfPresent(requestDto.getWorkDate(), LocalDate::toString, requestBodyBuilder::setWorkDate);
+        MappingUtils.setIfPresent(requestDto.getSpentMinutes(), requestBodyBuilder::setSpentMinutes);
+        MappingUtils.setIfPresent(requestDto.getWorkDate(), LocalDate::toString, requestBodyBuilder::setWorkDate);
 
         // "" передаём как есть: это означает "очистить комментарий"
         if (requestDto.getComment() != null) {
@@ -120,7 +120,7 @@ public class IssueWorklogMapper {
         }
 
         return UpdateIssueWorklogRequest.newBuilder()
-                .setHeader(GrpcMappingUtils.buildGrpcHeader(context))
+                .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setBody(requestBodyBuilder.build())
                 .build();
     }
