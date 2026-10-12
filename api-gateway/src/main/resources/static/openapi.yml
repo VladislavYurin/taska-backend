@@ -269,6 +269,38 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/context:
+    get:
+      summary: Контекст проекта — проект, участники, метки, все workflows
+      operationId: getProjectContext
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Контекст проекта успешно получен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContextResponseDto'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/members:
     get:
       description: Возвращает список участников проекта
@@ -3569,7 +3601,13 @@ components:
         email:
           type: string
         avatar:
-          $ref: '#/components/schemas/AvatarDto'
+          allOf:
+            - $ref: '#/components/schemas/AvatarDto'
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+          description: Когда участник добавлен в проект
 
 
     ListProjectMemberDetailsDto:
@@ -3579,6 +3617,39 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProjectMemberDetailsDto'
+
+    ProjectRoleDto:
+      type: string
+      enum: [ ADMIN, MEMBER, VIEWER ]
+
+    ProjectContextResponseDto:
+      type: object
+      required: [ project, members, labels, workflows ]
+      properties:
+        project:
+          $ref: '#/components/schemas/ProjectResponseDto'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMemberDetailsDto'
+        labels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectLabelResponseDto'
+        workflows:
+          type: array
+          description: Все типы задач проекта
+          items:
+            $ref: '#/components/schemas/ProjectWorkflowEntryDto'
+
+    ProjectWorkflowEntryDto:
+      type: object
+      required: [ issueType, workflow ]
+      properties:
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        workflow:
+          $ref: '#/components/schemas/WorkflowResponseDto'
 
     RestErrorResponse:
       type: object
@@ -3735,6 +3806,7 @@ components:
         createdAt:
           type: string
           format: date-time
+          nullable: true
         updatedAt:
           type: string
           format: date-time
@@ -3749,7 +3821,7 @@ components:
 
     WorkflowStatusDto:
       type: object
-      required: [ id, statusKey, name, category, sortOrder, createdAt, updatedAt ]
+      required: [ id, statusKey, name, category, sortOrder]
       properties:
         id:
           type: string
@@ -3772,10 +3844,11 @@ components:
         updatedAt:
           type: string
           format: date-time
+          nullable: true
 
     WorkflowTransitionDto:
       type: object
-      required: [ id, fromStatusId, toStatusId, name, sortOrder, createdAt, updatedAt ]
+      required: [ id, fromStatusId, toStatusId, name, sortOrder ]
       properties:
         id:
           type: string
@@ -3794,9 +3867,11 @@ components:
         createdAt:
           type: string
           format: date-time
+          nullable: true
         updatedAt:
           type: string
           format: date-time
+          nullable: true
 
     # ======= начало dto для attachments =========
 

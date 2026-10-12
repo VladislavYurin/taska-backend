@@ -29,6 +29,7 @@ import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ListProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectContextResponseDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectMemberRoleDto;
@@ -664,6 +665,150 @@ public class ProjectControllerTest {
 
             Mockito.verify(projectClient, Mockito.times(1))
                     .getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any());
+        }
+    }
+    @Nested
+    @DisplayName("Tests for GET /api/v1/projects/{projectId}/context endpoint")
+    class GetProjectContextEndpointTests {
+
+        private final String contextUri = "/api/v1/projects/{projectId}/context";
+
+        private ProjectContextResponseDto contextResponse;
+
+        @BeforeEach
+        void setUpContextData() {
+            contextResponse = new ProjectContextResponseDto();
+
+            var project = new ProjectResponseDto();
+            project.setId(PROJECT_ID);
+            project.setProjectKey(PROJECT_KEY);
+            project.setName(PROJECT_NAME);
+            project.setCurrentUserRole("ADMIN");
+            contextResponse.setProject(project);
+
+            contextResponse.setMembers(List.of());
+            contextResponse.setLabels(List.of());
+            contextResponse.setWorkflows(List.of());
+        }
+
+        @Test
+        @DisplayName("Should return 200 OK and project context when request is valid")
+        void getProjectContext_whenRequestIsValid_thenReturns200AndContext() {
+            mockAuthenticatedUser();
+
+            Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.just(contextResponse));
+
+            webTestClient.get()
+                    .uri(contextUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isOk()
+                    .expectHeader().exists("X-Request-Id")
+                    .expectBody(ProjectContextResponseDto.class)
+                    .value(actual -> {
+                        Assertions.assertThat(actual).isNotNull();
+                        Assertions.assertThat(actual.getProject()).isNotNull();
+                        Assertions.assertThat(actual.getProject().getId()).isEqualTo(PROJECT_ID);
+                        Assertions.assertThat(actual.getProject().getCurrentUserRole()).isEqualTo("ADMIN");
+                        Assertions.assertThat(actual.getMembers()).isEmpty();
+                        Assertions.assertThat(actual.getLabels()).isEmpty();
+                        Assertions.assertThat(actual.getWorkflows()).isEmpty();
+                    });
+
+            Mockito.verify(projectClient, Mockito.times(1))
+                    .getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any());
+        }
+
+        @Test
+        @DisplayName("Should return 403 Forbidden when access denied")
+        void getProjectContext_whenAccessDenied_thenReturns403() {
+            mockAuthenticatedUser();
+
+            Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.error(new ResponseStatusException(
+                            HttpStatus.FORBIDDEN, "You don't have access to this project")));
+
+            webTestClient.get()
+                    .uri(contextUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isForbidden()
+                    .expectHeader().exists("X-Request-Id")
+                    .expectBody()
+                    .jsonPath("$.code").exists()
+                    .jsonPath("$.message").exists();
+        }
+
+        @Test
+        @DisplayName("Should return 404 Not Found when project does not exist")
+        void getProjectContext_whenProjectNotFound_thenReturns404() {
+            mockAuthenticatedUser();
+
+            Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.error(new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "Project not found")));
+
+            webTestClient.get()
+                    .uri(contextUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isNotFound()
+                    .expectHeader().exists("X-Request-Id")
+                    .expectBody()
+                    .jsonPath("$.code").exists()
+                    .jsonPath("$.message").exists();
+        }
+
+        @Test
+        @DisplayName("Should return 401 Unauthorized without Bearer token")
+        void getProjectContext_whenNoToken_thenReturns401() {
+            webTestClient.get()
+                    .uri(contextUri, PROJECT_ID)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isUnauthorized()
+                    .expectHeader().exists("X-Request-Id");
+
+            Mockito.verify(projectClient, Mockito.never())
+                    .getProjectContext(Mockito.any(), Mockito.any());
+        }
+
+        @Test
+        @DisplayName("Should return 400 Bad Request when projectId is not a valid UUID")
+        void getProjectContext_whenProjectIdInvalid_thenReturns400() {
+            mockAuthenticatedUser();
+
+            webTestClient.get()
+                    .uri("/api/v1/projects/not-a-uuid/context")
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isBadRequest();
+
+            Mockito.verify(projectClient, Mockito.never())
+                    .getProjectContext(Mockito.any(), Mockito.any());
+        }
+
+        @Test
+        @DisplayName("Should return 503 Service Unavailable when downstream unavailable")
+        void getProjectContext_whenDownstreamUnavailable_thenReturns503() {
+            mockAuthenticatedUser();
+
+            Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
+                    .thenReturn(Mono.error(
+                            Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+
+            webTestClient.get()
+                    .uri(contextUri, PROJECT_ID)
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .exchange()
+                    .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
+                    .expectHeader().exists("X-Request-Id");
         }
     }
 }

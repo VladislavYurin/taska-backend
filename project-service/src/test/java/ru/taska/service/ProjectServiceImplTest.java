@@ -2,22 +2,30 @@ package ru.taska.service;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.projectContext.ProjectLabelDto;
+import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
+import ru.taska.domain.dto.projectContext.WorkflowDto;
 import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -26,11 +34,14 @@ import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.impl.ProjectServiceImpl;
+import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
+import ru.taska.transport.grpc.client.GrpcWorkFlowServiceClient;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.util.Collections;
+import java.util.List;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,11 +60,20 @@ class ProjectServiceImplTest {
     @Mock
     private OutboxEventService outboxEventService;
 
-    @Mock
-    private ObjectMapper objectMapper;
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     private ProjectMapper projectMapper;
+
+    @Mock
+    private GrpcIssueServiceClient issueServiceClient;
+
+    @Mock
+    private GrpcWorkFlowServiceClient workflowServiceClient;
+
+    @Mock
+    private ProjectMemberService projectMemberService;
 
     @InjectMocks
     private ProjectServiceImpl projectService;
@@ -93,24 +113,29 @@ class ProjectServiceImplTest {
         Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.empty());
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
 
-        ObjectNode mockNode = Mockito.mock(ObjectNode.class);
-        ArrayNode mockArray = Mockito.mock(ArrayNode.class);
-        Mockito.when(objectMapper.createObjectNode()).thenReturn(mockNode);
-        Mockito.when(mockNode.putArray("allowedIssueTypes")).thenReturn(mockArray);
-
-        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
-        Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
-        Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class)))
+                .thenReturn(Mono.just(new ProjectMember()));
+        Mockito.when(projectSettingRepository.insertSetting(
+                        ArgumentMatchers.eq(projectId),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.any(Instant.class),
+                        ArgumentMatchers.eq(userId)))
+                .thenReturn(Mono.empty());
+        Mockito.when(outboxEventService.saveProjectCreated(
+                        ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class)))
+                .thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
                 .expectNext(mockProject)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository).findByProjectKey(projectKey);
-        Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
-        Mockito.verify(projectSettingRepository).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventService).saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class));
+        Mockito.verify(projectSettingRepository).insertSetting(
+                ArgumentMatchers.eq(projectId),
+                ArgumentMatchers.contains("allowedIssueTypes"),
+                ArgumentMatchers.any(Instant.class),
+                ArgumentMatchers.eq(userId));
+
+        Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
     }
 
     @Test
@@ -321,5 +346,190 @@ class ProjectServiceImplTest {
                 .verifyComplete();
 
         Mockito.verifyNoInteractions(projectRepository);
+    }
+
+    @Nested
+    @DisplayName("getProjectContext")
+    class GetProjectContextTests {
+
+        private ProjectMemberDetailsDto memberDetails;
+        private ProjectLabelDto label;
+        private ProjectWorkflowDto workflow;
+        private ProjectCheckMembershipDto memberProjectDto;
+        private ProjectCheckMembershipDto globalAdminProjectDto;
+
+        @BeforeEach
+        void setUpContextData() {
+            memberDetails = ProjectMemberDetailsDto.builder()
+                    .userId(actorUserId)
+                    .role(ProjectRole.ADMIN)
+                    .displayName("Test User")
+                    .email("test@example.com")
+                    .avatar(null)
+                    .addedAt(Instant.now())
+                    .build();
+
+            label = ProjectLabelDto.builder()
+                    .id(UUID.randomUUID())
+                    .name("backend")
+                    .color("#3B82F6")
+                    .build();
+
+            workflow = new ProjectWorkflowDto(
+                    "TASK",
+                    WorkflowDto.builder()
+                            .id(UUID.randomUUID().toString())
+                            .name("Default")
+                            .version(1)
+                            .statuses(List.of())
+                            .transitions(List.of())
+                            .build());
+
+            memberProjectDto = ProjectCheckMembershipDto.builder()
+                    .project_id(projectId).project_key(projectKey).name(projectName)
+                    .created_by(userId).user_id(actorUserId).role(ProjectRole.ADMIN).build();
+
+            // GLOBAL_ADMIN без членства: user_id == null, role == null
+            globalAdminProjectDto = ProjectCheckMembershipDto.builder()
+                    .project_id(projectId).project_key(projectKey).name(projectName)
+                    .created_by(userId).user_id(null).role(null).build();
+        }
+
+        @Test
+        void asMember_returnsFullContext() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.just(memberDetails));
+
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of(label)));
+
+            // loadProjectWorkflows: сначала settings, потом workflow-service
+            mockWorkflowLoad();
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(memberProjectDto, ctx.project());
+                        Assertions.assertEquals(1, ctx.members().size());
+                        Assertions.assertEquals(1, ctx.labels().size());
+                        Assertions.assertEquals(1, ctx.workflows().size());
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
+        void asNonMember_returnsPermissionDenied() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(globalAdminProjectDto));
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .expectErrorSatisfies(throwable -> {
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, e.getStatus());
+                    })
+                    .verify();
+
+            // Никаких вызовов в members/labels/workflows не было
+            Mockito.verifyNoInteractions(projectMemberService);
+            Mockito.verifyNoInteractions(issueServiceClient);
+            Mockito.verifyNoInteractions(workflowServiceClient);
+        }
+
+        @Test
+        @DisplayName("GLOBAL_ADMIN без членства → 200, members=[] и labels=[], workflows загружаются")
+        void asGlobalAdminWithoutMembership_returnsEmptyMembersAndLabels() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(globalAdminProjectDto));
+
+            // members: PERMISSION_DENIED → onErrorResume → []
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.error(new DomainException(
+                            DomainStatus.PERMISSION_DENIED, "User has no access to project")));
+
+            // labels: PERMISSION_DENIED → onErrorResume → []
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.error(new DomainException(
+                            DomainStatus.PERMISSION_DENIED, "Access denied")));
+
+            // workflows: загружаются нормально
+            mockWorkflowLoad();
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(globalAdminProjectDto, ctx.project());
+                        Assertions.assertTrue(ctx.members().isEmpty(), "members должны быть пустыми");
+                        Assertions.assertTrue(ctx.labels().isEmpty(), "labels должны быть пустыми");
+                        Assertions.assertEquals(1, ctx.workflows().size(),
+                                "workflows должны загрузиться, т.к. workflow-service не проверяет актора (TAS-207)");
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("GLOBAL_ADMIN без членства: UNAVAILABLE в members НЕ гасится, контекст падает")
+        void asGlobalAdmin_unavailableInMembers_propagates() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(globalAdminProjectDto));
+
+            // Не PERMISSION_DENIED, а UNAVAILABLE — должно проброситься
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.error(new DomainException(
+                            DomainStatus.UNAVAILABLE, "DB unavailable")));
+
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of()));
+            mockWorkflowLoad();
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .expectErrorSatisfies(throwable -> {
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.UNAVAILABLE, e.getStatus());
+                    })
+                    .verify();
+        }
+
+        @Test
+        @DisplayName("проект не найден → NOT_FOUND, независимо от роли")
+        void projectNotFound_returnsNotFound() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.empty());
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .expectErrorSatisfies(throwable -> {
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.NOT_FOUND, e.getStatus());
+                    })
+                    .verify();
+        }
+
+        private void mockWorkflowLoad() {
+            ObjectNode settings = objectMapper.createObjectNode();
+            settings.putArray("allowedIssueTypes").add("TASK");
+
+            var setting = ProjectSetting.builder()
+                    .projectId(projectId)
+                    .settings(settings)
+                    .updatedAt(Instant.now())
+                    .updatedBy(userId)
+                    .build();
+
+            Mockito.when(projectSettingRepository.findById(projectId))
+                    .thenReturn(Mono.just(setting));
+
+            Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
+                            ArgumentMatchers.eq(projectId),
+                            ArgumentMatchers.anyString(),
+                            ArgumentMatchers.eq(actorUserId),
+                            ArgumentMatchers.eq(requestId),
+                            ArgumentMatchers.eq(nodeId)))
+                    .thenReturn(Mono.just(workflow));
+        }
     }
 }

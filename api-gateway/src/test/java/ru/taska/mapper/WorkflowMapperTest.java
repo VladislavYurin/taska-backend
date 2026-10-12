@@ -1,5 +1,6 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,8 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.IssueTypeDto;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 class WorkflowMapperTest {
@@ -33,7 +35,14 @@ class WorkflowMapperTest {
     private static final UUID STATUS_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
     private static final IssueTypeDto ISSUE_TYPE_DTO = IssueTypeDto.BUG;
-    private static final String ISO_DATE = "2026-07-21T18:00:00+03:00";
+    private static final Instant TIME = Instant.parse("2026-07-21T15:00:00Z");
+
+    private static Timestamp createTimestamp() {
+        return Timestamp.newBuilder()
+                .setSeconds(TIME.getEpochSecond())
+                .setNanos(TIME.getNano())
+                .build();
+    }
 
     @Test
     @DisplayName("Должен корректно мапить параметры и контекст в GetWorkflowForProjectRequest")
@@ -85,8 +94,8 @@ class WorkflowMapperTest {
                 .setName("To Do")
                 .setCategory(StatusCategory.STATUS_CATEGORY_TODO)
                 .setSortOrder(10)
-                .setCreatedAt(ISO_DATE)
-                .setUpdatedAt(ISO_DATE)
+                .setCreatedAt(createTimestamp())
+                .setUpdatedAt(createTimestamp())
                 .build();
 
         var grpcTransition = WorkflowTransition.newBuilder()
@@ -95,16 +104,16 @@ class WorkflowMapperTest {
                 .setToStatusId(UUID.randomUUID().toString())
                 .setName("Start Progress")
                 .setSortOrder(1)
-                .setCreatedAt(ISO_DATE)
-                .setUpdatedAt(ISO_DATE)
+                .setCreatedAt(createTimestamp())
+                .setUpdatedAt(createTimestamp())
                 .build();
 
         var grpcResponse = WorkflowResponse.newBuilder()
                 .setId(PROJECT_ID.toString())
                 .setName("Default Workflow")
                 .setVersion(1)
-                .setCreatedAt(ISO_DATE)
-                .setUpdatedAt(ISO_DATE)
+                .setCreatedAt(createTimestamp())
+                .setUpdatedAt(createTimestamp())
                 .addStatuses(grpcStatus)
                 .addTransitions(grpcTransition)
                 .build();
@@ -114,8 +123,10 @@ class WorkflowMapperTest {
         Assertions.assertThat(dto.getId()).isEqualTo(PROJECT_ID);
         Assertions.assertThat(dto.getName()).isEqualTo("Default Workflow");
         Assertions.assertThat(dto.getVersion()).isEqualTo(1);
-        Assertions.assertThat(dto.getCreatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
-        Assertions.assertThat(dto.getUpdatedAt()).isEqualTo(OffsetDateTime.parse(ISO_DATE));
+        Assertions.assertThat(dto.getCreatedAt())
+                .isEqualTo(TIME.atOffset(ZoneOffset.UTC));
+        Assertions.assertThat(dto.getUpdatedAt())
+                .isEqualTo(TIME.atOffset(ZoneOffset.UTC));
 
         Assertions.assertThat(dto.getStatuses()).hasSize(1);
         var statusDto = dto.getStatuses().get(0);
@@ -138,5 +149,4 @@ class WorkflowMapperTest {
         Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
         Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
     }
-
 }

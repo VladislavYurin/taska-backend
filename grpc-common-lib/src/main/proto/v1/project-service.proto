@@ -29,6 +29,11 @@ service ProjectService {
   rpc GetProject (GetProjectRequest) returns (ProjectResponse);
 
   /**
+   * Возвращает контекст проекта по идентификатору.
+   */
+  rpc GetProjectContext(GetProjectContextRequest) returns (ProjectContextResponse);
+
+  /**
    * Возвращает список всех проектов по идентификатору пользователя.
    */
   rpc ListMyProjects (ListMyProjectsRequest) returns (ListMyProjectsResponse);
@@ -92,6 +97,17 @@ message GetProjectRequestBody {
   string actor_user_id=2;
 }
 
+message GetProjectContextRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectContextRequestBody body = 2;
+}
+
+message GetProjectContextRequestBody {
+  string project_id = 1;
+  string actor_user_id = 2;
+  ru.taska.common.v1.GlobalRoleProto global_role = 3;
+}
+
 message ListMyProjectsRequest {
   ru.taska.common.v1.Header header = 1;
   ListMyProjectsRequestBody body = 2;
@@ -140,6 +156,28 @@ message ProjectResponse {
   google.protobuf.Timestamp updated_at = 6;
   optional google.protobuf.Timestamp archived_at = 7;
   optional ProjectRole current_user_role = 8;
+}
+
+message ProjectContextResponse {
+  ProjectResponse project = 1;
+  repeated ProjectMemberDetailsResponse members = 2;
+  repeated ProjectLabelResponse labels = 3;
+  repeated ProjectWorkflowEntryResponse workflows = 4;
+}
+
+message ProjectWorkflowEntryResponse {
+  string issue_type = 1;
+  WorkflowDataResponse workflow = 2;
+}
+
+message WorkflowDataResponse {
+  string id = 1;
+  string name = 2;
+  int32 version = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  repeated WorkflowStatusResponse statuses = 6;
+  repeated WorkflowTransitionResponse transitions = 7;
 }
 
 message ListMyProjectsResponse {
@@ -293,10 +331,11 @@ message ListProjectMemberResponse {
 
 message ProjectMemberDetailsResponse {
   string user_id = 1;
-  string role = 2;
+  ProjectRole role = 2;
   string display_name = 3;
   string email = 4;
   optional AvatarResponse avatar = 5;
+  optional google.protobuf.Timestamp added_at = 6;
 }
 
 message AvatarResponse {
@@ -306,4 +345,26 @@ message AvatarResponse {
   string content_type = 4;
   int64 size_bytes = 5;
   string download_url = 6;
+}
+
+message ProjectLabelResponse {
+  string id = 1;
+  string name = 2;
+  string color = 3;
+}
+
+message WorkflowStatusResponse {
+  string id = 1;
+  string status_key = 2;
+  string name = 3;
+  string category = 4;
+  int32 sort_order = 5;
+}
+
+message WorkflowTransitionResponse {
+  string id = 1;
+  string from_status_id = 2;
+  string to_status_id = 3;
+  string name = 4;
+  int32 sort_order = 5;
 }

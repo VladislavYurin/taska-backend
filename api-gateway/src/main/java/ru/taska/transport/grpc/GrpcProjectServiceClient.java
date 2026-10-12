@@ -13,6 +13,8 @@ import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.CreateProjectRequestBody;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequestBody;
+import ru.taska.api.project.v1.GetProjectContextRequest;
+import ru.taska.api.project.v1.GetProjectContextRequestBody;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.GetProjectRequestBody;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
@@ -27,6 +29,7 @@ import ru.taska.domain.dto.ChangeProjectMemberRoleRequestDto;
 import ru.taska.domain.dto.CreateProjectRequestDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ListProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectContextResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.mapper.ProjectMapper;
@@ -97,6 +100,29 @@ public class GrpcProjectServiceClient {
                         )
                         .build()
         ).map(projectMapper::toRestProjectResponse);
+    }
+
+    /**
+     * Вызов получения контекста проекта
+     * @param projectId идентификатор проекта
+     * @param context контекст запроса
+     *
+     * @return Rest DTO полученного контекста проекта
+     */
+    public Mono<ProjectContextResponseDto> getProjectContext(
+            String projectId,
+            GatewayContext context
+    ) {
+        return dynamicStub().getProjectContext(
+                GetProjectContextRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(GetProjectContextRequestBody.newBuilder()
+                                .setProjectId(projectId)
+                                .setActorUserId(context.userContext().userId())
+                                .setGlobalRole(projectMapper.toGlobalRoleProto(context.userContext().globalRole()))
+                                .build())
+                        .build()
+        ).map(projectMapper::toRestProjectContextResponse);
     }
 
     /**
@@ -217,9 +243,13 @@ public class GrpcProjectServiceClient {
      *
      * @return Rest DTO участников проекта
      */
-    public Mono<ListProjectMemberDetailsDto> getProjectMembers(String projectId, GatewayContext context) {
+    public Mono<ListProjectMemberDetailsDto> getProjectMembers(
+            String projectId,
+            GatewayContext context
+    ) {
         log.info("[{}] Calling getProjectMembers",context.requestId());
-        return dynamicStub().getProjectMembers(GetListProjectMemberRequest.newBuilder()
+        return dynamicStub().getProjectMembers(
+                    GetListProjectMemberRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(GetListProjectMemberRequestBody.newBuilder()
                                 .setProjectId(projectId)

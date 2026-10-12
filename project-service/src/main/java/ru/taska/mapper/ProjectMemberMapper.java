@@ -1,8 +1,10 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
+import org.mapstruct.Named;
 import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ValueMapping;
 import org.mapstruct.ValueMappings;
@@ -15,6 +17,8 @@ import ru.taska.domain.ProjectMember;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
+
+import java.time.Instant;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProjectMemberMapper {
@@ -99,17 +103,20 @@ public interface ProjectMemberMapper {
      * @param dto DTO участника проекта с обогащенными данными из auth-service
      * @return {@link ru.taska.api.project.v1.ProjectMemberDetailsResponse} для передачи в gRPC
      */
-    @Mapping(
-            target = "displayName",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
-    @Mapping(
-            target = "email",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
-    @Mapping(
-            target = "avatar",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
+    @Mapping(target = "displayName", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "email",       nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "avatar",      nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "addedAt", source = "addedAt",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS,
+            qualifiedByName = "instantToTimestamp")
     ProjectMemberDetailsResponse toProjectMemberResponse(ProjectMemberDetailsDto dto);
+
+    @Named("instantToTimestamp")
+    default Timestamp mapInstantToTimestamp(Instant instant) {
+        if (instant == null) return null;
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
+    }
 }
