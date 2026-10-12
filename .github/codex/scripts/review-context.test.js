@@ -215,13 +215,18 @@ async function prepareWithJira(t, { isPrivate, optIn }) {
     fetchImpl,
   }));
   const markdown = fs.readFileSync(path.join(repository.directory, '.ai-review', 'context.md'), 'utf8');
-  return { requests, markdown };
+  const state = JSON.parse(fs.readFileSync(path.join(repository.directory, '.ai-review', 'state.json'), 'utf8'));
+  return { requests, markdown, state };
 }
 
 test('prepareReviewContext keeps Jira out of public repositories unless enabled', async (t) => {
   const publicRepo = await prepareWithJira(t, { isPrivate: false, optIn: false });
   assert.equal(publicRepo.requests.length, 0);
   assert.doesNotMatch(publicRepo.markdown, /Секретное требование/);
+  // The key alone is public anyway: the summary still links the issue.
+  assert.equal(publicRepo.state.jira, null);
+  assert.deepEqual(publicRepo.state.issue, { key: 'TAS-1', url: 'https://jira.example.dev/browse/TAS-1' });
+  assert.deepEqual(publicRepo.state.issueLinks, { browseUrl: 'https://jira.example.dev/browse/', projectKeys: ['TAS'] });
 
   const optedIn = await prepareWithJira(t, { isPrivate: false, optIn: true });
   assert.equal(optedIn.requests.length, 1);

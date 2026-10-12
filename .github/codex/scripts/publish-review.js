@@ -22,6 +22,7 @@ const {
   severityRank,
   unquoteGitPath,
 } = require('./review-shared');
+const { linkIssueKeys } = require('./jira-context');
 
 const OUTPUT_FILE = 'codex-output.json';
 const MAX_MODEL_COMMENTS = 20;
@@ -282,6 +283,8 @@ function renderSummary({
   open,
   fixed,
   jira,
+  issue = null,
+  linkKeys = (text) => text,
   provider,
   headSha,
   unreviewedFiles = [],
@@ -299,12 +302,14 @@ function renderSummary({
   if (jira) {
     const status = jira.status ? ` _(${jira.status})_` : '';
     lines.push('', `**Задача:** [${jira.key}](${jira.url}) — ${jira.summary}${status}`);
+  } else if (issue) {
+    lines.push('', `**Задача:** [${issue.key}](${issue.url})`);
   }
 
-  lines.push('', '### Кратко', review.summary);
+  lines.push('', '### Кратко', linkKeys(review.summary));
 
   if (jira && review.taskAlignment) {
-    lines.push('', '### Соответствие задаче', review.taskAlignment);
+    lines.push('', '### Соответствие задаче', linkKeys(review.taskAlignment));
   }
 
   // Significant findings that could not go inline are shown in full: the
@@ -314,7 +319,7 @@ function renderSummary({
   const renderExtra = (comment) => {
     const location = `${comment.path}${comment.line ? `:${comment.line}` : ''}`;
     const note = rejected.includes(comment) ? ' _(GitHub не принял комментарий к этой строке)_' : '';
-    return `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${location}\` — ${comment.body.replace(/\s*\n\s*/g, ' ')}${note}`;
+    return `- ${SEVERITY_ICONS[comment.severity]} **[${comment.severity}]** \`${location}\` — ${linkKeys(comment.body.replace(/\s*\n\s*/g, ' '))}${note}`;
   };
 
   lines.push('', '### Новые замечания');
@@ -366,11 +371,11 @@ function renderSummary({
   if (review.manualChecks.length > 0) {
     lines.push(...renderDetails(
       `Что проверить вручную (${review.manualChecks.length})`,
-      review.manualChecks.map((check) => `- ${check}`)
+      review.manualChecks.map((check) => `- ${linkKeys(check)}`)
     ));
   }
 
-  lines.push(...renderDetails('Тесты', [review.tests]));
+  lines.push(...renderDetails('Тесты', [linkKeys(review.tests)]));
 
   const scopeNote = mode === 'incremental' && lastReviewedSha
     ? `изменения с \`${lastReviewedSha.slice(0, 7)}\``
@@ -417,7 +422,17 @@ function readTruncatedFiles() {
  * when any line is not commentable, so then each finding is retried alone.
  * Returns the findings GitHub would not accept.
  */
-async function publishInlineComments({ github, core, owner, repo, pullNumber, provider, headSha, comments }) {
+async function publishInlineComments({
+  github,
+  core,
+  owner,
+  repo,
+  pullNumber,
+  provider,
+  headSha,
+  comments,
+  linkKeys = (text) => text,
+}) {
   if (comments.length === 0) {
     return [];
   }
@@ -436,7 +451,7 @@ async function publishInlineComments({ github, core, owner, repo, pullNumber, pr
           path: source.path,
           line: source.line,
           side: 'RIGHT',
-          body: `${marker}\n${SEVERITY_ICONS[source.severity]} **[${source.severity}]** ${source.body}`,
+          body: `${marker}\n${SEVERITY_ICONS[source.severity]} **[${source.severity}]** ${linkKeys(source.body)}`,
         },
       };
     })
@@ -582,11 +597,13 @@ async function publishReview({ github, context, core, env = process.env }) {
 
   const { owner, repo } = context.repo;
   const pullNumber = context.payload.pull_request.number;
+  // Jira keys become links, as GitHub autolinks would make them.
+  const linkKeys = (text) => linkIssueKeys(text, state.issueLinks ?? {});
 
   // Inline comments go first: the summary stores the reviewed commit, so if
   // publishing fails midway the next run reviews the same changes again.
   const rejected = await publishInlineComments({
-    github, core, owner, repo, pullNumber, provider, headSha, comments: plan.inline,
+    github, core, owner, repo, pullNumber, provider, headSha, comments: plan.inline, linkKeys,
   });
   if (rejected.length > 0) {
     plan.inline = plan.inline.filter((comment) => !rejected.includes(comment));
@@ -602,6 +619,8 @@ async function publishReview({ github, context, core, env = process.env }) {
     open,
     fixed,
     jira: state.jira,
+    issue: state.issue ?? null,
+    linkKeys,
     provider,
     headSha,
     unreviewedFiles: readTruncatedFiles(),

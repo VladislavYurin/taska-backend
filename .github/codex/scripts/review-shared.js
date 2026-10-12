@@ -321,7 +321,10 @@ function parseInlineBody(body) {
   const withoutSeverity = severityMatch
     ? text.slice(severityMatch.index + severityMatch[0].length)
     : text;
-  return { severity, text: withoutSeverity.trim() };
+  // Links (e.g. to Jira issues) are reduced to their text: the URLs would only
+  // add noise to the prompt and to the similarity check.
+  const plain = withoutSeverity.replace(/\[([^\]]*)\]\(https?:[^)\s]*\)/g, '$1');
+  return { severity, text: plain.trim() };
 }
 
 function setStatusLine(body, statusLine) {

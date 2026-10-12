@@ -2,8 +2,11 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  browseBaseUrl,
   extractIssueKey,
   fetchIssue,
+  jiraRequest,
+  linkIssueKeys,
   loadJiraContext,
   parseProjectKeys,
 } = require('./jira-context');
@@ -50,6 +53,21 @@ test('extractIssueKey reads the title first, then the branch', () => {
   assert.equal(extractIssueKey(['TAS-1'], []), null);
 });
 
+test('linkIssueKeys links bare keys and leaves code, links and URLs alone', () => {
+  const links = { browseUrl: browseBaseUrl('https://jira.example.dev/jira'), projectKeys: ['TAS'] };
+  assert.equal(links.browseUrl, 'https://jira.example.dev/jira/browse/');
+
+  assert.equal(
+    linkIssueKeys('Требования TAS-252 покрыты (см. TAS-1).', links),
+    'Требования [TAS-252](https://jira.example.dev/jira/browse/TAS-252) покрыты (см. [TAS-1](https://jira.example.dev/jira/browse/TAS-1)).'
+  );
+  const untouched = 'Код `TAS-1`, ссылка [TAS-2](https://x.test/TAS-2), url https://jira.example.dev/browse/TAS-3, tas-4, XTAS-5, UTF-8.';
+  assert.equal(linkIssueKeys(untouched, links), untouched);
+  assert.equal(linkIssueKeys('TAS-1', { browseUrl: null, projectKeys: ['TAS'] }), 'TAS-1');
+  assert.equal(browseBaseUrl(undefined), null);
+  assert.equal(browseBaseUrl('not a url'), null);
+});
+
 test('fetchIssue uses a Bearer token for Jira Server/DC and Basic auth with a username', async () => {
   const requests = [];
   const fetchImpl = async (url, options) => {
@@ -68,6 +86,45 @@ test('fetchIssue uses a Bearer token for Jira Server/DC and Basic auth with a us
     requests[1].options.headers.Authorization,
     `Basic ${Buffer.from('bot@example.dev:api').toString('base64')}`
   );
+});
+
+test('jiraRequest retries reads on transient failures, never writes', async () => {
+  const flaky = (failures) => {
+    const calls = [];
+    const fetchImpl = async (url, options) => {
+      calls.push(options.method);
+      if (calls.length <= failures.length) {
+        const failure = failures[calls.length - 1];
+        if (failure === 'timeout') {
+          throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+        }
+        return { ok: false, status: failure, json: async () => ({}) };
+      }
+      return jsonResponse({ ok: true });
+    };
+    return { calls, fetchImpl };
+  };
+  const base = { baseUrl: 'https://jira.example.dev', token: 'pat', path: 'rest/api/2/myself', retryDelays: [0, 0] };
+
+  const read = flaky(['timeout', 503]);
+  assert.deepEqual(await jiraRequest({ ...base, fetchImpl: read.fetchImpl }), { ok: true });
+  assert.equal(read.calls.length, 3);
+
+  const exhausted = flaky(['timeout', 'timeout', 'timeout']);
+  await assert.rejects(jiraRequest({ ...base, fetchImpl: exhausted.fetchImpl }), /timeout/);
+  assert.equal(exhausted.calls.length, 3);
+
+  const forbidden = flaky([403]);
+  await assert.rejects(jiraRequest({ ...base, fetchImpl: forbidden.fetchImpl }), /HTTP 403/);
+  assert.equal(forbidden.calls.length, 1);
+
+  const comment = flaky(['timeout']);
+  await assert.rejects(jiraRequest({ ...base, method: 'POST', body: {}, fetchImpl: comment.fetchImpl }), /timeout/);
+  assert.equal(comment.calls.length, 1);
+
+  const link = flaky([502]);
+  await jiraRequest({ ...base, method: 'POST', idempotent: true, body: {}, fetchImpl: link.fetchImpl });
+  assert.equal(link.calls.length, 2);
 });
 
 test('fetchIssue refuses plain http and does not echo error bodies', async () => {
@@ -127,6 +184,32 @@ test('loadJiraContext renders the issue as untrusted context', async () => {
   assert.match(jira.markdown, /Тип: Task · Статус: In Review · Приоритет: Medium/);
   assert.match(jira.markdown, /relates to TAS-197 — gateway не отдаёт LOCKED \(Done\)/);
   assert.match(jira.markdown, /Аналитик \(2026-09-10\): Токены отзываем сразу\./);
+});
+
+test('loadJiraContext leaves the sync bot comments out of the issue context', async () => {
+  const people = Array.from({ length: 5 }, (_, index) => ({
+    author: { displayName: `Аналитик ${index + 1}` },
+    created: '2026-09-10T10:00:00.000+0300',
+    body: `Уточнение ${index + 1}`,
+  }));
+  const bot = [
+    'Открыт [PR #180 «TAS-198: fix»|https://github.com/acme/taska/pull/180] от dev ({{feature/TAS-198}} → {{develop}}).',
+    '[PR #180 «TAS-198: fix»|https://github.com/acme/taska/pull/180] влит в {{develop}}, merge-коммит {{abc1234}}.',
+  ].map((body) => ({ author: { displayName: 'taska-bot' }, created: '2026-09-11T10:00:00.000+0300', body }));
+  const issue = { ...ISSUE, fields: { ...ISSUE.fields, comment: { comments: [...people, ...bot] } } };
+
+  const jira = await loadJiraContext({
+    env: { JIRA_BASE_URL: 'https://jira.example.dev', JIRA_TOKEN: 'pat' },
+    title: 'TAS-198',
+    branch: '',
+    core: createCore(),
+    fetchImpl: async () => jsonResponse(issue),
+  });
+
+  assert.doesNotMatch(jira.markdown, /taska-bot|PR #180/);
+  for (let index = 1; index <= 5; index += 1) {
+    assert.match(jira.markdown, new RegExp(`Уточнение ${index}`));
+  }
 });
 
 test('loadJiraContext truncates long descriptions', async () => {
