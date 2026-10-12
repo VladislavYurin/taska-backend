@@ -71,19 +71,43 @@ public class ProfileMapper {
                 .build();
     }
 
+    /**
+     * Маппинг {@link AvatarDto} → {@link AvatarResponse}.
+     *
+     * <p>Protobuf-сеттеры не принимают {@code null}, поэтому каждое поле ставится только если оно заполнено.
+     * Пустое поле в DTO (например, {@code createdAt} у аватара из {@code findUsersWithAvatars})
+     * не должно ронять весь ответ.</p>
+     */
     public AvatarResponse toProto(AvatarDto dto) {
-        AvatarResponse.Builder builder = AvatarResponse.newBuilder()
-                .setId(dto.getId().toString())
-                .setUserId(dto.getUserId().toString())
-                .setObjectKey(dto.getObjectKey())
-                .setFileName(dto.getFileName())
-                .setContentType(dto.getContentType())
-                .setSizeBytes(dto.getSizeBytes())
-                .setDownloadUrl(dto.getDownloadUrl())
-                .setCreatedAt(Timestamp.newBuilder()
-                        .setSeconds(dto.getCreatedAt().getEpochSecond())
-                        .setNanos(dto.getCreatedAt().getNano())
-                        .build());
+        AvatarResponse.Builder builder = AvatarResponse.newBuilder();
+
+        if (dto.getId() != null) {
+            builder.setId(dto.getId().toString());
+        }
+        if (dto.getUserId() != null) {
+            builder.setUserId(dto.getUserId().toString());
+        }
+        if (dto.getObjectKey() != null) {
+            builder.setObjectKey(dto.getObjectKey());
+        }
+        if (dto.getFileName() != null) {
+            builder.setFileName(dto.getFileName());
+        }
+        if (dto.getContentType() != null) {
+            builder.setContentType(dto.getContentType());
+        }
+        if (dto.getSizeBytes() != null) {
+            builder.setSizeBytes(dto.getSizeBytes());
+        }
+        if (dto.getDownloadUrl() != null) {
+            builder.setDownloadUrl(dto.getDownloadUrl());
+        }
+        if (dto.getCreatedAt() != null) {
+            builder.setCreatedAt(Timestamp.newBuilder()
+                    .setSeconds(dto.getCreatedAt().getEpochSecond())
+                    .setNanos(dto.getCreatedAt().getNano())
+                    .build());
+        }
 
         return builder.build();
     }

@@ -84,11 +84,20 @@ public interface ProjectMapper {
     /**
      * Маппинг {@link ProjectMemberDetailsDto} → {@link ProjectMemberDetailsResponse}.
      *
-     * <p>Реализация генерируется MapStruct через {@code uses = ProjectMemberMapper.class}.</p>
+     * <p>Реализацию генерирует MapStruct для этого интерфейса (а не делегирует в
+     * {@link ProjectMemberMapper}), поэтому проверки на {@code null} объявлены здесь явно:
+     * protobuf-сеттеры не принимают {@code null}, а у участника может не быть аватара,
+     * отображаемого имени или e-mail.</p>
      *
      * @param dto DTO участника проекта
      * @return gRPC-ответ с данными участника
      */
+    @Mapping(target = "displayName", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "email",       nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "avatar",      nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "addedAt", source = "addedAt",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS,
+            qualifiedByName = "instantToTimestamp")
     ProjectMemberDetailsResponse toProjectMemberResponse(ProjectMemberDetailsDto dto);
 
     /**
