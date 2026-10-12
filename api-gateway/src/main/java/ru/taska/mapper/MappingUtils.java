@@ -1,5 +1,9 @@
 package ru.taska.mapper;
 
+import lombok.experimental.UtilityClass;
+import ru.taska.api.common.v1.Header;
+import ru.taska.domain.GatewayContext;
+
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -8,7 +12,16 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+@UtilityClass
 public class MappingUtils {
+
+    public static Header buildGrpcHeader(GatewayContext context) {
+        return Header.newBuilder()
+                .setRequestId(context.requestId())
+                .setNodeId(context.nodeId())
+                .build();
+    }
+
     /**
      * Устанавливает значение в билдер, если строка не null и не пустая.
      */
