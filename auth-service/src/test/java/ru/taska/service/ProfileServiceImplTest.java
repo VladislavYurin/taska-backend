@@ -61,6 +61,7 @@ class ProfileServiceImplTest {
 
     private UUID testUserId;
     private UUID testUserId2;
+    private UUID testUserId3;
 
     private User testUser;
     private UserAvatar testAvatar;
@@ -73,6 +74,7 @@ class ProfileServiceImplTest {
         profileServiceImpl = new ProfileServiceImpl(userRepository, userAvatarRepository, storageClient, profileMapper, transactionalOperator);
         testUserId = UUID.randomUUID();
         testUserId2 = UUID.randomUUID();
+        testUserId3 = UUID.randomUUID();
 
         testUser = User.builder()
                 .id(testUserId)
@@ -528,6 +530,66 @@ class ProfileServiceImplTest {
 
             Mockito.verify(userRepository, Mockito.times(1))
                     .findUsersWithAvatars(expectedDistinctIds);
+        }
+
+        @Test
+        @DisplayName("getUserDetailsByIds: при ошибке S3 для одного пользователя поток не падает, а возвращает его без downloadUrl")
+        void getUserDetailsByIds_whenStorageFailsForOneUser_shouldNotFailStreamAndReturnUserWithoutUrl() {
+            AvatarDto validAvatar = AvatarDto.builder()
+                    .id(UUID.randomUUID())
+                    .objectKey("avatars/user1.png")
+                    .build();
+
+            AvatarDto brokenAvatar = AvatarDto.builder()
+                    .id(UUID.randomUUID())
+                    .objectKey("avatars/broken.png")
+                    .build();
+
+            UserDetailsDto user1 = UserDetailsDto.builder()
+                    .userId(testUserId)
+                    .displayName("John Doe")
+                    .avatar(validAvatar)
+                    .build();
+
+            UserDetailsDto user2 = UserDetailsDto.builder()
+                    .userId(testUserId2)
+                    .displayName("Jane Smith")
+                    .avatar(brokenAvatar)
+                    .build();
+
+            UserDetailsDto user3 = UserDetailsDto.builder()
+                    .userId(testUserId3)
+                    .displayName("Jane Doe")
+                    .avatar(validAvatar)
+                    .build();
+
+            Mockito.when(userRepository.findUsersWithAvatars(Mockito.anyCollection()))
+                    .thenReturn(Flux.just(user1, user2, user3));
+
+            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/user1.png"))
+                    .thenReturn(Mono.just(URL));
+
+            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/broken.png"))
+                    .thenReturn(Mono.error(new RuntimeException("MinIO S3 error: NoSuchKey (Object does not exist)")));
+
+            Flux<UserDetailsDto> resultFlux = profileServiceImpl.getUserDetailsByIds(List.of(testUserId, testUserId2, testUserId3));
+
+            StepVerifier.create(resultFlux)
+                    .assertNext(resUser1 -> {
+                        Assertions.assertEquals(testUserId, resUser1.userId());
+                        Assertions.assertNotNull(resUser1.avatar());
+                        Assertions.assertEquals(URL, resUser1.avatar().getDownloadUrl());
+                    })
+                    .assertNext(resUser2 -> {
+                        Assertions.assertEquals(testUserId2, resUser2.userId());
+                        Assertions.assertNull(resUser2.avatar());
+                    })
+                    .assertNext(resUser3 -> {
+                        Assertions.assertEquals(testUserId3, resUser3.userId());
+                        Assertions.assertNotNull(resUser3.avatar());
+                        Assertions.assertEquals(URL, resUser3.avatar().getDownloadUrl());
+                    })
+                    .verifyComplete();
         }
     }
 }

@@ -176,7 +176,12 @@ public class ProfileServiceImpl implements ProfileService {
                 .mapNotNull(AvatarDto::getObjectKey)
                 .flatMap(storageClient::createPresignedDownloadUrl)
                 .doOnNext(url -> user.avatar().setDownloadUrl(url))
-                .thenReturn(user);
+                .doOnError(ex -> log.warn(
+                        "Failed to generate presigned URL for userId: {}. Cause: {}",
+                        user.userId(), ex.getMessage()
+                ))
+                .thenReturn(user)
+                .onErrorResume(ex -> Mono.just(UserDetailsDto.withoutAvatar(user)));
     }
 
     private Mono<User> verifyUserExists(UUID userId) {

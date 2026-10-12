@@ -28,6 +28,7 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
             u.id AS user_id, 
             u.display_name AS display_name, 
             u.email AS email, 
+            a.id AS avatar_id,
             a.user_id AS avatar_user_id,
             a.object_key AS avatar_object_key,
             a.file_name AS avatar_file_name,
