@@ -25,6 +25,10 @@ public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectM
             "AND (role = 'ADMIN' OR user_id = :actorUserId OR user_id = :changedMemberId) ORDER BY user_id FOR UPDATE")
     Flux<ProjectMemberDto> getRequiredMembersInProject(UUID actorUserId, UUID changedMemberId, UUID projectId);
 
+    @Query("SELECT user_id, role FROM taska.project_members WHERE project_id = :projectId " +
+            "AND (role = 'ADMIN' OR user_id = :actorUserId OR user_id = :addedMemberId)")
+    Flux<ProjectMemberDto> getRequiredMembersInProjectNoLock(UUID actorUserId, UUID addedMemberId, UUID projectId);
+
     Mono<ProjectMember> findByUserIdAndProjectId(UUID userId, UUID projectId);
 
     @Query("""
