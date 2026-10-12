@@ -894,6 +894,54 @@ class ProfileGrpcServiceTest {
         }
 
         @Test
+        @DisplayName("TAS-254: пользователь с аватаром без createdAt и пользователь без аватара — ответ собирается без NPE")
+        void getUserDetailsByIds_whenAvatarHasNoCreatedAtOrUserHasNoAvatar_thenBuildsResponse() {
+            ProfileGrpcService serviceWithRealMapper = new ProfileGrpcService(profileService, new ProfileMapper());
+
+            UUID avatarId = UUID.randomUUID();
+            AvatarDto avatarWithoutCreatedAt = AvatarDto.builder()
+                    .id(avatarId)
+                    .userId(userId1)
+                    .objectKey("avatars/user1.png")
+                    .downloadUrl("https://example.com/user1.png")
+                    .createdAt(null)
+                    .build();
+            UserDetailsDto userWithAvatar = UserDetailsDto.builder()
+                    .userId(userId1)
+                    .displayName(displayName1)
+                    .email(email1)
+                    .avatar(avatarWithoutCreatedAt)
+                    .build();
+            UserDetailsDto userWithoutAvatar = UserDetailsDto.builder()
+                    .userId(userId2)
+                    .displayName(displayName2)
+                    .email(email2)
+                    .avatar(null)
+                    .build();
+
+            GetUserDetailsByIdsRequest validRequest = buildRequest(List.of(userId1.toString(), userId2.toString()));
+            Mockito.when(profileService.getUserDetailsByIds(List.of(userId1, userId2)))
+                    .thenReturn(Flux.just(userWithAvatar, userWithoutAvatar));
+
+            StepVerifier.create(serviceWithRealMapper.getUserDetailsByIds(Mono.just(validRequest)))
+                    .assertNext(response -> {
+                        Assertions.assertEquals(2, response.getUserDetailsCount());
+
+                        UserDetails first = response.getUserDetails(0);
+                        Assertions.assertEquals(userId1.toString(), first.getUserId());
+                        Assertions.assertTrue(first.hasAvatar());
+                        Assertions.assertEquals(avatarId.toString(), first.getAvatar().getId());
+                        Assertions.assertEquals("https://example.com/user1.png", first.getAvatar().getDownloadUrl());
+                        Assertions.assertFalse(first.getAvatar().hasCreatedAt());
+
+                        UserDetails second = response.getUserDetails(1);
+                        Assertions.assertEquals(userId2.toString(), second.getUserId());
+                        Assertions.assertFalse(second.hasAvatar());
+                    })
+                    .verifyComplete();
+        }
+
+        @Test
         @DisplayName("Should propagate error when profileService throws an exception")
         void getUserDetailsByIds_whenServiceFails_thenPropagatesError() {
             List<UUID> expectedUserIds = List.of(userId1);
