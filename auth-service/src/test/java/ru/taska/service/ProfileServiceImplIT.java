@@ -213,6 +213,7 @@ class ProfileServiceImplIT extends AbstractIT {
                     assertThat(dto.email()).isEqualTo(TEST_USER_EMAIL);
 
                     assertThat(dto.avatar()).isNotNull();
+                    assertThat(dto.avatar().getId()).isNotNull();
                     assertThat(dto.avatar().getFileName()).isEqualTo(FILE_NAME);
                     assertThat(dto.avatar().getContentType()).isEqualTo(CONTENT_TYPE);
                     assertThat(dto.avatar().getSizeBytes()).isEqualTo(FILE_CONTENT.length);

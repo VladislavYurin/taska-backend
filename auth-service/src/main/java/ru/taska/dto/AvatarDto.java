@@ -2,7 +2,7 @@ package ru.taska.dto;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.Value;
+import org.springframework.data.relational.core.mapping.Column;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -10,6 +10,7 @@ import java.util.UUID;
 @Data
 @Builder
 public class AvatarDto {
+    @Column("id")
     UUID id;
     UUID userId;
     String objectKey;
