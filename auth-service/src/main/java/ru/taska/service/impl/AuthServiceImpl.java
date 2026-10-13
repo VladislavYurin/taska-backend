@@ -22,6 +22,7 @@ import ru.taska.repository.CredentialRepository;
 import ru.taska.repository.InviteTokenRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.UserRepository;
+import ru.taska.service.AccountLockService;
 import ru.taska.security.JwtService;
 import ru.taska.security.PasswordHashService;
 import ru.taska.security.RefreshTokenService;
@@ -40,6 +41,20 @@ import java.util.UUID;
  * Реализация сервиса аутентификации.
  * <p>Обрабатывает логин с защитой от перебора паролей (блокировка при превышении лимита попыток)
  * и ротацию refresh-токенов.</p>
+ *
+ * <p>Поведение при блокировке (ADR: см. docs/adr-lock-behavior.md):</p>
+ * <ul>
+ *   <li>{@code LOCKED} — временный лок за неудачные попытки входа. Источник правды —
+ *       {@code users.locked_until}. {@code LOCKED} <b>не</b> отзывает уже выпущенный
+ *       access-токен: легитимная сессия на другом устройстве не должна страдать от
+ *       перебора пароля третьей стороной. Лок снимается лениво на {@code login}
+ *       (через {@link AccountLockService#resolveLockState(User)}) и на {@code refresh}
+ *       (через {@link RefreshTokenService#validateAndRotate(String)}). {@code refresh}
+ *       <b>не</b> выдаёт новые токены, пока аккаунт {@code LOCKED}.</li>
+ *   <li>{@code BLOCKED} и {@code INVITED} — терминальные статусы (админский бан и
+ *       незавершённая активация). Отзывают уже выпущенный access-токен немедленно:
+ *       {@link #validateAccessToken(String)} читает статус из БД на каждом запросе.</li>
+ * </ul>
  */
 @Service
 @Slf4j
@@ -57,6 +72,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final PasswordValidator passwordValidator;
     private final JwtValidator jwtValidator;
+    private final AccountLockService accountLockService;
 
     /**
      * Транзакционный оператор с propagation REQUIRES_NEW.
@@ -88,18 +104,28 @@ public class AuthServiceImpl implements AuthService {
 
         return userRepository.findByEmail(normalizedEmail)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
-                .flatMap(user -> credentialRepository
-                        .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
-                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
-                        .flatMap( credential ->{
-
-                            if (user.getStatus() == UserStatus.BLOCKED || user.getStatus() == UserStatus.INVITED) {
-                                log.warn("Login attempt for {} user: {}", user.getStatus(), DataMaskingHelper.maskEmail(email));
-                                return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
-                            }
-                            return unlockIfLockoutExpired(user, credential)
-                                    .then(Mono.defer(() ->authenticate(user, credential, password)));
-                        })
+                .flatMap(user ->
+                        credentialRepository
+                                .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
+                                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
+                                .flatMap( credential ->
+                                        accountLockService
+                                                .resolveLockState(user)
+                                                .flatMap(refreshed -> {
+                                                        if (refreshed.getStatus() == UserStatus.LOCKED) {
+                                                            log.warn("Login attempt for LOCKED user: {}", DataMaskingHelper.maskEmail(email));
+                                                            return Mono.error(new DomainException(
+                                                                    DomainStatus.UNAUTHENTICATED,
+                                                                    "Account is locked until " + refreshed.getLockedUntil() + ". Try again later."));
+                                                        }
+                                                        if (refreshed.getStatus() == UserStatus.BLOCKED || refreshed.getStatus() == UserStatus.INVITED) {
+                                                            log.warn("Login attempt for {} user: {}", refreshed.getStatus(), DataMaskingHelper.maskEmail(email));
+                                                            return Mono.error(new DomainException(
+                                                                    DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
+                                                        }
+                                                        return authenticate(refreshed, credential, password);
+                                                })
+                                )
                 );
     }
 
@@ -113,6 +139,8 @@ public class AuthServiceImpl implements AuthService {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Refresh token cannot be blank"));
         }
 
+        // Статус и локаут проверяются внутри validateAndRotate — до создания нового токена,
+        // чтобы отказ не сжигал старый refresh.
         return refreshTokenService.validateAndRotate(refreshToken)
                 .flatMap(rotationResult -> {
                     String newRawRefreshToken = rotationResult.getRawToken();
@@ -167,6 +195,21 @@ public class AuthServiceImpl implements AuthService {
                 .then();
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>Читает статус пользователя из БД на каждом вызове.</p>
+     *
+     * <p>Отзывает уже выпущенный access-токен немедленно для терминальных статусов:</p>
+     * <ul>
+     *   <li>{@code BLOCKED} — админский бан;</li>
+     *   <li>{@code INVITED} — аккаунт не активирован.</li>
+     * </ul>
+     *
+     * <p>Для {@code LOCKED} access-токен <b>не</b> отзывается: лок — это анти-брутфорс
+     * на форме входа, легитимная сессия на другом устройстве не должна страдать.
+     * Метод лок <b>не</b> снимает.
+     * Истёкшее окно снимается на ближайшем {@code login} или {@code refresh}.</p>
+     */
     @Override
     public Mono<UserContext> validateAccessToken(String accessToken) {
         return jwtValidator.validate(accessToken)
@@ -196,22 +239,25 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Проверяет статус пользователя: активен ли, не заблокирован, активирован ли.
+     * Проверяет статус пользователя для доступа по access-токену.
      *
-     * @param user пользователь
-     * @return тот же пользователь, если статус допустим
-     * @throws DomainException если статус не позволяет войти
+     * <p>Режет только терминальные статусы: {@code BLOCKED} (админский бан) и
+     * {@code INVITED} (не завершена активация). {@code LOCKED} не режется — лок
+     * это анти-брутфорс формы входа; access-токен легитимной сессии продолжает
+     * работать.</p>
      */
     private Mono<User> validateUserStatus(User user) {
-        if (user.getStatus() == UserStatus.BLOCKED) {
-            log.warn("User is blocked, userId: {}", user.getId());
-            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User is blocked"));
-        }
-        if (user.getStatus() == UserStatus.INVITED) {
-            log.warn("User is not activated, userId: {}", user.getId());
-            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User not activated"));
-        }
-        return Mono.just(user);
+        return switch (user.getStatus()) {
+            case BLOCKED -> {
+                log.warn("User is blocked, userId: {}", user.getId());
+                yield Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "User not found or inactive"));
+            }
+            case INVITED -> {
+                log.warn("User is not activated, userId: {}", user.getId());
+                yield Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "User not found or inactive"));
+            }
+            default -> Mono.just(user);
+        };
     }
 
     private UserContext buildUserContext(User user) {
@@ -225,32 +271,9 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    private Mono<Void> unlockIfLockoutExpired(User user, Credential credential) {
-        if (user.getStatus() != UserStatus.LOCKED) {
-            return Mono.empty();
-        }
-        Instant now = Instant.now();
-        boolean expired = (credential.getLockedUntil() == null) || (credential.getLockedUntil().isBefore(now));
-        if (!expired) {
-            return Mono.error(new DomainException(
-                    DomainStatus.PERMISSION_DENIED,
-                    "Account is locked until " + credential.getLockedUntil() + ". Try again later."
-            ));
-        }
-        log.info("Lock expired for user {}, unlocking", user.getId());
-        user.setStatus(UserStatus.ACTIVE);
-        credential.setLockedUntil(null);
-        credential.setFailedAttempts(0);
-        return requiresNewTransactionalOperator.transactional(
-                userRepository.save(user)
-                        .then(credentialRepository.save(credential))
-                        .then()
-        );
-    }
-
     private Mono<AuthResponseDto> authenticate(User user, Credential credential, String password) {
         return verifyPassword(credential, password, user)
-                .flatMap(valid -> resetFailedAttempts(valid)
+                .flatMap(valid -> resetFailedAttempts(user,valid)
                         .then(generateTokens(user.getId())));
     }
     /**
@@ -276,9 +299,11 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Обрабатывает неудачную попытку входа: увеличивает счётчик, при необходимости блокирует учётные данные.
+     * Обрабатывает неудачную попытку входа: увеличивает счётчик, при необходимости
+     * переводит аккаунт в {@code LOCKED} и проставляет {@code lockedUntil}.
      *
      * @param credential учётные данные
+     * @param user       пользователь
      * @return никогда не возвращает успех, всегда ошибка {@link DomainException}
      */
     private Mono<Credential> handleFailedAttempt(Credential credential,User user) {
@@ -294,13 +319,13 @@ public class AuthServiceImpl implements AuthService {
 
         credential.setFailedAttempts(newAttempts);
         credential.setLastFailedAt(now);
-        credential.setLockedUntil(lockedUntil);
 
         return requiresNewTransactionalOperator.transactional(
                 credentialRepository.save(credential)
                         .flatMap(savedCredential -> {
                             if (shouldLock && (user.getStatus() != UserStatus.LOCKED)) {
                                 user.setStatus(UserStatus.LOCKED);
+                                user.setLockedUntil(lockedUntil);
                                 return userRepository.save(user)
                                         .doOnSuccess( savedUser->
                                                 log.warn("Account locked until {} due to {} failed attempts", lockedUntil, newAttempts)
@@ -315,15 +340,27 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Обнуляет счётчик неудачных попыток после успешного входа.
+     * Сбрасывает счётчик неудачных попыток и лок после успешного входа.
      *
+     * @param user       пользователь
      * @param credential учётные данные
-     * @return сохранённые учётные данные с обнулёнными попытками
+     * @return сохранённые учётные данные
      */
-    private Mono<Credential> resetFailedAttempts(Credential credential) {
+    private Mono<Void> resetFailedAttempts(User user, Credential credential) {
         credential.setFailedAttempts(0);
-        credential.setLockedUntil(null);
-        return credentialRepository.save(credential);
+
+        Mono<Void> saveCredential = credentialRepository.save(credential).then();
+
+        boolean needUserSave = user.getStatus() == UserStatus.LOCKED || user.getLockedUntil() != null;
+
+        if (needUserSave) {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setLockedUntil(null);
+            return saveCredential
+                    .then(userRepository.save(user))
+                    .then();
+        }
+        return saveCredential;
     }
 
     /**

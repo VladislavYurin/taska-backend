@@ -29,7 +29,7 @@ import java.util.UUID;
  *       <li>{@code secretHash} — хэш пароля (обязательно);</li>
  *       <li>{@code algo} — алгоритм хэширования (BCRYPT/ARGON2);</li>
  *       <li>{@code provider}, {@code subject} — не используются (null);</li>
- *       <li>{@code failedAttempts}, {@code lockedUntil} — защита от перебора.</li>
+ *       <li>{@code failedAttempts} — защита от перебора.</li>
  *     </ul>
  *   </li>
  *
@@ -130,12 +130,6 @@ public class Credential {
      */
     @Column("last_failed_at")
     private Instant lastFailedAt;
-
-    /**
-     * Время, до которого аутентификация заблокирована.
-     */
-    @Column("locked_until")
-    private Instant lockedUntil;
 
     /**
      * Временная метка создания записи (аудит).
