@@ -1,10 +1,12 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.CollectionMappingStrategy;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ReportingPolicy;
 import ru.taska.api.common.v1.GlobalRoleProto;
@@ -127,16 +129,36 @@ public interface ProjectMapper {
     /**
      * Маппинг {@link WorkflowDto} → {@link WorkflowDataResponse}.
      *
-     * <p>Списки {@code statuses} и {@code transitions} мапятся через
-     * {@link #toWorkflowStatusResponse(WorkflowStatusDto)} и
-     * {@link #toWorkflowTransitionResponse(WorkflowTransitionDto)}
-     * соответственно. Поля {@code createdAt}/{@code updatedAt} конвертируются
+     * <p>Списки {@code statuses} и {@code transitions} дописывает
+     * {@link #addWorkflowStatusesAndTransitions(WorkflowDto, WorkflowDataResponse.Builder)}.
+     * Поля {@code createdAt}/{@code updatedAt} конвертируются
      * через {@link #mapInstantToTimestamp(Instant)}.</p>
      *
      * @param dto DTO workflow с версией, статусами и переходами
      * @return gRPC-ответ с полными данными workflow
      */
     WorkflowDataResponse toWorkflowDataResponse(WorkflowDto dto);
+
+    /**
+     * Списки {@code statuses} и {@code transitions} для {@link #toWorkflowDataResponse(WorkflowDto)}.
+     *
+     * <p>Сам MapStruct их не заполняет: у repeated-полей protobuf-билдера нет сеттера,
+     * только {@code addStatuses}/{@code getStatusesList}, и без protobuf-SPI MapStruct
+     * не видит в них свойство. При {@code unmappedTargetPolicy = IGNORE} об этом
+     * не предупреждает и сборка (TAS-261).</p>
+     *
+     * @param dto    DTO workflow со статусами и переходами
+     * @param target билдер ответа, который собирает {@link #toWorkflowDataResponse(WorkflowDto)}
+     */
+    @AfterMapping
+    default void addWorkflowStatusesAndTransitions(WorkflowDto dto, @MappingTarget WorkflowDataResponse.Builder target) {
+        if (dto.statuses() != null) {
+            dto.statuses().forEach(status -> target.addStatuses(toWorkflowStatusResponse(status)));
+        }
+        if (dto.transitions() != null) {
+            dto.transitions().forEach(transition -> target.addTransitions(toWorkflowTransitionResponse(transition)));
+        }
+    }
 
     /**
      * Маппинг {@link WorkflowStatusDto} → {@link WorkflowStatusResponse}.

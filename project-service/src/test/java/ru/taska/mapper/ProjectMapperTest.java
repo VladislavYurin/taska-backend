@@ -7,11 +7,16 @@ import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 import ru.taska.api.project.v1.ProjectContextResponse;
 import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
+import ru.taska.api.project.v1.WorkflowDataResponse;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.projectContext.ProjectContextDto;
+import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
+import ru.taska.domain.dto.projectContext.WorkflowDto;
+import ru.taska.domain.dto.projectContext.WorkflowStatusDto;
+import ru.taska.domain.dto.projectContext.WorkflowTransitionDto;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -20,7 +25,7 @@ import java.util.UUID;
 
 /**
  * Тесты сборки {@link ProjectContextResponse}: участники без аватара / имени / e-mail
- * не должны ронять маппинг (TAS-254).
+ * не должны ронять маппинг (TAS-254); статусы и переходы workflow доходят до ответа (TAS-261).
  */
 class ProjectMapperTest {
 
@@ -54,6 +59,14 @@ class ProjectMapperTest {
                 .role(ProjectRole.ADMIN)
                 .build();
         return new ProjectContextDto(project, List.of(), List.of(), List.of(member));
+    }
+
+    private ProjectContextDto contextWithWorkflow(ProjectWorkflowDto workflow) {
+        ProjectContextDto base = contextWithMember(ProjectMemberDetailsDto.builder()
+                .userId(USER_ID)
+                .role(ProjectRole.ADMIN)
+                .build());
+        return new ProjectContextDto(base.project(), List.of(), List.of(workflow), base.members());
     }
 
     @Test
@@ -120,5 +133,51 @@ class ProjectMapperTest {
                 .isEqualTo("https://storage.example.com/avatars/user.png");
         Assertions.assertThat(memberResponse.hasAddedAt()).isTrue();
         Assertions.assertThat(memberResponse.getAddedAt().getSeconds()).isEqualTo(addedAt.getEpochSecond());
+    }
+
+    @Test
+    @DisplayName("toProjectContextResponse: workflow — statuses и transitions на месте, а не пустые списки")
+    void toProjectContextResponse_whenWorkflowHasStatusesAndTransitions_shouldMapBoth() {
+        WorkflowDto workflow = WorkflowDto.builder()
+                .id("11111111-1111-1111-1111-111111111111")
+                .name("Default workflow")
+                .version(1)
+                .createdAt(Instant.parse("2026-07-30T08:00:00Z"))
+                .updatedAt(Instant.parse("2026-07-30T08:00:00Z"))
+                .statuses(List.of(
+                        WorkflowStatusDto.builder()
+                                .id("22222222-2222-2222-2222-222222222222")
+                                .statusKey("TODO").name("To Do").category("TODO").sortOrder(1)
+                                .build(),
+                        WorkflowStatusDto.builder()
+                                .id("33333333-3333-3333-3333-333333333333")
+                                .statusKey("IN_PROGRESS").name("In Progress").category("IN_PROGRESS").sortOrder(2)
+                                .build()))
+                .transitions(List.of(
+                        WorkflowTransitionDto.builder()
+                                .id("55555555-5555-5555-5555-555555555555")
+                                .fromStatusId("22222222-2222-2222-2222-222222222222")
+                                .toStatusId("33333333-3333-3333-3333-333333333333")
+                                .name("Start Progress").sortOrder(1)
+                                .build()))
+                .build();
+
+        ProjectContextResponse response = projectMapper.toProjectContextResponse(
+                contextWithWorkflow(new ProjectWorkflowDto("TASK", workflow)));
+
+        Assertions.assertThat(response.getWorkflowsList()).hasSize(1);
+        Assertions.assertThat(response.getWorkflows(0).getIssueType()).isEqualTo("TASK");
+        WorkflowDataResponse workflowResponse = response.getWorkflows(0).getWorkflow();
+        Assertions.assertThat(workflowResponse.getId()).isEqualTo("11111111-1111-1111-1111-111111111111");
+        Assertions.assertThat(workflowResponse.getStatusesList())
+                .extracting(status -> status.getStatusKey() + "=" + status.getId())
+                .containsExactly(
+                        "TODO=22222222-2222-2222-2222-222222222222",
+                        "IN_PROGRESS=33333333-3333-3333-3333-333333333333");
+        Assertions.assertThat(workflowResponse.getTransitionsList()).hasSize(1);
+        Assertions.assertThat(workflowResponse.getTransitions(0).getId()).isEqualTo("55555555-5555-5555-5555-555555555555");
+        Assertions.assertThat(workflowResponse.getTransitions(0).getFromStatusId()).isEqualTo("22222222-2222-2222-2222-222222222222");
+        Assertions.assertThat(workflowResponse.getTransitions(0).getToStatusId()).isEqualTo("33333333-3333-3333-3333-333333333333");
+        Assertions.assertThat(workflowResponse.getTransitions(0).getName()).isEqualTo("Start Progress");
     }
 }
