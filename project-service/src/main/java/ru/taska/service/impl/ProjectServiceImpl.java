@@ -1,8 +1,5 @@
 package ru.taska.service.impl;
 
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -123,6 +120,13 @@ public class ProjectServiceImpl implements ProjectService {
                 });
     }
 
+    /**
+     * Доступ к контексту — то же правило, что и у {@link #getProject}: не участник проекта
+     * получает PERMISSION_DENIED независимо от глобальной роли. Полноценное чтение контекста
+     * для GLOBAL_ADMIN вне проекта (роль в gRPC-заголовке) — отдельная задача.
+     * Отказ любого из источников (members/labels/workflows) пробрасывается наружу,
+     * а не маскируется пустым списком.
+     */
     @Override
     public Mono<ProjectContextDto> getProjectContext(
             String requestId,
@@ -137,66 +141,26 @@ public class ProjectServiceImpl implements ProjectService {
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
                 }))
                 .flatMap(projectDto -> {
-                    // Проверка доступа
                     if (projectDto.user_id() == null) {
-                        if (globalRole != GlobalRole.GLOBAL_ADMIN) {
-                            log.warn("[{}][{}] User {} is not a member of project {}",
-                                    requestId, nodeId, actorUserId, projectId);
-                            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
-                                    "You don't have access to this project"));
-                        }
-                        // GLOBAL_ADMIN без членства — продолжаем.
-                        // Сейчас members и labels вернут PERMISSION_DENIED, поэтому каждый
-                        // такой вызов обёрнут в onErrorResume -> пустой список.
-                        // Когда в project-service и issue-service появится работа с Global Role -> достаточно убрать onErrorResume —
-                        // код ниже начнёт наполнять members/labels как обычно.
+                        log.warn("[{}][{}] User {} is not a member of project {} (globalRole={})",
+                                requestId, nodeId, actorUserId, projectId, globalRole);
+                        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
+                                "You don't have access to this project"));
                     }
 
                     log.info("[{}][{}] Assembling project context: projectId={}", requestId, nodeId, projectId);
 
-                    ///todo проблема - если global_admin, то его не будет в участниках проекта - будем обходить внедрением UserContext в Header grpc запроса
-                    /// todo: временнон решение - заглушка на GLOBAL_ADMIN - отдаем пустые списки, где требуется actor_user_id c предупреждением
-
-                    /// Загружаем участников.
-                    // onErrorResume: GLOBAL_ADMIN без членства сейчас получит PERMISSION_DENIED
-                    // из ProjectMemberRepository.findProjectMembers (SQL требует EXISTS по actorUserId).
-                    // Отдаём пустой список, чтобы не ронять весь контекст.
                     Mono<List<ProjectMemberDetailsDto>> membersMono =
                             projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId)
-                                    .collectList()
-                                    .onErrorResume(this::isPermissionDenied, e -> {
-                                        log.warn("[{}][{}] Access denied while loading project members, " +
-                                                        "returning empty list: projectId={}, actorUserId={}",
-                                                requestId, nodeId, projectId, actorUserId);
-                                        return Mono.just(List.of());
-                    });
+                                    .collectList();
 
-                    /// Загружаем метки из issue-service.
-                    // onErrorResume: симметрично members — issue-service проверяет роль актора
-                    // через ProjectRoleChecker и для не-участника отдаёт отказ.
                     Mono<List<ProjectLabelDto>> labelsMono =
-                            issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId)
-                                    .onErrorResume(this::isPermissionDenied,e -> {
-                                        log.warn("[{}][{}] Failed to load project labels for context, " +
-                                                        "returning empty list: projectId={}, actorUserId={}, reason={}",
-                                                requestId, nodeId, projectId, actorUserId, e.getMessage());
-                                        return Mono.just(List.of());
-                                    });
+                            issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId);
 
-
-                    /// Загружаем workflows из workflow-service.
-                    // Пока workflow-service не проверяет actor_user_id (TAS-207),
-                    // этот вызов для GLOBAL_ADMIN проходит как обычно. onErrorResume в качестве заглушки
                     Mono<List<ProjectWorkflowDto>> workflowsMono =
-                            loadProjectWorkflows(requestId, nodeId, projectId, actorUserId)
-                                    .onErrorResume(this::isPermissionDenied,e -> {
-                                        log.warn("[{}][{}] Failed to load project workflows for context, " +
-                                                        "returning empty list: projectId={}, actorUserId={}, reason={}",
-                                                requestId, nodeId, projectId, actorUserId, e.getMessage());
-                                        return Mono.just(List.of());
-                                    });
+                            loadProjectWorkflows(requestId, nodeId, projectId, actorUserId);
 
-                    return Mono.zip(labelsMono,workflowsMono, membersMono)
+                    return Mono.zip(labelsMono, workflowsMono, membersMono)
                             .map(tuple -> new ProjectContextDto(
                                     projectDto,
                                     tuple.getT1(),   // labels
@@ -310,14 +274,4 @@ public class ProjectServiceImpl implements ProjectService {
                 .collectList();
     }
 
-    /**
-     * Предикат для onErrorResume: гасим только отказ в доступе.
-     * Любая другая ошибка (UNAVAILABLE, NOT_FOUND, ошибка БД) пробрасывается наружу,
-     * чтобы не маскировать реальную деградацию сервисов.
-     */
-    private boolean isPermissionDenied(Throwable e) {
-        return (e instanceof DomainException de && de.getStatus() == DomainStatus.PERMISSION_DENIED)
-                || (e instanceof StatusRuntimeException grpcError
-                && grpcError.getStatus().getCode() == Status.Code.PERMISSION_DENIED);
-    }
 }
