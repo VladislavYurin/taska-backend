@@ -72,3 +72,4 @@ app:
     allowed-methods: ${GATEWAY_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
     allowed-headers: ${GATEWAY_CORS_ALLOWED_HEADERS:Authorization,Content-Type,Accept,X-Request-Id,Idempotency-Key,If-Match}
     exposed-headers: ${GATEWAY_CORS_EXPOSED_HEADERS:X-Request-Id}
+    max-age: ${GATEWAY_CORS_MAX_AGE:7200}

@@ -61,6 +61,7 @@ public class CorsWebFilterTest {
                 .expectStatus().isOk()
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN)
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_MAX_AGE, "7200")
                 .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, ".*GET.*")
                 .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*Authorization.*")
                 .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*Content-Type.*");
