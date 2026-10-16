@@ -1,16 +1,27 @@
 package ru.taska.mapper;
 
 import org.springframework.stereotype.Component;
+
 import ru.taska.api.admin.v1.ColumnMetadata;
 import ru.taska.api.admin.v1.GetCatalogResponse;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
+import ru.taska.api.admin.v1.ListAuditEntriesResponse;
+import ru.taska.api.admin.v1.ListAuditEntry;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ProblematicEventCountsByService;
+import ru.taska.api.admin.v1.RetryOutboxEventResponse;
 import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.ServiceMetadata;
 import ru.taska.api.admin.v1.TableMetadata;
 import ru.taska.api.admin.v1.Value;
+
+
+
+
+import com.google.protobuf.Timestamp;
+import ru.taska.domain.dto.AuditEntryDto;
 import ru.taska.domain.dto.ColumnMetadataDto;
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.PaginationInfoDto;
 import ru.taska.domain.dto.ProblematicEventCountsByServiceDto;
@@ -18,15 +29,11 @@ import ru.taska.domain.dto.ProblematicOutboxEventDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.domain.dto.ServiceMetadataDto;
 import ru.taska.domain.dto.TableCapabilitiesDto;
 import ru.taska.domain.dto.TableMetadataDto;
-import ru.taska.api.admin.v1.RetryOutboxEventResponse;
-import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 
-import java.util.UUID;
-
-import com.google.protobuf.Timestamp;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -34,6 +41,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -50,7 +58,7 @@ public class AdminDataMapper {
      * Преобразует gRPC GetCatalogResponse → REST MetadataResponse
      */
     public MetadataResponse toRestGetCatalogResponse(GetCatalogResponse grpcCatalogResponse) {
-        if(grpcCatalogResponse==null || !grpcCatalogResponse.hasCatalog()){
+        if (grpcCatalogResponse == null || !grpcCatalogResponse.hasCatalog()) {
             return new MetadataResponse();
         }
         List<ServiceMetadataDto> serviceMetadata = grpcCatalogResponse.getCatalog()
@@ -260,6 +268,98 @@ public class AdminDataMapper {
         dto.setEventId(UUID.fromString(grpcResponse.getEventId()));
         dto.setStatus(grpcResponse.getStatus());
         dto.setAttempts(grpcResponse.getAttempts());
+
+        return dto;
+    }
+
+    /**
+     * Преобразует gRPC ListAuditEntriesResponse → REST ListAuditEntriesResponseDto
+     */
+    public ListAuditEntriesResponseDto toRestListAuditEntriesResponse(ListAuditEntriesResponse grpcResponse) {
+        if (grpcResponse == null) {
+            return new ListAuditEntriesResponseDto();
+        }
+
+        List<AuditEntryDto> entries = grpcResponse.getEntriesList()
+                .stream()
+                .map(this::toRestAuditEntry)
+                .collect(Collectors.toList());
+
+        ListAuditEntriesResponseDto response = new ListAuditEntriesResponseDto();
+        response.setEntries(entries);
+
+        PaginationInfoDto pagination = new PaginationInfoDto();
+        pagination.setCurrentPage(grpcResponse.getCurrentPage());
+        pagination.setPageSize(grpcResponse.getPageSize());
+        pagination.setTotalRows(grpcResponse.getTotalRows());
+        pagination.setTotalPages(grpcResponse.getTotalPages());
+        pagination.setHasNext(grpcResponse.getHasNext());
+        pagination.setHasPrev(grpcResponse.getHasPrev());
+
+        response.setPagination(pagination);
+
+        return response;
+    }
+
+    /**
+     * /**
+     * Преобразует gRPC ListAuditEntry → REST AuditEntryDto
+     */
+    private AuditEntryDto toRestAuditEntry(ListAuditEntry grpcAuditEntry) {
+        AuditEntryDto dto = new AuditEntryDto();
+
+        if (grpcAuditEntry.hasActorUserId()) {
+            String actorUserId = grpcAuditEntry.getActorUserId();
+            if (actorUserId != null && !actorUserId.isEmpty()) {
+                dto.setActorUserId(UUID.fromString(actorUserId));
+            }
+        }
+
+        if (grpcAuditEntry.hasActorLogin()) {
+            dto.setActorLogin(grpcAuditEntry.getActorLogin());
+        }
+
+        if (grpcAuditEntry.hasAction()) {
+            dto.setAction(grpcAuditEntry.getAction());
+        }
+
+        if (grpcAuditEntry.hasTargetService()) {
+            dto.setTargetService(grpcAuditEntry.getTargetService());
+        }
+
+        if (grpcAuditEntry.hasTargetTable()) {
+            dto.setTargetTable(grpcAuditEntry.getTargetTable());
+        }
+
+        if (grpcAuditEntry.hasTargetId()) {
+            dto.setTargetId(grpcAuditEntry.getTargetId());
+        }
+
+        if (grpcAuditEntry.hasOldValue()) {
+            dto.setOldValue(grpcAuditEntry.getOldValue());
+        }
+
+        if (grpcAuditEntry.hasNewValue()) {
+            dto.setNewValue(grpcAuditEntry.getNewValue());
+        }
+
+        if (grpcAuditEntry.hasReason()) {
+            dto.setReason(grpcAuditEntry.getReason());
+        }
+
+        if (grpcAuditEntry.hasRequestId()) {
+            dto.setRequestId(grpcAuditEntry.getRequestId());
+        }
+
+        if (grpcAuditEntry.hasCreatedAt()) {
+            dto.setCreatedAt(OffsetDateTime.ofInstant(
+                    Instant.ofEpochSecond(
+                            grpcAuditEntry.getCreatedAt().getSeconds(),
+                            grpcAuditEntry.getCreatedAt().getNanos()
+                    ),
+                    ZoneOffset.UTC
+            ));
+        }
 
         return dto;
     }

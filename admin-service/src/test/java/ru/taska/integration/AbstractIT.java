@@ -88,27 +88,76 @@ public abstract class AbstractIT {
         try (Connection connection = DriverManager.getConnection(
                 postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
              Statement statement = connection.createStatement()) {
+
             statement.execute("CREATE SCHEMA IF NOT EXISTS " + FIXTURE_SCHEMA);
+
             statement.execute("""
-                    CREATE TABLE IF NOT EXISTS %s.%s (
-                        id uuid PRIMARY KEY,
-                        login varchar(64) NOT NULL,
-                        email varchar(255) NOT NULL,
-                        created_at timestamptz NOT NULL DEFAULT now(),
-                        age integer
-                    )
-                    """.formatted(FIXTURE_SCHEMA, FIXTURE_TABLE));
+                CREATE TABLE IF NOT EXISTS %s.%s (
+                    id uuid PRIMARY KEY,
+                    login varchar(64) NOT NULL,
+                    email varchar(255) NOT NULL,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    age integer
+                )
+                """.formatted(FIXTURE_SCHEMA, FIXTURE_TABLE));
             statement.execute("DELETE FROM " + FIXTURE_SCHEMA + "." + FIXTURE_TABLE);
             statement.execute("""
-                    INSERT INTO %s.%s (id, login, email, age) VALUES
-                    ('%s', '%s', '%s', 30),
-                    ('22222222-2222-2222-2222-222222222222', 'bob', 'bob@example.com', 25)
-                    """.formatted(
+                INSERT INTO %s.%s (id, login, email, age) VALUES
+                ('%s', '%s', '%s', 30),
+                ('22222222-2222-2222-2222-222222222222', 'bob', 'bob@example.com', 25)
+                """.formatted(
                     FIXTURE_SCHEMA,
                     FIXTURE_TABLE,
                     FIXTURE_USER_ID,
                     FIXTURE_USER_LOGIN,
                     FIXTURE_USER_EMAIL
+            ));
+
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS %s.admin_audit_log (
+                    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    request_id text NULL,
+                    actor_user_id uuid NOT NULL,
+                    actor_login varchar(64) NOT NULL,
+                    actor_roles jsonb NOT NULL,
+                    action text NOT NULL,
+                    target_service text NOT NULL,
+                    target_table text NOT NULL,
+                    target_id text NOT NULL,
+                    old_value jsonb NULL,
+                    new_value jsonb NULL,
+                    reason text NOT NULL,
+                    created_at timestamptz NOT NULL DEFAULT now()
+                )
+                """.formatted(FIXTURE_SCHEMA));
+
+            statement.execute("DELETE FROM " + FIXTURE_SCHEMA + ".admin_audit_log");
+            statement.execute("""
+                INSERT INTO %s.admin_audit_log (
+                    id, request_id, actor_user_id, actor_login, actor_roles, action,
+                    target_service, target_table, target_id, old_value, new_value,
+                    reason, created_at
+                ) VALUES (
+                    '33333333-3333-3333-3333-333333333333',
+                    'requestId',
+                    '%s',
+                    '%s',
+                    '["ADMIN"]'::jsonb,
+                    'action',
+                    '%s',
+                    '%s',
+                    '00000000-0000-0000-0000-000000000001',
+                    '{"name":"old-name"}'::jsonb,
+                    '{"name":"new-name"}'::jsonb,
+                    'test-reason',
+                    '2024-01-15T12:00:00Z'
+                )
+                """.formatted(
+                    FIXTURE_SCHEMA,
+                    FIXTURE_USER_ID,
+                    FIXTURE_USER_LOGIN,
+                    FIXTURE_SERVICE,
+                    FIXTURE_TABLE
             ));
         }
     }

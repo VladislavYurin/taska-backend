@@ -4,11 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+
+import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequestBody;
-import ru.taska.api.admin.v1.GetCatalogRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
+import ru.taska.api.admin.v1.ListAuditEntriesRequest;
+import ru.taska.api.admin.v1.ListAuditEntriesRequestBody;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsRequestBody;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
@@ -17,6 +20,8 @@ import ru.taska.api.admin.v1.RetryOutboxEventRequestBody;
 import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
+
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
@@ -31,6 +36,7 @@ import ru.taska.domain.dto.RetryOutboxEventRequestDto;
 import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.mapper.AdminDataMapper;
 import ru.taska.mapper.AdminUserManagementMapper;
+
 
 import java.util.Map;
 import java.util.UUID;
@@ -90,6 +96,46 @@ public class GrpcAdminServiceClient {
                 .map(adminDataMapper::toRestListTableRowsResponse);
     }
 
+    public Mono<ListAuditEntriesResponseDto> listAuditEntity(
+            String actorUserId,
+            String action,
+            String targetService,
+            String targetTable,
+            String targetId,
+            String requestId,
+            String createdAtFrom,
+            String createdAtTo,
+            Integer page,
+            Integer pageSize,
+            GatewayContext context
+    ) {
+        log.debug("[{}] Calling listAuditEntries", context.requestId());
+
+        ListAuditEntriesRequestBody.Builder bodyBuilder = ListAuditEntriesRequestBody.newBuilder();
+
+        if (actorUserId != null) bodyBuilder.setActorUserId(actorUserId);
+        if (action != null) bodyBuilder.setAction(action);
+        if (targetService != null) bodyBuilder.setTargetService(targetService);
+        if (targetTable != null) bodyBuilder.setTargetTable(targetTable);
+        if (targetId != null) bodyBuilder.setTargetId(targetId);
+        if (requestId != null) bodyBuilder.setRequestId(requestId);
+        if (createdAtFrom != null) bodyBuilder.setCreatedAtFrom(createdAtFrom);
+        if (createdAtTo != null) bodyBuilder.setCreatedAtTo(createdAtTo);
+
+        if (page != null) bodyBuilder.setPage(page);
+        if (pageSize != null) bodyBuilder.setPageSize(pageSize);
+
+        ListAuditEntriesRequestBody requestBody = bodyBuilder.build();
+
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(buildGrpcHeader(context))
+                .setBody(requestBody)
+                .build();
+
+        return dynamicStub().listAuditEntries(request)
+                .map(adminDataMapper::toRestListAuditEntriesResponse);
+    }
+
     public Mono<ReadOnlySingleRowResponseDto> getTableRowById(
             String service,
             String table,
@@ -144,9 +190,9 @@ public class GrpcAdminServiceClient {
         log.debug("[{}] Calling blockUser", context.requestId());
 
         return request
-                .flatMap(requestDto->
+                .flatMap(requestDto ->
                         dynamicStub().blockUser(
-                                adminUserManagementMapper.toBlockUserGrpcRequest(userId,requestDto,context)
+                                adminUserManagementMapper.toBlockUserGrpcRequest(userId, requestDto, context)
                         )
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
@@ -161,9 +207,9 @@ public class GrpcAdminServiceClient {
         log.debug("[{}] Calling unblockUser", context.requestId());
 
         return request
-                .flatMap(requestDto->
+                .flatMap(requestDto ->
                         dynamicStub().unblockUser(
-                                adminUserManagementMapper.toUnblockUserGrpcRequest(userId,requestDto,context)
+                                adminUserManagementMapper.toUnblockUserGrpcRequest(userId, requestDto, context)
                         )
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
@@ -177,9 +223,9 @@ public class GrpcAdminServiceClient {
         log.debug("[{}] Calling resetCredentialLockout", context.requestId());
 
         return request
-                .flatMap(requestDto->
+                .flatMap(requestDto ->
                         dynamicStub().resetCredentialLockout(
-                                adminUserManagementMapper.toResetCredentialLockoutRequest(userId,requestDto,context)
+                                adminUserManagementMapper.toResetCredentialLockoutRequest(userId, requestDto, context)
                         )
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
