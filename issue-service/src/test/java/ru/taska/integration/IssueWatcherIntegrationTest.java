@@ -28,7 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = "spring.grpc.server.port=0")
+        properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
 class IssueWatcherIntegrationTest extends AbstractIT {
     private static final String REQUEST_ID = "unwatch-regression";
     private static final String NODE_ID = "test-node";
