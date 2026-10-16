@@ -751,7 +751,12 @@ paths:
 
     put:
       summary: Обновляет основные поля задачи
-      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Назначающий и назначаемый должны иметь роль из `assign-issue-roles`: по умолчанию ADMIN или MEMBER.
+        При назначении себя роль проверяется один раз. Не участник проекта получает 403 «Access denied»,
+        неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_ASSIGN_ROLES; стенд может переопределить значения по умолчанию.
       deprecated: true
       operationId: updateIssue
       tags:
@@ -2077,10 +2082,14 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
     post:
-      summary: Добавление подписчика на задачу (только project ADMIN)
+      summary: Добавление подписчика на задачу с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
         Подписывает указанного пользователя (`userId` в body) на задачу.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: addIssueWatcher
       tags:
         - watchers
@@ -2129,7 +2138,11 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/me:
     put:
       summary: Подписка текущего пользователя на задачу
-      description: userId берётся из Gateway context (JWT), не из тела запроса.
+      description: |
+        userId берётся из Gateway context (JWT), не из тела запроса.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: watchIssueMe
       tags:
         - watchers
@@ -2171,7 +2184,11 @@ paths:
 
     delete:
       summary: Отписка текущего пользователя от задачи
-      description: userId берётся из Gateway context (JWT), не из path.
+      description: |
+        userId берётся из Gateway context (JWT), не из path.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: unwatchIssueMe
       tags:
         - watchers
@@ -2213,10 +2230,13 @@ paths:
 
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/{userId}:
     delete:
-      summary: Удаление подписчика задачи (только project ADMIN)
+      summary: Удаление подписчика задачи с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
-        Viewer/MEMBER без роли ADMIN не может удалить чужого watcher.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403; MEMBER может отписать себя, но не другого пользователя.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: removeIssueWatcher
       tags:
         - watchers
