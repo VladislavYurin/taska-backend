@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationPropertiesBindException;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -48,7 +49,7 @@ class CorsMaxAgeTest {
     void invalidMaxAge_preventsStartup(String maxAge) {
         contextRunner.withPropertyValues("app.cors.max-age=" + maxAge).run(context -> {
             assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure()).hasStackTraceContaining("max-age");
+            assertThat(context.getStartupFailure()).hasCauseInstanceOf(ConfigurationPropertiesBindException.class);
         });
     }
 
