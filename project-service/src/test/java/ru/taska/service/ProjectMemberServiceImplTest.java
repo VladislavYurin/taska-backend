@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -429,6 +431,65 @@ class ProjectMemberServiceImplTest {
         Mockito.verify(projectRepository).existsById(projectId);
         Mockito.verify(projectMemberRepository).findProjectMembers(projectId, actorId);
         Mockito.verify(grpcAuthServiceClient).getUserDetailsByIds(Mockito.anyList(), Mockito.eq(requestId), Mockito.eq(nodeId));
+    }
+
+    @ParameterizedTest(name = "remove={0}, actorRole={1}, targetExists={2}")
+    @CsvSource({
+            "true, OUTSIDER, true", "true, OUTSIDER, false",
+            "true, MEMBER, true", "true, MEMBER, false",
+            "true, VIEWER, true", "true, VIEWER, false",
+            "false, OUTSIDER, true", "false, OUTSIDER, false",
+            "false, MEMBER, true", "false, MEMBER, false",
+            "false, VIEWER, true", "false, VIEWER, false"
+    })
+    @DisplayName("Изменение и удаление участника не раскрывают членство не-администратору")
+    void modifyMember_deniesUnauthorizedActorRegardlessOfTarget(
+            boolean remove, String actorRole, boolean targetExists) {
+        var members = new java.util.ArrayList<ProjectMemberDto>();
+        members.add(mockMemberAdminDto);
+        if (!actorRole.equals("OUTSIDER")) {
+            members.add(ProjectMemberDto.builder().userId(actorId)
+                    .role(ProjectRole.valueOf(actorRole)).build());
+        }
+        if (targetExists) {
+            members.add(mockMemberViewerDto);
+        }
+        Mockito.when(projectMemberRepository.getRequiredMembersInProject(actorId, memberViewerId, projectId))
+                .thenReturn(Flux.fromIterable(members));
+
+        Mono<ProjectMember> result = remove
+                ? projectMemberService.rmProjectMember(requestId, nodeId, memberViewerId, actorId, projectId)
+                : projectMemberService.changeProjectMemberRole(
+                        requestId, nodeId, memberViewerId, actorId, ProjectRole.MEMBER, projectId);
+
+        StepVerifier.create(result)
+                .expectErrorSatisfies(error -> {
+                    var exception = Assertions.assertInstanceOf(DomainException.class, error);
+                    Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, exception.getStatus());
+                    Assertions.assertEquals("User with id: " + actorId + " is not an admin of project: " + projectId,
+                            exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectMemberRepository, Mockito.never()).updateRole(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository, Mockito.never()).deleteByUserIdAndProjectId(Mockito.any(), Mockito.any());
+        Mockito.verifyNoInteractions(outboxEventService, grpcAuthServiceClient);
+    }
+
+    @Test
+    @DisplayName("Администратор получает NOT_FOUND при изменении роли отсутствующего участника")
+    void changeProjectMemberRole_missingTargetReturnsNotFoundForAdmin() {
+        Mockito.when(projectMemberRepository.getRequiredMembersInProject(memberAdminId, memberViewerId, projectId))
+                .thenReturn(Flux.just(mockMemberAdminDto));
+
+        StepVerifier.create(projectMemberService.changeProjectMemberRole(
+                        requestId, nodeId, memberViewerId, memberAdminId, ProjectRole.MEMBER, projectId))
+                .expectErrorSatisfies(error -> Assertions.assertEquals(DomainStatus.NOT_FOUND,
+                        Assertions.assertInstanceOf(DomainException.class, error).getStatus()))
+                .verify();
+
+        Mockito.verify(projectMemberRepository, Mockito.never()).updateRole(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verifyNoInteractions(outboxEventService);
     }
 
     private void stubUserExists(UUID userId) {
