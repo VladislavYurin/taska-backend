@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import ru.taska.transport.kafka.OutboxEventScheduler;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -28,7 +30,13 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-class AttachmentIT extends AbstractIT {
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
+class AttachmentIntegrationTest extends AbstractIT {
+
+    @MockitoBean
+    private OutboxEventScheduler outboxScheduler;
 
     @MockitoBean
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
@@ -171,6 +179,7 @@ class AttachmentIT extends AbstractIT {
 
         Assertions.assertEquals(1, outboxEventRepository.count().block());
         Assertions.assertEquals(1, issueHistoryRepository.count().block());
+        assertIssueFieldsInOutbox();
     }
 
     @Test
@@ -189,6 +198,16 @@ class AttachmentIT extends AbstractIT {
         IssueAttachment softDeleted = attachmentRepository.findById(attachmentId).block();
         Assertions.assertNotNull(softDeleted);
         Assertions.assertNotNull(softDeleted.getDeletedAt());
+        assertIssueFieldsInOutbox();
+    }
+
+    private void assertIssueFieldsInOutbox() {
+        var events = outboxEventRepository.findAll().collectList().block();
+        Assertions.assertEquals(1, events.size());
+        var payload = events.getFirst().getPayload();
+        Assertions.assertEquals(issueId.toString(), payload.path("issueId").asString());
+        Assertions.assertEquals("TST-1", payload.path("issueKey").asString());
+        Assertions.assertEquals(PROJECT_ID.toString(), payload.path("projectId").asString());
     }
 
 }

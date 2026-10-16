@@ -9,6 +9,7 @@ import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.dto.AttachmentDownloadUrlDto;
 import ru.taska.domain.dto.AttachmentDto;
 import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -59,10 +60,10 @@ public class AttachmentServiceImpl implements AttachmentService {
     ) {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
-                .then(checkObjectExistsInStorage(requestId, nodeId, objectKey))
-                .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
-                .flatMap(metadata -> transactionExecutor.saveAttachment(
-                        requestId, nodeId, issueId, actorUserId, objectKey, fileName, contentType, metadata))
+                .flatMap(issue -> checkObjectExistsInStorage(requestId, nodeId, objectKey)
+                        .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
+                        .flatMap(metadata -> transactionExecutor.saveAttachment(
+                                requestId, nodeId, issue, actorUserId, objectKey, fileName, contentType, metadata)))
                 .flatMap(savedAttachment -> storageClient.createPresignedDownloadUrl(savedAttachment.getObjectKey())
                         .map(url -> new AttachmentDto(savedAttachment, url)));
     }
@@ -109,14 +110,10 @@ public class AttachmentServiceImpl implements AttachmentService {
                     var roles = attachment.getUploadedBy().equals(actorUserId)
                             ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
                             : issueProperties.allowedRoles().deleteAttachmentRoles();
-                    return findActiveIssueProjectId(requestId, nodeId, attachment.getIssueId())
-                            .flatMap(projectId -> projectRoleChecker.checkProjectRole(
-                                    requestId, nodeId, projectId, actorUserId, roles
-                            ))
-                            .thenReturn(attachment);
-                })
-                .flatMap(attachment -> transactionExecutor.deleteAttachment(
-                        requestId, nodeId, actorUserId, attachment));
+                    return checkUserHasRoleForIssue(requestId, nodeId, attachment.getIssueId(), actorUserId, roles)
+                            .flatMap(issue -> transactionExecutor.deleteAttachment(
+                                    requestId, nodeId, actorUserId, attachment, issue));
+                });
     }
 
     /**
@@ -162,29 +159,27 @@ public class AttachmentServiceImpl implements AttachmentService {
      * @param issueId      идентификатор задачи.
      * @param actorUserId  идентификатор пользователя.
      * @param allowedRoles набор допустимых ролей для выполнения операции.
-     * @return Mono<Void>, завершающийся успешно при наличии прав, или ошибка.
+     * @return Mono<Issue> с задачей при наличии прав, или ошибка.
      */
-    private Mono<Void> checkUserHasRoleForIssue(
+    private Mono<Issue> checkUserHasRoleForIssue(
             String requestId, String nodeId, UUID issueId, UUID actorUserId,
             Set<ProjectRole> allowedRoles) {
-        return findActiveIssueProjectId(requestId, nodeId, issueId)
-                .flatMap(projectId -> projectRoleChecker.checkProjectRole(
-                        requestId, nodeId, projectId, actorUserId,
-                        allowedRoles
-                ))
-                .then();
+        return findActiveIssue(requestId, nodeId, issueId)
+                .flatMap(issue -> projectRoleChecker.checkProjectRole(
+                        requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
+                ).thenReturn(issue));
     }
 
     /**
-     * Находит projectId активной задачи по идентификатору.
+     * Находит активную задачу по идентификатору.
      *
      * @param requestId идентификатор запроса.
      * @param nodeId    идентификатор узла.
      * @param issueId   идентификатор задачи.
-     * @return Mono с projectId найденной задачи или ошибка NOT_FOUND.
+     * @return Mono с найденной задачей или ошибка NOT_FOUND.
      */
-    private Mono<UUID> findActiveIssueProjectId(String requestId, String nodeId, UUID issueId) {
-        return issueRepository.findProjectIdByActiveIssueId(issueId)
+    private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {
+        return issueRepository.findActiveById(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue not found: issueId={}", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
