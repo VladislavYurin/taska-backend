@@ -16,6 +16,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -359,13 +361,14 @@ class AuthServiceImplTest {
             Mockito.verify(jwtServiceImpl, Mockito.never()).generateAccessToken(ArgumentMatchers.any());
         }
 
-        @Test
+        @ParameterizedTest
+        @ValueSource(ints = {1, 5})
         @DisplayName("Should lock account after max failed attempts — lockedUntil on User")
-        void shouldLockAccountAfterMaxFailedAttempts() {
+        void shouldLockAccountAfterMaxFailedAttempts(int maxAttempts) {
             // Given
             String email = "test@example.com";
             String wrongPassword = "wrongPassword";
-            testCredential.setFailedAttempts(4);
+            testCredential.setFailedAttempts(maxAttempts - 1);
 
             Mockito.when(userRepository.findByEmail(email)).thenReturn(Mono.just(testUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
@@ -374,7 +377,7 @@ class AuthServiceImplTest {
             Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
 
             Mockito.when(passwordHashService.matches(testCredential, wrongPassword)).thenReturn(Mono.just(false));
-            Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
+            Mockito.when(securityProperties.getMaxFailedAttempts()).thenReturn(maxAttempts);
             Mockito.when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
             Mockito.when(credentialRepository.save(ArgumentMatchers.any(Credential.class))).thenReturn(Mono.just(testCredential));
 
@@ -386,25 +389,27 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.login(email, wrongPassword))
                     .expectErrorMatches(e ->
                             e instanceof DomainException de
-                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
-                                    && e.getMessage().equals("Invalid credentials"))
+                                    && de.getStatus() == DomainStatus.PERMISSION_DENIED
+                                    && e.getMessage().equals("Account is locked until "
+                                    + testUser.getLockedUntil() + ". Try again later."))
                     .verify();
             Instant after = Instant.now();
 
             Duration lock = Duration.ofMinutes(15);
 
             Mockito.verify(credentialRepository).save(testCredential);
-            Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(5);
+            Assertions.assertThat(testCredential.getFailedAttempts()).isEqualTo(maxAttempts);
             Assertions.assertThat(testUser.getLockedUntil()).isNotNull();
             Assertions.assertThat(testUser.getStatus()).isEqualTo(UserStatus.LOCKED);
             Assertions.assertThat(testUser.getLockedUntil())
                     .isAfterOrEqualTo(before.plus(lock))
                     .isBeforeOrEqualTo(after.plus(lock));
             Mockito.verify(userRepository).save(testUser);
+            Mockito.verifyNoInteractions(jwtServiceImpl, refreshTokenServiceImpl);
         }
 
         @Test
-        @DisplayName("Should fail with UNAUTHENTICATED when account is locked with active window")
+        @DisplayName("Should fail with PERMISSION_DENIED when account is locked with active window")
         void shouldFailWhenAccountIsLockedWithActiveWindow() {
             // Given
             String email = "test@example.com";
@@ -427,8 +432,9 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.login(email, password))
                     .expectErrorMatches(e ->
                             e instanceof DomainException de
-                                    && de.getStatus() == DomainStatus.UNAUTHENTICATED
-                                    && e.getMessage().contains("Account is locked until"))
+                                    && de.getStatus() == DomainStatus.PERMISSION_DENIED
+                                    && e.getMessage().equals("Account is locked until "
+                                    + lockedUser.getLockedUntil() + ". Try again later."))
                     .verify();
 
             Mockito.verify(passwordHashService, Mockito.never()).matches(ArgumentMatchers.any(), ArgumentMatchers.anyString());

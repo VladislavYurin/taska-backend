@@ -35,6 +35,7 @@ import ru.taska.util.PasswordValidator;
 import ru.taska.util.UserStatusMapper;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /**
@@ -114,9 +115,7 @@ public class AuthServiceImpl implements AuthService {
                                                 .flatMap(refreshed -> {
                                                         if (refreshed.getStatus() == UserStatus.LOCKED) {
                                                             log.warn("Login attempt for LOCKED user: {}", DataMaskingHelper.maskEmail(email));
-                                                            return Mono.error(new DomainException(
-                                                                    DomainStatus.UNAUTHENTICATED,
-                                                                    "Account is locked until " + refreshed.getLockedUntil() + ". Try again later."));
+                                                            return Mono.error(accountLockedError(refreshed.getLockedUntil()));
                                                         }
                                                         if (refreshed.getStatus() == UserStatus.BLOCKED || refreshed.getStatus() == UserStatus.INVITED) {
                                                             log.warn("Login attempt for {} user: {}", refreshed.getStatus(), DataMaskingHelper.maskEmail(email));
@@ -313,8 +312,10 @@ public class AuthServiceImpl implements AuthService {
 
         boolean shouldLock = newAttempts >= securityProperties.getMaxFailedAttempts();
 
+        // PostgreSQL хранит timestamp с точностью до микросекунд: срок в ответе
+        // должен совпадать со сроком при следующем чтении пользователя из БД.
         Instant lockedUntil = shouldLock
-                ? now.plus(securityProperties.getLockDuration())
+                ? now.plus(securityProperties.getLockDuration()).truncatedTo(ChronoUnit.MICROS)
                 : null;
 
         credential.setFailedAttempts(newAttempts);
@@ -336,7 +337,14 @@ public class AuthServiceImpl implements AuthService {
                             return Mono.just(savedCredential);
                         })
                 )
-                .then(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
+                .then(Mono.error(shouldLock
+                        ? accountLockedError(lockedUntil)
+                        : new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")));
+    }
+
+    private DomainException accountLockedError(Instant lockedUntil) {
+        return new DomainException(DomainStatus.PERMISSION_DENIED,
+                "Account is locked until " + lockedUntil + ". Try again later.");
     }
 
     /**
