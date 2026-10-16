@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.OutboxProcessingProperties;
+import ru.taska.config.props.OutboxRetryProperties;
+import ru.taska.domain.OutboxRetryEligibility;
+import ru.taska.domain.OutboxStatus;
 import ru.taska.dto.GetProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.dto.ProblematicEventCountDto;
 import ru.taska.dto.ProblematicOutboxEventResponseDto;
@@ -38,6 +41,7 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
     private final ProblematicOutboxEventRepository outboxEventRepository;
     private final ProblematicOutboxEventMapper problematicOutboxEventMapper;
     private final SensitiveDataMaskService maskService;
+    private final OutboxRetryProperties retryProperties;
 
     private static final String COL_STATUS = "status";
     private static final String COL_ID = "id";
@@ -139,7 +143,12 @@ public class ProblematicOutboxEventServiceImpl implements ProblematicOutboxEvent
                 .collectList()
                 .map(rows -> maskService.maskSensitiveData(rows, serviceKey, OUTBOX_TABLE, requestId, nodeId))
                 .flatMapMany(Flux::fromIterable)
-                .map(row -> problematicOutboxEventMapper.toDto(row, serviceKey, determineReason(row)));
+                .map(row -> {
+                    var dto = problematicOutboxEventMapper.toDto(row, serviceKey, determineReason(row));
+                    boolean retryable = OutboxRetryEligibility.isRetryable(OutboxStatus.valueOf(dto.status()),
+                            dto.processingStartedAt(), now.minus(retryProperties.stuckThreshold()));
+                    return dto.toBuilder().retryable(retryable).build();
+                });
     }
 
     /**
