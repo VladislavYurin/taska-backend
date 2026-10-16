@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare local environment file
+        run: cp .env.docker.example .env
       - name: Test Compose and Grafana configuration
         run: node --test infra/tests/*.test.js
       - name: Validate Promtail config for local and stage

@@ -15,7 +15,7 @@ for (const [configured, expected] of [['', 'local'], ['local', 'local'], ['stage
     ], { cwd: root, env: { ...process.env, DEPLOY_ENVIRONMENT: configured }, encoding: 'utf8' });
     const promtail = JSON.parse(rendered).services.promtail;
     assert.equal(promtail.environment.DEPLOY_ENVIRONMENT, expected);
-    const expanded = promtailConfig.replaceAll('${DEPLOY_ENVIRONMENT}', promtail.environment.DEPLOY_ENVIRONMENT);
+    const expanded = promtailConfig.replaceAll('${DEPLOY_ENVIRONMENT:-local}', promtail.environment.DEPLOY_ENVIRONMENT);
     assert.match(expanded, new RegExp(`target_label: environment\\s+replacement: ${expected}`));
     assert.ok(promtail.command.includes('-config.expand-env=true'));
   });
