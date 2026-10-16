@@ -11,6 +11,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
+import ru.taska.transport.grpc.GrpcProjectServiceClient;
 
 import java.util.UUID;
 
@@ -27,6 +28,7 @@ public class WorkflowController implements WorkflowApi {
 
     private final GatewayRequestExecutor executor;
     private final GrpcWorkflowServiceClient grpcWorkflowServiceClient;
+    private final GrpcProjectServiceClient projectClient;
 
     /**
      * Возвращает workflow проекта для указанного типа задачи.
@@ -48,7 +50,8 @@ public class WorkflowController implements WorkflowApi {
     {
 
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcWorkflowServiceClient.getWorkflowForProject(projectId, issueType, context)
+                projectClient.getProject(projectId.toString(), context)
+                        .then(Mono.defer(() -> grpcWorkflowServiceClient.getWorkflowForProject(projectId, issueType, context)))
                         .map(ResponseEntity::ok));
     }
 
