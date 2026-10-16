@@ -56,6 +56,7 @@ class UserServiceImplTest {
             assertThat(result.getAvatar().getSizeBytes()).isEqualTo(100);
             assertThat(result.getAvatar().getCreatedAt().toInstant()).isEqualTo(Instant.ofEpochSecond(1000));
             assertThat(result.getAvatar().getDownloadUrl()).isEqualTo("https://storage/avatar");
+            assertThat(result.getAvatarUnavailable()).isFalse();
         }).verifyComplete();
         Mockito.verify(stub).getUserProfile(argThat((GetUserProfileRequest request) ->
                 request.getBody().getUserId().equals(context.userContext().userId())
@@ -68,7 +69,7 @@ class UserServiceImplTest {
     void absentAvatar_keepsCoreUserData() {
         Mockito.when(stub.getUserProfile(any(GetUserProfileRequest.class)))
                 .thenReturn(Mono.just(GetUserProfileResponse.getDefaultInstance()));
-        assertCoreProfile();
+        assertCoreProfile(false);
     }
 
     @ParameterizedTest
@@ -76,12 +77,13 @@ class UserServiceImplTest {
     void profileFailure_keepsCoreUserData(Status.Code code) {
         Mockito.when(stub.getUserProfile(any(GetUserProfileRequest.class)))
                 .thenReturn(Mono.error(Status.fromCode(code).asRuntimeException()));
-        assertCoreProfile();
+        assertCoreProfile(true);
     }
 
-    private void assertCoreProfile() {
+    private void assertCoreProfile(boolean avatarUnavailable) {
         StepVerifier.create(service.getMyInfo(context)).assertNext(result -> {
             assertThat(result.getAvatar()).isNull();
+            assertThat(result.getAvatarUnavailable()).isEqualTo(avatarUnavailable);
             assertThat(result.getId()).isEqualTo(context.userContext().userId());
             assertThat(result.getLogin()).isEqualTo("user");
             assertThat(result.getEmail()).isEqualTo("user@example.com");

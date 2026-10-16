@@ -2771,6 +2771,7 @@ components:
 
     ValidateAccessTokenResponseDto:
       type: object
+      required: [avatarUnavailable]
       properties:
         id:
           type: string
@@ -2788,7 +2789,13 @@ components:
           allOf:
             - $ref: '#/components/schemas/AvatarDto'
           nullable: true
-          description: Аватар текущего пользователя; null, если отсутствует или профиль временно недоступен.
+          description: Аватар текущего пользователя; null, если отсутствует или профиль временно недоступен (см. avatarUnavailable).
+        avatarUnavailable:
+          type: boolean
+          default: false
+          description: >-
+            true, если профиль с аватаром не удалось прочитать и avatar=null означает ошибку,
+            а не отсутствие фото. false, если аватар прочитан или у пользователя его нет.
 
     CreateIssueRequestDto:
       type: object

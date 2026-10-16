@@ -22,7 +22,8 @@ public class UserServiceImpl implements UserService {
      * Извлекает информацию о текущем пользователе из уже верифицированного контекста безопасности.
      * <p>
      * Основные поля берутся из проверенного контекста; аватар читается отдельным
-     * GetUserProfile только для этой операции. Ошибка обогащения не ломает профиль.
+     * GetUserProfile только для этой операции. Ошибка обогащения не ломает профиль:
+     * avatar остаётся null, а avatarUnavailable=true отличает её от отсутствия фото.
      *
      * @param context текущий контекст окружения запроса на Gateway с заполненным профилем пользователя
      * @return {@link Mono} с REST DTO {@link ValidateAccessTokenResponseDto} для ответа клиенту
@@ -32,6 +33,7 @@ public class UserServiceImpl implements UserService {
         log.info("[{}] Resolving getMyInfo from context", context.requestId());
         return Mono.defer(() -> {
             var response = authMapper.toValidateAccessTokenRestResponse(context.userContext());
+            response.setAvatarUnavailable(false);
             return Mono.defer(() -> profileClient.getUserProfileAvatar(context))
                     .map(avatar -> {
                         response.setAvatar(avatar);
@@ -40,6 +42,8 @@ public class UserServiceImpl implements UserService {
                     .defaultIfEmpty(response)
                     .onErrorResume(error -> {
                         log.warn("[{}] Could not load current user avatar", context.requestId(), error);
+                        response.setAvatar(null);
+                        response.setAvatarUnavailable(true);
                         return Mono.just(response);
                     });
         });
