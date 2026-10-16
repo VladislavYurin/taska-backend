@@ -9,6 +9,13 @@ import reactor.test.StepVerifier;
 import ru.taska.config.props.OutboxProcessingProperties;
 import ru.taska.config.props.OutboxRetryProperties;
 import ru.taska.mapper.ProblematicOutboxEventMapper;
+import ru.taska.domain.OutboxEventSnapshot;
+import ru.taska.domain.OutboxStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import ru.taska.repository.OutboxRetryRepository;
+import ru.taska.service.AuditService;
+import tools.jackson.databind.ObjectMapper;
 import ru.taska.repository.ProblematicOutboxEventRepository;
 import ru.taska.service.readonly.ProblematicOutboxEventServiceImpl;
 import ru.taska.service.readonly.SensitiveDataMaskService;
@@ -33,8 +40,8 @@ class OutboxRetryableSummaryTest {
         var mapper = new ProblematicOutboxEventMapper();
         var properties = new OutboxProcessingProperties(Map.of("issue", Duration.ofMinutes(5)),
                 Duration.ofMinutes(30), List.of("issue"), 100);
-        var service = new ProblematicOutboxEventServiceImpl(properties, repository, mapper, mask,
-                new OutboxRetryProperties(Duration.ofMinutes(threshold)));
+        var retryProperties = new OutboxRetryProperties(Duration.ofMinutes(threshold));
+        var service = new ProblematicOutboxEventServiceImpl(properties, repository, mapper, mask, retryProperties);
         Map<String, Object> row = new HashMap<>();
         row.put("id", UUID.randomUUID());
         row.put("aggregate_id", UUID.randomUUID());
@@ -55,5 +62,22 @@ class OutboxRetryableSummaryTest {
                     assertThat(response.events().getFirst().retryable()).isEqualTo(expected);
                     assertThat(mapper.toProto(response).getEvents(0).getRetryable()).isEqualTo(expected);
                 }).verifyComplete();
+
+        // Та же конфигурация должна давать то же решение в настоящем сервисе команды retry.
+        var retryRepository = Mockito.mock(OutboxRetryRepository.class);
+        var json = new ObjectMapper();
+        var snapshot = new OutboxEventSnapshot((UUID) row.get("id"), "Issue", (UUID) row.get("aggregate_id"),
+                "IssueCreated", OutboxStatus.valueOf(status), json.createObjectNode(), 1, null,
+                (Instant) row.get("created_at"), null, (Instant) row.get("processing_started_at"), "request");
+        Mockito.when(retryRepository.findById("issue", snapshot.id())).thenReturn(Mono.just(snapshot));
+        var reachedAtomicRetry = new IllegalStateException("Reached atomic retry");
+        Mockito.when(retryRepository.retry(anyString(), any(), any())).thenReturn(Mono.error(reachedAtomicRetry));
+        var retryService = new OutboxRetryServiceImpl(retryRepository, Mockito.mock(AuditService.class), retryProperties, json);
+        StepVerifier.create(retryService.retryOutboxEvent("request", "admin", "issue", snapshot.id(),
+                        "test", UUID.randomUUID(), "admin", json.createArrayNode()))
+                .expectErrorMatches(error -> expected ? error == reachedAtomicRetry
+                        : error instanceof DomainException domain && domain.getStatus() == DomainStatus.FAILED_PRECONDITION)
+                .verify();
+        Mockito.verify(retryRepository, Mockito.times(expected ? 1 : 0)).retry(anyString(), any(), any());
     }
 }
