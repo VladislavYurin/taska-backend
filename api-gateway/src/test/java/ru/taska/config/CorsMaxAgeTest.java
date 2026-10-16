@@ -11,6 +11,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import ru.taska.config.props.CorsProperties;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class CorsMaxAgeTest {
     private static final String ORIGIN = "https://taska.ozero.dev";
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -39,6 +41,15 @@ class CorsMaxAgeTest {
         contextRunner.withPropertyValues("app.cors.max-age=" + maxAge).run(context ->
                 preflight(client(context.getBean(CorsWebFilter.class)), "/api/v1/projects")
                         .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_MAX_AGE, Long.toString(maxAge)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-1", "invalid"})
+    void invalidMaxAge_preventsStartup(String maxAge) {
+        contextRunner.withPropertyValues("app.cors.max-age=" + maxAge).run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure()).hasStackTraceContaining("max-age");
+        });
     }
 
     private static WebTestClient client(CorsWebFilter filter) {
