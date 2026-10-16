@@ -344,7 +344,7 @@ class MetadataServiceTest {
         StepVerifier.create(service.getTableColumns("issue", "issues"))
                 .assertNext(columns -> assertThat(columns)
                         .containsExactly(
-                                Map.entry("id", DbColumnType.OTHER),
+                                Map.entry("id", DbColumnType.UUID),
                                 Map.entry("title", DbColumnType.TEXT)
                         ))
                 .verifyComplete();

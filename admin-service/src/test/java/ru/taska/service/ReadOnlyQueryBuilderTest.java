@@ -4,6 +4,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +26,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
 class ReadOnlyQueryBuilderTest {
@@ -733,6 +736,38 @@ class ReadOnlyQueryBuilderTest {
                 ).isInstanceOf(DomainException.class)
                 .hasFieldOrPropertyWithValue("status", DomainStatus.NOT_FOUND)
                 .hasMessageContaining("Service not found");
+    }
+
+    @Test
+    void uuidEquals_bindsUuidForSelectAndCount() {
+        UUID id = UUID.fromString("acd99770-d691-4a67-93c8-2848c017e818");
+        var queries = queryBuilder.buildSafePageableListQueries(
+                TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, 0, 20, null, null,
+                Map.of("user_id", new FilterOperatorsDto(id.toString(), null, null, null)),
+                Map.of("user_id", DbColumnType.fromPgType("uuid")), "user_id");
+
+        Assertions.assertThat(queries.selectQuery().params()).containsExactly(id);
+        Assertions.assertThat(queries.countQuery().params()).containsExactly(id);
+        Assertions.assertThat(queries.selectQuery().parameterizedQuery()).contains("\"user_id\" = $1");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not-a-uuid", "1-1-1-1-1", "acd99770d6914a6793c82848c017e818", "'; DROP TABLE users; --"})
+    void uuidEquals_invalidValueReturnsInvalidArgument(String value) {
+        Assertions.assertThatThrownBy(() -> queryBuilder.buildSafePageableListQueries(
+                        TEST_SERVICE, TEST_SCHEMA, TEST_TABLE, 0, 20, null, null,
+                        Map.of("user_id", new FilterOperatorsDto(value, null, null, null)),
+                        Map.of("user_id", DbColumnType.fromPgType("uuid")), "user_id"))
+                .isInstanceOf(DomainException.class)
+                .hasFieldOrPropertyWithValue("status", DomainStatus.INVALID_ARGUMENT)
+                .hasMessageContaining("user_id");
+    }
+
+    @Test
+    void uuidColumn_doesNotSupportContainsOrRange() {
+        var type = DbColumnType.fromPgType("UUID");
+        Assertions.assertThat(type.supportsContains()).isFalse();
+        Assertions.assertThat(type.supportsRange()).isFalse();
     }
 
 }

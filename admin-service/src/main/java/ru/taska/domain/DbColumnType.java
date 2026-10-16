@@ -13,6 +13,7 @@ public enum DbColumnType {
     TEMPORAL,
     NUMERIC,
     BOOLEAN,
+    UUID,
     OTHER;
 
     private static final Map<String, DbColumnType> PG_TYPE_MAP = Map.ofEntries(
@@ -41,7 +42,8 @@ public enum DbColumnType {
             Map.entry("bigserial", NUMERIC),
             Map.entry("smallserial", NUMERIC),
 
-            Map.entry("boolean", BOOLEAN)
+            Map.entry("boolean", BOOLEAN),
+            Map.entry("uuid", UUID)
     );
 
     private static final Set<DbColumnType> CONTAINS_COMPATIBLE = Set.of(TEXT);
