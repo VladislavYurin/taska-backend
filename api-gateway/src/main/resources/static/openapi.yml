@@ -2784,6 +2784,11 @@ components:
           type: string
         globalRole:
           $ref: '#/components/schemas/GlobalRoleTypeDto'
+        avatar:
+          allOf:
+            - $ref: '#/components/schemas/AvatarDto'
+          nullable: true
+          description: Аватар текущего пользователя; null, если отсутствует или профиль временно недоступен.
 
     CreateIssueRequestDto:
       type: object

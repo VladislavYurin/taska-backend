@@ -10,6 +10,8 @@ import ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlRequest;
 import ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlRequestBody;
 import ru.taska.api.auth.profile.v1.DeleteMyAvatarRequest;
 import ru.taska.api.auth.profile.v1.DeleteMyAvatarRequestBody;
+import ru.taska.api.auth.profile.v1.GetUserProfileRequest;
+import ru.taska.api.auth.profile.v1.GetUserProfileRequestBody;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequestBody;
 import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
@@ -18,6 +20,7 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AvatarResponseDto;
+import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ConfirmAvatarUploadRequestDto;
 import ru.taska.domain.dto.CreateAvatarUploadUrlRequestDto;
 import ru.taska.domain.dto.CreateAvatarUploadUrlResponseDto;
@@ -128,6 +131,16 @@ public class GrpcUserProfileServiceClient {
                                 .build()
                 )
                 .map(profileMapper::toRestGetAvatarDownloadUrlResponse);
+    }
+
+    public Mono<AvatarDto> getUserProfileAvatar(GatewayContext context) {
+        return dynamicStub().getUserProfile(GetUserProfileRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(GetUserProfileRequestBody.newBuilder()
+                                .setUserId(context.userContext().userId()).build())
+                        .build())
+                .filter(response -> response.hasAvatar())
+                .map(response -> profileMapper.toAvatarDto(response.getAvatar()));
     }
 
     /**
