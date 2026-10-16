@@ -753,10 +753,9 @@ paths:
       summary: Обновляет основные поля задачи
       description: |
         Устарел, используйте PATCH /api/v1/issues/{issueId}.
-        Назначающий и назначаемый должны иметь роль из `assign-issue-roles`: по умолчанию ADMIN или MEMBER.
-        При назначении себя роль проверяется один раз. Не участник проекта получает 403 «Access denied»,
-        неподходящая роль — 403 «Not allowed role».
-        Список настраивается через ISSUE_ASSIGN_ROLES; стенд может переопределить значения по умолчанию.
+        Вызывающий должен иметь роль из `update-issue-roles`: по умолчанию ADMIN или MEMBER.
+        Не участник проекта получает 403 «Access denied», неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_UPDATE_ROLES; стенд может переопределить значения по умолчанию.
       deprecated: true
       operationId: updateIssue
       tags:
@@ -911,7 +910,12 @@ paths:
   /api/v1/issues/{issueId}/assignee:
     put:
       summary: Назначает исполнителя задачи
-      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Назначающий и назначаемый должны иметь роль из `assign-issue-roles`: по умолчанию ADMIN или MEMBER.
+        При назначении себя роль проверяется один раз. Не участник проекта получает 403 «Access denied»,
+        неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_ASSIGN_ROLES; стенд может переопределить значения по умолчанию.
       deprecated: true
       operationId: assignIssue
       tags:
