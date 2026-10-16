@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssueEventType;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
@@ -36,13 +37,14 @@ public class AttachmentTransactionExecutor {
     public Mono<IssueAttachment> saveAttachment(
             String requestId,
             String nodeId,
-            UUID issueId,
+            Issue issue,
             UUID actorUserId,
             String objectKey,
             String fileName,
             String contentType,
             StoredObjectMetadata metadata
     ) {
+        UUID issueId = issue.getId();
         return issueAttachmentRepository.save(
                         IssueAttachment.createNewAttachment(issueId, actorUserId, objectKey, fileName,
                                 contentType, metadata.sizeBytes(), metadata.checksum())
@@ -50,7 +52,7 @@ public class AttachmentTransactionExecutor {
                 .flatMap(savedAttachment ->
                         issueWatcherRepository.findUserIdsByIssueId(issueId).distinct().collectList()
                         .flatMap(watchersIds->{
-                            var payload = payloadSerializer.createAttachmentUploadedPayload(savedAttachment,watchersIds);
+                            var payload = payloadSerializer.createAttachmentUploadedPayload(issue, savedAttachment, watchersIds);
                             return issueHistoryService.saveIssueHistory(requestId, nodeId, issueId, actorUserId,
                                             IssueEventType.ATTACHMENT_UPLOADED, payload)
                                     .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
@@ -65,13 +67,14 @@ public class AttachmentTransactionExecutor {
             String requestId,
             String nodeId,
             UUID actorUserId,
-            IssueAttachment attachment
+            IssueAttachment attachment,
+            Issue issue
     ) {
         return issueAttachmentRepository.softDelete(attachment.getId())
                 .flatMap(deleted ->
                         issueWatcherRepository.findUserIdsByIssueId(attachment.getIssueId()).distinct().collectList()
                         .flatMap(watchersIds-> {
-                            var payload = payloadSerializer.createAttachmentDeletedPayload(deleted, actorUserId, watchersIds);
+                            var payload = payloadSerializer.createAttachmentDeletedPayload(issue, deleted, actorUserId, watchersIds);
                             return issueHistoryService.saveIssueHistory(requestId, nodeId, deleted.getIssueId(),
                                             actorUserId, IssueEventType.ATTACHMENT_DELETED, payload)
                                     .then(outboxEventService.saveOutboxEvent(requestId, nodeId, AggregateType.ISSUE,
