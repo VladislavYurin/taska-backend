@@ -1,5 +1,8 @@
 package ru.taska.service.impl;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -313,6 +316,8 @@ public class ProjectServiceImpl implements ProjectService {
      * чтобы не маскировать реальную деградацию сервисов.
      */
     private boolean isPermissionDenied(Throwable e) {
-        return e instanceof DomainException de && de.getStatus() == DomainStatus.PERMISSION_DENIED;
+        return (e instanceof DomainException de && de.getStatus() == DomainStatus.PERMISSION_DENIED)
+                || (e instanceof StatusRuntimeException grpcError
+                && grpcError.getStatus().getCode() == Status.Code.PERMISSION_DENIED);
     }
 }

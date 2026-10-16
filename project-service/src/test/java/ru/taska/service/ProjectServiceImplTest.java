@@ -1,11 +1,15 @@
 package ru.taska.service;
 
+import io.grpc.Status;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -452,8 +456,7 @@ class ProjectServiceImplTest {
 
             // labels: PERMISSION_DENIED → onErrorResume → []
             Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
-                    .thenReturn(Mono.error(new DomainException(
-                            DomainStatus.PERMISSION_DENIED, "Access denied")));
+                    .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
 
             // workflows: загружаются нормально
             mockWorkflowLoad();
@@ -492,6 +495,55 @@ class ProjectServiceImplTest {
                         Assertions.assertEquals(DomainStatus.UNAVAILABLE, e.getStatus());
                     })
                     .verify();
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "labels, UNAVAILABLE", "labels, DEADLINE_EXCEEDED", "labels, NOT_FOUND", "labels, INTERNAL",
+                "workflows, UNAVAILABLE", "workflows, DEADLINE_EXCEEDED", "workflows, NOT_FOUND", "workflows, INTERNAL"
+        })
+        @DisplayName("Ошибки gRPC, кроме PERMISSION_DENIED, не скрываются в контексте")
+        void asGlobalAdmin_grpcFailurePropagates(String source, Status.Code code) {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(globalAdminProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.empty());
+            var failure = Status.fromCode(code).withDescription("upstream failure").asRuntimeException();
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(source.equals("labels") ? Mono.error(failure) : Mono.just(List.of()));
+            mockWorkflowLoad();
+            if (source.equals("workflows")) {
+                Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "TASK", actorUserId, requestId, nodeId))
+                        .thenReturn(Mono.error(failure));
+            }
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
+                    .verify();
+        }
+
+        @Test
+        @DisplayName("Отказ workflow-service в доступе возвращает пустой список workflows")
+        void asGlobalAdmin_grpcPermissionDeniedInWorkflows_returnsEmptyWorkflows() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(globalAdminProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.empty());
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of(label)));
+            mockWorkflowLoad();
+            Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "TASK", actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(globalAdminProjectDto, ctx.project());
+                        Assertions.assertEquals(List.of(label), ctx.labels());
+                        Assertions.assertTrue(ctx.workflows().isEmpty());
+                    })
+                    .verifyComplete();
         }
 
         @Test
