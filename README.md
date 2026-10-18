@@ -212,6 +212,7 @@ PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue
 - `/api/v1/projects/{projectId}/labels` и метки задач;
 - `/api/v1/projects/{projectId}/issues/{issueId}/watchers`;
 - `/api/v1/notifications`;
+- `/api/v1/meta` — словари допустимых значений перечислений;
 - `/api/v1/readonly` для глобального администратора.
 
 Ограничения проектных операций задаются переменными `ISSUE_*_ROLES`. Полный состав запросов, ответов, статусов и параметров находится в OpenAPI-файле.
