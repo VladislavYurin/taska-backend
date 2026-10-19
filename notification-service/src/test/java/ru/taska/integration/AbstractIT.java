@@ -57,6 +57,8 @@ public abstract class AbstractIT {
         registry.add("spring.kafka.listener.auto-startup", () -> "false");
         registry.add("spring.kafka.bootstrap-servers", () -> "localhost:0");
 
+        registry.add("notification.invitation.scheduler-enabled", () -> "false");
+
         // ===== Mail: заглушка =====
         registry.add("spring.mail.host", () -> "localhost");
         registry.add("spring.mail.port", () -> "0");

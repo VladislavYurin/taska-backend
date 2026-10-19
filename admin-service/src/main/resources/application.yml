@@ -170,7 +170,7 @@ admin:
             outbox_events:
               payload:
                 email: MASK_PARTIAL
-                rawInviteToken:
+                rawInviteToken: HIDE
       project:
         alias: project
         schema: taska
@@ -208,6 +208,8 @@ admin:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
+            invitation_email_deliveries.token: HIDE
+            invitation_email_deliveries.email: MASK_PARTIAL
             notification_preferences.email: MASK_PARTIAL
             email_delivery_attempts.to_email: MASK_PARTIAL
       admin:

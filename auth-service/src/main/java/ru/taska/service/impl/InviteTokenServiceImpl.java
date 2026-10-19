@@ -12,7 +12,6 @@ import ru.taska.service.InviteTokenService;
 
 import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -35,7 +34,7 @@ public class InviteTokenServiceImpl implements InviteTokenService {
         InviteToken tokenEntity = InviteToken.builder()
                 .userId(userId)
                 .tokenHash(hashToken(rawToken))
-                .expiresAt(Instant.now().plus(jwtProperties.getInviteTokenTtl().toDays(), ChronoUnit.DAYS))
+                .expiresAt(Instant.now().plus(jwtProperties.getInviteTokenTtl()))
                 .build();
         return inviteTokenRepository.save(tokenEntity)
                 .map(savedToken -> InviteTokenResponse.builder()

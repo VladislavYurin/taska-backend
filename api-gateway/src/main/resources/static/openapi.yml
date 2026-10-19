@@ -62,9 +62,113 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/auth/invitations:
+    post:
+      summary: Пригласить пользователя в Taska (GLOBAL_ADMIN)
+      description: |
+        Адрес нормализуется по пробелам и регистру; Gmail-подобные алиасы не объединяются.
+        Новый аккаунт получает 201, уже приглашённый — 200 с тем же userId.
+        Повтор без resend не отправляет ещё одно письмо, пока ссылка действительна.
+        resend=true отзывает старую ссылку и ставит новое письмо в очередь; по умолчанию 60 секунд между отправками.
+        Истёкшая или отсутствующая ссылка перевыпускается также без resend.
+        Существующие ACTIVE/LOCKED/BLOCKED аккаунты возвращают 409, их статус и пароль не меняются.
+        deliveryQueued означает запись в надёжную очередь, а не подтверждение доставки SMTP.
+        Приглашение не добавляет пользователя в проект и не меняет роль; членство создаётся отдельным запросом.
+      operationId: inviteUser
+      tags: [user-directory]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationRequestDto'
+      responses:
+        '201':
+          description: Новый пользователь приглашён, письмо поставлено в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponseDto'
+        '200':
+          description: Пользователь уже приглашён; deliveryQueued сообщает о новой отправке
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponseDto'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '429':
+          description: Повторная отправка запрошена слишком рано; details.retryAfterSeconds — время ожидания
+          headers:
+            Retry-After:
+              description: Число секунд до следующей разрешённой отправки
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users:
+    get:
+      summary: Поиск пользователей рабочего пространства по имени и email
+      description: |
+        Доступен авторизованным пользователям единого рабочего пространства Taska.
+        Поиск не предоставляет доступа к проектам, ролям, токенам и credentials.
+        Возвращает ACTIVE, INVITED и временно LOCKED; BLOCKED не выдаются.
+        query обрезается по краям и сравнивается без учёта регистра; %, _ и ! ищутся буквально.
+        Порядок — displayName, email без учёта регистра, затем id; page начинается с 0.
+        Недоступный аватар даёт avatarUrl=null и не ломает выдачу. Пустой результат — 200 с items=[].
+      operationId: searchUsers
+      tags: [user-directory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 100
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+            default: 0
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Страница результатов поиска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDirectoryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/invitations/accept:
     post:
       summary: Принятие инвайта и установка пароля
+      description: |
+        Успех — 204 без токенов сессии. После активации клиент выполняет обычный POST /api/v1/auth/login.
+        Ссылка одноразовая, с ограниченным сроком действия; после перевыпуска старая ссылка недействительна.
+        Активация меняет только INVITED аккаунт и не сбрасывает пароль уже активированного пользователя.
+        Слабый пароль не расходует ссылку; BCrypt допускает не более 72 UTF-8 байт.
       operationId: setPasswordByToken
       tags:
         - auth
@@ -2951,6 +3055,66 @@ components:
         expiresIn:
           type: integer
           format: int64
+
+    InvitationRequestDto:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+        displayName:
+          type: string
+          maxLength: 128
+          description: Только при создании; если не задано, используется локальная часть email.
+        resend:
+          type: boolean
+          default: false
+          description: Явно запросить новую ссылку, отозвав предыдущую.
+
+    InvitationResponseDto:
+      type: object
+      required: [userId, status, deliveryQueued, expiresAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/UserStatusDto'
+        deliveryQueued:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          description: Срок действия текущей ссылки; токен не возвращается в API.
+
+    DirectoryUserDto:
+      type: object
+      required: [id, displayName, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    UserDirectoryResponseDto:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DirectoryUserDto'
+        hasMore:
+          type: boolean
 
     PasswordByTokenRequestDto:
       type: object

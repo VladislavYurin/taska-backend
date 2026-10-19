@@ -21,14 +21,11 @@ public class AdminInviteUserMapper {
 
     private final ObjectMapper objectMapper;
 
-    //TODO: здесь создается логин из email'а, т. к. нельзя сохранить юзера без логина.
-    // Это происходит из-за not null констрейнта на поле "login" в БД.
-    // Согласно документации Confluence, login не может передаваться в грпс-запросе InviteUserRequest.
-    // Поэтому пока, при регистрации пользователя админом, рандомный login генерируется из переданного эмайла в этом методе.
+    /** Generates an opaque login independent of email local-part length. */
     public User buildInvitedUserFromRequest(InviteUserRequest request) {
         return User.builder()
             .email(request.getBody().getEmail())
-            .login(request.getBody().getEmail().split("@")[0] + "_" + UUID.randomUUID().toString().substring(0, 8))
+            .login("invited_" + UUID.randomUUID())
             .displayName(request.getBody().getDisplayName())
             .status(UserStatus.INVITED)
             .globalRole(GlobalRole.USER)
@@ -37,6 +34,7 @@ public class AdminInviteUserMapper {
 
     public OutboxEvent buildUserInvitedOutboxEvent(InviteTokenResponse inviteTokenResponse, String email, String requestId) {
         JsonNode payloadJson = objectMapper.valueToTree(buildUserInvitedPayload(inviteTokenResponse, email));
+        ((tools.jackson.databind.node.ObjectNode) payloadJson).put("expiresAt", inviteTokenResponse.getExpiresAt().toString());
         return OutboxEvent.builder()
                           .aggregateType(AggregateType.USER.getValue())
                           .aggregateId(inviteTokenResponse.getUserId())

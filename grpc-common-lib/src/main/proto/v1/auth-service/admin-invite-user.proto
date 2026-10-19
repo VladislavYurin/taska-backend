@@ -40,6 +40,8 @@ message InviteUserRequestBody {
    * Отображаемое имя пользователя.
    */
   string display_name = 2;
+  string actor_user_id = 3;
+  bool resend = 4;
 }
 
 /**
@@ -55,4 +57,7 @@ message InviteUserResponse {
    * Статус пользователя (INVITED/ACTIVE/BLOCKED).
    */
   ru.taska.common.v1.UserStatus status = 2;
+  bool created = 3;
+  bool delivery_queued = 4;
+  string expires_at = 5;
 }

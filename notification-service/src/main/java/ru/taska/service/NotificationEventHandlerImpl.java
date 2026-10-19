@@ -30,6 +30,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationFactory notificationFactory;
     private final EmailSenderService emailSenderService;
+    private final InvitationEmailQueue invitationEmailQueue;
     private final TransactionalOperator transactionalOperator;
 
     /**
@@ -41,7 +42,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     @Override
     public Mono<Void> handle(TaskaEvent event) {
         if (event == null || event.id() == null) {
-            log.warn("Received null or invalid event: {}", event);
+            log.warn("Received null event or event without an id");
             return Mono.empty();
         }
 
@@ -83,7 +84,9 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
             return Mono.just(Collections.emptyList());
         }
 
-        return Flux.fromIterable(notifications)
+        Mono<Void> invitation = ru.taska.event.EventType.USER_INVITED.getValue().equals(event.eventType())
+                ? invitationEmailQueue.enqueue(event) : Mono.empty();
+        return invitation.thenMany(Flux.fromIterable(notifications))
                 .concatMap(notificationRepository::save)
                 .collectList()
                 .doOnNext(savedNotifications ->
@@ -100,6 +103,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
         }
 
         return Flux.fromIterable(notifications)
+                .filter(notification -> notification.getNotificationType() != ru.taska.domain.NotificationType.USER_INVITED)
                 .flatMap(emailSenderService::sendIfEnabled)
                 .then();
     }
