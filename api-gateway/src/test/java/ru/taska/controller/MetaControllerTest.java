@@ -81,13 +81,21 @@ class MetaControllerTest {
                 .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache, private")
                 .expectBody()
                 .jsonPath("$.issueTypes[0].code").isEqualTo("TASK")
-                .jsonPath("$.issueTypes[0].name").isEqualTo("Задача")
+                .jsonPath("$.issueTypes[0].name").isEqualTo("Task")
                 .jsonPath("$.priorities[2].code").isEqualTo("HIGH")
                 .jsonPath("$.linkTypes[1].code").isEqualTo("RELATES_TO")
                 .jsonPath("$.notificationTypes[0].code").isEqualTo("ISSUE_ASSIGNED")
-                .jsonPath("$.notificationTypes[0].name").isEqualTo("Назначена задача")
+                .jsonPath("$.notificationTypes[0].name").isEqualTo("Issue assigned")
                 .jsonPath("$.userStatuses[3].code").isEqualTo("LOCKED")
-                .jsonPath("$.userStatuses[3].name").isEqualTo("Залочен");
+                .jsonPath("$.userStatuses[3].name").isEqualTo("Locked")
+                .jsonPath("$.linkViewTypes[3].code").isEqualTo("ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY")
+                .jsonPath("$.linkViewTypes[3].name").isEqualTo("Is blocked by")
+                .jsonPath("$.linkViewTypes[3].selectable").isEqualTo(true)
+                .jsonPath("$.linkViewTypes[0].selectable").isEqualTo(false)
+                .jsonPath("$.notificationTypes[22].code").isEqualTo("UNKNOWN")
+                .jsonPath("$.notificationTypes[22].selectable").isEqualTo(false)
+                .jsonPath("$.userStatuses[4].code").isEqualTo("UNSPECIFIED")
+                .jsonPath("$.userStatuses[4].selectable").isEqualTo(false);
     }
 
     @Test

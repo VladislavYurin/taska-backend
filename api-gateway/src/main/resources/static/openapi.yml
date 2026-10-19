@@ -4797,7 +4797,7 @@ components:
 
     MetaResponseDto:
       type: object
-      description: Словари допустимых значений перечислений, принимаемых и возвращаемых API
+      description: Словари значений API с английскими названиями. Значения с selectable=false служат только для отображения ответов и не предлагаются для выбора.
       required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
       properties:
         issueTypes:
@@ -4812,6 +4812,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IssueLinkTypeMetaPairDto'
+        linkViewTypes:
+          type: array
+          description: Направления связей, включая обратные; коды совпадают с viewLinkType в ответе связей.
+          items:
+            $ref: '#/components/schemas/IssueLinkViewTypeMetaPairDto'
         notificationTypes:
           type: array
           items:
@@ -4830,7 +4835,11 @@ components:
           $ref: '#/components/schemas/IssueTypeDto'
         name:
           type: string
-          description: Человекочитаемое название значения
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     IssuePriorityMetaPairDto:
       type: object
@@ -4841,7 +4850,11 @@ components:
           $ref: '#/components/schemas/IssuePriorityDto'
         name:
           type: string
-          description: Человекочитаемое название значения
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     IssueLinkTypeMetaPairDto:
       type: object
@@ -4852,7 +4865,26 @@ components:
           $ref: '#/components/schemas/IssueLinkTypeDto'
         name:
           type: string
-          description: Человекочитаемое название значения
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    IssueLinkViewTypeMetaPairDto:
+      type: object
+      description: Направление связи относительно текущей задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueLinkViewTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     NotificationTypeMetaPairDto:
       type: object
@@ -4863,7 +4895,11 @@ components:
           $ref: '#/components/schemas/NotificationTypeDto'
         name:
           type: string
-          description: Человекочитаемое название значения
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     UserStatusMetaPairDto:
       type: object
@@ -4874,7 +4910,11 @@ components:
           $ref: '#/components/schemas/UserStatusDto'
         name:
           type: string
-          description: Человекочитаемое название значения
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     BoardResponseDto:
       type: object
