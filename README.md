@@ -280,6 +280,8 @@ Actuator публикует `health`, `info` и `prometheus`. Метрики с�
 
 **AC Taska Logs** — централизованный просмотр логов из Loki. Агрегирует Docker-логи всех сервисов с фильтрацией по сервису, request ID, node ID и уровню логирования.
 
+Promtail получает `DEPLOY_ENVIRONMENT` из Compose (по умолчанию `local`) и добавляет его как label `environment`. На стенде задайте `DEPLOY_ENVIRONMENT=stage`; в AC Taska Logs окружение выбирается фильтром «Окружение». После изменения настройки пересоздайте контейнер Promtail.
+
 В логах и ответах gateway используется сквозной `X-Request-Id`. Для поиска запроса в Grafana доступны фильтры сервиса, request ID, node ID и уровня логирования.
 
 ## Сборка и тесты
