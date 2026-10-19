@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mockito;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -17,6 +18,8 @@ import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
+import ru.taska.mapper.AuditLogMapper;
+import ru.taska.repository.AuditLogRepository;
 import ru.taska.repository.MetadataSchemaRepository;
 import ru.taska.repository.ReadOnlyRepository;
 import ru.taska.service.AdminReadonlyService;
@@ -26,6 +29,7 @@ import ru.taska.service.readonly.FilterParser;
 import ru.taska.service.readonly.ReadOnlyQueryBuilder;
 import ru.taska.service.readonly.ReadOnlyQueryValidator;
 import ru.taska.service.readonly.SensitiveDataMaskService;
+import tools.jackson.databind.ObjectMapper;
 
 import java.sql.DriverManager;
 import java.time.Duration;
@@ -75,7 +79,8 @@ class UuidFilterIT {
         ReflectionTestUtils.setField(repository, "readonlyDatabaseClient", clients);
         service = new AdminReadonlyServiceImpl(properties, new SensitiveDataMaskService(properties),
                 new MetadataService(properties, new MetadataSchemaRepository(clients)), repository,
-                new ReadOnlyQueryBuilder(new ReadOnlyQueryValidator(properties)), new FilterParser());
+                new ReadOnlyQueryBuilder(new ReadOnlyQueryValidator(properties)), new FilterParser(),
+                Mockito.mock(AuditLogRepository.class), new AuditLogMapper(), new ObjectMapper());
     }
 
     @ParameterizedTest

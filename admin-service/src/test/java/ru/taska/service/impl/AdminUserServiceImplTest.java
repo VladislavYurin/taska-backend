@@ -13,7 +13,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GlobalRole;
 import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AuditEventDto;
@@ -46,12 +45,6 @@ class AdminUserServiceImplTest {
     @Mock
     private GrpcAdminUserManagementServiceClient client;
 
-    @Mock
-    private GrpcClientProperties grpcClientProperties;
-
-    @Mock
-    private GrpcClientProperties.Service authService;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AdminUserServiceImpl service;
@@ -67,8 +60,7 @@ class AdminUserServiceImplTest {
         service = new AdminUserServiceImpl(
                 auditService,
                 client,
-                objectMapper,
-                grpcClientProperties
+                objectMapper
         );
 
         targetUserId = UUID.randomUUID();
@@ -105,11 +97,6 @@ class AdminUserServiceImplTest {
                 .oldCredentialState(oldState)
                 .newCredentialState(newState)
                 .build();
-
-        Mockito.lenient().when(grpcClientProperties.authService())
-                .thenReturn(authService);
-        Mockito.lenient().when(authService.serviceName())
-                .thenReturn("auth-service");
     }
 
     @Nested
@@ -138,7 +125,7 @@ class AdminUserServiceImplTest {
             Assertions.assertThat(auditEvent.getActorLogin()).isEqualTo(ACTOR_LOGIN);
             Assertions.assertThat(auditEvent.getActorRoles()).isNotNull();
             Assertions.assertThat(auditEvent.getAction()).isEqualTo("USER_BLOCKED");
-            Assertions.assertThat(auditEvent.getTargetService()).isEqualTo("auth-service");
+            Assertions.assertThat(auditEvent.getTargetService()).isEqualTo(AdminUserServiceImpl.AUTH_SERVICE_KEY);
             Assertions.assertThat(auditEvent.getTargetTable()).isEqualTo("users");
             Assertions.assertThat(auditEvent.getTargetId()).isEqualTo(targetUserId.toString());
             Assertions.assertThat(auditEvent.getOldValue().get("status").asString())
@@ -194,6 +181,7 @@ class AdminUserServiceImplTest {
             Mockito.verify(client).unblockUser(REQUEST_ID, NODE_ID, requestDto);
             Mockito.verify(auditService).logAudit(auditCaptor.capture());
             Assertions.assertThat(auditCaptor.getValue().getAction()).isEqualTo("USER_UNBLOCKED");
+            Assertions.assertThat(auditCaptor.getValue().getTargetService()).isEqualTo(AdminUserServiceImpl.AUTH_SERVICE_KEY);
             Assertions.assertThat(auditCaptor.getValue().getOldValue().get("status").asString())
                     .isEqualTo("BLOCKED");
             Assertions.assertThat(auditCaptor.getValue().getNewValue().get("status").asString())
@@ -223,6 +211,7 @@ class AdminUserServiceImplTest {
 
             AuditEventDto auditEvent = auditCaptor.getValue();
             Assertions.assertThat(auditEvent.getAction()).isEqualTo("RESET_CREDENTIAL_LOCKOUT");
+            Assertions.assertThat(auditEvent.getTargetService()).isEqualTo(AdminUserServiceImpl.AUTH_SERVICE_KEY);
             Assertions.assertThat(auditEvent.getTargetTable()).isEqualTo("credentials");
 
             // Проверяем oldValue

@@ -4,6 +4,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
+import ru.taska.dto.AuditEntriesResponseDto;
+import ru.taska.dto.FilterAuditDTO;
 import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ServiceDto;
@@ -13,7 +15,9 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 
+import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Integration tests for the three AdminService RPC use-cases at the service layer.
@@ -127,7 +131,100 @@ class AdminReadOnlyServiceIT extends AbstractIT {
 
         StepVerifier.create(adminReadonlyService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .expectErrorMatches(e -> e instanceof DomainException de
-                        && de.getStatus() == DomainStatus.NOT_FOUND)
+                                         && de.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
+    }
+
+    @Test
+    void listAuditEntries_withAllFilters_returnsMatchingEntry() {
+        UUID actorUserId = UUID.fromString(FIXTURE_USER_ID);
+
+        FilterAuditDTO filterDTO = new FilterAuditDTO(
+                actorUserId,
+                "action",
+                FIXTURE_SERVICE,
+                FIXTURE_TABLE,
+                "00000000-0000-0000-0000-000000000001",
+                "requestId",
+                Instant.parse("2024-01-01T00:00:00Z"),
+                Instant.parse("2024-01-31T23:59:59.999999999Z")
+        );
+
+        StepVerifier.create(adminReadonlyService.listAuditEntries(filterDTO, 0, 10))
+                .assertNext(response -> {
+                    Assertions.assertThat(response.totalCount()).isEqualTo(1L);
+                    Assertions.assertThat(response.items()).hasSize(1);
+
+                    AuditEntriesResponseDto entry = response.items().getFirst();
+
+                    Assertions.assertThat(entry.id()).isEqualTo(UUID.fromString("33333333-3333-3333-3333-333333333333"));
+                    Assertions.assertThat(entry.actorUserId()).isEqualTo(actorUserId);
+                    Assertions.assertThat(entry.actorLogin()).isEqualTo(FIXTURE_USER_LOGIN);
+                    Assertions.assertThat(entry.action()).isEqualTo("action");
+                    Assertions.assertThat(entry.targetService()).isEqualTo(FIXTURE_SERVICE);
+                    Assertions.assertThat(entry.targetTable()).isEqualTo(FIXTURE_TABLE);
+                    Assertions.assertThat(entry.targetId()).isEqualTo("00000000-0000-0000-0000-000000000001");
+                    Assertions.assertThat(entry.requestId()).isEqualTo("requestId");
+                    Assertions.assertThat(entry.createdAt()).isEqualTo(Instant.parse("2024-01-15T12:00:00Z"));
+                    Assertions.assertThat(entry.reason()).isEqualTo("test-reason");
+                    Assertions.assertThat(entry.oldValue().get("name").asText()).isEqualTo("old-name");
+                    Assertions.assertThat(entry.newValue().get("name").asText()).isEqualTo("new-name");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void listAuditEntries_withoutFilters_returnsNewestFirstWithPagination() {
+        StepVerifier.create(adminReadonlyService.listAuditEntries(null, 0, 1))
+                .assertNext(firstPage -> {
+                    Assertions.assertThat(firstPage.totalCount()).isEqualTo(2L);
+                    Assertions.assertThat(firstPage.items()).hasSize(1);
+                    Assertions.assertThat(firstPage.page()).isEqualTo(0);
+                    Assertions.assertThat(firstPage.pageSize()).isEqualTo(1);
+                    Assertions.assertThat(firstPage.items().getFirst().createdAt())
+                            .isEqualTo(Instant.parse("2024-02-01T09:30:00Z"));
+                })
+                .verifyComplete();
+
+        StepVerifier.create(adminReadonlyService.listAuditEntries(FilterAuditDTO.builder().build(), 1, 1))
+                .assertNext(secondPage -> {
+                    Assertions.assertThat(secondPage.totalCount()).isEqualTo(2L);
+                    Assertions.assertThat(secondPage.items()).hasSize(1);
+                    Assertions.assertThat(secondPage.items().getFirst().createdAt())
+                            .isEqualTo(Instant.parse("2024-01-15T12:00:00Z"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void listAuditEntries_byRequestId_findsOnlyThatRequest() {
+        FilterAuditDTO filter = FilterAuditDTO.builder().requestId("requestId-2").build();
+
+        StepVerifier.create(adminReadonlyService.listAuditEntries(filter, 0, 10))
+                .assertNext(response -> {
+                    Assertions.assertThat(response.totalCount()).isEqualTo(1L);
+                    Assertions.assertThat(response.items()).hasSize(1);
+                    Assertions.assertThat(response.items().getFirst().requestId()).isEqualTo("requestId-2");
+                    Assertions.assertThat(response.items().getFirst().actorLogin()).isEqualTo(SECOND_AUDIT_ACTOR_LOGIN);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void listAuditEntries_masksSensitiveColumnsInOldAndNewValues_resolvingServiceSuffix() {
+        FilterAuditDTO filter = FilterAuditDTO.builder().action(SECOND_AUDIT_ACTION).build();
+
+        StepVerifier.create(adminReadonlyService.listAuditEntries(filter, 0, 10))
+                .assertNext(response -> {
+                    Assertions.assertThat(response.items()).hasSize(1);
+                    AuditEntriesResponseDto entry = response.items().getFirst();
+
+                    Assertions.assertThat(entry.targetService()).isEqualTo(SECOND_AUDIT_TARGET_SERVICE);
+                    Assertions.assertThat(entry.oldValue().get("login").asText()).isEqualTo("bob");
+                    Assertions.assertThat(entry.oldValue().get("email").asText()).isEqualTo("***");
+                    Assertions.assertThat(entry.newValue().get("login").asText()).isEqualTo("bob");
+                    Assertions.assertThat(entry.newValue().get("email").asText()).isEqualTo("***");
+                })
+                .verifyComplete();
     }
 }

@@ -7,6 +7,6 @@ import ru.taska.entity.AuditLog;
 import java.util.UUID;
 
 @Repository
-public interface AuditLogRepository extends ReactiveCrudRepository <AuditLog, UUID> {
+public interface AuditLogRepository extends ReactiveCrudRepository<AuditLog, UUID>, AdminRepositoryCustom {
 
 }
