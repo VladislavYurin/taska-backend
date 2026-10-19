@@ -3925,6 +3925,7 @@ components:
           $ref: '#/components/schemas/WorkflowResponseDto'
 
     RestErrorResponse:
+      description: Ошибка API; details содержит необязательные машиночитаемые параметры ошибки.
       type: object
       required: [code, message]
       properties:
@@ -3932,6 +3933,14 @@ components:
           type: string
         message:
           type: string
+        details:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: Параметры ошибки. Для временной блокировки lockedUntil — время разблокировки в ISO 8601 UTC.
+          example:
+            lockedUntil: '2026-09-22T11:55:50.398486Z'
 
     IssueTypeDto:
       type: string

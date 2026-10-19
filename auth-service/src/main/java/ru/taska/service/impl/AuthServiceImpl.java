@@ -37,6 +37,7 @@ import ru.taska.util.UserStatusMapper;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * Реализация сервиса аутентификации.
@@ -344,7 +345,8 @@ public class AuthServiceImpl implements AuthService {
 
     private DomainException accountLockedError(Instant lockedUntil) {
         return new DomainException(DomainStatus.PERMISSION_DENIED,
-                "Account is locked until " + lockedUntil + ". Try again later.");
+                "Account is locked until " + lockedUntil + ". Try again later.",
+                lockedUntil == null ? Map.of() : Map.of("lockedUntil", lockedUntil.toString()));
     }
 
     /**

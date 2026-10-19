@@ -661,6 +661,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         Assertions.assertThat(thresholdFailure.getStatus().getDescription())
                 .isEqualTo("Account is locked until " + lockedUser.getLockedUntil() + ". Try again later.");
 
+        Assertions.assertThat(mapper.GrpcErrorDetails.decode(thresholdFailure.getTrailers()))
+                .containsEntry("lockedUntil", lockedUser.getLockedUntil().toString());
+
         log.info(">>> Account locked until {} after {} failed attempts",
                 lockedUser.getLockedUntil(), maxAttempts);
 
@@ -685,6 +688,8 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                             .isEqualTo("PERMISSION_DENIED");
                     Assertions.assertThat(statusEx.getStatus().getDescription())
                             .isEqualTo(thresholdFailure.getStatus().getDescription());
+                    Assertions.assertThat(mapper.GrpcErrorDetails.decode(statusEx.getTrailers()))
+                            .containsEntry("lockedUntil", lockedUser.getLockedUntil().toString());
                 });
 
         // И счётчик НЕ должен увеличиться при попытке залогиниться в заблокированный аккаунт
