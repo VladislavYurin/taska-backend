@@ -37,7 +37,7 @@ public final class GrpcExceptionMapper {
             case UNKNOWN -> io.grpc.Status.UNKNOWN;
             case INTERNAL -> io.grpc.Status.INTERNAL;
         };
-        return status.withDescription(ex.getMessage()).asRuntimeException();
+        return status.withDescription(ex.getMessage()).asRuntimeException(GrpcErrorDetails.encode(ex.getDetails()));
     }
 
     /**

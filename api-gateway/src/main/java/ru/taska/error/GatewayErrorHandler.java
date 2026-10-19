@@ -3,6 +3,9 @@ package ru.taska.error;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
+import mapper.GrpcErrorDetails;
+
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
@@ -28,10 +31,12 @@ public class GatewayErrorHandler {
         HttpStatus httpStatus;
         String code;
         String message;
+        Map<String, String> details = Map.of();
 
         // grpc ошибка пришедшая из другого сервиса
         if (error instanceof StatusRuntimeException grpcEx) {
             Status grpcStatus = grpcEx.getStatus();
+            details = GrpcErrorDetails.decode(grpcEx.getTrailers());
             code = grpcStatus.getCode().name();
             message = grpcStatus.getDescription() != null ? grpcStatus.getDescription() : code;
             httpStatus = restErrorMapper.mapGrpcCodeToHttpStatus(grpcStatus.getCode());
@@ -54,6 +59,7 @@ public class GatewayErrorHandler {
         }
 
         RestErrorResponse errorResponse = new RestErrorResponse(code, message);
+        errorResponse.setDetails(details.isEmpty() ? null : details);
 
         var response = exchange.getResponse();
         response.setStatusCode(httpStatus);
