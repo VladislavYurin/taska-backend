@@ -751,7 +751,11 @@ paths:
 
     put:
       summary: Обновляет основные поля задачи
-      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Вызывающий должен иметь роль из `update-issue-roles`: по умолчанию ADMIN или MEMBER.
+        Не участник проекта получает 403 «Access denied», неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_UPDATE_ROLES; стенд может переопределить значения по умолчанию.
       deprecated: true
       operationId: updateIssue
       tags:
@@ -906,7 +910,12 @@ paths:
   /api/v1/issues/{issueId}/assignee:
     put:
       summary: Назначает исполнителя задачи
-      description: Устарел, используйте PATCH /api/v1/issues/{issueId}.
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Назначающий и назначаемый должны иметь роль из `assign-issue-roles`: по умолчанию ADMIN или MEMBER.
+        При назначении себя проверяется только роль вызывающего; при назначении другого пользователя — роли обоих.
+        Не участник проекта получает 403 «Access denied», неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_ASSIGN_ROLES; стенд может переопределить значения по умолчанию.
       deprecated: true
       operationId: assignIssue
       tags:
@@ -2077,10 +2086,14 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
     post:
-      summary: Добавление подписчика на задачу (только project ADMIN)
+      summary: Добавление подписчика на задачу с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
         Подписывает указанного пользователя (`userId` в body) на задачу.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: addIssueWatcher
       tags:
         - watchers
@@ -2129,7 +2142,11 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/me:
     put:
       summary: Подписка текущего пользователя на задачу
-      description: userId берётся из Gateway context (JWT), не из тела запроса.
+      description: |
+        userId берётся из Gateway context (JWT), не из тела запроса.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: watchIssueMe
       tags:
         - watchers
@@ -2171,7 +2188,11 @@ paths:
 
     delete:
       summary: Отписка текущего пользователя от задачи
-      description: userId берётся из Gateway context (JWT), не из path.
+      description: |
+        userId берётся из Gateway context (JWT), не из path.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: unwatchIssueMe
       tags:
         - watchers
@@ -2213,10 +2234,13 @@ paths:
 
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/{userId}:
     delete:
-      summary: Удаление подписчика задачи (только project ADMIN)
+      summary: Удаление подписчика задачи с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
-        Viewer/MEMBER без роли ADMIN не может удалить чужого watcher.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403; MEMBER может отписать себя, но не другого пользователя.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: removeIssueWatcher
       tags:
         - watchers
@@ -2466,6 +2490,10 @@ paths:
   /api/v1/admin/outbox/{service}/{eventId}/retry:
     post:
       summary: Повторная обработка outbox-события (только для GLOBAL_ADMIN)
+      description: >-
+        Допускает FAILED либо PROCESSING с ненулевым processingStartedAt строго раньше текущего времени
+        минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD (по умолчанию 10 минут). NEW и PUBLISHED не допускаются.
+        retryable из сводки является снимком; состояние проверяется повторно, включая атомарный UPDATE.
       operationId: retryOutboxEvent
       tags:
         - admin
@@ -2507,7 +2535,14 @@ paths:
                 $ref: '#/components/schemas/RetryOutboxEventResponseDto'
 
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          description: >-
+            FAILED_PRECONDITION: событие не удовлетворяет правилу retry или изменилось после чтения сводки.
+            Также возвращается при невалидных параметрах запроса.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+
         '401':
           $ref: '#/components/responses/ErrorResponse'
         '403':
@@ -2689,6 +2724,50 @@ paths:
 
   ########################## Окончание API userProfile ########################
 
+  /api/v1/meta:
+    get:
+      summary: Словари допустимых значений перечислений
+      description: |
+        Пять словарей (issueTypes, priorities, linkTypes, notificationTypes, userStatuses), каждый — список пар code/name. 
+        Коды совпадают с тем, что принимают и возвращают другие эндпоинты.
+        Ответ содержит ETag, это хеш текущего состояния словарей.
+        Повторный запрос должен содержать предыдущее значение ETag в заголовке If-None-Match.
+        Если If-None-Match равен текущему хэшу значит словари не изменились, ручка возвращает 304 без тела.
+        Если If-None-Match пустой или не равен текущему хэшу возвращается 200 со словарями в теле.
+      operationId: getMeta
+      tags:
+        - meta
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: ETag из предыдущего ответа этого маршрута
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Словари перечислений
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponseDto'
+        '304':
+          description: Словари не изменились
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2701,6 +2780,10 @@ components:
       schema:
         type: string
       description: Возвращаемый клиенту сквозной ID запроса
+    ETag-Header:
+      schema:
+        type: string
+      description: Версия содержимого ответа для условного запроса через If-None-Match
 
   responses:
     ErrorResponse:
@@ -2771,6 +2854,7 @@ components:
 
     ValidateAccessTokenResponseDto:
       type: object
+      required: [avatarUnavailable]
       properties:
         id:
           type: string
@@ -2784,6 +2868,17 @@ components:
           type: string
         globalRole:
           $ref: '#/components/schemas/GlobalRoleTypeDto'
+        avatar:
+          allOf:
+            - $ref: '#/components/schemas/AvatarDto'
+          nullable: true
+          description: Аватар текущего пользователя; null, если отсутствует или профиль временно недоступен (см. avatarUnavailable).
+        avatarUnavailable:
+          type: boolean
+          default: false
+          description: >-
+            true, если профиль с аватаром не удалось прочитать и avatar=null означает ошибку,
+            а не отсутствие фото. false, если аватар прочитан или у пользователя его нет.
 
     CreateIssueRequestDto:
       type: object
@@ -4237,7 +4332,15 @@ components:
 
     ProblematicOutboxEventDto:
       type: object
+      required: [retryable]
       properties:
+        retryable:
+          type: boolean
+          description: >-
+            Снимок пригодности к ручному retry: true для FAILED либо для PROCESSING с ненулевым
+            processingStartedAt строго раньше текущего времени минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD
+            (по умолчанию 10 минут). Для NEW и PUBLISHED — false. Состояние может измениться;
+            команда retry повторно проверяет правило и может отказать.
         id:
           type: string
         aggregateType:
@@ -4486,6 +4589,87 @@ components:
         - ACTIVE
         - BLOCKED
         - LOCKED
+
+    MetaResponseDto:
+      type: object
+      description: Словари допустимых значений перечислений, принимаемых и возвращаемых API
+      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
+      properties:
+        issueTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueTypeMetaPairDto'
+        priorities:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuePriorityMetaPairDto'
+        linkTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLinkTypeMetaPairDto'
+        notificationTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypeMetaPairDto'
+        userStatuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserStatusMetaPairDto'
+
+    IssueTypeMetaPairDto:
+      type: object
+      description: Тип задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    IssuePriorityMetaPairDto:
+      type: object
+      description: Приоритет задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    IssueLinkTypeMetaPairDto:
+      type: object
+      description: Тип связи между задачами
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueLinkTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    NotificationTypeMetaPairDto:
+      type: object
+      description: Тип уведомления
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/NotificationTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    UserStatusMetaPairDto:
+      type: object
+      description: Статус пользователя
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/UserStatusDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
 
     BoardResponseDto:
       type: object

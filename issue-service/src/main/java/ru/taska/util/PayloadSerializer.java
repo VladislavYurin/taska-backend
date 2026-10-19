@@ -482,11 +482,11 @@ public class PayloadSerializer {
      * @param attachment сохранённое вложение.
      * @return {@link JsonNode} с метаданными загрузки.
      */
-    public JsonNode createAttachmentUploadedPayload(IssueAttachment attachment, List<UUID> watcherIds) {
+    public JsonNode createAttachmentUploadedPayload(Issue issue, IssueAttachment attachment, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
-        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        putIssueFields(node, issue);
         node.put(UPLOADED_BY, attachment.getUploadedBy().toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(CONTENT_TYPE, attachment.getContentType());
@@ -504,11 +504,11 @@ public class PayloadSerializer {
      * @param deletedByUserId идентификатор пользователя, выполнившего удаление.
      * @return {@link JsonNode} с метаданными удаления.
      */
-    public JsonNode createAttachmentDeletedPayload(IssueAttachment attachment, UUID deletedByUserId, List<UUID> watcherIds) {
+    public JsonNode createAttachmentDeletedPayload(Issue issue, IssueAttachment attachment, UUID deletedByUserId, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
-        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        putIssueFields(node, issue);
         node.put(DELETED_BY, deletedByUserId.toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());

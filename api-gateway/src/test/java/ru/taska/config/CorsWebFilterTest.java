@@ -46,7 +46,8 @@ public class CorsWebFilterTest {
                 .expectStatus().isOk()
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN)
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
-                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, ".*X-Request-Id.*");
+                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, ".*X-Request-Id.*")
+                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, ".*ETag.*");
     }
 
     @Test
@@ -56,7 +57,7 @@ public class CorsWebFilterTest {
                 .uri(PUBLIC_ENDPOINT)
                 .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
-                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization,Content-Type")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization,Content-Type,If-Match,If-None-Match")
                 .exchange()
                 .expectStatus().isOk()
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN)
@@ -64,7 +65,9 @@ public class CorsWebFilterTest {
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_MAX_AGE, "7200")
                 .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, ".*GET.*")
                 .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*Authorization.*")
-                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*Content-Type.*");
+                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*Content-Type.*")
+                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*If-Match.*")
+                .expectHeader().valueMatches(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, ".*If-None-Match.*");
     }
 
     @Test

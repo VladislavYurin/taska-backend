@@ -1,6 +1,7 @@
 package ru.taska.repository;
 
 import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -69,8 +70,9 @@ public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatc
     Mono<IssueWatcher> findByIssueIdAndUserId(UUID issueId, UUID userId);
 
     /**
-     * Удаляет подписку пользователя на задачу.
+     * Удаляет подписку пользователя на задачу и возвращает число удалённых строк.
      */
+    @Modifying
     @Query("""
             DELETE FROM taska.issue_watchers
             WHERE issue_id = :issueId AND user_id = :userId

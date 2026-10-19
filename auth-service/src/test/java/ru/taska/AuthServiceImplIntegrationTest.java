@@ -638,14 +638,11 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                         .build())
                 .build();
 
-        Assertions.assertThatThrownBy(() ->
-                        authStub.login(Mono.just(finalRequest)).block(Duration.ofSeconds(10)))
-                .isInstanceOf(StatusRuntimeException.class)
-                .satisfies(ex -> {
-                    StatusRuntimeException statusEx = (StatusRuntimeException) ex;
-                    Assertions.assertThat(statusEx.getStatus().getCode().toString())
-                            .isEqualTo("UNAUTHENTICATED");
-                });
+        StatusRuntimeException thresholdFailure = Assertions.catchThrowableOfType(
+                () -> authStub.login(Mono.just(finalRequest)).block(Duration.ofSeconds(10)),
+                StatusRuntimeException.class);
+        Assertions.assertThat(thresholdFailure).isNotNull();
+        Assertions.assertThat(thresholdFailure.getStatus().getCode().toString()).isEqualTo("PERMISSION_DENIED");
 
         // Then: счётчик достиг максимума, credential заблокирован, user переведён в LOCKED
         Credential lockedCredential = credentialRepository
@@ -660,6 +657,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         Assertions.assertThat(lockedUser.getStatus())
                 .as("User should be LOCKED after max failed attempts")
                 .isEqualTo(UserStatus.LOCKED);
+
+        Assertions.assertThat(thresholdFailure.getStatus().getDescription())
+                .isEqualTo("Account is locked until " + lockedUser.getLockedUntil() + ". Try again later.");
 
         log.info(">>> Account locked until {} after {} failed attempts",
                 lockedUser.getLockedUntil(), maxAttempts);
@@ -682,9 +682,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
                 .satisfies(ex -> {
                     StatusRuntimeException statusEx = (StatusRuntimeException) ex;
                     Assertions.assertThat(statusEx.getStatus().getCode().toString())
-                            .isEqualTo("UNAUTHENTICATED");
+                            .isEqualTo("PERMISSION_DENIED");
                     Assertions.assertThat(statusEx.getStatus().getDescription())
-                            .contains("Account is locked until");
+                            .isEqualTo(thresholdFailure.getStatus().getDescription());
                 });
 
         // И счётчик НЕ должен увеличиться при попытке залогиниться в заблокированный аккаунт

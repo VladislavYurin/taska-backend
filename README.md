@@ -212,6 +212,7 @@ PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue
 - `/api/v1/projects/{projectId}/labels` и метки задач;
 - `/api/v1/projects/{projectId}/issues/{issueId}/watchers`;
 - `/api/v1/notifications`;
+- `/api/v1/meta` — словари допустимых значений перечислений;
 - `/api/v1/readonly` для глобального администратора.
 
 Ограничения проектных операций задаются переменными `ISSUE_*_ROLES`. Полный состав запросов, ответов, статусов и параметров находится в OpenAPI-файле.
@@ -278,6 +279,8 @@ Actuator публикует `health`, `info` и `prometheus`. Метрики с�
 **Taska - Post-deploy Overview** — дашборд наблюдаемости после автодеплоя. Позволяет быстро подтвердить, что новая версия успешно запустилась и работает штатно: scrape-статус всех инстансов, liveness/readiness пробы, версия и коммит сборки, состояние соединений с PostgreSQL и Kafka, динамика HTTP-ошибок и времени ответа, базовые JVM-метрики.
 
 **AC Taska Logs** — централизованный просмотр логов из Loki. Агрегирует Docker-логи всех сервисов с фильтрацией по сервису, request ID, node ID и уровню логирования.
+
+Promtail получает `DEPLOY_ENVIRONMENT` из Compose (по умолчанию `local`) и добавляет его как label `environment`. На стенде задайте `DEPLOY_ENVIRONMENT=stage`; в AC Taska Logs окружение выбирается фильтром «Окружение». После изменения настройки пересоздайте контейнер Promtail.
 
 В логах и ответах gateway используется сквозной `X-Request-Id`. Для поиска запроса в Grafana доступны фильтры сервиса, request ID, node ID и уровня логирования.
 

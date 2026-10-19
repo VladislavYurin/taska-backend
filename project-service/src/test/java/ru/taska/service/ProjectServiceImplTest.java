@@ -1,11 +1,16 @@
 package ru.taska.service;
 
+import io.grpc.Status;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -356,7 +361,7 @@ class ProjectServiceImplTest {
         private ProjectLabelDto label;
         private ProjectWorkflowDto workflow;
         private ProjectCheckMembershipDto memberProjectDto;
-        private ProjectCheckMembershipDto globalAdminProjectDto;
+        private ProjectCheckMembershipDto nonMemberProjectDto;
 
         @BeforeEach
         void setUpContextData() {
@@ -389,8 +394,8 @@ class ProjectServiceImplTest {
                     .project_id(projectId).project_key(projectKey).name(projectName)
                     .created_by(userId).user_id(actorUserId).role(ProjectRole.ADMIN).build();
 
-            // GLOBAL_ADMIN без членства: user_id == null, role == null
-            globalAdminProjectDto = ProjectCheckMembershipDto.builder()
+            // Не участник проекта (в т.ч. GLOBAL_ADMIN без членства): user_id == null, role == null
+            nonMemberProjectDto = ProjectCheckMembershipDto.builder()
                     .project_id(projectId).project_key(projectKey).name(projectName)
                     .created_by(userId).user_id(null).role(null).build();
         }
@@ -420,13 +425,15 @@ class ProjectServiceImplTest {
                     .verifyComplete();
         }
 
-        @Test
-        void asNonMember_returnsPermissionDenied() {
+        @ParameterizedTest
+        @EnumSource(GlobalRole.class)
+        @DisplayName("не участник проекта → PERMISSION_DENIED независимо от глобальной роли, источники не опрашиваются")
+        void asNonMember_returnsPermissionDenied(GlobalRole globalRole) {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
-                    .thenReturn(Mono.just(globalAdminProjectDto));
+                    .thenReturn(Mono.just(nonMemberProjectDto));
 
             StepVerifier.create(projectService.getProjectContext(
-                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                            requestId, nodeId, projectId, actorUserId, globalRole))
                     .expectErrorSatisfies(throwable -> {
                         DomainException e = (DomainException) throwable;
                         Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, e.getStatus());
@@ -440,57 +447,72 @@ class ProjectServiceImplTest {
         }
 
         @Test
-        @DisplayName("GLOBAL_ADMIN без членства → 200, members=[] и labels=[], workflows загружаются")
-        void asGlobalAdminWithoutMembership_returnsEmptyMembersAndLabels() {
+        @DisplayName("участник потерял доступ во время запроса: отказ members не маскируется пустым списком")
+        void asMember_permissionDeniedInMembers_propagates() {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
-                    .thenReturn(Mono.just(globalAdminProjectDto));
-
-            // members: PERMISSION_DENIED → onErrorResume → []
+                    .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
                     .thenReturn(Flux.error(new DomainException(
                             DomainStatus.PERMISSION_DENIED, "User has no access to project")));
-
-            // labels: PERMISSION_DENIED → onErrorResume → []
             Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
-                    .thenReturn(Mono.error(new DomainException(
-                            DomainStatus.PERMISSION_DENIED, "Access denied")));
-
-            // workflows: загружаются нормально
+                    .thenReturn(Mono.just(List.of(label)));
             mockWorkflowLoad();
 
             StepVerifier.create(projectService.getProjectContext(
-                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
-                    .assertNext(ctx -> {
-                        Assertions.assertEquals(globalAdminProjectDto, ctx.project());
-                        Assertions.assertTrue(ctx.members().isEmpty(), "members должны быть пустыми");
-                        Assertions.assertTrue(ctx.labels().isEmpty(), "labels должны быть пустыми");
-                        Assertions.assertEquals(1, ctx.workflows().size(),
-                                "workflows должны загрузиться, т.к. workflow-service не проверяет актора (TAS-207)");
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .expectErrorSatisfies(throwable -> {
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, e.getStatus());
                     })
-                    .verifyComplete();
+                    .verify();
         }
 
         @Test
-        @DisplayName("GLOBAL_ADMIN без членства: UNAVAILABLE в members НЕ гасится, контекст падает")
-        void asGlobalAdmin_unavailableInMembers_propagates() {
+        @DisplayName("UNAVAILABLE в members не гасится, контекст падает")
+        void asMember_unavailableInMembers_propagates() {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
-                    .thenReturn(Mono.just(globalAdminProjectDto));
-
-            // Не PERMISSION_DENIED, а UNAVAILABLE — должно проброситься
+                    .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
                     .thenReturn(Flux.error(new DomainException(
                             DomainStatus.UNAVAILABLE, "DB unavailable")));
-
             Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
                     .thenReturn(Mono.just(List.of()));
             mockWorkflowLoad();
 
             StepVerifier.create(projectService.getProjectContext(
-                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
                     .expectErrorSatisfies(throwable -> {
                         DomainException e = (DomainException) throwable;
                         Assertions.assertEquals(DomainStatus.UNAVAILABLE, e.getStatus());
                     })
+                    .verify();
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "labels, PERMISSION_DENIED", "labels, UNAVAILABLE", "labels, DEADLINE_EXCEEDED",
+                "labels, NOT_FOUND", "labels, INTERNAL",
+                "workflows, PERMISSION_DENIED", "workflows, UNAVAILABLE", "workflows, DEADLINE_EXCEEDED",
+                "workflows, NOT_FOUND", "workflows, INTERNAL"
+        })
+        @DisplayName("Ошибки gRPC от issue-service и workflow-service, включая PERMISSION_DENIED, пробрасываются из контекста")
+        void asMember_grpcFailurePropagates(String source, Status.Code code) {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.just(memberDetails));
+            var failure = Status.fromCode(code).withDescription("upstream failure").asRuntimeException();
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(source.equals("labels") ? Mono.error(failure) : Mono.just(List.of(label)));
+            mockWorkflowLoad();
+            if (source.equals("workflows")) {
+                Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "TASK", actorUserId, requestId, nodeId))
+                        .thenReturn(Mono.error(failure));
+            }
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
                     .verify();
         }
 

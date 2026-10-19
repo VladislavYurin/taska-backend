@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.OutboxProcessingProperties;
+import ru.taska.config.props.OutboxRetryProperties;
 import ru.taska.dto.GetProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.dto.ProblematicEventCountDto;
 import ru.taska.dto.ProblematicOutboxEventResponseDto;
@@ -75,7 +76,7 @@ class ProblematicOutboxEventServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ProblematicOutboxEventServiceImpl(
-                outboxProperties, outboxEventRepository, problematicOutboxEventMapper, maskService
+                outboxProperties, outboxEventRepository, problematicOutboxEventMapper, maskService, new OutboxRetryProperties(Duration.ofMinutes(10))
         );
     }
 
@@ -316,7 +317,7 @@ class ProblematicOutboxEventServiceImplTest {
         ProblematicOutboxEventResponseDto dto = new ProblematicOutboxEventResponseDto(
                 "evt-1", "Order", "order-1", "OrderCreated", "***",
                 "FAILED", Instant.parse("2026-01-01T00:00:00Z"), null,
-                3, null, null, null, SERVICE_A, "Event processing failed"
+                3, null, null, null, SERVICE_A, "Event processing failed", true
         );
         when(problematicOutboxEventMapper.toDto(any(), eq(SERVICE_A), anyString()))
                 .thenReturn(dto);
@@ -412,7 +413,7 @@ class ProblematicOutboxEventServiceImplTest {
         ProblematicOutboxEventResponseDto dto = new ProblematicOutboxEventResponseDto(
                 "evt-1", "Order", "order-1", "OrderCreated", "{}",
                 "FAILED", Instant.parse("2026-01-01T00:00:00Z"), null,
-                3, null, null, null, serviceKey, "Event processing failed"
+                3, null, null, null, serviceKey, "Event processing failed", true
         );
 
         when(problematicOutboxEventMapper.toDto(any(), eq(serviceKey), anyString()))
@@ -467,7 +468,7 @@ class ProblematicOutboxEventServiceImplTest {
             dtoByTimestamp.put(ts, new ProblematicOutboxEventResponseDto(
                     "evt-" + ts.getEpochSecond(), "Order", "order-1", "OrderCreated", "{}",
                     "FAILED", ts, null,
-                    3, null, null, null, serviceKey, "Event processing failed"
+                    3, null, null, null, serviceKey, "Event processing failed", true
             ));
         }
 

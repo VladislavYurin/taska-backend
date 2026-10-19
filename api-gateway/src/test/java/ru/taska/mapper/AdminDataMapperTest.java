@@ -37,6 +37,16 @@ class AdminDataMapperTest {
 
     private final AdminDataMapper mapper = new AdminDataMapper();
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void retryableFlag_survivesGrpcToRest(boolean retryable) {
+        var event = ru.taska.api.admin.v1.ProblematicOutboxEventDto.newBuilder()
+                .setId("event").setRetryable(retryable).build();
+        var response = GetProblematicOutboxEventsSummaryResponse.newBuilder().addEvents(event).build();
+        var result = mapper.toRestProblematicOutboxEventsSummaryResponse(response);
+        Assertions.assertEquals(retryable, result.getEvents().getFirst().getRetryable());
+    }
+
     // ==================== ТЕСТЫ GET CATALOG ====================
 
     @Test

@@ -7,6 +7,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.OutboxRetryProperties;
 import ru.taska.domain.OutboxEventSnapshot;
 import ru.taska.domain.OutboxStatus;
+import ru.taska.domain.OutboxRetryEligibility;
 import ru.taska.dto.AuditEventDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -173,13 +174,7 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
             OutboxEventSnapshot snapshot,
             Instant stuckBefore
     ) {
-        if (snapshot.status() == OutboxStatus.FAILED) {
-            return;
-        }
-
-        if (snapshot.status() == OutboxStatus.PROCESSING
-                && snapshot.processingStartedAt() != null
-                && snapshot.processingStartedAt().isBefore(stuckBefore)) {
+        if (OutboxRetryEligibility.isRetryable(snapshot.status(), snapshot.processingStartedAt(), stuckBefore)) {
             return;
         }
 

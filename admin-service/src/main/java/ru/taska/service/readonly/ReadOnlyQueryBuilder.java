@@ -15,6 +15,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Строит БЕЗОПАСНЫЕ SQL запросы с параметризацией.
@@ -222,10 +223,13 @@ public class ReadOnlyQueryBuilder {
 
     /**
      * Парсит значение для оператора equals в зависимости от типа колонки.
-     * Для NUMERIC — BigDecimal, для BOOLEAN — Boolean, остальные — String.
+     * Для NUMERIC — BigDecimal, для BOOLEAN — Boolean, для UUID — UUID, остальные — String.
      */
     private Object parseEqualsValue(String column, String value, Map<String, DbColumnType> columnTypes) {
         DbColumnType type = columnTypes.get(column);
+        if (type == DbColumnType.UUID) {
+            return parseUuidValue(column, value);
+        }
         if (type == DbColumnType.NUMERIC) {
             return parseNumericValue(column, value);
         }
@@ -251,6 +255,20 @@ public class ReadOnlyQueryBuilder {
         throw new DomainException(DomainStatus.INVALID_ARGUMENT,
                 "Invalid date format for column '" + column
                         + "': expected ISO-8601 (e.g. 2026-01-01T00:00:00Z), got '" + value + "'");
+    }
+
+    private UUID parseUuidValue(String column, String value) {
+        try {
+            UUID uuid = UUID.fromString(value);
+            // UUID.fromString также принимает сокращённые группы вроде 1-1-1-1-1.
+            if (!uuid.toString().equalsIgnoreCase(value)) {
+                throw new IllegalArgumentException("Non-canonical UUID");
+            }
+            return uuid;
+        } catch (IllegalArgumentException e) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT,
+                    "Invalid UUID value for column '" + column + "': expected UUID in 8-4-4-4-12 format");
+        }
     }
 
     private OffsetDateTime parseTemporalValue(String column, String value) {

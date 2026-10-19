@@ -201,6 +201,7 @@ public class AdminDataMapper {
         }
         dto.setServiceKey(grpcEvent.getServiceKey());
         dto.setReason(grpcEvent.getReason());
+        dto.setRetryable(grpcEvent.getRetryable());
         return dto;
     }
 
