@@ -1187,6 +1187,7 @@ public class GrpcIssueService {
                                     requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
                                     issueType,
                                     req.getBody().getIncludeDone(),
+                                    req.getBody().getDoneStatusKeysList(),
                                     labelIds,
                                     pageSizePerColumn
                             )

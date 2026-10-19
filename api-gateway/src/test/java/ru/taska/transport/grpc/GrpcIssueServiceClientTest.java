@@ -2,6 +2,7 @@ package ru.taska.transport.grpc;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -116,6 +117,26 @@ class GrpcIssueServiceClientTest {
 
         Mockito.when(stub.withDeadlineAfter(Mockito.anyLong(), Mockito.any(TimeUnit.class)))
                 .thenReturn(stub);
+    }
+
+    @Test
+    void listIssuesForBoard_carriesWorkflowFinalKeysInGrpcBody() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK"))
+                .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK", ASSIGNEE_ID, LABEL_ID,
+                        false, List.of("CLOSED", "RELEASED"), context))
+                .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
+        var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub).listIssuesForBoard(captor.capture());
+        var body = captor.getValue().getBody();
+        Assertions.assertThat(body.getDoneStatusKeysList()).containsExactly("CLOSED", "RELEASED");
+        Assertions.assertThat(body.getIncludeDone()).isFalse();
+        Assertions.assertThat(body.getActorUserId()).isEqualTo(USER_ID);
+        Assertions.assertThat(body.getProjectId()).isEqualTo(PROJECT_ID);
+        Assertions.assertThat(body.getAssigneeId()).isEqualTo(ASSIGNEE_ID);
+        Assertions.assertThat(body.getLabelIdsList()).containsExactly(LABEL_ID);
     }
 
     @Test

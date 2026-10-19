@@ -763,6 +763,7 @@ public class IssueServiceImpl implements IssueService {
                                                   UUID assigneeId,
                                                   IssueType issueType,
                                                   boolean includeDone,
+                                                  List<String> doneStatusKeys,
                                                   List<UUID> labelIds,
                                                   Integer pageSizePerColumn
     ) {
@@ -770,7 +771,7 @@ public class IssueServiceImpl implements IssueService {
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
-                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, labelIds, pageSizePerColumn)
+                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys, labelIds, pageSizePerColumn)
                                 .collectList()
                 )
                 .flatMap(issues -> {

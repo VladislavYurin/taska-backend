@@ -1520,6 +1520,7 @@ paths:
         - name: includeDone
           in: query
           required: false
+          description: Включать задачи в статусах категории DONE из workflow проекта. При false исключаются ключи всех таких статусов, а не буквальный ключ DONE.
           schema:
             type: boolean
             default: false

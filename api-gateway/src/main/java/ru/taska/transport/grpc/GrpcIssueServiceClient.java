@@ -483,6 +483,7 @@ public class GrpcIssueServiceClient {
             String assigneeId,
             String labelId,
             Boolean includeDone,
+            List<String> doneStatusKeys,
             GatewayContext context
     ) {
         log.info(
@@ -495,7 +496,8 @@ public class GrpcIssueServiceClient {
                 .setProjectId(projectId)
                 .setActorUserId(context.userContext().userId())
                 .setIssueType(issueMapper.toGrpcIssueType(issueType))
-                .setIncludeDone(Boolean.TRUE.equals(includeDone));
+                .setIncludeDone(Boolean.TRUE.equals(includeDone))
+                .addAllDoneStatusKeys(doneStatusKeys);
 
         if (assigneeId != null && !assigneeId.isBlank()) {
             requestBodyBuilder.setAssigneeId(assigneeId);

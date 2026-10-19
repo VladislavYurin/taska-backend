@@ -149,6 +149,7 @@ public interface IssueService {
             UUID assigneeId,
             IssueType issueType,
             boolean includeDone,
+            List<String> doneStatusKeys,
             List<UUID> labelIds,
             Integer pageSizePerColumn
     );
