@@ -72,6 +72,7 @@ public class AuditLogMapper {
             return null;
         }
         return new AuditEntriesResponseDto(
+                auditLog.getId(),
                 auditLog.getActorUserId(),
                 auditLog.getActorLogin(),
                 auditLog.getAction(),
@@ -129,6 +130,7 @@ public class AuditLogMapper {
     private ListAuditEntry toAuditEntryProto(AuditEntriesResponseDto dto) {
         ListAuditEntry.Builder entryBuilder = ListAuditEntry.newBuilder();
 
+        if (dto.id() != null) entryBuilder.setId(dto.id().toString());
         if (dto.actorUserId() != null) entryBuilder.setActorUserId(dto.actorUserId().toString());
         if (dto.actorLogin() != null) entryBuilder.setActorLogin(dto.actorLogin());
         if (dto.action() != null) entryBuilder.setAction(dto.action());

@@ -2,6 +2,7 @@ package ru.taska.transport.grpc;
 
 
 import com.google.protobuf.Timestamp;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
@@ -314,6 +315,7 @@ class GrpcAdminReadonlyServiceTest {
 
         List<AuditEntriesResponseDto> expectedEntries = List.of(
                 new AuditEntriesResponseDto(
+                        null,
                         ACTOR_USER_ID,
                         "actorLogin",
                         "action",
@@ -457,6 +459,68 @@ class GrpcAdminReadonlyServiceTest {
                 .verifyComplete();
 
         Mockito.verify(adminReadonlyService).listAuditEntries(filterDTO, 1, 10);
+    }
+
+    @Test
+    void listAuditEntries_invalidActorUserId_returnsInvalidArgument() {
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(ListAuditEntriesRequestBody.newBuilder()
+                        .setActorUserId("not-a-uuid")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectErrorMatches(e -> e instanceof StatusRuntimeException sre
+                        && sre.getStatus().getCode() == Status.Code.INVALID_ARGUMENT
+                        && sre.getStatus().getDescription() != null
+                        && sre.getStatus().getDescription().contains("body.actorUserId"))
+                .verify();
+
+        Mockito.verifyNoInteractions(adminReadonlyService);
+    }
+
+    @Test
+    void listAuditEntries_createdAtFromAfterCreatedAtTo_returnsInvalidArgument() {
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(ListAuditEntriesRequestBody.newBuilder()
+                        .setCreatedAtFrom("2024-02-01")
+                        .setCreatedAtTo("2024-01-01")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectErrorMatches(e -> e instanceof StatusRuntimeException sre
+                        && sre.getStatus().getCode() == Status.Code.INVALID_ARGUMENT)
+                .verify();
+
+        Mockito.verifyNoInteractions(adminReadonlyService);
+    }
+
+    @Test
+    void listAuditEntries_dateOnlyFilters_expandToWholeUtcDays() {
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(ListAuditEntriesRequestBody.newBuilder()
+                        .setCreatedAtFrom("2024-01-01")
+                        .setCreatedAtTo("2024-01-31")
+                        .build())
+                .build();
+
+        Mockito.when(auditLogMapper.toFilterDTO(
+                        isNull(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                        eq(Instant.parse("2024-01-01T00:00:00Z")),
+                        eq(Instant.parse("2024-01-31T23:59:59.999999999Z"))))
+                .thenReturn(FilterAuditDTO.builder().build());
+        Mockito.when(adminReadonlyService.listAuditEntries(any(FilterAuditDTO.class), isNull(), isNull()))
+                .thenReturn(Mono.just(new PageResult<>(List.of(), 0L, 0, 20)));
+        Mockito.when(auditLogMapper.toAuditProto(any()))
+                .thenReturn(ListAuditEntriesResponse.getDefaultInstance());
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectNextCount(1)
+                .verifyComplete();
     }
 
     private static @NonNull ListAuditEntriesRequest getListAuditEntriesRequest() {

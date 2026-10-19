@@ -149,6 +149,7 @@ class AuditLogMapperTest {
         AuditEntriesResponseDto result = mapper.toResponseDto(auditLog);
 
         Assertions.assertThat(result).isNotNull();
+        Assertions.assertThat(result.id()).isEqualTo(AUDIT_LOG_ID);
         Assertions.assertThat(result.actorUserId()).isEqualTo(ACTOR_USER_ID);
         Assertions.assertThat(result.actorLogin()).isEqualTo(ACTOR_LOGIN);
         Assertions.assertThat(result.action()).isEqualTo(ACTION);
@@ -212,6 +213,7 @@ class AuditLogMapperTest {
         List<AuditEntriesResponseDto> items = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             items.add(AuditEntriesResponseDto.builder()
+                    .id(UUID.randomUUID())
                     .actorUserId(ACTOR_USER_ID)
                     .actorLogin(ACTOR_LOGIN + "_" + i)
                     .action(ACTION + "_" + i)
@@ -246,6 +248,9 @@ class AuditLogMapperTest {
         Assertions.assertThat(result.getHasPrev()).isTrue();
 
         for (int i = 0; i < 20; i++) {
+            Assertions.assertThat(result.getEntries(i).getId())
+                    .isEqualTo(items.get(i).id().toString());
+
             Assertions.assertThat(result.getEntries(i).getActorUserId())
                     .isEqualTo(items.get(i).actorUserId().toString());
 

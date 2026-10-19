@@ -335,6 +335,8 @@ message ListAuditEntry {
   optional string reason = 9;
   optional string request_id = 10;
   optional google.protobuf.Timestamp created_at = 11;
+  /** Идентификатор записи журнала (uuid) — для ключей списка и ссылок на запись во фронте. */
+  optional string id = 12;
 }
 
 message ListAuditEntriesRequest{

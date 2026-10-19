@@ -418,7 +418,7 @@ class GrpcAdminServiceClientTest {
                 .thenReturn(restResponse);
 
         // when
-        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntries(
                 actorUserId.toString(),
                 "action",
                 "targetService",
@@ -469,7 +469,7 @@ class GrpcAdminServiceClientTest {
         Mockito.when(mapper.toRestListAuditEntriesResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntries(
                 null,
                 "UPDATE",
                 "order-service",
@@ -521,7 +521,7 @@ class GrpcAdminServiceClientTest {
         Mockito.when(mapper.toRestListAuditEntriesResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntity(
+        Mono<ListAuditEntriesResponseDto> result = client.listAuditEntries(
                 null,
                 null,
                 null,

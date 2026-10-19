@@ -1,7 +1,7 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
-
 import ru.taska.api.admin.v1.ColumnMetadata;
 import ru.taska.api.admin.v1.GetCatalogResponse;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
@@ -14,11 +14,6 @@ import ru.taska.api.admin.v1.Row;
 import ru.taska.api.admin.v1.ServiceMetadata;
 import ru.taska.api.admin.v1.TableMetadata;
 import ru.taska.api.admin.v1.Value;
-
-
-
-
-import com.google.protobuf.Timestamp;
 import ru.taska.domain.dto.AuditEntryDto;
 import ru.taska.domain.dto.ColumnMetadataDto;
 import ru.taska.domain.dto.ListAuditEntriesResponseDto;
@@ -33,7 +28,6 @@ import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.domain.dto.ServiceMetadataDto;
 import ru.taska.domain.dto.TableCapabilitiesDto;
 import ru.taska.domain.dto.TableMetadataDto;
-
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -303,11 +297,14 @@ public class AdminDataMapper {
     }
 
     /**
-     * /**
      * Преобразует gRPC ListAuditEntry → REST AuditEntryDto
      */
     private AuditEntryDto toRestAuditEntry(ListAuditEntry grpcAuditEntry) {
         AuditEntryDto dto = new AuditEntryDto();
+
+        if (grpcAuditEntry.hasId() && !grpcAuditEntry.getId().isEmpty()) {
+            dto.setId(UUID.fromString(grpcAuditEntry.getId()));
+        }
 
         if (grpcAuditEntry.hasActorUserId()) {
             String actorUserId = grpcAuditEntry.getActorUserId();

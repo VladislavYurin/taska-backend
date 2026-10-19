@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.AuditAction;
-import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.dto.AdminUserManagementDto.UserCredentialStateResponseDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
 import ru.taska.dto.AdminUserManagementDto.UserStatusResponseDto;
@@ -22,7 +21,13 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final AuditService auditService;
     private final GrpcAdminUserManagementServiceClient client;
     private final ObjectMapper objectMapper;
-    private final GrpcClientProperties properties;
+
+    /**
+     * Ключ auth-service в каталоге {@code admin.metadata.services}. В {@code target_service} журнала
+     * аудита пишется именно ключ каталога (как и в retry outbox), а не имя gRPC-клиента:
+     * по нему фильтруется журнал и подбираются правила маскирования sensitive-колонок.
+     */
+    static final String AUTH_SERVICE_KEY = "auth";
 
     private static final String USERS_TABLE = "users";
     private static final String CREDENTIAL_TABLE = "credentials";
@@ -44,7 +49,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                                         .actorLogin(requestDto.actorLogin())
                                         .actorRoles(objectMapper.valueToTree(requestDto.role()))
                                         .action(AuditAction.USER_BLOCKED.name())
-                                        .targetService(properties.authService().serviceName())
+                                        .targetService(AUTH_SERVICE_KEY)
                                         .targetTable(USERS_TABLE)
                                         .targetId(requestDto.targetUserId().toString())
                                         .oldValue(objectMapper.createObjectNode().put(STATUS,responseDto.previousStatus()))
@@ -72,7 +77,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                                         .actorLogin(requestDto.actorLogin())
                                         .actorRoles(objectMapper.valueToTree(requestDto.role()))
                                         .action(AuditAction.USER_UNBLOCKED.name())
-                                        .targetService(properties.authService().serviceName())
+                                        .targetService(AUTH_SERVICE_KEY)
                                         .targetTable(USERS_TABLE)
                                         .targetId(requestDto.targetUserId().toString())
                                         .oldValue(objectMapper.createObjectNode().put(STATUS,responseDto.previousStatus()))
@@ -108,7 +113,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                                                 .actorLogin(requestDto.actorLogin())
                                                 .actorRoles(objectMapper.valueToTree(requestDto.role()))
                                                 .action(AuditAction.RESET_CREDENTIAL_LOCKOUT.name())
-                                                .targetService(properties.authService().serviceName())
+                                                .targetService(AUTH_SERVICE_KEY)
                                                 .targetTable(CREDENTIAL_TABLE)
                                                 .targetId(requestDto.targetUserId().toString())
                                                 .oldValue(oldValue)

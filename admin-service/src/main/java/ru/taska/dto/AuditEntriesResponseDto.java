@@ -1,6 +1,5 @@
 package ru.taska.dto;
 
-
 import lombok.Builder;
 import tools.jackson.databind.JsonNode;
 
@@ -11,6 +10,7 @@ import java.util.UUID;
  * DTO для представления записи аудита в ответе API.
  * Содержит информацию о действии пользователя, измененных данных и контексте операции.
  *
+ * @param id            идентификатор записи журнала (UUID)
  * @param actorUserId   идентификатор пользователя, выполнившего действие (UUID)
  * @param actorLogin    логин пользователя, выполнившего действие
  * @param action        тип действия (например: CREATE, UPDATE, DELETE)
@@ -25,6 +25,7 @@ import java.util.UUID;
  */
 @Builder
 public record AuditEntriesResponseDto(
+        UUID id,
         UUID actorUserId,
         String actorLogin,
         String action,
@@ -38,5 +39,3 @@ public record AuditEntriesResponseDto(
         Instant createdAt
 ) {
 }
-
-

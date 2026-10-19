@@ -12,15 +12,13 @@ import reactor.core.publisher.Mono;
 import ru.taska.dto.FilterAuditDTO;
 import ru.taska.entity.AuditLog;
 
-
-import java.util.Optional;
-
-
 @Slf4j
 @Repository
 @RequiredArgsConstructor
 public class AdminRepositoryCustomImpl implements AdminRepositoryCustom {
 
+    private static final String CREATED_AT = "created_at";
+    private static final String ID = "id";
 
     private final R2dbcEntityTemplate r2dbcEntityTemplate;
 
@@ -37,18 +35,22 @@ public class AdminRepositoryCustomImpl implements AdminRepositoryCustom {
         return r2dbcEntityTemplate.count(query, AuditLog.class);
     }
 
+    /**
+     * Собирает запрос по фильтру. {@link Query} иммутабелен: {@code limit}/{@code offset}/{@code sort}
+     * возвращают новый объект, поэтому результат каждого вызова нужно переприсваивать.
+     * Сортировка — новые записи первыми; {@code id} добавлен как tie-breaker, чтобы записи
+     * с одинаковым {@code created_at} не «прыгали» между страницами.
+     */
     private Query buildQuery(FilterAuditDTO filter, Integer limit, Long offset) {
-        Criteria criteria = buildCriteria(filter);
-        Query query = Query.query(criteria);
+        Query query = Query.query(buildCriteria(filter))
+                .sort(Sort.by(Sort.Order.desc(CREATED_AT), Sort.Order.desc(ID)));
 
         if (limit != null) {
-            query.limit(limit);
+            query = query.limit(limit);
         }
         if (offset != null) {
-            query.offset(offset);
+            query = query.offset(offset);
         }
-
-        query.sort(Sort.by(Sort.Direction.DESC, "created_at"));
         return query;
     }
 
@@ -81,11 +83,11 @@ public class AdminRepositoryCustomImpl implements AdminRepositoryCustom {
             }
 
             if (filter.createdAtFrom() != null) {
-                criteria = criteria.and("created_at").greaterThanOrEquals(filter.createdAtFrom());
+                criteria = criteria.and(CREATED_AT).greaterThanOrEquals(filter.createdAtFrom());
             }
 
             if (filter.createdAtTo() != null) {
-                criteria = criteria.and("created_at").lessThanOrEquals(filter.createdAtTo());
+                criteria = criteria.and(CREATED_AT).lessThanOrEquals(filter.createdAtTo());
             }
         }
         return criteria;

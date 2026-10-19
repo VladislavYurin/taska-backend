@@ -641,9 +641,11 @@ class AdminDataMapperTest {
     @DisplayName("Должен корректно преобразовать ListEntityResponse в ListEntityResponseResponseDto")
     void toRestListEntityResponse_shouldCorrectMapsAllFields() {
         UUID actorUserId = UUID.randomUUID();
+        UUID entryId = UUID.randomUUID();
 
         var source = ListAuditEntriesResponse.newBuilder()
                 .addEntries(ListAuditEntry.newBuilder()
+                        .setId(entryId.toString())
                         .setActorUserId(actorUserId.toString())
                         .setActorLogin("test-login")
                         .setAction("CREATE")
@@ -685,6 +687,7 @@ class AdminDataMapperTest {
         Assertions.assertEquals(2, result.getEntries().size());
 
         var firstEntry = result.getEntries().getFirst();
+        Assertions.assertEquals(entryId, firstEntry.getId());
         Assertions.assertEquals(actorUserId, firstEntry.getActorUserId());
         Assertions.assertEquals("test-login", firstEntry.getActorLogin());
         Assertions.assertEquals("CREATE", firstEntry.getAction());
@@ -698,6 +701,7 @@ class AdminDataMapperTest {
         Assertions.assertEquals(OffsetDateTime.ofInstant(Instant.parse("2024-06-15T12:00:00Z"), ZoneOffset.UTC), firstEntry.getCreatedAt());
 
         var secondEntry = result.getEntries().get(1);
+        Assertions.assertNull(secondEntry.getId());
         Assertions.assertEquals(actorUserId, secondEntry.getActorUserId());
         Assertions.assertEquals("test-login2", secondEntry.getActorLogin());
         Assertions.assertEquals("UPDATE", secondEntry.getAction());
