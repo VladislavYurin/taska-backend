@@ -2145,7 +2145,7 @@ message ListIssuesForBoardRequestBody {
   optional string status_key = 5;
 
   /**
-   * Включать ли задачи в финальном статусе Done.
+   * Включать ли задачи в статусах категории DONE из workflow.
    */
   bool include_done = 6;
 
@@ -2159,6 +2159,12 @@ message ListIssuesForBoardRequestBody {
    */
 
   repeated string label_ids = 8;
+
+  /**
+   * Ключи статусов категории DONE из workflow проекта.
+   * При include_done=false исключаются именно эти ключи; пустой список не исключает статусы.
+   */
+  repeated string done_status_keys = 9;
 }
 
 /**
