@@ -333,11 +333,11 @@ public class SensitiveDataMaskService {
      * Применяет те же правила, что и TAS-104 для обычных строк таблицы.
      * Журнал аудита не должен стать обходным путём к скрытым данным.
      *
-     * <p>{@code targetService} в журнале может отличаться от ключа каталога: например,
-     * операции над пользователями пишут {@code auth-service}, а каталог настроен как {@code auth}.
-     * Ключ разрешается по точному совпадению, по {@code alias} и по имени без суффикса {@code -service}.
-     * Если сервис в каталоге не найден, правил маскирования для него нет, и все значения
-     * закрываются полностью (fail-closed), а в лог пишется предупреждение.</p>
+     * <p>В {@code target_service} журнала пишется ключ каталога ({@code auth}, {@code project}, ...).
+     * На случай записей, сделанных до миграции {@code 0002-admin-audit-log-target-service-keys},
+     * или внешних писателей ключ дополнительно разрешается по {@code alias} и по имени
+     * без суффикса {@code -service}. Если сервис в каталоге не найден, правил маскирования для него нет,
+     * и все значения закрываются полностью (fail-closed), а в лог пишется предупреждение.</p>
      *
      * @param rowMap        old/new значение из аудит-лога (ключ - имя колонки)
      * @param targetService сервис, над которым выполнена операция (как записано в журнале)
@@ -384,7 +384,8 @@ public class SensitiveDataMaskService {
     }
 
     /**
-     * Находит ключ сервиса в каталоге по значению {@code target_service} из журнала аудита.
+     * Находит ключ сервиса в каталоге по значению {@code target_service} из журнала аудита:
+     * точное совпадение, затем {@code alias}, затем имя без суффикса {@code -service} (legacy-записи).
      */
     private Optional<String> resolveServiceKey(String targetService) {
         if (targetService == null || targetService.isBlank() || properties.services() == null) {

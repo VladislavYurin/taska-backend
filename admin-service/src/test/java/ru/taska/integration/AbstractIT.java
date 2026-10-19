@@ -27,8 +27,8 @@ public abstract class AbstractIT {
     public static final String AUDIT_TABLE = "admin_audit_log";
 
     /**
-     * Вторая запись аудита: другой actor и action, target_service с суффиксом "-service"
-     * (как пишут операции над пользователями), в old/new есть sensitive-колонка email.
+     * Вторая запись аудита: другой actor и action, target_service в legacy-формате с суффиксом "-service"
+     * (так писали операции над пользователями до миграции 0002), в old/new есть sensitive-колонка email.
      */
     public static final String SECOND_AUDIT_ACTOR_ID = "22222222-2222-2222-2222-222222222222";
     public static final String SECOND_AUDIT_ACTOR_LOGIN = "bob";

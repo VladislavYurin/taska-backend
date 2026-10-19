@@ -2104,7 +2104,7 @@ paths:
           required: false
           schema:
             type: string
-          description: Фильтр по целевому сервису
+          description: Фильтр по целевому сервису — ключ каталога read-only API (auth, project, issue, workflow, notification, admin)
         - name: targetTable
           in: query
           required: false
