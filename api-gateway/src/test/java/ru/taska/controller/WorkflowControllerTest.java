@@ -4,6 +4,8 @@ import io.grpc.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -34,6 +36,8 @@ import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
+import ru.taska.transport.grpc.GrpcProjectServiceClient;
+import ru.taska.domain.dto.ProjectResponseDto;
 
 import java.util.List;
 import java.util.UUID;
@@ -65,6 +69,9 @@ class WorkflowControllerTest {
 
     @MockitoBean
     private GrpcWorkflowServiceClient workflowClient;
+
+    @MockitoBean
+    private GrpcProjectServiceClient projectClient;
 
     @MockitoBean
     private ContextMapper contextMapper;
@@ -316,7 +323,24 @@ class WorkflowControllerTest {
     }
 
 
+    @ParameterizedTest
+    @CsvSource({"PERMISSION_DENIED,403", "NOT_FOUND,404", "UNAVAILABLE,503", "DEADLINE_EXCEEDED,504"})
+    void projectAccessFailure_doesNotReadWorkflow(String code, int httpStatus) {
+        mockAuthenticatedUser();
+        Mockito.when(projectClient.getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any()))
+                .thenReturn(Mono.error(Status.fromCode(Status.Code.valueOf(code)).asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/projects/{projectId}/workflow?issueType=BUG", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange().expectStatus().isEqualTo(httpStatus);
+
+        Mockito.verifyNoInteractions(workflowClient);
+    }
+
     private void mockAuthenticatedUser() {
+        Mockito.when(projectClient.getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any()))
+                .thenReturn(Mono.just(new ProjectResponseDto()));
         var accessToken = ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(UserContext.newBuilder().setUserId(USER_ID).build())
                 .build();
