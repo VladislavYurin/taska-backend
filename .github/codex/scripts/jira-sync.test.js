@@ -12,6 +12,14 @@ const TRANSITIONS = [
   { id: '31', name: 'In Review', to: { name: 'In Review' } },
   { id: '41', name: 'Done', to: { name: 'Done' } },
 ];
+// The same workflow as seen by an account with a Russian UI language: Jira
+// Server localises status names per account, the category keys stay.
+const LOCALIZED_TRANSITIONS = [
+  { id: '11', name: 'Сделать', to: { name: 'Сделать', statusCategory: { key: 'new' } } },
+  { id: '21', name: 'В работе', to: { name: 'В работе', statusCategory: { key: 'indeterminate' } } },
+  { id: '31', name: 'In Review', to: { name: 'In Review', statusCategory: { key: 'indeterminate' } } },
+  { id: '41', name: 'Готово', to: { name: 'Готово', statusCategory: { key: 'done' } } },
+];
 
 /**
  * A Jira stand-in that records every request and keeps the issue status and
@@ -39,7 +47,7 @@ function createJira({ status = 'In Progress', category = 'indeterminate', fail =
       return { ok: true, status: 200, json: async () => ({ transitions }) };
     }
     if (kind === 'transitions') {
-      state.status = TRANSITIONS.find((item) => item.id === body.transition.id).to.name;
+      state.status = transitions.find((item) => item.id === body.transition.id).to.name;
       return { ok: true, status: 204, json: async () => { throw new Error('no body'); } };
     }
     if (kind === 'remotelink' && method === 'GET') {
@@ -138,6 +146,54 @@ test('merging into develop moves the issue to Done', async () => {
     posted(jira, '/comment')[0].body.body,
     /влит в \{\{develop\}\}, merge-коммит \{\{abcdef1\}\}\. Статус: In Review → Done\.$/
   );
+});
+
+test('a merge closes the issue through the done-category transition when the bot sees localised names', async () => {
+  const jira = createJira({ status: 'In Review', transitions: LOCALIZED_TRANSITIONS });
+  const core = createCore();
+
+  const result = await syncJiraIssue({
+    context: event('closed', { merged: true, merge_commit_sha: 'abcdef1234567890' }),
+    core,
+    env: { ...ENV, JIRA_STATUS_DONE: 'Done' },
+    fetchImpl: jira.fetchImpl,
+  });
+
+  assert.deepEqual(posted(jira, '/transitions').map((r) => r.body), [{ transition: { id: '41' } }]);
+  assert.equal(jira.state.status, 'Готово');
+  assert.deepEqual(result.move, { changed: true, from: 'In Review', to: 'Готово' });
+  assert.match(posted(jira, '/comment')[0].body.body, /Статус: In Review → Готово\.$/);
+  assert.equal(core.warnings.length, 0);
+});
+
+test('an issue already in a done-category status is not moved again, whatever that status is called', async () => {
+  const jira = createJira({ status: 'Готово', category: 'done', transitions: LOCALIZED_TRANSITIONS });
+  const core = createCore();
+
+  const result = await syncJiraIssue({
+    context: event('closed', { merged: true, merge_commit_sha: 'abcdef1234567890' }),
+    core,
+    env: { ...ENV, JIRA_STATUS_DONE: 'Done' },
+    fetchImpl: jira.fetchImpl,
+  });
+
+  assert.deepEqual(result.move, { changed: false, from: 'Готово', reason: 'already' });
+  assert.equal(jira.requests.filter((r) => r.path.endsWith('/transitions')).length, 0);
+  assert.doesNotMatch(posted(jira, '/comment')[0].body.body, /Статус:/);
+  assert.equal(core.warnings.length, 0);
+});
+
+test('the category fallback is for the done status only', async () => {
+  const core = createCore();
+  const transitions = LOCALIZED_TRANSITIONS.map((item) => (item.id === '31'
+    ? { id: '31', name: 'На ревью', to: { name: 'На ревью', statusCategory: { key: 'indeterminate' } } }
+    : item));
+  const jira = createJira({ status: 'В работе', transitions });
+
+  await syncJiraIssue({ context: event('opened'), core, env: ENV, fetchImpl: jira.fetchImpl });
+
+  assert.equal(posted(jira, '/transitions').length, 0);
+  assert.match(core.warnings[0], /to "In Review"; available: Сделать, В работе, На ревью, Готово\./);
 });
 
 test('merging into a feature branch (a stacked PR) does not finish the issue', async () => {

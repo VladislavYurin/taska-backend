@@ -71,6 +71,16 @@ function planSync(payload, settings) {
 }
 
 /**
+ * Jira Server returns status and transition names in the language of the
+ * account making the request (the bot sees «Готово» where another account
+ * sees Done), so the done status is also recognised by its category key,
+ * which never changes.
+ */
+function inDoneCategory(status) {
+  return status?.statusCategory?.key === 'done';
+}
+
+/**
  * Moves the issue to the status with the given name, through whichever
  * transition leads there. A finished issue is never moved back.
  */
@@ -81,11 +91,12 @@ async function moveIssue(request, key, targetStatus, settings) {
   });
   const status = issue?.fields?.status ?? {};
   const current = status.name ?? '';
-  if (sameName(current, targetStatus)) {
+  const toDone = sameName(targetStatus, settings.doneStatus);
+  const finished = inDoneCategory(status) || sameName(current, settings.doneStatus);
+  if (sameName(current, targetStatus) || (toDone && finished)) {
     return { changed: false, from: current, reason: 'already' };
   }
-  const finished = status.statusCategory?.key === 'done' || sameName(current, settings.doneStatus);
-  if (finished && !sameName(targetStatus, settings.doneStatus)) {
+  if (finished) {
     return { changed: false, from: current, reason: 'finished' };
   }
 
@@ -93,7 +104,8 @@ async function moveIssue(request, key, targetStatus, settings) {
     path: `rest/api/2/issue/${encodeURIComponent(key)}/transitions`,
   })) ?? {};
   const transition = transitions.find((item) => sameName(item.to?.name, targetStatus))
-    ?? transitions.find((item) => sameName(item.name, targetStatus));
+    ?? transitions.find((item) => sameName(item.name, targetStatus))
+    ?? (toDone ? transitions.find((item) => inDoneCategory(item.to)) : undefined);
   if (!transition) {
     // Jira lists only the transitions this account may perform: an empty
     // list usually means a missing permission or a misspelled status name.
