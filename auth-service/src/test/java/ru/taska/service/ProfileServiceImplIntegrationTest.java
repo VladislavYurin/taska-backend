@@ -31,7 +31,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("ProfileServiceImpl Integration Tests")
-class ProfileServiceImplIT extends AbstractIT {
+@org.springframework.boot.test.context.SpringBootTest(
+        webEnvironment = org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE,
+        properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
+class ProfileServiceImplIntegrationTest extends AbstractIT {
 
     private static final String CONTENT_TYPE = "image/png";
     private static final String FILE_NAME = "avatar.png";
@@ -231,8 +234,57 @@ class ProfileServiceImplIT extends AbstractIT {
                 .verifyComplete();
     }
 
+    @Test
+    void foreignAvatarCannotBeConfirmedOrDeleted() {
+        String key = uploadFileToS3(FILE_CONTENT);
+        profileService.confirmAvatarUpload(userId, key, FILE_NAME, CONTENT_TYPE).block();
+        UUID otherId = createOtherUser();
+        StepVerifier.create(profileService.confirmAvatarUpload(otherId, key, FILE_NAME, CONTENT_TYPE))
+                .expectErrorMatches(error -> error instanceof DomainException domain && domain.getStatus() == DomainStatus.NOT_FOUND)
+                .verify();
+        assertThat(userAvatarRepository.findByUserId(otherId).block()).isNull();
+        profileService.deleteMyAvatar(otherId).block();
+        assertThat(storageClient.objectExists(key).block()).isTrue();
+        assertThat(profileService.getAvatarDownloadUrl(userId).block()).isNotBlank();
+    }
+
+    @Test
+    void confirmingSameKeyKeepsObjectAndRecord() {
+        String key = uploadFileToS3(FILE_CONTENT);
+        var first = profileService.confirmAvatarUpload(userId, key, FILE_NAME, CONTENT_TYPE).block();
+        var second = profileService.confirmAvatarUpload(userId, key, FILE_NAME, CONTENT_TYPE).block();
+        assertThat(second.getId()).isEqualTo(first.getId());
+        assertThat(storageClient.objectExists(key).block()).isTrue();
+        assertThat(profileService.getAvatarDownloadUrl(userId).block()).isNotBlank();
+    }
+
+    @Test
+    void storedLegacyKeyCanBeConfirmedAgainAndIsUnique() {
+        String legacyKey = UUID.randomUUID().toString();
+        putObjectDirect(legacyKey, FILE_CONTENT);
+        UserAvatar avatar = new UserAvatar();
+        avatar.setUserId(userId);
+        avatar.setObjectKey(legacyKey);
+        avatar.setFileName(FILE_NAME);
+        avatar.setContentType(CONTENT_TYPE);
+        avatar.setSizeBytes((long) FILE_CONTENT.length);
+        var stored = userAvatarRepository.save(avatar).block();
+        assertThat(profileService.confirmAvatarUpload(userId, legacyKey, FILE_NAME, CONTENT_TYPE).block().getId())
+                .isEqualTo(stored.getId());
+        assertThat(storageClient.objectExists(legacyKey).block()).isTrue();
+        avatar.setId(null);
+        avatar.setUserId(createOtherUser());
+        StepVerifier.create(userAvatarRepository.save(avatar))
+                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+    }
+
+    private UUID createOtherUser() {
+        return userRepository.save(User.builder().login("other").email("other@example.com")
+                .displayName("Other").status(UserStatus.ACTIVE).globalRole(GlobalRole.USER).build()).block().getId();
+    }
+
     private String uploadFileToS3(byte[] content) {
-        String objectKey = UUID.randomUUID().toString();
+        String objectKey = "avatars/" + userId + "/" + UUID.randomUUID();
         putObjectDirect(objectKey, content);
         return objectKey;
     }

@@ -86,11 +86,14 @@ public class S3StorageClient implements StorageClient {
 
     @Override
     public Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes) {
+        return createPresignedUploadUrl(contentType, sizeBytes, UUID.randomUUID().toString());
+    }
+
+    @Override
+    public Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes, String objectKey) {
         validateFileParams(contentType, sizeBytes);
 
         String bucket = properties.getBucket();
-        String objectKey = UUID.randomUUID().toString();
-
         log.debug("Creating presigned upload URL for bucket={}, objectKey={}, contentType={}", bucket, objectKey, contentType);
 
         return Mono.fromCallable(() -> {

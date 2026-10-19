@@ -37,6 +37,9 @@ public interface StorageClient {
      */
     Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes);
 
+    /** Presign для ключа, сформированного доверенным бизнес-сервисом (например, с префиксом владельца). */
+    Mono<PresignedUploadResult> createPresignedUploadUrl(String contentType, long sizeBytes, String objectKey);
+
     /**
      * Генерирует presigned URL для скачивания файла фронтендом напрямую из хранилища.
      *

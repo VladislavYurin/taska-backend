@@ -94,6 +94,18 @@ class S3StorageClientTest {
     }
 
     @Test
+    void createPresignedUploadUrl_preservesOwnerScopedKey() throws Exception {
+        String key = "avatars/" + UUID.randomUUID() + "/" + UUID.randomUUID();
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/" + key));
+        when(s3Presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
+        var result = storageClient.createPresignedUploadUrl(ALLOWED_CONTENT_TYPE, 50L, key).block();
+        assertThat(result.objectKey()).isEqualTo(key);
+        org.mockito.Mockito.verify(s3Presigner).presignPutObject(org.mockito.ArgumentMatchers.argThat(
+                (PutObjectPresignRequest request) -> request.putObjectRequest().key().equals(key)));
+    }
+
+    @Test
     void createPresignedUploadUrl_generatesValidUuidKey() throws Exception {
         PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
         when(presigned.url()).thenReturn(new URL("http://rustfs:9000/test-bucket/key?sig=abc"));
