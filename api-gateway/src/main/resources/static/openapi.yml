@@ -2466,6 +2466,10 @@ paths:
   /api/v1/admin/outbox/{service}/{eventId}/retry:
     post:
       summary: Повторная обработка outbox-события (только для GLOBAL_ADMIN)
+      description: >-
+        Допускает FAILED либо PROCESSING с ненулевым processingStartedAt строго раньше текущего времени
+        минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD (по умолчанию 10 минут). NEW и PUBLISHED не допускаются.
+        retryable из сводки является снимком; состояние проверяется повторно, включая атомарный UPDATE.
       operationId: retryOutboxEvent
       tags:
         - admin
@@ -2507,7 +2511,14 @@ paths:
                 $ref: '#/components/schemas/RetryOutboxEventResponseDto'
 
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          description: >-
+            FAILED_PRECONDITION: событие не удовлетворяет правилу retry или изменилось после чтения сводки.
+            Также возвращается при невалидных параметрах запроса.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+
         '401':
           $ref: '#/components/responses/ErrorResponse'
         '403':
@@ -4285,7 +4296,15 @@ components:
 
     ProblematicOutboxEventDto:
       type: object
+      required: [retryable]
       properties:
+        retryable:
+          type: boolean
+          description: >-
+            Снимок пригодности к ручному retry: true для FAILED либо для PROCESSING с ненулевым
+            processingStartedAt строго раньше текущего времени минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD
+            (по умолчанию 10 минут). Для NEW и PUBLISHED — false. Состояние может измениться;
+            команда retry повторно проверяет правило и может отказать.
         id:
           type: string
         aggregateType:

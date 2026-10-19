@@ -110,7 +110,8 @@ public class ProblematicOutboxEventMapper {
                 .setCreatedAt(toTimestamp(dto.createdAt()))
                 .setAttempts(dto.attempts())
                 .setServiceKey(dto.serviceKey())
-                .setReason(dto.reason());
+                .setReason(dto.reason())
+                .setRetryable(dto.retryable());
 
         if (dto.publishedAt() != null) {
             builder.setPublishedAt(toTimestamp(dto.publishedAt()));

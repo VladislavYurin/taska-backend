@@ -372,6 +372,8 @@ message ProblematicOutboxEventDto {
   string service_key = 13;
   /** Человекочитаемая причина, почему событие считается проблемным. */
   string reason = 14;
+  /** Snapshot of retry eligibility; retry rechecks current state. */
+  bool retryable = 15;
 }
 
 /**

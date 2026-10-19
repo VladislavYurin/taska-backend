@@ -20,9 +20,10 @@ import java.time.Instant;
  * @param processingStartedAt момент начала текущей обработки ({@code null}, если не в PROCESSING)
  * @param requestId           идентификатор исходного запроса, породившего событие
  * @param serviceKey          ключ сервиса-источника (например, {@code "auth"}, {@code "issue"})
+ * @param retryable           снимок пригодности события к ручному retry; команда повторно проверяет состояние
  * @param reason              человекочитаемая причина, по которой событие считается проблемным
  */
-@Builder
+@Builder(toBuilder = true)
 public record ProblematicOutboxEventResponseDto(
         String id,
         String aggregateType,
@@ -37,6 +38,7 @@ public record ProblematicOutboxEventResponseDto(
         Instant processingStartedAt,
         String requestId,
         String serviceKey,
-        String reason
+        String reason,
+        boolean retryable
 ) {
 }
