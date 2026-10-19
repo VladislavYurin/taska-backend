@@ -20,7 +20,7 @@ Backend системы управления проектами и задачам
 - метрики Prometheus, дашборды Grafana и централизованные логи Loki/Promtail;
 - автоматический AI review pull request с провайдерами OpenAI Codex или DeepSeek.
 
-REST-контракт является источником истины для публичного API: [`api-gateway/src/main/resources/static/openapi.yml`](api-gateway/src/main/resources/static/openapi.yml).
+REST-контракт является источником истины для публичного API: [`api-gateway/src/main/resources/static/openapi.yml`](api-gateway/src/main/resources/static/openapi.yml). `/v3/api-docs` публикует этот же документ в JSON; интеграционный тест в CI проверяет совпадение с `/openapi.yml`. Справочная модель из аннотаций Springdoc доступна отдельно по `/v3/api-docs/generated`.
 
 ## Архитектура
 
@@ -187,6 +187,7 @@ curl http://127.0.0.1:8080/actuator/health
 |----------------------|---|
 | Swagger UI           | [http://127.0.0.1:8080/swagger-ui.html](http://127.0.0.1:8080/swagger-ui.html) |
 | OpenAPI YAML         | [http://127.0.0.1:8080/openapi.yml](http://127.0.0.1:8080/openapi.yml) |
+| OpenAPI JSON         | [http://127.0.0.1:8080/v3/api-docs](http://127.0.0.1:8080/v3/api-docs) |
 | Kafka UI             | [http://127.0.0.1:8088](http://127.0.0.1:8088) |
 | Grafana              | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
 | Prometheus           | [http://127.0.0.1:9090](http://127.0.0.1:9090) |

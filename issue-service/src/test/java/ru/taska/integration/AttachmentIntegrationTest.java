@@ -45,6 +45,9 @@ class AttachmentIntegrationTest extends AbstractIT {
     private StorageClient storageClient;
 
     @Autowired
+    private org.springframework.r2dbc.core.DatabaseClient databaseClient;
+
+    @Autowired
     private AttachmentService attachmentService;
 
     @Autowired
@@ -129,12 +132,16 @@ class AttachmentIntegrationTest extends AbstractIT {
         IssueAttachment active1 = IssueAttachment.createNewAttachment(
                 issueId, USER_ID, "key/file1.txt", "file1.txt",
                 "text/plain", 100L, "checksum-1");
-        attachmentRepository.save(active1).block();
+        UUID firstId = attachmentRepository.save(active1).block().getId();
 
         IssueAttachment active2 = IssueAttachment.createNewAttachment(
                 issueId, USER_ID, "key/file2.txt", "file2.txt",
                 "text/plain", 200L, "checksum-2");
-        attachmentRepository.save(active2).block();
+        UUID secondId = attachmentRepository.save(active2).block().getId();
+        databaseClient.sql("UPDATE taska.issue_attachments SET created_at = :time WHERE id = :id")
+                .bind("time", Instant.parse("2026-01-02T00:00:00Z")).bind("id", firstId).fetch().rowsUpdated().block();
+        databaseClient.sql("UPDATE taska.issue_attachments SET created_at = :time WHERE id = :id")
+                .bind("time", Instant.parse("2026-01-01T00:00:00Z")).bind("id", secondId).fetch().rowsUpdated().block();
 
         IssueAttachment deleted = IssueAttachment.createNewAttachment(
                 issueId, USER_ID, "key/deleted.txt", "deleted.txt",
@@ -147,6 +154,7 @@ class AttachmentIntegrationTest extends AbstractIT {
                 .collectList()
                 .block();
 
+        Assertions.assertEquals(List.of(secondId, firstId), result.stream().map(IssueAttachment::getId).toList());
         Assertions.assertEquals(2, result.size());
         Assertions.assertTrue(result.stream().allMatch(a -> a.getDeletedAt() == null));
         Assertions.assertTrue(result.stream().anyMatch(a -> a.getFileName().equals("file1.txt")));

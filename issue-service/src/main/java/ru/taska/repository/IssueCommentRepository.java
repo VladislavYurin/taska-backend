@@ -13,7 +13,7 @@ public interface IssueCommentRepository extends ReactiveCrudRepository<IssueComm
     /**
      * Находит активные комментарии по ID задачи, отсортированные по дате создания (сначала новые).
      */
-    @Query("SELECT * FROM taska.issue_comments WHERE issue_id = :issueId AND deleted_at IS NULL ORDER BY created_at DESC")
+    @Query("SELECT * FROM taska.issue_comments WHERE issue_id = :issueId AND deleted_at IS NULL ORDER BY created_at DESC, id DESC")
     Flux<IssueComment> findActiveByIssueIdOrderByCreatedAtDesc(UUID issueId);
 
     /**

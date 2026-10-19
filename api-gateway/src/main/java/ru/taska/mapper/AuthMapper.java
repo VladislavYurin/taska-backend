@@ -136,7 +136,8 @@ public class AuthMapper {
         dto.setLogin(userContext.login());
         dto.setEmail(userContext.email());
         dto.setDisplayName(userContext.displayName());
-        dto.setStatus(userContext.status() != null ? userContext.status().name() : null);
+        dto.setStatus(userContext.status() != null
+                ? ru.taska.domain.dto.UserStatusDto.fromValue(userContext.status().name()) : null);
         dto.setGlobalRole(
                 GlobalRoleTypeDto.valueOf(
                         userContext.globalRole()!=null ? userContext.globalRole().name() : GlobalRoleTypeDto.UNSPECIFIED.name()

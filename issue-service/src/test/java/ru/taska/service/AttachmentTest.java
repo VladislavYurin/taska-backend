@@ -340,7 +340,7 @@ public class AttachmentTest {
                 .thenReturn(Mono.empty());
         Mockito.when(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(ISSUE_ID))
                 .thenReturn(Flux.just(attachment1, attachment2));
-        Mockito.when(storageClient.createPresignedDownloadUrl("key-1")).thenReturn(Mono.just("https://url1"));
+        Mockito.when(storageClient.createPresignedDownloadUrl("key-1")).thenReturn(Mono.delay(java.time.Duration.ofMillis(50)).thenReturn("https://url1"));
         Mockito.when(storageClient.createPresignedDownloadUrl("key-2")).thenReturn(Mono.just("https://url2"));
 
         StepVerifier.create(attachmentService.listAttachments(REQUEST_ID, NODE_ID, ISSUE_ID, ACTOR_USER_ID).collectList())

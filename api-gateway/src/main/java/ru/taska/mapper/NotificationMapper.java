@@ -11,6 +11,7 @@ import ru.taska.api.notification.v1.NotificationKind;
 import ru.taska.api.notification.v1.NotificationResponse;
 import ru.taska.domain.dto.NotificationListResponseDto;
 import ru.taska.domain.dto.NotificationResponseDto;
+import ru.taska.domain.dto.NotificationTypeDto;
 import ru.taska.domain.dto.ReadAllNotificationsResponseDto;
 
 import java.time.Instant;
@@ -28,7 +29,6 @@ import java.util.UUID;
 @Slf4j
 public class NotificationMapper {
 
-    private static final String NOTIFICATION_KIND_PREFIX = "NOTIFICATION_KIND_";
     private static final String UNKNOWN_NOTIFICATION_TYPE = "UNKNOWN";
 
     /**
@@ -59,7 +59,7 @@ public class NotificationMapper {
         NotificationResponseDto dto = new NotificationResponseDto();
 
         dto.setId(parseUuid(source.getId(), "id"));
-        dto.setNotificationType(toRestNotificationType(source.getNotificationType()));
+        dto.setNotificationType(NotificationTypeDto.fromValue(toRestNotificationType(source.getNotificationType())));
         dto.setTitle(source.getTitle());
         dto.setBody(source.getBody());
         dto.setIssueId(parseNullableUuid(source.getIssueId(), "issueId"));
@@ -117,19 +117,21 @@ public class NotificationMapper {
             case NOTIFICATION_KIND_MEMBER_ADDED -> "MEMBER_ADDED";
             case NOTIFICATION_KIND_MEMBER_UPDATED -> "MEMBER_UPDATED";
             case NOTIFICATION_KIND_MEMBER_REMOVED -> "MEMBER_REMOVED";
+            case NOTIFICATION_KIND_ISSUE_LINK_CREATED -> "ISSUE_LINK_CREATED";
+            case NOTIFICATION_KIND_ISSUE_LINK_DELETED -> "ISSUE_LINK_DELETED";
             case NOTIFICATION_KIND_LABEL_ADDED -> "LABEL_ADDED";
             case NOTIFICATION_KIND_LABEL_REMOVED -> "LABEL_REMOVED";
+            case NOTIFICATION_KIND_USER_BLOCKED -> "USER_BLOCKED";
+            case NOTIFICATION_KIND_USER_UNBLOCKED -> "USER_UNBLOCKED";
+            case NOTIFICATION_KIND_ISSUE_COMMENT_CREATED -> "ISSUE_COMMENT_CREATED";
+            case NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED -> "ISSUE_COMMENT_UPDATED";
+            case NOTIFICATION_KIND_ISSUE_COMMENT_DELETED -> "ISSUE_COMMENT_DELETED";
+            case NOTIFICATION_KIND_ISSUE_ATTACHMENT_ADDED -> "ISSUE_ATTACHMENT_ADDED";
+            case NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED -> "ISSUE_ATTACHMENT_DELETED";
+            case NOTIFICATION_KIND_UNSPECIFIED -> UNKNOWN_NOTIFICATION_TYPE;
             case UNRECOGNIZED -> {
-                log.warn("Received UNRECOGNIZED NotificationKind from notification-service, " +
-                        "gateway proto is likely outdated");
+                log.warn("Received UNRECOGNIZED NotificationKind from notification-service");
                 yield UNKNOWN_NOTIFICATION_TYPE;
-            }
-            default -> {
-                String name = source.name();
-                log.warn("Received unmapped NotificationKind={} from notification-service", name);
-                yield name.startsWith(NOTIFICATION_KIND_PREFIX)
-                        ? name.substring(NOTIFICATION_KIND_PREFIX.length())
-                        : name;
             }
         };
     }

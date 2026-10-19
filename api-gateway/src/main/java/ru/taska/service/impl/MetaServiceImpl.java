@@ -81,11 +81,24 @@ public class MetaServiceImpl implements MetaService {
             case MEMBER_ADDED -> "Добавлен участник";
             case MEMBER_UPDATED -> "Изменена роль участника";
             case MEMBER_REMOVED -> "Удалён участник";
+            case ISSUE_LINK_CREATED -> "Создана связь задач";
+            case ISSUE_LINK_DELETED -> "Удалена связь задач";
+            case LABEL_ADDED -> "Добавлена метка";
+            case LABEL_REMOVED -> "Удалена метка";
+            case USER_BLOCKED -> "Заблокирован пользователь";
+            case USER_UNBLOCKED -> "Разблокирован пользователь";
+            case ISSUE_COMMENT_CREATED -> "Добавлен комментарий";
+            case ISSUE_COMMENT_UPDATED -> "Изменён комментарий";
+            case ISSUE_COMMENT_DELETED -> "Удалён комментарий";
+            case ISSUE_ATTACHMENT_ADDED -> "Добавлено вложение";
+            case ISSUE_ATTACHMENT_DELETED -> "Удалено вложение";
+            case UNKNOWN -> "Неизвестный тип";
         };
     }
 
     private static String userStatusName(UserStatusDto code) {
         return switch (code) {
+            case UNSPECIFIED -> "Не указан";
             case INVITED -> "Приглашён";
             case ACTIVE -> "Активен";
             case BLOCKED -> "Заблокирован";

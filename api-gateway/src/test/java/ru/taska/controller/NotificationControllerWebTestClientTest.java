@@ -405,7 +405,7 @@ class NotificationControllerWebTestClientTest {
         NotificationResponseDto dto = new NotificationResponseDto();
 
         dto.setId(UUID.fromString("906b9963-9511-4508-b546-d398f62f5765"));
-        dto.setNotificationType("ISSUE_ASSIGNED");
+        dto.setNotificationType(ru.taska.domain.dto.NotificationTypeDto.ISSUE_ASSIGNED);
         dto.setTitle("Вас назначили исполнителем");
         dto.setBody("Вы назначены исполнителем задачи TASKA-12");
         dto.setIssueId(UUID.fromString(ISSUE_ID));
