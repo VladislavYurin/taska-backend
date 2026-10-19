@@ -82,19 +82,19 @@ public class ProjectMemberValidatorImpl implements ProjectMemberValidator {
                 }))
                 .collectMap(ProjectMemberDto::userId, ProjectMemberDto::role)
                 .flatMap(members -> {
-                    //Существует ли изменяемый в проекте?
-                    if (!members.containsKey(changedMemberId)) {
-                        log.info("[{}][{}] Project member with id {} was not found in project with id {}",
-                                requestId, nodeId, changedMemberId, projectId);
-                        return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
-                                "Project member with id " + changedMemberId + " was not found in project with id " + projectId));
-                    }
                     //Является ли актор админом?
                     if (members.get(actorUserId) != ProjectRole.ADMIN) {
                         log.info("[{}][{}] Actor {} is not an admin or doesn't exist in project {}",
                                 requestId, nodeId, actorUserId, projectId);
                         return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
                                 "User with id: " + actorUserId + " is not an admin of project: " + projectId));
+                    }
+                    //Существует ли изменяемый в проекте?
+                    if (!members.containsKey(changedMemberId)) {
+                        log.info("[{}][{}] Project member with id {} was not found in project with id {}",
+                                requestId, nodeId, changedMemberId, projectId);
+                        return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                                "Project member with id " + changedMemberId + " was not found in project with id " + projectId));
                     }
                     //Не является ли изменяемый последним админом?
                     if (members.get(changedMemberId) == ProjectRole.ADMIN) {
