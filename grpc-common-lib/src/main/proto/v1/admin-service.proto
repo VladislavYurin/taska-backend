@@ -33,6 +33,12 @@ service AdminService {
   rpc GetTableRowById(GetTableRowByIdRequest) returns (GetTableRowByIdResponse);
 
   /**
+  * Возвращает список аудитных записей.
+  */
+  rpc ListAuditEntries(ListAuditEntriesRequest) returns (ListAuditEntriesResponse);
+
+
+  /**
    * Возвращает сводку по проблемным outbox-событиям: список событий и счётчики по сервисам.
    */
   rpc GetProblematicOutboxEventsSummary(GetProblematicOutboxEventsSummaryRequest) returns (GetProblematicOutboxEventsSummaryResponse);
@@ -304,6 +310,49 @@ message GetTableRowByIdRequestBody {
 message GetTableRowByIdResponse {
   /** Найденная строка. */
   Row row = 1;
+}
+
+message ListAuditEntriesResponse {
+  repeated ListAuditEntry entries = 1;
+  int32 current_page = 2;
+  int32 page_size = 3;
+  int64 total_rows = 4;
+  int32 total_pages = 5;
+  bool has_next = 6;
+  bool has_prev = 7;
+}
+
+
+message ListAuditEntry {
+  optional string actor_user_id = 1;
+  optional string actor_login = 2;
+  optional string action = 3;
+  optional string target_service = 4;
+  optional string target_table = 5;
+  optional string target_id = 6;
+  optional string old_value = 7;
+  optional string new_value = 8;
+  optional string reason = 9;
+  optional string request_id = 10;
+  optional google.protobuf.Timestamp created_at = 11;
+}
+
+message ListAuditEntriesRequest{
+  ru.taska.common.v1.Header header = 1;
+  ListAuditEntriesRequestBody body = 2;
+}
+
+message ListAuditEntriesRequestBody{
+  optional string actor_user_id = 1;
+  optional string action = 2;
+  optional string target_service = 3;
+  optional string target_table = 4;
+  optional string target_id = 5;
+  optional string request_id = 6;
+  optional string created_at_from = 7;
+  optional string created_at_to = 8;
+  optional int32 page_size = 9;
+  optional int32 page = 10;
 }
 
 message GetProblematicOutboxEventsSummaryRequest {

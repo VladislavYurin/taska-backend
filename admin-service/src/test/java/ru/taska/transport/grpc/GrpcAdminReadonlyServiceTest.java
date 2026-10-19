@@ -1,6 +1,9 @@
 package ru.taska.transport.grpc;
 
+
+import com.google.protobuf.Timestamp;
 import io.grpc.StatusRuntimeException;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -9,24 +12,19 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.admin.v1.GetCatalogRequest;
-import ru.taska.api.admin.v1.GetCatalogResponse;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequestBody;
-import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
-import ru.taska.api.admin.v1.GetTableRowByIdRequest;
-import ru.taska.api.admin.v1.GetTableRowByIdRequestBody;
-import ru.taska.api.admin.v1.GetTableRowByIdResponse;
-import ru.taska.api.admin.v1.ListTableRowsRequest;
-import ru.taska.api.admin.v1.ListTableRowsRequestBody;
-import ru.taska.api.admin.v1.ListTableRowsResponse;
+import ru.taska.api.admin.v1.*;
 import ru.taska.api.common.v1.Header;
+import ru.taska.domain.PageResult;
+
+import ru.taska.dto.AuditEntriesResponseDto;
 import ru.taska.dto.CatalogDto;
+import ru.taska.dto.FilterAuditDTO;
 import ru.taska.dto.GetProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.ListTableRowsResponseDto;
+import ru.taska.mapper.AuditLogMapper;
 import ru.taska.mapper.ListTableRowsMapper;
 import ru.taska.mapper.MetadataCatalogMapper;
 import ru.taska.mapper.ProblematicOutboxEventMapper;
@@ -34,14 +32,19 @@ import ru.taska.service.AdminReadonlyService;
 import ru.taska.service.MetadataService;
 import ru.taska.service.ProblematicOutboxEventService;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 class GrpcAdminReadonlyServiceTest {
 
     private static final String REQUEST_ID = "req-1";
     private static final String NODE_ID = "node-1";
+    private static final UUID ACTOR_USER_ID = UUID.randomUUID();
 
     @Mock
     private MetadataService metadataService;
@@ -54,6 +57,9 @@ class GrpcAdminReadonlyServiceTest {
 
     @Mock
     private ListTableRowsMapper listTableRowsMapper;
+
+    @Mock
+    private AuditLogMapper auditLogMapper;
 
     @Mock
     private ProblematicOutboxEventService problematicOutboxEventService;
@@ -289,5 +295,186 @@ class GrpcAdminReadonlyServiceTest {
                 .setRequestId(REQUEST_ID)
                 .setNodeId(NODE_ID)
                 .build();
+    }
+
+    @Test
+    void listAuditEntries_Success() {
+        ListAuditEntriesRequest request = getListAuditEntriesRequest();
+
+        FilterAuditDTO filterDTO = new FilterAuditDTO(
+                ACTOR_USER_ID,
+                "action",
+                "targetService",
+                "targetTable",
+                "targetId",
+                "requestId",
+                Instant.parse("2024-01-01T00:00:00Z"),
+                Instant.parse("2024-01-31T23:59:59.999999999Z")
+        );
+
+        List<AuditEntriesResponseDto> expectedEntries = List.of(
+                new AuditEntriesResponseDto(
+                        ACTOR_USER_ID,
+                        "actorLogin",
+                        "action",
+                        "targetService",
+                        "targetTable",
+                        "targetId",
+                        null,
+                        null,
+                        "reason",
+                        "requestId",
+                        Instant.parse("2024-01-01T00:00:00Z")
+                )
+        );
+
+        PageResult<AuditEntriesResponseDto> expectedPageResult =
+                new PageResult<>(expectedEntries, 1L, 1, 10);
+
+        ListAuditEntriesResponse expectedResponse = ListAuditEntriesResponse.newBuilder()
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setActorLogin("actorLogin")
+                        .setAction("action")
+                        .setTargetService("targetService")
+                        .setTargetTable("targetTable")
+                        .setTargetId("targetId")
+                        .setReason("reason")
+                        .setRequestId("requestId")
+                        .setCreatedAt(Timestamp.newBuilder()
+                                .setSeconds(Instant.parse("2024-01-01T00:00:00Z").getEpochSecond())
+                                .setNanos(Instant.parse("2024-01-01T00:00:00Z").getNano())
+                                .build())
+                        .build())
+                .setCurrentPage(1)
+                .setPageSize(10)
+                .setTotalRows(1)
+                .setTotalPages(1)
+                .setHasNext(false)
+                .setHasPrev(false)
+                .build();
+
+        Mockito.when(auditLogMapper.toFilterDTO(
+                eq(ACTOR_USER_ID), eq("action"), eq("targetService"),
+                eq("targetTable"), eq("targetId"), eq("requestId"),
+                eq(Instant.parse("2024-01-01T00:00:00Z")),
+                eq(Instant.parse("2024-01-31T23:59:59.999999999Z"))
+        )).thenReturn(filterDTO);
+
+        Mockito.when(adminReadonlyService.listAuditEntries(
+                eq(filterDTO), eq(1), eq(10)
+        )).thenReturn(Mono.just(expectedPageResult));
+
+        Mockito.when(auditLogMapper.toAuditProto(any(PageResult.class)))
+                .thenReturn(expectedResponse);
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectNext(expectedResponse)
+                .verifyComplete();
+    }
+
+    @Test
+    void listAuditEntries_OnlyDateRange() {
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(ListAuditEntriesRequestBody.newBuilder()
+                        .setCreatedAtFrom("2024-01-01")
+                        .setCreatedAtTo("2024-01-31")
+                        .build())
+                .build();
+
+        PageResult<AuditEntriesResponseDto> pageResult = new PageResult<>(
+                List.of(), 0L, 0, 10
+        );
+
+        Mockito.when(auditLogMapper.toFilterDTO(
+                        any(), any(), any(), any(), any(), anyString(), any(), any()))
+                .thenReturn(FilterAuditDTO.builder().build());
+
+        Mockito.when(adminReadonlyService.listAuditEntries(
+                        any(FilterAuditDTO.class),
+                        nullable(Integer.class),
+                        nullable(Integer.class)))
+                .thenReturn(Mono.just(pageResult));
+
+        Mockito.when(auditLogMapper.toAuditProto(any()))
+                .thenReturn(ListAuditEntriesResponse.newBuilder().build());
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    void listAuditEntries_success_delegatesToAdminService() {
+        ListAuditEntriesRequest request = getListAuditEntriesRequest();
+
+        FilterAuditDTO filterDTO = new FilterAuditDTO(ACTOR_USER_ID, "action", "targetService", "targetTable", "00000000-0000-0000-0000-000000000001", "requestId", Instant.parse("2024-01-01T00:00:00Z"), Instant.parse("2024-01-31T23:59:59.999999999Z")
+        );
+
+        List<AuditEntriesResponseDto> auditLogs = List.of(
+                AuditEntriesResponseDto.builder()
+                        .actorUserId(ACTOR_USER_ID)
+                        .action("action")
+                        .build()
+        );
+
+        PageResult<AuditEntriesResponseDto> responseDto = new PageResult<>
+                (auditLogs, 1, 10, 1);
+
+        ListAuditEntriesResponse grpcResponse = ListAuditEntriesResponse.newBuilder()
+                .addEntries(ListAuditEntry.newBuilder()
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setAction("action")
+                        .build())
+                .setCurrentPage(1)
+                .setPageSize(10)
+                .setTotalRows(1)
+                .setTotalPages(1)
+                .setHasNext(false)
+                .setHasPrev(false)
+                .build();
+
+        Mockito.when(auditLogMapper.toFilterDTO(
+                        Mockito.eq(ACTOR_USER_ID),
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.any(Instant.class),
+                        Mockito.any(Instant.class)))
+                .thenReturn(filterDTO);
+
+        Mockito.when(adminReadonlyService.listAuditEntries(filterDTO, 1, 10))
+                .thenReturn(Mono.just(responseDto));
+
+        Mockito.when(auditLogMapper.toAuditProto(responseDto))
+                .thenReturn(grpcResponse);
+
+        StepVerifier.create(grpcAdminReadonlyService.listAuditEntries(Mono.just(request)))
+                .expectNext(grpcResponse)
+                .verifyComplete();
+
+        Mockito.verify(adminReadonlyService).listAuditEntries(filterDTO, 1, 10);
+    }
+
+    private static @NonNull ListAuditEntriesRequest getListAuditEntriesRequest() {
+        ListAuditEntriesRequest request = ListAuditEntriesRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(ListAuditEntriesRequestBody.newBuilder()
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setAction("action")
+                        .setTargetService("targetService")
+                        .setTargetTable("targetTable")
+                        .setTargetId("targetId")
+                        .setRequestId("requestId")
+                        .setCreatedAtFrom("2024-01-01")
+                        .setCreatedAtTo("2024-01-31")
+                        .setPageSize(10)
+                        .setPage(1)
+                        .build())
+                .build();
+        return request;
     }
 }
