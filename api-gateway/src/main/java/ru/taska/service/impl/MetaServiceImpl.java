@@ -38,71 +38,89 @@ public class MetaServiceImpl implements MetaService {
                 toPairList(IssueTypeDto.values(), code -> new IssueTypeMetaPairDto(code, issueTypeName(code))),
                 toPairList(IssuePriorityDto.values(), code -> new IssuePriorityMetaPairDto(code, priorityName(code))),
                 toPairList(IssueLinkTypeDto.values(), code -> new IssueLinkTypeMetaPairDto(code, linkTypeName(code))),
-                toPairList(NotificationTypeDto.values(), code -> new NotificationTypeMetaPairDto(code, notificationTypeName(code))),
-                toPairList(UserStatusDto.values(), code -> new UserStatusMetaPairDto(code, userStatusName(code)))
+                toPairList(NotificationTypeDto.values(), code -> new NotificationTypeMetaPairDto(code, notificationTypeName(code))
+                        .selectable(code != NotificationTypeDto.UNKNOWN)),
+                toPairList(UserStatusDto.values(), code -> new UserStatusMetaPairDto(code, userStatusName(code))
+                        .selectable(code != UserStatusDto.UNSPECIFIED))
         );
+        this.meta.setLinkViewTypes(toPairList(IssueLinkViewTypeDto.values(),
+                code -> new IssueLinkViewTypeMetaPairDto(code, linkViewTypeName(code))
+                        .selectable(code != IssueLinkViewTypeDto.ISSUE_LINK_VIEW_TYPE_UNSPECIFIED
+                                && code != IssueLinkViewTypeDto.UNRECOGNIZED)));
         this.etag = computeEtag(meta);
     }
 
     private static String issueTypeName(IssueTypeDto code) {
         return switch (code) {
-            case TASK -> "Задача";
-            case BUG -> "Ошибка";
-            case STORY -> "История";
+            case TASK -> "Task";
+            case BUG -> "Bug";
+            case STORY -> "Story";
         };
     }
 
     private static String priorityName(IssuePriorityDto code) {
         return switch (code) {
-            case LOW -> "Низкий";
-            case MEDIUM -> "Средний";
-            case HIGH -> "Высокий";
+            case LOW -> "Low";
+            case MEDIUM -> "Medium";
+            case HIGH -> "High";
         };
     }
 
     private static String linkTypeName(IssueLinkTypeDto code) {
         return switch (code) {
-            case BLOCKS -> "Блокирует";
-            case RELATES_TO -> "Связана с";
-            case DUPLICATES -> "Дублирует";
+            case BLOCKS -> "Blocks";
+            case RELATES_TO -> "Relates to";
+            case DUPLICATES -> "Duplicates";
+        };
+    }
+
+    private static String linkViewTypeName(IssueLinkViewTypeDto code) {
+        return switch (code) {
+            case ISSUE_LINK_VIEW_TYPE_BLOCKS -> "Blocks";
+            case ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY -> "Is blocked by";
+            case ISSUE_LINK_VIEW_TYPE_RELATES_TO -> "Relates to";
+            case ISSUE_LINK_VIEW_TYPE_DUPLICATES -> "Duplicates";
+            case ISSUE_LINK_VIEW_TYPE_IS_DUPLICATED_BY -> "Is duplicated by";
+            case ISSUE_LINK_VIEW_TYPE_UNSPECIFIED -> "Unspecified";
+            case UNRECOGNIZED -> "Unrecognized";
         };
     }
 
     private static String notificationTypeName(NotificationTypeDto code) {
         return switch (code) {
-            case ISSUE_ASSIGNED -> "Назначена задача";
-            case ISSUE_TRANSITIONED -> "Сменился статус";
-            case ISSUE_CREATED -> "Создана задача";
-            case ISSUE_UPDATED -> "Изменена задача";
-            case ISSUE_DELETED -> "Удалена задача";
-            case USER_INVITED -> "Приглашён пользователь";
-            case USER_ACTIVATED -> "Активирован пользователь";
-            case PROJECT_CREATED -> "Создан проект";
-            case MEMBER_ADDED -> "Добавлен участник";
-            case MEMBER_UPDATED -> "Изменена роль участника";
-            case MEMBER_REMOVED -> "Удалён участник";
-            case ISSUE_LINK_CREATED -> "Создана связь задач";
-            case ISSUE_LINK_DELETED -> "Удалена связь задач";
-            case LABEL_ADDED -> "Добавлена метка";
-            case LABEL_REMOVED -> "Удалена метка";
-            case USER_BLOCKED -> "Заблокирован пользователь";
-            case USER_UNBLOCKED -> "Разблокирован пользователь";
-            case ISSUE_COMMENT_CREATED -> "Добавлен комментарий";
-            case ISSUE_COMMENT_UPDATED -> "Изменён комментарий";
-            case ISSUE_COMMENT_DELETED -> "Удалён комментарий";
-            case ISSUE_ATTACHMENT_ADDED -> "Добавлено вложение";
-            case ISSUE_ATTACHMENT_DELETED -> "Удалено вложение";
-            case UNKNOWN -> "Неизвестный тип";
+            case ISSUE_ASSIGNED -> "Issue assigned";
+            case ISSUE_TRANSITIONED -> "Issue status changed";
+            case ISSUE_CREATED -> "Issue created";
+            case ISSUE_UPDATED -> "Issue updated";
+            case ISSUE_DELETED -> "Issue deleted";
+            case USER_INVITED -> "User invited";
+            case USER_ACTIVATED -> "User activated";
+            case PROJECT_CREATED -> "Project created";
+            case MEMBER_ADDED -> "Member added";
+            case MEMBER_UPDATED -> "Member role changed";
+            case MEMBER_REMOVED -> "Member removed";
+            case ISSUE_LINK_CREATED -> "Issue link created";
+            case ISSUE_LINK_DELETED -> "Issue link deleted";
+            case LABEL_ADDED -> "Label added";
+            case LABEL_REMOVED -> "Label removed";
+            case USER_BLOCKED -> "User blocked";
+            case USER_UNBLOCKED -> "User unblocked";
+            case ISSUE_COMMENT_CREATED -> "Issue comment created";
+            case ISSUE_COMMENT_UPDATED -> "Issue comment updated";
+            case ISSUE_COMMENT_DELETED -> "Issue comment deleted";
+            case ISSUE_ATTACHMENT_ADDED -> "Issue attachment added";
+            case ISSUE_ATTACHMENT_DELETED -> "Issue attachment deleted";
+            case UNKNOWN -> "Unknown";
         };
     }
 
     private static String userStatusName(UserStatusDto code) {
         return switch (code) {
-            case UNSPECIFIED -> "Не указан";
-            case INVITED -> "Приглашён";
-            case ACTIVE -> "Активен";
-            case BLOCKED -> "Заблокирован";
-            case LOCKED -> "Залочен";
+            case UNSPECIFIED -> "Unspecified";
+            case INVITED -> "Invited";
+            case ACTIVE -> "Active";
+            case BLOCKED -> "Blocked";
+            case LOCKED -> "Locked";
         };
     }
 

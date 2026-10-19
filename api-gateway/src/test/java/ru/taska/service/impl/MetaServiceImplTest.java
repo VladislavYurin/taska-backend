@@ -6,6 +6,8 @@ import org.springframework.format.support.DefaultFormattingConversionService;
 import ru.taska.config.WebConfig;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssueLinkViewTypeDto;
+import ru.taska.domain.dto.IssueLinkViewTypeMetaPairDto;
 import ru.taska.domain.dto.IssueLinkTypeMetaPairDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssuePriorityMetaPairDto;
@@ -36,6 +38,8 @@ class MetaServiceImplTest {
                 .containsExactly(IssuePriorityDto.values());
         assertThat(meta.getLinkTypes()).extracting(IssueLinkTypeMetaPairDto::getCode)
                 .containsExactly(IssueLinkTypeDto.values());
+        assertThat(meta.getLinkViewTypes()).extracting(IssueLinkViewTypeMetaPairDto::getCode)
+                .containsExactly(IssueLinkViewTypeDto.values());
         assertThat(meta.getNotificationTypes()).extracting(NotificationTypeMetaPairDto::getCode)
                 .containsExactly(NotificationTypeDto.values());
         assertThat(meta.getUserStatuses()).extracting(UserStatusMetaPairDto::getCode)
@@ -50,6 +54,7 @@ class MetaServiceImplTest {
         assertThat(meta.getIssueTypes()).extracting(IssueTypeMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getPriorities()).extracting(IssuePriorityMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getLinkTypes()).extracting(IssueLinkTypeMetaPairDto::getName).allMatch(this::isFilled);
+        assertThat(meta.getLinkViewTypes()).extracting(IssueLinkViewTypeMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getNotificationTypes()).extracting(NotificationTypeMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getUserStatuses()).extracting(UserStatusMetaPairDto::getName).allMatch(this::isFilled);
     }
@@ -94,7 +99,23 @@ class MetaServiceImplTest {
         assertThat(new MetaServiceImpl().getEtag()).isEqualTo(service.getEtag());
     }
 
+    @Test
+    void placeholdersAreDisplayOnlyAndNormalValuesRemainSelectable() {
+        var meta = service.getMeta();
+        assertThat(meta.getNotificationTypes()).allSatisfy(item ->
+                assertThat(item.getSelectable()).isEqualTo(item.getCode() != NotificationTypeDto.UNKNOWN));
+        assertThat(meta.getUserStatuses()).allSatisfy(item ->
+                assertThat(item.getSelectable()).isEqualTo(item.getCode() != UserStatusDto.UNSPECIFIED));
+        assertThat(meta.getLinkViewTypes()).allSatisfy(item -> assertThat(item.getSelectable()).isEqualTo(
+                item.getCode() != IssueLinkViewTypeDto.ISSUE_LINK_VIEW_TYPE_UNSPECIFIED
+                        && item.getCode() != IssueLinkViewTypeDto.UNRECOGNIZED));
+        assertThat(meta.getIssueTypes()).allSatisfy(item -> assertThat(item.getSelectable()).isTrue());
+        assertThat(meta.getPriorities()).allSatisfy(item -> assertThat(item.getSelectable()).isTrue());
+        assertThat(meta.getLinkTypes()).allSatisfy(item -> assertThat(item.getSelectable()).isTrue());
+    }
+
     private boolean isFilled(String name) {
-        return name != null && !name.isBlank();
+        return name != null && !name.isBlank() && name.codePoints().noneMatch(
+                c -> Character.UnicodeScript.of(c) == Character.UnicodeScript.CYRILLIC);
     }
 }
