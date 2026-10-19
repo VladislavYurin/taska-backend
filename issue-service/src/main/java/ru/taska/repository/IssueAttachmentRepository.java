@@ -10,6 +10,8 @@ import java.util.UUID;
 
 public interface IssueAttachmentRepository extends ReactiveCrudRepository<IssueAttachment, UUID> {
 
+    @Query("SELECT * FROM taska.issue_attachments WHERE issue_id = :issueId AND deleted_at IS NULL "
+            + "ORDER BY created_at ASC, id ASC")
     Flux<IssueAttachment> findAllByIssueIdAndDeletedAtIsNull(UUID issueId);
 
     Mono<IssueAttachment> findByIdAndDeletedAtIsNull(UUID id);

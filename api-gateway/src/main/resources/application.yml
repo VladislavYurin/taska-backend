@@ -12,6 +12,8 @@ springdoc:
     disable-swagger-default-url: true
   api-docs:
     enabled: true
+    # Diagnostics only; /v3/api-docs serves the authoritative static contract.
+    path: /v3/api-docs/generated
 
 management:
   endpoints:

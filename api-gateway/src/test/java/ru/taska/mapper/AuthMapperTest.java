@@ -149,7 +149,7 @@ class AuthMapperTest {
             assertThat(dto.getLogin()).isEqualTo("john.doe");
             assertThat(dto.getEmail()).isEqualTo("john.doe@example.com");
             assertThat(dto.getDisplayName()).isEqualTo("John Doe");
-            assertThat(dto.getStatus()).isEqualTo("LOCKED");
+            assertThat(dto.getStatus().getValue()).isEqualTo("LOCKED");
             assertThat(dto.getGlobalRole()).isEqualTo(GlobalRoleTypeDto.USER);
         }
 
@@ -167,7 +167,7 @@ class AuthMapperTest {
             ValidateAccessTokenResponseDto dto =
                     authMapper.toValidateAccessTokenRestResponse(context);
 
-            assertThat(dto.getStatus()).isEqualTo("ACTIVE");
+            assertThat(dto.getStatus().getValue()).isEqualTo("ACTIVE");
             assertThat(dto.getGlobalRole()).isEqualTo(GlobalRoleTypeDto.GLOBAL_ADMIN);
         }
 

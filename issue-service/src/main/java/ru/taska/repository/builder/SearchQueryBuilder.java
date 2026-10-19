@@ -12,7 +12,7 @@ public class SearchQueryBuilder {
     private static final String SELECT = "SELECT * FROM taska.issues WHERE 1=1";
     private static final String COUNT = "SELECT COUNT(*) as count FROM taska.issues WHERE 1=1";
     private static final String DELETED_CONDITION = " AND deleted_at IS NULL";
-    private static final String ORDER_BY = " ORDER BY created_at DESC";
+    private static final String ORDER_BY = " ORDER BY created_at DESC, id DESC";
 
     public SearchQuery build(SearchCriteria criteria) {
         SearchQuery query = new SearchQuery();

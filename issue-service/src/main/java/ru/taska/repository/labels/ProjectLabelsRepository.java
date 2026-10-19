@@ -19,6 +19,8 @@ public interface ProjectLabelsRepository extends R2dbcRepository<ProjectLabels, 
      * @param projectId идентификатор проекта
      * @return Flux<{@link ProjectLabels}> поток активных меток проекта
      */
+    @Query("SELECT * FROM taska.project_labels WHERE project_id = :projectId AND deleted_at IS NULL "
+            + "ORDER BY name ASC, id ASC")
     Flux<ProjectLabels> findByProjectIdAndDeletedAtIsNull(UUID projectId);
 
     /**

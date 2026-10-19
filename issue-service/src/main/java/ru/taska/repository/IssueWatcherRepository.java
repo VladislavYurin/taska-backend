@@ -18,7 +18,7 @@ public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatc
     @Query("""
             SELECT * FROM taska.issue_watchers
             WHERE issue_id = :issueId
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             LIMIT :limit OFFSET :offset
             """)
     Flux<IssueWatcher> findByIssueId(UUID issueId, int limit, long offset);
@@ -29,7 +29,7 @@ public interface IssueWatcherRepository extends ReactiveCrudRepository<IssueWatc
     @Query("""
             SELECT * FROM taska.issue_watchers
             WHERE issue_id = :issueId
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             """)
     Flux<IssueWatcher> findByIssueId(UUID issueId);
 

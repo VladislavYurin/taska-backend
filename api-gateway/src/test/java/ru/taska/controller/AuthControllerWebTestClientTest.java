@@ -292,7 +292,7 @@ class AuthControllerWebTestClientTest {
         restResponseDto.setLogin("anna");
         restResponseDto.setEmail("anna@example.com");
         restResponseDto.setDisplayName("Anna Ivanova");
-        restResponseDto.setStatus("ACTIVE");
+        restResponseDto.setStatus(ru.taska.domain.dto.UserStatusDto.ACTIVE);
         restResponseDto.setGlobalRole(GlobalRoleTypeDto.USER);
 
         Mockito.when(grpcAuthServiceClient.validateAccessToken(ArgumentMatchers.eq(

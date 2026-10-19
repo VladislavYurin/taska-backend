@@ -29,6 +29,19 @@ class NotificationMapperTest {
     private final NotificationMapper mapper = new NotificationMapper();
 
     @Test
+    void everyKnownNotificationKindHasAnExplicitRestValue() {
+        var known = java.util.Arrays.stream(NotificationKind.values())
+                .filter(kind -> kind != NotificationKind.UNRECOGNIZED
+                        && kind != NotificationKind.NOTIFICATION_KIND_UNSPECIFIED).toList();
+        assertThat(known).hasSize(22);
+        for (var kind : known) {
+            String expected = kind.name().substring("NOTIFICATION_KIND_".length());
+            assertThat(mapper.toRestNotificationType(kind)).isEqualTo(expected);
+            assertThat(ru.taska.domain.dto.NotificationTypeDto.fromValue(expected).getValue()).isEqualTo(expected);
+        }
+    }
+
+    @Test
     @DisplayName("Должен корректно маппить уведомление с readAt в REST DTO")
     void toNotificationResponseDto_notificationWithReadAt_mapsAllFields() {
         UUID notificationId = UUID.randomUUID();
@@ -50,7 +63,7 @@ class NotificationMapperTest {
         NotificationResponseDto result = mapper.toNotificationResponseDto(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
-        assertThat(result.getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
+        assertThat(result.getNotificationType().getValue()).isEqualTo("ISSUE_ASSIGNED");
         assertThat(result.getTitle()).isEqualTo("Вас назначили исполнителем");
         assertThat(result.getBody()).isEqualTo("Вы назначены исполнителем задачи TASKA-12");
         assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
@@ -79,7 +92,7 @@ class NotificationMapperTest {
         NotificationResponseDto result = mapper.toNotificationResponseDto(source);
 
         assertThat(result.getId()).isEqualTo(notificationId);
-        assertThat(result.getNotificationType()).isEqualTo("ISSUE_CREATED");
+        assertThat(result.getNotificationType().getValue()).isEqualTo("ISSUE_CREATED");
         assertThat(result.getReadAt()).isNull();
         assertThat(result.getSourceEventId()).isEqualTo(sourceEventId);
     }
@@ -99,8 +112,8 @@ class NotificationMapperTest {
         NotificationListResponseDto result = mapper.toNotificationListResponseDto(source);
 
         assertThat(result.getItems()).hasSize(2);
-        assertThat(result.getItems().get(0).getNotificationType()).isEqualTo("ISSUE_ASSIGNED");
-        assertThat(result.getItems().get(1).getNotificationType()).isEqualTo("PROJECT_CREATED");
+        assertThat(result.getItems().get(0).getNotificationType().getValue()).isEqualTo("ISSUE_ASSIGNED");
+        assertThat(result.getItems().get(1).getNotificationType().getValue()).isEqualTo("PROJECT_CREATED");
         assertThat(result.getUnreadCount()).isEqualTo(2);
     }
 
@@ -147,10 +160,10 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть имя без префикса для известного, но не замапленного явно notificationType")
-    void toRestNotificationType_unknownNamedType_returnsNameWithoutPrefix() {
+    @DisplayName("Должен вернуть UNKNOWN для отсутствующего типа notificationType")
+    void toRestNotificationType_unspecified_returnsUnknown() {
         assertThat(mapper.toRestNotificationType(NotificationKind.NOTIFICATION_KIND_UNSPECIFIED))
-                .isEqualTo("UNSPECIFIED");
+                .isEqualTo("UNKNOWN");
     }
 
     @Test
@@ -174,7 +187,7 @@ class NotificationMapperTest {
 
         NotificationResponseDto result = mapper.toNotificationResponseDto(source);
 
-        assertThat(result.getNotificationType()).isEqualTo("UNKNOWN");
+        assertThat(result.getNotificationType().getValue()).isEqualTo("UNKNOWN");
     }
 
     @Test

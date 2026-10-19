@@ -92,11 +92,11 @@ public class IssueMapper {
         restDto.setProjectId(protoDto.getProjectId());
         restDto.setIssueNumber(protoDto.getIssueNumber());
         restDto.setIssueKey(protoDto.getIssueKey());
-        restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
+        restDto.setIssueType(toIssueTypeDto(protoDto.getIssueType()));
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
         restDto.setStatus(protoDto.getStatusKey());
-        restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+        restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
         restDto.setAssigneeId(protoDto.getAssigneeId());
         restDto.setReporterId(protoDto.getReporterId());
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
@@ -155,8 +155,8 @@ public class IssueMapper {
         restDto.setId(protoDto.getId());
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setSummary(protoDto.getSummary());
-        restDto.setIssueType(this.toRestIssueType(protoDto.getIssueType()));
-        restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+        restDto.setIssueType(toIssueTypeDto(protoDto.getIssueType()));
+        restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
         restDto.setAssigneeId(protoDto.getAssigneeId());
         MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
 
@@ -184,7 +184,7 @@ public class IssueMapper {
         restDto.setId(protoDto.getUpdatedIssueId());
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
-        restDto.setPriority(this.toRestIssuePriority(protoDto.getPriority()));
+        restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
 
         // Optional поля:
         MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
@@ -216,7 +216,7 @@ public class IssueMapper {
             restDto.setAssignee(userDto);
         }
 
-        restDto.setLabels(new ArrayList<>(protoDto.getLabelIdsList()));
+        restDto.setLabels(protoDto.getLabelIdsList().stream().sorted().toList());
 
         return restDto;
     }
@@ -242,7 +242,7 @@ public class IssueMapper {
         restDto.setProjectId(protoDto.getProjectId());
         restDto.setSourceIssueId(protoDto.getSourceIssueId());
         restDto.setTargetIssueId(protoDto.getTargetIssueId());
-        restDto.setViewLinkType(protoDto.getViewLinkType().name());
+        restDto.setViewLinkType(ru.taska.domain.dto.IssueLinkViewTypeDto.fromValue(protoDto.getViewLinkType().name()));
         restDto.setCreatedBy(protoDto.getCreatedBy());
         restDto.setCreatedAt(this.toOffsetDateTime(protoDto.getCreatedAt()));
 

@@ -36,6 +36,7 @@ public interface IssueLinkRepository extends ReactiveCrudRepository<IssueLink, U
             SELECT * FROM taska.issue_links
             WHERE (source_issue_id = :issueId OR target_issue_id = :issueId)
                 AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
             """)
     Flux<IssueLink> findAllByIssueId(UUID issueId);
 
@@ -73,6 +74,7 @@ public interface IssueLinkRepository extends ReactiveCrudRepository<IssueLink, U
     WHERE (il.source_issue_id = :issueId OR il.target_issue_id = :issueId)
       AND il.deleted_at IS NULL
       AND other.deleted_at IS NULL
+    ORDER BY il.created_at ASC, il.id ASC
     """)
     Flux<IssueLinkDetails> findIssueLinksWithOtherIssues(UUID issueId);
 }

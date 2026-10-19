@@ -78,7 +78,7 @@ public class AttachmentServiceImpl implements AttachmentService {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().viewAttachmentRoles())
                 .thenMany(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
-                        .flatMap(attachment ->
+                        .flatMapSequential(attachment ->
                                 storageClient.createPresignedDownloadUrl(attachment.getObjectKey())
                                         .map(url -> new AttachmentDto(attachment, url)))
                         );
