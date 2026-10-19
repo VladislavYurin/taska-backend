@@ -164,9 +164,9 @@ public class AuthServiceImpl implements AuthService {
 
         log.debug("setPasswordByToken: processing token hash: {}", DataMaskingHelper.maskJwt(tokenHash));
 
-        if (token.length() > 256 || newPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+        if (token.length() > 256) {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,
-                    "Invite token is too long or password exceeds the BCrypt limit of 72 UTF-8 bytes"));
+                    "Invite token is too long"));
         }
         // Lock the account before its tokens: same order as resend, preventing activation/resend races.
         return inviteTokenRepository.findByTokenHash(tokenHash)

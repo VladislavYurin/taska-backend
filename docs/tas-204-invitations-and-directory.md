@@ -47,6 +47,8 @@ Configure `NOTIFICATION_INVITATION_ACCEPT_URL` to the real frontend invitation f
 
 `deliveryQueued=true` means durable acceptance, not successful SMTP delivery. Monitor `invitation_email_deliveries.status`, attempts and next_attempt_at, and alert on RETRY/FAILED. Logs record event ids and failure classes without bodies or tokens. There is no invitation cancellation API or active-account password reset in this change; existing administrative blocking can stop an unactivated account from being used.
 
+Invalid delivery credentials (including malformed timestamps, missing email and non-string tokens) are permanent event errors: preserve the generic inbox entry and deduplication, skip SMTP, and increment `taska.invitation.delivery.rejected` with bounded `reason=invalid_payload` or `missing_credentials`. Alert on this counter and use the logged event id to investigate; the token/body is never logged. Database failures still propagate and roll back the entire event transaction for retry.
+
 ## Rollout
 
 1. Reconcile any accounts with email addresses equal after trim/case folding before applying the unique email index; the migration deliberately fails rather than merging identities or deleting accounts. PostgreSQL migration privileges must allow `pg_trgm`.

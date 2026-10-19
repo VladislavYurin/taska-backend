@@ -28,6 +28,8 @@ import static org.mockito.Mockito.*;
 @org.springframework.test.context.TestPropertySource(properties = "management.health.mail.enabled=false")
 class InvitationEmailQueueIntegrationTest extends AbstractIT {
     @Autowired
+    private io.micrometer.core.instrument.MeterRegistry metrics;
+    @Autowired
     private InvitationEmailQueue queue;
     @Autowired
     private DatabaseClient database;
@@ -43,6 +45,42 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
     @BeforeEach
     void clearQueue() {
         database.sql("DELETE FROM taska.invitation_email_deliveries").fetch().rowsUpdated().block(TIMEOUT);
+    }
+
+    @Test
+    void malformedDeliveryPayloadIsObservableAndDoesNotPoisonInboxOrReplay() {
+        double before = metrics.counter("taska.invitation.delivery.rejected", "reason", "invalid_payload").count();
+        var mapper = JsonMapper.builder().build();
+        var variants = java.util.List.of(
+                mapper.createObjectNode().put("email", "invitee@example.test").put("rawInviteToken", TOKEN).put("expiresAt", "not-a-date"),
+                mapper.createObjectNode().put("email", "invitee@example.test").put("rawInviteToken", 123).put("expiresAt", Instant.now().toString()),
+                mapper.createObjectNode().put("rawInviteToken", TOKEN).put("expiresAt", Instant.now().toString()),
+                mapper.createObjectNode().put("email", "bad\r\nrecipient@example.test").put("rawInviteToken", TOKEN).put("expiresAt", Instant.now().toString()));
+        for (var payload : variants) {
+            UUID user = UUID.randomUUID();
+            var event = TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                    .eventType("UserInvited").occurredAt(Instant.now()).payload(payload).build();
+            handler.handle(event).block(TIMEOUT);
+            handler.handle(event).block(TIMEOUT);
+            assertThat(status(user)).isNull();
+            assertThat(notifications.findAll().filter(n -> event.id().equals(n.getSourceEventId())).count().block(TIMEOUT)).isEqualTo(1);
+        }
+        assertThat(metrics.counter("taska.invitation.delivery.rejected", "reason", "invalid_payload").count()).isEqualTo(before + variants.size());
+        queue.dispatchBatch().block(TIMEOUT);
+        verifyNoInteractions(mail);
+    }
+
+    @Test
+    void legacyDeliveryWithoutCredentialsIsCountedAndKeepsGenericInbox() {
+        double before = metrics.counter("taska.invitation.delivery.rejected", "reason", "missing_credentials").count();
+        UUID user = UUID.randomUUID();
+        var event = TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType("UserInvited").occurredAt(Instant.now())
+                .payload(JsonMapper.builder().build().createObjectNode().put("userId", user.toString())).build();
+        handler.handle(event).block(TIMEOUT);
+        assertThat(status(user)).isNull();
+        assertThat(notifications.findAll().filter(n -> event.id().equals(n.getSourceEventId())).count().block(TIMEOUT)).isEqualTo(1);
+        assertThat(metrics.counter("taska.invitation.delivery.rejected", "reason", "missing_credentials").count()).isEqualTo(before + 1);
     }
 
     @Test

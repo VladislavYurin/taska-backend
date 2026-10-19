@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -14,7 +15,7 @@ import static org.mockito.Mockito.mock;
 class InvitationEmailQueueTest {
     @Test
     void activationUrlRequiresTrustedHttpsExceptForLocalDevelopment() {
-        var queue = new InvitationEmailQueue(mock(DatabaseClient.class), mock(JavaMailSender.class));
+        var queue = new InvitationEmailQueue(mock(DatabaseClient.class), mock(JavaMailSender.class), new SimpleMeterRegistry());
         for (String valid : List.of("https://taska.example.test/login", "http://localhost:3001/login", "http://127.0.0.1/login?mode=invite")) {
             ReflectionTestUtils.setField(queue, "acceptUrl", valid);
             assertThatCode(queue::validateAcceptUrl).doesNotThrowAnyException();

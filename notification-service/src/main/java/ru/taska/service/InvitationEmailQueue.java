@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import jakarta.annotation.PostConstruct;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import ru.taska.event.TaskaEvent;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
 
 /** Durable, private invitation-email outbox. SMTP is at-least-once; activation remains one-time. */
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class InvitationEmailQueue {
     private final DatabaseClient database;
     private final JavaMailSender mail;
+    private final MeterRegistry metrics;
     @Value("${notification.invitation.accept-url:http://localhost:3001/login}")
     private String acceptUrl;
 
@@ -44,14 +47,24 @@ public class InvitationEmailQueue {
         var payload = event.payload();
         if (payload == null || payload.get("rawInviteToken") == null || payload.get("expiresAt") == null) {
             // Old events had no token on the wire. They remain valid inbox events but cannot be delivered as invitations.
-            log.warn("Invitation event has no delivery credentials: eventId={}", event.id());
-            return Mono.empty();
+            return reject(event, "missing_credentials");
         }
-        String token = payload.get("rawInviteToken").asString();
-        String email = payload.get("email").asString();
-        Instant expiresAt = Instant.parse(payload.get("expiresAt").asString());
-        if (token == null || !token.matches("[A-Za-z0-9_-]{43}") || email == null || email.contains("\r") || email.contains("\n")) {
-            return Mono.error(new IllegalArgumentException("Invalid invitation delivery payload"));
+        if (event.id() == null || event.aggregateId() == null || event.occurredAt() == null
+                || !payload.path("rawInviteToken").isString() || !payload.path("email").isString()
+                || !payload.path("expiresAt").isString()) {
+            return reject(event, "invalid_payload");
+        }
+        String token = payload.get("rawInviteToken").stringValue();
+        String email = payload.get("email").stringValue();
+        Instant expiresAt;
+        try {
+            expiresAt = Instant.parse(payload.get("expiresAt").stringValue());
+        } catch (DateTimeParseException error) {
+            return reject(event, "invalid_payload");
+        }
+        if (!token.matches("[A-Za-z0-9_-]{43}") || email.isBlank() || email.length() > 320
+                || email.codePoints().anyMatch(Character::isISOControl)) {
+            return reject(event, "invalid_payload");
         }
         return database.sql("""
                 INSERT INTO taska.invitation_email_deliveries AS current
@@ -65,6 +78,14 @@ public class InvitationEmailQueue {
                 """).bind("user", event.aggregateId()).bind("event", event.id()).bind("email", email)
                 .bind("token", token).bind("issued", event.occurredAt()).bind("expires", expiresAt)
                 .fetch().rowsUpdated().then();
+    }
+
+    private Mono<Void> reject(TaskaEvent event, String reason) {
+        // Permanent data errors must not poison Kafka retries; database errors below still propagate.
+        return Mono.fromRunnable(() -> {
+            metrics.counter("taska.invitation.delivery.rejected", "reason", reason).increment();
+            log.warn("Invitation delivery event rejected: eventId={}, reason={}", event.id(), reason);
+        });
     }
 
     public Mono<Void> dispatchBatch() {
