@@ -114,9 +114,22 @@ class PasswordValidatorTest {
         @Test
         @DisplayName("Should accept password with exact max length")
         void shouldAcceptPasswordWithExactMaxLength() {
-            String password = "a".repeat(128);
+            Mockito.when(props.max()).thenReturn(64);
+            String password = "a".repeat(64);
 
             Assertions.assertDoesNotThrow(() -> validator.validate(password));
+        }
+
+        @Test
+        void bcryptLimitCountsUtf8BytesAndAcceptsExactly72() {
+            Assertions.assertDoesNotThrow(() -> validator.validate("a".repeat(72)));
+            Assertions.assertDoesNotThrow(() -> validator.validate("я".repeat(36)));
+            Assertions.assertDoesNotThrow(() -> validator.validate("😊".repeat(18)));
+            for (String password : java.util.List.of("a".repeat(73), "я".repeat(37), "😊".repeat(19))) {
+                DomainException error = Assertions.assertThrows(DomainException.class, () -> validator.validate(password));
+                Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, error.getStatus());
+                Assertions.assertTrue(error.getMessage().contains("72 UTF-8 bytes"));
+            }
         }
 
         @Test

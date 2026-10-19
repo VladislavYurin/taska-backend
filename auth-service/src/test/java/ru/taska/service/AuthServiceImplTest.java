@@ -752,7 +752,7 @@ class AuthServiceImplTest {
 
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(validInviteToken));
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.just(invitedUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.empty());
@@ -776,7 +776,7 @@ class AuthServiceImplTest {
 
             Mockito.verify(passwordValidator).validate(newPassword);
             Mockito.verify(inviteTokenRepository).findByTokenHash(ArgumentMatchers.anyString());
-            Mockito.verify(userRepository).findById(testUserId);
+            Mockito.verify(userRepository).findByIdForUpdate(testUserId);
             Mockito.verify(credentialRepository).findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD);
             Mockito.verify(passwordHashService).encode(newPassword, HashingAlgorithm.BCRYPT);
             Mockito.verify(credentialRepository).save(ArgumentMatchers.any(Credential.class));
@@ -802,7 +802,7 @@ class AuthServiceImplTest {
                     .thenReturn(Mono.just(1));
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(validInviteToken));
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.just(invitedUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.just(testCredential));
@@ -838,6 +838,10 @@ class AuthServiceImplTest {
             Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
                             .thenReturn(Mono.just(0));
 
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));
+            Mockito.when(userRepository.findByIdForUpdate(testUserId)).thenReturn(Mono.just(invitedUser));
+
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
@@ -847,7 +851,6 @@ class AuthServiceImplTest {
                     )
                     .verify();
 
-            Mockito.verify(userRepository, Mockito.never()).findById(ArgumentMatchers.any(UUID.class));
             Mockito.verify(credentialRepository, Mockito.never()).save(ArgumentMatchers.any());
         }
 
@@ -859,6 +862,10 @@ class AuthServiceImplTest {
             Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(0));
 
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.just(validInviteToken));
+            Mockito.when(userRepository.findByIdForUpdate(testUserId)).thenReturn(Mono.just(invitedUser));
+
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, testRawToken, newPassword))
                     .expectErrorMatches(error ->
@@ -868,11 +875,6 @@ class AuthServiceImplTest {
                     )
                     .verify();
 
-            // Проверяем, что findByTokenHash НЕ вызывался
-            Mockito.verify(inviteTokenRepository, Mockito.never())
-                    .findByTokenHash(ArgumentMatchers.anyString());
-            Mockito.verify(userRepository, Mockito.never())
-                    .findById(ArgumentMatchers.any(UUID.class));
             Mockito.verify(credentialRepository, Mockito.never())
                     .save(ArgumentMatchers.any(Credential.class));
         }
@@ -888,11 +890,9 @@ class AuthServiceImplTest {
                     .status(UserStatus.ACTIVE)  // ACTIVE, не INVITED
                     .build();
 
-            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
-                    .thenReturn(Mono.just(1));
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(validInviteToken));  // Используем validInviteToken
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.just(activeUser));       // Используем activeUser
 
             // When & Then
@@ -914,11 +914,9 @@ class AuthServiceImplTest {
             // Given
             testUser.setStatus(UserStatus.BLOCKED);
 
-            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
-                    .thenReturn(Mono.just(1));
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(testInviteToken));
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.just(testUser));
 
             // When & Then
@@ -939,8 +937,8 @@ class AuthServiceImplTest {
             // Given
             String nonExistentToken = "non-existent-token";
             // markTokenAsUsedIfValid возвращает 0 (токен не найден)
-            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
-                    .thenReturn(Mono.just(0));
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.empty());
 
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, nonExistentToken, newPassword))
@@ -951,19 +949,17 @@ class AuthServiceImplTest {
                     )
                     .verify();
 
-            Mockito.verify(userRepository, Mockito.never()).findById(ArgumentMatchers.any(UUID.class));
+            Mockito.verify(userRepository, Mockito.never()).findByIdForUpdate(ArgumentMatchers.any(UUID.class));
         }
 
         @Test
         @DisplayName("Should fail when user not found")
         void shouldFailWhenUserNotFound() {
             // Given
-            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
-                    .thenReturn(Mono.just(1));
             // Используем validInviteToken, который связан с invitedUser
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(validInviteToken));  // Изменено на validInviteToken
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.empty());
 
             // When & Then
@@ -1018,7 +1014,7 @@ class AuthServiceImplTest {
 
             Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
                     .thenReturn(Mono.just(validInviteToken));
-            Mockito.when(userRepository.findById(testUserId))
+            Mockito.when(userRepository.findByIdForUpdate(testUserId))
                     .thenReturn(Mono.just(invitedUser));
             Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD))
                     .thenReturn(Mono.empty());
@@ -1049,8 +1045,8 @@ class AuthServiceImplTest {
             String differentToken = "different-token";
 
             // markTokenAsUsedIfValid возвращает 0 (токен не найден или уже использован)
-            Mockito.when(inviteTokenRepository.markTokenAsUsedIfValid(ArgumentMatchers.anyString()))
-                    .thenReturn(Mono.just(0));
+            Mockito.when(inviteTokenRepository.findByTokenHash(ArgumentMatchers.anyString()))
+                    .thenReturn(Mono.empty());
 
             // When & Then
             StepVerifier.create(authServiceImpl.setPasswordByToken(REQUEST_ID, differentToken, newPassword))
@@ -1061,11 +1057,8 @@ class AuthServiceImplTest {
                     )
                     .verify();
 
-            // Проверяем, что findByTokenHash НЕ вызывался (так как mark вернул 0)
-            Mockito.verify(inviteTokenRepository, Mockito.never())
-                    .findByTokenHash(ArgumentMatchers.anyString());
             Mockito.verify(userRepository, Mockito.never())
-                    .findById(ArgumentMatchers.any(UUID.class));
+                    .findByIdForUpdate(ArgumentMatchers.any(UUID.class));
         }
     }
 

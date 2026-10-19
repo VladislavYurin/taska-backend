@@ -7,6 +7,8 @@ import ru.taska.config.props.PasswordPolicyProperties;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * Валидация паролей на пустоту, длину и надежность
  * <p>Работает с codePoints для обеспечиния безопасности non-latin паролей.
@@ -31,6 +33,9 @@ public class PasswordValidator {
 
         checkBlank(password);
         checkLength(password);
+        if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Password exceeds the BCrypt limit of 72 UTF-8 bytes");
+        }
         checkStrength(password);
     }
 

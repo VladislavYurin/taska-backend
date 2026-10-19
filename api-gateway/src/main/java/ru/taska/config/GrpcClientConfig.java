@@ -125,4 +125,14 @@ public class GrpcClientConfig {
     public ReactorProfileServiceGrpc.ReactorProfileServiceStub profileServiceStub() {
         return ReactorProfileServiceGrpc.newReactorStub(authManagedChannel());
     }
+    @Bean
+    public ru.taska.api.directory.v1.ReactorUserDirectoryServiceGrpc.ReactorUserDirectoryServiceStub userDirectoryStub() {
+        return ru.taska.api.directory.v1.ReactorUserDirectoryServiceGrpc.newReactorStub(authManagedChannel());
+    }
+
+    @Bean
+    public ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc.ReactorAdminInviteUserServiceStub inviteUserStub() {
+        return ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc.newReactorStub(authManagedChannel());
+    }
+
 }

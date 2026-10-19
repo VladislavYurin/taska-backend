@@ -22,6 +22,8 @@ Backend системы управления проектами и задачам
 
 REST-контракт является источником истины для публичного API: [`api-gateway/src/main/resources/static/openapi.yml`](api-gateway/src/main/resources/static/openapi.yml). `/v3/api-docs` публикует этот же документ в JSON; интеграционный тест в CI проверяет совпадение с `/openapi.yml`. Справочная модель из аннотаций Springdoc доступна отдельно по `/v3/api-docs/generated`.
 
+Приглашения и каталог пользователей: [правила, пограничные случаи и выкатка TAS-204](docs/tas-204-invitations-and-directory.md).
+
 ## Архитектура
 
 ```mermaid

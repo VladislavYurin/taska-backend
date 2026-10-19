@@ -66,6 +66,7 @@ class NotificationEventHandlerTest {
     @Mock private ProcessedEventRepository processedEventRepository;
     @Mock private NotificationFactory notificationFactory;
     @Mock private EmailSenderService emailSenderService;
+    @Mock private InvitationEmailQueue invitationEmailQueue;
     @Mock private TransactionalOperator transactionalOperator;
 
     @InjectMocks

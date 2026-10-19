@@ -65,6 +65,11 @@ public class GatewayErrorHandler {
         response.setStatusCode(httpStatus);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
         response.getHeaders().set(REQUEST_ID, requestId);
+        String retryAfter = details.get("retryAfterSeconds");
+        if (httpStatus == HttpStatus.TOO_MANY_REQUESTS && retryAfter != null
+                && retryAfter.matches("[1-9][0-9]{0,5}")) {
+            response.getHeaders().set(org.springframework.http.HttpHeaders.RETRY_AFTER, retryAfter);
+        }
 
         try {
             byte[] body = objectMapper.writeValueAsBytes(errorResponse);

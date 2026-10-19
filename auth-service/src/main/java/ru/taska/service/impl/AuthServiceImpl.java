@@ -164,35 +164,37 @@ public class AuthServiceImpl implements AuthService {
 
         log.debug("setPasswordByToken: processing token hash: {}", DataMaskingHelper.maskJwt(tokenHash));
 
-        return inviteTokenRepository.markTokenAsUsedIfValid(tokenHash)
-                .flatMap(updatedRows -> {
-                    if (updatedRows == 0) {
-                        log.debug("setPasswordByToken failed: invalid or expired token, hash: {}", DataMaskingHelper.maskJwt(tokenHash));
-                        return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"));
-                    }
-                    return inviteTokenRepository.findByTokenHash(tokenHash)
-                            .flatMap(inviteToken -> userRepository.findById(inviteToken.getUserId())
-                                    .filter(user -> user.getStatus() == UserStatus.INVITED)
-                                    .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")))
-                                    .flatMap(user -> credentialRepository
-                                            .findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
-                                            .defaultIfEmpty(createEmptyCredential(user.getId()))
-                                            .flatMap(credential -> {
-                                                credential.setSecretHash(passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT));
-                                                return credentialRepository.save(credential);
-                                            })
-                                            .then(Mono.defer(() -> {
-                                                user.setStatus(UserStatus.ACTIVE);
-                                                log.info("User id={} activated successfully via invite token", user.getId());
-                                                return userRepository.save(user)
-                                                        .then(Mono.fromCallable(() -> userMapper.buildUserActivatedOutboxEvent(user, requestId)))
-                                                        .flatMap(outboxEventRepository::save);
-                                            }))
-                                    ));
-
-
-                })
+        if (token.length() > 256) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,
+                    "Invite token is too long"));
+        }
+        // Lock the account before its tokens: same order as resend, preventing activation/resend races.
+        return inviteTokenRepository.findByTokenHash(tokenHash)
+                .flatMap(tokenEntity -> userRepository.findByIdForUpdate(tokenEntity.getUserId()))
+                .filter(user -> user.getStatus() == UserStatus.INVITED)
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")))
+                .flatMap(user -> inviteTokenRepository.markTokenAsUsedIfValid(tokenHash)
+                        .flatMap(updated -> updated == 1 ? activateInvitedUser(user, newPassword, requestId)
+                                : Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"))))
                 .then();
+    }
+
+    private Mono<Void> activateInvitedUser(User user, String newPassword, String requestId) {
+        return credentialRepository.findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
+                .defaultIfEmpty(createEmptyCredential(user.getId()))
+                .flatMap(credential -> Mono.fromCallable(() -> passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT))
+                        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                        .flatMap(hash -> {
+                            credential.setSecretHash(hash);
+                            credential.setAlgo(HashingAlgorithm.BCRYPT);
+                            return credentialRepository.save(credential);
+                        }))
+                .then(Mono.defer(() -> {
+                    user.setStatus(UserStatus.ACTIVE);
+                    return userRepository.save(user)
+                            .then(Mono.fromCallable(() -> userMapper.buildUserActivatedOutboxEvent(user, requestId)))
+                            .flatMap(outboxEventRepository::save);
+                })).then();
     }
 
     /**
