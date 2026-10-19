@@ -2689,6 +2689,50 @@ paths:
 
   ########################## Окончание API userProfile ########################
 
+  /api/v1/meta:
+    get:
+      summary: Словари допустимых значений перечислений
+      description: |
+        Пять словарей (issueTypes, priorities, linkTypes, notificationTypes, userStatuses), каждый — список пар code/name. 
+        Коды совпадают с тем, что принимают и возвращают другие эндпоинты.
+        Ответ содержит ETag, это хеш текущего состояния словарей.
+        Повторный запрос должен содержать предыдущее значение ETag в заголовке If-None-Match.
+        Если If-None-Match равен текущему хэшу значит словари не изменились, ручка возвращает 304 без тела.
+        Если If-None-Match пустой или не равен текущему хэшу возвращается 200 со словарями в теле.
+      operationId: getMeta
+      tags:
+        - meta
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: ETag из предыдущего ответа этого маршрута
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Словари перечислений
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponseDto'
+        '304':
+          description: Словари не изменились
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2701,6 +2745,10 @@ components:
       schema:
         type: string
       description: Возвращаемый клиенту сквозной ID запроса
+    ETag-Header:
+      schema:
+        type: string
+      description: Версия содержимого ответа для условного запроса через If-None-Match
 
   responses:
     ErrorResponse:
@@ -4486,6 +4534,87 @@ components:
         - ACTIVE
         - BLOCKED
         - LOCKED
+
+    MetaResponseDto:
+      type: object
+      description: Словари допустимых значений перечислений, принимаемых и возвращаемых API
+      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
+      properties:
+        issueTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueTypeMetaPairDto'
+        priorities:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuePriorityMetaPairDto'
+        linkTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLinkTypeMetaPairDto'
+        notificationTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypeMetaPairDto'
+        userStatuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserStatusMetaPairDto'
+
+    IssueTypeMetaPairDto:
+      type: object
+      description: Тип задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    IssuePriorityMetaPairDto:
+      type: object
+      description: Приоритет задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    IssueLinkTypeMetaPairDto:
+      type: object
+      description: Тип связи между задачами
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueLinkTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    NotificationTypeMetaPairDto:
+      type: object
+      description: Тип уведомления
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/NotificationTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
+
+    UserStatusMetaPairDto:
+      type: object
+      description: Статус пользователя
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/UserStatusDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения
 
     BoardResponseDto:
       type: object
