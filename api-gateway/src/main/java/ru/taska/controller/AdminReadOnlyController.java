@@ -7,7 +7,6 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
-
 import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
@@ -20,6 +19,7 @@ import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
 
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -145,30 +145,37 @@ public class AdminReadOnlyController implements AdminApi {
         );
     }
 
+    /**
+     * GET /api/v1/readonly/audit-entries
+     * Возвращает страницу журнала аудита с фильтрами (только GLOBAL_ADMIN).
+     * <p>
+     * {@code actorUserId} и даты валидируются на уровне OpenAPI (uuid / yyyy-MM-dd) и уходят
+     * в admin-service строками в ISO-формате.
+     */
     @Override
     public Mono<ResponseEntity<ListAuditEntriesResponseDto>> listAuditEntries(
             Integer page,
             Integer pageSize,
-            String actorUserId,
+            UUID actorUserId,
             String action,
             String targetService,
             String targetTable,
             String targetId,
             String requestId,
-            String createdAtFrom,
-            String createdAtTo,
+            LocalDate createdAtFrom,
+            LocalDate createdAtTo,
             ServerWebExchange exchange) {
 
         return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
-                adminServiceClient.listAuditEntity(
-                        actorUserId,
+                adminServiceClient.listAuditEntries(
+                        actorUserId != null ? actorUserId.toString() : null,
                         action,
                         targetService,
                         targetTable,
                         targetId,
                         requestId,
-                        createdAtFrom,
-                        createdAtTo,
+                        createdAtFrom != null ? createdAtFrom.toString() : null,
+                        createdAtTo != null ? createdAtTo.toString() : null,
                         page,
                         pageSize,
                         context

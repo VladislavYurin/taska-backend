@@ -24,6 +24,16 @@ public abstract class AbstractIT {
     public static final String FIXTURE_USER_ID = "11111111-1111-1111-1111-111111111111";
     public static final String FIXTURE_USER_LOGIN = "alice";
     public static final String FIXTURE_USER_EMAIL = "alice@example.com";
+    public static final String AUDIT_TABLE = "admin_audit_log";
+
+    /**
+     * Вторая запись аудита: другой actor и action, target_service с суффиксом "-service"
+     * (как пишут операции над пользователями), в old/new есть sensitive-колонка email.
+     */
+    public static final String SECOND_AUDIT_ACTOR_ID = "22222222-2222-2222-2222-222222222222";
+    public static final String SECOND_AUDIT_ACTOR_LOGIN = "bob";
+    public static final String SECOND_AUDIT_ACTION = "second-action";
+    public static final String SECOND_AUDIT_TARGET_SERVICE = FIXTURE_SERVICE + "-service";
 
     /**
      * Singleton container: started once for the JVM, not stopped between test classes.
@@ -114,7 +124,7 @@ public abstract class AbstractIT {
             ));
 
             statement.execute("""
-                CREATE TABLE IF NOT EXISTS %s.admin_audit_log (
+                CREATE TABLE IF NOT EXISTS %s.%s (
                     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                     request_id text NULL,
                     actor_user_id uuid NOT NULL,
@@ -129,11 +139,11 @@ public abstract class AbstractIT {
                     reason text NOT NULL,
                     created_at timestamptz NOT NULL DEFAULT now()
                 )
-                """.formatted(FIXTURE_SCHEMA));
+                """.formatted(FIXTURE_SCHEMA, AUDIT_TABLE));
 
-            statement.execute("DELETE FROM " + FIXTURE_SCHEMA + ".admin_audit_log");
+            statement.execute("DELETE FROM " + FIXTURE_SCHEMA + "." + AUDIT_TABLE);
             statement.execute("""
-                INSERT INTO %s.admin_audit_log (
+                INSERT INTO %s.%s (
                     id, request_id, actor_user_id, actor_login, actor_roles, action,
                     target_service, target_table, target_id, old_value, new_value,
                     reason, created_at
@@ -151,12 +161,32 @@ public abstract class AbstractIT {
                     '{"name":"new-name"}'::jsonb,
                     'test-reason',
                     '2024-01-15T12:00:00Z'
+                ), (
+                    '44444444-4444-4444-4444-444444444444',
+                    'requestId-2',
+                    '%s',
+                    '%s',
+                    '["ADMIN"]'::jsonb,
+                    '%s',
+                    '%s',
+                    '%s',
+                    '00000000-0000-0000-0000-000000000002',
+                    '{"login":"bob","email":"bob@example.com"}'::jsonb,
+                    '{"login":"bob","email":"bob.new@example.com"}'::jsonb,
+                    'second-reason',
+                    '2024-02-01T09:30:00Z'
                 )
                 """.formatted(
                     FIXTURE_SCHEMA,
+                    AUDIT_TABLE,
                     FIXTURE_USER_ID,
                     FIXTURE_USER_LOGIN,
                     FIXTURE_SERVICE,
+                    FIXTURE_TABLE,
+                    SECOND_AUDIT_ACTOR_ID,
+                    SECOND_AUDIT_ACTOR_LOGIN,
+                    SECOND_AUDIT_ACTION,
+                    SECOND_AUDIT_TARGET_SERVICE,
                     FIXTURE_TABLE
             ));
         }

@@ -661,4 +661,84 @@ class SensitiveDataMaskServiceTest {
                 .isInstanceOf(DomainException.class)
                 .hasMessageContaining("Cannot mask JSON fields");
     }
+
+    // ==================== maskSensitiveDataForAudit (TAS-160) ====================
+
+    @Test
+    void auditMask_appliesColumnRulesWhenTargetServiceIsCatalogKey() {
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of(
+                TEST_TABLE + ".email", "MASK_FULL",
+                TEST_TABLE + ".secret", "HIDE"
+        ));
+        Map<String, Object> value = Map.of("id", "123", "email", "test@example.com", "secret", "s3cr3t");
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, TEST_SERVICE, TEST_TABLE, "req", "audit-log-read");
+
+        Assertions.assertThat(masked)
+                .containsEntry("id", "123")
+                .containsEntry("email", "***")
+                .doesNotContainKey("secret");
+    }
+
+    @Test
+    void auditMask_resolvesTargetServiceWithServiceSuffixToCatalogKey() {
+        Mockito.when(properties.services()).thenReturn(Map.of("auth", serviceProps));
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of("users.email", "MASK_PARTIAL"));
+        Map<String, Object> value = Map.of("status", "BLOCKED", "email", "test@example.com");
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, "auth-service", "users", "req", "audit-log-read");
+
+        Assertions.assertThat(masked)
+                .containsEntry("status", "BLOCKED")
+                .containsEntry("email", "t**************m");
+    }
+
+    @Test
+    void auditMask_resolvesTargetServiceByAlias() {
+        Mockito.when(properties.services()).thenReturn(Map.of("auth-db", serviceProps));
+        Mockito.when(serviceProps.alias()).thenReturn("auth");
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of("users.email", "MASK_FULL"));
+        Map<String, Object> value = Map.of("email", "test@example.com");
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, "auth", "users", "req", "audit-log-read");
+
+        Assertions.assertThat(masked).containsEntry("email", "***");
+    }
+
+    @Test
+    void auditMask_unknownService_masksEveryValueInsteadOfFailing() {
+        Map<String, Object> value = new HashMap<>();
+        value.put("status", "BLOCKED");
+        value.put("email", "test@example.com");
+        value.put("note", null);
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, "unknown-service", "users", "req", "audit-log-read");
+
+        Assertions.assertThat(masked)
+                .containsOnlyKeys("status", "email", "note")
+                .containsEntry("status", "***")
+                .containsEntry("email", "***")
+                .containsEntry("note", "***");
+    }
+
+    @Test
+    void auditMask_returnsSameMapWhenTableHasNoSensitiveRules() {
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of("other_table.email", "MASK_FULL"));
+        Map<String, Object> value = Map.of("id", "123", "email", "test@example.com");
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, TEST_SERVICE, TEST_TABLE, "req", "audit-log-read");
+
+        Assertions.assertThat(masked).isSameAs(value);
+    }
+
+    @Test
+    void auditMask_returnsNullForNullValue() {
+        Assertions.assertThat(maskService.maskSensitiveDataForAudit(
+                null, TEST_SERVICE, TEST_TABLE, "req", "audit-log-read")).isNull();
+    }
 }

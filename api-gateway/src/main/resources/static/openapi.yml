@@ -2056,7 +2056,11 @@ paths:
 
   /api/v1/readonly/audit-entries:
     get:
-      summary: Получение списка аудит-записей (только для GLOBAL_ADMIN)
+      summary: Получение списка записей журнала аудита (только для GLOBAL_ADMIN)
+      description: >-
+        Постраничное чтение admin_audit_log с фильтрами. Записи отсортированы по createdAt по убыванию.
+        Sensitive-значения в oldValue/newValue замаскированы по тем же правилам, что и read-only API таблиц.
+        Журнал read-only: записи нельзя изменить или удалить через API.
       operationId: listAuditEntries
       tags:
         - admin
@@ -2084,16 +2088,17 @@ paths:
             default: 20
         - name: actorUserId
           in: query
-          description: Фильтр по ID актора
+          description: Фильтр по ID пользователя, выполнившего операцию (UUID)
           required: false
           schema:
             type: string
+            format: uuid
         - name: action
           in: query
           required: false
           schema:
             type: string
-          description: Фильтр по типу операции
+          description: Фильтр по типу операции (например, USER_BLOCKED, RETRY_OUTBOX_EVENT)
         - name: targetService
           in: query
           required: false
@@ -2117,19 +2122,23 @@ paths:
           required: false
           schema:
             type: string
-          description: Фильтр по ID запроса
+          description: Фильтр по requestId исходной операции — находит все записи одного запроса
         - name: createdAtFrom
           in: query
           required: false
           schema:
             type: string
-          description: Фильтр по началу периода
+            format: date
+            example: "2026-10-01"
+          description: Начало периода (дата в формате yyyy-MM-dd, UTC, включительно — с начала дня)
         - name: createdAtTo
           in: query
           required: false
           schema:
             type: string
-          description: Фильтр по концу периода
+            format: date
+            example: "2026-10-31"
+          description: Конец периода (дата в формате yyyy-MM-dd, UTC, включительно — до конца дня). Не может быть раньше createdAtFrom
       responses:
         '200':
           description: Данные успешно получены
@@ -2150,7 +2159,6 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
-
 
   /api/v1/readonly/{service}/{table}/{id}:
     get:
@@ -3197,11 +3205,11 @@ components:
         targetId:
           type: string
         oldValue:
-          type: string  # changed from object to string
-          description: JSON string representation of old value
+          type: string
+          description: Состояние объекта до операции — JSON-строка с замаскированными sensitive-значениями
         newValue:
-          type: string  # changed from object to string
-          description: JSON string representation of new value
+          type: string
+          description: Состояние объекта после операции — JSON-строка с замаскированными sensitive-значениями
         reason:
           type: string
         requestId:

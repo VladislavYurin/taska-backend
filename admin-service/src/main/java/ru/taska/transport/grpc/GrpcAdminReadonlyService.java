@@ -331,8 +331,15 @@ public class GrpcAdminReadonlyService {
                         }));
     }
 
-    @TrackMetrics(counter = "admin_service_list_audit_entries_grpc_counter",
-            timer = "admin_service_list_audit_entries_grpc_timer")
+    /**
+     * Обрабатывает gRPC-запрос на чтение журнала аудита (TAS-160).
+     * <p>
+     * Даты фильтра принимаются в формате {@code yyyy-MM-dd} и трактуются как UTC-сутки включительно:
+     * {@code createdAtFrom} — начало дня, {@code createdAtTo} — конец дня.
+     * Невалидный {@code actorUserId} или диапазон дат → {@code INVALID_ARGUMENT}.
+     */
+    @TrackMetrics(counter = "admin-service_list-audit-entries_grpc_counter",
+            timer = "admin-service_list-audit-entries_grpc_timer")
     public Mono<ListAuditEntriesResponse> listAuditEntries(Mono<ListAuditEntriesRequest> request) {
         return request
                 .flatMap(req -> Mono.zip(
@@ -346,6 +353,10 @@ public class GrpcAdminReadonlyService {
                                         req.getBody().hasCreatedAtFrom(), req.getBody().getCreatedAtFrom(),
                                         req.getBody().hasCreatedAtTo(), req.getBody().getCreatedAtTo(),
                                         "body.createdAtFrom", "body.createdAtTo"
+                                ),
+                                GrpcRequestValidators.parseOptionalUuidOrInvalidArgument(
+                                        req.getBody().hasActorUserId(), req.getBody().getActorUserId(),
+                                        "body.actorUserId"
                                 )
                         )
                         .doOnError(StatusRuntimeException.class,
@@ -372,9 +383,7 @@ public class GrpcAdminReadonlyService {
                                     ? req.getBody().getPage()
                                     : null;
 
-                            UUID actorUserId = req.getBody().hasActorUserId()
-                                    ? UUID.fromString(req.getBody().getActorUserId())
-                                    : null;
+                            UUID actorUserId = t.getT4().orElse(null);
 
                             String action = req.getBody().getAction();
                             String targetService = req.getBody().getTargetService();

@@ -7,7 +7,6 @@ import reactor.core.publisher.Mono;
 import ru.taska.config.props.MetadataCatalogProperties;
 import ru.taska.domain.DbColumnType;
 import ru.taska.domain.PageResult;
-
 import ru.taska.dto.ListTableRowsResponseDto;
 import ru.taska.dto.ListTableRowsRequestDto;
 import ru.taska.dto.FilterOperatorsDto;
@@ -15,7 +14,6 @@ import ru.taska.dto.GetTableRowByIdResponseDto;
 import ru.taska.dto.GetTableRowByIdRequestDto;
 import ru.taska.dto.AuditEntriesResponseDto;
 import ru.taska.dto.FilterAuditDTO;
-
 import ru.taska.entity.AuditLog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -134,41 +132,37 @@ public class AdminReadonlyServiceImpl implements AdminReadonlyService {
         int resolvedPage = normalizePage(page);
         int resolvedPageSize = normalizePageSize(pageSize);
         long resolvedOffset = (long) resolvedPage * resolvedPageSize;
+        FilterAuditDTO safeFilter = filterAuditDTO != null ? filterAuditDTO : FilterAuditDTO.builder().build();
 
         log.debug("Fetching audit entries with filters - actor: {}, action: {}, target: {}/{}/{}, requestId: {}, from: {}, to: {}, page: {}, size: {}",
-                filterAuditDTO != null ? filterAuditDTO.actorUserId() : null,
-                filterAuditDTO != null ? filterAuditDTO.action() : null,
-                filterAuditDTO != null ? filterAuditDTO.targetService() : null,
-                filterAuditDTO != null ? filterAuditDTO.targetTable() : null,
-                filterAuditDTO != null ? filterAuditDTO.targetId() : null,
-                filterAuditDTO != null ? filterAuditDTO.requestId() : null,
-                filterAuditDTO != null ? filterAuditDTO.createdAtFrom() : null,
-                filterAuditDTO != null ? filterAuditDTO.createdAtTo() : null,
+                safeFilter.actorUserId(),
+                safeFilter.action(),
+                safeFilter.targetService(),
+                safeFilter.targetTable(),
+                safeFilter.targetId(),
+                safeFilter.requestId(),
+                safeFilter.createdAtFrom(),
+                safeFilter.createdAtTo(),
                 resolvedPage,
                 resolvedPageSize);
 
-        FilterAuditDTO safeFilter = filterAuditDTO != null ? filterAuditDTO : FilterAuditDTO.builder().build();
-
         return Mono.zip(
-                         auditLogRepository.findByFilter(safeFilter, resolvedPageSize, resolvedOffset)
-                                 .collectList(),
-                         auditLogRepository.countByFilter(safeFilter)
-                 )
-                 .map(tuple -> {
-                     List<AuditLog> auditLogs = tuple.getT1();
-                     Long count = tuple.getT2();
+                        auditLogRepository.findByFilter(safeFilter, resolvedPageSize, resolvedOffset)
+                                .collectList(),
+                        auditLogRepository.countByFilter(safeFilter)
+                )
+                .map(tuple -> {
+                    List<AuditLog> auditLogs = tuple.getT1();
+                    Long count = tuple.getT2();
 
-                     List<AuditEntriesResponseDto> maskedLogs = auditLogs.stream()
-                             .map(this::maskAndMapAuditLog)
-                             .toList();
+                    List<AuditEntriesResponseDto> maskedLogs = auditLogs.stream()
+                            .map(this::maskAndMapAuditLog)
+                            .toList();
 
-                     log.debug("Found {} audit entries out of {} total", maskedLogs.size(), count);
-                     return new PageResult<>(maskedLogs, count, resolvedPage, resolvedPageSize);
+                    log.debug("Found {} audit entries out of {} total", maskedLogs.size(), count);
+                    return new PageResult<>(maskedLogs, count, resolvedPage, resolvedPageSize);
                 })
-                .onErrorResume(ex -> {
-                    log.error("Error fetching audit entries", ex);
-                    return Mono.error(ex);
-                });
+                .doOnError(ex -> log.error("Error fetching audit entries", ex));
     }
 
     /**

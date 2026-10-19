@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 
 /**
@@ -36,6 +37,7 @@ import java.util.Map;
 public class SensitiveDataMaskService {
 
     private static final String FULLY_MASKED_VALUE = "***";
+    private static final String SERVICE_NAME_SUFFIX = "-service";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final MetadataCatalogProperties properties;
@@ -331,16 +333,22 @@ public class SensitiveDataMaskService {
      * Применяет те же правила, что и TAS-104 для обычных строк таблицы.
      * Журнал аудита не должен стать обходным путём к скрытым данным.
      *
-     * @param rowMap     old/new значение из аудит-лога (ключ - имя колонки)
-     * @param serviceKey ключ сервиса из конфигурации
-     * @param tableName  имя таблицы
-     * @param requestId  идентификатор запроса (для логирования)
-     * @param nodeId     идентификатор узла (для логирования)
-     * @return замаскированная Map с теми же ключами
+     * <p>{@code targetService} в журнале может отличаться от ключа каталога: например,
+     * операции над пользователями пишут {@code auth-service}, а каталог настроен как {@code auth}.
+     * Ключ разрешается по точному совпадению, по {@code alias} и по имени без суффикса {@code -service}.
+     * Если сервис в каталоге не найден, правил маскирования для него нет, и все значения
+     * закрываются полностью (fail-closed), а в лог пишется предупреждение.</p>
+     *
+     * @param rowMap        old/new значение из аудит-лога (ключ - имя колонки)
+     * @param targetService сервис, над которым выполнена операция (как записано в журнале)
+     * @param tableName     имя таблицы
+     * @param requestId     идентификатор запроса (для логирования)
+     * @param nodeId        идентификатор узла (для логирования)
+     * @return замаскированная Map с теми же ключами (кроме скрытых колонок)
      */
     public Map<String, Object> maskSensitiveDataForAudit(
             Map<String, Object> rowMap,
-            String serviceKey,
+            String targetService,
             String tableName,
             String requestId,
             String nodeId
@@ -349,8 +357,16 @@ public class SensitiveDataMaskService {
             return null;
         }
 
-        Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey, tableName);
-        Map<String, Map<String, MaskType>> sensitiveJsonFields = getSensitiveJsonFields(serviceKey, tableName);
+        Optional<String> serviceKey = resolveServiceKey(targetService);
+        if (serviceKey.isEmpty()) {
+            log.warn("[{}][{}] Service '{}' from audit log is not configured in admin.metadata.services; "
+                            + "masking all values of table {} in audit data",
+                    requestId, nodeId, targetService, tableName);
+            return maskAllValues(rowMap);
+        }
+
+        Map<String, MaskType> sensitiveColumns = getSensitiveColumns(serviceKey.get(), tableName);
+        Map<String, Map<String, MaskType>> sensitiveJsonFields = getSensitiveJsonFields(serviceKey.get(), tableName);
 
         if (sensitiveColumns.isEmpty() && sensitiveJsonFields.isEmpty()) {
             return rowMap;
@@ -358,12 +374,50 @@ public class SensitiveDataMaskService {
 
         if (!sensitiveColumns.isEmpty()) {
             log.info("[{}][{}] Masking sensitive columns {} in audit data for table {}.{}",
-                    requestId, nodeId, sensitiveColumns.keySet(), serviceKey, tableName);
+                    requestId, nodeId, sensitiveColumns.keySet(), serviceKey.get(), tableName);
         }
         if (!sensitiveJsonFields.isEmpty()) {
             log.info("[{}][{}] Masking sensitive JSON fields {} in audit data for table {}.{}",
-                    requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey, tableName);
+                    requestId, nodeId, sensitiveJsonFields.keySet(), serviceKey.get(), tableName);
         }
         return maskRow(rowMap, sensitiveColumns, sensitiveJsonFields);
+    }
+
+    /**
+     * Находит ключ сервиса в каталоге по значению {@code target_service} из журнала аудита.
+     */
+    private Optional<String> resolveServiceKey(String targetService) {
+        if (targetService == null || targetService.isBlank() || properties.services() == null) {
+            return Optional.empty();
+        }
+
+        Optional<String> direct = findServiceKey(targetService);
+        if (direct.isPresent()) {
+            return direct;
+        }
+
+        if (targetService.endsWith(SERVICE_NAME_SUFFIX)) {
+            String shortName = targetService.substring(0, targetService.length() - SERVICE_NAME_SUFFIX.length());
+            return findServiceKey(shortName);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> findServiceKey(String name) {
+        if (properties.services().containsKey(name)) {
+            return Optional.of(name);
+        }
+        return properties.services().entrySet().stream()
+                .filter(entry -> entry.getValue() != null && name.equals(entry.getValue().alias()))
+                .map(Map.Entry::getKey)
+                .findFirst();
+    }
+
+    private Map<String, Object> maskAllValues(Map<String, Object> rowMap) {
+        Map<String, Object> masked = new HashMap<>();
+        for (String column : rowMap.keySet()) {
+            masked.put(column, FULLY_MASKED_VALUE);
+        }
+        return masked;
     }
 }

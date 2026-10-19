@@ -33,7 +33,6 @@ import static ru.taska.service.MetadataService.isTableVisible;
 
 class MetadataServiceTest {
 
-
     @Test
     void buildTables_groupsColumnsAndPreservesTypes() {
         List<TableDto> tables = buildTables(
