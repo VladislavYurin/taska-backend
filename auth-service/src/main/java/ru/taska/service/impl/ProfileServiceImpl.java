@@ -23,7 +23,6 @@ import ru.taska.storage.dto.PresignedUploadResult;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -47,7 +46,8 @@ public class ProfileServiceImpl implements ProfileService {
     @Override
     public Mono<PresignedUploadResult> createAvatarUploadUrl(UUID actorUserId, String contentType, long sizeBytes) {
         return verifyUserExists(actorUserId)
-                .then(Mono.defer(() -> storageClient.createPresignedUploadUrl(contentType, sizeBytes)));
+                .then(Mono.defer(() -> storageClient.createPresignedUploadUrl(contentType, sizeBytes,
+                        "avatars/" + actorUserId + "/" + UUID.randomUUID())));
     }
 
     @Override
@@ -74,6 +74,7 @@ public class ProfileServiceImpl implements ProfileService {
             String fileName,
             String contentType) {
         return verifyUserExists(actorUserId)
+                .then(Mono.defer(() -> verifyAvatarKeyOwner(actorUserId, objectKey)))
                 .then(Mono.defer(() -> storageClient.objectExists(objectKey)))
                 .flatMap(exists -> {
                     if (!exists) {
@@ -110,12 +111,37 @@ public class ProfileServiceImpl implements ProfileService {
         UserAvatar newAvatar = profileMapper.toUserAvatar(userId, objectKey, fileName, contentType, sizeBytes);
         return transactionalOperator.transactional(
                 userAvatarRepository.findByUserId(userId)
-                        .flatMap(oldAvatar -> userAvatarRepository.delete(oldAvatar)
-                                .thenReturn(Optional.of(oldAvatar.getObjectKey())))
-                        .defaultIfEmpty(Optional.empty())
-                        .flatMap(oldKey -> userAvatarRepository.save(newAvatar)
-                                .map(saved -> new SavedAvatarResult(saved, oldKey.orElse(null))))
+                        .flatMap(oldAvatar -> {
+                            if (Objects.equals(oldAvatar.getObjectKey(), objectKey)) {
+                                return Mono.just(new SavedAvatarResult(oldAvatar, null));
+                            }
+                            return userAvatarRepository.delete(oldAvatar)
+                                    .then(userAvatarRepository.save(newAvatar))
+                                    .map(saved -> new SavedAvatarResult(saved, oldAvatar.getObjectKey()));
+                        })
+                        .switchIfEmpty(Mono.defer(() -> userAvatarRepository.save(newAvatar)
+                                .map(saved -> new SavedAvatarResult(saved, null))))
         );
+    }
+
+    private Mono<Void> verifyAvatarKeyOwner(UUID userId, String objectKey) {
+        String prefix = "avatars/" + userId + "/";
+        if (objectKey != null && objectKey.startsWith(prefix)) {
+            String suffix = objectKey.substring(prefix.length());
+            try {
+                if (UUID.fromString(suffix).toString().equals(suffix)) {
+                    return Mono.empty();
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Неканонический ключ не считается выданным этому пользователю.
+            }
+        }
+        // Старые ключи без префикса разрешены только для уже сохранённого собственного аватара.
+        return userAvatarRepository.findByUserId(userId)
+                .filter(avatar -> objectKey != null && objectKey.equals(avatar.getObjectKey()))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                        "An object with this key was not found in the storage.")))
+                .then();
     }
 
     /**

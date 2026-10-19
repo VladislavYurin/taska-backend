@@ -40,7 +40,7 @@ class ProfileServiceImplTest {
     private static final String FILE_NAME = "test-avatar.png";
     private static final String CONTENT_TYPE = "image/png";
     private static final long SIZE_BYTES = 102400L;
-    private static final String NEW_OBJECT_KEY = "new-object-key";
+    private String NEW_OBJECT_KEY;
     public static final String TEST_USER_EMAIL = "test@example.com";
 
     @Mock
@@ -73,6 +73,7 @@ class ProfileServiceImplTest {
     void setUp() {
         profileServiceImpl = new ProfileServiceImpl(userRepository, userAvatarRepository, storageClient, profileMapper, transactionalOperator);
         testUserId = UUID.randomUUID();
+        NEW_OBJECT_KEY = "avatars/" + testUserId + "/" + UUID.randomUUID();
         testUserId2 = UUID.randomUUID();
         testUserId3 = UUID.randomUUID();
 
@@ -255,7 +256,7 @@ class ProfileServiceImplTest {
             PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", URL,300);
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES))
+            Mockito.when(storageClient.createPresignedUploadUrl(Mockito.eq(CONTENT_TYPE), Mockito.eq(SIZE_BYTES), Mockito.startsWith("avatars/" + testUserId + "/")))
                     .thenReturn(Mono.just(expectedResult));
 
             // When & Then
@@ -264,7 +265,7 @@ class ProfileServiceImplTest {
                     .verifyComplete();
 
             Mockito.verify(userRepository).findById(testUserId);
-            Mockito.verify(storageClient).createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES);
+            Mockito.verify(storageClient).createPresignedUploadUrl(Mockito.eq(CONTENT_TYPE), Mockito.eq(SIZE_BYTES), Mockito.startsWith("avatars/" + testUserId + "/"));
         }
     }
 
@@ -400,6 +401,21 @@ class ProfileServiceImplTest {
             Mockito.verify(userAvatarRepository, Mockito.never()).findByUserId(testUserId);
             Mockito.verify(userAvatarRepository, Mockito.never()).save(Mockito.any());
         }
+    }
+
+    @Test
+    void foreignOrUnknownKey_isRejectedBeforeStorageAndMutation() {
+        Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
+        Mockito.when(userAvatarRepository.findByUserId(testUserId)).thenReturn(Mono.empty());
+        for (String key : java.util.List.of("avatars/" + testUserId2 + "/" + UUID.randomUUID(),
+                "unknown", "avatars/" + testUserId + "/../other")) {
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, key, FILE_NAME, CONTENT_TYPE))
+                    .expectErrorMatches(error -> error instanceof DomainException domain && domain.getStatus() == DomainStatus.NOT_FOUND)
+                    .verify();
+        }
+        Mockito.verifyNoInteractions(storageClient);
+        Mockito.verify(userAvatarRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verify(userAvatarRepository, Mockito.never()).delete(Mockito.any());
     }
 
     @Nested
