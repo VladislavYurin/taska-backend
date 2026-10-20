@@ -235,8 +235,8 @@ public class UpdateProjectIT extends AbstractIT {
                                 Optional.of("Some description"), Optional.empty())
                         .flatMap(created -> projectService.getProject(REQUEST_ID, NODE_ID, created.getId(), creatorId))
         ).assertNext(fetched -> {
-            Assertions.assertThat(fetched.getDescription()).isEqualTo("Some description");
-            Assertions.assertThat(fetched.getColor()).isNull();
+            Assertions.assertThat(fetched.description()).isEqualTo("Some description");
+            Assertions.assertThat(fetched.color()).isNull();
         }).verifyComplete();
     }
 
