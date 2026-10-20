@@ -14,6 +14,9 @@ import ru.taska.api.auth.profile.v1.GetUserProfileRequest;
 import ru.taska.api.auth.profile.v1.GetUserProfileRequestBody;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequestBody;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequest;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequestBody;
+import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.common.v1.Header;
@@ -27,6 +30,7 @@ import ru.taska.domain.dto.CreateAvatarUploadUrlResponseDto;
 import ru.taska.domain.dto.GetAvatarDownloadUrlResponseDto;
 import ru.taska.mapper.UserProfileMapper;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -131,6 +135,28 @@ public class GrpcUserProfileServiceClient {
                                 .build()
                 )
                 .map(profileMapper::toRestGetAvatarDownloadUrlResponse);
+    }
+
+    /**
+     * Получает данные профилей пользователей по списку идентификаторов одним батч-вызовом.
+     *
+     * @param userIds идентификаторы пользователей
+     * @param context контекст запроса
+     * @return ответ auth-service со списком {@link ru.taska.api.auth.profile.v1.UserDetails}
+     */
+    public Mono<GetUserDetailsByIdsResponse> getUserDetailsByIds(List<UUID> userIds, GatewayContext context) {
+        log.debug("[{}] Calling getUserDetailsByIds", context.requestId());
+
+        return dynamicStub().getUserDetailsByIds(
+                GetUserDetailsByIdsRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context))
+                        .setBody(
+                                GetUserDetailsByIdsRequestBody.newBuilder()
+                                        .addAllUserIds(userIds.stream().map(UUID::toString).toList())
+                                        .build()
+                        )
+                        .build()
+        );
     }
 
     public Mono<AvatarDto> getUserProfileAvatar(GatewayContext context) {

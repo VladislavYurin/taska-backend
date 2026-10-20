@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.criteria.SearchCriteria;
@@ -216,7 +217,9 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             boolean includeDone,
             List<String> doneStatusKeys,
             List<UUID> labelIds,
-            Integer pageSizePerColumn
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query
     ) {
         boolean labelFilterActive = labelIds != null && !labelIds.isEmpty();
 
@@ -227,12 +230,12 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     }
 
                     List<BoardFilterCondition> conditions = boardFilterConditions(
-                            projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
+                            projectId, issueType, priority, assigneeId, statusKey, includeDone, doneStatusKeys,
                             labelFilterActive ? issueIds : null
                     );
 
-                    return pageSizePerColumn != null
-                            ? findForBoardLimitedPerColumn(conditions, pageSizePerColumn)
+                    return pageSizePerColumn != null || query != null
+                            ? findForBoardRaw(conditions, query, pageSizePerColumn)
                             : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(conditions), Issue.class);
                 });
     }
@@ -268,27 +271,44 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
      * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
      */
-    private Flux<Issue> findForBoardLimitedPerColumn(List<BoardFilterCondition> conditions, int pageSizePerColumn) {
+    private Flux<Issue> findForBoardRaw(List<BoardFilterCondition> conditions,
+                                       String query,
+                                       Integer pageSizePerColumn){
         Map<String, Object> params = new LinkedHashMap<>();
         String where = toSqlWhere(conditions, params);
-        params.put("pageSizePerColumn", pageSizePerColumn);
 
-        String sql = """
-                SELECT * FROM (
-                    SELECT i.*,
-                           ROW_NUMBER() OVER (PARTITION BY i.status_key ORDER BY i.created_at ASC) AS rn
-                    FROM taska.issues i
-                    WHERE %s
-                ) t
-                WHERE rn <= :pageSizePerColumn
-                ORDER BY status_key ASC, created_at ASC
-                """.formatted(where);
-
-        DatabaseClient.GenericExecuteSpec spec = r2dbcEntityTemplate.getDatabaseClient().sql(sql);
-        for (var entry : params.entrySet()) {
-            spec = spec.bind(entry.getKey(), entry.getValue());
+        if(query != null){
+            where += " AND (i.issue_key ILIKE :searchQuery"
+                    + " OR i.summary ILIKE :searchQuery"
+                    + " OR i.description ILIKE :searchQuery)";
+            params.put("searchQuery", "%" + query + "%");
         }
 
+        String sql = "";
+        if (pageSizePerColumn != null){
+            params.put("pageSizePerColumn", pageSizePerColumn);
+            sql = """
+                    SELECT * FROM (
+                    SELECT i.*,
+                                ROW_NUMBER() OVER (PARTITION BY i.status_key ORDER BY i.created_at ASC) AS rn
+                    FROM taska.issues i
+                    WHERE %s
+                    ) t
+                    WHERE rn <= :pageSizePerColumn
+                    ORDER BY status_key ASC, created_at ASC
+                    """.formatted(where);
+        } else {
+            sql = """
+                    SELECT i.* FROM taska.issues i
+                    WHERE %s
+                    ORDER BY i.status_key ASC, i.created_at ASC
+                """.formatted(where);
+        }
+
+        DatabaseClient.GenericExecuteSpec spec = r2dbcEntityTemplate.getDatabaseClient().sql(sql);
+        for (var entry : params.entrySet()){
+            spec = spec.bind(entry.getKey(), entry.getValue());
+        }
         return spec.map(issueMapper::mapRowToIssue).all();
     }
 
@@ -353,6 +373,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     private List<BoardFilterCondition> boardFilterConditions(
             UUID projectId,
             IssueType issueType,
+            IssuePriority priority,
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
@@ -364,6 +385,9 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         conditions.add(new BoardFilterCondition("deleted_at", null, BoardFilterOperator.IS_NULL, null));
         if (issueType != null) {
             conditions.add(new BoardFilterCondition("issue_type", "issueType", BoardFilterOperator.EQUALS, issueType.name()));
+        }
+        if (priority != null){
+            conditions.add(new BoardFilterCondition("priority", "priority", BoardFilterOperator.EQUALS, priority));
         }
         if (assigneeId != null) {
             conditions.add(new BoardFilterCondition("assignee_id", "assigneeId", BoardFilterOperator.EQUALS, assigneeId));
@@ -398,7 +422,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     String column = "i." + c.column();
                     return switch (c.operator()) {
                         case EQUALS -> {
-                            paramsOut.put(c.paramName(), c.value());
+                            Object value = c.value() instanceof Enum<?> enumValue ? enumValue.name() : c.value();
+                            paramsOut.put(c.paramName(), value);
                             yield column + " = :" + c.paramName();
                         }
                         case NOT_IN -> {

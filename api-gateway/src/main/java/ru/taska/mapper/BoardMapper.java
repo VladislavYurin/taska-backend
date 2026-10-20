@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 
 import java.util.List;
@@ -23,20 +22,21 @@ public class BoardMapper {
      * Формирует REST DTO ответа Board API.
      *
      * @param projectId идентификатор проекта
-     * @param issueType тип задач доски
      * @param columns список подготовленных колонок доски
+     * @param unplacedIssues задачи, чей statusKey не входит ни в один workflow,
+     *                       использованный для построения колонок
      * @return объект {@link BoardResponseDto} для отправки клиенту
      */
     public BoardResponseDto toBoardResponse(
             UUID projectId,
-            IssueTypeDto issueType,
-            List<BoardColumnDto> columns
+            List<BoardColumnDto> columns,
+            List<BoardIssueDto> unplacedIssues
     ) {
 
         BoardResponseDto dto = new BoardResponseDto();
         dto.setProjectId(projectId);
-        dto.setIssueType(issueType);
         dto.setColumns(columns);
+        dto.setUnplacedIssues(unplacedIssues);
 
         return dto;
     }

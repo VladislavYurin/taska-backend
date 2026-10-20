@@ -28,6 +28,7 @@ import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.api.issue.attachment.v1.AttachmentResponse;
 import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
 import ru.taska.api.issue.v1.GetIssueDetailsResponse;
+import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.IssueDetailsResponse;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
@@ -53,6 +54,7 @@ import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
+import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.IssueWatcherResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
@@ -1091,6 +1093,103 @@ class IssueMapperTest {
                 Arguments.of(IssueLinkTypeDto.BLOCKS, IssueLinkType.ISSUE_LINK_TYPE_BLOCKS),
                 Arguments.of(IssueLinkTypeDto.DUPLICATES, IssueLinkType.ISSUE_LINK_TYPE_DUPLICATES)
         );
+    }
+
+    @Test
+    @DisplayName("toRestBoardIssue: должен замапить все поля карточки доски, labels оставляет пустым для последующего обогащения")
+    void toRestBoardIssue_shouldMapAllFields() {
+        var createdAt = Timestamp.newBuilder().setSeconds(1).build();
+        var updatedAt = Timestamp.newBuilder().setSeconds(2).build();
+
+        var source = IssueBoardResponse.newBuilder()
+                .setId(ISSUE_ID)
+                .setIssueKey(ISSUE_KEY)
+                .setSummary(SUMMARY)
+                .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
+                .setStatusKey(STATUS_KEY)
+                .setAssigneeId(ASSIGNEE_ID)
+                .setReporterId(USER_ID)
+                .setCommentsCount(4)
+                .setWatchersCount(2)
+                .addLabelIds(LINK_ID)
+                .setCreatedAt(createdAt)
+                .setUpdatedAt(updatedAt)
+                .setVersion(VERSION)
+                .setDescription(DESCRIPTION)
+                .setStoryPoints(STORY_POINTS)
+                .setDueDate(DUE_DATE)
+                .build();
+
+        var result = mapper.toRestBoardIssue(source);
+
+        Assertions.assertEquals(UUID.fromString(ISSUE_ID), result.getId());
+        Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
+        Assertions.assertEquals(SUMMARY, result.getSummary());
+        Assertions.assertEquals(IssueTypeDto.TASK, result.getIssueType());
+        Assertions.assertEquals(IssuePriorityDto.HIGH, result.getPriority());
+        Assertions.assertEquals(STATUS_KEY, result.getStatusKey());
+        Assertions.assertEquals(VERSION, result.getVersion());
+        Assertions.assertEquals(4, result.getCommentCount());
+        Assertions.assertEquals(OffsetDateTime.parse("1970-01-01T00:00:01Z"), result.getCreatedAt());
+        Assertions.assertEquals(OffsetDateTime.parse("1970-01-01T00:00:02Z"), result.getUpdatedAt());
+        Assertions.assertEquals(DESCRIPTION, result.getDescription());
+        Assertions.assertEquals(STORY_POINTS, result.getStoryPoints());
+        Assertions.assertEquals(LocalDate.parse(DUE_DATE), result.getDueDate());
+        Assertions.assertEquals(UUID.fromString(ASSIGNEE_ID), result.getAssignee().getId());
+        Assertions.assertNull(result.getAssignee().getDisplayName());
+        Assertions.assertNull(result.getAssignee().getAvatarUrl());
+        Assertions.assertTrue(result.getLabels().isEmpty());
+    }
+
+    @Test
+    @DisplayName("toRestBoardIssue: без Optional полей и без исполнителя оставляет их пустыми")
+    void toRestBoardIssue_shouldMapWithoutOptionalFieldsAndAssignee() {
+        var createdAt = Timestamp.newBuilder().setSeconds(1).build();
+        var updatedAt = Timestamp.newBuilder().setSeconds(2).build();
+
+        var source = IssueBoardResponse.newBuilder()
+                .setId(ISSUE_ID)
+                .setIssueKey(ISSUE_KEY)
+                .setSummary(SUMMARY)
+                .setIssueType(IssueType.ISSUE_TYPE_BUG)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_LOW)
+                .setStatusKey(STATUS_KEY)
+                .setCreatedAt(createdAt)
+                .setUpdatedAt(updatedAt)
+                .setVersion(VERSION)
+                .build();
+
+        var result = mapper.toRestBoardIssue(source);
+
+        Assertions.assertNull(result.getAssignee());
+        Assertions.assertNull(result.getDescription());
+        Assertions.assertNull(result.getStoryPoints());
+        Assertions.assertNull(result.getDueDate());
+    }
+
+    @Test
+    @DisplayName("toBoardIssueData: сохраняет statusKey и labelIds отдельно от REST DTO для последующей группировки/обогащения")
+    void toBoardIssueData_shouldCarryStatusKeyAndLabelIdsSeparately() {
+        var labelId = UUID.randomUUID();
+        var source = IssueBoardResponse.newBuilder()
+                .setId(ISSUE_ID)
+                .setIssueKey(ISSUE_KEY)
+                .setSummary(SUMMARY)
+                .setIssueType(IssueType.ISSUE_TYPE_STORY)
+                .setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                .setStatusKey(STATUS_KEY)
+                .addLabelIds(labelId.toString())
+                .setCreatedAt(Timestamp.getDefaultInstance())
+                .setUpdatedAt(Timestamp.getDefaultInstance())
+                .setVersion(VERSION)
+                .build();
+
+        var result = mapper.toBoardIssueData(source);
+
+        Assertions.assertEquals(STATUS_KEY, result.statusKey());
+        Assertions.assertEquals(List.of(labelId), result.labelIds());
+        Assertions.assertEquals(ISSUE_KEY, result.issue().getIssueKey());
     }
 
     @Nested

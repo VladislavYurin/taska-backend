@@ -8,6 +8,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.BoardApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.BoardResponseDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.service.BoardService;
@@ -25,13 +26,16 @@ public class BoardController implements BoardApi {
     private final BoardService boardService;
 
     /**
-     * Возвращает доску проекта для указанного типа задач с учетом фильтров.
+     * Возвращает доску проекта с учетом фильтров. Без параметра issueType
+     * возвращаются задачи всех типов.
      *
-     * @param projectId идентификатор проекта
-     * @param issueType тип задач
+     * @param projectId  идентификатор проекта
+     * @param issueType  тип задач; без параметра — все типы
      * @param assigneeId фильтр по исполнителю
      * @param labelId фильтр по метке
      * @param includeDone включать ли завершенные задачи
+     * @param priority фильтр по приоритету задачи
+     * @param query полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
      * @param exchange текущий HTTP exchange
      * @return сформированная доска проекта
      */
@@ -42,6 +46,8 @@ public class BoardController implements BoardApi {
             UUID assigneeId,
             UUID labelId,
             Boolean includeDone,
+            IssuePriorityDto priority,
+            String query,
             ServerWebExchange exchange
     ) {
         return executor.execute(
@@ -53,6 +59,8 @@ public class BoardController implements BoardApi {
                         assigneeId,
                         labelId,
                         includeDone,
+                        priority,
+                        query,
                         context
                 ).map(ResponseEntity::ok)
         );
