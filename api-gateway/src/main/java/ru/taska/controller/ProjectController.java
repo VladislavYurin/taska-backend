@@ -94,19 +94,21 @@ public class ProjectController implements ProjectApi {
     /**
      * PATCH /api/v1/projects/{projectId}
      * Обновляет проект (имя/описание/цвет, PATCH-семантика) → 200 OK
-     * <p>
-     * Тело запроса читается вручную (через {@link JsonNode}), а не через стандартный
-     * {@code @RequestBody}-декодер, потому что Jackson-десериализация в POJO не различает
-     * "поле отсутствует в JSON" и "поле явно передано как null" — оба дают null в DTO.
-     * Явный null у color/description трактуется как сброс значения в null; отсутствие поля —
-     * как "не менять" (см. {@link ru.taska.domain.dto.UpdateProjectRequestDto}). Явный null у name,
-     * в отличие от color/description, недопустим и приводит к 400 — "имя = null" бизнес-логически
-     * бессмысленно, как и пустая строка (которая уже отклоняется через {@code @Size(min = 1)}).
-     * Bean Validation не видит разницы между "null" и "не передано" на уровне DTO-поля, поэтому
-     * эта проверка сделана вручную, до вызова {@link #validate}.
-     * Параметр {@code updateProjectRequestDto}, инжектируемый сгенерированным {@link ProjectApi},
-     * намеренно не используется — тело запроса имеет ровно одного подписчика (ниже), чтобы не
-     * читать реактивный body-поток дважды.
+     * <ul>
+     *     <li>Тело запроса читается вручную (через {@link JsonNode}), а не через стандартный
+     *     {@code @RequestBody}-декодер, потому что Jackson-десериализация в POJO не различает
+     *     "поле отсутствует в JSON" и "поле явно передано как null" — оба дают null в DTO.</li>
+     *     <li>Явный null у color/description трактуется как сброс значения в null; отсутствие поля —
+     *     как "не менять" (см. {@link ru.taska.domain.dto.UpdateProjectRequestDto}).</li>
+     *     <li>Явный null у name, в отличие от color/description, недопустим и приводит к 400 —
+     *     "имя = null" бизнес-логически бессмысленно, как и пустая строка (которая уже отклоняется
+     *     через {@code @Size(min = 1)}).</li>
+     *     <li>Bean Validation не видит разницы между "null" и "не передано" на уровне DTO-поля,
+     *     поэтому эта проверка сделана вручную, до вызова {@link #validate}.</li>
+     *     <li>Параметр {@code updateProjectRequestDto}, инжектируемый сгенерированным {@link ProjectApi},
+     *     намеренно не используется — тело запроса имеет ровно одного подписчика (ниже), чтобы не
+     *     читать реактивный body-поток дважды.</li>
+     * </ul>
      */
     @Override
     public Mono<ResponseEntity<ProjectResponseDto>> updateProject(
@@ -129,35 +131,6 @@ public class ProjectController implements ProjectApi {
                     projectClient.updateProject(projectId, Mono.just(dto), clearColor, clearDescription, context))
                             .map(ResponseEntity::ok);
         });
-    }
-
-    private Mono<JsonNode> readBodyAsJsonNode(ServerWebExchange exchange) {
-        return DataBufferUtils.join(exchange.getRequest().getBody())
-                .map(this::parseJsonNode)
-                .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")));
-    }
-
-    private JsonNode parseJsonNode(DataBuffer dataBuffer) {
-        try {
-            byte[] bytes = new byte[dataBuffer.readableByteCount()];
-            dataBuffer.read(bytes);
-            return objectMapper.readTree(bytes);
-        } catch (Exception e) {
-            throw new ServerWebInputException("Malformed JSON request body", null, e);
-        } finally {
-            DataBufferUtils.release(dataBuffer);
-        }
-    }
-
-    private boolean isExplicitNull(JsonNode bodyNode, String fieldName) {
-        return bodyNode.has(fieldName) && bodyNode.get(fieldName).isNull();
-    }
-
-    private void validate(UpdateProjectRequestDto dto) {
-        Set<ConstraintViolation<UpdateProjectRequestDto>> violations = validator.validate(dto);
-        if (!violations.isEmpty()) {
-            throw new ConstraintViolationException(violations);
-        }
     }
 
     /**
@@ -228,5 +201,36 @@ public class ProjectController implements ProjectApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                         projectClient.getProjectMembers(projectId, context))
                 .map(ResponseEntity::ok);
+    }
+
+    ///=================== Utils ======================
+
+    private Mono<JsonNode> readBodyAsJsonNode(ServerWebExchange exchange) {
+        return DataBufferUtils.join(exchange.getRequest().getBody())
+                .map(this::parseJsonNode)
+                .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")));
+    }
+
+    private JsonNode parseJsonNode(DataBuffer dataBuffer) {
+        try {
+            byte[] bytes = new byte[dataBuffer.readableByteCount()];
+            dataBuffer.read(bytes);
+            return objectMapper.readTree(bytes);
+        } catch (Exception e) {
+            throw new ServerWebInputException("Malformed JSON request body", null, e);
+        } finally {
+            DataBufferUtils.release(dataBuffer);
+        }
+    }
+
+    private boolean isExplicitNull(JsonNode bodyNode, String fieldName) {
+        return bodyNode.has(fieldName) && bodyNode.get(fieldName).isNull();
+    }
+
+    private void validate(UpdateProjectRequestDto dto) {
+        Set<ConstraintViolation<UpdateProjectRequestDto>> violations = validator.validate(dto);
+        if (!violations.isEmpty()) {
+            throw new ConstraintViolationException(violations);
+        }
     }
 }
