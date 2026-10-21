@@ -1856,6 +1856,212 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/workflows:
+    get:
+      summary: Все workflow проекта со всеми статусами и переходами
+      description: |
+        Возвращает каждый workflow, по которому работают задачи проекта, один раз: с типами задач,
+        которые по нему работают, всеми статусами и всеми переходами, включая скрытые (hidden = true).
+        Тип задачи без своего workflow проекта работает по общему default workflow (shared = true).
+        Default workflow не меняется: чтобы завести свои статусы и переходы, создайте workflow проекта.
+        Доступно любому участнику проекта.
+      operationId: listProjectWorkflows
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow проекта получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowsResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Создание своего workflow проекта
+      description: |
+        Создаёт workflow проекта со своими статусами и переходами и привязывает к нему указанные типы задач.
+        Тип задачи, у которого в проекте уже есть свой workflow, повторно привязать нельзя (409).
+        Внимание: issue-service пока создаёт новые задачи в статусе с ключом TODO. Если такого статуса
+        в workflow нет, новые задачи этого типа окажутся в статусе, которого в workflow нет.
+        Требуется роль ADMIN в проекте.
+      operationId: createProjectWorkflow
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequestDto'
+      responses:
+        '201':
+          description: Workflow создан
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/statuses:
+    post:
+      summary: Добавление статуса в workflow проекта
+      description: |
+        Добавляет статус в свой workflow проекта. Ключ статуса и sortOrder должны быть уникальны внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowStatus
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+      responses:
+        '201':
+          description: Статус добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Статус с таким ключом в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/transitions:
+    post:
+      summary: Добавление перехода в workflow проекта
+      description: |
+        Разрешает переход между двумя статусами своего workflow проекта. Статусы задаются ключами.
+        Переход из статуса в него же запрещён, пара статусов не повторяется, sortOrder уникален внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowTransition
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+      responses:
+        '201':
+          description: Переход добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Переход между этими статусами в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   ########################## API для project/issue меток ##################
 
   /api/v1/projects/{projectId}/labels:
@@ -4506,6 +4712,9 @@ components:
         sortOrder:
           type: integer
           format: int32
+        hidden:
+          type: boolean
+          description: Скрытый переход. GET /projects/{projectId}/workflow скрытые не отдаёт, GET /projects/{projectId}/workflows отдаёт все.
         createdAt:
           type: string
           format: date-time
@@ -4514,6 +4723,106 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    WorkflowStatusCategoryDto:
+      type: string
+      description: Системная категория статуса для группировки и семантики
+      enum:
+        - TODO
+        - IN_PROGRESS
+        - DONE
+
+    CreateWorkflowStatusRequestDto:
+      type: object
+      required: [ statusKey, name, category, sortOrder ]
+      properties:
+        statusKey:
+          type: string
+          description: Стабильный ключ статуса, уникальный внутри workflow. Формат ^[A-Z][A-Z0-9_]{1,63}$
+          example: CODE_REVIEW
+        name:
+          type: string
+          description: Отображаемое имя статуса, до 100 символов
+          example: Code Review
+        category:
+          $ref: '#/components/schemas/WorkflowStatusCategoryDto'
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок колонки на доске, не меньше нуля и уникален внутри workflow
+          example: 25
+
+    CreateWorkflowTransitionRequestDto:
+      type: object
+      required: [ fromStatusKey, toStatusKey, name, sortOrder ]
+      properties:
+        fromStatusKey:
+          type: string
+          description: Ключ исходного статуса workflow
+          example: IN_PROGRESS
+        toStatusKey:
+          type: string
+          description: Ключ целевого статуса workflow
+          example: TODO
+        name:
+          type: string
+          description: Отображаемое имя перехода, до 100 символов
+          example: Stop Progress
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок перехода, не меньше нуля и уникален внутри workflow
+          example: 40
+        hidden:
+          type: boolean
+          description: Скрытый переход (не показывается в UI, но доступен программно)
+          default: false
+
+    CreateWorkflowRequestDto:
+      type: object
+      required: [ name, issueTypes, statuses, transitions ]
+      properties:
+        name:
+          type: string
+          description: Отображаемое имя workflow, до 100 символов
+          example: Development
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые будут работать по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+
+    ProjectWorkflowDto:
+      type: object
+      required: [ workflow, issueTypes, shared ]
+      properties:
+        workflow:
+          $ref: '#/components/schemas/WorkflowResponseDto'
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые работают по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        shared:
+          type: boolean
+          description: Общий default workflow. Не меняется; для своих статусов и переходов создайте workflow проекта.
+
+    ProjectWorkflowsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectWorkflowDto'
 
     # ======= начало dto для attachments =========
 

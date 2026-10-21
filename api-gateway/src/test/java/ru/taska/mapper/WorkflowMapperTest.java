@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import ru.taska.api.workflow.v1.IssueType;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
+import ru.taska.api.workflow.v1.ProjectWorkflow;
 import ru.taska.api.workflow.v1.StatusCategory;
 import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.api.workflow.v1.WorkflowTransition;
@@ -16,10 +18,16 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.domain.dto.CreateWorkflowRequestDto;
+import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
+import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
+import ru.taska.domain.dto.ProjectWorkflowDto;
+import ru.taska.domain.dto.WorkflowStatusCategoryDto;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 class WorkflowMapperTest {
@@ -148,5 +156,79 @@ class WorkflowMapperTest {
         Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)).isEqualTo("IN_PROGRESS");
         Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_DONE)).isEqualTo("DONE");
         Assertions.assertThat(mapper.toRestStatusCategory(StatusCategory.STATUS_CATEGORY_UNSPECIFIED)).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("Должен мапить тело создания workflow в CreateWorkflowRequest")
+    void shouldMapToCreateWorkflowGrpcRequest() {
+        var context = new GatewayContext("req-1", "node-1", GatewayUserContext.builder().userId("user-1").build());
+        var transition = new CreateWorkflowTransitionRequestDto("TODO", "IN_PROGRESS", "Start Progress", 10);
+        transition.setHidden(null);
+        var request = new CreateWorkflowRequestDto(
+                "Development",
+                List.of(IssueTypeDto.TASK, IssueTypeDto.STORY),
+                List.of(new CreateWorkflowStatusRequestDto("TODO", "To Do", WorkflowStatusCategoryDto.TODO, 10),
+                        new CreateWorkflowStatusRequestDto("IN_PROGRESS", "In Progress", WorkflowStatusCategoryDto.IN_PROGRESS, 20)),
+                List.of(transition));
+
+        var grpc = mapper.toCreateWorkflowGrpcRequest(PROJECT_ID, request, context);
+
+        Assertions.assertThat(grpc.getHeader().getRequestId()).isEqualTo("req-1");
+        Assertions.assertThat(grpc.getBody().getProjectId()).isEqualTo(PROJECT_ID.toString());
+        Assertions.assertThat(grpc.getBody().getActorUserId()).isEqualTo("user-1");
+        Assertions.assertThat(grpc.getBody().getName()).isEqualTo("Development");
+        Assertions.assertThat(grpc.getBody().getIssueTypesList())
+                .containsExactly(IssueType.ISSUE_TYPE_TASK, IssueType.ISSUE_TYPE_STORY);
+        Assertions.assertThat(grpc.getBody().getStatusesList()).extracting(s -> s.getCategory())
+                .containsExactly(StatusCategory.STATUS_CATEGORY_TODO, StatusCategory.STATUS_CATEGORY_IN_PROGRESS);
+        Assertions.assertThat(grpc.getBody().getTransitions(0).getFromStatusKey()).isEqualTo("TODO");
+        Assertions.assertThat(grpc.getBody().getTransitions(0).getIsHidden()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Должен мапить добавляемый переход в AddWorkflowTransitionRequest")
+    void shouldMapToAddWorkflowTransitionGrpcRequest() {
+        var context = new GatewayContext("req-1", "node-1", GatewayUserContext.builder().userId("user-1").build());
+        UUID workflowId = UUID.randomUUID();
+        var transition = new CreateWorkflowTransitionRequestDto("IN_PROGRESS", "TODO", "Stop Progress", 40);
+        transition.setHidden(true);
+
+        var grpc = mapper.toAddWorkflowTransitionGrpcRequest(PROJECT_ID, workflowId, transition, context);
+
+        Assertions.assertThat(grpc.getBody().getWorkflowId()).isEqualTo(workflowId.toString());
+        Assertions.assertThat(grpc.getBody().getActorUserId()).isEqualTo("user-1");
+        Assertions.assertThat(grpc.getBody().getTransition().getToStatusKey()).isEqualTo("TODO");
+        Assertions.assertThat(grpc.getBody().getTransition().getSortOrder()).isEqualTo(40);
+        Assertions.assertThat(grpc.getBody().getTransition().getIsHidden()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Должен мапить workflow проекта с типами задач, признаком shared и скрытыми переходами")
+    void shouldMapListProjectWorkflowsResponse() {
+        var response = ListProjectWorkflowsResponse.newBuilder()
+                .addWorkflows(ProjectWorkflow.newBuilder()
+                        .setWorkflow(WorkflowResponse.newBuilder()
+                                .setId(UUID.randomUUID().toString())
+                                .setName("Default workflow")
+                                .setVersion(1)
+                                .addTransitions(WorkflowTransition.newBuilder()
+                                        .setId(TRANSITION_ID.toString())
+                                        .setFromStatusId(STATUS_ID.toString())
+                                        .setToStatusId(UUID.randomUUID().toString())
+                                        .setName("Hidden")
+                                        .setIsHidden(true)))
+                        .addIssueTypes(IssueType.ISSUE_TYPE_BUG)
+                        .addIssueTypes(IssueType.ISSUE_TYPE_UNSPECIFIED)
+                        .setIsShared(true))
+                .build();
+
+        var dto = mapper.toProjectWorkflowsResponseRestDto(response);
+
+        Assertions.assertThat(dto.getItems()).hasSize(1);
+        ProjectWorkflowDto item = dto.getItems().get(0);
+        Assertions.assertThat(item.getShared()).isTrue();
+        Assertions.assertThat(item.getIssueTypes()).containsExactly(IssueTypeDto.BUG);
+        Assertions.assertThat(item.getWorkflow().getName()).isEqualTo("Default workflow");
+        Assertions.assertThat(item.getWorkflow().getTransitions().get(0).getHidden()).isTrue();
     }
 }

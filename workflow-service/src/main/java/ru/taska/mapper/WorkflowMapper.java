@@ -2,17 +2,21 @@ package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
 import org.springframework.stereotype.Component;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
+import ru.taska.api.workflow.v1.ProjectWorkflow;
 import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.api.workflow.v1.WorkflowStatus;
 import ru.taska.api.workflow.v1.WorkflowTransition;
 import ru.taska.api.workflow.v1.StatusCategory;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.ProjectWorkflowAggregate;
 import ru.taska.domain.WorkflowAggregate;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowEntity;
 
 import java.time.Instant;
+import java.util.List;
 
 @Component
 public class WorkflowMapper {
@@ -30,12 +34,34 @@ public class WorkflowMapper {
                 .build();
     }
 
+    public ListProjectWorkflowsResponse toListProjectWorkflowsProto(List<ProjectWorkflowAggregate> workflows) {
+        return ListProjectWorkflowsResponse.newBuilder()
+                .addAllWorkflows(workflows.stream().map(this::toProjectWorkflowProto).toList())
+                .build();
+    }
+
     public IssueType toDomainIssueType(ru.taska.api.workflow.v1.IssueType proto) {
         return switch (proto) {
             case ISSUE_TYPE_TASK -> IssueType.TASK;
             case ISSUE_TYPE_STORY -> IssueType.STORY;
             case ISSUE_TYPE_BUG -> IssueType.BUG;
             default -> null;
+        };
+    }
+
+    private ProjectWorkflow toProjectWorkflowProto(ProjectWorkflowAggregate projectWorkflow) {
+        return ProjectWorkflow.newBuilder()
+                .setWorkflow(toWorkflowProto(projectWorkflow.workflow()))
+                .addAllIssueTypes(projectWorkflow.issueTypes().stream().map(this::toProtoIssueType).toList())
+                .setIsShared(projectWorkflow.shared())
+                .build();
+    }
+
+    private ru.taska.api.workflow.v1.IssueType toProtoIssueType(IssueType issueType) {
+        return switch (issueType) {
+            case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
+            case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+            case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
         };
     }
 
@@ -69,6 +95,7 @@ public class WorkflowMapper {
                 .setSortOrder(transition.getSortOrder())
                 .setCreatedAt(toTimestampFromInstant(transition.getCreatedAt()))
                 .setUpdatedAt(toTimestampFromInstant(transition.getUpdatedAt()))
+                .setIsHidden(transition.isHidden())
                 .build();
     }
 
