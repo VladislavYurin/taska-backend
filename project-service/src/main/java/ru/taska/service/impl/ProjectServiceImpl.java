@@ -73,7 +73,7 @@ public class ProjectServiceImpl implements ProjectService {
                                              .projectKey(projectKey)
                                              .name(projectName)
                                              .createdBy(userId)
-                                             .description(description.orElse(null))
+                                             .description(normalizeDescription(description.orElse(null)))
                                              .color(color.orElse(null))
                                              .build();
 
@@ -237,6 +237,14 @@ public class ProjectServiceImpl implements ProjectService {
         return defaultSettingsJson;
     }
 
+    /**
+     * "" и null для description — одно и то же состояние "нет описания" (review): пустая/пробельная
+     * строка схлопывается в null, без изменения непустого содержимого.
+     */
+    private String normalizeDescription(String description) {
+        return (description == null || description.isBlank()) ? null : description;
+    }
+
     private ProjectMember createAdminMember(Project savedProject) {
         return ProjectMember.builder()
                             .projectId(savedProject.getId())
@@ -300,7 +308,12 @@ public class ProjectServiceImpl implements ProjectService {
                                 return Mono.just(project);
                             }
 
-                            String newDescription = clearDescription ? null : description.orElse(project.getDescription());
+                            // Optional.map() трактует mapper, вернувший null, как "значение отсутствует" и срабатывает
+                            // orElse() — а normalizeDescription("") должен именно стать null, а не откатиться
+                            // к старому значению, поэтому isPresent()/get() вместо map().orElse().
+                            String newDescription = clearDescription
+                                    ? null
+                                    : description.isPresent() ? normalizeDescription(description.get()) : project.getDescription();
                             String newColor = clearColor ? null : color.orElse(project.getColor());
 
                             Project updatedProject = project.toBuilder()

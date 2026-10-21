@@ -4169,7 +4169,8 @@ components:
           maxLength: 255
         description:
           type: string
-          description: Описание проекта
+          description: >
+            Описание проекта. Пустая строка или строка из пробелов приводится к null.
           maxLength: 2000
         color:
           type: string
@@ -4197,7 +4198,8 @@ components:
           type: string
           description: >
             Новое описание проекта. Отсутствие поля в теле запроса — «не менять» текущее значение.
-            Явная передача null — явный сброс описания в null.
+            Явная передача null — явный сброс описания в null. Пустая строка или строка из пробелов
+            приводится к null — то есть трактуется как тот же явный сброс, а не как значение "".
           maxLength: 2000
         color:
           type: string

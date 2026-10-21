@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -142,6 +143,33 @@ class ProjectServiceImplTest {
                 ArgumentMatchers.eq(userId));
 
         Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
+    }
+
+    @Test
+    void createProject_Success_BlankDescriptionNormalizedToNull() {
+        Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.empty());
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
+
+        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class)))
+                .thenReturn(Mono.just(new ProjectMember()));
+        Mockito.when(projectSettingRepository.insertSetting(
+                        ArgumentMatchers.eq(projectId),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.any(Instant.class),
+                        ArgumentMatchers.eq(userId)))
+                .thenReturn(Mono.empty());
+        Mockito.when(outboxEventService.saveProjectCreated(
+                        ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class)))
+                .thenReturn(Mono.just(new OutboxEvent()));
+
+        StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId,
+                        Optional.of(""), Optional.empty()))
+                .expectNext(mockProject)
+                .verifyComplete();
+
+        ArgumentCaptor<Project> savedProject = ArgumentCaptor.forClass(Project.class);
+        Mockito.verify(projectRepository).save(savedProject.capture());
+        Assertions.assertNull(savedProject.getValue().getDescription());
     }
 
     @Test
@@ -295,6 +323,33 @@ class ProjectServiceImplTest {
 
         Mockito.verify(outboxEventService, Mockito.never())
                 .saveProjectUpdated(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void updateProject_Success_BlankDescriptionNormalizedToNull() {
+        Project projectWithDescription = mockProject.toBuilder().description("Initial description").build();
+        ProjectMember adminMember = ProjectMember.builder()
+                .projectId(projectId)
+                .userId(actorUserId)
+                .role(ProjectRole.ADMIN)
+                .build();
+
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(projectWithDescription));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        Mockito.when(outboxEventService.saveProjectUpdated(
+                        ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(Mono.just(new OutboxEvent()));
+
+        StepVerifier.create(projectService.updateProject(requestId, nodeId, projectId, actorUserId,
+                        Optional.empty(), Optional.of(""), false, Optional.empty(), false))
+                .assertNext(updated -> Assertions.assertNull(updated.getDescription()))
+                .verifyComplete();
+
+        ArgumentCaptor<Project> savedProject = ArgumentCaptor.forClass(Project.class);
+        Mockito.verify(projectRepository).save(savedProject.capture());
+        Assertions.assertNull(savedProject.getValue().getDescription());
     }
 
     @Test

@@ -139,6 +139,18 @@ public class UpdateProjectIT extends AbstractIT {
     }
 
     @Test
+    void adminSendsBlankDescription_NormalizedToNull() {
+        StepVerifier.create(projectService.updateProject(
+                REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
+                Optional.empty(), Optional.of(""), false, Optional.empty(), false
+        )).assertNext(updated -> {
+            Assertions.assertThat(updated.getDescription()).isNull();
+            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
+        }).verifyComplete();
+    }
+
+    @Test
     void patchOnlyNameField_DoesNotChangeDescriptionOrColor() {
         StepVerifier.create(projectService.updateProject(
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
@@ -238,6 +250,18 @@ public class UpdateProjectIT extends AbstractIT {
             Assertions.assertThat(fetched.description()).isEqualTo("Some description");
             Assertions.assertThat(fetched.color()).isNull();
         }).verifyComplete();
+    }
+
+    @Test
+    void createProjectWithBlankDescription_GetReturnsNullDescription() {
+        UUID creatorId = UUID.randomUUID();
+
+        StepVerifier.create(
+                projectService.createProject(REQUEST_ID, NODE_ID, "NEWPROJ2", "New project 2", creatorId,
+                                Optional.of(""), Optional.empty())
+                        .flatMap(created -> projectService.getProject(REQUEST_ID, NODE_ID, created.getId(), creatorId))
+        ).assertNext(fetched -> Assertions.assertThat(fetched.description()).isNull())
+                .verifyComplete();
     }
 
     private void assertPermissionDenied(Throwable error) {
