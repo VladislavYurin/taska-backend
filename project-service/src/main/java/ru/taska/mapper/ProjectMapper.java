@@ -21,6 +21,7 @@ import ru.taska.api.project.v1.WorkflowStatusResponse;
 import ru.taska.api.project.v1.WorkflowTransitionResponse;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.Project;
+import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
@@ -56,6 +57,30 @@ public interface ProjectMapper {
     @Mapping(target = "description", source = "description", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     @Mapping(target = "color", source = "color", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project);
+
+    /**
+     * Маппинг {@link Project} + роль актора в {@link ProjectResponse}.
+     *
+     * <p>Используется там, где роль не прилетает вместе с проектом из БД (например,
+     * {@code updateProject}: SELECT по project_id без джойна на project_members), но сервис
+     * её уже проверил сам (актор — ADMIN) и может передать явно — чтобы PATCH-ответ, как
+     * GET/list/context, тоже содержал {@code currentUserRole}.</p>
+     *
+     * @param project проект
+     * @param role    роль актора, уже подтверждённая вызывающим сервисом
+     * @return {@link ProjectResponse}
+     */
+    @Mapping(target = "id", source = "project.id")
+    @Mapping(target = "projectKey", source = "project.projectKey")
+    @Mapping(target = "name", source = "project.name")
+    @Mapping(target = "createdBy", source = "project.createdBy")
+    @Mapping(target = "createdAt", source = "project.createdAt")
+    @Mapping(target = "updatedAt", source = "project.updatedAt")
+    @Mapping(target = "archivedAt", source = "project.archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "description", source = "project.description", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "color", source = "project.color", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "currentUserRole", source = "role", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    ProjectResponse toProjectResponse(Project project, ProjectRole role);
 
     /**
      * Маппинг {@link ProjectCheckMembershipDto} в {@link ProjectResponse}

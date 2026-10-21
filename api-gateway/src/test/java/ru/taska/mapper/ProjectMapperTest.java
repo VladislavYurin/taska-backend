@@ -101,6 +101,49 @@ public class ProjectMapperTest {
         Assertions.assertThat(result.getArchivedAt()).isEqualTo(expectedDateTime);
     }
 
+    @Test
+    @DisplayName("Должен смаппить currentUserRole из ProjectResponse (как при ответе PATCH) в ProjectResponseDto")
+    void toRestProjectResponse_shouldMapCurrentUserRole_whenPresent() {
+        // given
+        var timestamp = createTimestamp();
+        var proto = ProjectResponse.newBuilder()
+                .setId(PROJECT_ID)
+                .setProjectKey("TASKA")
+                .setName("Taska Platform")
+                .setCreatedBy(USER_ID)
+                .setCreatedAt(timestamp)
+                .setUpdatedAt(timestamp)
+                .setCurrentUserRole(ProjectRole.PROJECT_ROLE_ADMIN)
+                .build();
+
+        // when
+        var result = mapper.toRestProjectResponse(proto);
+
+        // then
+        Assertions.assertThat(result.getCurrentUserRole()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    @DisplayName("currentUserRole должен остаться null, если его нет в ProjectResponse")
+    void toRestProjectResponse_shouldNotSetCurrentUserRole_whenAbsent() {
+        // given
+        var timestamp = createTimestamp();
+        var proto = ProjectResponse.newBuilder()
+                .setId(PROJECT_ID)
+                .setProjectKey("TASKA")
+                .setName("Taska Platform")
+                .setCreatedBy(USER_ID)
+                .setCreatedAt(timestamp)
+                .setUpdatedAt(timestamp)
+                .build();
+
+        // when
+        var result = mapper.toRestProjectResponse(proto);
+
+        // then
+        Assertions.assertThat(result.getCurrentUserRole()).isNull();
+    }
+
     // ========== ListMyProjectsResponse -> ListMyProjectResponseDto ==========
 
     @Test

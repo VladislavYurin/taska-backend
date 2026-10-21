@@ -14,6 +14,7 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectUpdateResult;
 import ru.taska.domain.dto.projectContext.ProjectContextDto;
 import ru.taska.domain.dto.projectContext.ProjectLabelDto;
 import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
@@ -283,7 +284,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public Mono<Project> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
+    public Mono<ProjectUpdateResult> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
                                        Optional<String> name, Optional<String> description, boolean clearDescription,
                                        Optional<String> color, boolean clearColor) {
         return projectRepository.findById(projectId)
@@ -305,7 +306,7 @@ public class ProjectServiceImpl implements ProjectService {
                             if (name.isEmpty() && description.isEmpty() && !clearDescription
                                     && color.isEmpty() && !clearColor) {
                                 log.info("[{}][{}] Empty PATCH for project {}, nothing to update", requestId, nodeId, projectId);
-                                return Mono.just(project);
+                                return Mono.just(new ProjectUpdateResult(project, member.getRole()));
                             }
 
                             // Optional.map() трактует mapper, вернувший null, как "значение отсутствует" и срабатывает
@@ -330,7 +331,7 @@ public class ProjectServiceImpl implements ProjectService {
                                     })
                                     .flatMap(savedProject ->
                                             outboxEventService.saveProjectUpdated(requestId, nodeId, savedProject, actorUserId)
-                                                    .thenReturn(savedProject));
+                                                    .thenReturn(new ProjectUpdateResult(savedProject, member.getRole())));
                         }))
                 .doOnSuccess(p -> log.info("[{}][{}] Project successfully updated: projectId={}", requestId, nodeId, projectId));
     }

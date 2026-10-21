@@ -506,6 +506,6 @@ public class GrpcProjectService {
                         );
                     });
                 })
-                .map(projectMapper::toProjectResponse);
+                .map(result -> projectMapper.toProjectResponse(result.project(), result.actorRole()));
     }
 }

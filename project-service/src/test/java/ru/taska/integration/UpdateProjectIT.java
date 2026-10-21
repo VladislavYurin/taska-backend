@@ -78,9 +78,10 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.of("New name"), Optional.of("New description"), false, Optional.of("#ABCDEF"), false
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getName()).isEqualTo("New name");
-            Assertions.assertThat(updated.getDescription()).isEqualTo("New description");
-            Assertions.assertThat(updated.getColor()).isEqualTo("#ABCDEF");
+            Assertions.assertThat(updated.project().getName()).isEqualTo("New name");
+            Assertions.assertThat(updated.project().getDescription()).isEqualTo("New description");
+            Assertions.assertThat(updated.project().getColor()).isEqualTo("#ABCDEF");
+            Assertions.assertThat(updated.actorRole()).isEqualTo(ProjectRole.ADMIN);
         }).verifyComplete();
 
         StepVerifier.create(outboxEventRepository.findAll()
@@ -99,10 +100,10 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.empty(), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
-            Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
-            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
-            Assertions.assertThat(updated.getUpdatedAt())
+            Assertions.assertThat(updated.project().getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.project().getDescription()).isEqualTo("Original description");
+            Assertions.assertThat(updated.project().getColor()).isEqualTo("#111111");
+            Assertions.assertThat(updated.project().getUpdatedAt())
                     .isCloseTo(updatedAtBeforePatch, Assertions.within(1, ChronoUnit.MICROS));
         }).verifyComplete();
 
@@ -120,9 +121,9 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.empty(), Optional.empty(), false, Optional.empty(), true
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getColor()).isNull();
-            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
-            Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
+            Assertions.assertThat(updated.project().getColor()).isNull();
+            Assertions.assertThat(updated.project().getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.project().getDescription()).isEqualTo("Original description");
         }).verifyComplete();
     }
 
@@ -132,9 +133,9 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.empty(), Optional.empty(), true, Optional.empty(), false
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getDescription()).isNull();
-            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
-            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
+            Assertions.assertThat(updated.project().getDescription()).isNull();
+            Assertions.assertThat(updated.project().getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.project().getColor()).isEqualTo("#111111");
         }).verifyComplete();
     }
 
@@ -144,9 +145,9 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.empty(), Optional.of(""), false, Optional.empty(), false
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getDescription()).isNull();
-            Assertions.assertThat(updated.getName()).isEqualTo("Original name");
-            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
+            Assertions.assertThat(updated.project().getDescription()).isNull();
+            Assertions.assertThat(updated.project().getName()).isEqualTo("Original name");
+            Assertions.assertThat(updated.project().getColor()).isEqualTo("#111111");
         }).verifyComplete();
     }
 
@@ -156,9 +157,9 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.of("Only name changed"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated -> {
-            Assertions.assertThat(updated.getName()).isEqualTo("Only name changed");
-            Assertions.assertThat(updated.getDescription()).isEqualTo("Original description");
-            Assertions.assertThat(updated.getColor()).isEqualTo("#111111");
+            Assertions.assertThat(updated.project().getName()).isEqualTo("Only name changed");
+            Assertions.assertThat(updated.project().getDescription()).isEqualTo("Original description");
+            Assertions.assertThat(updated.project().getColor()).isEqualTo("#111111");
         }).verifyComplete();
     }
 
@@ -207,7 +208,7 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.of("New name"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated ->
-                Assertions.assertThat(updated.getVersion()).isEqualTo(versionBeforeUpdate + 1)
+                Assertions.assertThat(updated.project().getVersion()).isEqualTo(versionBeforeUpdate + 1)
         ).verifyComplete();
     }
 
@@ -224,7 +225,7 @@ public class UpdateProjectIT extends AbstractIT {
                 REQUEST_ID, NODE_ID, project.getId(), ADMIN_ID,
                 Optional.of("Updated by client B"), Optional.empty(), false, Optional.empty(), false
         )).assertNext(updated ->
-                Assertions.assertThat(updated.getVersion()).isEqualTo(staleSnapshot.getVersion() + 1)
+                Assertions.assertThat(updated.project().getVersion()).isEqualTo(staleSnapshot.getVersion() + 1)
         ).verifyComplete();
 
         Project staleWrite = staleSnapshot.toBuilder()

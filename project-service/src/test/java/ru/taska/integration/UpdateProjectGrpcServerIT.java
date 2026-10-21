@@ -108,6 +108,64 @@ class UpdateProjectGrpcServerIT extends AbstractIT {
     }
 
     @Test
+    void updateProject_ThroughRealGrpcServer_ReturnsCurrentUserRoleAdmin() {
+        UpdateProjectRequest request = UpdateProjectRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(UpdateProjectRequestBody.newBuilder()
+                        .setProjectId(project.getId().toString())
+                        .setActorUserId(ADMIN_ID.toString())
+                        .setName("Updated by admin")
+                        .build())
+                .build();
+
+        StepVerifier.create(stub.updateProject(Mono.just(request)))
+                .assertNext(response -> {
+                    Assertions.assertThat(response.hasCurrentUserRole()).isTrue();
+                    Assertions.assertThat(response.getCurrentUserRole())
+                            .isEqualTo(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_ADMIN);
+                })
+                .verifyComplete();
+    }
+
+    /**
+     * Фиксирует текущее поведение (review, TAS-145): если в {@code UpdateProjectRequestBody}
+     * одновременно пришли непустой {@code description} и {@code clear_description=true}, явный
+     * сброс выигрывает и значение description игнорируется — ещё на уровне
+     * {@code GrpcProjectService} (там description даже не попадает в {@code Optional}, который
+     * увидит {@code ProjectServiceImpl}). Поведение детерминированное, но до этого теста не было
+     * покрыто ни одним тестом.
+     */
+    @Test
+    void updateProject_WhenDescriptionAndClearDescriptionBothSet_ClearWins() {
+        UpdateProjectRequest setDescriptionRequest = UpdateProjectRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(UpdateProjectRequestBody.newBuilder()
+                        .setProjectId(project.getId().toString())
+                        .setActorUserId(ADMIN_ID.toString())
+                        .setDescription("Original description")
+                        .build())
+                .build();
+
+        StepVerifier.create(stub.updateProject(Mono.just(setDescriptionRequest)))
+                .assertNext(response -> Assertions.assertThat(response.getDescription()).isEqualTo("Original description"))
+                .verifyComplete();
+
+        UpdateProjectRequest conflictingRequest = UpdateProjectRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())
+                .setBody(UpdateProjectRequestBody.newBuilder()
+                        .setProjectId(project.getId().toString())
+                        .setActorUserId(ADMIN_ID.toString())
+                        .setDescription("Should be ignored")
+                        .setClearDescription(true)
+                        .build())
+                .build();
+
+        StepVerifier.create(stub.updateProject(Mono.just(conflictingRequest)))
+                .assertNext(response -> Assertions.assertThat(response.hasDescription()).isFalse())
+                .verifyComplete();
+    }
+
+    @Test
     void updateProject_NonExistentProject_ThroughRealGrpcServer_ReturnsNotFound() {
         UpdateProjectRequest request = UpdateProjectRequest.newBuilder()
                 .setHeader(Header.newBuilder().setRequestId(REQUEST_ID).setNodeId(NODE_ID).build())

@@ -344,12 +344,37 @@ class ProjectServiceImplTest {
 
         StepVerifier.create(projectService.updateProject(requestId, nodeId, projectId, actorUserId,
                         Optional.empty(), Optional.of(""), false, Optional.empty(), false))
-                .assertNext(updated -> Assertions.assertNull(updated.getDescription()))
+                .assertNext(updated -> Assertions.assertNull(updated.project().getDescription()))
                 .verifyComplete();
 
         ArgumentCaptor<Project> savedProject = ArgumentCaptor.forClass(Project.class);
         Mockito.verify(projectRepository).save(savedProject.capture());
         Assertions.assertNull(savedProject.getValue().getDescription());
+    }
+
+    @Test
+    void updateProject_Success_ReturnsActorRole() {
+        ProjectMember adminMember = ProjectMember.builder()
+                .projectId(projectId)
+                .userId(actorUserId)
+                .role(ProjectRole.ADMIN)
+                .build();
+
+        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        Mockito.when(outboxEventService.saveProjectUpdated(
+                        ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(Mono.just(new OutboxEvent()));
+
+        StepVerifier.create(projectService.updateProject(requestId, nodeId, projectId, actorUserId,
+                        Optional.of("New name"), Optional.empty(), false, Optional.empty(), false))
+                .assertNext(updated -> {
+                    Assertions.assertEquals(ProjectRole.ADMIN, updated.actorRole());
+                    Assertions.assertEquals("New name", updated.project().getName());
+                })
+                .verifyComplete();
     }
 
     @Test

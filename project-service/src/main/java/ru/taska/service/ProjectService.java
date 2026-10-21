@@ -5,6 +5,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.Project;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.dto.ProjectUpdateResult;
 import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.domain.dto.projectContext.ProjectContextDto;
 
@@ -95,9 +96,10 @@ public interface ProjectService {
      * @param clearDescription - если true, описание явно сбрасывается в null (приоритетнее description).
      * @param color - новый цвет проекта (HEX), если передан.
      * @param clearColor - если true, цвет явно сбрасывается в null (приоритетнее color).
-     * @return Mono<{@link Project}> с обновлёнными данными проекта.
+     * @return Mono<{@link ProjectUpdateResult}> с обновлёнными данными проекта и ролью актора
+     *         (ADMIN — её проверяет этот же метод), чтобы ответ мог содержать currentUserRole.
      */
-    Mono<Project> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId, Optional<String> name,
+    Mono<ProjectUpdateResult> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId, Optional<String> name,
                                  Optional<String> description, boolean clearDescription,
                                  Optional<String> color, boolean clearColor);
 }
