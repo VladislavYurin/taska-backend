@@ -42,7 +42,14 @@ WHERE t.id = ranked.id
   AND NOT ranked.has_rules;
 
 -- changeset taska:0001-transitions-from-to-uniq
+-- preconditions onFail:HALT onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM (SELECT 1 FROM taska.transitions GROUP BY workflow_id, from_status_id, to_status_id HAVING COUNT(*) > 1) duplicates
 -- comment: Один переход на пару статусов внутри workflow: переходы теперь добавляются по одному через API
+
+-- Если миграция остановилась здесь с "SQL Precondition failed. Expected '0' got 'N'": после
+-- 0001-transitions-from-to-dedupe остались N пар дублей, у которых validator_rules есть больше чем у одного
+-- перехода. Найти их: SELECT workflow_id, from_status_id, to_status_id, array_agg(id) FROM taska.transitions
+-- GROUP BY 1, 2, 3 HAVING COUNT(*) > 1; решить, чьи правила оставить, удалить лишние переходы и перезапустить.
 
 CREATE UNIQUE INDEX IF NOT EXISTS transitions_workflow_from_to_uniq
     ON taska.transitions (workflow_id, from_status_id, to_status_id);
