@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -40,7 +42,6 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         mockIssue = new Issue();
         mockIssue.setId(localIssueId);
         mockIssue.setProjectId(PROJECT_ID);
-        mockIssue.setDeletedAt(Instant.now());
         mockIssue.setAssigneeId(ASSIGNEE_ID);
 
         allowedRoles = Set.of(
@@ -64,8 +65,13 @@ public class DeleteIssueTest extends IssueServiceImplTest {
     public void testDeleteIssue_Success() {
         ObjectNode payload = JsonNodeFactory.instance.objectNode();
 
-        Mockito.when(issueRepository.softDeleteAndReturn(localIssueId))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(localIssueId))
                 .thenReturn(Mono.just(mockIssue));
+        Mockito.when(issueRepository.softDeleteAndReturn(localIssueId))
+                .thenAnswer(invocation -> {
+                    mockIssue.setDeletedAt(Instant.now());
+                    return Mono.just(mockIssue);
+                });
 
         Mockito.when(payloadSerializer.createIssueDeletedPayload(
                 Mockito.any(), Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID))
@@ -93,6 +99,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles
         );
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(localIssueId);
         Mockito.verify(payloadSerializer).createIssueDeletedPayload(Mockito.any(), Mockito.eq(IssueEventType.DELETED), Mockito.any(Instant.class), Mockito.eq(localActorUserId), Mockito.eq(ASSIGNEE_ID));
         Mockito.verify(issueHistoryService).saveIssueHistory(localRequestId, localNodeId, mockIssue.getId(), localActorUserId, IssueEventType.DELETED, payload);
         Mockito.verify(outboxEventService).saveOutboxEvent(localRequestId, localNodeId, AggregateType.ISSUE, mockIssue.getId(), EventType.ISSUE_DELETED, payload);
@@ -102,7 +109,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
     @DisplayName("Выкидывание ошибки при отсутствии задачи в БД или если отмечена удаленной.")
     @Test
     public void testDeleteIssue_NotFound_ThrowsDomainException() {
-        Mockito.when(issueRepository.softDeleteAndReturn(localIssueId))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(localIssueId))
                 .thenReturn(Mono.empty());
 
         Mono<Issue> resultMono = issueService.deleteIssue(localRequestId, localNodeId, localIssueId, localActorUserId);
@@ -115,8 +122,30 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(localIssueId);
         Mockito.verifyNoMoreInteractions(issueRepository);
         Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService, projectRoleChecker);
+    }
+
+    @DisplayName("Отказ или сбой проверки прав не вызывает удаление, историю и outbox")
+    @ParameterizedTest
+    @EnumSource(value = DomainStatus.class, names = {"PERMISSION_DENIED", "UNAVAILABLE"})
+    void deleteIssue_authorizationFailureHasNoSideEffects(DomainStatus status) {
+        Mockito.when(issueRepository.findActiveByIdForUpdate(localIssueId))
+                .thenReturn(Mono.just(mockIssue));
+        DomainException failure = new DomainException(status, "Authorization failed");
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles))
+                .thenReturn(Mono.error(failure));
+
+        StepVerifier.create(issueService.deleteIssue(
+                        localRequestId, localNodeId, localIssueId, localActorUserId))
+                .expectErrorMatches(error -> error == failure)
+                .verify();
+
+        Assertions.assertNull(mockIssue.getDeletedAt());
+        Mockito.verify(issueRepository).findActiveByIdForUpdate(localIssueId);
+        Mockito.verifyNoMoreInteractions(issueRepository);
+        Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService);
     }
 }
