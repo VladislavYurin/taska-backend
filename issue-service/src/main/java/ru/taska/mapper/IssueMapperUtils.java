@@ -4,10 +4,13 @@ import com.google.protobuf.Timestamp;
 import lombok.extern.slf4j.Slf4j;
 import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueEventType;
 import ru.taska.domain.aggregate.IssueLinkViewType;
 import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.projection.IssueLinkDetails;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,6 +20,27 @@ import java.util.UUID;
 /** * Утилиты для преобразования доменных моделей задач в protobuf-модели. */
 @Slf4j
 public final class IssueMapperUtils {
+    /** Keeps legacy comment text out of both history APIs during rolling upgrades. */
+    public static String historyPayload(IssueHistory history) {
+        JsonNode payload = history.getPayload();
+        if (payload == null) {
+            return "";
+        }
+        IssueEventType type = history.getEventType();
+        if (type != IssueEventType.COMMENT_CREATED && type != IssueEventType.COMMENT_UPDATED
+                && type != IssueEventType.COMMENT_DELETED) {
+            return payload.toString();
+        }
+        if (!(payload instanceof ObjectNode object)) {
+            return "{}";
+        }
+        ObjectNode metadata = object.deepCopy();
+        metadata.remove("body");
+        metadata.remove("oldBody");
+        metadata.remove("newBody");
+        return metadata.toString();
+    }
+
     public static UserSummaryResponse resolveUser(UUID userId, Map<UUID, UserSummary> profiles) {
         if (userId == null) {
             return null;
