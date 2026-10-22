@@ -107,7 +107,7 @@ public class IssueMapper {
                 .setEventType(toProtoIssueEventType(history.getEventType()))
                 .setActorUserId(history.getActorUserId().toString())
                 .setOccurredAt(toTimestamp(history.getOccurredAt()))
-                .setPayload(history.getPayload() != null ? history.getPayload().toString() : "")
+                .setPayload(IssueMapperUtils.historyPayload(history))
                 .build();
     }
 

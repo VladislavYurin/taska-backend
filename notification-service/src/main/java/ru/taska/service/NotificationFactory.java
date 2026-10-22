@@ -288,7 +288,6 @@ public class NotificationFactory {
 
     private List<Notification> buildIssueCommentCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID actorUserId = extractUuid(payload, "actorUserId");
-        String body = extractString(payload, "body");
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
         if (actorUserId == null) {
@@ -306,7 +305,7 @@ public class NotificationFactory {
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toCommentCreated(event, userId, issueInfo, body));
+            notifications.add(notificationMapper.toCommentCreated(event, userId, issueInfo));
         }
         return notifications;
     }

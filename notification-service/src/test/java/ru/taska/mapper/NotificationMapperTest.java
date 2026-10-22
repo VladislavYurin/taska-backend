@@ -162,9 +162,10 @@ class NotificationMapperTest {
 
         @Test
         void toCommentCreated_shouldFillIssueFields() {
-            Notification result = mapper.toCommentCreated(event, USER_ID, issueInfo, "test body");
+            Notification result = mapper.toCommentCreated(event, USER_ID, issueInfo);
 
             assertThat(result.getNotificationType()).isEqualTo(NotificationType.ISSUE_COMMENT_CREATED);
+            assertThat(result.getBody()).isEqualTo("Новый комментарий к задаче " + ISSUE_KEY);
             assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
             assertThat(result.getIssueKey()).isEqualTo(ISSUE_KEY);
         }

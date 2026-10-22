@@ -24,7 +24,6 @@ import java.util.UUID;
 public class NotificationMapper {
 
     private final NotificationProperties notificationProperties;
-    private final String ETC_SIGN = "...";
 
     public Notification toIssueCreated(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
@@ -222,13 +221,25 @@ public class NotificationMapper {
                 .build();
     }
 
+    /** Redacts legacy previews even if an old worker writes after the cleanup migration. */
+    public static String safeBody(Notification notification) {
+        if (notification.getNotificationType() != NotificationType.ISSUE_COMMENT_CREATED) {
+            return notification.getBody();
+        }
+        String key = notification.getIssueKey();
+        if (key == null || key.isBlank()) {
+            key = notification.getIssueId() == null ? null : notification.getIssueId().toString();
+        }
+        return key == null ? "Новый комментарий" : "Новый комментарий к задаче " + key;
+    }
+
     public NotificationResponse toNotificationProto(Notification notification) {
         NotificationResponse.Builder builder = NotificationResponse.newBuilder()
                 .setId(toStringOrEmpty(notification.getId()))
                 .setUserId(toStringOrEmpty(notification.getUserId()))
                 .setNotificationType(toProtoNotificationKind(notification.getNotificationType()))
                 .setTitle(toStringOrEmpty(notification.getTitle()))
-                .setBody(toStringOrEmpty(notification.getBody()))
+                .setBody(toStringOrEmpty(safeBody(notification)))
                 .setSourceEventId(toStringOrEmpty(notification.getSourceEventId()))
                 .setIssueId(toStringOrEmpty(notification.getIssueId()))
                 .setIssueKey(toStringOrEmpty(notification.getIssueKey()))
@@ -327,21 +338,13 @@ public class NotificationMapper {
     public Notification toCommentCreated(
             TaskaEvent event,
             UUID userId,
-            IssueInfo issueInfo,
-            String body
+            IssueInfo issueInfo
     ) {
-        int maxCommentBodyLength = notificationProperties.comment().maxShownBodyLength();
-
-        String preview = body != null && body.length() > maxCommentBodyLength
-                ? body.substring(0, maxCommentBodyLength - ETC_SIGN.length()) + ETC_SIGN
-                : body;
-
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_CREATED)
                 .title("Новый комментарий")
-                .body("Новый комментарий к задаче " + displayKey(issueInfo)
-                        + ": " + preview)
+                .body("Новый комментарий к задаче " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())

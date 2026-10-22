@@ -15,7 +15,8 @@ public class EmailDeliveryAttemptMapper {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(toEmail);
         message.setSubject(notification.getTitle());
-        message.setText(notification.getBody() != null ? notification.getBody() : "");
+        String body = NotificationMapper.safeBody(notification);
+        message.setText(body != null ? body : "");
         return message;
     }
 
