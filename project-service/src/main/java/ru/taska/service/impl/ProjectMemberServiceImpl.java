@@ -13,6 +13,8 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberDto;
+import ru.taska.domain.dto.ProjectMemberStatsDto;
+import ru.taska.domain.dto.ProjectMemberStatsRow;
 import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -24,6 +26,7 @@ import ru.taska.service.validator.ProjectMemberValidator;
 import ru.taska.transport.grpc.client.GrpcAuthServiceClient;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -147,6 +150,34 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                 )
                 .buffer(100)
                 .concatMap(batch -> enrichMembersBatch(batch, requestId, nodeId));
+    }
+
+    @Override
+    public Flux<ProjectMemberStatsDto> getMemberStatsBatch(
+            List<UUID> projectIds, UUID actorUserId, String requestId, String nodeId) {
+        if (projectIds.isEmpty()) {
+            return Flux.empty();
+        }
+        return projectMemberRepository.findMemberStatsBatch(projectIds, actorUserId).collectList()
+                .flatMapMany(rows -> {
+                    if (rows.isEmpty()) {
+                        return Flux.empty();
+                    }
+                    var userIds = rows.stream().map(ProjectMemberStatsRow::userId).distinct().toList();
+                    return authServiceClient.getUserDetailsByIds(userIds, requestId, nodeId).flatMapMany(response -> {
+                        var users = response.getUserDetailsList().stream()
+                                .collect(Collectors.toMap(UserDetails::getUserId, Function.identity(), (a, b) -> a));
+                        var grouped = rows.stream().collect(Collectors.groupingBy(
+                                ProjectMemberStatsRow::projectId,
+                                LinkedHashMap::new, Collectors.toList()));
+                        return Flux.fromIterable(grouped.entrySet()).map(entry ->
+                                new ProjectMemberStatsDto(entry.getKey(),
+                                        entry.getValue().getFirst().memberCount(), entry.getValue().stream()
+                                                .map(member -> buildProjectMemberDetailsDto(new ProjectMemberDto(
+                                                        member.userId(), member.role(), member.addedAt()),
+                                                        users.get(member.userId().toString()))).toList()));
+                    });
+                });
     }
 
     private Mono<Void> ensureProjectExists(String requestId, String nodeId, UUID projectId) {

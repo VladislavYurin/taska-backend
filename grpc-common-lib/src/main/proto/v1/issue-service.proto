@@ -65,6 +65,10 @@ service IssueService {
   /**
    * Создаёт новую задачу в проекте.
    */
+  // Internal only: callers must obtain project IDs from an authorized project list.
+  rpc CountProjectIssuesBatchInternal(CountProjectIssuesBatchInternalRequest)
+      returns (CountProjectIssuesBatchInternalResponse);
+
   rpc CreateIssue(CreateIssueRequest)
       returns (IssueResponse);
 
@@ -2452,4 +2456,16 @@ message GetIssueByKeyRequest {
 message GetIssueByKeyRequestBody {
   string issue_key = 1;
   string actor_user_id = 2;
+}
+
+message CountProjectIssuesBatchInternalRequest {
+  ru.taska.common.v1.Header header = 1;
+  repeated string project_ids = 2;
+}
+message ProjectIssueCount {
+  string project_id = 1;
+  int64 issue_count = 2;
+}
+message CountProjectIssuesBatchInternalResponse {
+  repeated ProjectIssueCount items = 1;
 }
