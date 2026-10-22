@@ -5,7 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.Session;
+import java.util.Properties;
+import static ru.taska.testutil.EmailTestSupport.parts;
+import static ru.taska.testutil.EmailTestSupport.recipients;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -44,6 +48,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
 
     @BeforeEach
     void clearQueue() {
+        lenient().when(mail.createMimeMessage()).thenAnswer(call -> new MimeMessage(Session.getInstance(new Properties())));
         database.sql("DELETE FROM taska.invitation_email_deliveries").fetch().rowsUpdated().block(TIMEOUT);
     }
 
@@ -94,21 +99,22 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
         assertThat(inbox).hasSize(1);
         assertThat(inbox.getFirst().getBody()).doesNotContain(TOKEN);
         queue.dispatchBatch().block(TIMEOUT);
-        var captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mail).send(captor.capture());
-        assertThat(captor.getValue().getTo()).containsExactly("invitee@example.test");
-        assertThat(captor.getValue().getText()).contains("http://localhost:3001/login?token=" + TOKEN, "After activation, sign in");
+        assertThat(recipients(captor.getValue())).containsExactly("invitee@example.test");
+        assertThat(parts(captor.getValue()).get("text")).contains("http://localhost:5173/?token=" + TOKEN, "your new password");
+        assertThat(parts(captor.getValue()).get("html")).contains("http://localhost:5173/?token=" + TOKEN);
         assertThat(status(event.aggregateId())).isEqualTo("SENT");
         assertThat(storedToken(event.aggregateId())).isNull();
         queue.dispatchBatch().block(TIMEOUT);
-        verify(mail, times(1)).send(any(SimpleMailMessage.class));
+        verify(mail, times(1)).send(any(MimeMessage.class));
     }
 
     @Test
     void smtpFailureRetriesWithoutLosingTheTokenThenClearsItAfterDelivery() {
         var event = event(UUID.randomUUID(), TOKEN, Instant.now(), Instant.now().plusSeconds(3600));
         queue.enqueue(event).block(TIMEOUT);
-        doThrow(new MailSendException("temporary SMTP failure")).doNothing().when(mail).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("temporary SMTP failure")).doNothing().when(mail).send(any(MimeMessage.class));
         queue.dispatchBatch().block(TIMEOUT);
         assertThat(status(event.aggregateId())).isEqualTo("RETRY");
         assertThat(storedToken(event.aggregateId())).isEqualTo(TOKEN);
@@ -117,7 +123,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
         queue.dispatchBatch().block(TIMEOUT);
         assertThat(status(event.aggregateId())).isEqualTo("SENT");
         assertThat(storedToken(event.aggregateId())).isNull();
-        verify(mail, times(2)).send(any(SimpleMailMessage.class));
+        verify(mail, times(2)).send(any(MimeMessage.class));
     }
 
     @Test
@@ -132,7 +138,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
         queue.dispatchBatch().block(TIMEOUT);
         queue.enqueue(fresh).block(TIMEOUT);
         queue.dispatchBatch().block(TIMEOUT);
-        verify(mail, times(1)).send(any(SimpleMailMessage.class));
+        verify(mail, times(1)).send(any(MimeMessage.class));
         assertThat(storedToken(user)).isNull();
     }
 
@@ -141,7 +147,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
         var event = event(UUID.randomUUID(), TOKEN, Instant.now(), Instant.now().plusSeconds(3600));
         queue.enqueue(event).block(TIMEOUT);
         Flux.range(0, 2).flatMap(i -> queue.dispatchBatch().subscribeOn(Schedulers.parallel()), 2).then().block(TIMEOUT);
-        verify(mail, times(1)).send(any(SimpleMailMessage.class));
+        verify(mail, times(1)).send(any(MimeMessage.class));
         var recovery = event(UUID.randomUUID(), "c".repeat(43), Instant.now(), Instant.now().plusSeconds(3600));
         queue.enqueue(recovery).block(TIMEOUT);
         database.sql("UPDATE taska.invitation_email_deliveries SET status='PROCESSING', attempts=1, "
@@ -149,7 +155,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
                 .bind("lease", UUID.randomUUID()).bind("id", recovery.aggregateId()).fetch().rowsUpdated().block(TIMEOUT);
         queue.dispatchBatch().block(TIMEOUT);
         assertThat(status(recovery.aggregateId())).isEqualTo("SENT");
-        verify(mail, times(2)).send(any(SimpleMailMessage.class));
+        verify(mail, times(2)).send(any(MimeMessage.class));
     }
 
     @Test
@@ -179,7 +185,7 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
         var fresh = event(user, "d".repeat(43), now, now.plusSeconds(7200));
         queue.enqueue(first).block(TIMEOUT);
         doAnswer(invocation -> { queue.enqueue(fresh).block(TIMEOUT); return null; })
-                .when(mail).send(any(SimpleMailMessage.class));
+                .when(mail).send(any(MimeMessage.class));
         queue.dispatchBatch().block(TIMEOUT);
         assertThat(status(user)).isEqualTo("PENDING");
         assertThat(storedToken(user)).isEqualTo("d".repeat(43));
