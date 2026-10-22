@@ -2,6 +2,7 @@ package ru.taska.service;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -740,5 +741,61 @@ class SensitiveDataMaskServiceTest {
     void auditMask_returnsNullForNullValue() {
         Assertions.assertThat(maskService.maskSensitiveDataForAudit(
                 null, TEST_SERVICE, TEST_TABLE, "req", "audit-log-read")).isNull();
+    }
+    @Test
+    @DisplayName("auditMask маскирует outbox_events.payload как в конфиге auth (email MASK_PARTIAL, token HIDE)")
+    void auditMask_masksOutboxEventPayload() {
+        Mockito.when(properties.services()).thenReturn(Map.of("auth", serviceProps));
+
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of());
+
+        Map<String, Map<String, Map<String, String>>> jsonFieldsConfig = Map.of(
+                "outbox_events", Map.of(
+                        "payload", Map.of(
+                                "email", "MASK_PARTIAL",
+                                "rawInviteToken", "HIDE"
+                        )
+                )
+        );
+        Mockito.when(tableProps.sensitiveJsonFields()).thenReturn(jsonFieldsConfig);
+
+        String rawJson = "{\"email\":\"user@example.com\",\"rawInviteToken\":\"SECRET-TOKEN-123\",\"displayName\":\"Ivan\"}";
+        Map<String, Object> value = Map.of("payload", rawJson);
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, "auth", "outbox_events", "req", "outbox-retry-write");
+
+        String maskedJson = (String) masked.get("payload");
+
+        Assertions.assertThat(maskedJson).contains("\"email\":\"u**************m\"");
+
+        Assertions.assertThat(maskedJson).doesNotContain("rawInviteToken");
+        Assertions.assertThat(maskedJson).doesNotContain("SECRET-TOKEN-123");
+
+        Assertions.assertThat(maskedJson).contains("\"displayName\":\"Ivan\"");
+    }
+
+    @Test
+    @DisplayName("auditMask не падает, если поля для HIDE нет в payload")
+    void auditMask_ignoresMissingJsonFieldForHide() {
+        Mockito.when(properties.services()).thenReturn(Map.of("auth", serviceProps));
+
+        Mockito.when(tableProps.sensitiveColumns()).thenReturn(Map.of());
+
+        Map<String, Map<String, Map<String, String>>> jsonFieldsConfig = Map.of(
+                "outbox_events", Map.of(
+                        "payload", Map.of("rawInviteToken", "HIDE")
+                )
+        );
+        Mockito.when(tableProps.sensitiveJsonFields()).thenReturn(jsonFieldsConfig);
+
+        String rawJson = "{\"email\":\"user@example.com\"}";
+        Map<String, Object> value = Map.of("payload", rawJson);
+
+        Map<String, Object> masked = maskService.maskSensitiveDataForAudit(
+                value, "auth", "outbox_events", "req", "outbox-retry-write");
+
+        String maskedJson = (String) masked.get("payload");
+        Assertions.assertThat(maskedJson).isEqualTo("{\"email\":\"user@example.com\"}");
     }
 }

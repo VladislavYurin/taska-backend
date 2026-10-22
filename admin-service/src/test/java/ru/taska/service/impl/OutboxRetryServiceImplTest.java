@@ -17,23 +17,25 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.OutboxRetryRepository;
 import ru.taska.service.AuditService;
+import ru.taska.service.readonly.SensitiveDataMaskService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit-тесты административного retry outbox-событий.
@@ -65,6 +67,9 @@ class OutboxRetryServiceImplTest {
 
     @Mock
     private AuditService auditService;
+
+    @Mock
+    private SensitiveDataMaskService maskService;
 
     private ObjectMapper objectMapper;
     private JsonNode payload;
@@ -101,7 +106,8 @@ class OutboxRetryServiceImplTest {
                 outboxRetryRepository,
                 auditService,
                 properties,
-                objectMapper
+                objectMapper,
+                maskService
         );
     }
 
@@ -136,6 +142,9 @@ class OutboxRetryServiceImplTest {
                 eq(EVENT_ID),
                 any(Instant.class)
         )).thenReturn(Mono.just(1L));
+
+        when(maskService.maskSensitiveDataForAudit(anyMap(), eq(SERVICE), anyString(), anyString(), anyString()))
+                .thenReturn(Map.of("payload", objectMapper.writeValueAsString(oldSnapshot.payload())));
 
         when(auditService.logAudit(any(AuditEventDto.class)))
                 .thenReturn(Mono.empty());
@@ -591,6 +600,102 @@ class OutboxRetryServiceImplTest {
                 .verifyErrorSatisfies(throwable ->
                         assertSame(auditException, throwable)
                 );
+    }
+
+    /**
+     * Проверяет, что перед записью в аудит payload маскируется,
+     * и замаскированные данные попадают в AuditEventDto.
+     *
+     */
+    @Test
+    @DisplayName("Payload маскируется перед записью в audit")
+    void retryWithSensitivePayload_shouldMaskPayloadBeforeAudit() {
+        JsonNode sensitivePayload = objectMapper.readTree("""
+                {
+                  "email": "user@example.com",
+                  "rawInviteToken": "SECRET-TOKEN-123",
+                  "displayName": "Ivan"
+                }
+                """);
+        JsonNode maskedPayload = objectMapper.readTree("""
+                {
+                  "email": "u**************m",
+                  "displayName": "Ivan"
+                }
+                """);
+
+        OutboxEventSnapshot oldSnapshot = snapshot(
+                OutboxStatus.FAILED,
+                3,
+                "Kafka unavailable",
+                null,
+                sensitivePayload
+        );
+        OutboxEventSnapshot newSnapshot = snapshot(
+                OutboxStatus.NEW,
+                3,
+                null,
+                null,
+                sensitivePayload
+        );
+
+        when(outboxRetryRepository.findById(SERVICE, EVENT_ID))
+                .thenReturn(Mono.just(oldSnapshot))
+                .thenReturn(Mono.just(newSnapshot));
+        when(outboxRetryRepository.retry(
+                eq(SERVICE),
+                eq(EVENT_ID),
+                any(Instant.class)
+        )).thenReturn(Mono.just(1L));
+
+        when(auditService.logAudit(any(AuditEventDto.class)))
+                .thenReturn(Mono.empty());
+
+        String maskedPayloadJsonString = objectMapper.writeValueAsString(maskedPayload);
+
+        when(maskService.maskSensitiveDataForAudit(
+                anyMap(),
+                eq(SERVICE),
+                eq("outbox_events"),
+                eq(REQUEST_ID),
+                anyString()
+        )).thenReturn(Map.of("payload", maskedPayloadJsonString));
+
+        StepVerifier.create(service.retryOutboxEvent(
+                        REQUEST_ID,
+                        NODE_ID,
+                        SERVICE,
+                        EVENT_ID,
+                        REASON,
+                        ACTOR_USER_ID,
+                        ACTOR_LOGIN,
+                        actorRoles
+                ))
+                .expectNext(newSnapshot)
+                .verifyComplete();
+
+        verify(maskService, times(1)).maskSensitiveDataForAudit(
+                anyMap(),
+                eq(SERVICE),
+                eq("outbox_events"),
+                eq(REQUEST_ID),
+                anyString()
+        );
+
+        ArgumentCaptor<AuditEventDto> auditCaptor =
+                ArgumentCaptor.forClass(AuditEventDto.class);
+        verify(auditService).logAudit(auditCaptor.capture());
+
+        AuditEventDto audit = auditCaptor.getValue();
+
+        JsonNode auditedOldPayload = audit.getOldValue().get("payload");
+        JsonNode auditedNewPayload = audit.getNewValue().get("payload");
+
+        assertEquals(maskedPayload, auditedOldPayload);
+        assertEquals(maskedPayload, auditedNewPayload);
+
+        assertFalse(auditedOldPayload.toString().contains("SECRET-TOKEN-123"));
+        assertFalse(auditedNewPayload.toString().contains("SECRET-TOKEN-123"));
     }
 
     /**
