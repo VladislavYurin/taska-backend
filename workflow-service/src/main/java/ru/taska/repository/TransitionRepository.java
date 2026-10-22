@@ -17,4 +17,6 @@ public interface TransitionRepository extends ReactiveCrudRepository<TransitionE
         ORDER BY t.sort_order ASC
         """)
     Flux<TransitionEntity> findVisibleByWorkflowId(UUID workflowId);
+
+    Flux<TransitionEntity> findByWorkflowIdOrderBySortOrderAsc(UUID workflowId);
 }

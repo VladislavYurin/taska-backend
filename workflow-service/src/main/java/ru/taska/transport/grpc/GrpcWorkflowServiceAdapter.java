@@ -4,8 +4,12 @@ import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.grpc.server.service.GrpcService;
 import reactor.core.publisher.Mono;
+import ru.taska.api.workflow.v1.AddWorkflowStatusRequest;
+import ru.taska.api.workflow.v1.AddWorkflowTransitionRequest;
 import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
@@ -31,6 +35,21 @@ public class GrpcWorkflowServiceAdapter  extends ReactorWorkflowServiceGrpc.Work
     public Mono<WorkflowResponse> createWorkflow(Mono<CreateWorkflowRequest> request) {
         return grpcWorkflowService.createWorkflow(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("createWorkflow"));
+    }
+    @Override
+    public Mono<WorkflowResponse> addWorkflowStatus(Mono<AddWorkflowStatusRequest> request) {
+        return grpcWorkflowService.addWorkflowStatus(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addWorkflowStatus"));
+    }
+    @Override
+    public Mono<WorkflowResponse> addWorkflowTransition(Mono<AddWorkflowTransitionRequest> request) {
+        return grpcWorkflowService.addWorkflowTransition(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("addWorkflowTransition"));
+    }
+    @Override
+    public Mono<ListProjectWorkflowsResponse> listProjectWorkflows(Mono<ListProjectWorkflowsRequest> request) {
+        return grpcWorkflowService.listProjectWorkflows(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectWorkflows"));
     }
 
 }
