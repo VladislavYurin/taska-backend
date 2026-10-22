@@ -316,13 +316,14 @@ public class IssueServiceImpl implements IssueService {
     }
 
     @Override
+    @Transactional
     public Mono<Issue> deleteIssue(String requestId,
                                    String nodeId,
                                    UUID issueId,
                                    UUID actorUserId
     ) {
 
-        return issueRepository.softDeleteAndReturn(issueId)
+        return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue with id: " + issueId + " was not found", requestId, nodeId);
                     return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
@@ -331,7 +332,7 @@ public class IssueServiceImpl implements IssueService {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
 
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue);
+                            .then(Mono.defer(() -> issueRepository.softDeleteAndReturn(issueId)));
                 })
                 .flatMap(deletedIssue -> {
                     JsonNode payload = payloadSerializer.createIssueDeletedPayload(
