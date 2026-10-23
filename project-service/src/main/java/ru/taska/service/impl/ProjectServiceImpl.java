@@ -2,6 +2,7 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -13,6 +14,7 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectUpdateResult;
 import ru.taska.domain.dto.projectContext.ProjectContextDto;
 import ru.taska.domain.dto.projectContext.ProjectLabelDto;
 import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -59,13 +62,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
-    public Mono<Project> createProject(
-            String requestId,
-            String nodeId,
-            String projectKey,
-            String projectName,
-            UUID userId
-    ) {
+    public Mono<Project> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId,
+                                       Optional<String> description, Optional<String> color) {
+        ru.taska.service.ProjectInputValidator.validate(Optional.ofNullable(projectName), description, color);
         return projectRepository.findByProjectKey(projectKey)
                 .flatMap(p -> {
                     log.info("[{}][{}] Project already exists: projectKey={}",
@@ -77,6 +76,8 @@ public class ProjectServiceImpl implements ProjectService {
                                              .projectKey(projectKey)
                                              .name(projectName)
                                              .createdBy(userId)
+                                             .description(normalizeDescription(description.orElse(null)))
+                                             .color(color.orElse(null))
                                              .build();
 
                     return projectRepository.save(project)
@@ -244,6 +245,14 @@ public class ProjectServiceImpl implements ProjectService {
         return defaultSettingsJson;
     }
 
+    /**
+     * "" и null для description — одно и то же состояние "нет описания" (review): пустая/пробельная
+     * строка схлопывается в null, без изменения непустого содержимого.
+     */
+    private String normalizeDescription(String description) {
+        return (description == null || description.isBlank()) ? null : description;
+    }
+
     private ProjectMember createAdminMember(Project savedProject) {
         return ProjectMember.builder()
                             .projectId(savedProject.getId())
@@ -273,4 +282,68 @@ public class ProjectServiceImpl implements ProjectService {
                 .collectList();
     }
 
+    @Override
+    @Transactional
+    public Mono<ProjectUpdateResult> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
+                                       Optional<String> name, Optional<String> description, boolean clearDescription,
+                                       Optional<String> color, boolean clearColor) {
+        ru.taska.service.ProjectInputValidator.validate(name, description, color);
+        return projectRepository.findByIdForUpdate(projectId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                }))
+                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectIdForShare(actorUserId, projectId)
+                        .switchIfEmpty(Mono.defer(() -> {
+                            log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
+                            return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
+                        }))
+                        .flatMap(member -> {
+                            if (member.getRole() != ProjectRole.ADMIN) {
+                                log.warn("[{}][{}] User {} is not ADMIN of project {}", requestId, nodeId, actorUserId, projectId);
+                                return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Only project ADMIN can update the project"));
+                            }
+
+                            if (project.getArchivedAt() != null) {
+                                return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                        "Project is archived", Map.of("reason", "PROJECT_ARCHIVED")));
+                            }
+
+                            if (name.isEmpty() && description.isEmpty() && !clearDescription
+                                    && color.isEmpty() && !clearColor) {
+                                log.info("[{}][{}] Empty PATCH for project {}, nothing to update", requestId, nodeId, projectId);
+                                return Mono.just(new ProjectUpdateResult(project, member.getRole()));
+                            }
+
+                            // Optional.map() трактует mapper, вернувший null, как "значение отсутствует" и срабатывает
+                            // orElse() — а normalizeDescription("") должен именно стать null, а не откатиться
+                            // к старому значению, поэтому isPresent()/get() вместо map().orElse().
+                            String newDescription = clearDescription
+                                    ? null
+                                    : description.isPresent() ? normalizeDescription(description.get()) : project.getDescription();
+                            String newColor = clearColor ? null : color.orElse(project.getColor());
+
+                            Project updatedProject = project.toBuilder()
+                                    .name(name.orElse(project.getName()))
+                                    .description(newDescription)
+                                    .color(newColor)
+                                    .build();
+
+                            if (Objects.equals(updatedProject.getName(), project.getName())
+                                    && Objects.equals(newDescription, project.getDescription())
+                                    && Objects.equals(newColor, project.getColor())) {
+                                return Mono.just(new ProjectUpdateResult(project, member.getRole()));
+                            }
+                            return projectRepository.save(updatedProject)
+                                    .onErrorMap(OptimisticLockingFailureException.class, ex -> {
+                                        log.warn("[{}][{}] Project was concurrently modified: projectId={}", requestId, nodeId, projectId);
+                                        return new DomainException(DomainStatus.ABORTED,
+                                                "Project was concurrently modified by another request, please retry");
+                                    })
+                                    .flatMap(savedProject ->
+                                            outboxEventService.saveProjectUpdated(requestId, nodeId, savedProject, actorUserId)
+                                                    .thenReturn(new ProjectUpdateResult(savedProject, member.getRole())));
+                        }))
+                ;
+    }
 }

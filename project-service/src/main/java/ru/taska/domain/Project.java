@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -43,5 +44,15 @@ public class Project {
 
     @Column("archived_at")
     private Instant archivedAt;
+
+    @Column("description")
+    private String description;
+
+    @Column("color")
+    private String color;
+
+    @Version
+    @Column("version")
+    private Integer version;
 
 }

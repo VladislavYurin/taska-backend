@@ -22,6 +22,8 @@ import ru.taska.api.project.v1.ListMyProjectsRequestBody;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberRequestBody;
+import ru.taska.api.project.v1.UpdateProjectRequest;
+import ru.taska.api.project.v1.UpdateProjectRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AddProjectMemberRequestDto;
@@ -32,6 +34,7 @@ import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectContextResponseDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.mapper.ProjectMapper;
 
 import java.util.concurrent.TimeUnit;
@@ -62,17 +65,57 @@ public class GrpcProjectServiceClient {
     ){
         log.info("[{}] Calling createProject",context.requestId());
 
-        return request.flatMap(requestDto -> dynamicStub().createProject(
-                CreateProjectRequest.newBuilder()
-                        .setHeader(buildGrpcHeader(context))
-                        .setBody(
-                                CreateProjectRequestBody.newBuilder()
-                                        .setProjectKey(requestDto.getProjectKey())
-                                        .setName(requestDto.getName())
-                                        .setUserId(context.userContext().userId())
-                        )
-                        .build()
-                )
+        return request.flatMap(requestDto -> {
+                    CreateProjectRequestBody.Builder body = CreateProjectRequestBody.newBuilder()
+                            .setProjectKey(requestDto.getProjectKey())
+                            .setName(requestDto.getName())
+                            .setUserId(context.userContext().userId());
+                    if (requestDto.getDescription() != null) {
+                        body.setDescription(requestDto.getDescription());
+                    }
+                    if (requestDto.getColor() != null) {
+                        body.setColor(requestDto.getColor());
+                    }
+
+                    return dynamicStub().createProject(
+                            CreateProjectRequest.newBuilder()
+                                    .setHeader(buildGrpcHeader(context))
+                                    .setBody(body)
+                                    .build()
+                    );
+                }
+        ).map(projectMapper::toRestProjectResponse);
+    }
+
+    /**
+     * Вызов обновления проекта (PATCH-семантика)
+     * @param projectId идентификатор проекта
+     * @param request поля для обновления (name/description/color, все опциональны)
+     * @param clearColor если true — явный сброс color в null (независимо от request.getColor())
+     * @param clearDescription если true — явный сброс description в null (независимо от request.getDescription())
+     * @param context контекст запроса
+     * @return Rest DTO обновлённого проекта
+     */
+    public Mono<ProjectResponseDto> updateProject(
+            String projectId,
+            Mono<UpdateProjectRequestDto> request,
+            boolean clearColor,
+            boolean clearDescription,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling updateProject", context.requestId());
+
+        return request.flatMap(requestDto -> {
+                    UpdateProjectRequestBody.Builder body = projectMapper.toGrpcUpdateProjectRequestBody(
+                            projectId, requestDto, clearColor, clearDescription, context.userContext().userId());
+
+                    return dynamicStub().updateProject(
+                            UpdateProjectRequest.newBuilder()
+                                    .setHeader(buildGrpcHeader(context))
+                                    .setBody(body)
+                                    .build()
+                    );
+                }
         ).map(projectMapper::toRestProjectResponse);
     }
 

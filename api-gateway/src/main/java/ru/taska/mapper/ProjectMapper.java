@@ -18,6 +18,7 @@ import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ProjectWorkflowEntryResponse;
+import ru.taska.api.project.v1.UpdateProjectRequestBody;
 import ru.taska.api.project.v1.WorkflowStatusResponse;
 import ru.taska.api.project.v1.WorkflowTransitionResponse;
 import ru.taska.domain.GlobalRole;
@@ -32,6 +33,7 @@ import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.domain.dto.ProjectWorkflowEntryDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.domain.dto.WorkflowTransitionDto;
@@ -42,6 +44,9 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Component
 @RequiredArgsConstructor
@@ -60,12 +65,10 @@ public class ProjectMapper {
         restDto.setCreatedBy(protoDto.getCreatedBy());
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
-        if (protoDto.hasArchivedAt()){
-            restDto.setArchivedAt(toOffsetDateTime(protoDto.getArchivedAt()));
-        }
-        if (protoDto.hasCurrentUserRole()) {
-            restDto.setCurrentUserRole(toRestProjectRole(protoDto.getCurrentUserRole()));
-        }
+        setIfPresent(protoDto::hasArchivedAt, () -> toOffsetDateTime(protoDto.getArchivedAt()), restDto::setArchivedAt);
+        setIfPresent(protoDto::hasCurrentUserRole, () -> toRestProjectRole(protoDto.getCurrentUserRole()), restDto::setCurrentUserRole);
+        setIfPresent(protoDto::hasDescription, protoDto::getDescription, restDto::setDescription);
+        setIfPresent(protoDto::hasColor, protoDto::getColor, restDto::setColor);
         return restDto;
     }
 
@@ -233,6 +236,33 @@ public class ProjectMapper {
         };
     }
 
+    /// REST TO gRPC Dto
+
+    /**
+     * Собирает Builder тела gRPC-запроса на обновление проекта (PATCH-семантика).
+     * name/description/color устанавливаются только если переданы в requestDto (Optional-поля);
+     * clearColor/clearDescription — прямая безусловная передача boolean, не Optional-паттерн.
+     */
+    public UpdateProjectRequestBody.Builder toGrpcUpdateProjectRequestBody(
+            String projectId,
+            UpdateProjectRequestDto requestDto,
+            boolean clearColor,
+            boolean clearDescription,
+            String actorUserId
+    ) {
+        UpdateProjectRequestBody.Builder body = UpdateProjectRequestBody.newBuilder()
+                .setProjectId(projectId)
+                .setActorUserId(actorUserId)
+                .setClearColor(clearColor)
+                .setClearDescription(clearDescription);
+
+        setIfPresent(requestDto.getName(), body::setName);
+        setIfPresent(requestDto.getDescription(), body::setDescription);
+        setIfPresent(requestDto.getColor(), body::setColor);
+
+        return body;
+    }
+
     /**
      * ProjectRole (proto enum) -> REST String.
      */
@@ -273,5 +303,23 @@ public class ProjectMapper {
             case GlobalRole.USER -> GlobalRoleProto.GLOBAL_ROLE_USER;
             default -> GlobalRoleProto.GLOBAL_ROLE_UNSPECIFIED;
         };
+    }
+
+    /**
+     * Устанавливает значение в билдер, если объект не null.
+     */
+    private static <T> void setIfPresent(T value, Consumer<T> setter) {
+        if (value != null) {
+            setter.accept(value);
+        }
+    }
+
+    /**
+     * Устанавливает значение в билдер, если объект есть в protoDto.
+     */
+    private static <T> void setIfPresent(BooleanSupplier hasCheck, Supplier<T> getter, Consumer<T> setter) {
+        if (hasCheck.getAsBoolean()) {
+            setter.accept(getter.get());
+        }
     }
 }

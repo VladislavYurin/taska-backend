@@ -34,6 +34,7 @@ import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberResponseDto;
 import ru.taska.domain.dto.ProjectMemberRoleDto;
 import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -192,6 +193,246 @@ public class ProjectControllerTest {
                 .expectBody()
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "null", "[]", "42", "{", "{\"name\":123}", "{\"color\":{}}", "{\"projectKey\":\"NEW\"}", "{\"name\":\"   \"}"})
+    void updateProjectRejectsInvalidBodyWithoutCallingBackend(String body) {
+        mockAuthenticatedUser();
+        var call = webTestClient.patch().uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).contentType(MediaType.APPLICATION_JSON);
+        call.bodyValue(body).exchange().expectStatus().isBadRequest();
+        Mockito.verify(projectClient, Mockito.never()).updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any());
+    }
+
+    // ========== UPDATE PROJECT ==========
+
+    @Test
+    @DisplayName("Должен успешно обновить проект и вернуть 200 OK")
+    void updateProject_shouldReturn200OK() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new UpdateProjectRequestDto();
+        request.setName("New name");
+        request.setDescription("New description");
+        request.setColor("#0052CC");
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+        response.setProjectKey(PROJECT_KEY);
+        response.setName("New name");
+        response.setDescription("New description");
+        response.setColor("#0052CC");
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody(ProjectResponseDto.class).isEqualTo(response);
+
+        Mockito.verify(projectClient).updateProject(
+                Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.eq(false), Mockito.eq(false), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при невалидном HEX-формате color")
+    void updateProject_shouldReturn400_whenColorIsInvalid() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new UpdateProjectRequestDto();
+        request.setColor("not-a-hex-color");
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при слишком длинном name")
+    void updateProject_shouldReturn400_whenNameTooLong() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new UpdateProjectRequestDto();
+        request.setName("a".repeat(256));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 400 Bad Request при слишком длинном description")
+    void updateProject_shouldReturn400_whenDescriptionTooLong() {
+        // given
+        mockAuthenticatedUser();
+
+        var request = new UpdateProjectRequestDto();
+        request.setDescription("a".repeat(2001));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+    }
+
+    @Test
+    @DisplayName("PATCH с {\"color\": null} должен смаппиться в clearColor=true (явный сброс, а не \"не менять\")")
+    void updateProject_shouldMapExplicitNullColorToClearColorTrue() {
+        // given
+        mockAuthenticatedUser();
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then: поле color присутствует в теле и явно равно null
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"color\": null}")
+                .exchange()
+                .expectStatus().isOk();
+
+        Mockito.verify(projectClient).updateProject(
+                Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.eq(true), Mockito.eq(false), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH без поля color вообще должен смаппиться в clearColor=false (\"не менять\", а не сброс)")
+    void updateProject_shouldNotClearColor_whenColorFieldAbsent() {
+        // given
+        mockAuthenticatedUser();
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then: поле color вообще отсутствует в теле (не null, а именно отсутствует)
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"name\": \"Just a rename\"}")
+                .exchange()
+                .expectStatus().isOk();
+
+        Mockito.verify(projectClient).updateProject(
+                Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.eq(false), Mockito.eq(false), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH с {\"name\": null} должен вернуть 400 Bad Request, а не no-op 200")
+    void updateProject_shouldReturn400_whenNameIsExplicitNull() {
+        // given
+        mockAuthenticatedUser();
+
+        // when & then: поле name присутствует в теле и явно равно null
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"name\": null}")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.code").exists()
+                .jsonPath("$.message").exists();
+
+        Mockito.verify(projectClient, Mockito.never()).updateProject(
+                Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH с {\"description\": null} должен смаппиться в clearDescription=true")
+    void updateProject_shouldMapExplicitNullDescriptionToClearDescriptionTrue() {
+        // given
+        mockAuthenticatedUser();
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"description\": null}")
+                .exchange()
+                .expectStatus().isOk();
+
+        Mockito.verify(projectClient).updateProject(
+                Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.eq(false), Mockito.eq(true), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("PATCH без поля description вообще должен смаппиться в clearDescription=false")
+    void updateProject_shouldNotClearDescription_whenDescriptionFieldAbsent() {
+        // given
+        mockAuthenticatedUser();
+
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+
+        Mockito.when(projectClient.updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(Mono.just(response));
+
+        // when & then
+        webTestClient.patch()
+                .uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"name\": \"Just a rename\"}")
+                .exchange()
+                .expectStatus().isOk();
+
+        Mockito.verify(projectClient).updateProject(
+                Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.eq(false), Mockito.eq(false), Mockito.any());
     }
 
     // ========== LIST PROJECTS ==========
@@ -810,4 +1051,5 @@ public class ProjectControllerTest {
                     .expectHeader().exists("X-Request-Id");
         }
     }
+
 }

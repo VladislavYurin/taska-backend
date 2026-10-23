@@ -15,6 +15,7 @@ import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
 import ru.taska.event.payload.projectService.MemberUpdatedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
+import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
@@ -30,6 +31,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     private static final String PROJECT_CREATED = EventType.PROJECT_CREATED.getValue();
     private static final String MEMBER_ADDED = EventType.MEMBER_ADDED.getValue();
     private static final String MEMBER_REMOVED = EventType.MEMBER_REMOVED.getValue();
+    private static final String PROJECT_UPDATED = EventType.PROJECT_UPDATED.getValue();
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -99,6 +101,35 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                 requestId, nodeId, EventType.MEMBER_UPDATED.getValue(), updatedMemberId, projectId);
         return outboxEventRepository.save(event);
+    }
+
+    @Override
+    public Mono<OutboxEvent> saveProjectUpdated(String requestId, String nodeId, Project project, UUID actorUserId){
+        OutboxEvent event = OutboxEvent.builder()
+                .aggregateType(AggregateType.PROJECT.getValue())
+                .aggregateId(project.getId())
+                .eventType(PROJECT_UPDATED)
+                .payload(projectUpdatePayload(project, actorUserId))
+                .attempts(0)
+                .status(OutboxEventStatus.NEW)
+                .requestId(requestId)
+                .build();
+
+        log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
+                requestId, nodeId, EventType.PROJECT_UPDATED, project.getId());
+        return outboxEventRepository.save(event);
+    }
+
+    private JsonNode projectUpdatePayload(Project project , UUID actorUserId){
+        return objectMapper.valueToTree(
+                new ProjectUpdatedPayload(
+                        project.getId(),
+                        project.getName(),
+                        project.getDescription(),
+                        project.getColor(),
+                        actorUserId
+                )
+        );
     }
 
     private JsonNode projectCreatedPayload(Project project) {

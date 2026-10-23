@@ -38,7 +38,8 @@ public enum EventType {
     WORKLOG_UPDATED("WorklogUpdated"),
     WORKLOG_DELETED("WorklogDeleted"),
     USER_BLOCKED("UserBlocked"),
-    USER_UNBLOCKED("UserUnblocked");
+    USER_UNBLOCKED("UserUnblocked"),
+    PROJECT_UPDATED("ProjectUpdated");
 
     private final String value;
 

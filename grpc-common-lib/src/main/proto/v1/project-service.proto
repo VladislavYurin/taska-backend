@@ -81,6 +81,11 @@ service ProjectService {
    * Используется сервисами, которые уже проверили права.
    */
   rpc GetProjectInfoBatchInternal (GetProjectInfoBatchInternalRequest) returns (GetProjectInfoBatchInternalResponse);
+
+  /**
+   * Обновляет проект (name/description/color).
+   */
+  rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse);
 }
 
 message CreateProjectRequest {
@@ -92,6 +97,8 @@ message CreateProjectRequestBody {
   string project_key = 1;
   string name = 2;
   string user_id = 3;
+  optional string description = 4;
+  optional string color = 5;
 }
 
 message GetProjectRequest {
@@ -163,6 +170,8 @@ message ProjectResponse {
   google.protobuf.Timestamp updated_at = 6;
   optional google.protobuf.Timestamp archived_at = 7;
   optional ProjectRole current_user_role = 8;
+  optional string description = 9;
+  optional string color = 10;
 }
 
 message ProjectContextResponse {
@@ -404,6 +413,24 @@ message WorkflowTransitionResponse {
   string to_status_id = 3;
   string name = 4;
   int32 sort_order = 5;
+}
+
+/**
+ * Запрос обновления проекта.
+ */
+message UpdateProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  UpdateProjectRequestBody body = 2;
+}
+
+message UpdateProjectRequestBody {
+  string project_id = 1;
+  string actor_user_id = 2;
+  optional string name = 3;
+  optional string description = 4;
+  optional string color = 5;
+  bool clear_color = 6;
+  bool clear_description = 7;
 }
 
 message GetProjectMemberStatsBatchRequest {

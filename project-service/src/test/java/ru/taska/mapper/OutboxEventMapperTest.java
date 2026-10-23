@@ -106,6 +106,29 @@ class OutboxEventMapperTest {
         }
 
         @Test
+        void shouldShapeProjectUpdatedPayload() {
+            UUID projectId = UUID.randomUUID();
+            UUID updatedBy = UUID.randomUUID();
+            JsonNode source = objectMapper.valueToTree(Map.of(
+                    "projectId", projectId.toString(),
+                    "name", "New name",
+                    "description", "New description",
+                    "color", "#ABCDEF",
+                    "updatedBy", updatedBy.toString()
+            ));
+
+            TaskaEvent taskaEvent = mapper.toTaskaEvent(event("ProjectUpdated", "project", projectId, source));
+
+            Assertions.assertThat(taskaEvent.eventType()).isEqualTo("ProjectUpdated");
+            JsonNode payload = taskaEvent.payload();
+            Assertions.assertThat(payload.get("projectId").asString()).isEqualTo(projectId.toString());
+            Assertions.assertThat(payload.get("name").asString()).isEqualTo("New name");
+            Assertions.assertThat(payload.get("description").asString()).isEqualTo("New description");
+            Assertions.assertThat(payload.get("color").asString()).isEqualTo("#ABCDEF");
+            Assertions.assertThat(payload.get("updatedBy").asString()).isEqualTo(updatedBy.toString());
+        }
+
+        @Test
         void shouldYieldNullField_whenSourceFieldMissing() {
             UUID projectId = UUID.randomUUID();
             Map<String, String> sourceMap = new HashMap<>();
