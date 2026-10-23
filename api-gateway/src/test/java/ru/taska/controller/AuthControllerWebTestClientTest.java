@@ -280,7 +280,6 @@ class AuthControllerWebTestClientTest {
 
         GatewayUserContext gatewayUserContext = new GatewayUserContext(
                 "6d774efa-57d8-4ae0-a27e-2984d1dfbbf6",
-                "anna",
                 "anna@example.com",
                 "Anna Ivanova",
                 GatewayUserStatus.ACTIVE,
@@ -289,7 +288,6 @@ class AuthControllerWebTestClientTest {
 
         ru.taska.domain.dto.ValidateAccessTokenResponseDto restResponseDto = new ru.taska.domain.dto.ValidateAccessTokenResponseDto();
         restResponseDto.setId("6d774efa-57d8-4ae0-a27e-2984d1dfbbf6");
-        restResponseDto.setLogin("anna");
         restResponseDto.setEmail("anna@example.com");
         restResponseDto.setDisplayName("Anna Ivanova");
         restResponseDto.setStatus(ru.taska.domain.dto.UserStatusDto.ACTIVE);
@@ -311,7 +309,7 @@ class AuthControllerWebTestClientTest {
                 .expectHeader().valueEquals("X-Request-Id", "req-me-success")
                 .expectBody()
                 .jsonPath("$.id").isEqualTo("6d774efa-57d8-4ae0-a27e-2984d1dfbbf6")
-                .jsonPath("$.login").isEqualTo("anna")
+                .jsonPath("$.login").doesNotExist()
                 .jsonPath("$.email").isEqualTo("anna@example.com")
                 .jsonPath("$.displayName").isEqualTo("Anna Ivanova")
                 .jsonPath("$.status").isEqualTo("ACTIVE")

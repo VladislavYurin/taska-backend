@@ -21,7 +21,7 @@ public interface OutboxRetryService {
      * @param eventId     идентификатор outbox-события
      * @param reason      обязательная причина ручного retry
      * @param actorUserId идентификатор администратора
-     * @param actorLogin  логин администратора
+     * @param actorDisplayName  имя администратора
      * @param actorRoles  роли администратора для аудита
      * @return состояние outbox-события после retry
      */
@@ -32,7 +32,8 @@ public interface OutboxRetryService {
             UUID eventId,
             String reason,
             UUID actorUserId,
-            String actorLogin,
+            String actorDisplayName,
+            String actorEmail,
             JsonNode actorRoles
     );
 }

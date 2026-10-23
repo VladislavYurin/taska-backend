@@ -80,7 +80,6 @@ class ProfileServiceImplTest {
         testUser = User.builder()
                 .id(testUserId)
                 .email(TEST_USER_EMAIL)
-                .login("testuser")
                 .status(UserStatus.ACTIVE)
                 .build();
 

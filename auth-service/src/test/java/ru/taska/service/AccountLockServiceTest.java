@@ -51,7 +51,6 @@ class AccountLockServiceTest {
         return User.builder()
                 .id(userId)
                 .email("u@example.com")
-                .login("u")
                 .status(status)
                 .lockedUntil(lockedUntil)
                 .build();

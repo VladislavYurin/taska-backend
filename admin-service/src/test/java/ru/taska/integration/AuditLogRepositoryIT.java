@@ -28,7 +28,8 @@ class AuditLogRepositoryIT extends AbstractIT {
         AuditLog auditLog = new AuditLog();
         auditLog.setRequestId("req-test-123");
         auditLog.setActorUserId(UUID.randomUUID());
-        auditLog.setActorLogin("admin");
+        auditLog.setActorDisplayName("admin");
+        auditLog.setActorEmail("admin@example.com");
         auditLog.setActorRoles(actorRoles);
         auditLog.setAction("UPDATE_TASK");
         auditLog.setTargetService("issue-service");

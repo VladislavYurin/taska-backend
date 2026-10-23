@@ -1,5 +1,11 @@
 package ru.taska.integration;
 
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -22,7 +28,7 @@ public abstract class AbstractIT {
     public static final String FIXTURE_TABLE = "it_users";
     public static final String FIXTURE_SCHEMA = "taska";
     public static final String FIXTURE_USER_ID = "11111111-1111-1111-1111-111111111111";
-    public static final String FIXTURE_USER_LOGIN = "alice";
+    public static final String FIXTURE_USER_NAME = "alice";
     public static final String FIXTURE_USER_EMAIL = "alice@example.com";
     public static final String AUDIT_TABLE = "admin_audit_log";
 
@@ -31,7 +37,7 @@ public abstract class AbstractIT {
      * (так писали операции над пользователями до миграции 0002), в old/new есть sensitive-колонка email.
      */
     public static final String SECOND_AUDIT_ACTOR_ID = "22222222-2222-2222-2222-222222222222";
-    public static final String SECOND_AUDIT_ACTOR_LOGIN = "bob";
+    public static final String SECOND_AUDIT_ACTOR_NAME = "bob";
     public static final String SECOND_AUDIT_ACTION = "second-action";
     public static final String SECOND_AUDIT_TARGET_SERVICE = FIXTURE_SERVICE + "-service";
 
@@ -95,6 +101,13 @@ public abstract class AbstractIT {
 
     @BeforeAll
     static void ensureReadonlyFixture() throws Exception {
+        // Install the real schema before seeding fixtures; changesets must see their historical schema.
+        try (var connection = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var liquibase = new Liquibase("db/changelog/db.changelog-master.yaml",
+                     new ClassLoaderResourceAccessor(), new JdbcConnection(connection))) {
+            liquibase.update(new Contexts(), new LabelExpression());
+        }
         try (Connection connection = DriverManager.getConnection(
                 postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
              Statement statement = connection.createStatement()) {
@@ -104,7 +117,7 @@ public abstract class AbstractIT {
             statement.execute("""
                 CREATE TABLE IF NOT EXISTS %s.%s (
                     id uuid PRIMARY KEY,
-                    login varchar(64) NOT NULL,
+                    display_name varchar(64) NOT NULL,
                     email varchar(255) NOT NULL,
                     created_at timestamptz NOT NULL DEFAULT now(),
                     age integer
@@ -112,14 +125,14 @@ public abstract class AbstractIT {
                 """.formatted(FIXTURE_SCHEMA, FIXTURE_TABLE));
             statement.execute("DELETE FROM " + FIXTURE_SCHEMA + "." + FIXTURE_TABLE);
             statement.execute("""
-                INSERT INTO %s.%s (id, login, email, age) VALUES
+                INSERT INTO %s.%s (id, display_name, email, age) VALUES
                 ('%s', '%s', '%s', 30),
                 ('22222222-2222-2222-2222-222222222222', 'bob', 'bob@example.com', 25)
                 """.formatted(
                     FIXTURE_SCHEMA,
                     FIXTURE_TABLE,
                     FIXTURE_USER_ID,
-                    FIXTURE_USER_LOGIN,
+                    FIXTURE_USER_NAME,
                     FIXTURE_USER_EMAIL
             ));
 
@@ -128,7 +141,8 @@ public abstract class AbstractIT {
                     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                     request_id text NULL,
                     actor_user_id uuid NOT NULL,
-                    actor_login varchar(64) NOT NULL,
+                    actor_display_name text NOT NULL,
+                    actor_email varchar(320),
                     actor_roles jsonb NOT NULL,
                     action text NOT NULL,
                     target_service text NOT NULL,
@@ -144,7 +158,7 @@ public abstract class AbstractIT {
             statement.execute("DELETE FROM " + FIXTURE_SCHEMA + "." + AUDIT_TABLE);
             statement.execute("""
                 INSERT INTO %s.%s (
-                    id, request_id, actor_user_id, actor_login, actor_roles, action,
+                    id, request_id, actor_user_id, actor_display_name, actor_roles, action,
                     target_service, target_table, target_id, old_value, new_value,
                     reason, created_at
                 ) VALUES (
@@ -171,8 +185,8 @@ public abstract class AbstractIT {
                     '%s',
                     '%s',
                     '00000000-0000-0000-0000-000000000002',
-                    '{"login":"bob","email":"bob@example.com"}'::jsonb,
-                    '{"login":"bob","email":"bob.new@example.com"}'::jsonb,
+                    '{"display_name":"bob","email":"bob@example.com"}'::jsonb,
+                    '{"display_name":"bob","email":"bob.new@example.com"}'::jsonb,
                     'second-reason',
                     '2024-02-01T09:30:00Z'
                 )
@@ -180,11 +194,11 @@ public abstract class AbstractIT {
                     FIXTURE_SCHEMA,
                     AUDIT_TABLE,
                     FIXTURE_USER_ID,
-                    FIXTURE_USER_LOGIN,
+                    FIXTURE_USER_NAME,
                     FIXTURE_SERVICE,
                     FIXTURE_TABLE,
                     SECOND_AUDIT_ACTOR_ID,
-                    SECOND_AUDIT_ACTOR_LOGIN,
+                    SECOND_AUDIT_ACTOR_NAME,
                     SECOND_AUDIT_ACTION,
                     SECOND_AUDIT_TARGET_SERVICE,
                     FIXTURE_TABLE

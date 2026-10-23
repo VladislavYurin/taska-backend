@@ -57,7 +57,6 @@ class AdminUserManagementControllerTest {
     private static final String USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String TARGET_USER_ID = "11111111-1111-1111-1111-111111111111";
     private static final String REASON = "Test reason";
-    private static final String LOGIN = "admin";
     private static final String EMAIL = "admin@example.com";
     private static final String DISPLAY_NAME = "Admin Adminov";
     private static final OffsetDateTime FIXED_TIME = OffsetDateTime.of(
@@ -499,7 +498,6 @@ class AdminUserManagementControllerTest {
 
         var userContext = GatewayUserContext.builder()
                 .userId(USER_ID)
-                .login(LOGIN)
                 .email(EMAIL)
                 .displayName(DISPLAY_NAME)
                 .status(GatewayUserStatus.ACTIVE)

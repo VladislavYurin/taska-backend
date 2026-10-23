@@ -639,7 +639,6 @@ class UserProfileControllerTest {
 
         var userContext = GatewayUserContext.builder()
                 .userId(USER_ID)
-                .login("testuser")
                 .email("test@example.com")
                 .displayName("Test User")
                 .status(GatewayUserStatus.ACTIVE)

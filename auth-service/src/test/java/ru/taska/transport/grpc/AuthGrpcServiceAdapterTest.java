@@ -91,7 +91,6 @@ class AuthGrpcServiceAdapterTest {
 
         userContext = UserContext.newBuilder()
                 .setUserId(UUID.randomUUID().toString())
-                .setLogin("testuser")
                 .setEmail("test@example.com")
                 .setDisplayName("Test User")
                 .build();
@@ -329,7 +328,6 @@ class AuthGrpcServiceAdapterTest {
             StepVerifier.create(adapter.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectNextMatches(response ->
                             response.getUserContext().getUserId().equals(userContext.getUserId()) &&
-                                    response.getUserContext().getLogin().equals(userContext.getLogin()) &&
                                     response.getUserContext().getEmail().equals(userContext.getEmail()) &&
                                     response.getUserContext().getDisplayName().equals(userContext.getDisplayName())
                     )

@@ -66,7 +66,6 @@ public class GrpcNotificationServiceClientTest {
 
         GatewayUserContext userContext = new GatewayUserContext(
                 USER_ID,
-                "testuser",
                 "test@example.com",
                 "Test User",
                 GatewayUserStatus.ACTIVE,

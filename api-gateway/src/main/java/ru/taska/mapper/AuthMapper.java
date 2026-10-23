@@ -133,7 +133,6 @@ public class AuthMapper {
     public ValidateAccessTokenResponseDto toValidateAccessTokenRestResponse(GatewayUserContext userContext) {
         ValidateAccessTokenResponseDto dto = new ValidateAccessTokenResponseDto();
         dto.setId(userContext.userId());
-        dto.setLogin(userContext.login());
         dto.setEmail(userContext.email());
         dto.setDisplayName(userContext.displayName());
         dto.setStatus(userContext.status() != null

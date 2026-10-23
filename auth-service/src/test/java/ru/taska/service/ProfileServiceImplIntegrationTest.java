@@ -62,7 +62,6 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
     @BeforeEach
     void setUp() {
         User user = User.builder()
-                .login("testuser")
                 .email(TEST_USER_EMAIL)
                 .displayName(TEST_USER_DISPLAY_NAME)
                 .status(UserStatus.ACTIVE)
@@ -200,7 +199,6 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
         userAvatarRepository.save(avatar).block();
 
         User userWithoutAvatar = User.builder()
-                .login("noavatar")
                 .email("noavatar@example.com")
                 .displayName("No Avatar User")
                 .status(UserStatus.ACTIVE)
@@ -279,7 +277,7 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
     }
 
     private UUID createOtherUser() {
-        return userRepository.save(User.builder().login("other").email("other@example.com")
+        return userRepository.save(User.builder().email("other@example.com")
                 .displayName("Other").status(UserStatus.ACTIVE).globalRole(GlobalRole.USER).build()).block().getId();
     }
 

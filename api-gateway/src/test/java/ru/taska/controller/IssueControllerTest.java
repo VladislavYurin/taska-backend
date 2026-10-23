@@ -88,7 +88,6 @@ import java.util.stream.Stream;
 class IssueControllerTest {
 
     public static final String VIEW_LINK_TYPE = "ISSUE_LINK_VIEW_TYPE_RELATES_TO";
-    private static final String LOGIN = "test-login";
     private static final String EMAIL = "test@example.com";
     private static final String DISPLAY_NAME = "Ivan Ivanov";
     private static final String TOKEN = "Bearer JWT-token";
@@ -1197,7 +1196,6 @@ class IssueControllerTest {
 
         var userContext = GatewayUserContext.builder()
                 .userId(USER_ID)
-                .login(LOGIN)
                 .email(EMAIL)
                 .displayName(DISPLAY_NAME)
                 .status(GatewayUserStatus.ACTIVE)
