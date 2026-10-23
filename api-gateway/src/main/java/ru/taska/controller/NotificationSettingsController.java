@@ -35,7 +35,13 @@ public class NotificationSettingsController implements NotificationSettingsApi {
     public Mono<ResponseEntity<TelegramLinkDto>> createTelegramLink(ServerWebExchange exchange) {
         return executor.execute(exchange,PROTECTED,c -> client.link(c).flatMap(link -> {
             // Older workers may omit the snapshot during a rolling restart.
-            var preferences = link.hasPreferences() ? Mono.just(link.getPreferences()) : client.get(c);
+            var preferences = link.hasPreferences() ? Mono.just(link.getPreferences()) : client.get(c)
+                    .filter(p -> link.getLinkId().equals(p.getTelegramLinkId())
+                            && !p.getTelegramLinkExpiresAt().isEmpty()
+                            && OffsetDateTime.parse(link.getExpiresAt()).toInstant()
+                                .equals(OffsetDateTime.parse(p.getTelegramLinkExpiresAt()).toInstant()))
+                    .switchIfEmpty(Mono.error(io.grpc.Status.ABORTED
+                            .withDescription("Telegram link was replaced; create a new link").asRuntimeException()));
             return preferences.map(p -> {
                 var dto=new TelegramLinkDto();
                 dto.setLinkId(UUID.fromString(link.getLinkId()));

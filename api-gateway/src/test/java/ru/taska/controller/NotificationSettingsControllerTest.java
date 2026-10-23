@@ -87,7 +87,7 @@ class NotificationSettingsControllerTest {
         if(withPreferences) response.setPreferences(prefs.toBuilder().setTelegramStatus("PENDING").setTelegramLinkId(link));
         when(settings.link(any())).thenReturn(Mono.just(response.build()));
         if(!withPreferences) when(settings.get(any())).thenReturn(Mono.just(prefs.toBuilder()
-                .setTelegramStatus("PENDING").setTelegramLinkId(link).build()));
+                .setTelegramStatus("PENDING").setTelegramLinkId(link).setTelegramLinkExpiresAt("2026-10-23T12:00:00Z").build()));
         var body=http.post().uri("/api/v1/users/me/telegram/link").headers(h -> h.setBearerAuth("valid"))
                 .exchange().expectStatus().isOk().expectBody().jsonPath("$.linkId").isEqualTo(link);
         body.jsonPath("$.preferences.telegramStatus").isEqualTo("PENDING")
@@ -101,6 +101,17 @@ class NotificationSettingsControllerTest {
         http.patch().uri("/api/v1/users/me/notification-preferences").headers(h -> h.setBearerAuth("valid"))
                 .contentType(MediaType.APPLICATION_JSON).bodyValue(body).exchange().expectStatus().isBadRequest();
         verifyNoInteractions(settings);
+    }
+    @Test
+    void oldWorkerFallbackRejectsAReplacedLink() {
+        when(settings.link(any())).thenReturn(Mono.just(TelegramLinkResponse.newBuilder()
+                .setLinkId(UUID.randomUUID().toString()).setUrl("https://t.me/test_bot?start=test")
+                .setExpiresAt("2026-10-23T12:00:00Z").build()));
+        when(settings.get(any())).thenReturn(Mono.just(prefs.toBuilder().setTelegramLinkId(UUID.randomUUID().toString())
+                .setTelegramLinkExpiresAt("2026-10-23T12:00:00Z").build()));
+        http.post().uri("/api/v1/users/me/telegram/link").headers(h -> h.setBearerAuth("valid"))
+                .exchange().expectStatus().isEqualTo(409).expectBody().jsonPath("$.message")
+                .isEqualTo("Telegram link was replaced; create a new link");
     }
     @Test
     void unknownConfirmFieldIsRejectedBeforeDownstream() {

@@ -55,6 +55,19 @@ class NotificationEmailMigrationTest {
                 assertThat(published.payload().get("email").asString()).isEqualTo("updated@example.test");
                 assertThat(rows.next()).isFalse();
             }
+            try(var validate=connection.prepareStatement("SELECT taska.valid_notification_email(?)")) {
+                for(String email:new String[]{"bad@","good@example.test"," ","\u2003","\u2007","\u0085","\u00a0"}) {
+                    validate.setString(1,email);
+                    try(var row=validate.executeQuery()) {
+                        row.next();assertThat(row.getBoolean(1)).isEqualTo(!email.isBlank() && email.length()<=320
+                                && email.codePoints().noneMatch(Character::isISOControl));
+                    }
+                }
+            }
+            int changed=query.executeUpdate("UPDATE taska.users SET email='batch-'||id||'@example.test' WHERE status IN ('ACTIVE','LOCKED') AND taska.valid_notification_email(email)");
+            try(var rows=query.executeQuery("SELECT count(*) FROM taska.outbox_events WHERE request_id='TAS-391-email-change'")) {
+                rows.next();assertThat(rows.getInt(1)).isEqualTo(1+changed);
+            }
             connection.setAutoCommit(false);
             query.executeUpdate("UPDATE taska.users SET email='rolled-back@example.test' WHERE id='"+active+"'");
             connection.rollback();connection.setAutoCommit(true);

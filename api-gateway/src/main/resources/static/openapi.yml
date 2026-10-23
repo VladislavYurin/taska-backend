@@ -167,7 +167,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '409':
-          description: Существующая привязка — 'Disconnect the previous Telegram account first'.
+          description: Существующая привязка — 'Disconnect the previous Telegram account first'; замена ссылки во время rolling fallback — 'Telegram link was replaced; create a new link'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
