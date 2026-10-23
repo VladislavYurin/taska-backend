@@ -1,6 +1,7 @@
 package ru.taska.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -9,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.sql.DriverManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.r2dbc.connection.R2dbcTransactionManager;
@@ -117,6 +119,45 @@ class ProjectIssueTypeIntegrationTest {
                 .expectError(org.springframework.dao.DuplicateKeyException.class).verify();
     }
 
+    @Test
+    void invalidLegacyKeysHaltLiquibaseBeforeCreatingRegistry() throws Exception {
+        UUID project = project("INVALID");
+        db.sql("INSERT INTO taska.project_settings(project_id,settings,updated_by) VALUES (:p,'{\"allowedIssueTypes\":[\"task\"]}',:actor)")
+                .bind("p", project).bind("actor", actor).fetch().rowsUpdated().block();
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var liquibase = new liquibase.Liquibase("db/changelog/changes/0001-project-issue-types.sql",
+                     new liquibase.resource.ClassLoaderResourceAccessor(), new liquibase.database.jvm.JdbcConnection(connection))) {
+            assertThatThrownBy(() -> liquibase.update(new liquibase.Contexts(), new liquibase.LabelExpression()))
+                    .isInstanceOf(liquibase.exception.LiquibaseException.class)
+                    .hasRootCauseInstanceOf(liquibase.exception.PreconditionFailedException.class);
+        }
+        assertThat(db.sql("SELECT count(*) AS n FROM information_schema.tables WHERE table_schema='taska' AND table_name='project_issue_types'")
+                .map((r, m) -> r.get("n", Long.class)).one().block()).isZero();
+        assertThat(db.sql("SELECT settings->'allowedIssueTypes'->>0 AS value FROM taska.project_settings WHERE project_id=:p")
+                .bind("p", project).map((r, m) -> r.get("value", String.class)).one().block()).isEqualTo("task");
+    }
+
+    @Test
+    void deletingDefaultSelectsFirstRemainingTypeBySortOrder() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("DEFAULT");
+        admin(project);
+        repository.seedDefaults(project).block();
+        var issues = mock(GrpcIssueServiceClient.class);
+        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
+        var service = new ProjectIssueTypeService(repository, null, issues);
+        service.update(project, actor, "BUG", null, null, null, 0).as(tx::transactional).block();
+        assertThat(defaultType(project)).isEqualTo("BUG");
+        service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
+        assertThat(defaultType(project)).isEqualTo("TASK");
+        assertThat(repository.list(project).collectList().block().getFirst().code()).isEqualTo("TASK");
+    }
+
+    private String defaultType(UUID project) {
+        return db.sql("SELECT settings->>'defaultIssueType' AS value FROM taska.project_settings WHERE project_id=:p")
+                .bind("p", project).map((r, m) -> r.get("value", String.class)).one().block();
+    }
+
     private UUID project(String key) {
         UUID id = UUID.randomUUID();
         db.sql("INSERT INTO taska.projects(id,project_key,name,created_by) VALUES (:id,:key,'Project',:actor)")
@@ -131,7 +172,7 @@ class ProjectIssueTypeIntegrationTest {
 
     private void migrate(String file) throws Exception {
         String sql = Files.readString(Path.of("src/main/resources/db/changelog/changes", file));
-        for (String statement : sql.split(";")) {
+        for (String statement : sql.replaceAll("(?m)--.*$", "").split(";")) {
             if (!statement.replaceAll("(?m)--.*$", "").isBlank()) db.sql(statement).fetch().rowsUpdated().block();
         }
     }

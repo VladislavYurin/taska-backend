@@ -1,6 +1,9 @@
 --liquibase formatted sql
 
 -- changeset taska:0001-project-issue-types
+-- comment: Fix invalid legacy allowedIssueTypes before deployment; never silently rewrite referenced type keys.
+--preconditions onFail:HALT onError:HALT
+--precondition-sql-check expectedResult:0 SELECT count(*) FROM taska.project_settings s WHERE (jsonb_exists(s.settings, 'allowedIssueTypes') AND jsonb_typeof(s.settings->'allowedIssueTypes') IS DISTINCT FROM 'array') OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(s.settings->'allowedIssueTypes') = 'array' THEN s.settings->'allowedIssueTypes' ELSE '[]'::jsonb END) AS t(code) WHERE code IS NULL OR code !~ '^[A-Z][A-Z0-9_]{1,31}$');
 CREATE TABLE taska.project_issue_types (
     project_id uuid NOT NULL REFERENCES taska.projects(id) ON DELETE CASCADE,
     code varchar(32) NOT NULL CHECK (code ~ '^[A-Z][A-Z0-9_]{1,31}$'),
