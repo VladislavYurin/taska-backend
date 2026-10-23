@@ -12,6 +12,148 @@ servers:
     description: Current host
 
 paths:
+  /api/v1/users/me/notification-preferences:
+    get:
+      summary: getNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: getNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      summary: updateNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: updateNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesPatchDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/link:
+    post:
+      summary: createTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: createTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/confirm:
+    post:
+      summary: confirmTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: confirmTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTelegramLinkDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram:
+    delete:
+      summary: disconnectTelegram
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: disconnectTelegram
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/integrations/telegram/webhook:
+    post:
+      summary: Telegram updates
+      description: Отдельный webhook, проверяет secret header; bearer token не нужен. Body до 32 KiB. Дедупликация update_id, private chat only. 200 только после commit. Некорректный секрет — 403, выключенная интеграция — 503.
+      operationId: processTelegramWebhook
+      tags: [telegram-webhook]
+      parameters:
+        - in: header
+          name: X-Telegram-Bot-Api-Secret-Token
+          required: true
+          schema: {type: string, maxLength: 256}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [update_id]
+              properties:
+                update_id: {type: integer, format: int64, minimum: 0}
+              additionalProperties: true
+      responses:
+        '200':
+          description: Обработано или уже было обработано
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/login:
     post:
       summary: Аутентификация пользователя
@@ -3357,6 +3499,44 @@ components:
             $ref: '#/components/schemas/RestErrorResponse'
 
   schemas:
+    NotificationPreferencesDto:
+      type: object
+      required: [emailEnabled, telegramEnabled, email, telegramAvailable, telegramStatus]
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+        email: {type: string, format: email}
+        telegramAvailable: {type: boolean}
+        telegramStatus:
+          type: string
+          enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE]
+        telegramUsername: {type: string, nullable: true}
+        telegramName: {type: string, nullable: true}
+        telegramLinkId: {type: string, format: uuid, nullable: true}
+        telegramLinkExpiresAt: {type: string, format: date-time, nullable: true}
+        telegramError: {type: string, nullable: true}
+    NotificationPreferencesPatchDto:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Независимые переключатели. Оба false оставляют inbox. Включение неподтверждённого/недоступного Telegram — 409. null не допускается.
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+    TelegramLinkDto:
+      type: object
+      required: [linkId, url, expiresAt]
+      properties:
+        linkId: {type: string, format: uuid}
+        url: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+    ConfirmTelegramLinkDto:
+      type: object
+      additionalProperties: false
+      required: [linkId]
+      description: Подтверждает именно текущую заявку и включает Telegram. Не меняет выбор email. Повторная/просроченная заявка — 409.
+      properties:
+        linkId: {type: string, format: uuid}
     LoginRequestDto:
       type: object
       required: [email, password]
