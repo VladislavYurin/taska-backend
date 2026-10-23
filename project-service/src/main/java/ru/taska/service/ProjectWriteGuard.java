@@ -9,7 +9,7 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.exception.ProjectArchived;
 
-/** Called inside project-service transactions, before member rows are locked. */
+/** Serializes project mutations before member rows are locked, including ADMIN revocation. */
 @Component
 @RequiredArgsConstructor
 public class ProjectWriteGuard {
@@ -19,7 +19,7 @@ public class ProjectWriteGuard {
         return db.sql("""
                 SELECT p.archived_at IS NOT NULL AS archived, pm.user_id IS NOT NULL AS member
                 FROM taska.projects p LEFT JOIN taska.project_members pm ON pm.project_id=p.id AND pm.user_id=:actor
-                WHERE p.id=:project FOR SHARE OF p
+                WHERE p.id=:project FOR UPDATE OF p
                 """).bind("project", project).bind("actor", actor)
                 .map((r, m) -> new Access(Boolean.TRUE.equals(r.get("archived", Boolean.class)), Boolean.TRUE.equals(r.get("member", Boolean.class))))
                 .one().switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found")))

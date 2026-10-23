@@ -43,6 +43,7 @@ class ArchiveProjectIntegrationTest {
         r.add("spring.r2dbc.username", postgres::getUsername); r.add("spring.r2dbc.password", postgres::getPassword);
     }
     @MockitoBean OutboxEventScheduler scheduler;
+    @MockitoBean ru.taska.transport.grpc.client.GrpcAuthServiceClient auth;
     @Autowired ProjectArchiveService archive;
     @Autowired ProjectService service;
     @Autowired ProjectMemberService membership;
@@ -112,6 +113,31 @@ class ArchiveProjectIntegrationTest {
                     .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
             assertThat(projects.findById(p.getId()).block().getArchivedAt()).isNull();
         } finally { db.sql("ALTER TABLE taska.outbox_events DROP CONSTRAINT archive_test").fetch().rowsUpdated().block(); }
+    }
+
+    @Test
+    void adminRevocationWaitsUntilAuthorizedMemberAdditionCompletes() throws Exception {
+        var p = project();
+        UUID secondAdmin = UUID.randomUUID(), addedUser = UUID.randomUUID();
+        members.save(ProjectMember.builder().projectId(p.getId()).userId(secondAdmin).role(ProjectRole.ADMIN)
+                .addedBy(actor).addedAt(Instant.now()).build()).block();
+        var lookupStarted = new java.util.concurrent.CountDownLatch(1);
+        var lookup = reactor.core.publisher.Sinks.<ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse>one();
+        org.mockito.Mockito.when(auth.getUserDetailsByIds(java.util.List.of(addedUser), "add", "n"))
+                .thenReturn(Mono.defer(() -> { lookupStarted.countDown(); return lookup.asMono(); }));
+        var addition = membership.addProjectMember("add", "n", addedUser, actor, ProjectRole.MEMBER, p.getId()).toFuture();
+        assertThat(lookupStarted.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        var revocation = membership.changeProjectMemberRole("revoke", "n", actor, secondAdmin, ProjectRole.MEMBER, p.getId());
+        try {
+            StepVerifier.create(revocation).expectSubscription().expectNoEvent(java.time.Duration.ofMillis(200))
+                    .then(() -> lookup.tryEmitValue(ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse.newBuilder()
+                            .addUserDetails(ru.taska.api.auth.profile.v1.UserDetails.newBuilder().setUserId(addedUser.toString())).build()))
+                    .assertNext(member -> assertThat(member.getRole()).isEqualTo(ProjectRole.MEMBER)).verifyComplete();
+            assertThat(addition.get(5, java.util.concurrent.TimeUnit.SECONDS).getUserId()).isEqualTo(addedUser);
+        } finally {
+            lookup.tryEmitError(new IllegalStateException("Test cleanup"));
+            addition.cancel(true);
+        }
     }
 
     private Project project() {
