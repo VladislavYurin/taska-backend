@@ -350,6 +350,9 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
         assertThat(text("SELECT updated_at::text"+query)).isEqualTo(updated);
         user=fresh;
         handler.handle(assignedEvent()).block(WAIT);
+        handler.handle(emailEvent(fresh,"dormant@example.test")).block(WAIT);
+        assertThat(text("SELECT status FROM taska.notification_deliveries")).isEqualTo("PENDING");
+        assertThat(text("SELECT email_version::text"+query)).isEqualTo(version);
         handler.handle(emailEvent(fresh,"changed@example.test")).block(WAIT);
         assertThat(text("SELECT email_version::text"+query)).isNotEqualTo(version);
         assertThat(text("SELECT status FROM taska.notification_deliveries")).isEqualTo("CANCELLED");
