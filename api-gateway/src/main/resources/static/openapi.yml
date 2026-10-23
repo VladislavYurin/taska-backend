@@ -738,32 +738,6 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
   /api/v1/projects/{projectId}:
-    get:
-      summary: Возвращает проект по идентификатору
-      operationId: getProject
-      tags:
-        - project
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Проект успешно найден
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/X-RequestId-Header'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectResponseDto'
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-
     delete:
       operationId: archiveProject
       summary: Архивировать проект — только ADMIN проекта, идемпотентно
@@ -796,6 +770,33 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+
+    get:
+      summary: Возвращает проект по идентификатору
+      operationId: getProject
+      tags:
+        - project
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Проект успешно найден
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
