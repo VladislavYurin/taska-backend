@@ -4,6 +4,7 @@ import jakarta.annotation.PreDestroy;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ public class NotificationPreferencesSynchronizer implements AutoCloseable {
     private final Sinks.Many<GatewayContext> requests = Sinks.many().unicast()
             .onBackpressureBuffer(new ArrayBlockingQueue<>(256));
     private final Disposable worker;
+    private long lastOverflowWarning = System.nanoTime() - TimeUnit.MINUTES.toNanos(1);
 
     @Autowired
     public NotificationPreferencesSynchronizer(GrpcNotificationSettingsClient client) {
@@ -44,7 +46,16 @@ public class NotificationPreferencesSynchronizer implements AutoCloseable {
     public synchronized void submit(GatewayContext context) {
         String user = context.userContext().userId();
         if (worker.isDisposed() || !pending.add(user)) return;
-        if (requests.tryEmitNext(context).isFailure()) pending.remove(user);
+        var result = requests.tryEmitNext(context);
+        if (result.isFailure()) {
+            pending.remove(user);
+            long now = System.nanoTime();
+            if (result == Sinks.EmitResult.FAIL_OVERFLOW && now - lastOverflowWarning >= TimeUnit.MINUTES.toNanos(1)) {
+                lastOverflowWarning = now;
+                log.warn("Notification preferences synchronization queue is full (capacity 256); "
+                        + "provisioning is deferred until a later profile or settings request");
+            }
+        }
     }
 
     @Override
