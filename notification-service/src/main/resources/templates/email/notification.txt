@@ -1,0 +1,13 @@
+Taska[# th:if="${!#strings.isEmpty(brand.workspaceName)}"] · [(${brand.workspaceName})][/]
+
+[# th:if="${!#strings.isEmpty(notification.issueKey)}"][(${notification.issueKey})]
+[/][(${notification.title})]
+
+[(${notification.body})]
+[# th:if="${!#strings.isEmpty(actionUrl) and !#strings.isEmpty(notification.issueKey)}"]
+Open [(${notification.issueKey})]:
+[(${actionUrl})]
+[/]
+---
+You're getting this because email notifications are on for your
+Taska account.

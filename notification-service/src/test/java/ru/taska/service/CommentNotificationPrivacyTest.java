@@ -11,7 +11,7 @@ import ru.taska.domain.Notification;
 import ru.taska.domain.NotificationType;
 import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
-import ru.taska.mapper.EmailDeliveryAttemptMapper;
+import static ru.taska.testutil.EmailTestSupport.parts;
 import ru.taska.mapper.NotificationMapper;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,11 +24,12 @@ class CommentNotificationPrivacyTest {
         var notification = Notification.builder().notificationType(NotificationType.ISSUE_COMMENT_CREATED)
                 .issueId(issue).issueKey(hasIssueKey ? "PRV-1" : null).body("secret legacy preview").build();
         var mapper = new NotificationMapper(new NotificationProperties(new NotificationProperties.Comment(200)));
-        String expected = "Новый комментарий к задаче " + (hasIssueKey ? "PRV-1" : issue);
+        String expected = "New comment on " + (hasIssueKey ? "PRV-1" : issue);
 
         assertThat(mapper.toNotificationProto(notification).getBody()).isEqualTo(expected);
-        assertThat(new EmailDeliveryAttemptMapper().toMailMessage(notification, "watcher@example.com").getText())
-                .isEqualTo(expected);
+        for (String body : parts(EmailMessageFactoryTest.factory().notification(notification, "watcher@example.com")).values()) {
+            assertThat(body).contains(expected).doesNotContain("secret legacy preview", "secret deleted comment");
+        }
         assertThat(notification.getBody()).isEqualTo("secret legacy preview");
     }
 
@@ -63,9 +64,12 @@ class CommentNotificationPrivacyTest {
 
         assertThat(notifications).singleElement().satisfies(notification -> {
             assertThat(notification.getUserId()).isEqualTo(watcher);
-            assertThat(notification.getBody()).isEqualTo("Новый комментарий к задаче PRV-1");
-            assertThat(new EmailDeliveryAttemptMapper().toMailMessage(notification, "watcher@example.com").getText())
-                    .isEqualTo(notification.getBody());
+            assertThat(notification.getBody()).isEqualTo("New comment on PRV-1");
+            for (String body : parts(EmailMessageFactoryTest.factory()
+                    .notification(notification, "watcher@example.com")).values()) {
+                assertThat(body).contains(notification.getBody())
+                        .doesNotContain("secret legacy preview", "secret deleted comment");
+            }
         });
     }
 }
