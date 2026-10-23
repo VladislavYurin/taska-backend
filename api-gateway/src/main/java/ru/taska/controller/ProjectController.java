@@ -227,6 +227,8 @@ public class ProjectController implements ProjectApi {
             }
             if (node.hasNonNull("name") && node.get("name").asString().isBlank()) throw new ServerWebInputException("name must be nonblank");
             return node;
+        } catch (ServerWebInputException e) {
+            throw e;
         } catch (Exception e) {
             throw new ServerWebInputException("Malformed JSON request body", null, e);
         } finally {
