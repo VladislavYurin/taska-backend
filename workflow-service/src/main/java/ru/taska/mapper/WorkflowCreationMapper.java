@@ -38,7 +38,7 @@ public class WorkflowCreationMapper {
         };
     }
 
-    private CreateWorkflowStatusDto toStatusDto(WorkflowStatusCreateRequest proto) {
+    public CreateWorkflowStatusDto toStatusDto(WorkflowStatusCreateRequest proto) {
         return CreateWorkflowStatusDto.builder()
                 .statusKey(proto.getStatusKey().trim())
                 .name(proto.getName().trim())
@@ -47,13 +47,33 @@ public class WorkflowCreationMapper {
                 .build();
     }
 
-    private CreateWorkflowTransitionDto toTransitionDto(WorkflowTransitionCreateRequest proto) {
+    public CreateWorkflowTransitionDto toTransitionDto(WorkflowTransitionCreateRequest proto) {
         return CreateWorkflowTransitionDto.builder()
                 .fromStatusKey(proto.getFromStatusKey())
                 .toStatusKey(proto.getToStatusKey())
                 .name(proto.getName().trim())
                 .sortOrder(proto.getSortOrder())
                 .hidden(proto.getIsHidden())
+                .build();
+    }
+
+    // Сохранённый статус в виде DTO создания: так изменение workflow проверяется теми же правилами, что и создание.
+    public CreateWorkflowStatusDto toStatusDto(StatusEntity entity) {
+        return CreateWorkflowStatusDto.builder()
+                .statusKey(entity.getStatusKey())
+                .name(entity.getName())
+                .category(entity.getCategory())
+                .sortOrder(entity.getSortOrder())
+                .build();
+    }
+
+    public CreateWorkflowTransitionDto toTransitionDto(TransitionEntity entity, Map<UUID, String> statusIdToKey) {
+        return CreateWorkflowTransitionDto.builder()
+                .fromStatusKey(statusIdToKey.get(entity.getFromStatusId()))
+                .toStatusKey(statusIdToKey.get(entity.getToStatusId()))
+                .name(entity.getName())
+                .sortOrder(entity.getSortOrder())
+                .hidden(entity.isHidden())
                 .build();
     }
 

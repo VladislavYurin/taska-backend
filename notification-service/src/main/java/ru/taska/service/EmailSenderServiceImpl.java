@@ -33,6 +33,7 @@ public class EmailSenderServiceImpl implements EmailSenderService {
     private Duration retryDelay;
 
     private final JavaMailSender mailSender;
+    private final EmailMessageFactory emailMessages;
     private final NotificationPreferenceRepository preferenceRepository;
     private final EmailDeliveryAttemptRepository attemptRepository;
     private final EmailDeliveryAttemptMapper emailDeliveryAttemptMapper;
@@ -67,7 +68,7 @@ public class EmailSenderServiceImpl implements EmailSenderService {
 
     private Mono<Void> doSend(Notification notification, String toEmail) {
         return Mono.fromCallable(() -> {
-                    mailSender.send(emailDeliveryAttemptMapper.toMailMessage(notification, toEmail));
+                    mailSender.send(emailMessages.notification(notification, toEmail));
                     return true;
                 })
                 .subscribeOn(Schedulers.boundedElastic())

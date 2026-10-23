@@ -2,12 +2,383 @@ openapi: 3.0.3
 info:
   title: Taska API Gateway Contract
   version: 1.0.0
+  description: |
+    Авторитетный контракт API — этот документ /openapi.yml.
+    /v3/api-docs публикует тот же контракт в JSON; совпадение проверяется в CI.
+    /v3/api-docs/generated — справочная модель springdoc из Java-аннотаций.
 
 servers:
   - url: /
     description: Current host
 
 paths:
+  /api/v1/users/me/notification-preferences:
+    get:
+      summary: getNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: getNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      summary: updateNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: updateNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesPatchDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        '400':
+          description: Пустой patch, null, неизвестное поле или неверный тип переключателя
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Telegram ещё не подтверждён или сейчас недоступен для включения
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/link:
+    post:
+      summary: createTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: createTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Сначала отключите существующую привязку Telegram
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/confirm:
+    post:
+      summary: confirmTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: confirmTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTelegramLinkDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        '400':
+          description: Отсутствующий или некорректный UUID linkId
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Заявка чужая, просрочена, уже использована, не получен Start либо Telegram занят другим аккаунтом
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram:
+    delete:
+      summary: disconnectTelegram
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: disconnectTelegram
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/integrations/telegram/webhook:
+    post:
+      summary: Telegram updates
+      description: Отдельный webhook, проверяет secret header; bearer token не нужен. Body до 32 KiB. Дедупликация update_id, private chat only. 200 только после commit. Некорректный секрет — 403, выключенная интеграция — 503.
+      operationId: processTelegramWebhook
+      tags: [telegram-webhook]
+      parameters:
+        - in: header
+          name: X-Telegram-Bot-Api-Secret-Token
+          required: true
+          schema: {type: string, maxLength: 256}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [update_id]
+              properties:
+                update_id: {type: integer, format: int64, minimum: 0}
+              additionalProperties: true
+      responses:
+        '200':
+          description: Обработано или уже было обработано
+        '400':
+          description: Некорректное JSON-тело или update_id
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Неверный или отсутствующий webhook secret
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '413':
+          description: Тело превышает 32 KiB
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '429':
+          description: Превышен лимит webhook-запросов
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/login:
     post:
       summary: Аутентификация пользователя
@@ -58,9 +429,113 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/auth/invitations:
+    post:
+      summary: Пригласить пользователя в Taska (GLOBAL_ADMIN)
+      description: |
+        Адрес нормализуется по пробелам и регистру; Gmail-подобные алиасы не объединяются.
+        Новый аккаунт получает 201, уже приглашённый — 200 с тем же userId.
+        Повтор без resend не отправляет ещё одно письмо, пока ссылка действительна.
+        resend=true отзывает старую ссылку и ставит новое письмо в очередь; по умолчанию 60 секунд между отправками.
+        Истёкшая или отсутствующая ссылка перевыпускается также без resend.
+        Существующие ACTIVE/LOCKED/BLOCKED аккаунты возвращают 409, их статус и пароль не меняются.
+        deliveryQueued означает запись в надёжную очередь, а не подтверждение доставки SMTP.
+        Приглашение не добавляет пользователя в проект и не меняет роль; членство создаётся отдельным запросом.
+      operationId: inviteUser
+      tags: [user-directory]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationRequestDto'
+      responses:
+        '201':
+          description: Новый пользователь приглашён, письмо поставлено в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponseDto'
+        '200':
+          description: Пользователь уже приглашён; deliveryQueued сообщает о новой отправке
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponseDto'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '429':
+          description: Повторная отправка запрошена слишком рано; details.retryAfterSeconds — время ожидания
+          headers:
+            Retry-After:
+              description: Число секунд до следующей разрешённой отправки
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users:
+    get:
+      summary: Поиск пользователей рабочего пространства по имени и email
+      description: |
+        Доступен авторизованным пользователям единого рабочего пространства Taska.
+        Поиск не предоставляет доступа к проектам, ролям, токенам и credentials.
+        Возвращает ACTIVE, INVITED и временно LOCKED; BLOCKED не выдаются.
+        query обрезается по краям и сравнивается без учёта регистра; %, _ и ! ищутся буквально.
+        Порядок — displayName, email без учёта регистра, затем id; page начинается с 0.
+        Недоступный аватар даёт avatarUrl=null и не ломает выдачу. Пустой результат — 200 с items=[].
+      operationId: searchUsers
+      tags: [user-directory]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 100
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+            default: 0
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Страница результатов поиска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDirectoryResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/invitations/accept:
     post:
       summary: Принятие инвайта и установка пароля
+      description: |
+        Успех — 204 без токенов сессии. После активации клиент выполняет обычный POST /api/v1/auth/login.
+        Ссылка одноразовая, с ограниченным сроком действия; после перевыпуска старая ссылка недействительна.
+        Активация меняет только INVITED аккаунт и не сбрасывает пароль уже активированного пользователя.
+        Слабый пароль не расходует ссылку; BCrypt допускает не более 72 UTF-8 байт.
       operationId: setPasswordByToken
       tags:
         - auth
@@ -242,6 +717,26 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/project-stats:
+    get:
+      summary: Счётчики и первые пять участников всех проектов пользователя
+      operationId: getProjectStats
+      tags: [project-stats]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Статистика доступных проектов; пустой items, если проектов нет
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectStatsDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}:
     get:
       summary: Возвращает проект по идентификатору
@@ -268,9 +763,158 @@ paths:
                 $ref: '#/components/schemas/ProjectResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
+
     delete:
-      summary: Мягкое удаление проекта по идентификатору
-      operationId: deleteProject
+      operationId: archiveProject
+      summary: Архивировать проект — только ADMIN проекта, идемпотентно
+      description: >
+        Проект и его данные сохраняются. Архивный проект скрыт из списка проектов, но доступен
+        участникам по прямой ссылке для чтения. Запись отклоняется с FAILED_PRECONDITION и
+        details.reason=PROJECT_ARCHIVED. Повторный DELETE возвращает тот же archivedAt без нового события.
+      tags: [project-archive]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Проект в архиве
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issue-types:
+    get:
+      operationId: listProjectIssueTypes
+      summary: Типы задач проекта, по sortOrder и code; первый тип используется по умолчанию
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectIssueTypesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      operationId: createProjectIssueType
+      summary: Добавить тип задачи — только ADMIN проекта
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectIssueTypeRequestDto'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectIssueTypeDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issue-types/{code}:
+    patch:
+      operationId: updateProjectIssueType
+      summary: Изменить подпись, цвет, значок или порядок типа — только ADMIN проекта
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchProjectIssueTypeRequestDto'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectIssueTypeDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteProjectIssueType
+      summary: Удалить неиспользуемый тип — только ADMIN; последний тип удалить нельзя
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      responses:
+        '204':
+          description: Success
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/context:
+    get:
+      summary: Контекст проекта — проект, участники, метки, все workflows
+      operationId: getProjectContext
       tags:
         - project
       security:
@@ -281,16 +925,21 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         '200':
-          description: Проект успешно удален
+          description: Контекст проекта успешно получен
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProjectResponseDto'
+                $ref: '#/components/schemas/ProjectContextResponseDto'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -621,6 +1270,7 @@ paths:
   /api/v1/issues/{issueId}/links:
     get:
       summary: Возвращает список связей для задачи
+      description: Порядок элементов — createdAt asc, id asc.
       operationId: listIssueLinks
       tags:
         - issue
@@ -738,12 +1388,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+                $ref: '#/components/schemas/IssueDetailsWithHistoryResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
     put:
       summary: Обновляет основные поля задачи
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Вызывающий должен иметь роль из `update-issue-roles`: по умолчанию ADMIN или MEMBER.
+        Не участник проекта получает 403 «Access denied», неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_UPDATE_ROLES; стенд может переопределить значения по умолчанию.
+      deprecated: true
       operationId: updateIssue
       tags:
         - issue
@@ -801,9 +1457,109 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+    patch:
+      summary: Частично обновляет задачу с оптимистичной блокировкой по версии
+      description: |
+        Поля, которые можно передать: summary, description, priority, assigneeId, storyPoints, startDate, 
+        dueDate, originalEstimateMinutes, remainingEstimateMinutes
+        Все поля PatchIssueRequestDto необязательные. Отсутствие поля в теле запроса — не изменять значение.
+        Явно переданный null — очистить значение (для полей, допускающих NULL в БД;
+        summary и priority очищены быть не могут).
+        Заголовок If-Match должен содержать текущую версию задачи (Issue.version).
+        Если версия не совпадает с версией в БД, изменения не применяются и возвращается 409
+        с актуальным состоянием задачи.
+      operationId: patchIssue
+      tags:
+        - issue
+      security:
+        - bearerAuth: []
+
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: If-Match
+          in: header
+          required: true
+          description: |
+            Версия задачи для оптимистичной блокировки (Issue.version).
+            Принимается как число (3), так и в формате ETag в кавычках ("3").
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchIssueRequestDto'
+
+      responses:
+        '200':
+          description: Задача успешно обновлена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        '409':
+          description: >-
+            Версия из If-Match не совпадает с текущей версией задачи в БД (конфликт
+            конкурентного изменения). Тело ответа содержит актуальное состояние задачи.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/issues/by-key/{issueKey}:
+    get:
+      summary: Возвращает задачу по ключу (без projectId)
+      operationId: getIssueByKey
+      tags:
+        - issue
+      security:
+        - bearerAuth: [ ]
+
+      parameters:
+        - name: issueKey
+          in: path
+          required: true
+          schema:
+            type: string
+            example: API-12
+
+      responses:
+        '200':
+          description: Задача найдена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/issues/{issueId}/assignee:
     put:
       summary: Назначает исполнителя задачи
+      description: |
+        Устарел, используйте PATCH /api/v1/issues/{issueId}.
+        Назначающий и назначаемый должны иметь роль из `assign-issue-roles`: по умолчанию ADMIN или MEMBER.
+        При назначении себя проверяется только роль вызывающего; при назначении другого пользователя — роли обоих.
+        Не участник проекта получает 403 «Access denied», неподходящая роль — 403 «Not allowed role».
+        Список настраивается через ISSUE_ASSIGN_ROLES; стенд может переопределить значения по умолчанию.
+      deprecated: true
       operationId: assignIssue
       tags:
         - issue
@@ -882,6 +1638,7 @@ paths:
   /api/v1/issues/search:
     get:
       summary: Поиск задач по ключу, summary и description с фильтрами (Все параметры применяются через логическое "AND")
+      description: Порядок элементов — createdAt desc, id desc (сначала новые задачи).
       operationId: searchIssues
       tags:
         - issue
@@ -891,10 +1648,10 @@ paths:
         - name: query
           in: query
           required: false
-          description: Строка для поиска (поиск по issue_key, summary, description через логическое "OR")
+          description: Строка для поиска по issue_key, summary и description (OR). Минимум 3 символа по умолчанию; настраивается в issue-service. Пустая строка возвращает 400.
           schema:
             type: string
-            minLength: 2
+            minLength: 3
         - name: projectId
           in: query
           required: false
@@ -905,7 +1662,7 @@ paths:
         - name: statusKey
           in: query
           required: false
-          description: Фильтр по статусу задачи
+          description: Фильтр по открытому ключу статуса workflow проекта
           schema:
             type: string
         - name: assigneeId
@@ -970,10 +1727,189 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  # ============ API для worklogs ============
+  /api/v1/projects/{projectId}/issues/{issueId}/worklogs:
+    get:
+      summary: Получение списка worklogs задачи
+      operationId: listIssueWorklogs
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Worklogs задачи получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIssueWorklogsResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      summary: Добавление worklog к задаче
+      operationId: addIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIssueWorklogRequestDto'
+      responses:
+        '201':
+          description: Worklog добавлен к задаче
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWorklogResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issues/{issueId}/worklogs/{worklogId}:
+    put:
+      summary: Обновление worklog
+      operationId: updateIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: worklogId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIssueWorklogRequestDto'
+      responses:
+        '200':
+          description: Worklog обновлён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueWorklogResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      summary: Удаление worklog
+      operationId: deleteIssueWorklog
+      tags:
+        - worklogs
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: issueId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: worklogId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Worklog удалён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
   # ============ API для issue attachments ============
   /api/v1/projects/{projectId}/issues/{issueId}/attachments:
     get:
       summary: Получение списка вложений к задаче
+      description: Порядок элементов — createdAt asc, id asc.
       operationId: listAttachments
       tags:
         - attachments
@@ -1222,6 +2158,7 @@ paths:
         - name: includeDone
           in: query
           required: false
+          description: Включать задачи в статусах категории DONE из workflow проекта. При false исключаются ключи всех таких статусов, а не буквальный ключ DONE.
           schema:
             type: boolean
             default: false
@@ -1242,6 +2179,7 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/comments:
     get:
       summary: Получение списка комментариев к задаче
+      description: Порядок элементов — createdAt desc, id desc (новые сверху).
       operationId: listComments
       tags:
         - comments
@@ -1452,11 +2390,218 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/workflows:
+    get:
+      summary: Все workflow проекта со всеми статусами и переходами
+      description: |
+        Возвращает каждый workflow, по которому работают задачи проекта, один раз: с типами задач,
+        которые по нему работают, всеми статусами и всеми переходами, включая скрытые (hidden = true).
+        Тип задачи без своего workflow проекта работает по общему default workflow (shared = true).
+        Default workflow не меняется: чтобы завести свои статусы и переходы, создайте workflow проекта.
+        Доступно любому участнику проекта.
+      operationId: listProjectWorkflows
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow проекта получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowsResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Создание своего workflow проекта
+      description: |
+        Создаёт workflow проекта со своими статусами и переходами и привязывает к нему указанные типы задач.
+        Тип задачи, у которого в проекте уже есть свой workflow, повторно привязать нельзя (409).
+        Внимание: issue-service пока создаёт новые задачи в статусе с ключом TODO. Если такого статуса
+        в workflow нет, новые задачи этого типа окажутся в статусе, которого в workflow нет.
+        Требуется роль ADMIN в проекте.
+      operationId: createProjectWorkflow
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequestDto'
+      responses:
+        '201':
+          description: Workflow создан
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/statuses:
+    post:
+      summary: Добавление статуса в workflow проекта
+      description: |
+        Добавляет статус в свой workflow проекта. Ключ статуса и sortOrder должны быть уникальны внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowStatus
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+      responses:
+        '201':
+          description: Статус добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Статус с таким ключом в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/transitions:
+    post:
+      summary: Добавление перехода в workflow проекта
+      description: |
+        Разрешает переход между двумя статусами своего workflow проекта. Статусы задаются ключами.
+        Переход из статуса в него же запрещён, пара статусов не повторяется, sortOrder уникален внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowTransition
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+      responses:
+        '201':
+          description: Переход добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Переход между этими статусами в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   ########################## API для project/issue меток ##################
 
   /api/v1/projects/{projectId}/labels:
     get:
       summary: Получение списка меток проекта
+      description: Порядок элементов — name asc, id asc (сравнение строк по collation БД).
       operationId: listProjectLabels
       tags:
         - labels
@@ -1619,6 +2764,7 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/labels:
     get:
       summary: Получение списка меток задачи
+      description: Порядок элементов — name asc, id asc (сравнение строк по collation БД).
       operationId: listIssueLabels
       tags:
         - labels
@@ -1755,6 +2901,7 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/watchers:
     get:
       summary: Получение списка подписчиков задачи
+      description: Порядок элементов — createdAt desc, id desc.
       operationId: listIssueWatchers
       tags:
         - watchers
@@ -1795,10 +2942,14 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
     post:
-      summary: Добавление подписчика на задачу (только project ADMIN)
+      summary: Добавление подписчика на задачу с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
         Подписывает указанного пользователя (`userId` в body) на задачу.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: addIssueWatcher
       tags:
         - watchers
@@ -1847,7 +2998,11 @@ paths:
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/me:
     put:
       summary: Подписка текущего пользователя на задачу
-      description: userId берётся из Gateway context (JWT), не из тела запроса.
+      description: |
+        userId берётся из Gateway context (JWT), не из тела запроса.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: watchIssueMe
       tags:
         - watchers
@@ -1889,7 +3044,11 @@ paths:
 
     delete:
       summary: Отписка текущего пользователя от задачи
-      description: userId берётся из Gateway context (JWT), не из path.
+      description: |
+        userId берётся из Gateway context (JWT), не из path.
+        Проверяется роль текущего пользователя из `watch-issue-roles`: по умолчанию ADMIN или MEMBER.
+        VIEWER при настройках по умолчанию получает 403.
+        Список настраивается через ISSUE_WATCH_ROLES; стенд может переопределить значения по умолчанию.
       operationId: unwatchIssueMe
       tags:
         - watchers
@@ -1931,10 +3090,13 @@ paths:
 
   /api/v1/projects/{projectId}/issues/{issueId}/watchers/{userId}:
     delete:
-      summary: Удаление подписчика задачи (только project ADMIN)
+      summary: Удаление подписчика задачи с проверкой проектной роли
       description: |
-        Доступно только пользователю с ролью ADMIN в проекте.
-        Viewer/MEMBER без роли ADMIN не может удалить чужого watcher.
+        Для чужого userId проверяется роль вызывающего из `manage-watchers-roles` (по умолчанию ADMIN).
+        Для своего userId проверяется роль вызывающего из `watch-issue-roles` (по умолчанию ADMIN или MEMBER).
+        VIEWER при настройках по умолчанию получает 403; MEMBER может отписать себя, но не другого пользователя.
+        Списки настраиваются через ISSUE_MANAGE_WATCHERS_ROLES и ISSUE_WATCH_ROLES;
+        стенд может переопределить значения по умолчанию.
       operationId: removeIssueWatcher
       tags:
         - watchers
@@ -2079,6 +3241,112 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/readonly/audit-entries:
+    get:
+      summary: Получение списка записей журнала аудита (только для GLOBAL_ADMIN)
+      description: >-
+        Постраничное чтение admin_audit_log с фильтрами. Записи отсортированы по createdAt по убыванию.
+        Sensitive-значения в oldValue/newValue замаскированы по тем же правилам, что и read-only API таблиц.
+        Журнал read-only: записи нельзя изменить или удалить через API.
+      operationId: listAuditEntries
+      tags:
+        - admin
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-based)
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          description: Page size (1-100)
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: actorUserId
+          in: query
+          description: Фильтр по ID пользователя, выполнившего операцию (UUID)
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по типу операции (например, USER_BLOCKED, RETRY_OUTBOX_EVENT)
+        - name: targetService
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по целевому сервису — ключ каталога read-only API (auth, project, issue, workflow, notification, admin)
+        - name: targetTable
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по целевой таблице
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID целевого объекта
+        - name: requestId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по requestId исходной операции — находит все записи одного запроса
+        - name: createdAtFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2026-10-01"
+          description: Начало периода (дата в формате yyyy-MM-dd, UTC, включительно — с начала дня)
+        - name: createdAtTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2026-10-31"
+          description: Конец периода (дата в формате yyyy-MM-dd, UTC, включительно — до конца дня). Не может быть раньше createdAtFrom
+      responses:
+        '200':
+          description: Данные успешно получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAuditEntriesResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/readonly/{service}/{table}/{id}:
     get:
       summary: Получение одной строки таблицы по ID (только для GLOBAL_ADMIN)
@@ -2184,6 +3452,10 @@ paths:
   /api/v1/admin/outbox/{service}/{eventId}/retry:
     post:
       summary: Повторная обработка outbox-события (только для GLOBAL_ADMIN)
+      description: >-
+        Допускает FAILED либо PROCESSING с ненулевым processingStartedAt строго раньше текущего времени
+        минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD (по умолчанию 10 минут). NEW и PUBLISHED не допускаются.
+        retryable из сводки является снимком; состояние проверяется повторно, включая атомарный UPDATE.
       operationId: retryOutboxEvent
       tags:
         - admin
@@ -2225,7 +3497,14 @@ paths:
                 $ref: '#/components/schemas/RetryOutboxEventResponseDto'
 
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          description: >-
+            FAILED_PRECONDITION: событие не удовлетворяет правилу retry или изменилось после чтения сводки.
+            Также возвращается при невалидных параметрах запроса.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+
         '401':
           $ref: '#/components/responses/ErrorResponse'
         '403':
@@ -2407,6 +3686,50 @@ paths:
 
   ########################## Окончание API userProfile ########################
 
+  /api/v1/meta:
+    get:
+      summary: Словари допустимых значений перечислений
+      description: |
+        Пять словарей (issueTypes, priorities, linkTypes, notificationTypes, userStatuses), каждый — список пар code/name. 
+        Коды совпадают с тем, что принимают и возвращают другие эндпоинты.
+        Ответ содержит ETag, это хеш текущего состояния словарей.
+        Повторный запрос должен содержать предыдущее значение ETag в заголовке If-None-Match.
+        Если If-None-Match равен текущему хэшу значит словари не изменились, ручка возвращает 304 без тела.
+        Если If-None-Match пустой или не равен текущему хэшу возвращается 200 со словарями в теле.
+      operationId: getMeta
+      tags:
+        - meta
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: ETag из предыдущего ответа этого маршрута
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Словари перечислений
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponseDto'
+        '304':
+          description: Словари не изменились
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+            ETag:
+              $ref: '#/components/headers/ETag-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2419,6 +3742,10 @@ components:
       schema:
         type: string
       description: Возвращаемый клиенту сквозной ID запроса
+    ETag-Header:
+      schema:
+        type: string
+      description: Версия содержимого ответа для условного запроса через If-None-Match
 
   responses:
     ErrorResponse:
@@ -2432,6 +3759,58 @@ components:
             $ref: '#/components/schemas/RestErrorResponse'
 
   schemas:
+    NotificationPreferencesDto:
+      type: object
+      required: [emailEnabled, telegramEnabled, email, telegramAvailable, telegramStatus]
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+        email: {type: string, format: email}
+        telegramAvailable: {type: boolean}
+        telegramStatus:
+          type: string
+          description: UNKNOWN означает неизвестный backend-статус; клиент не должен предлагать подтверждение или включение.
+          enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE, UNKNOWN]
+        telegramUsername: {type: string, nullable: true}
+        telegramName: {type: string, nullable: true}
+        telegramLinkId: {type: string, format: uuid, nullable: true}
+        telegramLinkExpiresAt: {type: string, format: date-time, nullable: true}
+        telegramError:
+          type: string
+          nullable: true
+          description: >-
+            BOT_CHANGED — включён другой бот, требуется переподключение.
+            TELEGRAM_DELIVERY_UNAVAILABLE — постоянный отказ доставки, канал отключён.
+            Выключенная интеграция определяется telegramAvailable=false и сама не создаёт BOT_CHANGED.
+            Временные ошибки доставки не публикуются здесь. Набор открыт для расширения;
+            неизвестный код клиент отображает как общую недоступность без обещания повторной отправки.
+          x-extensible-enum: [BOT_CHANGED, TELEGRAM_DELIVERY_UNAVAILABLE]
+    NotificationPreferencesPatchDto:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Независимые переключатели. Оба false оставляют inbox. Включение неподтверждённого/недоступного Telegram — 409. null не допускается.
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+    TelegramLinkDto:
+      type: object
+      required: [linkId, url, expiresAt]
+      properties:
+        linkId: {type: string, format: uuid}
+        url: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+        preferences:
+          description: Снимок настроек после создания заявки в той же транзакции. При его наличии отдельный GET не требуется; поле опционально для rolling upgrade.
+          allOf:
+            - $ref: '#/components/schemas/NotificationPreferencesDto'
+    ConfirmTelegramLinkDto:
+      type: object
+      additionalProperties: false
+      required: [linkId]
+      description: Подтверждает именно текущую заявку и включает Telegram. Не меняет выбор email. Повторная/просроченная заявка — 409.
+      properties:
+        linkId: {type: string, format: uuid}
     LoginRequestDto:
       type: object
       required: [email, password]
@@ -2470,6 +3849,66 @@ components:
           type: integer
           format: int64
 
+    InvitationRequestDto:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+        displayName:
+          type: string
+          maxLength: 128
+          description: Только при создании; если не задано, используется локальная часть email.
+        resend:
+          type: boolean
+          default: false
+          description: Явно запросить новую ссылку, отозвав предыдущую.
+
+    InvitationResponseDto:
+      type: object
+      required: [userId, status, deliveryQueued, expiresAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/UserStatusDto'
+        deliveryQueued:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          description: Срок действия текущей ссылки; токен не возвращается в API.
+
+    DirectoryUserDto:
+      type: object
+      required: [id, displayName, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    UserDirectoryResponseDto:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DirectoryUserDto'
+        hasMore:
+          type: boolean
+
     PasswordByTokenRequestDto:
       type: object
       required: [token, newPassword]
@@ -2489,6 +3928,7 @@ components:
 
     ValidateAccessTokenResponseDto:
       type: object
+      required: [avatarUnavailable]
       properties:
         id:
           type: string
@@ -2499,22 +3939,33 @@ components:
         displayName:
           type: string
         status:
-          type: string
+          $ref: '#/components/schemas/UserStatusDto'
         globalRole:
           $ref: '#/components/schemas/GlobalRoleTypeDto'
+        avatar:
+          allOf:
+            - $ref: '#/components/schemas/AvatarDto'
+          nullable: true
+          description: Аватар текущего пользователя; null, если отсутствует или профиль временно недоступен (см. avatarUnavailable).
+        avatarUnavailable:
+          type: boolean
+          default: false
+          description: >-
+            true, если профиль с аватаром не удалось прочитать и avatar=null означает ошибку,
+            а не отсутствие фото. false, если аватар прочитан или у пользователя его нет.
 
     CreateIssueRequestDto:
       type: object
       required: [issueType, summary, description, priority]
       properties:
         issueType:
-          type: string
+          $ref: '#/components/schemas/IssueTypeDto'
         summary:
           type: string
         description:
           type: string
         priority:
-          type: string
+          $ref: '#/components/schemas/IssuePriorityDto'
         storyPoints:
           type: number
           format: double
@@ -2553,15 +4004,16 @@ components:
         issueKey:
           type: string
         issueType:
-          type: string
+          $ref: '#/components/schemas/IssueTypeDto'
         summary:
           type: string
         description:
           type: string
         status:
           type: string
+          description: Открытый ключ статуса workflow проекта.
         priority:
-          type: string
+          $ref: '#/components/schemas/IssuePriorityDto'
         assigneeId:
           type: string
         reporterId:
@@ -2599,7 +4051,7 @@ components:
           minimum: 0
         labels:
           type: array
-          description: Метки задачи (краткая информация)
+          description: Порядок — name asc, id asc (сравнение строк по collation БД).
           items:
             $ref: '#/components/schemas/IssueLabelResponseDto'
 
@@ -2618,6 +4070,157 @@ components:
         payload:
           type: object
 
+    IssueDetailsWithHistoryResponseDto:
+      type: object
+      required:
+        - issue
+        - history
+      properties:
+        issue:
+          $ref: '#/components/schemas/IssueDetailsResponseDto'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueHistoryResponseDto'
+
+    IssueDetailsResponseDto:
+      type: object
+      required: [id, projectId, issueNumber, issueKey, issueType, summary, status,
+                 priority, reporter, createdAt, updatedAt, version, isWatching, commentCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        issueNumber:
+          type: integer
+          format: int64
+        issueKey:
+          type: string
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        summary:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          description: Открытый ключ статуса workflow проекта.
+          example: "IN_PROGRESS"
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        assignee:
+          $ref: '#/components/schemas/UserSummaryDto'
+        reporter:
+          $ref: '#/components/schemas/UserSummaryDto'
+        assigneeId:
+          type: string
+          format: uuid
+        reporterId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int32
+        storyPoints:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+        startDate:
+          type: string
+          format: date
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+        labels:
+          type: array
+          description: Порядок — name asc, id asc (сравнение строк по collation БД).
+          items:
+            $ref: '#/components/schemas/IssueLabelResponseDto'
+        watchers:
+          type: array
+          description: Порядок — createdAt desc, id desc.
+          items:
+            $ref: '#/components/schemas/IssueWatcherResponseDto'
+        isWatching:
+          type: boolean
+        links:
+          type: array
+          description: Порядок — createdAt asc, id asc.
+          items:
+            $ref: '#/components/schemas/IssueLinkResponseDto'
+        attachments:
+          type: array
+          description: Порядок — createdAt asc, id asc.
+          items:
+            $ref: '#/components/schemas/IssueAttachmentDto'
+        commentCount:
+          type: integer
+          format: int64
+          description: Общее количество комментариев к задаче
+          minimum: 0
+
+    UserSummaryDto:
+      type: object
+      required:
+        - id
+        - displayName
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          format: uri
+
+    TargetIssueDto:
+      type: object
+      required:
+        - id
+        - issueKey
+        - summary
+        - projectId
+        - statusKey
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueKey:
+          type: string
+        summary:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        statusKey:
+          type: string
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
+
     IssueWithHistoryResponseDto:
       type: object
       properties:
@@ -2630,7 +4233,7 @@ components:
 
     IssueShortResponseDto:
       type: object
-      required: [id, issueKey, summary, issueType, priority, assigneeId]
+      required: [id, issueKey, summary, issueType, priority, assigneeId, statusKey]
       properties:
         id:
           type: string
@@ -2639,9 +4242,9 @@ components:
         summary:
           type: string
         issueType:
-          type: string
+          $ref: '#/components/schemas/IssueTypeDto'
         priority:
-          type: string
+          $ref: '#/components/schemas/IssuePriorityDto'
         assigneeId:
           type: string
         storyPoints:
@@ -2649,6 +4252,14 @@ components:
           format: double
           description: Оценка сложности задачи в story points
           minimum: 0
+        projectId:
+          type: string
+        projectKey:
+          type: string
+        statusKey:
+          type: string
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
+
 
     ListIssuesResponseDto:
       type: object
@@ -2669,7 +4280,7 @@ components:
         description:
           type: string
         priority:
-          type: string
+          $ref: '#/components/schemas/IssuePriorityDto'
         storyPoints:
           type: number
           format: double
@@ -2694,6 +4305,57 @@ components:
           description: Оставшееся время в минутах
           minimum: 0
 
+    PatchIssueRequestDto:
+      type: object
+      description: |
+        Частичное обновление задачи (JSON Merge Patch). Все поля необязательные.
+        Отсутствие поля — не изменять. Явный null — очистить значение.
+        summary и priority очищены быть не могут.
+        В коде отображается на собственный класс ru.taska.domain.dto.PatchIssueRequestDto
+        (schemaMappings в openapi-generator), который различает отсутствующее поле и явный null.
+      properties:
+        summary:
+          type: string
+          description: Краткое описание задачи. Не может быть null.
+        description:
+          type: string
+          nullable: true
+          description: Подробное описание задачи
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        assigneeId:
+          type: string
+          nullable: true
+          description: Идентификатор исполнителя
+        storyPoints:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+          description: Оценка сложности задачи в story points
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          description: Дата начала работы над задачей
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          description: Крайний срок выполнения задачи
+        originalEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Первоначальная оценка времени в минутах
+        remainingEstimateMinutes:
+          type: integer
+          format: int32
+          nullable: true
+          minimum: 0
+          description: Оставшееся время в минутах
+
     UpdateIssueResponseDto:
       type: object
       required: [id, summary, description, priority]
@@ -2705,7 +4367,7 @@ components:
         description:
           type: string
         priority:
-          type: string
+          $ref: '#/components/schemas/IssuePriorityDto'
         storyPoints:
           type: number
           format: double
@@ -2772,12 +4434,14 @@ components:
         targetIssueId:
           type: string
         viewLinkType:
-          type: string
+          $ref: '#/components/schemas/IssueLinkViewTypeDto'
         createdBy:
           type: string
         createdAt:
           type: string
           format: date-time
+        target:
+          $ref: '#/components/schemas/TargetIssueDto'
 
     # ==================== LABELS SCHEMAS ====================
 
@@ -2919,6 +4583,7 @@ components:
       properties:
         watchers:
           type: array
+          description: Порядок — createdAt desc, id desc.
           items:
             $ref: '#/components/schemas/IssueWatcherResponseDto'
         totalCount:
@@ -2949,6 +4614,12 @@ components:
           type: string
           format: uuid
           description: Кто создал подписку
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          format: uri
 
     AddIssueWatcherRequestDto:
       type: object
@@ -3023,9 +4694,7 @@ components:
           type: string
           format: uuid
         notificationType:
-          type: string
-          description: Тип уведомления.
-          example: ISSUE_ASSIGNED,MEMBER_REMOVED etc.
+          $ref: '#/components/schemas/NotificationTypeDto'
         title:
           type: string
         body:
@@ -3054,6 +4723,7 @@ components:
 
     NotificationTypeDto:
       type: string
+      description: Все типы уведомлений; UNKNOWN — отсутствующий или неизвестный тип из сервиса.
       enum:
         - ISSUE_ASSIGNED
         - ISSUE_TRANSITIONED
@@ -3063,9 +4733,22 @@ components:
         - USER_INVITED
         - USER_ACTIVATED
         - PROJECT_CREATED
+        - PROJECT_ARCHIVED
         - MEMBER_ADDED
         - MEMBER_UPDATED
         - MEMBER_REMOVED
+        - ISSUE_LINK_CREATED
+        - ISSUE_LINK_DELETED
+        - LABEL_ADDED
+        - LABEL_REMOVED
+        - USER_BLOCKED
+        - USER_UNBLOCKED
+        - ISSUE_COMMENT_CREATED
+        - ISSUE_COMMENT_UPDATED
+        - ISSUE_COMMENT_DELETED
+        - ISSUE_ATTACHMENT_ADDED
+        - ISSUE_ATTACHMENT_DELETED
+        - UNKNOWN
 
     SortOrderDto:
       type: string
@@ -3096,6 +4779,50 @@ components:
           type: object
           additionalProperties: true
           description: Строка таблицы
+
+    ListAuditEntriesResponseDto:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntryDto'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfoDto'
+
+    AuditEntryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Идентификатор записи журнала
+        actorUserId:
+          type: string
+          format: uuid
+        actorLogin:
+          type: string
+        action:
+          type: string
+        targetService:
+          type: string
+        targetTable:
+          type: string
+        targetId:
+          type: string
+        oldValue:
+          type: string
+          description: Состояние объекта до операции — JSON-строка с замаскированными sensitive-значениями
+        newValue:
+          type: string
+          description: Состояние объекта после операции — JSON-строка с замаскированными sensitive-значениями
+        reason:
+          type: string
+        requestId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     PaginationInfoDto:
       type: object
@@ -3212,6 +4939,36 @@ components:
         currentUserRole:
           type: string
 
+    ListProjectStatsDto:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectStatsDto'
+
+    ProjectStatsDto:
+      type: object
+      required: [projectId, issueCount, memberCount, members]
+      properties:
+        projectId:
+          type: string
+        issueCount:
+          type: integer
+          format: int64
+          minimum: 0
+        memberCount:
+          type: integer
+          format: int64
+          minimum: 0
+        members:
+          type: array
+          maxItems: 5
+          description: Первые пять участников по addedAt, затем userId
+          items:
+            $ref: '#/components/schemas/ProjectMemberDetailsDto'
+
     ListMyProjectResponseDto:
       type: object
       properties:
@@ -3286,7 +5043,13 @@ components:
         email:
           type: string
         avatar:
-          $ref: '#/components/schemas/AvatarDto'
+          allOf:
+            - $ref: '#/components/schemas/AvatarDto'
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+          description: Когда участник добавлен в проект
 
 
     ListProjectMemberDetailsDto:
@@ -3297,7 +5060,121 @@ components:
           items:
             $ref: '#/components/schemas/ProjectMemberDetailsDto'
 
+    ProjectRoleDto:
+      type: string
+      enum: [ ADMIN, MEMBER, VIEWER ]
+
+    ProjectIssueTypeColorDto:
+      type: string
+      enum: [blue, red, green, amber, purple, teal, slate]
+    ProjectIssueTypeIconDto:
+      type: string
+      enum: [check-square, bug, book-open, headset, megaphone, file-text, flag, layers]
+    ProjectIssueTypeDto:
+      type: object
+      required: [code, name, color, icon, sortOrder]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+          description: Неизменяемый ключ типа внутри проекта.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+    ListProjectIssueTypesDto:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectIssueTypeDto'
+    CreateProjectIssueTypeRequestDto:
+      type: object
+      additionalProperties: false
+      required: [code, name, color, icon]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 100
+    PatchProjectIssueTypeRequestDto:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Пропущенное поле не меняется; явный null запрещён. code неизменяем.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+
+    ProjectContextResponseDto:
+      type: object
+      required: [ project, members, labels, workflows, issueTypes ]
+      properties:
+        project:
+          $ref: '#/components/schemas/ProjectResponseDto'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectMemberDetailsDto'
+        labels:
+          type: array
+          description: Порядок — name asc, id asc (сравнение строк по collation БД).
+          items:
+            $ref: '#/components/schemas/ProjectLabelResponseDto'
+        issueTypes:
+          type: array
+          description: Реестр типов проекта по sortOrder и code; первый тип — по умолчанию.
+          items:
+            $ref: '#/components/schemas/ProjectIssueTypeDto'
+        workflows:
+          type: array
+          description: Workflows поддерживаемых типов проекта
+          items:
+            $ref: '#/components/schemas/ProjectWorkflowEntryDto'
+
+    ProjectWorkflowEntryDto:
+      type: object
+      required: [ issueType, workflow ]
+      properties:
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        workflow:
+          $ref: '#/components/schemas/WorkflowResponseDto'
+
     RestErrorResponse:
+      description: Ошибка API; details содержит необязательные машиночитаемые параметры ошибки.
       type: object
       required: [code, message]
       properties:
@@ -3305,6 +5182,14 @@ components:
           type: string
         message:
           type: string
+        details:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: Параметры ошибки. Для временной блокировки lockedUntil — время разблокировки в ISO 8601 UTC.
+          example:
+            lockedUntil: '2026-09-22T11:55:50.398486Z'
 
     IssueTypeDto:
       type: string
@@ -3327,16 +5212,29 @@ components:
         - RELATES_TO
         - DUPLICATES
 
+    IssueLinkViewTypeDto:
+      type: string
+      description: Направление связи относительно текущей задачи; значения существующего REST-ответа с gRPC-префиксом.
+      enum:
+        - ISSUE_LINK_VIEW_TYPE_UNSPECIFIED
+        - ISSUE_LINK_VIEW_TYPE_RELATES_TO
+        - ISSUE_LINK_VIEW_TYPE_BLOCKS
+        - ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY
+        - ISSUE_LINK_VIEW_TYPE_DUPLICATES
+        - ISSUE_LINK_VIEW_TYPE_IS_DUPLICATED_BY
+        - UNRECOGNIZED
+
     SearchIssuesRequestDto:
       type: object
       properties:
         query:
           type: string
-          minLength: 2
+          minLength: 3
         projectId:
           type: string
         statusKey:
           type: string
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
         assigneeId:
           type: string
         reporterId:
@@ -3403,6 +5301,8 @@ components:
           type: string
           format: uuid
           description: Идентификатор автора комментария
+        author:
+          $ref: '#/components/schemas/UserSummaryDto'
         body:
           type: string
           description: Текст комментария
@@ -3413,11 +5313,11 @@ components:
         updatedAt:
           type: string
           format: date-time
-          nullable: true
-          description: Дата и время последнего обновления
+          nullable: false
+          description: Проставляется при создании и равен createdAt, пока комментарий не редактировали; после правки строго больше createdAt.
         version:
           type: integer
-          description: Версия комментария (для оптимистической блокировки)
+          description: Версия для оптимистической блокировки — 1 при создании, увеличивается на 1 при каждом изменении, включая мягкое удаление.
 
     CommentsListResponseDto:
       type: object
@@ -3450,6 +5350,7 @@ components:
         createdAt:
           type: string
           format: date-time
+          nullable: true
         updatedAt:
           type: string
           format: date-time
@@ -3464,20 +5365,20 @@ components:
 
     WorkflowStatusDto:
       type: object
-      required: [ id, statusKey, name, category, sortOrder, createdAt, updatedAt ]
+      required: [ id, statusKey, name, category, sortOrder]
       properties:
         id:
           type: string
           format: uuid
         statusKey:
           type: string
-          description: Уникальный строковый ключ статуса (например, TODO, IN_PROGRESS)
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
         name:
           type: string
           description: Отображаемое имя статуса для UI
         category:
           type: string
-          description: Категория жизненного цикла статуса (без жесткого ограничения enum в схеме для расширяемости)
+          description: Открытая категория workflow; набор намеренно не ограничен enum.
         sortOrder:
           type: integer
           format: int32
@@ -3487,10 +5388,11 @@ components:
         updatedAt:
           type: string
           format: date-time
+          nullable: true
 
     WorkflowTransitionDto:
       type: object
-      required: [ id, fromStatusId, toStatusId, name, sortOrder, createdAt, updatedAt ]
+      required: [ id, fromStatusId, toStatusId, name, sortOrder ]
       properties:
         id:
           type: string
@@ -3506,12 +5408,117 @@ components:
         sortOrder:
           type: integer
           format: int32
+        hidden:
+          type: boolean
+          description: Скрытый переход. GET /projects/{projectId}/workflow скрытые не отдаёт, GET /projects/{projectId}/workflows отдаёт все.
         createdAt:
           type: string
           format: date-time
+          nullable: true
         updatedAt:
           type: string
           format: date-time
+          nullable: true
+
+    WorkflowStatusCategoryDto:
+      type: string
+      description: Системная категория статуса для группировки и семантики
+      enum:
+        - TODO
+        - IN_PROGRESS
+        - DONE
+
+    CreateWorkflowStatusRequestDto:
+      type: object
+      required: [ statusKey, name, category, sortOrder ]
+      properties:
+        statusKey:
+          type: string
+          description: Стабильный ключ статуса, уникальный внутри workflow. Формат ^[A-Z][A-Z0-9_]{1,63}$
+          example: CODE_REVIEW
+        name:
+          type: string
+          description: Отображаемое имя статуса, до 100 символов
+          example: Code Review
+        category:
+          $ref: '#/components/schemas/WorkflowStatusCategoryDto'
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок колонки на доске, не меньше нуля и уникален внутри workflow
+          example: 25
+
+    CreateWorkflowTransitionRequestDto:
+      type: object
+      required: [ fromStatusKey, toStatusKey, name, sortOrder ]
+      properties:
+        fromStatusKey:
+          type: string
+          description: Ключ исходного статуса workflow
+          example: IN_PROGRESS
+        toStatusKey:
+          type: string
+          description: Ключ целевого статуса workflow
+          example: TODO
+        name:
+          type: string
+          description: Отображаемое имя перехода, до 100 символов
+          example: Stop Progress
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок перехода, не меньше нуля и уникален внутри workflow
+          example: 40
+        hidden:
+          type: boolean
+          description: Скрытый переход (не показывается в UI, но доступен программно)
+          default: false
+
+    CreateWorkflowRequestDto:
+      type: object
+      required: [ name, issueTypes, statuses, transitions ]
+      properties:
+        name:
+          type: string
+          description: Отображаемое имя workflow, до 100 символов
+          example: Development
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые будут работать по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+
+    ProjectWorkflowDto:
+      type: object
+      required: [ workflow, issueTypes, shared ]
+      properties:
+        workflow:
+          $ref: '#/components/schemas/WorkflowResponseDto'
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые работают по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        shared:
+          type: boolean
+          description: Общий default workflow. Не меняется; для своих статусов и переходов создайте workflow проекта.
+
+    ProjectWorkflowsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectWorkflowDto'
 
     # ======= начало dto для attachments =========
 
@@ -3541,6 +5548,8 @@ components:
         createdAt:
           type: string
           format: date-time
+        uploadedByUser:
+          $ref: '#/components/schemas/UserSummaryDto'
 
     IssueAttachmentsResponseDto:
       type: object
@@ -3600,6 +5609,87 @@ components:
 
     # ======= конец dto для attachments =========
 
+    IssueWorklogResponseDto:
+      type: object
+      required: [id, issueId, projectId, authorUserId, spentMinutes, workDate, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        authorUserId:
+          type: string
+          format: uuid
+        spentMinutes:
+          type: integer
+          format: int32
+        workDate:
+          type: string
+          format: date
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ListIssueWorklogsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueWorklogResponseDto'
+
+    AddIssueWorklogRequestDto:
+      type: object
+      required: [ spentMinutes, workDate ]
+      properties:
+        spentMinutes:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Затраченное время в минутах
+          example: 120
+        workDate:
+          type: string
+          format: date
+          description: Дата, за которую списывается время
+          example: "2026-07-13"
+        comment:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Комментарий к worklog
+          example: "Implemented validation"
+
+    UpdateIssueWorklogRequestDto:
+      type: object
+      properties:
+        spentMinutes:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Затраченное время в минутах
+        workDate:
+          type: string
+          format: date
+          description: Дата, за которую списывается время
+        comment:
+          type: string
+          maxLength: 2000
+          description: Новый комментарий. Если не передан, не меняется
+
     ProblematicOutboxEventsSummaryResponseDto:
       type: object
       properties:
@@ -3616,7 +5706,15 @@ components:
 
     ProblematicOutboxEventDto:
       type: object
+      required: [retryable]
       properties:
+        retryable:
+          type: boolean
+          description: >-
+            Снимок пригодности к ручному retry: true для FAILED либо для PROCESSING с ненулевым
+            processingStartedAt строго раньше текущего времени минус ADMIN_OUTBOX_RETRY_STUCK_THRESHOLD
+            (по умолчанию 10 минут). Для NEW и PUBLISHED — false. Состояние может измениться;
+            команда retry повторно проверяет правило и может отказать.
         id:
           type: string
         aggregateType:
@@ -3719,9 +5817,9 @@ components:
         sizeBytes:
           type: integer
           format: int64
-          description: Размер файла в байтах (макс. 5 MB)
+          description: Размер файла в байтах (макс. 2 MB)
           minimum: 1
-          maximum: 5242880
+          maximum: 2097152
           example: 120000
 
     CreateAvatarUploadUrlResponseDto:
@@ -3865,6 +5963,128 @@ components:
         - ACTIVE
         - BLOCKED
         - LOCKED
+        - UNSPECIFIED
+
+    MetaResponseDto:
+      type: object
+      description: Словари значений API с английскими названиями. Значения с selectable=false служат только для отображения ответов и не предлагаются для выбора.
+      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
+      properties:
+        issueTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueTypeMetaPairDto'
+        priorities:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuePriorityMetaPairDto'
+        linkTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssueLinkTypeMetaPairDto'
+        linkViewTypes:
+          type: array
+          description: Направления связей, включая обратные; коды совпадают с viewLinkType в ответе связей.
+          items:
+            $ref: '#/components/schemas/IssueLinkViewTypeMetaPairDto'
+        notificationTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypeMetaPairDto'
+        userStatuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserStatusMetaPairDto'
+
+    IssueTypeMetaPairDto:
+      type: object
+      description: Тип задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    IssuePriorityMetaPairDto:
+      type: object
+      description: Приоритет задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    IssueLinkTypeMetaPairDto:
+      type: object
+      description: Тип связи между задачами
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueLinkTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    IssueLinkViewTypeMetaPairDto:
+      type: object
+      description: Направление связи относительно текущей задачи
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/IssueLinkViewTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    NotificationTypeMetaPairDto:
+      type: object
+      description: Тип уведомления
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/NotificationTypeDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
+
+    UserStatusMetaPairDto:
+      type: object
+      description: Статус пользователя
+      required: [ code, name ]
+      properties:
+        code:
+          $ref: '#/components/schemas/UserStatusDto'
+        name:
+          type: string
+          description: Человекочитаемое название значения на английском языке
+        selectable:
+          type: boolean
+          default: true
+          description: false для технических значений-заглушек; такие значения не предлагаются для выбора.
 
     BoardResponseDto:
       type: object
@@ -3886,10 +6106,12 @@ components:
       properties:
         statusKey:
           type: string
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
         name:
           type: string
         category:
           type: string
+          description: Открытая категория workflow; набор намеренно не ограничен enum.
         sortOrder:
           type: integer
           format: int32
@@ -3916,6 +6138,7 @@ components:
           $ref: '#/components/schemas/BoardUserDto'
         labels:
           type: array
+          description: Идентификаторы меток в порядке id asc.
           items:
             type: string
 

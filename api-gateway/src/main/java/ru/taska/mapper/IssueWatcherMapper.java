@@ -10,9 +10,8 @@ import ru.taska.domain.dto.ListIssueWatchersResponseDto;
 import ru.taska.domain.dto.UnwatchIssueResponseDto;
 import ru.taska.domain.dto.WatchIssueResponseDto;
 
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,21 +27,29 @@ public class IssueWatcherMapper {
         dto.setIssueId(UUID.fromString(proto.getIssueId()));
         dto.setProjectId(UUID.fromString(proto.getProjectId()));
         dto.setUserId(UUID.fromString(proto.getUserId()));
-        dto.setCreatedAt(toOffsetDateTime(proto.getCreatedAt()));
+        dto.setCreatedAt(MappingUtils.toOffsetDateTime(proto.getCreatedAt()));
         dto.setCreatedBy(UUID.fromString(proto.getCreatedBy()));
+        if (proto.hasDisplayName()) {
+            dto.displayName(proto.getDisplayName());
+        }
+        if (proto.hasAvatarUrl()) {
+            dto.avatarUrl(URI.create(proto.getAvatarUrl()));
+        }
         return dto;
     }
 
     public ListIssueWatchersResponseDto toRestListWatchers(ListIssueWatchersResponse proto) {
         ListIssueWatchersResponseDto dto = new ListIssueWatchersResponseDto();
 
-        dto.setWatchers(
-                proto.getWatchersList().stream()
-                        .map(this::toRestWatcher)
-                        .collect(Collectors.toList())
-        );
+        dto.setWatchers(toRestIssueWatcherResponseList(proto));
         dto.setTotalCount(proto.getTotalCount());
         return dto;
+    }
+
+    public List<IssueWatcherResponseDto> toRestIssueWatcherResponseList(ListIssueWatchersResponse responseList) {
+        return responseList.getWatchersList().stream()
+                .map(this::toRestWatcher)
+                .collect(Collectors.toList());
     }
 
     public WatchIssueResponseDto toRestWatchIssueResponse(WatchIssueResponse proto) {
@@ -60,14 +67,5 @@ public class IssueWatcherMapper {
         dto.setRemoved(proto.getRemoved());
         dto.setWatchersCount(proto.getWatchersCount());
         return dto;
-    }
-
-    private OffsetDateTime toOffsetDateTime(com.google.protobuf.Timestamp timestamp) {
-        if (timestamp == null || (timestamp.getSeconds() == 0 && timestamp.getNanos() == 0)) {
-            return null;
-        }
-
-        return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
-                .atOffset(ZoneOffset.UTC);
     }
 }

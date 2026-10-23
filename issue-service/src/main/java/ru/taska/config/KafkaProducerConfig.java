@@ -1,11 +1,13 @@
 package ru.taska.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.kafka.sender.KafkaSender;
+import reactor.kafka.sender.MicrometerProducerListener;
 import reactor.kafka.sender.SenderOptions;
 
 import java.util.HashMap;
@@ -17,7 +19,7 @@ public class KafkaProducerConfig {
     private String bootstrapServers;
 
     @Bean
-    public SenderOptions<String, String> senderOptions() {
+    public SenderOptions<String, String> senderOptions(MeterRegistry meterRegistry) {
         var props = new HashMap<String, Object>();
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -27,7 +29,8 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
 
-        return SenderOptions.create(props);
+        return SenderOptions.<String, String>create(props)
+                .producerListener(new MicrometerProducerListener(meterRegistry));
     }
 
     @Bean(destroyMethod = "close")

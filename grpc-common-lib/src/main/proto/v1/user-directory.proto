@@ -1,0 +1,25 @@
+syntax = "proto3";
+package ru.taska.directory.v1;
+import "v1/common.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.directory.v1";
+service UserDirectoryService {
+  rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse);
+}
+message SearchUsersRequest {
+  ru.taska.common.v1.Header header = 1;
+  string actor_user_id = 2;
+  string query = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+message DirectoryUser {
+  string id = 1;
+  string display_name = 2;
+  string email = 3;
+  optional string avatar_url = 4;
+}
+message SearchUsersResponse {
+  repeated DirectoryUser items = 1;
+  bool has_more = 2;
+}

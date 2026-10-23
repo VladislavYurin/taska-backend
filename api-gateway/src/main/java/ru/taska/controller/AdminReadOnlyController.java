@@ -7,17 +7,19 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.AdminApi;
 import ru.taska.domain.EndpointSecurity;
+import ru.taska.domain.dto.ListAuditEntriesResponseDto;
 import ru.taska.domain.dto.MetadataResponse;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.ProblematicOutboxEventsSummaryResponseDto;
 import ru.taska.domain.dto.ReadOnlySingleRowResponseDto;
 import ru.taska.domain.dto.ReadOnlyTableRowsResponseDto;
+import ru.taska.domain.dto.RetryOutboxEventRequestDto;
+import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 import ru.taska.domain.dto.SortOrderDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcAdminServiceClient;
-import ru.taska.domain.dto.RetryOutboxEventRequestDto;
-import ru.taska.domain.dto.RetryOutboxEventResponseDto;
 
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -116,9 +118,9 @@ public class AdminReadOnlyController implements AdminApi {
      * Actor context формируется из проверенного GatewayContext и не принимается
      * от REST-клиента.
      *
-     * @param service сервис-владелец outbox
-     * @param eventId идентификатор outbox-события
-     * @param request запрос с обязательной причиной retry
+     * @param service  сервис-владелец outbox
+     * @param eventId  идентификатор outbox-события
+     * @param request  запрос с обязательной причиной retry
      * @param exchange текущий HTTP exchange
      * @return состояние outbox-события после retry
      */
@@ -140,6 +142,44 @@ public class AdminReadOnlyController implements AdminApi {
                                 context
                         ))
                         .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * GET /api/v1/readonly/audit-entries
+     * Возвращает страницу журнала аудита с фильтрами (только GLOBAL_ADMIN).
+     * <p>
+     * {@code actorUserId} и даты валидируются на уровне OpenAPI (uuid / yyyy-MM-dd) и уходят
+     * в admin-service строками в ISO-формате.
+     */
+    @Override
+    public Mono<ResponseEntity<ListAuditEntriesResponseDto>> listAuditEntries(
+            Integer page,
+            Integer pageSize,
+            UUID actorUserId,
+            String action,
+            String targetService,
+            String targetTable,
+            String targetId,
+            String requestId,
+            LocalDate createdAtFrom,
+            LocalDate createdAtTo,
+            ServerWebExchange exchange) {
+
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.listAuditEntries(
+                        actorUserId != null ? actorUserId.toString() : null,
+                        action,
+                        targetService,
+                        targetTable,
+                        targetId,
+                        requestId,
+                        createdAtFrom != null ? createdAtFrom.toString() : null,
+                        createdAtTo != null ? createdAtTo.toString() : null,
+                        page,
+                        pageSize,
+                        context
+                ).map(ResponseEntity::ok)
         );
     }
 }

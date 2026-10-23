@@ -10,5 +10,6 @@ public enum GatewayUserStatus {
         UNSPECIFIED,
         INVITED,
         ACTIVE,
-        BLOCKED
+    BLOCKED,
+    LOCKED
 }

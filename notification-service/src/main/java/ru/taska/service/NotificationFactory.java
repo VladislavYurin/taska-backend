@@ -72,7 +72,7 @@ public class NotificationFactory {
             case ISSUE_LINK_DELETED -> buildIssueLinkDeleted(event, payload, eventId);
             case USER_INVITED -> buildUserInvited(event, eventId);
             case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
-            case PROJECT_ARCHIVED -> buildProjectArchived(event, payload, eventId);
+            case PROJECT_ARCHIVED -> buildProjectArchived(event, payload);
             case MEMBER_ADDED -> buildMemberAdded(event, payload, eventId);
             case MEMBER_UPDATED -> buildMemberUpdated(event, payload, eventId);
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
@@ -96,25 +96,42 @@ public class NotificationFactory {
         return notifications;
     }
 
+    private List<Notification> buildProjectArchived(TaskaEvent event, JsonNode payload) {
+        UUID projectId = extractUuid(payload, "projectId");
+        if (projectId == null) return List.of();
+        UUID actor = extractUuid(payload, "actorUserId");
+        String name = payload.hasNonNull("projectName") ? payload.get("projectName").asString() : "";
+        if (name.isBlank()) name = payload.hasNonNull("projectKey") ? payload.get("projectKey").asString() : "Project";
+        final String displayName = name;
+        return resolveRecipients(actor, extractUuidList(payload, "memberIds"), List.of()).stream()
+                .map(user -> notificationMapper.toProjectArchived(event, user, projectId, displayName)).toList();
+    }
+
     private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID assigneeId = extractUuid(payload, "assigneeId");
         UUID actorUserId = extractUuid(payload, "actorUserId");
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
+        // assigneeId == null — исполнитель снят с задачи, уведомляем только watchers
         if (assigneeId == null) {
-            log.warn("IssueAssigned event without assigneeId, eventId={}", eventId);
-            return List.of();
+            log.info("IssueAssigned event without assigneeId (assignee removed), eventId={}", eventId);
         }
 
         IssueInfo issueInfo = extractIssueInfo(payload);
         if (skipIfNoIssueInfo(issueInfo, event, eventId)) {
             return List.of();
         }
-        Set<UUID> recipients = resolveRecipients(actorUserId, List.of(assigneeId), watcherIds);
+        Set<UUID> recipients = resolveRecipients(
+                actorUserId,
+                assigneeId != null ? List.of(assigneeId) : List.of(),
+                watcherIds
+        );
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toIssueAssigned(event, userId, issueInfo));
+            notifications.add(assigneeId != null
+                    ? notificationMapper.toIssueAssigned(event, userId, issueInfo)
+                    : notificationMapper.toIssueUnassigned(event, userId, issueInfo));
         }
 
         return notifications;
@@ -283,7 +300,6 @@ public class NotificationFactory {
 
     private List<Notification> buildIssueCommentCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID actorUserId = extractUuid(payload, "actorUserId");
-        String body = extractString(payload, "body");
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
 
         if (actorUserId == null) {
@@ -301,7 +317,7 @@ public class NotificationFactory {
 
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
-            notifications.add(notificationMapper.toCommentCreated(event, userId, issueInfo, body));
+            notifications.add(notificationMapper.toCommentCreated(event, userId, issueInfo));
         }
         return notifications;
     }
@@ -322,15 +338,6 @@ public class NotificationFactory {
             return List.of();
         }
         return List.of(notificationMapper.toProjectCreated(event, createdBy));
-    }
-
-    private List<Notification> buildProjectArchived(TaskaEvent event, JsonNode payload, UUID eventId) {
-        UUID createdBy = extractUuid(payload, "createdBy");
-        if (createdBy == null) {
-            log.warn("ProjectArchived event without createdBy, eventId={}", eventId);
-            return List.of();
-        }
-        return List.of(notificationMapper.toProjectArchived(event, createdBy));
     }
 
     private List<Notification> buildMemberAdded(TaskaEvent event, JsonNode payload, UUID eventId) {

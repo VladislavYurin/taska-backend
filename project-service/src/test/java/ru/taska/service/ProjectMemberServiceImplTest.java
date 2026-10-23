@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -26,7 +28,6 @@ import ru.taska.repository.ProjectRepository;
 import ru.taska.service.impl.ProjectMemberServiceImpl;
 import ru.taska.service.impl.validator.ProjectMemberValidatorImpl;
 import ru.taska.service.validator.ProjectMemberValidator;
-import ru.taska.service.validator.ProjectValidator;
 import ru.taska.transport.grpc.client.GrpcAuthServiceClient;
 
 import java.time.Instant;
@@ -46,10 +47,10 @@ class ProjectMemberServiceImplTest {
     private ProjectRepository projectRepository;
 
     @Mock
-    private ProjectValidator projectValidator;
+    private GrpcAuthServiceClient grpcAuthServiceClient;
 
     @Mock
-    private GrpcAuthServiceClient grpcAuthServiceClient;
+    private ru.taska.service.ProjectWriteGuard writeGuard;
 
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;
@@ -69,6 +70,8 @@ class ProjectMemberServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(writeGuard.check(Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+
         mockProjectMember = ProjectMember.builder()
                 .userId(projectMemberId)
                 .projectId(projectId)
@@ -93,36 +96,34 @@ class ProjectMemberServiceImplTest {
                 .setEmail("john.doe@test.com")
                 .build();
 
-        ProjectMemberValidator projectMemberValidator = new ProjectMemberValidatorImpl(projectMemberRepository);
-
-        Mockito.lenient().when(projectValidator.isArchived(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+        ProjectMemberValidator projectMemberValidator = new ProjectMemberValidatorImpl(projectMemberRepository, grpcAuthServiceClient);
 
         projectMemberService = new ProjectMemberServiceImpl(
                 projectMemberRepository,
                 projectRepository,
                 outboxEventService,
                 projectMemberValidator,
-                projectValidator,
-                grpcAuthServiceClient
+                grpcAuthServiceClient, writeGuard
         );
     }
 
     @Test
     @DisplayName("Проверка успешного добавления участника проекта")
     void addProjectMember_Success() {
-        Mockito.when(projectMemberRepository.getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(projectMemberRepository.getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Flux.just(mockMemberAdminDto, mockMemberViewerDto));
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(mockProjectMember));
         Mockito.when(outboxEventService.saveMemberAdded(
                 ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(ProjectMember.class)))
                 .thenReturn(Mono.just(new OutboxEvent()));
+        stubUserExists(projectMemberId);
 
         StepVerifier.create(projectMemberService.addProjectMember(requestId, nodeId, projectMemberId, memberAdminId, ProjectRole.ADMIN, projectId))
                 .expectNextMatches(pm ->
                         pm.getUserId().equals(projectMemberId) && pm.getProjectId().equals(projectId) && pm.getRole().equals(ProjectRole.ADMIN))
                 .verifyComplete();
 
-        Mockito.verify(projectMemberRepository).getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository).getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
         Mockito.verify(outboxEventService).saveMemberAdded(
                 ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(ProjectMember.class));
@@ -131,7 +132,7 @@ class ProjectMemberServiceImplTest {
     @Test
     @DisplayName("Проверка на выбрасывание ошибки, если участник уже есть в проекте")
     void addProjectMember_ThrowsAlreadyExistsException_WhenMemberExists() {
-        Mockito.when(projectMemberRepository.getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(projectMemberRepository.getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Flux.just(mockMemberAdminDto, mockMemberViewerDto));
 
         StepVerifier.create(projectMemberService.addProjectMember(
@@ -143,14 +144,15 @@ class ProjectMemberServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(projectMemberRepository).getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository).getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
+        Mockito.verifyNoInteractions(grpcAuthServiceClient);
     }
 
     @Test
     @DisplayName("Проверка на выбрасывание ошибки, если актор не админ или не найден в проекте")
     void addProjectMember_ThrowsNotFoundException_WhenMemberIsNotAnAdminOrNotFound() {
-        Mockito.when(projectMemberRepository.getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any()))
+        Mockito.when(projectMemberRepository.getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Flux.just(mockMemberAdminDto, mockMemberViewerDto));
 
         StepVerifier.create(projectMemberService.addProjectMember(
@@ -162,7 +164,30 @@ class ProjectMemberServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(projectMemberRepository).getRequiredMembersInProject(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository).getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
+        Mockito.verifyNoInteractions(grpcAuthServiceClient);
+    }
+
+    @Test
+    @DisplayName("Проверка на выбрасывание ошибки, если участника не существует")
+    void addProjectMember_ThrowsInvalidArgument_WhenUserDoesNotExist() {
+        Mockito.when(projectMemberRepository.getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Flux.just(mockMemberAdminDto, mockMemberViewerDto));
+        Mockito.when(grpcAuthServiceClient.getUserDetailsByIds(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(GetUserDetailsByIdsResponse.newBuilder().build()));
+
+        StepVerifier.create(projectMemberService
+                        .addProjectMember(requestId, nodeId, projectMemberId, memberAdminId, ProjectRole.ADMIN, projectId)
+                )
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertTrue(throwable instanceof DomainException);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, exception.getStatus());
+                })
+                .verify();
+
+        Mockito.verify(projectMemberRepository).getRequiredMembersInProjectNoLock(Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any(ProjectMember.class));
     }
 
@@ -411,5 +436,78 @@ class ProjectMemberServiceImplTest {
         Mockito.verify(projectRepository).existsById(projectId);
         Mockito.verify(projectMemberRepository).findProjectMembers(projectId, actorId);
         Mockito.verify(grpcAuthServiceClient).getUserDetailsByIds(Mockito.anyList(), Mockito.eq(requestId), Mockito.eq(nodeId));
+    }
+
+    @ParameterizedTest(name = "remove={0}, actorRole={1}, targetExists={2}")
+    @CsvSource({
+            "true, OUTSIDER, true", "true, OUTSIDER, false",
+            "true, MEMBER, true", "true, MEMBER, false",
+            "true, VIEWER, true", "true, VIEWER, false",
+            "false, OUTSIDER, true", "false, OUTSIDER, false",
+            "false, MEMBER, true", "false, MEMBER, false",
+            "false, VIEWER, true", "false, VIEWER, false"
+    })
+    @DisplayName("Изменение и удаление участника не раскрывают членство не-администратору")
+    void modifyMember_deniesUnauthorizedActorRegardlessOfTarget(
+            boolean remove, String actorRole, boolean targetExists) {
+        var members = new java.util.ArrayList<ProjectMemberDto>();
+        members.add(mockMemberAdminDto);
+        if (!actorRole.equals("OUTSIDER")) {
+            members.add(ProjectMemberDto.builder().userId(actorId)
+                    .role(ProjectRole.valueOf(actorRole)).build());
+        }
+        if (targetExists) {
+            members.add(mockMemberViewerDto);
+        }
+        Mockito.when(projectMemberRepository.getRequiredMembersInProject(actorId, memberViewerId, projectId))
+                .thenReturn(Flux.fromIterable(members));
+
+        Mono<ProjectMember> result = remove
+                ? projectMemberService.rmProjectMember(requestId, nodeId, memberViewerId, actorId, projectId)
+                : projectMemberService.changeProjectMemberRole(
+                        requestId, nodeId, memberViewerId, actorId, ProjectRole.MEMBER, projectId);
+
+        StepVerifier.create(result)
+                .expectErrorSatisfies(error -> {
+                    var exception = Assertions.assertInstanceOf(DomainException.class, error);
+                    Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, exception.getStatus());
+                    Assertions.assertEquals("User with id: " + actorId + " is not an admin of project: " + projectId,
+                            exception.getMessage());
+                })
+                .verify();
+
+        Mockito.verify(projectMemberRepository, Mockito.never()).updateRole(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(projectMemberRepository, Mockito.never()).deleteByUserIdAndProjectId(Mockito.any(), Mockito.any());
+        Mockito.verifyNoInteractions(outboxEventService, grpcAuthServiceClient);
+    }
+
+    @Test
+    @DisplayName("Администратор получает NOT_FOUND при изменении роли отсутствующего участника")
+    void changeProjectMemberRole_missingTargetReturnsNotFoundForAdmin() {
+        Mockito.when(projectMemberRepository.getRequiredMembersInProject(memberAdminId, memberViewerId, projectId))
+                .thenReturn(Flux.just(mockMemberAdminDto));
+
+        StepVerifier.create(projectMemberService.changeProjectMemberRole(
+                        requestId, nodeId, memberViewerId, memberAdminId, ProjectRole.MEMBER, projectId))
+                .expectErrorSatisfies(error -> Assertions.assertEquals(DomainStatus.NOT_FOUND,
+                        Assertions.assertInstanceOf(DomainException.class, error).getStatus()))
+                .verify();
+
+        Mockito.verify(projectMemberRepository, Mockito.never()).updateRole(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verifyNoInteractions(outboxEventService);
+    }
+
+    private void stubUserExists(UUID userId) {
+        Mockito.when(grpcAuthServiceClient.getUserDetailsByIds(
+                Mockito.eq(List.of(userId)),
+                Mockito.anyString(),
+                Mockito.anyString()
+        )).thenReturn(Mono.just(
+                GetUserDetailsByIdsResponse.newBuilder()
+                        .addUserDetails(UserDetails.newBuilder()
+                                .setUserId(userId.toString())
+                                .build())
+                        .build()
+        ));
     }
 }

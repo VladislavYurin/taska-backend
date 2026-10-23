@@ -1,7 +1,7 @@
 package ru.taska.domain.dto.labels;
 
-import ru.taska.domain.Issue;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.util.List;
 

@@ -3,7 +3,7 @@ package ru.taska.repository;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.ProjectCounter;
+import ru.taska.domain.entity.ProjectCounter;
 
 import java.util.UUID;
 

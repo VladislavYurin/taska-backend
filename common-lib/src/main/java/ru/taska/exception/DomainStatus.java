@@ -23,7 +23,6 @@ package ru.taska.exception;
  * UNIMPLEMENTED        UNIMPLEMENTED          501
  * UNKNOWN              UNKNOWN                500
  * INTERNAL             INTERNAL               500
- * PROJECT_ARCHIVED     FAILED_PRECONDITION    400
  * </pre>
  */
 public enum DomainStatus {
@@ -74,8 +73,5 @@ public enum DomainStatus {
     UNKNOWN,
 
     /** Внутренняя ошибка сервера. */
-    INTERNAL,
-
-    /** Проект удален (soft delete) */
-    PROJECT_ARCHIVED
+    INTERNAL
 }

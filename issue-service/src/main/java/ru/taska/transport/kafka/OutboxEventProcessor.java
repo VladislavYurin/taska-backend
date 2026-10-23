@@ -2,7 +2,7 @@ package ru.taska.transport.kafka;
 
 import org.springframework.stereotype.Service;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.processor.AbstractOutboxEventProcessor;
 import ru.taska.publisher.AbstractOutboxEventPublisher;
 import ru.taska.repository.CommonOutboxEventRepository;

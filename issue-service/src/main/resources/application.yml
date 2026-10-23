@@ -110,6 +110,9 @@ grpc:
     workflow-service:
       host: ${WORKFLOW_GRPC_HOST:localhost}
       port: ${WORKFLOW_GRPC_PORT:9093}
+    auth-service:
+      host: ${AUTH_GRPC_HOST:localhost}
+      port: ${AUTH_GRPC_PORT:9091}
 
 logging:
   level:

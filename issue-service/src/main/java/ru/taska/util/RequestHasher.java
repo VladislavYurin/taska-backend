@@ -5,7 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.UUID;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;

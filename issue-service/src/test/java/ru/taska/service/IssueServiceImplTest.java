@@ -2,13 +2,13 @@ package ru.taska.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.reactive.TransactionalOperator;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.IdempotencyKeyRepository;
@@ -18,9 +18,10 @@ import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectCounterRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
+import ru.taska.service.impl.IssueAccessGuard;
 import ru.taska.service.impl.IssueServiceImpl;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.ObjectMapper;
@@ -55,10 +56,7 @@ public class IssueServiceImplTest {
     protected IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Mock
-    protected ProjectAccessibility projectAccessibility;
-
-    @Mock
-    protected TransactionalOperator transactionalOperator;
+    protected ProjectRoleChecker projectRoleChecker;
 
     @Mock
     protected IssueLabelsRepository issueLabelsRepository;
@@ -68,6 +66,9 @@ public class IssueServiceImplTest {
 
     @Mock
     protected IssueTransitionValidator validator;
+
+    @Mock
+    protected IssueAccessGuard issueAccessGuard;
 
     @Mock
     protected ru.taska.service.watcher.IssueAutoWatchService issueAutoWatchService;

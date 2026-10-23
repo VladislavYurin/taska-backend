@@ -113,7 +113,9 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ./infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yml
+    environment:
+      DEPLOY_ENVIRONMENT: ${DEPLOY_ENVIRONMENT:-local}
+    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
     depends_on:
       loki:
         condition: service_started
@@ -148,8 +150,6 @@ services:
     networks:
       - taskanetwork
       - public
-    env_file:
-      - .env
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Монтируем файл конфигурации. (:ro) Режим read-only. Prometheus не сможет случайно испортить ваш файл конфигурации.
       - prometheus_data:/prometheus
@@ -173,6 +173,7 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      RUSTFS_CORS_ALLOWED_ORIGINS: ${STORAGE_CORS_ALLOWED_ORIGINS}
     volumes:
       - rustfs_data:/data
     command: server /data --console-address ":9001"

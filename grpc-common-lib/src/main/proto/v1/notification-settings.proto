@@ -1,0 +1,55 @@
+syntax = "proto3";
+package ru.taska.notification.v1;
+import "v1/common.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.notification.v1";
+
+// Internal requests are accepted only from the trusted gateway network.
+// email is supplied by auth's validated context, never by a REST request body.
+service NotificationSettingsService {
+  rpc GetPreferences(NotificationSettingsUserRequest) returns (NotificationPreferencesResponse);
+  rpc UpdatePreferences(UpdateNotificationPreferencesRequest) returns (NotificationPreferencesResponse);
+  rpc CreateTelegramLink(NotificationSettingsUserRequest) returns (TelegramLinkResponse);
+  rpc ConfirmTelegramLink(ConfirmTelegramLinkRequest) returns (NotificationPreferencesResponse);
+  rpc DisconnectTelegram(NotificationSettingsUserRequest) returns (NotificationPreferencesResponse);
+  rpc ProcessTelegramUpdate(TelegramUpdateRequest) returns (TelegramUpdateResponse);
+}
+message NotificationSettingsUserRequest {
+  ru.taska.common.v1.Header header = 1;
+  string user_id = 2;
+  string email = 3;
+}
+message UpdateNotificationPreferencesRequest {
+  NotificationSettingsUserRequest user = 1;
+  optional bool email_enabled = 2;
+  optional bool telegram_enabled = 3;
+}
+message ConfirmTelegramLinkRequest {
+  NotificationSettingsUserRequest user = 1;
+  string link_id = 2;
+}
+message NotificationPreferencesResponse {
+  bool email_enabled = 1;
+  bool telegram_enabled = 2;
+  string email = 3;
+  bool telegram_available = 4;
+  string telegram_status = 5;
+  string telegram_username = 6;
+  string telegram_name = 7;
+  string telegram_link_id = 8;
+  string telegram_link_expires_at = 9;
+  string telegram_error = 10;
+}
+message TelegramLinkResponse {
+  string link_id = 1;
+  string url = 2;
+  string expires_at = 3;
+  // Snapshot committed with this link; optional during rolling upgrades.
+  NotificationPreferencesResponse preferences = 4;
+}
+message TelegramUpdateRequest {
+  // Validated a second time by notification-service. Never log this request.
+  string webhook_secret = 1;
+  string update_json = 2;
+}
+message TelegramUpdateResponse {}

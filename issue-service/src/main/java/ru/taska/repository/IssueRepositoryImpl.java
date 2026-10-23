@@ -10,7 +10,7 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.IssueType;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.repository.criteria.SearchCriteria;
@@ -214,6 +214,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
+            List<String> doneStatusKeys,
             List<UUID> labelIds,
             Integer pageSizePerColumn
     ) {
@@ -226,7 +227,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     }
 
                     List<BoardFilterCondition> conditions = boardFilterConditions(
-                            projectId, issueType, assigneeId, statusKey, includeDone,
+                            projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
                             labelFilterActive ? issueIds : null
                     );
 
@@ -355,6 +356,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             UUID assigneeId,
             String statusKey,
             boolean includeDone,
+            List<String> doneStatusKeys,
             List<UUID> labelFilterIssueIds
     ) {
         List<BoardFilterCondition> conditions = new ArrayList<>();
@@ -369,8 +371,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         if (statusKey != null) {
             conditions.add(new BoardFilterCondition("status_key", "statusKey", BoardFilterOperator.EQUALS, statusKey));
         }
-        if (!includeDone) {
-            conditions.add(new BoardFilterCondition("status_key", "excludedStatusKey", BoardFilterOperator.NOT_EQUALS, "DONE"));
+        if (!includeDone && doneStatusKeys != null && !doneStatusKeys.isEmpty()) {
+            conditions.add(new BoardFilterCondition("status_key", "doneStatusKeys", BoardFilterOperator.NOT_IN, doneStatusKeys));
         }
         if (labelFilterIssueIds != null) {
             conditions.add(new BoardFilterCondition("id", "labelFilterIssueIds", BoardFilterOperator.IN, labelFilterIssueIds));
@@ -382,7 +384,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         List<Criteria> criteriaList = conditions.stream()
                 .map(c -> switch (c.operator()) {
                     case EQUALS -> Criteria.where(c.column()).is(c.value());
-                    case NOT_EQUALS -> Criteria.where(c.column()).not(c.value());
+                    case NOT_IN -> Criteria.where(c.column()).notIn((Collection<?>) c.value());
                     case IN -> Criteria.where(c.column()).in((Collection<?>) c.value());
                     case IS_NULL -> Criteria.where(c.column()).isNull();
                 })
@@ -399,9 +401,9 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                             paramsOut.put(c.paramName(), c.value());
                             yield column + " = :" + c.paramName();
                         }
-                        case NOT_EQUALS -> {
+                        case NOT_IN -> {
                             paramsOut.put(c.paramName(), c.value());
-                            yield column + " <> :" + c.paramName();
+                            yield column + " NOT IN (:" + c.paramName() + ")";
                         }
                         case IN -> {
                             paramsOut.put(c.paramName(), c.value());
@@ -421,6 +423,6 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     }
 
     private enum BoardFilterOperator {
-        EQUALS, NOT_EQUALS, IN, IS_NULL
+        EQUALS, NOT_IN, IN, IS_NULL
     }
 }

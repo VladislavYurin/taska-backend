@@ -3,17 +3,32 @@ package ru.taska.mapper;
 import com.google.protobuf.Timestamp;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.InjectMocks;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import ru.taska.api.common.v1.NullableDouble;
+import ru.taska.api.common.v1.NullableInt32;
+import ru.taska.api.common.v1.NullableString;
+import ru.taska.api.common.v1.UserSummaryResponse;
+import ru.taska.api.issue.attachment.v1.AttachmentResponse;
+import ru.taska.api.issue.attachment.v1.ListAttachmentsResponse;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
+import ru.taska.api.issue.v1.IssueDetailsResponse;
 import ru.taska.api.issue.v1.IssueEventType;
 import ru.taska.api.issue.v1.IssueHistoryResponse;
 import ru.taska.api.issue.v1.IssueLinkResponse;
@@ -23,26 +38,44 @@ import ru.taska.api.issue.v1.IssuePriority;
 import ru.taska.api.issue.v1.IssueResponse;
 import ru.taska.api.issue.v1.IssueShortResponse;
 import ru.taska.api.issue.v1.IssueType;
+import ru.taska.api.issue.v1.IssueWatcherResponse;
 import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLinksResponse;
+import ru.taska.api.issue.v1.ListIssueWatchersResponse;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsResponseDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
+import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
+import ru.taska.domain.dto.IssuePriorityDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
+import ru.taska.domain.dto.IssueWatcherResponseDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+@ExtendWith(MockitoExtension.class)
 class IssueMapperTest {
 
+    public static final String PAYLOAD = """
+            {
+              "oldStatus":"TODO",
+              "newStatus":"IN_PROGRESS"
+            }
+            """;
     private static final String ISSUE_ID = "00000000-0000-0000-0000-000000000001";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000002";
     private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000003";
@@ -66,7 +99,17 @@ class IssueMapperTest {
     private static final Integer REMAINING_ESTIMATE_MINUTES = 240;
     private static final String START_DATE = LocalDate.of(2026, 9, 1).toString();
     private static final String DUE_DATE = LocalDate.of(2026, 9, 10).toString();
-    private final IssueMapper mapper = new IssueMapper(new ObjectMapper());
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+    @Spy
+    private UserProfileMapper userProfileMapper = new UserProfileMapper();
+    @Spy
+    private IssueWatcherMapper watcherMapper = new IssueWatcherMapper();
+    @Spy
+    private IssueAttachmentMapper attachmentMapper = new IssueAttachmentMapper(userProfileMapper);
+    @InjectMocks
+    private IssueMapper mapper;
 
     @Test
     @DisplayName("Должен корректно преобразовать IssueResponse(gRPC DTO) в IssueResponseDto(REST DTO) без Optional полей")
@@ -105,11 +148,11 @@ class IssueMapperTest {
         Assertions.assertEquals(PROJECT_ID, result.getProjectId());
         Assertions.assertEquals(ISSUE_NUMBER, result.getIssueNumber());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
-        Assertions.assertEquals("TASK", result.getIssueType());
+        Assertions.assertEquals("TASK", result.getIssueType().getValue());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
         Assertions.assertEquals(STATUS_KEY, result.getStatus());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertEquals(USER_ID, result.getReporterId());
         Assertions.assertEquals(expectedCreatedAt, result.getCreatedAt());
@@ -164,11 +207,11 @@ class IssueMapperTest {
         Assertions.assertEquals(PROJECT_ID, result.getProjectId());
         Assertions.assertEquals(ISSUE_NUMBER, result.getIssueNumber());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
-        Assertions.assertEquals("TASK", result.getIssueType());
+        Assertions.assertEquals("TASK", result.getIssueType().getValue());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
         Assertions.assertEquals(STATUS_KEY, result.getStatus());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertEquals(USER_ID, result.getReporterId());
         Assertions.assertEquals(expectedCreatedAt, result.getCreatedAt());
@@ -188,19 +231,12 @@ class IssueMapperTest {
                 .setSeconds(1)
                 .build();
 
-        var payload = """
-                {
-                  "oldStatus":"TODO",
-                  "newStatus":"IN_PROGRESS"
-                }
-                """;
-
         var source = IssueHistoryResponse.newBuilder()
                 .setId(HISTORY_ID)
                 .setEventType(IssueEventType.ISSUE_EVENT_TYPE_CREATED)
                 .setActorUserId(USER_ID)
                 .setOccurredAt(occurredAt)
-                .setPayload(payload)
+                .setPayload(PAYLOAD)
                 .build();
 
 
@@ -241,8 +277,8 @@ class IssueMapperTest {
         var result = mapper.toRestIssueWithHistoryResponse(source);
 
         Assertions.assertNotNull(result.getIssue());
-        Assertions.assertEquals("TASK", result.getIssue().getIssueType());
-        Assertions.assertEquals("MEDIUM", result.getIssue().getPriority());
+        Assertions.assertEquals("TASK", result.getIssue().getIssueType().getValue());
+        Assertions.assertEquals("MEDIUM", result.getIssue().getPriority().getValue());
         Assertions.assertNotNull(result.getHistory());
         Assertions.assertEquals(2, result.getHistory().size());
         Assertions.assertEquals("CREATED", result.getHistory().getFirst().getEventType());
@@ -266,8 +302,8 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
         Assertions.assertEquals(SUMMARY, result.getSummary());
-        Assertions.assertEquals("TASK", result.getIssueType());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertNull(result.getStoryPoints());
     }
@@ -290,8 +326,8 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
         Assertions.assertEquals(SUMMARY, result.getSummary());
-        Assertions.assertEquals("TASK", result.getIssueType());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertEquals(STORY_POINTS, result.getStoryPoints());
     }
@@ -318,10 +354,10 @@ class IssueMapperTest {
 
         Assertions.assertNotNull(result.getItems());
         Assertions.assertEquals(2, result.getItems().size());
-        Assertions.assertEquals("TASK", result.getItems().getFirst().getIssueType());
-        Assertions.assertEquals("MEDIUM", result.getItems().getFirst().getPriority());
-        Assertions.assertEquals("BUG", result.getItems().get(1).getIssueType());
-        Assertions.assertEquals("HIGH", result.getItems().get(1).getPriority());
+        Assertions.assertEquals("TASK", result.getItems().getFirst().getIssueType().getValue());
+        Assertions.assertEquals("MEDIUM", result.getItems().getFirst().getPriority().getValue());
+        Assertions.assertEquals("BUG", result.getItems().get(1).getIssueType().getValue());
+        Assertions.assertEquals("HIGH", result.getItems().get(1).getPriority().getValue());
         Assertions.assertEquals(5, result.getTotalCount());
     }
 
@@ -409,8 +445,8 @@ class IssueMapperTest {
         Assertions.assertEquals(2, result.getItems().size());
 
         var firstResult = result.getItems().get(0);
-        Assertions.assertEquals("TASK", firstResult.getIssueType());
-        Assertions.assertEquals("MEDIUM", firstResult.getPriority());
+        Assertions.assertEquals("TASK", firstResult.getIssueType().getValue());
+        Assertions.assertEquals("MEDIUM", firstResult.getPriority().getValue());
         Assertions.assertNotNull(firstResult.getLabels());
         Assertions.assertEquals(2, firstResult.getLabels().size());
         Assertions.assertEquals("test", firstResult.getLabels().get(0).getName());
@@ -419,8 +455,8 @@ class IssueMapperTest {
         Assertions.assertEquals("#E3A008", firstResult.getLabels().get(1).getColor());
 
         var secondResult = result.getItems().get(1);
-        Assertions.assertEquals("BUG", secondResult.getIssueType());
-        Assertions.assertEquals("HIGH", secondResult.getPriority());
+        Assertions.assertEquals("BUG", secondResult.getIssueType().getValue());
+        Assertions.assertEquals("HIGH", secondResult.getPriority().getValue());
         Assertions.assertNotNull(secondResult.getLabels());
         Assertions.assertTrue(secondResult.getLabels().isEmpty());
 
@@ -442,7 +478,7 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertNull(result.getStoryPoints());
         Assertions.assertNull(result.getStartDate());
         Assertions.assertNull(result.getDueDate());
@@ -470,7 +506,7 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
-        Assertions.assertEquals("MEDIUM", result.getPriority());
+        Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(STORY_POINTS, result.getStoryPoints());
         Assertions.assertEquals(START_DATE, result.getStartDate().toString());
         Assertions.assertEquals(DUE_DATE, result.getDueDate().toString());
@@ -503,7 +539,7 @@ class IssueMapperTest {
         Assertions.assertEquals(PROJECT_ID, result.getProjectId());
         Assertions.assertEquals(ISSUE_ID, result.getSourceIssueId());
         Assertions.assertEquals(TARGET_ISSUE_ID, result.getTargetIssueId());
-        Assertions.assertEquals("ISSUE_LINK_VIEW_TYPE_BLOCKS", result.getViewLinkType());
+        Assertions.assertEquals("ISSUE_LINK_VIEW_TYPE_BLOCKS", result.getViewLinkType().getValue());
         Assertions.assertEquals(USER_ID, result.getCreatedBy());
         Assertions.assertEquals(expectedCreatedAt, result.getCreatedAt());
     }
@@ -537,7 +573,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) без Optional полей")
     void toCreateIssueGrpcRequest_shouldCorrectMapsAllFields_withoutOptionalFields() {
-        var source = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, "LOW");
+        var source = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
 
         var result = mapper.toCreateIssueGrpcRequest(PROJECT_ID, IDEMPOTENCY_KEY, source, CONTEXT);
         var resultBody = result.getBody();
@@ -561,7 +597,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) c Optional полями")
     void toCreateIssueGrpcRequest_shouldCorrectMapsAllFields_withOptionalFields() {
-        var source = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, "LOW");
+        var source = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
         source.setStoryPoints(STORY_POINTS);
         source.setStartDate(LocalDate.parse(START_DATE));
         source.setDueDate(LocalDate.parse(DUE_DATE));
@@ -590,7 +626,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) без Optional полей")
     void toUpdateIssueRequest_shouldCorrectMapsAllFields_withoutOptionalFields() {
-        var source = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, "LOW");
+        var source = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
 
         var result = mapper.toUpdateIssueRequest(ISSUE_ID, source, CONTEXT);
         var resultBody = result.getBody();
@@ -612,7 +648,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) c Optional полями")
     void toUpdateIssueRequest_shouldCorrectMapsAllFields_withOptionalFields() {
-        var source = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, "LOW");
+        var source = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
         source.setStoryPoints(STORY_POINTS);
         source.setStartDate(LocalDate.parse(START_DATE));
         source.setDueDate(LocalDate.parse(DUE_DATE));
@@ -634,6 +670,147 @@ class IssueMapperTest {
         Assertions.assertEquals(DUE_DATE, resultBody.getDueDate());
         Assertions.assertEquals(ORIGINAL_ESTIMATE_MINUTES, resultBody.getOriginalEstimateMinutes());
         Assertions.assertEquals(REMAINING_ESTIMATE_MINUTES, resultBody.getRemainingEstimateMinutes());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен корректно преобразовать все переданные поля в PatchIssueRequest(gRPC DTO)")
+    void toPatchIssueRequest_shouldCorrectMapsAllFields() {
+        var source = new PatchIssueRequestDto();
+        source.setSummary(SUMMARY);
+        source.setPriority(IssuePriorityDto.HIGH);
+        source.setDescription(DESCRIPTION);
+        source.setAssigneeId(ASSIGNEE_ID);
+        source.setStoryPoints(STORY_POINTS);
+        source.setStartDate(LocalDate.parse(START_DATE));
+        source.setDueDate(LocalDate.parse(DUE_DATE));
+        source.setOriginalEstimateMinutes(BigDecimal.valueOf(ORIGINAL_ESTIMATE_MINUTES));
+        source.setRemainingEstimateMinutes(BigDecimal.valueOf(REMAINING_ESTIMATE_MINUTES));
+
+        var result = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT);
+        var resultBody = result.getBody();
+
+        Assertions.assertEquals(REQUEST_ID, result.getHeader().getRequestId());
+        Assertions.assertEquals(NODE_ID, result.getHeader().getNodeId());
+        Assertions.assertEquals(ISSUE_ID, resultBody.getIssueId());
+        Assertions.assertEquals(USER_ID, resultBody.getActorUserId());
+        Assertions.assertEquals(VERSION, resultBody.getVersion());
+        Assertions.assertEquals(SUMMARY, resultBody.getSummary());
+        Assertions.assertEquals(IssuePriority.ISSUE_PRIORITY_HIGH, resultBody.getPriority());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(DESCRIPTION).build(), resultBody.getDescription());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(ASSIGNEE_ID).build(), resultBody.getAssigneeId());
+        Assertions.assertEquals(NullableDouble.newBuilder().setValue(STORY_POINTS).build(), resultBody.getStoryPoints());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(START_DATE).build(), resultBody.getStartDate());
+        Assertions.assertEquals(NullableString.newBuilder().setValue(DUE_DATE).build(), resultBody.getDueDate());
+        Assertions.assertEquals(
+                NullableInt32.newBuilder().setValue(ORIGINAL_ESTIMATE_MINUTES).build(),
+                resultBody.getOriginalEstimateMinutes()
+        );
+        Assertions.assertEquals(
+                NullableInt32.newBuilder().setValue(REMAINING_ESTIMATE_MINUTES).build(),
+                resultBody.getRemainingEstimateMinutes()
+        );
+    }
+
+    @Test
+    @DisplayName("PATCH: не должен устанавливать поля, отсутствующие в теле запроса")
+    void toPatchIssueRequest_shouldNotSetAbsentFields() {
+        var result = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), new PatchIssueRequestDto(), CONTEXT);
+        var resultBody = result.getBody();
+
+        Assertions.assertEquals(ISSUE_ID, resultBody.getIssueId());
+        Assertions.assertEquals(USER_ID, resultBody.getActorUserId());
+        Assertions.assertEquals(VERSION, resultBody.getVersion());
+        Assertions.assertFalse(resultBody.hasSummary());
+        Assertions.assertFalse(resultBody.hasPriority());
+        Assertions.assertFalse(resultBody.hasDescription());
+        Assertions.assertFalse(resultBody.hasAssigneeId());
+        Assertions.assertFalse(resultBody.hasStoryPoints());
+        Assertions.assertFalse(resultBody.hasStartDate());
+        Assertions.assertFalse(resultBody.hasDueDate());
+        Assertions.assertFalse(resultBody.hasOriginalEstimateMinutes());
+        Assertions.assertFalse(resultBody.hasRemainingEstimateMinutes());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен помечать is_null для полей, явно переданных как null")
+    void toPatchIssueRequest_shouldSetIsNull_whenFieldsExplicitlyNull() {
+        var source = new PatchIssueRequestDto();
+        source.setDescription(null);
+        source.setAssigneeId(null);
+        source.setStoryPoints(null);
+        source.setStartDate(null);
+        source.setDueDate(null);
+        source.setOriginalEstimateMinutes(null);
+        source.setRemainingEstimateMinutes(null);
+
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT).getBody();
+
+        Assertions.assertFalse(resultBody.hasSummary());
+        Assertions.assertFalse(resultBody.hasPriority());
+        Assertions.assertTrue(resultBody.getDescription().getIsNull());
+        Assertions.assertTrue(resultBody.getAssigneeId().getIsNull());
+        Assertions.assertTrue(resultBody.getStoryPoints().getIsNull());
+        Assertions.assertTrue(resultBody.getStartDate().getIsNull());
+        Assertions.assertTrue(resultBody.getDueDate().getIsNull());
+        Assertions.assertTrue(resultBody.getOriginalEstimateMinutes().getIsNull());
+        Assertions.assertTrue(resultBody.getRemainingEstimateMinutes().getIsNull());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен принимать оценки времени, переданные числом с нулевой дробной частью")
+    void toPatchIssueRequest_shouldAcceptWholeFloatingEstimates() {
+        var source = new PatchIssueRequestDto();
+        source.setOriginalEstimateMinutes(new BigDecimal("90.0"));
+        source.setRemainingEstimateMinutes(BigDecimal.valueOf(30));
+
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT).getBody();
+
+        Assertions.assertEquals(90, resultBody.getOriginalEstimateMinutes().getValue());
+        Assertions.assertEquals(30, resultBody.getRemainingEstimateMinutes().getValue());
+    }
+
+    @Test
+    @DisplayName("PATCH: должен обрезать пробелы в значении If-Match")
+    void toPatchIssueRequest_shouldTrimIfMatchVersion() {
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, " 7 ", new PatchIssueRequestDto(), CONTEXT).getBody();
+
+        Assertions.assertEquals(7, resultBody.getVersion());
+    }
+
+    @ParameterizedTest(name = "If-Match = {0}")
+    @MethodSource("quotedIfMatchArguments")
+    @DisplayName("PATCH: должен принимать If-Match в формате ETag (в кавычках)")
+    void toPatchIssueRequest_shouldStripQuotesFromIfMatchVersion(String ifMatch) {
+        var resultBody = mapper.toPatchIssueRequest(ISSUE_ID, ifMatch, new PatchIssueRequestDto(), CONTEXT).getBody();
+
+        Assertions.assertEquals(3, resultBody.getVersion());
+    }
+
+    @ParameterizedTest(name = "If-Match = \"{0}\"")
+    @MethodSource("invalidIfMatchArguments")
+    @DisplayName("PATCH: должен выбрасывать 400 Bad Request, если If-Match не является целым числом")
+    void toPatchIssueRequest_shouldThrowsException_whenIfMatchInvalid(String ifMatch) {
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toPatchIssueRequest(ISSUE_ID, ifMatch, new PatchIssueRequestDto(), CONTEXT)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidPatchBodyArguments")
+    @DisplayName("PATCH: должен выбрасывать 400 Bad Request при очистке summary/priority или недопустимой оценке времени")
+    void toPatchIssueRequest_shouldThrowsException_whenFieldValueInvalid(Consumer<PatchIssueRequestDto> fill) {
+        var source = new PatchIssueRequestDto();
+        fill.accept(source);
+
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toPatchIssueRequest(ISSUE_ID, String.valueOf(VERSION), source, CONTEXT)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
     }
 
     @Test
@@ -757,6 +934,18 @@ class IssueMapperTest {
         Assertions.assertEquals(expected, result);
     }
 
+    @ParameterizedTest(name = "priority = \"{0}\"")
+    @MethodSource("unknownIssuePriorityArguments")
+    @DisplayName("Должен выбрасывать 400 Bad Request, если приходит неизвестный REST issuePriority")
+    void toGrpcIssuePriority_shouldThrowsException_whenUnknownIssuePriority(String source) {
+        var ex = Assertions.assertThrows(
+                ResponseStatusException.class,
+                () -> mapper.toGrpcIssuePriority(source)
+        );
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
     @ParameterizedTest
     @MethodSource("restIssuePriorityArguments")
     @DisplayName("Должен корректно преобразовать gRPC issueType в REST issueType")
@@ -824,8 +1013,16 @@ class IssueMapperTest {
         return Stream.of(
                 Arguments.of("LOW", IssuePriority.ISSUE_PRIORITY_LOW),
                 Arguments.of("MEDIUM", IssuePriority.ISSUE_PRIORITY_MEDIUM),
-                Arguments.of("HIGH", IssuePriority.ISSUE_PRIORITY_HIGH),
-                Arguments.of("UNSPECIFIED", IssuePriority.ISSUE_PRIORITY_UNSPECIFIED)
+                Arguments.of("HIGH", IssuePriority.ISSUE_PRIORITY_HIGH)
+        );
+    }
+
+    private static Stream<Arguments> unknownIssuePriorityArguments() {
+        return Stream.of(
+                Arguments.of("UNSPECIFIED"),
+                Arguments.of("URGENT"),
+                Arguments.of("low"),
+                Arguments.of("")
         );
     }
 
@@ -855,11 +1052,230 @@ class IssueMapperTest {
         );
     }
 
+    private static Stream<Arguments> invalidIfMatchArguments() {
+        return Stream.of(
+                Arguments.of("abc"),
+                Arguments.of(""),
+                Arguments.of("\""),
+                Arguments.of("\"\""),
+                Arguments.of("\"3"),
+                Arguments.of("W/\"3\""),
+                Arguments.of("*"),
+                Arguments.of("1.5")
+        );
+    }
+
+    private static Stream<Arguments> quotedIfMatchArguments() {
+        return Stream.of(
+                Arguments.of("\"3\""),
+                Arguments.of(" \"3\" ")
+        );
+    }
+
+    private static Stream<Arguments> invalidPatchBodyArguments() {
+        return Stream.<Consumer<PatchIssueRequestDto>>of(
+                        dto -> dto.setSummary(null),
+                        dto -> dto.setPriority(null),
+                        dto -> dto.setOriginalEstimateMinutes(BigDecimal.valueOf(-1)),
+                        dto -> dto.setRemainingEstimateMinutes(BigDecimal.valueOf(-30)),
+                        dto -> dto.setOriginalEstimateMinutes(new BigDecimal("90.9")),
+                        dto -> dto.setRemainingEstimateMinutes(new BigDecimal("30.1")),
+                        dto -> dto.setRemainingEstimateMinutes(BigDecimal.valueOf(3_000_000_000L))
+                )
+                .map(Arguments::of);
+    }
+
     private static Stream<Arguments> grpcIssueLinkTypeArguments() {
         return Stream.of(
                 Arguments.of(IssueLinkTypeDto.RELATES_TO, IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO),
                 Arguments.of(IssueLinkTypeDto.BLOCKS, IssueLinkType.ISSUE_LINK_TYPE_BLOCKS),
                 Arguments.of(IssueLinkTypeDto.DUPLICATES, IssueLinkType.ISSUE_LINK_TYPE_DUPLICATES)
         );
+    }
+
+    @Nested
+    @DisplayName("Тесты маппинга IssueMapper")
+    class IssueMapperNestedTests {
+
+        @Test
+        @DisplayName("Успешный маппинг полных данных из gRPC Response в REST DTO")
+        void shouldMapFullResponseToRestDtoSuccessfully() {
+            Instant now = Instant.parse("2026-09-17T10:00:00Z");
+            Timestamp timestamp = Timestamp.newBuilder()
+                    .setSeconds(now.getEpochSecond())
+                    .setNanos(now.getNano())
+                    .build();
+
+            UserSummaryResponse assigneeResponse = UserSummaryResponse.newBuilder()
+                    .setId(ASSIGNEE_ID)
+                    .setDisplayName("John Doe")
+                    .setAvatarUrl("https://example.com/avatar.png")
+                    .build();
+
+            IssueWatcherResponse watcherResponse = IssueWatcherResponse.newBuilder()
+                    .setId(String.valueOf(UUID.randomUUID()))
+                    .setIssueId(ISSUE_ID)
+                    .setUserId(USER_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setCreatedBy(ASSIGNEE_ID)
+                    .setDisplayName("Watcher User")
+                    .build();
+
+            ListIssueWatchersResponse listIssueWatchersResponse = ListIssueWatchersResponse.newBuilder()
+                    .addWatchers(watcherResponse)
+                    .build();
+
+            AttachmentResponse attachmentResponse = AttachmentResponse.newBuilder()
+                    .setId(String.valueOf(UUID.randomUUID()))
+                    .setFileName("document.pdf")
+                    .setSizeBytes(1024L)
+                    .setContentType("application/pdf")
+                    .setCreatedAt(timestamp)
+                    .setUploadedBy(ASSIGNEE_ID)
+                    .setUploadedByUser(assigneeResponse)
+                    .setIssueId(ISSUE_ID)
+                    .build();
+
+            ListAttachmentsResponse listAttachmentsResponse = ListAttachmentsResponse.newBuilder()
+                    .addAttachments(attachmentResponse)
+                    .build();
+
+            IssueDetailsResponse issueDetailsResponse = IssueDetailsResponse.newBuilder()
+                    .setId(ISSUE_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setIssueNumber(ISSUE_NUMBER)
+                    .setIssueKey(ISSUE_KEY)
+                    .setSummary(SUMMARY)
+                    .setDescription(DESCRIPTION)
+                    .setStatus(STATUS_KEY)
+                    .setVersion(VERSION)
+                    .setCommentCount(2)
+                    .setIsWatching(true)
+                    .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
+                    .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                    .setCreatedAt(timestamp)
+                    .setUpdatedAt(timestamp)
+                    .setStoryPoints(STORY_POINTS)
+                    .setOriginalEstimateMinutes(ORIGINAL_ESTIMATE_MINUTES)
+                    .setRemainingEstimateMinutes(REMAINING_ESTIMATE_MINUTES)
+                    .setStartDate(START_DATE)
+                    .setDueDate(DUE_DATE)
+                    .setAssignee(assigneeResponse)
+                    .setWatchers(listIssueWatchersResponse)
+                    .setAttachments(listAttachmentsResponse)
+                    .setReporterId(UUID.randomUUID().toString())
+                    .build();
+
+            IssueHistoryResponse historyResponse = IssueHistoryResponse.newBuilder()
+                    .setId(HISTORY_ID)
+                    .setEventType(IssueEventType.ISSUE_EVENT_TYPE_UPDATED)
+                    .setActorUserId(USER_ID)
+                    .setOccurredAt(timestamp)
+                    .setPayload(PAYLOAD)
+                    .build();
+
+            GetIssueDetailsResponse response = GetIssueDetailsResponse.newBuilder()
+                    .setIssue(issueDetailsResponse)
+                    .addHistory(historyResponse)
+                    .build();
+
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(response);
+
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getIssue());
+
+            IssueDetailsResponseDto issueDto = result.getIssue();
+            Assertions.assertEquals(UUID.fromString(ISSUE_ID), issueDto.getId());
+            Assertions.assertEquals(UUID.fromString(PROJECT_ID), issueDto.getProjectId());
+            Assertions.assertEquals(ISSUE_NUMBER, issueDto.getIssueNumber());
+            Assertions.assertEquals(ISSUE_KEY, issueDto.getIssueKey());
+            Assertions.assertEquals(SUMMARY, issueDto.getSummary());
+            Assertions.assertEquals(DESCRIPTION, issueDto.getDescription());
+            Assertions.assertEquals(STATUS_KEY, issueDto.getStatus());
+            Assertions.assertEquals(VERSION, issueDto.getVersion());
+            Assertions.assertEquals(2, issueDto.getCommentCount());
+            Assertions.assertTrue(issueDto.getIsWatching());
+            Assertions.assertEquals(STORY_POINTS, issueDto.getStoryPoints());
+            Assertions.assertEquals(ORIGINAL_ESTIMATE_MINUTES, issueDto.getOriginalEstimateMinutes());
+            Assertions.assertEquals(REMAINING_ESTIMATE_MINUTES, issueDto.getRemainingEstimateMinutes());
+            Assertions.assertEquals(LocalDate.parse(START_DATE), issueDto.getStartDate());
+            Assertions.assertEquals(LocalDate.parse(DUE_DATE), issueDto.getDueDate());
+
+            OffsetDateTime expectedTime = now.atOffset(ZoneOffset.UTC);
+            Assertions.assertEquals(expectedTime, issueDto.getCreatedAt());
+            Assertions.assertEquals(expectedTime, issueDto.getUpdatedAt());
+
+            Assertions.assertNotNull(issueDto.getAssignee());
+            Assertions.assertEquals(UUID.fromString(ASSIGNEE_ID), issueDto.getAssignee().getId());
+
+            Assertions.assertEquals(1, issueDto.getWatchers().size());
+            IssueWatcherResponseDto watcherDto = issueDto.getWatchers().get(0);
+            Assertions.assertEquals(UUID.fromString(USER_ID), watcherDto.getUserId());
+
+            Assertions.assertEquals(1, issueDto.getAttachments().size());
+            Assertions.assertEquals("document.pdf", issueDto.getAttachments().get(0).getFileName());
+
+            Assertions.assertEquals(1, result.getHistory().size());
+            IssueHistoryResponseDto historyDto = result.getHistory().get(0);
+            Assertions.assertEquals(HISTORY_ID, historyDto.getId());
+            Assertions.assertEquals("UPDATED", historyDto.getEventType());
+            Assertions.assertEquals(USER_ID, historyDto.getActorUserId());
+            Assertions.assertEquals(expectedTime, historyDto.getOccurredAt());
+            Assertions.assertNotNull(historyDto.getPayload());
+        }
+
+        @Test
+        @DisplayName("Возврат null при передаче null в качестве ответа")
+        void shouldReturnNullWhenResponseIsNull() {
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(null);
+            Assertions.assertNull(result);
+        }
+
+        @Test
+        @DisplayName("Корректная обработка отсутствующих опциональных полей задачи")
+        void shouldMapIssueWithoutOptionalFields() {
+            Instant now = Instant.parse("2026-09-17T10:00:00Z");
+            Timestamp timestamp = Timestamp.newBuilder()
+                    .setSeconds(now.getEpochSecond())
+                    .setNanos(now.getNano())
+                    .build();
+
+            IssueDetailsResponse issueDetailsResponse = IssueDetailsResponse.newBuilder()
+                    .setId(ISSUE_ID)
+                    .setProjectId(PROJECT_ID)
+                    .setIssueNumber(ISSUE_NUMBER)
+                    .setIssueKey(ISSUE_KEY)
+                    .setSummary(SUMMARY)
+                    .setStatus(STATUS_KEY)
+                    .setVersion(VERSION)
+                    .setCommentCount(0)
+                    .setIsWatching(false)
+                    .setCreatedAt(timestamp)
+                    .setUpdatedAt(timestamp)
+                    .setReporterId(UUID.randomUUID().toString())
+                    .setIssueType(IssueType.ISSUE_TYPE_TASK)
+                    .build();
+
+            GetIssueDetailsResponse response = GetIssueDetailsResponse.newBuilder()
+                    .setIssue(issueDetailsResponse)
+                    .build();
+
+            IssueDetailsWithHistoryResponseDto result = mapper.toRestIssueDetailsWithHistoryResponseDto(response);
+
+            Assertions.assertNotNull(result);
+            Assertions.assertNotNull(result.getIssue());
+
+            IssueDetailsResponseDto issueDto = result.getIssue();
+            Assertions.assertNull(issueDto.getDescription());
+            Assertions.assertNull(issueDto.getStoryPoints());
+            Assertions.assertNull(issueDto.getOriginalEstimateMinutes());
+            Assertions.assertNull(issueDto.getRemainingEstimateMinutes());
+            Assertions.assertNull(issueDto.getStartDate());
+            Assertions.assertNull(issueDto.getDueDate());
+            Assertions.assertNull(issueDto.getAssignee());
+            Assertions.assertNull(issueDto.getReporter());
+            Assertions.assertTrue(issueDto.getWatchers().isEmpty());
+            Assertions.assertTrue(issueDto.getAttachments().isEmpty());
+        }
     }
 }

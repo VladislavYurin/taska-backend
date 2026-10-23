@@ -1,7 +1,5 @@
 package ru.taska.service;
 
-import static org.mockito.ArgumentMatchers.any;
-
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,14 +9,13 @@ import org.springframework.data.domain.Limit;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.ProjectResponse;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 
@@ -42,11 +39,6 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(issueProperties.allowedRoles().getIssueRoles()).thenReturn(allowedRoles);
         Mockito.lenient().when(issueProperties.card().maxHistorySize()).thenReturn(mockHistorySize);
-        Mockito.lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
-                                                    .build()));
     }
 
     private Issue buildIssue() {
@@ -83,7 +75,12 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), any(Limit.class)))
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
+
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.any(Limit.class)))
                 .thenReturn(Flux.just(history));
 
         IssueWithHistory result = issueService.getIssue(
@@ -112,7 +109,12 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), any(Limit.class)))
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
+
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.any(Limit.class)))
                 .thenReturn(Flux.fromIterable(List.of(first, second, third)));
 
         IssueWithHistory result = issueService.getIssue(
@@ -143,7 +145,7 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
-        Mockito.verifyNoInteractions(projectAccessibility, issueHistoryRepository);
+        Mockito.verifyNoInteractions(projectRoleChecker, issueHistoryRepository);
     }
 
     @Test
@@ -155,7 +157,12 @@ class GetIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), any(Limit.class)))
+        Mockito.when(projectRoleChecker.checkProjectRole(
+                        REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles)
+                )
+                .thenReturn(Mono.empty());
+
+        Mockito.when(issueHistoryRepository.findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.any(Limit.class)))
                 .thenReturn(Flux.error(new RuntimeException("DB error")));
 
         StepVerifier.create(issueService.getIssue(
@@ -170,6 +177,6 @@ class GetIssueTest extends IssueServiceImplTest {
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
         Mockito.verify(issueProperties.allowedRoles()).getIssueRoles();
         Mockito.verify(issueProperties.card()).maxHistorySize();
-        Mockito.verify(projectAccessibility).check(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
     }
 }

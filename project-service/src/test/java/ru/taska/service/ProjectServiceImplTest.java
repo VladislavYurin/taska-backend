@@ -1,24 +1,37 @@
 package ru.taska.service;
 
-import java.time.Instant;
+import io.grpc.Status;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.projectContext.ProjectLabelDto;
+import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
+import ru.taska.domain.dto.projectContext.WorkflowDto;
+import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
@@ -26,11 +39,15 @@ import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.impl.ProjectServiceImpl;
-import ru.taska.service.validator.ProjectValidator;
+import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
+import ru.taska.transport.grpc.client.GrpcWorkFlowServiceClient;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.util.Collections;
+import java.util.List;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,16 +63,25 @@ class ProjectServiceImplTest {
     private ProjectSettingRepository projectSettingRepository;
 
     @Mock
-    private OutboxEventService outboxEventService;
+    private ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
 
     @Mock
-    private ObjectMapper objectMapper;
+    private OutboxEventService outboxEventService;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     private ProjectMapper projectMapper;
 
     @Mock
-    private ProjectValidator projectValidator;
+    private GrpcIssueServiceClient issueServiceClient;
+
+    @Mock
+    private GrpcWorkFlowServiceClient workflowServiceClient;
+
+    @Mock
+    private ProjectMemberService projectMemberService;
 
     @InjectMocks
     private ProjectServiceImpl projectService;
@@ -93,26 +119,33 @@ class ProjectServiceImplTest {
     @Test
     void createProject_Success() {
         Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.empty());
+        Mockito.when(issueTypeRepository.seedDefaults(projectId)).thenReturn(Mono.empty());
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
 
-        ObjectNode mockNode = Mockito.mock(ObjectNode.class);
-        ArrayNode mockArray = Mockito.mock(ArrayNode.class);
-        Mockito.when(objectMapper.createObjectNode()).thenReturn(mockNode);
-        Mockito.when(mockNode.putArray("allowedIssueTypes")).thenReturn(mockArray);
-
-        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class))).thenReturn(Mono.just(new ProjectMember()));
-        Mockito.when(projectSettingRepository.save(ArgumentMatchers.any(ProjectSetting.class))).thenReturn(Mono.just(new ProjectSetting()));
-        Mockito.when(outboxEventService.saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(new OutboxEvent()));
+        Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class)))
+                .thenReturn(Mono.just(new ProjectMember()));
+        Mockito.when(projectSettingRepository.insertSetting(
+                        ArgumentMatchers.eq(projectId),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.any(Instant.class),
+                        ArgumentMatchers.eq(userId)))
+                .thenReturn(Mono.empty());
+        Mockito.when(outboxEventService.saveProjectCreated(
+                        ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class)))
+                .thenReturn(Mono.just(new OutboxEvent()));
 
         StepVerifier.create(projectService.createProject(requestId, nodeId, projectKey, projectName, userId))
                 .expectNext(mockProject)
                 .verifyComplete();
 
-        Mockito.verify(projectRepository).findByProjectKey(projectKey);
-        Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(projectMemberRepository).save(ArgumentMatchers.any(ProjectMember.class));
-        Mockito.verify(projectSettingRepository).save(ArgumentMatchers.any(ProjectSetting.class));
-        Mockito.verify(outboxEventService).saveProjectCreated(ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class));
+        Mockito.verify(projectSettingRepository).insertSetting(
+                ArgumentMatchers.eq(projectId),
+                ArgumentMatchers.contains("allowedIssueTypes"),
+                ArgumentMatchers.any(Instant.class),
+                ArgumentMatchers.eq(userId));
+
+        Mockito.verify(issueTypeRepository).seedDefaults(projectId);
+        Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
     }
 
     @Test
@@ -229,133 +262,292 @@ class ProjectServiceImplTest {
         Mockito.verify(projectRepository).findAllByMemberUserId(userId);
     }
 
-    // ---------- softDeleteProject ----------
+    @Test
+    void getProjectKeyByIdInternal_Success() {
+        String expectedProjectKey = "TEST";
+        Mockito.when(projectRepository.findProjectKeyById(projectId))
+                .thenReturn(Mono.just(expectedProjectKey));
+
+        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
+                .expectNext(expectedProjectKey)
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
 
     @Test
-    void softDeleteProject_Success_WhenNotArchived() {
-        ProjectMember adminMember = ProjectMember.builder()
-                                                 .userId(actorUserId)
-                                                 .projectId(projectId)
-                                                 .role(ProjectRole.ADMIN)
-                                                 .build();
+    void getProjectKeyByIdInternal_ThrowsNotFoundException_WhenProjectDoesNotExist() {
+        Mockito.when(projectRepository.findProjectKeyById(projectId))
+                .thenReturn(Mono.empty());
 
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
-               .thenReturn(Mono.just(adminMember));
-        Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
-               .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
-        Mockito.when(outboxEventService.saveProjectArchived(
-                       ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class),ArgumentMatchers.eq(actorUserId)))
-               .thenReturn(Mono.just(new OutboxEvent()));
+        StepVerifier.create(projectService.getProjectKeyByIdInternal(projectId))
+                .expectErrorSatisfies(throwable -> {
+                    Assertions.assertInstanceOf(DomainException.class, throwable);
+                    DomainException exception = (DomainException) throwable;
+                    Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
+                    Assertions.assertEquals("Project not found", exception.getMessage());
+                })
+                .verify();
 
-        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
-                    .expectNextMatches(project -> project.getId().equals(projectId) && project.getArchivedAt() != null)
+        Mockito.verify(projectRepository).findProjectKeyById(projectId);
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsEmptyMap_WhenProjectsDoNotExistInDb() {
+        // Arrange
+        UUID projectId1 = UUID.randomUUID();
+        UUID projectId2 = UUID.randomUUID();
+        List<UUID> projectIds = List.of(projectId1, projectId2);
+
+        Mockito.when(projectRepository.findProjectInfoByIds(Mockito.anyCollection()))
+                .thenReturn(Flux.empty());
+
+        // Act & Assert
+        StepVerifier.create(projectService.getProjectInfoByIds(projectIds))
+                .assertNext(resultMap -> {
+                    Assertions.assertNotNull(resultMap);
+                    Assertions.assertTrue(resultMap.isEmpty());
+                })
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectInfoByIds(Mockito.argThat(ids ->
+                ids.containsAll(projectIds) && ids.size() == projectIds.size()
+        ));
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsMapWithFoundProjects_WhenSomeProjectsExist() {
+        // Arrange
+        UUID projectId1 = UUID.randomUUID();
+        UUID projectId2 = UUID.randomUUID();
+        List<UUID> projectIds = List.of(projectId1, projectId2);
+
+        ProjectInfo projectInfo1 = new ProjectInfo(projectId1, "PRJ1", "Project 1");
+
+        Mockito.when(projectRepository.findProjectInfoByIds(Mockito.anyCollection()))
+                .thenReturn(Flux.just(projectInfo1));
+
+        // Act & Assert
+        StepVerifier.create(projectService.getProjectInfoByIds(projectIds))
+                .assertNext(resultMap -> {
+                    Assertions.assertNotNull(resultMap);
+                    Assertions.assertEquals(1, resultMap.size());
+                    Assertions.assertTrue(resultMap.containsKey(projectId1));
+                    Assertions.assertFalse(resultMap.containsKey(projectId2));
+
+                    ProjectInfo actualInfo = resultMap.get(projectId1);
+                    Assertions.assertEquals("PRJ1", actualInfo.key());
+                    Assertions.assertEquals("Project 1", actualInfo.name());
+                })
+                .verifyComplete();
+
+        Mockito.verify(projectRepository).findProjectInfoByIds(Mockito.anyCollection());
+    }
+
+    @Test
+    void getProjectInfoByIds_ReturnsEmptyMap_WithoutCallingRepository_WhenInputIsEmptyOrNull() {
+        // Act & Assert для null и пустого списка
+        StepVerifier.create(projectService.getProjectInfoByIds(Collections.emptyList()))
+                .assertNext(resultMap -> Assertions.assertTrue(resultMap.isEmpty()))
+                .verifyComplete();
+
+        StepVerifier.create(projectService.getProjectInfoByIds(null))
+                .assertNext(resultMap -> Assertions.assertTrue(resultMap.isEmpty()))
+                .verifyComplete();
+
+        Mockito.verifyNoInteractions(projectRepository);
+    }
+
+    @Nested
+    @DisplayName("getProjectContext")
+    class GetProjectContextTests {
+
+        private ProjectMemberDetailsDto memberDetails;
+        private ProjectLabelDto label;
+        private ProjectWorkflowDto workflow;
+        private ProjectCheckMembershipDto memberProjectDto;
+        private ProjectCheckMembershipDto nonMemberProjectDto;
+
+        @BeforeEach
+        void setUpContextData() {
+            memberDetails = ProjectMemberDetailsDto.builder()
+                    .userId(actorUserId)
+                    .role(ProjectRole.ADMIN)
+                    .displayName("Test User")
+                    .email("test@example.com")
+                    .avatar(null)
+                    .addedAt(Instant.now())
+                    .build();
+
+            label = ProjectLabelDto.builder()
+                    .id(UUID.randomUUID())
+                    .name("backend")
+                    .color("#3B82F6")
+                    .build();
+
+            workflow = new ProjectWorkflowDto(
+                    "TASK",
+                    WorkflowDto.builder()
+                            .id(UUID.randomUUID().toString())
+                            .name("Default")
+                            .version(1)
+                            .statuses(List.of())
+                            .transitions(List.of())
+                            .build());
+
+            memberProjectDto = ProjectCheckMembershipDto.builder()
+                    .project_id(projectId).project_key(projectKey).name(projectName)
+                    .created_by(userId).user_id(actorUserId).role(ProjectRole.ADMIN).build();
+
+            // Не участник проекта (в т.ч. GLOBAL_ADMIN без членства): user_id == null, role == null
+            nonMemberProjectDto = ProjectCheckMembershipDto.builder()
+                    .project_id(projectId).project_key(projectKey).name(projectName)
+                    .created_by(userId).user_id(null).role(null).build();
+        }
+
+        @Test
+        void asMember_returnsFullContext() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.just(memberDetails));
+
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of(label)));
+
+            // Registry drives workflow selection and type metadata.
+            mockWorkflowLoad();
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(memberProjectDto, ctx.project());
+                        Assertions.assertEquals(1, ctx.members().size());
+                        Assertions.assertEquals(1, ctx.labels().size());
+                        Assertions.assertEquals(1, ctx.workflows().size());
+                        Assertions.assertEquals("TASK", ctx.issueTypes().getFirst().code());
+                    })
                     .verifyComplete();
+        }
 
-        Mockito.verify(projectRepository).findById(projectId);
-        Mockito.verify(projectRepository).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(outboxEventService).saveProjectArchived(
-                ArgumentMatchers.eq(requestId), ArgumentMatchers.eq(nodeId), ArgumentMatchers.any(Project.class),ArgumentMatchers.eq(actorUserId));
-    }
+        @ParameterizedTest
+        @EnumSource(GlobalRole.class)
+        @DisplayName("не участник проекта → PERMISSION_DENIED независимо от глобальной роли, источники не опрашиваются")
+        void asNonMember_returnsPermissionDenied(GlobalRole globalRole) {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(nonMemberProjectDto));
 
-    @Test
-    void softDeleteProject_Success_WhenAlreadyArchived() {
-        Project archivedProject = Project.builder()
-                                         .id(projectId)
-                                         .projectKey(projectKey)
-                                         .name(projectName)
-                                         .createdBy(userId)
-                                         .archivedAt(Instant.now())
-                                         .build();
-
-        ProjectMember adminMember = ProjectMember.builder()
-                                                 .userId(actorUserId)
-                                                 .projectId(projectId)
-                                                 .role(ProjectRole.ADMIN)
-                                                 .build();
-
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(archivedProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
-               .thenReturn(Mono.just(adminMember));
-
-        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
-                    .expectNext(archivedProject)
-                    .verifyComplete();
-
-        Mockito.verify(projectRepository).findById(projectId);
-        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
-                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),ArgumentMatchers.any());
-    }
-
-    @Test
-    void softDeleteProject_ThrowsNotFoundException_WhenProjectDoesNotExist() {
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.empty());
-
-        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, globalRole))
                     .expectErrorSatisfies(throwable -> {
-                        Assertions.assertTrue(throwable instanceof DomainException);
-                        DomainException exception = (DomainException) throwable;
-                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                        Assertions.assertEquals("Project not found", exception.getMessage());
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, e.getStatus());
                     })
                     .verify();
 
-        Mockito.verify(projectRepository).findById(projectId);
-        Mockito.verify(projectMemberRepository, Mockito.never())
-               .findByUserIdAndProjectId(ArgumentMatchers.any(), ArgumentMatchers.any());
-        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
-                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
-    }
+            // Никаких вызовов в members/labels/workflows не было
+            Mockito.verifyNoInteractions(projectMemberService);
+            Mockito.verifyNoInteractions(issueServiceClient);
+            Mockito.verifyNoInteractions(workflowServiceClient);
+        }
 
-    @Test
-    void softDeleteProject_ThrowsNotFoundException_WhenActorIsNotAMember() {
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
-               .thenReturn(Mono.empty());
+        @Test
+        @DisplayName("участник потерял доступ во время запроса: отказ members не маскируется пустым списком")
+        void asMember_permissionDeniedInMembers_propagates() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.error(new DomainException(
+                            DomainStatus.PERMISSION_DENIED, "User has no access to project")));
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of(label)));
+            mockWorkflowLoad();
 
-        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
                     .expectErrorSatisfies(throwable -> {
-                        Assertions.assertTrue(throwable instanceof DomainException);
-                        DomainException exception = (DomainException) throwable;
-                        Assertions.assertEquals(DomainStatus.NOT_FOUND, exception.getStatus());
-                        Assertions.assertEquals("User not found", exception.getMessage());
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, e.getStatus());
                     })
                     .verify();
+        }
 
-        Mockito.verify(projectRepository).findById(projectId);
-        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(actorUserId, projectId);
-        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
-                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
-    }
+        @Test
+        @DisplayName("UNAVAILABLE в members не гасится, контекст падает")
+        void asMember_unavailableInMembers_propagates() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.error(new DomainException(
+                            DomainStatus.UNAVAILABLE, "DB unavailable")));
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of()));
+            mockWorkflowLoad();
 
-    @Test
-    void softDeleteProject_ThrowsPermissionDenied_WhenActorIsNotAdmin() {
-        ProjectMember viewerMember = ProjectMember.builder()
-                                                  .userId(actorUserId)
-                                                  .projectId(projectId)
-                                                  .role(ProjectRole.VIEWER)
-                                                  .build();
-
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId))
-               .thenReturn(Mono.just(viewerMember));
-
-        StepVerifier.create(projectService.softDeleteProject(requestId, nodeId, projectId, actorUserId))
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
                     .expectErrorSatisfies(throwable -> {
-                        Assertions.assertTrue(throwable instanceof DomainException);
-                        DomainException exception = (DomainException) throwable;
-                        Assertions.assertEquals(DomainStatus.PERMISSION_DENIED, exception.getStatus());
-                        Assertions.assertEquals("User must have the role ADMIN", exception.getMessage());
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.UNAVAILABLE, e.getStatus());
                     })
                     .verify();
+        }
 
-        Mockito.verify(projectRepository).findById(projectId);
-        Mockito.verify(projectMemberRepository).findByUserIdAndProjectId(actorUserId, projectId);
-        Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any(Project.class));
-        Mockito.verify(outboxEventService, Mockito.never()).saveProjectArchived(
-                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+        @ParameterizedTest
+        @CsvSource({
+                "labels, PERMISSION_DENIED", "labels, UNAVAILABLE", "labels, DEADLINE_EXCEEDED",
+                "labels, NOT_FOUND", "labels, INTERNAL",
+                "workflows, PERMISSION_DENIED", "workflows, UNAVAILABLE", "workflows, DEADLINE_EXCEEDED",
+                "workflows, NOT_FOUND", "workflows, INTERNAL"
+        })
+        @DisplayName("Ошибки gRPC от issue-service и workflow-service, включая PERMISSION_DENIED, пробрасываются из контекста")
+        void asMember_grpcFailurePropagates(String source, Status.Code code) {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.just(memberDetails));
+            var failure = Status.fromCode(code).withDescription("upstream failure").asRuntimeException();
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(source.equals("labels") ? Mono.error(failure) : Mono.just(List.of(label)));
+            mockWorkflowLoad();
+            if (source.equals("workflows")) {
+                Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "TASK", actorUserId, requestId, nodeId))
+                        .thenReturn(Mono.error(failure));
+            }
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
+                    .verify();
+        }
+
+        @Test
+        @DisplayName("проект не найден → NOT_FOUND, независимо от роли")
+        void projectNotFound_returnsNotFound() {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.empty());
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.GLOBAL_ADMIN))
+                    .expectErrorSatisfies(throwable -> {
+                        DomainException e = (DomainException) throwable;
+                        Assertions.assertEquals(DomainStatus.NOT_FOUND, e.getStatus());
+                    })
+                    .verify();
+        }
+
+        private void mockWorkflowLoad() {
+            Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", "check-square", 10, null, null)));
+
+            Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
+                            ArgumentMatchers.eq(projectId),
+                            ArgumentMatchers.anyString(),
+                            ArgumentMatchers.eq(actorUserId),
+                            ArgumentMatchers.eq(requestId),
+                            ArgumentMatchers.eq(nodeId)))
+                    .thenReturn(Mono.just(workflow));
+        }
     }
 }

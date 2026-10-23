@@ -9,14 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
@@ -25,11 +25,11 @@ import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.link.IssueLinkService;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 public class IssueLinkServiceIT extends AbstractIT {
 
@@ -40,7 +40,7 @@ public class IssueLinkServiceIT extends AbstractIT {
     private static final String NODE_ID = "issue-service";
 
     @MockitoBean
-    private ProjectAccessibility projectAccessibility;
+    private ProjectRoleChecker projectRoleChecker;
 
     @Autowired
     private IssueLinkService issueLinkService;
@@ -59,12 +59,16 @@ public class IssueLinkServiceIT extends AbstractIT {
 
     @BeforeEach
     void cleanDb() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         outboxEventRepository.deleteAll().block();
         issueHistoryRepository.deleteAll().block();
         issueLinkRepository.deleteAll().block();
         issueRepository.deleteAll().block();
 
-        Mockito.when(projectAccessibility.check(
+        Mockito.when(projectRoleChecker.checkProjectRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),

@@ -8,13 +8,21 @@ import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleRequest;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
-import ru.taska.api.project.v1.DeleteProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectContextRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
+import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ListProjectMemberResponse;
+import ru.taska.api.project.v1.ProjectContextResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
@@ -27,6 +35,16 @@ import ru.taska.api.project.v1.RmProjectMemberResponse;
 public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.ProjectServiceImplBase{
 
     private final GrpcProjectService grpcProjectService;
+    private final ProjectArchiveGrpcService archiveService;
+    private final ProjectIssueTypeGrpcService issueTypeService;
+
+
+    @Override
+    public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
+            Mono<GetProjectMemberStatsBatchRequest> request) {
+        return grpcProjectService.getProjectMemberStatsBatch(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectMemberStatsBatch"));
+    }
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
@@ -41,9 +59,9 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     }
 
     @Override
-    public Mono<ProjectResponse> deleteProject(Mono<DeleteProjectRequest> request) {
-        return grpcProjectService.deleteProject(request)
-                .transform(GrpcExceptionHandler.withErrorHandling("deleteProject"));
+    public Mono<ProjectContextResponse> getProjectContext(Mono<GetProjectContextRequest> request) {
+        return grpcProjectService.getProjectContext(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectContext"));
     }
 
     @Override
@@ -69,10 +87,56 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
         return grpcProjectService.changeProjectMemberRole(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("changeProjectMemberRole"));
     }
+    @Override
+    public Mono<CheckProjectMemberRoleResponse> checkProjectMemberRole (Mono<CheckProjectMemberRoleRequest> request) {
+        return grpcProjectService.checkProjectMemberRole(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("checkProjectRole"));
+    }
+
+    @Override
+    public Mono<ProjectKeyResponse> getProjectKeyInternal(Mono<GetProjectKeyInternalRequest> request) {
+        return grpcProjectService.getProjectKeyInternal(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectKeyInternal"));
+    }
 
     @Override
     public Mono<ListProjectMemberResponse> getProjectMembers(Mono<GetListProjectMemberRequest> request) {
         return grpcProjectService.getProjectMembers(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProjectMembers"));
     }
+
+    @Override
+    public Mono<GetProjectInfoBatchInternalResponse> getProjectInfoBatchInternal(Mono<GetProjectInfoBatchInternalRequest> request) {
+        return grpcProjectService.getProjectInfoBatchInternal(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectInfoBatchInternal"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ListProjectIssueTypesResponse> listProjectIssueTypes(Mono<ru.taska.api.project.v1.ProjectIssueTypesRequest> request) {
+        return issueTypeService.list(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectIssueTypes"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> createProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.create(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProjectIssueType"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> updateProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.update(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProjectIssueType"));
+    }
+
+    @Override
+    public Mono<com.google.protobuf.Empty> deleteProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.delete(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectIssueType"));
+    }
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectResponse> archiveProject(Mono<ru.taska.api.project.v1.ArchiveProjectRequest> request) {
+        return archiveService.archive(request).transform(GrpcExceptionHandler.withErrorHandling("archiveProject"));
+    }
+
 }

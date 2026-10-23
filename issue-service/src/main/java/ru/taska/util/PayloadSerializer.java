@@ -8,13 +8,13 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.IssuePriority;
-import ru.taska.domain.Worklog;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.entity.IssuePriority;
+import ru.taska.domain.entity.Worklog;
+import ru.taska.domain.entity.ProjectLabels;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -169,7 +169,9 @@ public class PayloadSerializer {
     /**
      * Создает {@link JsonNode} с измененными данными при обновлении задачи.
      *
-     * @param issue          измененная задача.
+     * @param issue          задача до изменения, источник старых значений полей.
+     * @param actorUserId    идентификатор инициатора изменения.
+     * @param assigneeId     исполнитель задачи после изменения, получатель уведомления об изменении.
      * @param newSummary     новое краткое описание задачи.
      * @param newDescription новое полное описание задачи.
      * @param newPriority    новый приоритет задачи.
@@ -178,6 +180,7 @@ public class PayloadSerializer {
     public JsonNode createIssueUpdatedPayload(
             Issue issue,
             UUID actorUserId,
+            UUID assigneeId,
             String newSummary,
             String newDescription,
             IssuePriority newPriority,
@@ -190,7 +193,7 @@ public class PayloadSerializer {
     ) {
 
         boolean nothingChanged = newSummary.equals(issue.getSummary())
-                && newDescription.equals(issue.getDescription())
+                && Objects.equals(newDescription, issue.getDescription())
                 && newPriority.equals(issue.getPriority())
                 && Objects.equals(storyPoints, issue.getStoryPoints())
                 && Objects.equals(startDate, issue.getStartDate())
@@ -211,8 +214,8 @@ public class PayloadSerializer {
             node.putNull(ACTOR_USER_ID);
         }
 
-        if (issue.getAssigneeId() != null) {
-            node.put(ASSIGNEE, issue.getAssigneeId().toString());
+        if (assigneeId != null) {
+            node.put(ASSIGNEE, assigneeId.toString());
         } else {
             node.putNull(ASSIGNEE);
         }
@@ -222,7 +225,7 @@ public class PayloadSerializer {
             node.put(NEW_SUMMARY, newSummary);
         }
 
-        if (!newDescription.equals(issue.getDescription())) {
+        if (!Objects.equals(newDescription, issue.getDescription())) {
             node.put(OLD_DESCRIPTION, issue.getDescription());
             node.put(NEW_DESCRIPTION, newDescription);
         }
@@ -479,11 +482,11 @@ public class PayloadSerializer {
      * @param attachment сохранённое вложение.
      * @return {@link JsonNode} с метаданными загрузки.
      */
-    public JsonNode createAttachmentUploadedPayload(IssueAttachment attachment, List<UUID> watcherIds) {
+    public JsonNode createAttachmentUploadedPayload(Issue issue, IssueAttachment attachment, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
-        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        putIssueFields(node, issue);
         node.put(UPLOADED_BY, attachment.getUploadedBy().toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(CONTENT_TYPE, attachment.getContentType());
@@ -501,11 +504,11 @@ public class PayloadSerializer {
      * @param deletedByUserId идентификатор пользователя, выполнившего удаление.
      * @return {@link JsonNode} с метаданными удаления.
      */
-    public JsonNode createAttachmentDeletedPayload(IssueAttachment attachment, UUID deletedByUserId, List<UUID> watcherIds) {
+    public JsonNode createAttachmentDeletedPayload(Issue issue, IssueAttachment attachment, UUID deletedByUserId, List<UUID> watcherIds) {
         ObjectNode node = objectMapper.createObjectNode();
 
         node.put(ATTACHMENT_ID, attachment.getId().toString());
-        node.put(ISSUE_ID, attachment.getIssueId().toString());
+        putIssueFields(node, issue);
         node.put(DELETED_BY, deletedByUserId.toString());
         node.put(FILE_NAME, attachment.getFileName());
         node.put(DELETED_AT, attachment.getDeletedAt().toString());

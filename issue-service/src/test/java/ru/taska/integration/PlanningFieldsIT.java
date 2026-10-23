@@ -4,7 +4,6 @@ import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Optional;
 import java.util.UUID;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -21,16 +20,15 @@ import org.springframework.data.domain.Limit;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
-import ru.taska.api.project.v1.GetProjectRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
 import ru.taska.api.project.v1.ProjectKeyResponse;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueHistoryRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.OutboxEventRepository;
@@ -74,12 +72,17 @@ class PlanningFieldsIT extends AbstractIT {
     void setUp() {
         issueRepository.deleteAll().block();
 
-        Mockito.when(projectServiceStub.getProject(any(GetProjectRequest.class)))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                                                    .build()));
+        Mockito.when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
+               .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                                                                   .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                                                                   .setIsMember(true)
+                                                                   .setProjectExists(true).setProjectArchived(false)
+                                                                   .build()));
 
+        Mockito.when(projectServiceStub.getProjectKeyInternal(any(GetProjectKeyInternalRequest.class)))
+               .thenReturn(Mono.just(ProjectKeyResponse.newBuilder()
+                                                       .setProjectKey("TST")
+                                                       .build()));
     }
 
     @DisplayName("Issue можно создать без planning fields — все поля null")
@@ -241,7 +244,8 @@ class PlanningFieldsIT extends AbstractIT {
         Assertions.assertThat(page).isNotNull();
         Assertions.assertThat(page.items())
                   .isNotEmpty()
-                  .allSatisfy(issue -> {
+                  .allSatisfy(issueWithProject -> {
+                      Issue issue = issueWithProject.issue();
                       if (issue.getProjectId().equals(PROJECT_ID)) {
                           Assertions.assertThat(issue.getStoryPoints()).isNotNull();
                       }

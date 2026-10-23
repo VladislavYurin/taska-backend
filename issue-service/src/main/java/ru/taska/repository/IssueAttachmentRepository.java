@@ -4,12 +4,14 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IssueAttachment;
+import ru.taska.domain.entity.IssueAttachment;
 
 import java.util.UUID;
 
 public interface IssueAttachmentRepository extends ReactiveCrudRepository<IssueAttachment, UUID> {
 
+    @Query("SELECT * FROM taska.issue_attachments WHERE issue_id = :issueId AND deleted_at IS NULL "
+            + "ORDER BY created_at ASC, id ASC")
     Flux<IssueAttachment> findAllByIssueIdAndDeletedAtIsNull(UUID issueId);
 
     Mono<IssueAttachment> findByIdAndDeletedAtIsNull(UUID id);

@@ -8,7 +8,11 @@ import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.CreateWorkflowRequestDto;
+import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
+import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
+import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.mapper.WorkflowMapper;
 
@@ -67,6 +71,87 @@ public class GrpcWorkflowServiceClient {
                 .toGetWorkflowGrpcRequest(projectId, issueTypeDto, context);
 
         return dynamicStub().getWorkflowForProject(grpcRequest)
+                .map(workflowMapper::toWorkflowResponseRestDto);
+    }
+
+    /**
+     * Запрашивает все workflow, по которым работает проект, со всеми статусами и переходами, включая скрытые.
+     *
+     * @param projectId идентификатор проекта
+     * @param context   текущий контекст окружения и сквозной трассировки запроса на Gateway
+     * @return {@link Mono} с REST DTO {@link ProjectWorkflowsResponseDto}
+     */
+    public Mono<ProjectWorkflowsResponseDto> listProjectWorkflows(UUID projectId, GatewayContext context) {
+        log.info("[{}] Calling listProjectWorkflows for project: {}", context.requestId(), projectId);
+
+        return dynamicStub().listProjectWorkflows(workflowMapper.toListProjectWorkflowsGrpcRequest(projectId, context))
+                .map(workflowMapper::toProjectWorkflowsResponseRestDto);
+    }
+
+    /**
+     * Создаёт workflow проекта со своими статусами и переходами.
+     *
+     * @param projectId идентификатор проекта
+     * @param request   тело REST-запроса
+     * @param context   текущий контекст окружения и сквозной трассировки запроса на Gateway
+     * @return {@link Mono} с созданным workflow {@link WorkflowResponseDto}
+     */
+    public Mono<WorkflowResponseDto> createWorkflow(
+            UUID projectId,
+            Mono<CreateWorkflowRequestDto> request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling createWorkflow for project: {}", context.requestId(), projectId);
+
+        return request
+                .flatMap(dto -> dynamicStub().createWorkflow(
+                        workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context)))
+                .map(workflowMapper::toWorkflowResponseRestDto);
+    }
+
+    /**
+     * Добавляет статус в workflow проекта.
+     *
+     * @param projectId  идентификатор проекта
+     * @param workflowId идентификатор workflow проекта
+     * @param request    добавляемый статус
+     * @param context    текущий контекст окружения и сквозной трассировки запроса на Gateway
+     * @return {@link Mono} с изменённым workflow {@link WorkflowResponseDto}
+     */
+    public Mono<WorkflowResponseDto> addWorkflowStatus(
+            UUID projectId,
+            UUID workflowId,
+            Mono<CreateWorkflowStatusRequestDto> request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling addWorkflowStatus for project: {}, workflow: {}", context.requestId(), projectId, workflowId);
+
+        return request
+                .flatMap(dto -> dynamicStub().addWorkflowStatus(
+                        workflowMapper.toAddWorkflowStatusGrpcRequest(projectId, workflowId, dto, context)))
+                .map(workflowMapper::toWorkflowResponseRestDto);
+    }
+
+    /**
+     * Добавляет переход в workflow проекта.
+     *
+     * @param projectId  идентификатор проекта
+     * @param workflowId идентификатор workflow проекта
+     * @param request    добавляемый переход
+     * @param context    текущий контекст окружения и сквозной трассировки запроса на Gateway
+     * @return {@link Mono} с изменённым workflow {@link WorkflowResponseDto}
+     */
+    public Mono<WorkflowResponseDto> addWorkflowTransition(
+            UUID projectId,
+            UUID workflowId,
+            Mono<CreateWorkflowTransitionRequestDto> request,
+            GatewayContext context
+    ) {
+        log.info("[{}] Calling addWorkflowTransition for project: {}, workflow: {}", context.requestId(), projectId, workflowId);
+
+        return request
+                .flatMap(dto -> dynamicStub().addWorkflowTransition(
+                        workflowMapper.toAddWorkflowTransitionGrpcRequest(projectId, workflowId, dto, context)))
                 .map(workflowMapper::toWorkflowResponseRestDto);
     }
 }

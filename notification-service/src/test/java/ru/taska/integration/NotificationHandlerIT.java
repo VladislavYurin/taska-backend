@@ -32,7 +32,6 @@ class NotificationHandlerIT extends AbstractIT {
     // ==================== Поля payload ====================
 
     private static final String FIELD_ISSUE_ID = "issueId";
-    private static final String FIELD_AUTHOR_USER_ID = "authorUserId";
     private static final String FIELD_ACTOR_USER_ID = "actorUserId";
     private static final String FIELD_ASSIGNEE_ID = "assigneeId";
     private static final String FIELD_CREATED_BY = "createdBy";
@@ -101,7 +100,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("ISSUE_COMMENT_CREATED уведомляет наблюдателей, исключая автора")
         void shouldNotifyWatchersExceptAuthorOnCommentCreated() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hello");
             setWatchers(payload, userA, userB, actorId);
 
@@ -233,7 +232,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("ProcessedEvent сохраняется с правильными eventId и sourceType")
         void shouldSaveProcessedEvent() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
             setWatchers(payload, userA);
 
@@ -284,7 +283,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("Пустой список наблюдателей не приводит к ошибке")
         void shouldNotFailOnEmptyWatchers() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
             setWatchers(payload);
 
@@ -301,7 +300,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("Отсутствие поля watcherIds не приводит к ошибке")
         void shouldNotFailWhenWatchersMissing() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
 
             TaskaEvent event = event(EventType.ISSUE_COMMENT_CREATED, payload);
@@ -315,7 +314,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("Все наблюдатели — актор: уведомлений нет, событие обработано")
         void shouldNotCreateNotificationsWhenAllWatchersAreActor() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
             setWatchers(payload, actorId);
 
@@ -338,7 +337,7 @@ class NotificationHandlerIT extends AbstractIT {
         @DisplayName("Созданные уведомления имеют правильный тип и sourceEventId")
         void shouldCreateNotificationsWithCorrectTypeAndSourceEventId() {
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
             setWatchers(payload, userA);
 
@@ -362,7 +361,7 @@ class NotificationHandlerIT extends AbstractIT {
             // Событие 1
             UUID eventId1 = UUID.randomUUID();
             ObjectNode payload1 = basePayload();
-            payload1.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload1.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload1.put(FIELD_BODY, "hi");
             setWatchers(payload1, userA);
 
@@ -378,7 +377,7 @@ class NotificationHandlerIT extends AbstractIT {
             // Событие 2
             UUID eventId2 = UUID.randomUUID();
             ObjectNode payload2 = basePayload();
-            payload2.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload2.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload2.put(FIELD_BODY, "hi");
             setWatchers(payload2, userB);
 
@@ -413,7 +412,7 @@ class NotificationHandlerIT extends AbstractIT {
             UUID eventId2 = UUID.randomUUID();
 
             ObjectNode payload = basePayload();
-            payload.put(FIELD_AUTHOR_USER_ID, actorId.toString());
+            payload.put(FIELD_ACTOR_USER_ID, actorId.toString());
             payload.put(FIELD_BODY, "hi");
             setWatchers(payload, userA);
 

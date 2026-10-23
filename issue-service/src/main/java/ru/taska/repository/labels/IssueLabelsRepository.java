@@ -4,9 +4,9 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.dto.labels.ProjectLabelWithIssuesId;
-import ru.taska.domain.labels.IssueLabels;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.projection.ProjectLabelWithIssuesId;
+import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +48,7 @@ public interface IssueLabelsRepository extends R2dbcRepository<IssueLabels, UUID
         JOIN taska.issue_labels il ON il.label_id = pl.id
         WHERE il.issue_id = :issueId
         AND pl.deleted_at IS NULL
+        ORDER BY pl.name ASC, pl.id ASC
     """)
     Flux<ProjectLabels> findActiveLabelsByIssueId(UUID issueId);
 
@@ -64,6 +65,7 @@ public interface IssueLabelsRepository extends R2dbcRepository<IssueLabels, UUID
         JOIN taska.issue_labels il ON il.label_id = pl.id
         WHERE il.issue_id IN (:issueIds)
           AND pl.deleted_at IS NULL
+        ORDER BY il.issue_id ASC, pl.name ASC, pl.id ASC
         """)
     Flux<ProjectLabelWithIssuesId> findActiveLabelsWithIssueId(List<UUID> issueIds);
 }

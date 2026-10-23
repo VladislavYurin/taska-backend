@@ -12,8 +12,6 @@ public interface OutboxEventService {
 
     Mono<OutboxEvent> saveProjectCreated(String requestId, String nodeId, Project project);
 
-    Mono<OutboxEvent> saveProjectArchived(String requestId, String nodeId, Project project, UUID actorId);
-
     Mono<OutboxEvent> saveMemberAdded(String requestId, String nodeId, ProjectMember member);
 
     Mono<OutboxEvent> saveMemberRemoved(String requestId, String nodeId, UUID deletedMemberId, UUID projectId);

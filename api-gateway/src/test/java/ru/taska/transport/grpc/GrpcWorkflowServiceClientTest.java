@@ -12,14 +12,24 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.workflow.v1.AddWorkflowStatusRequest;
+import ru.taska.api.workflow.v1.AddWorkflowTransitionRequest;
+import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
+import ru.taska.domain.dto.CreateWorkflowRequestDto;
+import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
+import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
+import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
+import ru.taska.domain.dto.WorkflowStatusCategoryDto;
 import ru.taska.mapper.WorkflowMapper;
 
 import java.time.Duration;
@@ -126,5 +136,74 @@ class GrpcWorkflowServiceClientTest {
 
         Mockito.verify(workflowMapper, Mockito.never())
                 .toWorkflowResponseRestDto(Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC listProjectWorkflows и вернуть ответ")
+    void listProjectWorkflows_shouldCallStubAndReturnMappedResponse() {
+        var grpcRequest = ListProjectWorkflowsRequest.getDefaultInstance();
+        var grpcResponse = ListProjectWorkflowsResponse.getDefaultInstance();
+        var restResponse = new ProjectWorkflowsResponseDto();
+
+        Mockito.when(workflowMapper.toListProjectWorkflowsGrpcRequest(PROJECT_ID, context)).thenReturn(grpcRequest);
+        Mockito.when(stub.listProjectWorkflows(grpcRequest)).thenReturn(Mono.just(grpcResponse));
+        Mockito.when(workflowMapper.toProjectWorkflowsResponseRestDto(grpcResponse)).thenReturn(restResponse);
+
+        StepVerifier.create(client.listProjectWorkflows(PROJECT_ID, context))
+                .expectNext(restResponse)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC createWorkflow с телом запроса")
+    void createWorkflow_shouldCallStubWithMappedRequest() {
+        var body = new CreateWorkflowRequestDto();
+        var grpcRequest = CreateWorkflowRequest.getDefaultInstance();
+        var grpcResponse = WorkflowResponse.getDefaultInstance();
+        var restResponse = new WorkflowResponseDto();
+
+        Mockito.when(workflowMapper.toCreateWorkflowGrpcRequest(PROJECT_ID, body, context)).thenReturn(grpcRequest);
+        Mockito.when(stub.createWorkflow(grpcRequest)).thenReturn(Mono.just(grpcResponse));
+        Mockito.when(workflowMapper.toWorkflowResponseRestDto(grpcResponse)).thenReturn(restResponse);
+
+        StepVerifier.create(client.createWorkflow(PROJECT_ID, Mono.just(body), context))
+                .expectNext(restResponse)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Должен вызвать gRPC addWorkflowStatus с телом запроса")
+    void addWorkflowStatus_shouldCallStubWithMappedRequest() {
+        UUID workflowId = UUID.randomUUID();
+        var body = new CreateWorkflowStatusRequestDto("CODE_REVIEW", "Code Review", WorkflowStatusCategoryDto.IN_PROGRESS, 25);
+        var grpcRequest = AddWorkflowStatusRequest.getDefaultInstance();
+        var grpcResponse = WorkflowResponse.getDefaultInstance();
+        var restResponse = new WorkflowResponseDto();
+
+        Mockito.when(workflowMapper.toAddWorkflowStatusGrpcRequest(PROJECT_ID, workflowId, body, context)).thenReturn(grpcRequest);
+        Mockito.when(stub.addWorkflowStatus(grpcRequest)).thenReturn(Mono.just(grpcResponse));
+        Mockito.when(workflowMapper.toWorkflowResponseRestDto(grpcResponse)).thenReturn(restResponse);
+
+        StepVerifier.create(client.addWorkflowStatus(PROJECT_ID, workflowId, Mono.just(body), context))
+                .expectNext(restResponse)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Должен пробросить ошибку gRPC addWorkflowTransition без маппинга ответа")
+    void addWorkflowTransition_shouldPropagateError_whenGrpcCallFails() {
+        UUID workflowId = UUID.randomUUID();
+        var body = new CreateWorkflowTransitionRequestDto("IN_PROGRESS", "TODO", "Stop Progress", 40);
+        var grpcRequest = AddWorkflowTransitionRequest.getDefaultInstance();
+        var expectedException = io.grpc.Status.ALREADY_EXISTS.asRuntimeException();
+
+        Mockito.when(workflowMapper.toAddWorkflowTransitionGrpcRequest(PROJECT_ID, workflowId, body, context)).thenReturn(grpcRequest);
+        Mockito.when(stub.addWorkflowTransition(grpcRequest)).thenReturn(Mono.error(expectedException));
+
+        StepVerifier.create(client.addWorkflowTransition(PROJECT_ID, workflowId, Mono.just(body), context))
+                .expectErrorMatches(throwable -> throwable.equals(expectedException))
+                .verify();
+
+        Mockito.verify(workflowMapper, Mockito.never()).toWorkflowResponseRestDto(Mockito.any());
     }
 }

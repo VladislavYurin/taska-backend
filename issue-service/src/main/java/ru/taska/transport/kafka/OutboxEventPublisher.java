@@ -3,7 +3,7 @@ package ru.taska.transport.kafka;
 import org.springframework.stereotype.Component;
 import reactor.kafka.sender.KafkaSender;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.mapper.OutboxEventMapper;
 import ru.taska.publisher.AbstractOutboxEventPublisher;
 

@@ -1,5 +1,6 @@
 package ru.taska.repository;
 
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
@@ -20,4 +21,9 @@ public interface WorkflowRepository extends ReactiveCrudRepository<WorkflowEntit
     LIMIT 1
     """)
     Mono<WorkflowEntity> findWorkflowForProject(UUID projectId, String issueType);
+
+    // Атомарно: параллельные изменения одного workflow не теряют увеличение версии.
+    @Modifying
+    @Query("UPDATE taska.workflows SET version = version + 1, updated_at = now() WHERE id = :workflowId")
+    Mono<Integer> incrementVersion(UUID workflowId);
 }

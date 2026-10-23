@@ -12,15 +12,14 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
 
 import java.time.Duration;
@@ -37,7 +36,7 @@ class IssueTransitionServiceImplTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private ProjectAccessibility projectAccessibility;
+    private ProjectRoleChecker projectRoleChecker;
 
     @Mock
     private IssueTransitionValidator validator;
@@ -66,12 +65,6 @@ class IssueTransitionServiceImplTest {
                 ProjectRole.ADMIN,
                 ProjectRole.MEMBER
         );
-
-        Mockito.lenient().when(projectAccessibility.check(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
-                                                    .build()));
     }
 
     @Test
@@ -88,6 +81,15 @@ class IssueTransitionServiceImplTest {
 
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
+
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.any(UUID.class),
+                        Mockito.any(UUID.class),
+                        Mockito.anySet()
+                ))
+                .thenReturn(Mono.empty());
 
         Mockito.when(validator.validateTransition(
                         Mockito.anyString(),
@@ -124,8 +126,8 @@ class IssueTransitionServiceImplTest {
         Mockito.verify(issueRepository, Mockito.times(1))
                 .findActiveById(ISSUE_ID);
 
-        Mockito.verify(projectAccessibility, Mockito.times(1))
-                .check(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+        Mockito.verify(projectRoleChecker, Mockito.times(1))
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verify(validator, Mockito.times(1))
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
@@ -160,7 +162,7 @@ class IssueTransitionServiceImplTest {
         Mockito.verify(issueRepository, Mockito.times(1))
                 .findActiveById(Mockito.any(UUID.class));
 
-        Mockito.verifyNoMoreInteractions(projectAccessibility, validator, executor);
+        Mockito.verifyNoMoreInteractions(projectRoleChecker, validator, executor);
     }
 
     @Test
@@ -178,7 +180,7 @@ class IssueTransitionServiceImplTest {
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
 
-        Mockito.when(projectAccessibility.check(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
@@ -202,8 +204,8 @@ class IssueTransitionServiceImplTest {
         Mockito.verify(issueRepository, Mockito.times(1))
                 .findActiveById(ISSUE_ID);
 
-        Mockito.verify(projectAccessibility, Mockito.times(1))
-                .check(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+        Mockito.verify(projectRoleChecker, Mockito.times(1))
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verifyNoMoreInteractions(validator, executor, issueRepository);
     }
@@ -224,6 +226,15 @@ class IssueTransitionServiceImplTest {
 
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
+
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
+                        Mockito.anyString(),
+                        Mockito.anyString(),
+                        Mockito.any(UUID.class),
+                        Mockito.any(UUID.class),
+                        Mockito.anySet()
+                ))
+                .thenReturn(Mono.empty());
 
         Mockito.when(validator.validateTransition(
                         Mockito.anyString(),
@@ -266,8 +277,8 @@ class IssueTransitionServiceImplTest {
         Mockito.verify(issueRepository, Mockito.times(1))
                 .findActiveById(ISSUE_ID);
 
-        Mockito.verify(projectAccessibility, Mockito.times(1))
-                .check(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+        Mockito.verify(projectRoleChecker, Mockito.times(1))
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verify(validator, Mockito.times(1))
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);

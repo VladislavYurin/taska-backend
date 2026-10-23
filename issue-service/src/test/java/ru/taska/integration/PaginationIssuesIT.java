@@ -1,9 +1,5 @@
 package ru.taska.integration;
 
-import static org.mockito.ArgumentMatchers.any;
-
-import java.util.List;
-import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,15 +8,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueService;
+
+import java.util.List;
+import java.util.UUID;
 
 class PaginationIssuesIT extends AbstractIT {
 
@@ -64,11 +63,12 @@ class PaginationIssuesIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
-        Mockito.when(projectServiceStub.getProject(Mockito.any(GetProjectRequest.class)))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                                                    .build()));
+        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                        .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                        .setIsMember(true)
+                        .setProjectExists(true).setProjectArchived(false)
+                        .build()));
     }
 
     private Issue buildIssue(int number, UUID projectId, String status, UUID assigneeId) {

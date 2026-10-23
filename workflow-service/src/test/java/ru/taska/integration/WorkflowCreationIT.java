@@ -16,7 +16,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.CreateWorkflowRequestBody;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
@@ -36,11 +35,12 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowBindingRepository;
 import ru.taska.service.WorkflowService;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 class WorkflowCreationIT extends AbstractIT {
 
@@ -49,7 +49,7 @@ class WorkflowCreationIT extends AbstractIT {
     private static final UUID PROJECT_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID ACTOR_USER_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
-    @Value("${spring.grpc.server.port:9090}")
+    @Value("${grpc.server.port:9090}")
     private int grpcPort;
 
     @Autowired
@@ -59,7 +59,7 @@ class WorkflowCreationIT extends AbstractIT {
     private WorkflowBindingRepository workflowBindingRepository;
 
     @MockitoBean
-    private ProjectAccessibility projectAccessibility;
+    private ProjectRoleChecker projectRoleChecker;
 
     @MockitoSpyBean
     private TransitionRepository transitionRepository;
@@ -99,14 +99,13 @@ class WorkflowCreationIT extends AbstractIT {
 
     @BeforeEach
     void stubRoleChecker() {
-        var projectResponse = ProjectResponse.newBuilder().build();
-        Mockito.when(projectAccessibility.check(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class),
                         Mockito.anySet()))
-                .thenReturn(Mono.just(projectResponse));
+                .thenReturn(Mono.empty());
     }
 
     @BeforeEach
@@ -167,15 +166,15 @@ class WorkflowCreationIT extends AbstractIT {
         Assertions.assertEquals(3, statuses.size());
         Assertions.assertEquals("TODO", statuses.get(0).getStatusKey());
         Assertions.assertEquals("To Do", statuses.get(0).getName());
-        Assertions.assertEquals(StatusCategory.TODO, statuses.get(0).getCategory());
+        Assertions.assertEquals(StatusCategory.TODO.name(), statuses.get(0).getCategory());
         Assertions.assertEquals(0, statuses.get(0).getSortOrder());
         Assertions.assertEquals("IN_PROGRESS", statuses.get(1).getStatusKey());
         Assertions.assertEquals("In Progress", statuses.get(1).getName());
-        Assertions.assertEquals(StatusCategory.IN_PROGRESS, statuses.get(1).getCategory());
+        Assertions.assertEquals(StatusCategory.IN_PROGRESS.name(), statuses.get(1).getCategory());
         Assertions.assertEquals(1, statuses.get(1).getSortOrder());
         Assertions.assertEquals("DONE", statuses.get(2).getStatusKey());
         Assertions.assertEquals("Done", statuses.get(2).getName());
-        Assertions.assertEquals(StatusCategory.DONE, statuses.get(2).getCategory());
+        Assertions.assertEquals(StatusCategory.DONE.name(), statuses.get(2).getCategory());
         Assertions.assertEquals(2, statuses.get(2).getSortOrder());
 
         List<TransitionEntity> transitions = aggregate.transitions();

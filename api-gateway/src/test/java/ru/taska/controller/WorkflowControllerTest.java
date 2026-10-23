@@ -4,6 +4,8 @@ import io.grpc.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -21,8 +23,14 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
+import ru.taska.domain.dto.CreateWorkflowRequestDto;
+import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
+import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
+import ru.taska.domain.dto.ProjectWorkflowDto;
+import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
+import ru.taska.domain.dto.WorkflowStatusCategoryDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.domain.dto.WorkflowTransitionDto;
 import ru.taska.error.GatewayErrorHandler;
@@ -34,6 +42,8 @@ import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.ContextMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
+import ru.taska.transport.grpc.GrpcProjectServiceClient;
+import ru.taska.domain.dto.ProjectResponseDto;
 
 import java.util.List;
 import java.util.UUID;
@@ -65,6 +75,9 @@ class WorkflowControllerTest {
 
     @MockitoBean
     private GrpcWorkflowServiceClient workflowClient;
+
+    @MockitoBean
+    private GrpcProjectServiceClient projectClient;
 
     @MockitoBean
     private ContextMapper contextMapper;
@@ -316,7 +329,180 @@ class WorkflowControllerTest {
     }
 
 
+    @ParameterizedTest
+    @CsvSource({"PERMISSION_DENIED,403", "NOT_FOUND,404", "UNAVAILABLE,503", "DEADLINE_EXCEEDED,504"})
+    void projectAccessFailure_doesNotReadWorkflow(String code, int httpStatus) {
+        mockAuthenticatedUser();
+        Mockito.when(projectClient.getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any()))
+                .thenReturn(Mono.error(Status.fromCode(Status.Code.valueOf(code)).asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/projects/{projectId}/workflow?issueType=BUG", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange().expectStatus().isEqualTo(httpStatus);
+
+        Mockito.verifyNoInteractions(workflowClient);
+    }
+
+    @Test
+    @DisplayName("GET /workflows: 200 со всеми workflow проекта после проверки доступа к проекту")
+    void listProjectWorkflows_shouldReturn200_whenProjectIsVisible() {
+        mockAuthenticatedUser();
+
+        var transition = new WorkflowTransitionDto();
+        transition.setId(UUID.randomUUID());
+        transition.setHidden(true);
+        var workflow = new WorkflowResponseDto();
+        workflow.setId(UUID.randomUUID());
+        workflow.setTransitions(List.of(transition));
+        var entry = new ProjectWorkflowDto();
+        entry.setWorkflow(workflow);
+        entry.setIssueTypes(List.of(IssueTypeDto.TASK, IssueTypeDto.BUG));
+        entry.setShared(true);
+        var response = new ProjectWorkflowsResponseDto();
+        response.setItems(List.of(entry));
+
+        Mockito.when(workflowClient.listProjectWorkflows(Mockito.eq(PROJECT_ID), Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.items[0].shared").isEqualTo(true)
+                .jsonPath("$.items[0].issueTypes[1]").isEqualTo("BUG")
+                .jsonPath("$.items[0].workflow.transitions[0].hidden").isEqualTo(true);
+
+        Mockito.verify(projectClient).getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any());
+    }
+
+    @Test
+    @DisplayName("GET /workflows: проект недоступен — workflow не читаются")
+    void listProjectWorkflows_shouldNotReadWorkflows_whenProjectIsNotVisible() {
+        mockAuthenticatedUser();
+        Mockito.when(projectClient.getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any()))
+                .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
+
+        webTestClient.get()
+                .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isNotFound();
+
+        Mockito.verifyNoInteractions(workflowClient);
+    }
+
+    @Test
+    @DisplayName("POST /workflows: 201 и созданный workflow")
+    void createProjectWorkflow_shouldReturn201_whenRequestIsValid() {
+        mockAuthenticatedUser();
+        var response = new WorkflowResponseDto();
+        response.setId(UUID.randomUUID());
+        response.setName("Development");
+
+        Mockito.when(workflowClient.createWorkflow(Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.any(GatewayContext.class)))
+                .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowRequestDto>>getArgument(1).map(request -> response));
+
+        var status = new CreateWorkflowStatusRequestDto("TODO", "To Do", WorkflowStatusCategoryDto.TODO, 10);
+        var request = new CreateWorkflowRequestDto("Development", List.of(IssueTypeDto.TASK), List.of(status), List.of());
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+    }
+
+    @Test
+    @DisplayName("POST /workflows: без обязательных полей — 400")
+    void createProjectWorkflow_shouldReturn400_whenRequiredFieldsAreMissing() {
+        mockAuthenticatedUser();
+        Mockito.when(workflowClient.createWorkflow(Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.any(GatewayContext.class)))
+                .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowRequestDto>>getArgument(1)
+                        .map(request -> new WorkflowResponseDto()));
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"name\": \"Development\"}")
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    @DisplayName("POST /workflows/{workflowId}/statuses: 201 и workflow целиком")
+    void addWorkflowStatus_shouldReturn201_whenRequestIsValid() {
+        mockAuthenticatedUser();
+        UUID workflowId = UUID.randomUUID();
+        var response = new WorkflowResponseDto();
+        response.setId(workflowId);
+        response.setVersion(2);
+
+        Mockito.when(workflowClient.addWorkflowStatus(Mockito.eq(PROJECT_ID), Mockito.eq(workflowId), Mockito.any(),
+                        Mockito.any(GatewayContext.class)))
+                .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowStatusRequestDto>>getArgument(2).map(request -> response));
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/workflows/{workflowId}/statuses", PROJECT_ID, workflowId)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreateWorkflowStatusRequestDto("CODE_REVIEW", "Code Review", WorkflowStatusCategoryDto.IN_PROGRESS, 25))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ALREADY_EXISTS,409", "FAILED_PRECONDITION,400", "INVALID_ARGUMENT,400", "PERMISSION_DENIED,403", "NOT_FOUND,404"})
+    @DisplayName("POST /workflows/{workflowId}/statuses: ошибки workflow-service отдаются своими HTTP-статусами")
+    void addWorkflowStatus_shouldMapWorkflowServiceErrors(String code, int httpStatus) {
+        mockAuthenticatedUser();
+        UUID workflowId = UUID.randomUUID();
+        Mockito.when(workflowClient.addWorkflowStatus(Mockito.eq(PROJECT_ID), Mockito.eq(workflowId), Mockito.any(),
+                        Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(Status.fromCode(Status.Code.valueOf(code)).asRuntimeException()));
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/workflows/{workflowId}/statuses", PROJECT_ID, workflowId)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreateWorkflowStatusRequestDto("DONE", "Done", WorkflowStatusCategoryDto.DONE, 30))
+                .exchange()
+                .expectStatus().isEqualTo(httpStatus);
+    }
+
+    @Test
+    @DisplayName("POST /workflows/{workflowId}/transitions: 201 и workflow целиком")
+    void addWorkflowTransition_shouldReturn201_whenRequestIsValid() {
+        mockAuthenticatedUser();
+        UUID workflowId = UUID.randomUUID();
+        var response = new WorkflowResponseDto();
+        response.setId(workflowId);
+        response.setVersion(3);
+
+        Mockito.when(workflowClient.addWorkflowTransition(Mockito.eq(PROJECT_ID), Mockito.eq(workflowId), Mockito.any(),
+                        Mockito.any(GatewayContext.class)))
+                .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowTransitionRequestDto>>getArgument(2).map(request -> response));
+
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/workflows/{workflowId}/transitions", PROJECT_ID, workflowId)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreateWorkflowTransitionRequestDto("IN_PROGRESS", "TODO", "Stop Progress", 40))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+    }
+
     private void mockAuthenticatedUser() {
+        Mockito.when(projectClient.getProject(Mockito.eq(PROJECT_ID.toString()), Mockito.any()))
+                .thenReturn(Mono.just(new ProjectResponseDto()));
         var accessToken = ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(UserContext.newBuilder().setUserId(USER_ID).build())
                 .build();

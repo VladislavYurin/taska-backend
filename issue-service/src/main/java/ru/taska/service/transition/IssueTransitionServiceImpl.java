@@ -6,12 +6,12 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.IssueWithHistory;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import ru.taska.transport.grpc.workflow.IssueTransitionValidator;
 
 import java.util.Set;
@@ -27,13 +27,13 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
 
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
-    private final ProjectAccessibility projectAccessibility;
+    private final ProjectRoleChecker projectRoleChecker;
     private final IssueTransitionValidator issueTransitionValidator;
     private final IssueTransitionExecutor issueTransitionExecutor;
 
     /**
      * Оркестрирует процесс перехода задачи по workflow.
-     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectAccessChecker}.
+     * Проверяет роль пользователя, инициировавшего запрос через {@link ProjectRoleChecker}.
      * Валидирует правила перехода задачи по workflow через {@link IssueTransitionValidator}.
      * В случае успешной валидации передает выполнение перехода задачи по workflow
      * в транзакционный блок {@link IssueTransitionExecutor#executeTransition}.
@@ -59,8 +59,8 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().issueTransitionRoles();
 
-                    return projectAccessibility.check(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                                               .thenReturn(issue);
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                            .thenReturn(issue);
                 })
                 .flatMap(issue ->
                         issueTransitionValidator.validateTransition(requestId, nodeId, issue, transitionId, actorUserId, payload)

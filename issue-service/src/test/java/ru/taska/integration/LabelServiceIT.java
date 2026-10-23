@@ -1,8 +1,5 @@
 package ru.taska.integration;
 
-import static org.mockito.ArgumentMatchers.any;
-
-import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,24 +9,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.dto.labels.IssueWithLabels;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.domain.dto.labels.LabelResponses;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.ProjectLabels;
+import ru.taska.domain.util.PageResult;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.repository.labels.ProjectLabelsRepository;
-import ru.taska.service.IssueService;
 import ru.taska.service.LabelService;
+import ru.taska.service.IssueService;
+
+import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.any;
 
 class LabelServiceIT extends AbstractIT {
 
@@ -93,11 +95,12 @@ class LabelServiceIT extends AbstractIT {
 
     private void mockProjectRole(ProjectRole role) {
         Mockito.reset(projectServiceStub);
-        Mockito.when(projectServiceStub.getProject(Mockito.any(GetProjectRequest.class)))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(role)
-                                                    .build()));
+        Mockito.when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                        .setRole(role)
+                        .setIsMember(true)
+                        .setProjectExists(true).setProjectArchived(false)
+                        .build()));
     }
 
     @Test
@@ -414,7 +417,7 @@ class LabelServiceIT extends AbstractIT {
         mockProjectRole(ProjectRole.PROJECT_ROLE_VIEWER);
 
         // Act
-        Mono<ru.taska.domain.PageResult<IssueWithLabels>> result = issueService.listIssues(
+        Mono<PageResult<IssueWithLabels>> result = issueService.listIssues(
                 REQUEST_ID, NODE_ID, PROJECT_ID, VIEWER_ID,
                 null, null, label1.getId(), 0, 10
         );

@@ -1,18 +1,24 @@
 package ru.taska.mapper;
 
+import com.google.protobuf.Timestamp;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
+import org.mapstruct.Named;
 import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.ValueMapping;
 import org.mapstruct.ValueMappings;
 import ru.taska.api.project.v1.AddProjectMemberResponse;
 import ru.taska.api.project.v1.ChangeProjectMemberRoleResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
 import ru.taska.domain.ProjectMember;
-import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMembershipInfoDto;
+import ru.taska.domain.ProjectRole;
+
+import java.time.Instant;
 
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface ProjectMemberMapper {
@@ -66,6 +72,30 @@ public interface ProjectMemberMapper {
             @ValueMapping(source = MappingConstants.ANY_UNMAPPED, target = "PROJECT_ROLE_UNSPECIFIED")})
     ru.taska.api.project.v1.ProjectRole toGrpcRole(ProjectRole role);
 
+    /**
+     * Билдер, который создает транспортный grpc объектп.
+     *
+     * @param {@link ProjectMembershipInfoDto} из трех элементов, содержащий:
+     *               <ul>
+     *               <li>{@link ProjectRole} — роль участника проекта</li>
+     *               <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
+     *               <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
+     *               </ul>
+     * @return {@link ru.taska.api.project.v1.CheckProjectMemberRoleResponse} из трех элементов, содержащий:
+     * <ul>
+     * <li>{@link ProjectRole} — роль участника проекта</li>
+     * <li>{@link Boolean} — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
+     * <li>{@link Boolean} — флаг, сигнализирующий о том, существует ли такой проект</li>
+     * </ul>
+     */
+    default CheckProjectMemberRoleResponse toCheckProjectRoleResponse(ProjectMembershipInfoDto dto) {
+        return CheckProjectMemberRoleResponse.newBuilder()
+                .setRole(this.toGrpcRole(dto.role()))
+                .setIsMember(dto.isMember())
+                .setProjectExists(dto.isProjectExists())
+                .setProjectArchived(dto.projectArchived())
+                .build();
+    }
 
     /**
      * Преобразует внутренний DTO с детальной информацией об участнике проекта
@@ -74,17 +104,20 @@ public interface ProjectMemberMapper {
      * @param dto DTO участника проекта с обогащенными данными из auth-service
      * @return {@link ru.taska.api.project.v1.ProjectMemberDetailsResponse} для передачи в gRPC
      */
-    @Mapping(
-            target = "displayName",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
-    @Mapping(
-            target = "email",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
-    @Mapping(
-            target = "avatar",
-            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS
-    )
+    @Mapping(target = "displayName", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "email",       nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "avatar",      nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "addedAt", source = "addedAt",
+            nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS,
+            qualifiedByName = "instantToTimestamp")
     ProjectMemberDetailsResponse toProjectMemberResponse(ProjectMemberDetailsDto dto);
+
+    @Named("instantToTimestamp")
+    default Timestamp mapInstantToTimestamp(Instant instant) {
+        if (instant == null) return null;
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
+    }
 }

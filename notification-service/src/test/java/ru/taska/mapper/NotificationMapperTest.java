@@ -49,6 +49,33 @@ class NotificationMapperTest {
                 .build();
     }
 
+    @Test
+    void freshNotificationCopyIsEnglishForAllSupportedKinds() {
+        var notifications = java.util.List.of(
+                mapper.toIssueCreated(event, USER_ID, issueInfo),
+                mapper.toIssueAssigned(event, USER_ID, issueInfo),
+                mapper.toIssueUnassigned(event, USER_ID, issueInfo),
+                mapper.toIssueTransitioned(event, USER_ID, issueInfo),
+                mapper.toIssueUpdated(event, USER_ID, issueInfo),
+                mapper.toIssueDeleted(event, USER_ID, issueInfo),
+                mapper.toIssueLinkCreated(event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID),
+                mapper.toIssueLinkDeleted(event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID),
+                mapper.toUserInvited(event), mapper.toProjectCreated(event, USER_ID),
+                mapper.toMemberAdded(event, USER_ID), mapper.toMemberUpdated(event, USER_ID),
+                mapper.toMemberRemoved(event, USER_ID), mapper.toUserActivated(event),
+                mapper.toLabelAdded(event, USER_ID, issueInfo, "bug"),
+                mapper.toLabelRemoved(event, USER_ID, issueInfo, "bug"),
+                mapper.toUserBlocked(event, USER_ID, "Reason"), mapper.toUserUnblocked(event, USER_ID, "Reason"),
+                mapper.toCommentCreated(event, USER_ID, issueInfo),
+                mapper.toCommentUpdated(event, USER_ID, issueInfo), mapper.toCommentDeleted(event, USER_ID, issueInfo),
+                mapper.toAttachmentAdded(event, USER_ID, issueInfo, "file.txt"),
+                mapper.toAttachmentDeleted(event, USER_ID, issueInfo, "file.txt"));
+        assertThat(notifications).hasSize(23).allSatisfy(notification -> {
+            assertThat(notification.getTitle()).isNotBlank().matches("[\\x00-\\x7F]+");
+            assertThat(notification.getBody()).isNotBlank().matches("[\\x00-\\x7F]+");
+        });
+    }
+
     // ==================== Регрессия: link-события ====================
 
     @Nested
@@ -162,9 +189,10 @@ class NotificationMapperTest {
 
         @Test
         void toCommentCreated_shouldFillIssueFields() {
-            Notification result = mapper.toCommentCreated(event, USER_ID, issueInfo, "test body");
+            Notification result = mapper.toCommentCreated(event, USER_ID, issueInfo);
 
             assertThat(result.getNotificationType()).isEqualTo(NotificationType.ISSUE_COMMENT_CREATED);
+            assertThat(result.getBody()).isEqualTo("New comment on " + ISSUE_KEY);
             assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
             assertThat(result.getIssueKey()).isEqualTo(ISSUE_KEY);
         }

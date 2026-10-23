@@ -3,6 +3,7 @@ package ru.taska.repository;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -53,7 +54,7 @@ public class ReadOnlyRepository {
                     .bindValues(params)
                     .fetch()
                     .all();
-        });
+        }).onErrorMap(DataAccessException.class, error -> databaseFailure(serviceKey, "SELECT", error));
     }
 
     /**
@@ -75,6 +76,14 @@ public class ReadOnlyRepository {
                     .bindValues(params)
                     .map(row -> row.get(0, Long.class))
                     .first();
-        });
+        }).onErrorMap(DataAccessException.class, error -> databaseFailure(serviceKey, "COUNT", error));
+    }
+
+    private DomainException databaseFailure(String serviceKey, String operation, DataAccessException error) {
+        log.error("Administrative {} query failed for service '{}'", operation, serviceKey, error);
+        var failure = new DomainException(DomainStatus.INTERNAL,
+                "Administrative " + operation + " query failed for service: " + serviceKey);
+        failure.initCause(error);
+        return failure;
     }
 }

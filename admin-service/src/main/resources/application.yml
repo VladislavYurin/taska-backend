@@ -170,7 +170,7 @@ admin:
             outbox_events:
               payload:
                 email: MASK_PARTIAL
-                rawInviteToken:
+                rawInviteToken: HIDE
       project:
         alias: project
         schema: taska
@@ -208,7 +208,19 @@ admin:
             - databasechangelog
             - databasechangeloglock
           sensitive-columns:
+            invitation_email_deliveries.token: HIDE
+            invitation_email_deliveries.email: MASK_PARTIAL
             notification_preferences.email: MASK_PARTIAL
+            notification_preferences.telegram_chat_id: HIDE
+            notification_preferences.telegram_user_id: HIDE
+            notification_preferences.telegram_username: HIDE
+            notification_preferences.telegram_name: HIDE
+            telegram_link_requests.token_hash: HIDE
+            telegram_link_requests.candidate_chat_id: HIDE
+            telegram_link_requests.candidate_user_id: HIDE
+            telegram_link_requests.candidate_username: HIDE
+            telegram_link_requests.candidate_name: HIDE
+            notification_deliveries.reply_chat_id: HIDE
             email_delivery_attempts.to_email: MASK_PARTIAL
       admin:
         alias: admin

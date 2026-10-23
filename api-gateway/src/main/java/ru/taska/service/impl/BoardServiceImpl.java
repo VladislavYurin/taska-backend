@@ -12,7 +12,6 @@ import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.domain.dto.IssueTypeDto;
-import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.mapper.BoardMapper;
 import ru.taska.service.BoardService;
@@ -59,69 +58,69 @@ public class BoardServiceImpl implements BoardService {
     ) {
         log.info("[{}] Getting board for project: {}", context.requestId(), projectId);
 
-        var workflowMono = workflowClient.getWorkflowForProject(projectId, issueType, context);
+        return workflowClient.getWorkflowForProject(projectId, issueType, context)
+                .flatMap(workflow -> {
+                    List<String> doneStatusKeys = workflow.getStatuses().stream()
+                            .filter(status -> "DONE".equals(status.getCategory()))
+                            .map(WorkflowStatusDto::getStatusKey)
+                            .distinct()
+                            .toList();
+                    return issueClient.listIssuesForBoard(
+                            projectId.toString(),
+                            issueType.name(),
+                            assigneeId != null ? assigneeId.toString() : null,
+                            labelId != null ? labelId.toString() : null,
+                            includeDone,
+                            doneStatusKeys,
+                            context
+                    ).map(issues -> {
+                        Map<String, List<BoardIssueData>> issuesByStatus =
+                                issues.stream()
+                                        .collect(Collectors.groupingBy(BoardIssueData::statusKey));
 
-        var issuesMono = issueClient.listIssuesForBoard(
-                projectId.toString(),
-                issueType.name(),
-                assigneeId != null ? assigneeId.toString() : null,
-                labelId != null ? labelId.toString() : null,
-                includeDone,
-                context
-        );
+                        List<BoardColumnDto> columns =
+                                workflow.getStatuses()
+                                        .stream()
+                                        .sorted(Comparator.comparingInt(WorkflowStatusDto::getSortOrder))
+                                        .map(status -> {
 
-        return Mono.zip(workflowMono, issuesMono)
-                .map(tuple -> {
+                                            List<BoardIssueDto> issuesForColumn =
+                                                    issuesByStatus.getOrDefault(
+                                                                    status.getStatusKey(),
+                                                                    List.<BoardIssueData>of()
+                                                            )
+                                                            .stream()
+                                                            .map(BoardIssueData::issue)
+                                                            .toList();
 
-                    WorkflowResponseDto workflow = tuple.getT1();
-                    List<BoardIssueData> issues = tuple.getT2();
+                                            issuesByStatus.remove(status.getStatusKey());
 
-                    Map<String, List<BoardIssueData>> issuesByStatus =
-                            issues.stream()
-                                    .collect(Collectors.groupingBy(BoardIssueData::statusKey));
+                                            return boardMapper.toBoardColumn(
+                                                    status,
+                                                    issuesForColumn
+                                            );
+                                        })
+                                        .toList();
 
-                    List<BoardColumnDto> columns =
-                            workflow.getStatuses()
-                                    .stream()
-                                    .sorted(Comparator.comparingInt(WorkflowStatusDto::getSortOrder))
-                                    .map(status -> {
+                        if (!issuesByStatus.isEmpty()) {
+                            log.warn(
+                                    "[{}] Found issues with unknown statuses: {}",
+                                    context.requestId(),
+                                    issuesByStatus.keySet()
+                            );
 
-                                        List<BoardIssueDto> issuesForColumn =
-                                                issuesByStatus.getOrDefault(
-                                                                status.getStatusKey(),
-                                                                List.<BoardIssueData>of()
-                                                        )
-                                                        .stream()
-                                                        .map(BoardIssueData::issue)
-                                                        .toList();
+                            throw new ResponseStatusException(
+                                    HttpStatus.INTERNAL_SERVER_ERROR,
+                                    "Inconsistent state: issues found with statuses not present in workflow"
+                            );
+                        }
 
-                                        issuesByStatus.remove(status.getStatusKey());
-
-                                        return boardMapper.toBoardColumn(
-                                                status,
-                                                issuesForColumn
-                                        );
-                                    })
-                                    .toList();
-
-                    if (!issuesByStatus.isEmpty()) {
-                        log.warn(
-                                "[{}] Found issues with unknown statuses: {}",
-                                context.requestId(),
-                                issuesByStatus.keySet()
+                        return boardMapper.toBoardResponse(
+                                projectId,
+                                issueType,
+                                columns
                         );
-
-                        throw new ResponseStatusException(
-                                HttpStatus.INTERNAL_SERVER_ERROR,
-                                "Inconsistent state: issues found with statuses not present in workflow"
-                        );
-                    }
-
-                    return boardMapper.toBoardResponse(
-                            projectId,
-                            issueType,
-                            columns
-                    );
+                    });
                 });
     }
 }

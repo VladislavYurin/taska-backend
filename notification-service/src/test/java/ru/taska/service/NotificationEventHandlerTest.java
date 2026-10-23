@@ -65,7 +65,9 @@ class NotificationEventHandlerTest {
     @Mock private NotificationRepository notificationRepository;
     @Mock private ProcessedEventRepository processedEventRepository;
     @Mock private NotificationFactory notificationFactory;
-    @Mock private EmailSenderService emailSenderService;
+    @Mock private NotificationDeliveryQueue deliveryQueue;
+    @Mock private NotificationSettingsService settings;
+    @Mock private InvitationEmailQueue invitationEmailQueue;
     @Mock private TransactionalOperator transactionalOperator;
 
     @InjectMocks
@@ -100,7 +102,7 @@ class NotificationEventHandlerTest {
             verify(processedEventRepository, times(1)).save(any(ProcessedEvent.class));
             verify(notificationFactory, times(1)).create(event, EVENT_ID);
             verify(notificationRepository, times(1)).save(any(Notification.class));
-            verify(emailSenderService, times(1)).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, times(1)).enqueue(any(Notification.class));
         }
 
         @Test
@@ -135,7 +137,7 @@ class NotificationEventHandlerTest {
             handler.handle(event).block();
 
             verify(notificationRepository, times(2)).save(any(Notification.class));
-            verify(emailSenderService, times(2)).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, times(2)).enqueue(any(Notification.class));
         }
 
         @Test
@@ -149,7 +151,7 @@ class NotificationEventHandlerTest {
             handler.handle(event).block();
 
             verify(notificationRepository, never()).save(any(Notification.class));
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
 
         @Test
@@ -165,7 +167,7 @@ class NotificationEventHandlerTest {
             handler.handle(event).block();
 
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-            verify(emailSenderService).sendIfEnabled(captor.capture());
+            verify(deliveryQueue).enqueue(captor.capture());
 
             Notification sent = captor.getValue();
             assertThat(sent.getUserId()).isEqualTo(ASSIGNEE_ID);
@@ -208,7 +210,7 @@ class NotificationEventHandlerTest {
             verify(processedEventRepository, times(1)).save(any(ProcessedEvent.class));
             verify(notificationFactory, never()).create(any(), any());
             verify(notificationRepository, never()).save(any(Notification.class));
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
 
         @Test
@@ -230,7 +232,7 @@ class NotificationEventHandlerTest {
             verify(processedEventRepository, times(2)).save(any(ProcessedEvent.class));
             verify(notificationFactory, times(1)).create(event, EVENT_ID);
             verify(notificationRepository, times(1)).save(any(Notification.class));
-            verify(emailSenderService, times(1)).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, times(1)).enqueue(any(Notification.class));
         }
 
         @Test
@@ -250,7 +252,7 @@ class NotificationEventHandlerTest {
 
             verify(processedEventRepository, times(1)).save(any(ProcessedEvent.class));
             verify(notificationRepository, times(1)).save(any(Notification.class));
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
     }
 
@@ -269,7 +271,7 @@ class NotificationEventHandlerTest {
             verify(notificationFactory, never()).create(any(), any());
             verify(notificationRepository, never()).save(any());
             verify(transactionalOperator, never()).transactional(any(Mono.class));
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
 
         @Test
@@ -291,21 +293,21 @@ class NotificationEventHandlerTest {
         }
 
         @Test
-        @DisplayName("Завершается успешно, если отправка письма упала")
-        void shouldCompleteWhenEmailFails() throws Exception {
+        @DisplayName("Ошибка постановки доставки откатывает обработку события")
+        void shouldRollBackWhenQueueInsertFails() throws Exception {
             TaskaEvent event = issueAssignedEvent();
 
             stubProcessedEventSaveSuccess();
             stubFactoryCreate(List.of(notificationFor(ASSIGNEE_ID)));
             stubNotificationSaveSuccess();
 
-            Mockito.when(emailSenderService.sendIfEnabled(any(Notification.class)))
+            Mockito.when(deliveryQueue.enqueue(any(Notification.class)))
                     .thenReturn(Mono.error(new RuntimeException("Email sending failed")));
 
-            StepVerifier.create(handler.handle(event)).verifyComplete();
+            StepVerifier.create(handler.handle(event)).expectError(RuntimeException.class).verify();
 
             verify(notificationRepository, times(1)).save(any(Notification.class));
-            verify(emailSenderService, times(1)).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, times(1)).enqueue(any(Notification.class));
         }
 
         @Test
@@ -323,7 +325,7 @@ class NotificationEventHandlerTest {
                     .expectError(RuntimeException.class)
                     .verify();
 
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
 
         @Test
@@ -342,7 +344,7 @@ class NotificationEventHandlerTest {
                     .verify();
 
             // Ошибка пробрасывается — значит, транзакция откатится
-            verify(emailSenderService, never()).sendIfEnabled(any(Notification.class));
+            verify(deliveryQueue, never()).enqueue(any(Notification.class));
         }
     }
 
@@ -364,7 +366,7 @@ class NotificationEventHandlerTest {
     }
 
     private void stubEmailSendSuccess() {
-        Mockito.when(emailSenderService.sendIfEnabled(any(Notification.class)))
+        Mockito.when(deliveryQueue.enqueue(any(Notification.class)))
                 .thenReturn(Mono.empty());
     }
 

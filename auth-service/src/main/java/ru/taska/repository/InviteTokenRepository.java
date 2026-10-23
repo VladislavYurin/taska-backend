@@ -13,6 +13,13 @@ import ru.taska.entity.InviteToken;
 public interface InviteTokenRepository extends ReactiveCrudRepository<InviteToken, UUID> {
 
     Mono<InviteToken> findByUserId(UUID userId);
+
+    @Query("SELECT * FROM taska.invite_tokens WHERE user_id = :userId ORDER BY created_at DESC, id DESC LIMIT 1")
+    Mono<InviteToken> findLatestByUserId(UUID userId);
+
+    @Modifying
+    @Query("UPDATE taska.invite_tokens SET used_at = now() WHERE user_id = :userId AND used_at IS NULL")
+    Mono<Integer> revokeUnusedForUser(UUID userId);
     Mono<InviteToken> findByTokenHash(String hash);
 
     @Modifying

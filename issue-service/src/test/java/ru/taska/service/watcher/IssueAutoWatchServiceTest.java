@@ -10,8 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueWatcher;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueWatcher;
 
 import java.util.UUID;
 

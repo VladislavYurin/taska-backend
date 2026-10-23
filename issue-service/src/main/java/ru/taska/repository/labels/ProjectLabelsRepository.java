@@ -4,7 +4,7 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.ProjectLabels;
 
 import java.util.UUID;
 
@@ -19,6 +19,8 @@ public interface ProjectLabelsRepository extends R2dbcRepository<ProjectLabels, 
      * @param projectId идентификатор проекта
      * @return Flux<{@link ProjectLabels}> поток активных меток проекта
      */
+    @Query("SELECT * FROM taska.project_labels WHERE project_id = :projectId AND deleted_at IS NULL "
+            + "ORDER BY name ASC, id ASC")
     Flux<ProjectLabels> findByProjectIdAndDeletedAtIsNull(UUID projectId);
 
     /**

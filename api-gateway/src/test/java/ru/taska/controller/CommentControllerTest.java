@@ -32,6 +32,7 @@ import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.filter.RequestIdProvider;
 import ru.taska.mapper.CommentRestMapper;
 import ru.taska.mapper.ContextMapper;
+import ru.taska.mapper.UserProfileMapper;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.GrpcCommentServiceClient;
 
@@ -46,7 +47,8 @@ import java.util.UUID;
         BearerTokenExtractor.class,
         GatewayErrorHandler.class,
         RestErrorMapper.class,
-        CommentRestMapper.class
+        CommentRestMapper.class,
+        UserProfileMapper.class
 })
 class CommentControllerTest {
 

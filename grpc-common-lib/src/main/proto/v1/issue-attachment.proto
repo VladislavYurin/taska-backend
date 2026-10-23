@@ -71,6 +71,11 @@ message AttachmentResponse {
    * Presigned URL для скачивания вложения.
    */
   string url = 10;
+
+  /**
+   * Пользователь, загрузивший файл.
+   */
+  optional ru.taska.common.v1.UserSummaryResponse uploaded_by_user = 11;
 }
 
 /**

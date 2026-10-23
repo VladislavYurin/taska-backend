@@ -22,7 +22,7 @@ import ru.taska.api.issue.v1.ListIssueWorklogsBody;
 import ru.taska.api.issue.v1.ListIssueWorklogsRequest;
 import ru.taska.api.issue.v1.UpdateIssueWorklogBody;
 import ru.taska.api.issue.v1.UpdateIssueWorklogRequest;
-import ru.taska.domain.Worklog;
+import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
 import ru.taska.domain.dto.UpdateWorklogDto;
 import ru.taska.mapper.WorklogMapper;

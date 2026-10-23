@@ -2,7 +2,7 @@ package ru.taska.transport.kafka;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.processor.AbstractOutboxEventProcessor;
 import ru.taska.scheduler.AbstractOutboxEventScheduler;
 

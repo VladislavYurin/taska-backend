@@ -5,8 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.AutoWatchRole;
-import ru.taska.domain.Issue;
+import ru.taska.domain.util.AutoWatchRole;
+import ru.taska.domain.entity.Issue;
 
 import java.util.UUID;
 

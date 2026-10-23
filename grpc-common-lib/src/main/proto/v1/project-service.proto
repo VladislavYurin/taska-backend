@@ -18,15 +18,28 @@ enum ProjectRole {
 }
 
 service ProjectService {
+  rpc ArchiveProject(ArchiveProjectRequest) returns (ProjectResponse);
+  rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
+  rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
+  rpc UpdateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
+  rpc DeleteProjectIssueType(ChangeProjectIssueTypeRequest) returns (google.protobuf.Empty);
   /**
    * Создаёт новый проект.
    */
+  // Batch member summaries; filters requested projects by current membership.
+  rpc GetProjectMemberStatsBatch(GetProjectMemberStatsBatchRequest) returns (GetProjectMemberStatsBatchResponse);
+
   rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
 
   /**
    * Возвращает проект по идентификатору.
    */
   rpc GetProject (GetProjectRequest) returns (ProjectResponse);
+
+  /**
+   * Возвращает контекст проекта по идентификатору.
+   */
+  rpc GetProjectContext(GetProjectContextRequest) returns (ProjectContextResponse);
 
   /**
    * Возвращает список всех проектов по идентификатору пользователя.
@@ -54,9 +67,21 @@ service ProjectService {
   rpc ChangeProjectMemberRole (ChangeProjectMemberRoleRequest) returns (ChangeProjectMemberRoleResponse);
 
   /**
-   * Удаляет проект (soft delete).
+   * Проверяет роль пользователя в проекте.
    */
-  rpc DeleteProject (DeleteProjectRequest) returns (ProjectResponse);
+  rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
+
+  /**
+   * Внутренний метод. Возвращает ключ проекта по ID без проверки прав.
+   * Используется только сервисами, которые уже проверили права.
+   */
+  rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
+
+  /**
+   * Внутренний метод. Возвращает информацию по списку ID проектов без проверки прав.
+   * Используется сервисами, которые уже проверили права.
+   */
+  rpc GetProjectInfoBatchInternal (GetProjectInfoBatchInternalRequest) returns (GetProjectInfoBatchInternalResponse);
 }
 
 message CreateProjectRequest {
@@ -80,6 +105,17 @@ message GetProjectRequestBody {
   string actor_user_id=2;
 }
 
+message GetProjectContextRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectContextRequestBody body = 2;
+}
+
+message GetProjectContextRequestBody {
+  string project_id = 1;
+  string actor_user_id = 2;
+  ru.taska.common.v1.GlobalRoleProto global_role = 3;
+}
+
 message ListMyProjectsRequest {
   ru.taska.common.v1.Header header = 1;
   ListMyProjectsRequestBody body = 2;
@@ -89,6 +125,35 @@ message ListMyProjectsRequestBody {
   string user_id = 1;
 }
 
+/**
+ * Запрос на проверку роли пользователя в проекте.
+ */
+message CheckProjectMemberRoleRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  CheckProjectMemberRoleRequestBody body = 2;
+}
+
+/**
+ * Тело запроса на проверку роли пользователя в проекте.
+ */
+message CheckProjectMemberRoleRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор участника проекта.
+   */
+  string user_id = 2;
+}
 
 message ProjectResponse {
   string id = 1;
@@ -99,6 +164,58 @@ message ProjectResponse {
   google.protobuf.Timestamp updated_at = 6;
   optional google.protobuf.Timestamp archived_at = 7;
   optional ProjectRole current_user_role = 8;
+}
+
+message ProjectContextResponse {
+  ProjectResponse project = 1;
+  repeated ProjectMemberDetailsResponse members = 2;
+  repeated ProjectLabelResponse labels = 3;
+  repeated ProjectWorkflowEntryResponse workflows = 4;
+  repeated ProjectIssueTypeResponse issue_types = 5;
+}
+
+message ProjectIssueTypesRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+}
+
+message ChangeProjectIssueTypeRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  string code = 4;
+  optional string name = 5;
+  optional string color = 6;
+  optional string icon = 7;
+  optional int32 sort_order = 8;
+}
+
+message ProjectIssueTypeResponse {
+  string code = 1;
+  string name = 2;
+  string color = 3;
+  string icon = 4;
+  int32 sort_order = 5;
+}
+
+message ListProjectIssueTypesResponse {
+  repeated ProjectIssueTypeResponse items = 1;
+}
+
+message ProjectWorkflowEntryResponse {
+  string issue_type = 1;
+  WorkflowDataResponse workflow = 2;
+}
+
+message WorkflowDataResponse {
+  string id = 1;
+  string name = 2;
+  int32 version = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  repeated WorkflowStatusResponse statuses = 6;
+  repeated WorkflowTransitionResponse transitions = 7;
 }
 
 message ListMyProjectsResponse {
@@ -157,6 +274,44 @@ message ChangeProjectMemberRoleResponse {
   string project_id = 3;
 }
 
+/**
+ * Ответ проверки роли пользователя в проекте.
+ */
+message CheckProjectMemberRoleResponse {
+  /**
+   * Роль пользователя.
+   */
+  ProjectRole role = 1;
+
+  /**
+   * Является ли пользователь участником проекта.
+   */
+  bool is_member = 2;
+
+  /**
+   * Существует ли проект.
+   */
+  bool project_exists = 3;
+  // Presence confirms that the server supports archive-aware write authorization.
+  optional bool project_archived = 4;
+
+}
+
+/**
+ * Запрос получения projectKey.
+ */
+message GetProjectKeyInternalRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetProjectKeyInternalRequestBody body = 2;
+}
+
+message GetProjectKeyInternalRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+}
+
 message ProjectKeyResponse {
   /**
    * Ключ-название проекта
@@ -164,21 +319,43 @@ message ProjectKeyResponse {
   string project_key = 1;
 }
 
-message DeleteProjectRequest {
+message GetProjectInfoBatchInternalRequest {
   ru.taska.common.v1.Header header = 1;
-  DeleteProjectRequestBody body = 2;
+  GetProjectInfoBatchInternalRequestBody body = 2;
 }
 
-message DeleteProjectRequestBody {
+message GetProjectInfoBatchInternalRequestBody {
   /**
-   * Идентификатор проекта.
+   * Список уникальных идентификаторов проектов.
    */
-  string project_id = 1;
-  /**
-   * Идентификатор пользователя отправившего запрос.
-   */
-  string actor_user_id=2;
+  repeated string project_ids = 1;
 }
+
+message GetProjectInfoBatchInternalResponse {
+  /**
+   * Отображение ID проекта -> краткая информация о проекте.
+   * Ключ Map: project_id (String)
+   */
+  map<string, ProjectShortInfo> projects = 1;
+}
+
+message ProjectShortInfo {
+  /**
+   * Идентификатор проекта
+   */
+  string id = 1;
+
+  /**
+   * Ключ-название проекта
+   */
+  string key = 2;
+
+  /**
+   * Полное наименование проекта (опционально, заложено на будущее)
+   */
+  string name = 3;
+}
+
 message GetListProjectMemberRequest {
   ru.taska.common.v1.Header header = 1;
   GetListProjectMemberRequestBody body = 2;
@@ -195,10 +372,11 @@ message ListProjectMemberResponse {
 
 message ProjectMemberDetailsResponse {
   string user_id = 1;
-  string role = 2;
+  ProjectRole role = 2;
   string display_name = 3;
   string email = 4;
   optional AvatarResponse avatar = 5;
+  optional google.protobuf.Timestamp added_at = 6;
 }
 
 message AvatarResponse {
@@ -208,4 +386,46 @@ message AvatarResponse {
   string content_type = 4;
   int64 size_bytes = 5;
   string download_url = 6;
+}
+
+message ProjectLabelResponse {
+  string id = 1;
+  string name = 2;
+  string color = 3;
+}
+
+message WorkflowStatusResponse {
+  string id = 1;
+  string status_key = 2;
+  string name = 3;
+  string category = 4;
+  int32 sort_order = 5;
+}
+
+message WorkflowTransitionResponse {
+  string id = 1;
+  string from_status_id = 2;
+  string to_status_id = 3;
+  string name = 4;
+  int32 sort_order = 5;
+}
+
+message GetProjectMemberStatsBatchRequest {
+  ru.taska.common.v1.Header header = 1;
+  string actor_user_id = 2;
+  repeated string project_ids = 3;
+}
+message ProjectMemberStats {
+  string project_id = 1;
+  int64 member_count = 2;
+  repeated ProjectMemberDetailsResponse members = 3;
+}
+message GetProjectMemberStatsBatchResponse {
+  repeated ProjectMemberStats items = 1;
+}
+
+message ArchiveProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
 }

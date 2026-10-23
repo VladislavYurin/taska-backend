@@ -89,7 +89,7 @@ class BoardServiceImplTest {
                 ISSUE_TYPE.name(),
                 ASSIGNEE_ID.toString(),
                 LABEL_ID.toString(),
-                true,
+                true, List.of("DONE"),
                 context
         )).thenReturn(Mono.just(List.of(doneIssue, todoIssue)));
 
@@ -122,7 +122,7 @@ class BoardServiceImplTest {
                 ISSUE_TYPE.name(),
                 ASSIGNEE_ID.toString(),
                 LABEL_ID.toString(),
-                true,
+                true, List.of("DONE"),
                 context
         );
     }
@@ -145,7 +145,7 @@ class BoardServiceImplTest {
                 ISSUE_TYPE.name(),
                 null,
                 null,
-                false,
+                false, List.of(),
                 context
         )).thenReturn(Mono.just(List.of(unknownIssue)));
 
@@ -169,6 +169,48 @@ class BoardServiceImplTest {
                             );
                 })
                 .verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void getBoard_passesFinalStatusKeysFromCategories(Boolean includeDone) {
+        var workflow = new WorkflowResponseDto();
+        workflow.setStatuses(List.of(
+                workflowStatus("DONE", "Still in progress", "IN_PROGRESS", 1),
+                workflowStatus("CLOSED", "Closed", "DONE", 2),
+                workflowStatus("RELEASED", "Released", "DONE", 3)));
+        var activeIssue = boardIssueDto("TAS-1");
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context)).thenReturn(Mono.just(workflow));
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+                includeDone, List.of("CLOSED", "RELEASED"), context))
+                .thenReturn(Mono.just(List.of(new BoardIssueData("DONE", activeIssue))));
+
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, includeDone, context))
+                .assertNext(board -> assertThat(board.getColumns().getFirst().getIssues()).containsExactly(activeIssue))
+                .verifyComplete();
+        verify(issueClient).listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+                includeDone, List.of("CLOSED", "RELEASED"), context);
+    }
+
+    @Test
+    void getBoard_withoutFinalCategoriesDoesNotInventDoneKey() {
+        var workflow = new WorkflowResponseDto();
+        workflow.setStatuses(List.of(workflowStatus("DONE", "Still open", "TODO", 1)));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context)).thenReturn(Mono.just(workflow));
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+                false, List.of(), context)).thenReturn(Mono.just(List.of()));
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, false, context))
+                .assertNext(board -> assertThat(board.getColumns()).hasSize(1)).verifyComplete();
+    }
+
+    @Test
+    void getBoard_workflowFailureDoesNotReadIssuesWithoutTheirCategories() {
+        var failure = new IllegalStateException("workflow unavailable");
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context)).thenReturn(Mono.error(failure));
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, false, context))
+                .expectErrorMatches(error -> error == failure).verify();
+        org.mockito.Mockito.verifyNoInteractions(issueClient);
     }
 
     private WorkflowStatusDto workflowStatus(

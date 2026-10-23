@@ -11,6 +11,8 @@ import ru.taska.api.issue.v1.AddIssueLabelResponse;
 import ru.taska.api.issue.v1.AddIssueWorklogRequest;
 import ru.taska.api.issue.v1.AddIssueWorklogResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalResponse;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateProjectLabelRequest;
@@ -24,6 +26,8 @@ import ru.taska.api.issue.v1.DeleteIssueWorklogRequest;
 import ru.taska.api.issue.v1.DeleteIssueWorklogResponse;
 import ru.taska.api.issue.v1.DeleteProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteProjectLabelResponse;
+import ru.taska.api.issue.v1.GetIssueByKeyRequest;
+import ru.taska.api.issue.v1.GetIssueDetailsResponse;
 import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.GetIssueWatchStateRequest;
 import ru.taska.api.issue.v1.GetIssueWatchStateResponse;
@@ -46,6 +50,8 @@ import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
 import ru.taska.api.issue.v1.ListProjectLabelsRequest;
 import ru.taska.api.issue.v1.ListProjectLabelsResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueResponse;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
@@ -76,6 +82,13 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     private final GrpcIssueWorklogService grpcIssueWorklogService;
 
     @Override
+    public Mono<CountProjectIssuesBatchInternalResponse> countProjectIssuesBatchInternal(
+            Mono<CountProjectIssuesBatchInternalRequest> request) {
+        return grpcIssueService.countProjectIssuesBatchInternal(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("countProjectIssuesBatchInternal"));
+    }
+
+    @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
         return grpcIssueService.createIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
@@ -85,6 +98,18 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<IssueWithHistoryResponse> getIssue(Mono<GetIssueRequest> request) {
         return grpcIssueService.getIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
+    }
+
+    @Override
+    public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
+        return grpcIssueService.getIssueDetails(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getIssueDetails"));
+    }
+
+    @Override
+    public Mono<IssueResponse> getIssueByKey(Mono<GetIssueByKeyRequest> request) {
+        return grpcIssueService.getIssueByKey(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getIssueByKey"));
     }
 
     @Override
@@ -110,6 +135,13 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
         return grpcIssueService.updateIssue(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
     }
+
+    @Override
+    public Mono<PatchIssueResponse> patchIssue(Mono<PatchIssueRequest> request) {
+        return grpcIssueService.patchIssue(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("patchIssue"));
+    }
+
     @Override
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
         return grpcIssueService.transitionIssue(request)

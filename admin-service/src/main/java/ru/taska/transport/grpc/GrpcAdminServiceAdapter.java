@@ -10,6 +10,8 @@ import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest;
 import ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryResponse;
 import ru.taska.api.admin.v1.GetTableRowByIdRequest;
 import ru.taska.api.admin.v1.GetTableRowByIdResponse;
+import ru.taska.api.admin.v1.ListAuditEntriesRequest;
+import ru.taska.api.admin.v1.ListAuditEntriesResponse;
 import ru.taska.api.admin.v1.ListTableRowsRequest;
 import ru.taska.api.admin.v1.ListTableRowsResponse;
 import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
@@ -47,6 +49,18 @@ public class GrpcAdminServiceAdapter extends ReactorAdminServiceGrpc.AdminServic
     public Mono<GetTableRowByIdResponse> getTableRowById(Mono<GetTableRowByIdRequest> request) {
         return grpcAdminReadonlyService.getTableRowById(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getTableRowById"));
+    }
+
+    /**
+     * Публикует чтение журнала аудита (TAS-160) через gRPC.
+     *
+     * @param request запрос с фильтрами и пагинацией
+     * @return страница записей аудита
+     */
+    @Override
+    public Mono<ListAuditEntriesResponse> listAuditEntries(Mono<ListAuditEntriesRequest> request) {
+        return grpcAdminReadonlyService.listAuditEntries(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listAuditEntries"));
     }
 
     @Override

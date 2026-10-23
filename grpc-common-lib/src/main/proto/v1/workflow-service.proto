@@ -3,6 +3,7 @@ syntax = "proto3";
 package ru.taska.workflow.v1;
 
 import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.workflow.v1";
@@ -43,6 +44,27 @@ service WorkflowService {
    */
   rpc CreateWorkflow(CreateWorkflowRequest)
       returns (WorkflowResponse);
+
+  /**
+   * Добавляет статус в workflow проекта.
+   * Общий default workflow не меняется: проекту нужен свой workflow (CreateWorkflow).
+   */
+  rpc AddWorkflowStatus(AddWorkflowStatusRequest)
+      returns (WorkflowResponse);
+
+  /**
+   * Добавляет переход между статусами workflow проекта.
+   * Общий default workflow не меняется: проекту нужен свой workflow (CreateWorkflow).
+   */
+  rpc AddWorkflowTransition(AddWorkflowTransitionRequest)
+      returns (WorkflowResponse);
+
+  /**
+   * Возвращает все workflow, по которым работает проект: свои и общий default,
+   * с типами задач, всеми статусами и всеми переходами (включая скрытые).
+   */
+  rpc ListProjectWorkflows(ListProjectWorkflowsRequest)
+      returns (ListProjectWorkflowsResponse);
 }
 
 message GetWorkflowForProjectRequest {
@@ -98,12 +120,12 @@ message WorkflowResponse {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 4;
+  google.protobuf.Timestamp created_at = 4;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 5;
+  google.protobuf.Timestamp updated_at = 5;
 
   /**
    * Статусы workflow.
@@ -147,12 +169,12 @@ message WorkflowStatus {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 6;
+  google.protobuf.Timestamp created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 7;
+  google.protobuf.Timestamp updated_at = 7;
 }
 
 message WorkflowTransition {
@@ -185,12 +207,18 @@ message WorkflowTransition {
   /**
    * Временная метка создания записи (аудит).
    */
-  string created_at = 6;
+  google.protobuf.Timestamp created_at = 6;
 
   /**
    * Временная метка последнего изменения записи (аудит).
    */
-  string updated_at = 7;
+  google.protobuf.Timestamp updated_at = 7;
+
+  /**
+   * Признак скрытого перехода (не отображается в UI, но доступен программно).
+   * GetWorkflowForProject скрытые переходы не отдаёт, ListProjectWorkflows отдаёт все.
+   */
+  bool is_hidden = 8;
 }
 
 message ValidateTransitionRequest {
@@ -382,4 +410,123 @@ message CreateWorkflowRequest {
    * Тело запроса.
    */
   CreateWorkflowRequestBody body = 2;
+}
+
+message AddWorkflowStatusRequestBody {
+  /**
+   * Идентификатор проекта, которому принадлежит workflow.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор изменяемого workflow.
+   */
+  string workflow_id = 2;
+
+  /**
+   * Добавляемый статус.
+   */
+  WorkflowStatusCreateRequest status = 3;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   * Используется для проверки прав доступа к проекту.
+   */
+  string actor_user_id = 4;
+}
+
+message AddWorkflowStatusRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddWorkflowStatusRequestBody body = 2;
+}
+
+message AddWorkflowTransitionRequestBody {
+  /**
+   * Идентификатор проекта, которому принадлежит workflow.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор изменяемого workflow.
+   */
+  string workflow_id = 2;
+
+  /**
+   * Добавляемый переход. Статусы задаются ключами статусов этого workflow.
+   */
+  WorkflowTransitionCreateRequest transition = 3;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   * Используется для проверки прав доступа к проекту.
+   */
+  string actor_user_id = 4;
+}
+
+message AddWorkflowTransitionRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  AddWorkflowTransitionRequestBody body = 2;
+}
+
+message ListProjectWorkflowsRequestBody {
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 1;
+
+  /**
+   * Идентификатор пользователя, инициировавшего запрос.
+   */
+  string actor_user_id = 2;
+}
+
+message ListProjectWorkflowsRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  ListProjectWorkflowsRequestBody body = 2;
+}
+
+message ProjectWorkflow {
+  /**
+   * Workflow со всеми статусами и всеми переходами, включая скрытые.
+   */
+  WorkflowResponse workflow = 1;
+
+  /**
+   * Типы задач проекта, которые работают по этому workflow.
+   */
+  repeated IssueType issue_types = 2;
+
+  /**
+   * Общий default workflow: им пользуются все проекты без своего workflow, поэтому он не меняется.
+   * Чтобы завести свои статусы и переходы, проекту нужен свой workflow (CreateWorkflow).
+   */
+  bool is_shared = 3;
+}
+
+message ListProjectWorkflowsResponse {
+  /**
+   * Workflow проекта, по одному на каждый различный workflow.
+   */
+  repeated ProjectWorkflow workflows = 1;
 }

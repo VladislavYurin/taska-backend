@@ -3,7 +3,7 @@ package ru.taska.mapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.TaskaEvent;
 import tools.jackson.databind.ObjectMapper;
 

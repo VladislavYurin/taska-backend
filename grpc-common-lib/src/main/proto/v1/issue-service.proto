@@ -4,6 +4,7 @@ package ru.taska.issue.v1;
 
 import "v1/common.proto";
 import "google/protobuf/timestamp.proto";
+import "v1/issue-attachment.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.issue.v1";
@@ -16,8 +17,8 @@ enum IssueEventType {
   ISSUE_EVENT_TYPE_ASSIGNED = 3;
   ISSUE_EVENT_TYPE_TRANSITIONED = 4;
   ISSUE_EVENT_TYPE_DELETED = 5;
-  ISSUE_LINK_EVENT_TYPE_CREATED = 6;
-  ISSUE_LINK_EVENT_TYPE_DELETED = 7;
+  ISSUE_EVENT_TYPE_LINK_CREATED = 6;
+  ISSUE_EVENT_TYPE_LINK_DELETED = 7;
   ISSUE_EVENT_TYPE_ATTACHMENT_UPLOADED = 8;
   ISSUE_EVENT_TYPE_ATTACHMENT_DELETED = 9;
   ISSUE_EVENT_TYPE_COMMENT_CREATED = 10;
@@ -64,6 +65,10 @@ service IssueService {
   /**
    * Создаёт новую задачу в проекте.
    */
+  // Internal only: callers must obtain project IDs from an authorized project list.
+  rpc CountProjectIssuesBatchInternal(CountProjectIssuesBatchInternalRequest)
+      returns (CountProjectIssuesBatchInternalResponse);
+
   rpc CreateIssue(CreateIssueRequest)
       returns (IssueResponse);
 
@@ -73,6 +78,15 @@ service IssueService {
   rpc GetIssue(GetIssueRequest)
       returns (IssueWithHistoryResponse);
 
+  /**
+   * Возвращает подробные данные задачи по идентификатору
+   */
+  rpc GetIssueDetails (GetIssueRequest) returns (GetIssueDetailsResponse);
+
+  /**
+   * Возвращает задачу по ключу
+   */
+  rpc GetIssueByKey(GetIssueByKeyRequest) returns (IssueResponse);
   /**
    * Мягкое удаление задачи.
    */
@@ -84,6 +98,12 @@ service IssueService {
    */
   rpc UpdateIssue(UpdateIssueRequest)
       returns (UpdateIssueResponse);
+
+  /**
+   * Частичное обновление задачи (PATCH) с оптимистичной блокировкой по версии.
+   */
+  rpc PatchIssue(PatchIssueRequest)
+      returns (PatchIssueResponse);
 
   /**
    * Возвращает список задач проекта с фильтрацией по статусу и исполнителю.
@@ -553,6 +573,95 @@ message UpdateIssueRequestBody {
   optional int32 remaining_estimate_minutes = 11;
 }
 
+message PatchIssueRequest {
+  /**
+   * Заголовок запроса.
+   */
+  ru.taska.common.v1.Header header = 1;
+
+  /**
+   * Тело запроса.
+   */
+  PatchIssueRequestBody body = 2;
+}
+
+message PatchIssueRequestBody {
+  /**
+   * Идентификатор задачи.
+   */
+  string issue_id = 1;
+
+  /**
+   * Идентификатор инициатора.
+   */
+  string actor_user_id = 2;
+
+  /**
+   * Версия задачи для оптимистичной блокировки (значение заголовка If-Match).
+   */
+  int32 version = 3;
+
+  /**
+   * Краткое описание задачи (не может быть очищено, NOT NULL в БД).
+   * Отсутствие поля — не изменять.
+   */
+  optional string summary = 4;
+
+  /**
+   * Приоритет задачи (не может быть очищен, NOT NULL в БД).
+   * Отсутствие поля — не изменять.
+   */
+  optional IssuePriority priority = 5;
+
+  /**
+   * Подробное описание задачи. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString description = 6;
+
+  /**
+   * Идентификатор исполнителя. Отсутствие поля — не изменять, is_null=true — снять исполнителя.
+   */
+  ru.taska.common.v1.NullableString assignee_id = 7;
+
+  /**
+   * Story points задачи. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableDouble story_points = 8;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd). Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString start_date = 9;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd). Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableString due_date = 10;
+
+  /**
+   * Исходная оценка времени в минутах. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableInt32 original_estimate_minutes = 11;
+
+  /**
+   * Оставшееся время в минутах. Отсутствие поля — не изменять, is_null=true — очистить.
+   */
+  ru.taska.common.v1.NullableInt32 remaining_estimate_minutes = 12;
+}
+
+message PatchIssueResponse {
+  /**
+   * Признак конфликта версий: version из If-Match не совпал с текущей версией в БД.
+   * true — изменения не применены, issue содержит актуальное состояние задачи.
+   */
+  bool version_conflict = 1;
+
+  /**
+   * Актуальное состояние задачи после операции (либо после неудачной попытки применить изменения).
+   */
+  IssueResponse issue = 2;
+}
+
 message ListIssuesRequest {
   /**
    * Заголовок запроса.
@@ -831,6 +940,21 @@ message IssueShortResponse {
    * Story points задачи.
    */
   optional double story_points = 7;
+
+  /**
+   * Идентификатор проекта.
+   */
+  string project_id = 8;
+
+  /**
+   * Ключ проекта.
+   */
+  string project_key = 9;
+
+  /**
+   * Ключ статуса задачи.
+   */
+  string status_key = 10;
 }
 
 message IssueResponse {
@@ -1389,6 +1513,11 @@ message IssueLinkResponse {
    * Временная метка мягкого удаления (null — запись активна).
    */
   google.protobuf.Timestamp deleted_at = 8;
+
+  /**
+  * Целевая связанная задача.
+  */
+  optional TargetIssueResponse target = 9;
 }
 
 message DeleteIssueLinkResponse {
@@ -1526,6 +1655,11 @@ message IssueCommentResponse {
    * Версия комментария.
    */
   int32 version = 8;
+
+  /**
+   * Автор комментария
+   */
+  optional ru.taska.common.v1.UserSummaryResponse author = 9;
 }
 
 /**
@@ -1753,6 +1887,16 @@ message IssueWatcherResponse {
    * Идентификатор пользователя, создавшего подписку.
    */
   string created_by = 6;
+
+  /**
+   * Отображаемое имя пользователя.
+   */
+  optional string display_name = 7;
+
+  /**
+   * Ссылка на аватар пользователя.
+   */
+  optional string avatar_url = 8;
 }
 
 /**
@@ -2005,7 +2149,7 @@ message ListIssuesForBoardRequestBody {
   optional string status_key = 5;
 
   /**
-   * Включать ли задачи в финальном статусе Done.
+   * Включать ли задачи в статусах категории DONE из workflow.
    */
   bool include_done = 6;
 
@@ -2019,6 +2163,12 @@ message ListIssuesForBoardRequestBody {
    */
 
   repeated string label_ids = 8;
+
+  /**
+   * Ключи статусов категории DONE из workflow проекта.
+   * При include_done=false исключаются именно эти ключи; пустой список не исключает статусы.
+   */
+  repeated string done_status_keys = 9;
 }
 
 /**
@@ -2084,4 +2234,242 @@ message ListIssuesForBoardResponse {
    * Список задач.
    */
   repeated IssueBoardResponse issues = 1;
+}
+
+/**
+ * Агрегированные данные о задаче с историей.
+ */
+message GetIssueDetailsResponse {
+  /**
+   * Детализированная информация о задаче.
+   */
+  IssueDetailsResponse issue = 1;
+
+  /**
+   * История изменений задачи.
+   */
+  repeated IssueHistoryResponse history = 2;
+}
+
+/**
+ * Детализированные данные задачи с агрегированными связями.
+ */
+message IssueDetailsResponse {
+  /**
+   * Уникальный идентификатор задачи (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Идентификатор проекта (UUID).
+   */
+  string project_id = 2;
+
+  /**
+   * Порядковый номер задачи в проекте.
+   */
+  int64 issue_number = 3;
+
+  /**
+   * Уникальный ключ задачи (например, API-12).
+   */
+  string issue_key = 4;
+
+  /**
+   * Тип задачи (TASK, BUG, EPIC и т.д.).
+   */
+  IssueType issue_type = 5;
+
+  /**
+   * Краткое наименование задачи.
+   */
+  string summary = 6;
+
+  /**
+   * Подробное описание задачи.
+   */
+  optional string description = 7;
+
+  /**
+   * Текущий статус задачи.
+   */
+  string status = 8;
+
+  /**
+   * Приоритет задачи.
+   */
+  IssuePriority priority = 9;
+
+  /**
+   * Исполнитель задачи.
+   */
+  ru.taska.common.v1.UserSummaryResponse assignee = 10;
+
+  /**
+   * Автор задачи.
+   */
+  ru.taska.common.v1.UserSummaryResponse reporter = 11;
+
+  /**
+   * Идентификатор исполнителя задачи.
+   */
+  optional string assignee_id = 12;
+
+  /**
+   * Идентификатор создателя задачи.
+   */
+  string reporter_id = 13;
+
+  /**
+   * Дата и время создания задачи (ISO-8601 UTC).
+   */
+  google.protobuf.Timestamp created_at = 14;
+
+  /**
+   * Дата и время последнего обновления задачи (ISO-8601 UTC).
+   */
+  google.protobuf.Timestamp updated_at = 15;
+
+  /**
+   * Версия оптимистичной блокировки.
+   */
+  int32 version = 16;
+
+  /**
+   * Метки задачи.
+   */
+  optional ListLabelsResponse labels = 17;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 18;
+
+  /**
+   * Дата начала задачи (ISO yyyy-MM-dd).
+   */
+  optional string start_date = 19;
+
+  /**
+   * Дата окончания задачи (ISO yyyy-MM-dd).
+   */
+  optional string due_date = 20;
+
+  /**
+   * Исходная оценка времени в минутах.
+   */
+  optional int32 original_estimate_minutes = 21;
+
+  /**
+   * Оставшееся время в минутах.
+   */
+  optional int32 remaining_estimate_minutes = 22;
+
+  /**
+   * Список наблюдателей задачи.
+   */
+  optional ListIssueWatchersResponse watchers = 23;
+
+  /**
+   * Флаг, отслеживает ли текущий пользователь эту задачу.
+   */
+  bool is_watching = 24;
+
+  /**
+   * Список связанных задач.
+   */
+  optional ListIssueLinksResponse links = 25;
+
+  /**
+   * Список вложений задачи.
+   */
+  optional ru.taska.issue.attachment.v1.ListAttachmentsResponse attachments = 26;
+
+  /**
+   * Общее количество комментариев к задаче.
+   */
+  int64 comment_count = 27;
+}
+
+/**
+ * Метка (тег) задачи.
+ */
+message IssueLabelResponse {
+  /**
+   * Идентификатор метки (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Название метки.
+   */
+  string name = 2;
+
+  /**
+   * Цвет метки в формате HEX.
+   */
+  string color = 3;
+}
+
+message ListLabelsResponse {
+  /**
+   * Список меток, привязанных к задаче.
+   */
+  repeated IssueLabelResponse labels = 1;
+}
+
+/**
+ * Краткая информация о целевой связанной задаче.
+ */
+message TargetIssueResponse {
+  /**
+   * Идентификатор целевой задачи (UUID).
+   */
+  string id = 1;
+
+  /**
+   * Ключ целевой задачи (например, API-7).
+   */
+  string issue_key = 2;
+
+  /**
+   * Название целевой задачи.
+   */
+  string summary = 3;
+
+  /**
+   * Идентификатор проекта целевой задачи (UUID).
+   */
+  string project_id = 4;
+
+  /**
+   * Ключ статуса целевой задачи.
+   */
+  string status_key = 5;
+}
+
+message GetIssueByKeyRequest {
+  ru.taska.common.v1.Header header = 1;
+  GetIssueByKeyRequestBody body = 2;
+}
+
+message GetIssueByKeyRequestBody {
+  string issue_key = 1;
+  string actor_user_id = 2;
+}
+
+message CountProjectIssuesBatchInternalRequest {
+  ru.taska.common.v1.Header header = 1;
+  repeated string project_ids = 2;
+  optional string issue_type_key = 3;
+  bool include_deleted = 4;
+}
+message ProjectIssueCount {
+  string project_id = 1;
+  int64 issue_count = 2;
+}
+message CountProjectIssuesBatchInternalResponse {
+  repeated ProjectIssueCount items = 1;
+  // Older servers ignore filters; destructive callers must fail closed.
+  bool filters_applied = 2;
 }

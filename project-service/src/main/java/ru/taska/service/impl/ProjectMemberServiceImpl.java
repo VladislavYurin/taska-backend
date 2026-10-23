@@ -1,10 +1,5 @@
 package ru.taska.service.impl;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +13,9 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectMemberDto;
+import ru.taska.domain.dto.ProjectMemberStatsDto;
+import ru.taska.domain.dto.ProjectMemberStatsRow;
+import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ProjectMemberRepository;
@@ -25,8 +23,14 @@ import ru.taska.repository.ProjectRepository;
 import ru.taska.service.OutboxEventService;
 import ru.taska.service.ProjectMemberService;
 import ru.taska.service.validator.ProjectMemberValidator;
-import ru.taska.service.validator.ProjectValidator;
 import ru.taska.transport.grpc.client.GrpcAuthServiceClient;
+
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -36,15 +40,14 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectRepository projectRepository;
     private final OutboxEventService outboxEventService;
     private final ProjectMemberValidator projectMemberValidator;
-    private final ProjectValidator projectValidator;
     private final GrpcAuthServiceClient authServiceClient;
+    private final ru.taska.service.ProjectWriteGuard writeGuard;
 
     @Override
     @Transactional
     public Mono<ProjectMember> addProjectMember(String requestId, String nodeId, UUID addedMemberId,
                                                 UUID actorUserId, ProjectRole role, UUID projectId) {
-        return projectValidator.isArchived(requestId, nodeId, projectId)
-                .then(projectMemberValidator.validateBeforeAdd(requestId, nodeId, actorUserId, addedMemberId, projectId))
+        return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeAdd(requestId, nodeId, actorUserId, addedMemberId, projectId)))
                 .flatMap(b -> {
                     ProjectMember addedMember = ProjectMember.builder()
                             .userId(addedMemberId)
@@ -67,8 +70,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     @Transactional
     public Mono<ProjectMember> rmProjectMember(String requestId, String nodeId, UUID deletedMemberId,
                                                UUID actorUserId, UUID projectId) {
-        return projectValidator.isArchived(requestId, nodeId, projectId)
-                .then(projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, deletedMemberId, projectId))
+        return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, deletedMemberId, projectId)))
                 .flatMap( b -> {
                         ProjectMember deletedMember = ProjectMember.builder()
                                 .userId(deletedMemberId)
@@ -88,8 +90,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     @Transactional()
     public Mono<ProjectMember> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId,
                                                        UUID actorUserId, ProjectRole role, UUID projectId) {
-    return projectValidator.isArchived(requestId, nodeId, projectId)
-            .then(projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, changedMemberId, projectId))
+    return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, changedMemberId, projectId)))
             .flatMap(b -> {
                 ProjectMember changedMember = ProjectMember.builder()
                         .userId(changedMemberId)
@@ -105,33 +106,33 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                             requestId, nodeId, changedMemberId, role, projectId));
     }
 
-//    @Override
-//    public Mono<ProjectMembershipInfoDto> checkProjectMemberRole(
-//            String requestId,
-//            String nodeId,
-//            UUID projectId,
-//            UUID userId
-//    ) {
-//        return projectRepository.findById(projectId)
-//                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectId(userId, projectId)
-//                        .map(pm -> this.createProjectMembershipInfoDto(pm.getRole(), true, true))
-//                        .switchIfEmpty(Mono.defer(() -> Mono.just(
-//                                this.createProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, true)
-//                        )))
-//                )
-//                .switchIfEmpty(Mono.defer(() -> Mono.just(
-//                        this.createProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, false)
-//                )))
-//                .doOnSuccess(t -> {
-//                    if (t != null) {
-//                        log.info("[{}][{}] Checking project role completed: " +
-//                                        "projectId={}, userId={}, role={}, isMember={}, projectExists={}",
-//                                requestId, nodeId, projectId, userId,
-//                                t.role(), t.isMember(), t.isProjectExists()
-//                        );
-//                    }
-//                });
-//    }
+    @Override
+    public Mono<ProjectMembershipInfoDto> checkProjectMemberRole(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID userId
+    ) {
+        return projectRepository.findById(projectId)
+                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectId(userId, projectId)
+                        .map(pm -> new ProjectMembershipInfoDto(pm.getRole(), true, true, project.getArchivedAt() != null))
+                        .switchIfEmpty(Mono.defer(() -> Mono.just(
+                                new ProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, true, project.getArchivedAt() != null)
+                        )))
+                )
+                .switchIfEmpty(Mono.defer(() -> Mono.just(
+                        this.createProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, false)
+                )))
+                .doOnSuccess(t -> {
+                    if (t != null) {
+                        log.info("[{}][{}] Checking project role completed: " +
+                                        "projectId={}, userId={}, role={}, isMember={}, projectExists={}",
+                                requestId, nodeId, projectId, userId,
+                                t.role(), t.isMember(), t.isProjectExists()
+                        );
+                    }
+                });
+    }
 
     @Override
     public Flux<ProjectMemberDetailsDto> getProjectMembers(
@@ -150,6 +151,34 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                 )
                 .buffer(100)
                 .concatMap(batch -> enrichMembersBatch(batch, requestId, nodeId));
+    }
+
+    @Override
+    public Flux<ProjectMemberStatsDto> getMemberStatsBatch(
+            List<UUID> projectIds, UUID actorUserId, String requestId, String nodeId) {
+        if (projectIds.isEmpty()) {
+            return Flux.empty();
+        }
+        return projectMemberRepository.findMemberStatsBatch(projectIds, actorUserId).collectList()
+                .flatMapMany(rows -> {
+                    if (rows.isEmpty()) {
+                        return Flux.empty();
+                    }
+                    var userIds = rows.stream().map(ProjectMemberStatsRow::userId).distinct().toList();
+                    return authServiceClient.getUserDetailsByIds(userIds, requestId, nodeId).flatMapMany(response -> {
+                        var users = response.getUserDetailsList().stream()
+                                .collect(Collectors.toMap(UserDetails::getUserId, Function.identity(), (a, b) -> a));
+                        var grouped = rows.stream().collect(Collectors.groupingBy(
+                                ProjectMemberStatsRow::projectId,
+                                LinkedHashMap::new, Collectors.toList()));
+                        return Flux.fromIterable(grouped.entrySet()).map(entry ->
+                                new ProjectMemberStatsDto(entry.getKey(),
+                                        entry.getValue().getFirst().memberCount(), entry.getValue().stream()
+                                                .map(member -> buildProjectMemberDetailsDto(new ProjectMemberDto(
+                                                        member.userId(), member.role(), member.addedAt()),
+                                                        users.get(member.userId().toString()))).toList()));
+                    });
+                });
     }
 
     private Mono<Void> ensureProjectExists(String requestId, String nodeId, UUID projectId) {
@@ -199,7 +228,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private ProjectMemberDetailsDto buildProjectMemberDetailsDto(ProjectMemberDto member, UserDetails user) {
         var builder = ProjectMemberDetailsDto.builder()
                 .userId(member.userId())
-                .role(member.role());
+                .role(member.role())
+                .addedAt(member.addedAt());
 
         if (user != null) {
             builder.displayName(user.getDisplayName())
@@ -223,6 +253,15 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                 .contentType(avatarResponse.getContentType())
                 .sizeBytes(avatarResponse.getSizeBytes())
                 .downloadUrl(avatarResponse.getDownloadUrl())
+                .build();
+    }
+
+    private ProjectMembershipInfoDto createProjectMembershipInfoDto(ProjectRole role, Boolean isMember, Boolean
+            isProjectExists) {
+        return ProjectMembershipInfoDto.builder()
+                .role(role)
+                .isMember(isMember)
+                .isProjectExists(isProjectExists)
                 .build();
     }
 

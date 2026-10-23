@@ -1,27 +1,29 @@
 package ru.taska.service;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueComment;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssueHistory;
-import ru.taska.domain.OutboxEvent;
-import ru.taska.domain.PageResult;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueComment;
+import ru.taska.domain.dto.IssueCommentWithAuthor;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssueHistory;
+import ru.taska.domain.entity.OutboxEvent;
+import ru.taska.domain.util.PageResult;
+import ru.taska.domain.dto.ProjectRole;
+import ru.taska.domain.dto.UserSummary;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -30,10 +32,13 @@ import ru.taska.repository.IssueCommentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.impl.CommentServiceImpl;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
+import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,6 +47,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,10 +73,10 @@ class CommentServiceImplTest {
     private OutboxEventService outboxEventService;
 
     @Mock
-    private ProjectAccessibility projectAccessibility;
+    private ProjectRoleChecker projectRoleChecker;
 
     @Mock
-    private TransactionalOperator transactionalOperator;
+    private GrpcAuthServiceClient authServiceClient;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -89,9 +95,14 @@ class CommentServiceImplTest {
     private IssueComment comment;
     private IssueHistory issueHistory;
     private OutboxEvent outboxEvent;
+    private UserSummary authorSummary;
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         projectId = UUID.randomUUID();
         issueId = UUID.randomUUID();
         actorUserId = UUID.randomUUID();
@@ -189,16 +200,8 @@ class CommentServiceImplTest {
                 .eventType("COMMENT_CREATED")
                 .build();
 
-
-        lenient().when(issueRepository.findActiveById(any()))
-                 .thenReturn(Mono.just(issue));
-        lenient().when(projectAccessibility.check(any(), any(), any(), any(), any()))
-                 .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                      .setProjectKey("TSK")
-                                                      .setCurrentUserRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_MEMBER)
-                                                      .build()));
-        lenient().when(transactionalOperator.transactional(any(Mono.class)))
-                 .thenAnswer(inv -> inv.getArgument(0));
+        // Создание объекта с автором комментария
+        authorSummary = new UserSummary(actorUserId, "Comment Author", "/test/avatar.png");
     }
 
     // ==================== ТЕСТЫ ДЛЯ addComment ====================
@@ -207,6 +210,8 @@ class CommentServiceImplTest {
     @DisplayName("addComment: должен успешно добавить комментарий")
     void addComment_success() {
         // Arrange
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -234,11 +239,12 @@ class CommentServiceImplTest {
                 .expectNextMatches(savedComment -> savedComment.getId().equals(commentId))
                 .verifyComplete();
 
-        verify(projectAccessibility).check(
+        verify(projectRoleChecker).checkProjectWriteRole(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(issueRepository).findActiveByIdForUpdate(issueId);
         verify(commentRepository).save(any(IssueComment.class));
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_CREATED, EventType.ISSUE_COMMENT_CREATED);
     }
 
     @Test
@@ -286,6 +292,8 @@ class CommentServiceImplTest {
                 .updatedAt(Instant.now())
                 .build();
 
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -322,6 +330,7 @@ class CommentServiceImplTest {
         verify(commentRepository).updateWithVersionCheckAndAuthor(
                 eq(commentId), eq(newBody), eq(1), eq(actorUserId)
         );
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_UPDATED, EventType.ISSUE_COMMENT_UPDATED);
     }
 
     @Test
@@ -330,11 +339,10 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
-                .thenReturn(Mono.just(issue));
-
-        when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
 
         when(commentRepository.findActiveById(commentId))
@@ -371,6 +379,8 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -415,6 +425,8 @@ class CommentServiceImplTest {
                 .deletedAt(Instant.now())
                 .build();
 
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -447,6 +459,23 @@ class CommentServiceImplTest {
 
         verify(issueRepository).findActiveByIdForUpdate(issueId);
         verify(commentRepository).softDeleteWithVersionCheck(eq(commentId), eq(1));
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_DELETED, EventType.ISSUE_COMMENT_DELETED);
+    }
+
+    private void assertMetadataOnlyPayload(IssueEventType historyType, EventType eventType) {
+        ArgumentCaptor<JsonNode> history = ArgumentCaptor.forClass(JsonNode.class);
+        ArgumentCaptor<JsonNode> outbox = ArgumentCaptor.forClass(JsonNode.class);
+        verify(issueHistoryService).saveIssueHistory(
+                eq(requestId), eq(nodeId), eq(issueId), eq(actorUserId), eq(historyType), history.capture());
+        verify(outboxEventService).saveOutboxEvent(
+                eq(requestId), eq(nodeId), eq(AggregateType.ISSUE), eq(issueId), eq(eventType), outbox.capture());
+        for (JsonNode payload : java.util.List.of(history.getValue(), outbox.getValue())) {
+            Assertions.assertEquals(commentId.toString(), payload.path("commentId").asText());
+            Assertions.assertEquals(actorUserId.toString(), payload.path("actorUserId").asText());
+            Assertions.assertFalse(payload.has("body"));
+            Assertions.assertFalse(payload.has("oldBody"));
+            Assertions.assertFalse(payload.has("newBody"));
+        }
     }
 
     @Test
@@ -455,6 +484,8 @@ class CommentServiceImplTest {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
 
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
                 .thenReturn(Mono.just(issue));
@@ -491,6 +522,8 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 10;
 
+        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -501,8 +534,11 @@ class CommentServiceImplTest {
         when(commentRepository.findActiveByIssueIdOrderByCreatedAtDesc(issueId))
                 .thenReturn(Flux.just(comment));
 
+        when(authServiceClient.getUserProfiles(Mockito.anySet(), Mockito.any(), Mockito.anyString()))
+                .thenReturn(Mono.just(Map.of(actorUserId, authorSummary)));
+
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -513,21 +549,28 @@ class CommentServiceImplTest {
 
         // Assert
         StepVerifier.create(result)
-                .expectNextMatches(pageResult -> pageResult.totalCount() == 1)
+                .consumeNextWith(pageResult -> {
+                    Assertions.assertEquals(1, pageResult.totalCount());
+
+                    Assertions.assertEquals(authorSummary, pageResult.items().get(0).author());
+                })
                 .verifyComplete();
 
         verify(issueRepository).findActiveById(issueId);
-        verify(projectAccessibility).check(
+        verify(projectRoleChecker).checkProjectRole(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(commentRepository).countActiveByIssueId(issueId);
         verify(commentRepository).findActiveByIssueIdOrderByCreatedAtDesc(issueId);
+        verify(authServiceClient).getUserProfiles(Set.of(actorUserId), requestId, nodeId);
     }
 
     @Test
     @DisplayName("listComments: должен использовать значения по умолчанию для пагинации")
     void listComments_defaultPagination() {
         // Arrange
+        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -539,7 +582,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -554,6 +597,8 @@ class CommentServiceImplTest {
                 .verifyComplete();
 
         verify(commentRepository).findActiveByIssueIdOrderByCreatedAtDesc(issueId);
+
+        verifyNoInteractions(authServiceClient);
     }
 
     @Test
@@ -563,6 +608,8 @@ class CommentServiceImplTest {
         int page = 0;
         int pageSize = 100;
 
+        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.just(issue));
@@ -574,7 +621,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -595,8 +642,6 @@ class CommentServiceImplTest {
         // Arrange
         when(issueRepository.findActiveById(issueId))
                 .thenReturn(Mono.empty());
-        when(issueRepository.findActiveById(issueId))
-                .thenReturn(Mono.empty());
 
         when(commentRepository.countActiveByIssueId(issueId))
                 .thenReturn(Mono.just(0L));
@@ -605,7 +650,7 @@ class CommentServiceImplTest {
                 .thenReturn(Flux.empty());
 
         // Act
-        Mono<PageResult<IssueComment>> result = commentService.listComments(
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
                 requestId,
                 nodeId,
                 issueId,
@@ -620,7 +665,52 @@ class CommentServiceImplTest {
                     assert error instanceof DomainException;
                     DomainException ex = (DomainException) error;
                     assert ex.getStatus() == DomainStatus.NOT_FOUND;
+                    assert ex.getMessage().contains("Issue not found");
                 })
                 .verify();
+
+        verifyNoInteractions(authServiceClient);
+
+    }
+
+    @Test
+    @DisplayName("listComments: должен вернуть комментарий с author = null, если gRPC сервис профилей упал с ошибкой")
+    void listComments_grpcAuthServiceError_returnsCommentWithNullAuthor() {
+        UUID authorId = UUID.randomUUID();
+
+        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+                .thenReturn(Mono.empty());
+
+        when(issueRepository.findActiveById(issueId))
+                .thenReturn(Mono.just(issue));
+
+        when(commentRepository.countActiveByIssueId(issueId))
+                .thenReturn(Mono.just(1L));
+
+        when(commentRepository.findActiveByIssueIdOrderByCreatedAtDesc(issueId))
+                .thenReturn(Flux.just(comment));
+
+        when(authServiceClient.getUserProfiles(eq(Set.of(authorId)), eq(requestId), eq(nodeId)))
+                .thenReturn(Mono.error(new RuntimeException("gRPC service unavailable")));
+
+        // Act
+        Mono<PageResult<IssueCommentWithAuthor>> result = commentService.listComments(
+                requestId,
+                nodeId,
+                issueId,
+                actorUserId,
+                0,
+                10
+        );
+
+        // Assert
+        StepVerifier.create(result)
+                .consumeNextWith(pageResult -> {
+                    Assertions.assertEquals(1, pageResult.totalCount());
+
+                    IssueCommentWithAuthor commentWithAuthor = pageResult.items().get(0);
+                    Assertions.assertNull(commentWithAuthor.author());
+                })
+                .verifyComplete();
     }
 }

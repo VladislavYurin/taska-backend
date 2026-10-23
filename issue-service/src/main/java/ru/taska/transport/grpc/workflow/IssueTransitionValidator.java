@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 

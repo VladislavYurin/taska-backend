@@ -8,10 +8,12 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.IssueApi;
+import ru.taska.controller.utils.EnumFilterUtils;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
+import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
@@ -19,6 +21,7 @@ import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
@@ -27,6 +30,8 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.transport.grpc.GrpcIssueServiceClient;
+
+import java.util.Collections;
 
 /**
  * REST-контроллер для работы с задачами.
@@ -46,12 +51,23 @@ public class IssueController implements IssueApi {
      * Возвращает задачу вместе с историей изменений.
      */
     @Override
-    public Mono<ResponseEntity<IssueWithHistoryResponseDto>> getIssue(
+    public Mono<ResponseEntity<IssueDetailsWithHistoryResponseDto>> getIssue(
             String issueId,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.getIssue(issueId, context)
+                issueClient.getIssueDetails(issueId, context)
+                        .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Возвращает задачу по ключу.
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> getIssueByKey(String issueKey, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.getIssueByKey(issueKey, context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -95,7 +111,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Назначает исполнителя задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<IssueResponseDto>> assignIssue(
             String issueId,
@@ -110,7 +129,10 @@ public class IssueController implements IssueApi {
 
     /**
      * Обновляет основные поля задачи.
+     *
+     * @deprecated используйте {@link #patchIssue}
      */
+    @Deprecated
     @Override
     public Mono<ResponseEntity<UpdateIssueResponseDto>> updateIssue(
             String issueId,
@@ -120,6 +142,21 @@ public class IssueController implements IssueApi {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 issueClient.updateIssue(issueId, request, context)
                         .map(ResponseEntity::ok)
+        );
+    }
+
+    /**
+     * Частично обновляет задачу (PATCH) с оптимистичной блокировкой по версии (заголовок If-Match).
+     */
+    @Override
+    public Mono<ResponseEntity<IssueResponseDto>> patchIssue(
+            String issueId,
+            String ifMatch,
+            Mono<PatchIssueRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                issueClient.patchIssue(issueId, ifMatch, request, context)
         );
     }
 
@@ -220,20 +257,31 @@ public class IssueController implements IssueApi {
                         "priority={}, issueType={}, page={}, pageSize={}",
                 query, projectId, statusKey, assigneeId, reporterId, priority, issueType, page, pageSize);
 
-        SearchIssuesRequestDto request = issueMapper.toSearchRequestDto(
-                query,
-                projectId,
-                statusKey,
-                assigneeId,
-                reporterId,
-                priority,
-                issueType,
-                page,
-                pageSize);
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context -> {
+            if (EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
+                return Mono.just(ResponseEntity.ok(emptySearchIssuesResponse()));
+            }
 
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                        issueClient.searchIssues(request, context)
-                                .map(ResponseEntity::ok));
+            SearchIssuesRequestDto request = issueMapper.toSearchRequestDto(
+                    query,
+                    projectId,
+                    statusKey,
+                    assigneeId,
+                    reporterId,
+                    priority,
+                    issueType,
+                    page,
+                    pageSize);
+
+            return issueClient.searchIssues(request, context)
+                    .map(ResponseEntity::ok);
+        });
+    }
+
+    private SearchIssuesResponseDto emptySearchIssuesResponse() {
+        return new SearchIssuesResponseDto()
+                .items(Collections.emptyList())
+                .totalCount(0);
     }
 }
 

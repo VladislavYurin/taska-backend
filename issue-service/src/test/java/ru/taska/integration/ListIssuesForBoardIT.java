@@ -14,15 +14,15 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.labels.IssueLabels;
-import ru.taska.domain.labels.ProjectLabels;
+import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.repository.labels.ProjectLabelsRepository;
@@ -94,18 +94,19 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @BeforeEach
     void setup(){
-        Mockito.when(projectServiceStub.getProject(Mockito.any(GetProjectRequest.class)))
-               .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                                                    .setProjectKey("TSK")
-                                                    .setCurrentUserRole(ProjectRole.PROJECT_ROLE_MEMBER)
-                                                    .build()));
+        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                                .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
+                                .setIsMember(true)
+                                .setProjectExists(true).setProjectArchived(false)
+                        .build()));
     }
 
     @Test
     void shouldReturnIssueFromGivenProject(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, null, null)
+                null, null, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(4);
 
@@ -122,7 +123,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByIssueType(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null,  null, ISSUE_TYPE_BUG, true,null,  null)
+                null,  null, ISSUE_TYPE_BUG, true, List.of("DONE"),null,  null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -139,7 +140,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByAssignee(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, ASSIGNEE_ID_1, null, true, null, null)
+                null, ASSIGNEE_ID_1, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -156,7 +157,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnIssuesFilteredByStatusKey(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                ISSUE_STATUS_KEY_TODO, null, null, true, null, null)
+                ISSUE_STATUS_KEY_TODO, null, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -173,7 +174,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldExcludeDoneIssuesWhenIncludeDoneIsFalse(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, false, null,null)
+                null, null, null, false, List.of("DONE"), null,null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -190,7 +191,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnEmptyListWhenStatusKeyDoesNotMatch(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID,  ACTOR_USER_ID,  PROJECT_ID_1,
-                ISSUE_STATUS_KEY_IN_PROGRESS, null, null, true, null, null)
+                ISSUE_STATUS_KEY_IN_PROGRESS, null, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
         }).verifyComplete();
@@ -200,7 +201,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldLimitResultsPerColumnNotTotalWhenPageSizePerColumnIsSet(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, null, 1)
+                null, null, null, true, List.of("DONE"), null, 1)
         ).assertNext(result -> {
             Map<String, List<IssueBoardResponse>> byStatus = result.stream()
                     .collect(Collectors.groupingBy(IssueBoardResponse::getStatusKey));
@@ -242,7 +243,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of(label.getId()), null)
+                null, null, null, true, List.of("DONE"), List.of(label.getId()), null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -268,7 +269,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of(unusedLabel.getId()), null)
+                null, null, null, true, List.of("DONE"), List.of(unusedLabel.getId()), null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
         }).verifyComplete();
@@ -336,7 +337,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, null, null)
+                null, null, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             IssueBoardResponse card = result.stream()
                     .filter(r -> r.getIssueKey().equals("TEST-1"))
@@ -352,7 +353,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void shouldReturnEmptyLabelIdsListForIssueWithoutLabels(){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, null, null)
+                null, null, null, true, List.of("DONE"), null, null)
         ).assertNext(result -> {
             IssueBoardResponse card = result.stream()
                     .filter(r -> r.getIssueKey().equals("TEST-1"))

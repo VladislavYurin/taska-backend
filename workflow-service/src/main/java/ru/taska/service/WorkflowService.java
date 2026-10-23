@@ -1,10 +1,14 @@
 package ru.taska.service;
 
 import reactor.core.publisher.Mono;
+import ru.taska.domain.ProjectWorkflowAggregate;
 import ru.taska.domain.WorkflowAggregate;
+import ru.taska.dto.CreateWorkflowStatusDto;
+import ru.taska.dto.CreateWorkflowTransitionDto;
 import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.dto.WorkflowCreationDto;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface WorkflowService {
@@ -23,4 +27,12 @@ public interface WorkflowService {
     );
 
     Mono<WorkflowAggregate> createWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto);
+
+    Mono<WorkflowAggregate> addStatus(String requestId, String nodeId, UUID actorUserId,
+                                      UUID projectId, UUID workflowId, CreateWorkflowStatusDto status);
+
+    Mono<WorkflowAggregate> addTransition(String requestId, String nodeId, UUID actorUserId,
+                                          UUID projectId, UUID workflowId, CreateWorkflowTransitionDto transition);
+
+    Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(UUID projectId);
 }

@@ -1,6 +1,7 @@
 package ru.taska.mapper;
 
 import com.google.protobuf.Timestamp;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.attachment.v1.AttachmentResponse;
 import ru.taska.api.issue.attachment.v1.CreateAttachmentUploadUrlResponse;
@@ -15,22 +16,27 @@ import java.net.URI;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Маппер для преобразования Protobuf-ответов gRPC-сервиса в REST DTO вложений.
  */
 @Component
+@RequiredArgsConstructor
 public class IssueAttachmentMapper {
+    public final UserProfileMapper userProfileMapper;
 
     public IssueAttachmentsResponseDto toIssueAttachmentsResponseDto(ListAttachmentsResponse response) {
-        var items = response.getAttachmentsList().stream()
+        var restDto = new IssueAttachmentsResponseDto();
+        restDto.setItems(toRestIssueAttachmentList(response));
+        return restDto;
+    }
+
+    public List<IssueAttachmentDto> toRestIssueAttachmentList(ListAttachmentsResponse response) {
+        return response.getAttachmentsList().stream()
                 .map(this::toIssueAttachmentDto)
                 .toList();
-
-        var restDto = new IssueAttachmentsResponseDto();
-        restDto.setItems(items);
-        return restDto;
     }
 
     public IssueAttachmentDto toIssueAttachmentDto(AttachmentResponse r) {
@@ -45,6 +51,10 @@ public class IssueAttachmentMapper {
 
         String checksum = r.getChecksum();
         dto.setChecksum(checksum.isBlank() ? null : checksum);
+
+        if (r.hasUploadedByUser()) {
+            dto.uploadedByUser(userProfileMapper.toUserSummaryDto(r.getUploadedByUser()));
+        }
         return dto;
     }
 

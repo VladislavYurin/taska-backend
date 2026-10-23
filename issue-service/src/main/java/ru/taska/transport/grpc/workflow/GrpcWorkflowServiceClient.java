@@ -9,7 +9,7 @@ import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
 import ru.taska.api.workflow.v1.ValidateTransitionRequestBody;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
-import ru.taska.domain.Issue;
+import ru.taska.domain.entity.Issue;
 import ru.taska.mapper.IssueMapper;
 
 import java.util.UUID;

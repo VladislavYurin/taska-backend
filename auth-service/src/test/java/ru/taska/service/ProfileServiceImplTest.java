@@ -40,7 +40,7 @@ class ProfileServiceImplTest {
     private static final String FILE_NAME = "test-avatar.png";
     private static final String CONTENT_TYPE = "image/png";
     private static final long SIZE_BYTES = 102400L;
-    private static final String NEW_OBJECT_KEY = "new-object-key";
+    private String NEW_OBJECT_KEY;
     public static final String TEST_USER_EMAIL = "test@example.com";
 
     @Mock
@@ -61,6 +61,7 @@ class ProfileServiceImplTest {
 
     private UUID testUserId;
     private UUID testUserId2;
+    private UUID testUserId3;
 
     private User testUser;
     private UserAvatar testAvatar;
@@ -72,7 +73,9 @@ class ProfileServiceImplTest {
     void setUp() {
         profileServiceImpl = new ProfileServiceImpl(userRepository, userAvatarRepository, storageClient, profileMapper, transactionalOperator);
         testUserId = UUID.randomUUID();
+        NEW_OBJECT_KEY = "avatars/" + testUserId + "/" + UUID.randomUUID();
         testUserId2 = UUID.randomUUID();
+        testUserId3 = UUID.randomUUID();
 
         testUser = User.builder()
                 .id(testUserId)
@@ -253,7 +256,7 @@ class ProfileServiceImplTest {
             PresignedUploadResult expectedResult = new PresignedUploadResult("object-key-123", URL,300);
 
             Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
-            Mockito.when(storageClient.createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES))
+            Mockito.when(storageClient.createPresignedUploadUrl(Mockito.eq(CONTENT_TYPE), Mockito.eq(SIZE_BYTES), Mockito.startsWith("avatars/" + testUserId + "/")))
                     .thenReturn(Mono.just(expectedResult));
 
             // When & Then
@@ -262,7 +265,7 @@ class ProfileServiceImplTest {
                     .verifyComplete();
 
             Mockito.verify(userRepository).findById(testUserId);
-            Mockito.verify(storageClient).createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES);
+            Mockito.verify(storageClient).createPresignedUploadUrl(Mockito.eq(CONTENT_TYPE), Mockito.eq(SIZE_BYTES), Mockito.startsWith("avatars/" + testUserId + "/"));
         }
     }
 
@@ -400,6 +403,21 @@ class ProfileServiceImplTest {
         }
     }
 
+    @Test
+    void foreignOrUnknownKey_isRejectedBeforeStorageAndMutation() {
+        Mockito.when(userRepository.findById(testUserId)).thenReturn(Mono.just(testUser));
+        Mockito.when(userAvatarRepository.findByUserId(testUserId)).thenReturn(Mono.empty());
+        for (String key : java.util.List.of("avatars/" + testUserId2 + "/" + UUID.randomUUID(),
+                "unknown", "avatars/" + testUserId + "/../other")) {
+            StepVerifier.create(profileServiceImpl.confirmAvatarUpload(testUserId, key, FILE_NAME, CONTENT_TYPE))
+                    .expectErrorMatches(error -> error instanceof DomainException domain && domain.getStatus() == DomainStatus.NOT_FOUND)
+                    .verify();
+        }
+        Mockito.verifyNoInteractions(storageClient);
+        Mockito.verify(userAvatarRepository, Mockito.never()).save(Mockito.any());
+        Mockito.verify(userAvatarRepository, Mockito.never()).delete(Mockito.any());
+    }
+
     @Nested
     @DisplayName("deleteMyAvatar Tests")
     class DeleteMyAvatarTests {
@@ -528,6 +546,66 @@ class ProfileServiceImplTest {
 
             Mockito.verify(userRepository, Mockito.times(1))
                     .findUsersWithAvatars(expectedDistinctIds);
+        }
+
+        @Test
+        @DisplayName("getUserDetailsByIds: при ошибке S3 для одного пользователя поток не падает, а возвращает его без downloadUrl")
+        void getUserDetailsByIds_whenStorageFailsForOneUser_shouldNotFailStreamAndReturnUserWithoutUrl() {
+            AvatarDto validAvatar = AvatarDto.builder()
+                    .id(UUID.randomUUID())
+                    .objectKey("avatars/user1.png")
+                    .build();
+
+            AvatarDto brokenAvatar = AvatarDto.builder()
+                    .id(UUID.randomUUID())
+                    .objectKey("avatars/broken.png")
+                    .build();
+
+            UserDetailsDto user1 = UserDetailsDto.builder()
+                    .userId(testUserId)
+                    .displayName("John Doe")
+                    .avatar(validAvatar)
+                    .build();
+
+            UserDetailsDto user2 = UserDetailsDto.builder()
+                    .userId(testUserId2)
+                    .displayName("Jane Smith")
+                    .avatar(brokenAvatar)
+                    .build();
+
+            UserDetailsDto user3 = UserDetailsDto.builder()
+                    .userId(testUserId3)
+                    .displayName("Jane Doe")
+                    .avatar(validAvatar)
+                    .build();
+
+            Mockito.when(userRepository.findUsersWithAvatars(Mockito.anyCollection()))
+                    .thenReturn(Flux.just(user1, user2, user3));
+
+            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/user1.png"))
+                    .thenReturn(Mono.just(URL));
+
+            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/broken.png"))
+                    .thenReturn(Mono.error(new RuntimeException("MinIO S3 error: NoSuchKey (Object does not exist)")));
+
+            Flux<UserDetailsDto> resultFlux = profileServiceImpl.getUserDetailsByIds(List.of(testUserId, testUserId2, testUserId3));
+
+            StepVerifier.create(resultFlux)
+                    .assertNext(resUser1 -> {
+                        Assertions.assertEquals(testUserId, resUser1.userId());
+                        Assertions.assertNotNull(resUser1.avatar());
+                        Assertions.assertEquals(URL, resUser1.avatar().getDownloadUrl());
+                    })
+                    .assertNext(resUser2 -> {
+                        Assertions.assertEquals(testUserId2, resUser2.userId());
+                        Assertions.assertNull(resUser2.avatar());
+                    })
+                    .assertNext(resUser3 -> {
+                        Assertions.assertEquals(testUserId3, resUser3.userId());
+                        Assertions.assertNotNull(resUser3.avatar());
+                        Assertions.assertEquals(URL, resUser3.avatar().getDownloadUrl());
+                    })
+                    .verifyComplete();
         }
     }
 }

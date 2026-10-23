@@ -5,7 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("grpc.client")
 public record GrpcClientProperties(
         ExternalService projectService,
-        ExternalService workflowService
+        ExternalService workflowService,
+        ExternalService authService
 ) {
 
     public record ExternalService(

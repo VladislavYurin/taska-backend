@@ -2,7 +2,7 @@ package ru.taska.repository;
 
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.IdempotencyKey;
+import ru.taska.domain.entity.IdempotencyKey;
 
 import java.util.UUID;
 

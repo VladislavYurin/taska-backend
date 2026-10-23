@@ -12,24 +12,23 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueLink;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueLink;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.IssueLinkType;
-import ru.taska.domain.ProjectRole;
-import ru.taska.domain.dto.IssueLinkInfoDto;
+import ru.taska.domain.entity.IssueLinkType;
+import ru.taska.domain.dto.ProjectRole;
+import ru.taska.domain.projection.IssueLinkInfoDto;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 @ExtendWith(MockitoExtension.class)
 class IssueLinkServiceImplTest {
@@ -66,7 +65,7 @@ class IssueLinkServiceImplTest {
     private IssueLinkRepository issueLinkRepository;
 
     @Mock
-    private ProjectAccessibility projectAccessibility;
+    private ProjectRoleChecker projectRoleChecker;
 
     @Mock
     private IssueProperties properties;
@@ -85,6 +84,10 @@ class IssueLinkServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         issue = Issue.builder()
                 .id(SOURCE_ISSUE_ID)
                 .projectId(PROJECT_ID)
@@ -123,14 +126,14 @@ class IssueLinkServiceImplTest {
         Mockito.lenient().when(allowedRoles.deleteIssueLinksRoles())
                 .thenReturn(Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER));
 
-        Mockito.lenient().when(projectAccessibility.check(
+        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class),
                         Mockito.anySet()
                 ))
-                .thenReturn(Mono.just(ProjectResponse.newBuilder().build()));
+                .thenReturn(Mono.empty());
     }
 
     @Test
@@ -150,7 +153,7 @@ class IssueLinkServiceImplTest {
         Mockito.verify(issueRepository).findActiveById(SOURCE_ISSUE_ID);
         Mockito.verify(properties).allowedRoles();
         Mockito.verify(allowedRoles).listIssueLinksRoles();
-        Mockito.verify(projectAccessibility).check(
+        Mockito.verify(projectRoleChecker).checkProjectRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -175,8 +178,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveById(SOURCE_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles,
-                                         projectAccessibility, issueLinkRepository);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, issueLinkRepository);
     }
 
     @Test
@@ -215,7 +217,7 @@ class IssueLinkServiceImplTest {
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
         Mockito.verify(properties).allowedRoles();
         Mockito.verify(allowedRoles).createIssueLinksRoles();
-        Mockito.verify(projectAccessibility).check(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -251,8 +253,7 @@ class IssueLinkServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verifyNoMoreInteractions(issueRepository, properties, allowedRoles,
-                                         projectAccessibility, executor);
+        Mockito.verifyNoMoreInteractions(issueRepository, properties, allowedRoles, projectRoleChecker, executor);
     }
 
     @Test
@@ -277,7 +278,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessibility, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
     }
 
     @Test
@@ -302,7 +303,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessibility, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
     }
 
     @Test
@@ -329,7 +330,7 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessibility, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
     }
 
     @Test
@@ -397,6 +398,6 @@ class IssueLinkServiceImplTest {
                 .verify();
 
         Mockito.verify(issueLinkRepository).findActiveByIdAndIssueId(LINK_ID, SOURCE_ISSUE_ID);
-        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectAccessibility, executor);
+        Mockito.verifyNoMoreInteractions(properties, allowedRoles, projectRoleChecker, executor);
     }
 }

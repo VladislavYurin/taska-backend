@@ -99,3 +99,9 @@ storage:
     - image/jpeg
     - image/png
     - image/webp
+
+invitation:
+  resend-cooldown: ${AUTH_INVITATION_RESEND_COOLDOWN:1m}
+
+directory:
+  avatar-timeout: ${AUTH_DIRECTORY_AVATAR_TIMEOUT:250ms}

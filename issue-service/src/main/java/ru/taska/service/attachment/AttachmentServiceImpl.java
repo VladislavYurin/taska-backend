@@ -3,23 +3,24 @@ package ru.taska.service.attachment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.AttachmentDownloadUrlDto;
-import ru.taska.domain.AttachmentDto;
-import ru.taska.domain.IssueAttachment;
-import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.AttachmentDownloadUrlDto;
+import ru.taska.domain.dto.AttachmentDto;
+import ru.taska.domain.entity.IssueAttachment;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueAttachmentRepository;
 import ru.taska.repository.IssueRepository;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import ru.taska.transport.grpc.project.ProjectAccessibility;
 
 @Slf4j
 @Service
@@ -29,7 +30,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     private final IssueProperties issueProperties;
     private final IssueRepository issueRepository;
     private final IssueAttachmentRepository issueAttachmentRepository;
-    private final ProjectAccessibility projectAccessibility;
+    private final ProjectRoleChecker projectRoleChecker;
     private final StorageClient storageClient;
     private final AttachmentTransactionExecutor transactionExecutor;
 
@@ -42,7 +43,7 @@ public class AttachmentServiceImpl implements AttachmentService {
             String contentType,
             long sizeBytes
     ) {
-        return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
+        return checkUserHasWriteRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
                 .then(storageClient.createPresignedUploadUrl(contentType, sizeBytes));
     }
@@ -57,18 +58,18 @@ public class AttachmentServiceImpl implements AttachmentService {
             String fileName,
             String contentType
     ) {
-        return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
+        return checkUserHasWriteRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
-                .then(checkObjectExistsInStorage(requestId, nodeId, objectKey))
-                .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
-                .flatMap(metadata -> transactionExecutor.saveAttachment(
-                        requestId, nodeId, issueId, actorUserId, objectKey, fileName, contentType, metadata))
+                .flatMap(issue -> checkObjectExistsInStorage(requestId, nodeId, objectKey)
+                        .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
+                        .flatMap(metadata -> transactionExecutor.saveAttachment(
+                                requestId, nodeId, issue, actorUserId, objectKey, fileName, contentType, metadata)))
                 .flatMap(savedAttachment -> storageClient.createPresignedDownloadUrl(savedAttachment.getObjectKey())
                         .map(url -> new AttachmentDto(savedAttachment, url)));
     }
 
     @Override
-    public Mono<List<AttachmentDto>> listAttachments(
+    public Flux<AttachmentDto> listAttachments(
             String requestId,
             String nodeId,
             UUID issueId,
@@ -76,11 +77,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     ) {
         return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().viewAttachmentRoles())
-                .then(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
-                        .flatMap(attachment ->
+                .thenMany(issueAttachmentRepository.findAllByIssueIdAndDeletedAtIsNull(issueId)
+                        .flatMapSequential(attachment ->
                                 storageClient.createPresignedDownloadUrl(attachment.getObjectKey())
                                         .map(url -> new AttachmentDto(attachment, url)))
-                        .collectList());
+                        );
     }
 
     @Override
@@ -109,14 +110,10 @@ public class AttachmentServiceImpl implements AttachmentService {
                     var roles = attachment.getUploadedBy().equals(actorUserId)
                             ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
                             : issueProperties.allowedRoles().deleteAttachmentRoles();
-                    return findActiveIssueProjectId(requestId, nodeId, attachment.getIssueId())
-                            .flatMap(projectId -> projectAccessibility.check(
-                                    requestId, nodeId, projectId, actorUserId, roles
-                            ))
-                            .thenReturn(attachment);
-                })
-                .flatMap(attachment -> transactionExecutor.deleteAttachment(
-                        requestId, nodeId, actorUserId, attachment));
+                    return checkUserHasWriteRoleForIssue(requestId, nodeId, attachment.getIssueId(), actorUserId, roles)
+                            .flatMap(issue -> transactionExecutor.deleteAttachment(
+                                    requestId, nodeId, actorUserId, attachment, issue));
+                });
     }
 
     /**
@@ -162,29 +159,33 @@ public class AttachmentServiceImpl implements AttachmentService {
      * @param issueId      идентификатор задачи.
      * @param actorUserId  идентификатор пользователя.
      * @param allowedRoles набор допустимых ролей для выполнения операции.
-     * @return Mono<Void>, завершающийся успешно при наличии прав, или ошибка.
+     * @return Mono<Issue> с задачей при наличии прав, или ошибка.
      */
-    private Mono<Void> checkUserHasRoleForIssue(
+    private Mono<Issue> checkUserHasWriteRoleForIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
+                                                     Set<ProjectRole> allowedRoles) {
+        return findActiveIssue(requestId, nodeId, issueId).flatMap(issue -> projectRoleChecker.checkProjectWriteRole(
+                requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles).thenReturn(issue));
+    }
+
+    private Mono<Issue> checkUserHasRoleForIssue(
             String requestId, String nodeId, UUID issueId, UUID actorUserId,
             Set<ProjectRole> allowedRoles) {
-        return findActiveIssueProjectId(requestId, nodeId, issueId)
-                .flatMap(projectId -> projectAccessibility.check(
-                        requestId, nodeId, projectId, actorUserId,
-                        allowedRoles
-                ))
-                .then();
+        return findActiveIssue(requestId, nodeId, issueId)
+                .flatMap(issue -> projectRoleChecker.checkProjectRole(
+                        requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
+                ).thenReturn(issue));
     }
 
     /**
-     * Находит projectId активной задачи по идентификатору.
+     * Находит активную задачу по идентификатору.
      *
      * @param requestId идентификатор запроса.
      * @param nodeId    идентификатор узла.
      * @param issueId   идентификатор задачи.
-     * @return Mono с projectId найденной задачи или ошибка NOT_FOUND.
+     * @return Mono с найденной задачей или ошибка NOT_FOUND.
      */
-    private Mono<UUID> findActiveIssueProjectId(String requestId, String nodeId, UUID issueId) {
-        return issueRepository.findProjectIdByActiveIssueId(issueId)
+    private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {
+        return issueRepository.findActiveById(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue not found: issueId={}", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));

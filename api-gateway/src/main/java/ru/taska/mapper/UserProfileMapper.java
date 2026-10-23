@@ -4,10 +4,14 @@ import org.springframework.stereotype.Component;
 import ru.taska.api.auth.profile.v1.ConfirmAvatarUploadResponse;
 import ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlResponse;
 import ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlResponse;
+import ru.taska.api.common.v1.UserSummaryResponse;
 import ru.taska.domain.dto.AvatarResponseDto;
+import ru.taska.domain.dto.AvatarDto;
 import ru.taska.domain.dto.CreateAvatarUploadUrlResponseDto;
 import ru.taska.domain.dto.GetAvatarDownloadUrlResponseDto;
+import ru.taska.domain.dto.UserSummaryDto;
 
+import java.net.URI;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -28,6 +32,18 @@ public class UserProfileMapper {
         responseDto.setCreatedAt(toOffsetDateTime(protoResponse.getAvatar().getCreatedAt()));
         responseDto.setDownloadUrl(protoResponse.getAvatar().getDownloadUrl());
         return responseDto;
+    }
+
+    public AvatarDto toAvatarDto(ru.taska.api.auth.profile.v1.AvatarResponse avatar) {
+        AvatarDto dto = new AvatarDto();
+        dto.setId(avatar.getId());
+        dto.setObjectKey(avatar.getObjectKey());
+        dto.setFileName(avatar.getFileName());
+        dto.setContentType(avatar.getContentType());
+        dto.setSizeBytes(avatar.getSizeBytes());
+        dto.setCreatedAt(toOffsetDateTime(avatar.getCreatedAt()));
+        dto.setDownloadUrl(avatar.getDownloadUrl());
+        return dto;
     }
 
     public CreateAvatarUploadUrlResponseDto toRestCreateAvatarUploadUrlResponse(
@@ -54,5 +70,16 @@ public class UserProfileMapper {
         }
         return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())
                 .atOffset(ZoneOffset.UTC);
+    }
+
+    public UserSummaryDto toUserSummaryDto(UserSummaryResponse proto) {
+        if (proto == null)
+            return null;
+
+        UserSummaryDto dto = new UserSummaryDto();
+        dto.setId(UUID.fromString(proto.getId()));
+        dto.setDisplayName(proto.getDisplayName());
+        MappingUtils.setIfPresent(proto::hasAvatarUrl, () -> URI.create(proto.getAvatarUrl()), dto::setAvatarUrl);
+        return dto;
     }
 }

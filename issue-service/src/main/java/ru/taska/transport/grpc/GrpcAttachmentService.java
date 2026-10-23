@@ -169,6 +169,7 @@ public class GrpcAttachmentService {
                                     requestId, nodeId, issueId, actorUserId);
 
                             return attachmentService.listAttachments(requestId, nodeId, issueId, actorUserId)
+                                    .collectList()
                                     .doOnNext(attachments ->
                                             log.info("[{}][{}] listAttachments: found {} attachments",
                                                     requestId, nodeId, attachments.size())

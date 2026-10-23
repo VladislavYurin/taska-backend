@@ -1,13 +1,20 @@
 package ru.taska.service;
 
-import java.util.UUID;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMemberStatsDto;
+import ru.taska.domain.dto.ProjectMembershipInfoDto;
+
+import java.util.List;
+import java.util.UUID;
 
 public interface ProjectMemberService {
+
+    Flux<ProjectMemberStatsDto> getMemberStatsBatch(
+            List<UUID> projectIds, UUID actorUserId, String requestId, String nodeId);
 
     /**
      * Добавляет нового участника в проект.
@@ -46,6 +53,22 @@ public interface ProjectMemberService {
      * @return Mono<{@link ProjectMember}> с обновленной ролью
      */
     Mono<ProjectMember> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId, UUID actorUserId, ProjectRole role, UUID projectId);
+
+    /**
+     * Проверяет роль участника проекта по полученным данным.
+     *
+     * @param requestId уникальный идентификатор запроса.
+     * @param nodeId    уникальный идентификатор узла.
+     * @param projectId уникальный идентификатор проекта.
+     * @param userId    уникальный идентификатор участника проекта.
+     * @return ({@link ProjectMembershipInfoDto}) из трех элементов, содержащий:
+     * <ul>
+     * <li>{@code T1} ({@link ProjectRole}) — роль участника проекта</li>
+     * <li>{@code T2} ({@link Boolean}) — флаг, сигнализирующий о том, является ли пользователь участником проекта</li>
+     * <li>{@code T3} ({@link Boolean}) — флаг, сигнализирующий о том, существует ли такой проект</li>
+     * </ul>
+     */
+    Mono<ProjectMembershipInfoDto> checkProjectMemberRole(String requestId, String nodeId, UUID projectId, UUID userId);
 
     /**
      * Возвращает список участников проекта с обогащенными данными из сервиса пользователей.

@@ -294,7 +294,7 @@ public class ProjectMapperTest {
 
             memberWithAvatar = ProjectMemberDetailsResponse.newBuilder()
                     .setUserId(userId1)
-                    .setRole(role1)
+                    .setRole(ProjectRole.PROJECT_ROLE_ADMIN)
                     .setDisplayName(displayName1)
                     .setEmail(email1)
                     .setAvatar(avatarResponse)
@@ -302,7 +302,7 @@ public class ProjectMapperTest {
 
             memberWithoutAvatar = ProjectMemberDetailsResponse.newBuilder()
                     .setUserId(userId2)
-                    .setRole(role2)
+                    .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
                     .setDisplayName(displayName2)
                     .setEmail(email2)
                     .build();

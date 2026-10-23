@@ -66,11 +66,8 @@ public class OutboxEventMapper {
         EventType eventType = EventType.fromValue(event.getEventType());
 
         return switch (eventType) {
-            case USER_INVITED -> objectMapper.valueToTree(new UserInvitedPayload(
-                    getUuid(sourcePayload, USER_ID),
-                    getString(sourcePayload, EMAIL),
-                    getString(sourcePayload, INVITED_BY)
-            ));
+            // Invitation credentials are consumed only by the private email queue, never the inbox body.
+            case USER_INVITED -> sourcePayload.deepCopy();
 
             case USER_ACTIVATED -> objectMapper.valueToTree(new UserActivatedPayload(
                     getUuid(sourcePayload, USER_ID),

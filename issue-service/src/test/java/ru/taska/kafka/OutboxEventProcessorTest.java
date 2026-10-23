@@ -14,7 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.OutboxConfig;
-import ru.taska.domain.OutboxEvent;
+import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.transport.kafka.OutboxEventProcessor;
 import ru.taska.transport.kafka.OutboxEventPublisher;

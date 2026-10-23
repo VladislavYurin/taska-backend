@@ -13,4 +13,12 @@ public record UserDetailsDto(
         @Embedded(onEmpty = Embedded.OnEmpty.USE_NULL, prefix = "avatar_")
         AvatarDto avatar
 ) {
+        public static UserDetailsDto withoutAvatar(UserDetailsDto user) {
+                return UserDetailsDto.builder()
+                        .userId(user.userId())
+                        .displayName(user.displayName())
+                        .email(user.email())
+                        .avatar(null)
+                        .build();
+        }
 }

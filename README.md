@@ -20,7 +20,11 @@ Backend системы управления проектами и задачам
 - метрики Prometheus, дашборды Grafana и централизованные логи Loki/Promtail;
 - автоматический AI review pull request с провайдерами OpenAI Codex или DeepSeek.
 
-REST-контракт является источником истины для публичного API: [`api-gateway/src/main/resources/static/openapi.yml`](api-gateway/src/main/resources/static/openapi.yml).
+REST-контракт является источником истины для публичного API: [`api-gateway/src/main/resources/static/openapi.yml`](api-gateway/src/main/resources/static/openapi.yml). `/v3/api-docs` публикует этот же документ в JSON; интеграционный тест в CI проверяет совпадение с `/openapi.yml`. Справочная модель из аннотаций Springdoc доступна отдельно по `/v3/api-docs/generated`.
+
+Приглашения и каталог пользователей: [правила, пограничные случаи и выкатка TAS-204](docs/tas-204-invitations-and-directory.md).
+
+Каналы уведомлений Email/Telegram: [подключение бота, настройки пользователя и доставка TAS-387](docs/tas-387-telegram-notifications.md).
 
 ## Архитектура
 
@@ -187,6 +191,7 @@ curl http://127.0.0.1:8080/actuator/health
 |----------------------|---|
 | Swagger UI           | [http://127.0.0.1:8080/swagger-ui.html](http://127.0.0.1:8080/swagger-ui.html) |
 | OpenAPI YAML         | [http://127.0.0.1:8080/openapi.yml](http://127.0.0.1:8080/openapi.yml) |
+| OpenAPI JSON         | [http://127.0.0.1:8080/v3/api-docs](http://127.0.0.1:8080/v3/api-docs) |
 | Kafka UI             | [http://127.0.0.1:8088](http://127.0.0.1:8088) |
 | Grafana              | [http://127.0.0.1:3000](http://127.0.0.1:3000) |
 | Prometheus           | [http://127.0.0.1:9090](http://127.0.0.1:9090) |
@@ -212,6 +217,7 @@ PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue
 - `/api/v1/projects/{projectId}/labels` и метки задач;
 - `/api/v1/projects/{projectId}/issues/{issueId}/watchers`;
 - `/api/v1/notifications`;
+- `/api/v1/meta` — словари допустимых значений перечислений;
 - `/api/v1/readonly` для глобального администратора.
 
 Ограничения проектных операций задаются переменными `ISSUE_*_ROLES`. Полный состав запросов, ответов, статусов и параметров находится в OpenAPI-файле.
@@ -279,6 +285,8 @@ Actuator публикует `health`, `info` и `prometheus`. Метрики с�
 
 **AC Taska Logs** — централизованный просмотр логов из Loki. Агрегирует Docker-логи всех сервисов с фильтрацией по сервису, request ID, node ID и уровню логирования.
 
+Promtail получает `DEPLOY_ENVIRONMENT` из Compose (по умолчанию `local`) и добавляет его как label `environment`. На стенде задайте `DEPLOY_ENVIRONMENT=stage`; в AC Taska Logs окружение выбирается фильтром «Окружение». После изменения настройки пересоздайте контейнер Promtail.
+
 В логах и ответах gateway используется сквозной `X-Request-Id`. Для поиска запроса в Grafana доступны фильтры сервиса, request ID, node ID и уровня логирования.
 
 ## Сборка и тесты
@@ -316,6 +324,42 @@ Actuator публикует `health`, `info` и `prometheus`. Метрики с�
 ```
 
 В pull request CI запускает Maven verify по матрице модулей. Docker images собираются только для PR с label `docker`. Отдельный workflow выполняет структурированный AI review, если repository variable `AI_REVIEW_ENABLED=true`.
+
+AI review ведёт одну сводку в PR и не повторяет себя между пушами:
+
+- первый прогон проверяет весь PR, следующие — только строки, изменённые с последнего проверенного коммита (он хранится в скрытом маркере сводки); после force-push ревью снова полное, а пуш без изменений в файлах PR и перезапуск старого прогона пропускаются;
+- модель видит прошлые треды бота: resolved больше не поднимаются, по открытым в сводке остаётся ссылка-напоминание, исправленные помечаются ✅ в самом треде; тред, переоткрытый вручную, бот больше не закрывает;
+- inline публикуются замечания не ниже `AI_REVIEW_INLINE_MIN_SEVERITY` и не больше `AI_REVIEW_MAX_INLINE` за прогон; значимые замечания сверх лимита (или к строкам, которые GitHub не принимает) показываются в сводке целиком, мелкие — свёрнутым списком;
+- если diff не помещается в `DEEPSEEK_MAX_DIFF_LINES`, контекст вокруг изменений сокращается, а файлы, которые всё равно не поместились, перечислены в сводке как непроверенные;
+- если в заголовке PR или имени ветки есть ключ задачи (`TAS-123`), описание задачи из Jira добавляется в контекст модели, а в сводке появляется раздел «Соответствие задаче». В публичном репозитории это включается только при `AI_REVIEW_JIRA_IN_PUBLIC_REPO=true`: Codex печатает в лог Actions всё, что читает, а логи и комментарии публичного репозитория видны всем. Описание и последние комментарии задачи также уходят провайдеру модели (OpenAI или DeepSeek) вместе с diff;
+- ссылка на задачу в сводке строится по ключу и есть всегда, даже если Jira не ответила; ключи задач в тексте ревью тоже становятся ссылками. Запросы чтения к Jira повторяются при таймауте или ошибке сервера;
+- label `ai-review:skip` отключает ревью PR.
+
+| Настройка | Тип | По умолчанию | Назначение |
+|---|---|---|---|
+| `AI_REVIEW_INLINE_MIN_SEVERITY` | variable | `medium` | минимальная severity inline-комментария |
+| `AI_REVIEW_MAX_INLINE` | variable | `8` | максимум inline-комментариев за прогон |
+| `AI_REVIEW_AUTO_RESOLVE` | variable | `false` | закрывать треды, которые модель считает исправленными |
+| `AI_REVIEW_JIRA_IN_PUBLIC_REPO` | variable | `false` | загружать задачу из Jira в публичном репозитории (в приватном загружается всегда) |
+| `JIRA_BASE_URL` | variable | — | адрес Jira, например `https://jira.ozero.dev`; без него контекст задачи не загружается |
+| `JIRA_TOKEN` | secret | — | Personal Access Token учётной записи с правом чтения проекта |
+| `JIRA_USERNAME` | variable | — | только для Jira Cloud: email, тогда `JIRA_TOKEN` — API token |
+| `JIRA_PROJECT_KEYS` | variable | `TAS` | ключи проектов, которые ищутся в заголовке PR и имени ветки |
+
+Workflow `Jira sync` двигает задачу из заголовка PR или имени ветки по флоу, если `JIRA_SYNC_ENABLED=true`:
+
+- PR открыт, переоткрыт или выведен из draft — ссылка на PR в связях задачи, перевод в `JIRA_STATUS_IN_REVIEW` (по умолчанию `In Review`) и комментарий;
+- PR влит в ветку из `JIRA_DONE_BRANCHES` (по умолчанию `develop,main,master`) — перевод в `JIRA_STATUS_DONE` (по умолчанию `Done`) и комментарий с merge-коммитом; мерж в другую ветку (stacked PR) задачу не закрывает;
+- PR закрыт без мержа — только комментарий;
+- пуш в PR или правка заголовка срабатывают как открытие, только если в задаче ещё нет ссылки на этот PR (GitHub не запускает workflow, пока у PR конфликт, а ключ могут дописать в заголовок позже).
+
+Переход ищется по имени целевого статуса, а для `JIRA_STATUS_DONE` подходит и переход в любой статус категории «done» (`statusCategory.key`): Jira Server отдаёт имена статусов на языке учётной записи бота, и `Done` для неё может называться «Готово»; если подходящего перехода нет — в лог пишется warning со списком доступных; задача из Done обратно не возвращается; draft PR и PR без ключа задачи пропускаются. Комментарии бота AI review не учитывает в контексте задачи. Используются те же `JIRA_BASE_URL` и `JIRA_TOKEN`, что и в AI review; учётной записи бота нужны права Browse Projects, Transition Issues, Add Comments и Link Issues. Ошибки Jira пишутся warning в лог и не валят проверку.
+
+Тесты скриптов AI review и Jira sync:
+
+```bash
+node --test .github/codex/scripts/*.test.js
+```
 
 ## Конфигурация и деплой
 

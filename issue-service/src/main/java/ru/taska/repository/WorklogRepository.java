@@ -5,7 +5,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.domain.Worklog;
+import ru.taska.domain.entity.Worklog;
 
 import java.util.UUID;
 
@@ -24,7 +24,7 @@ public interface WorklogRepository extends ReactiveCrudRepository<Worklog, UUID>
     Mono<Worklog> findActiveByIdForUpdate(@Param("id") UUID id);
 
 
-    @Query("SELECT * FROM taska.issue_worklogs t WHERE t.issue_id = :id AND deleted_at IS NULL ORDER BY work_date DESC")
+        @Query("SELECT * FROM taska.issue_worklogs t WHERE t.issue_id = :id AND deleted_at IS NULL ORDER BY work_date DESC, created_at DESC")
     Flux<Worklog> findActiveByIssueId(@Param("id") UUID id);
 
 

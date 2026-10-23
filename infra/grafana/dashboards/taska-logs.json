@@ -74,7 +74,7 @@
           },
           "direction": "backward",
           "editorMode": "code",
-          "expr": "{environment=\"local\", service=~\"$service\"} |~ \"(?i)$level\" |~ \"(?i)$requestId\" |~ \"(?i)$nodeId\"",
+          "expr": "{environment=~\"${environment:regex}\", service=~\"$service\"} |~ \"(?i)$level\" |~ \"(?i)$requestId\" |~ \"(?i)$nodeId\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -95,6 +95,35 @@
     "list": [
       {
         "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "Loki"
+        },
+        "definition": "label_values(environment)",
+        "includeAll": true,
+        "label": "Окружение",
+        "multi": true,
+        "name": "environment",
+        "options": [],
+        "query": {
+          "label": "environment",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "",
+          "type": 1
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {
           "text": ["All"],
           "value": ["$__all"]
         },
@@ -102,7 +131,7 @@
           "type": "loki",
           "uid": "Loki"
         },
-        "definition": "label_values(service)",
+        "definition": "label_values({environment=~\"${environment:regex}\"}, service)",
         "description": "",
         "includeAll": true,
         "label": "Сервис",
@@ -112,7 +141,7 @@
         "query": {
           "label": "service",
           "refId": "LokiVariableQueryEditor-VariableQuery",
-          "stream": "",
+          "stream": "{environment=~\"${environment:regex}\"}",
           "type": 1
         },
         "refresh": 1,

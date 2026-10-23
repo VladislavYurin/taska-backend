@@ -6,26 +6,41 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.taska.domain.GlobalRole;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.domain.ProjectSetting;
 import ru.taska.domain.dto.ProjectCheckMembershipDto;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.projectContext.ProjectContextDto;
+import ru.taska.domain.dto.projectContext.ProjectLabelDto;
+import ru.taska.domain.dto.projectContext.ProjectWorkflowDto;
+import ru.taska.domain.projection.ProjectInfo;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
-import ru.taska.mapper.ProjectMapper;
 import ru.taska.repository.ProjectMemberRepository;
 import ru.taska.repository.ProjectRepository;
 import ru.taska.repository.ProjectSettingRepository;
 import ru.taska.service.OutboxEventService;
+import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
-import ru.taska.service.validator.ProjectValidator;
+import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
+import ru.taska.transport.grpc.client.GrpcWorkFlowServiceClient;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,12 +52,20 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectSettingRepository projectSettingRepository;
     private final OutboxEventService outboxEventService;
     private final ObjectMapper objectMapper;
-    private final ProjectMapper projectMapper;
-    private final ProjectValidator projectValidator;
+    private final ProjectMemberService projectMemberService;
+    private final GrpcIssueServiceClient issueServiceClient;
+    private final GrpcWorkFlowServiceClient workflowServiceClient;
+    private final ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
 
     @Override
     @Transactional
-    public Mono<Project> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId) {
+    public Mono<Project> createProject(
+            String requestId,
+            String nodeId,
+            String projectKey,
+            String projectName,
+            UUID userId
+    ) {
         return projectRepository.findByProjectKey(projectKey)
                 .flatMap(p -> {
                     log.info("[{}][{}] Project already exists: projectKey={}",
@@ -58,20 +81,30 @@ public class ProjectServiceImpl implements ProjectService {
 
                     return projectRepository.save(project)
 
-                            .flatMap(savedProject -> {
-                                return projectMemberRepository.save(createAdminMember(savedProject))
-                                        .then(projectSettingRepository.save(createDefaultProjectSettings(savedProject)))
-                                        .then(outboxEventService.saveProjectCreated(requestId, nodeId, savedProject))
-                                        .then(Mono.fromRunnable(() ->
-                                                log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
-                                                        requestId, nodeId, projectKey, projectName, userId)))
-                                        .thenReturn(savedProject);
-                            });
+                            .flatMap(savedProject ->
+                                    projectMemberRepository.save(createAdminMember(savedProject))
+                                            .then(projectSettingRepository.insertSetting(
+                                                    savedProject.getId(),
+                                                    createDefaultProjectSettingsJson(savedProject).toString(),
+                                                    Instant.now(),
+                                                    savedProject.getCreatedBy()
+                                            ))
+                                            .then(Mono.defer(() -> issueTypeRepository.seedDefaults(savedProject.getId())))
+                                            .then(outboxEventService.saveProjectCreated(requestId, nodeId, savedProject))
+                                            .then(Mono.fromRunnable(() ->
+                                                    log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
+                                                            requestId, nodeId, projectKey, projectName, userId)))
+                                            .thenReturn(savedProject));
                 }));
     }
 
     @Override
-    public Mono<ProjectCheckMembershipDto> getProject(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
+    public Mono<ProjectCheckMembershipDto> getProject(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId
+    ) {
         return projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId,actorUserId)
                 .switchIfEmpty(
                         Mono.defer(() -> {
@@ -89,52 +122,118 @@ public class ProjectServiceImpl implements ProjectService {
                 });
     }
 
+    /**
+     * Доступ к контексту — то же правило, что и у {@link #getProject}: не участник проекта
+     * получает PERMISSION_DENIED независимо от глобальной роли. Полноценное чтение контекста
+     * для GLOBAL_ADMIN вне проекта (роль в gRPC-заголовке) — отдельная задача.
+     * Отказ любого из источников (members/labels/workflows) пробрасывается наружу,
+     * а не маскируется пустым списком.
+     */
     @Override
-    public Flux<ProjectCheckMembershipDto> listMyProjects(String requestId, String nodeId, UUID userId) {
+    public Mono<ProjectContextDto> getProjectContext(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId,
+            GlobalRole globalRole
+    ) {
+        return projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                }))
+                .flatMap(projectDto -> {
+                    if (projectDto.user_id() == null) {
+                        log.warn("[{}][{}] User {} is not a member of project {} (globalRole={})",
+                                requestId, nodeId, actorUserId, projectId, globalRole);
+                        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,
+                                "You don't have access to this project"));
+                    }
+
+                    log.info("[{}][{}] Assembling project context: projectId={}", requestId, nodeId, projectId);
+
+                    Mono<List<ProjectMemberDetailsDto>> membersMono =
+                            projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId)
+                                    .collectList();
+
+                    Mono<List<ProjectLabelDto>> labelsMono =
+                            issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId);
+
+                    Mono<List<ru.taska.domain.ProjectIssueType>> typesMono =
+                            issueTypeRepository.list(projectId).collectList().cache();
+
+                    Mono<List<ProjectWorkflowDto>> workflowsMono =
+                            typesMono.flatMap(types -> loadProjectWorkflows(requestId, nodeId, projectId, actorUserId, types));
+
+                    return Mono.zip(labelsMono, workflowsMono, membersMono, typesMono)
+                            .map(tuple -> new ProjectContextDto(
+                                    projectDto,
+                                    tuple.getT1(),   // labels
+                                    tuple.getT2(),   // workflows
+                                    tuple.getT3(),   // members
+                                    tuple.getT4()    // issue types
+                            ));
+                });
+    }
+
+
+    @Override
+    public Flux<ProjectCheckMembershipDto> listMyProjects(
+            String requestId,
+            String nodeId,
+            UUID userId
+    ) {
         return projectRepository.findAllByMemberUserId(userId)
                 .doOnComplete(() -> log.info("[{}][{}] Successfully getting all projects for user id: {}", requestId, nodeId, userId));
     }
 
     @Override
-    @Transactional
-    public Mono<Project> softDeleteProject(
-            String requestId,
-            String nodeId,
-            UUID projectId,
-            UUID actorUserId) {
-
-        return projectRepository.findById(projectId)
-                                .switchIfEmpty(
-                                        Mono.defer(() -> {
-                                            log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
-                                            return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
-                                        })
-                                ).flatMap(project ->
-                                                  projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)
-                                                                         .switchIfEmpty(Mono.defer(() -> {
-                                                                             log.warn("[{}][{}] User not found: {}", requestId, nodeId, actorUserId);
-                                                                             return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found"));})
-                                                                         )
-                                                                         .filter(member -> ProjectRole.ADMIN.equals(member.getRole()))
-                                                                         .switchIfEmpty(Mono.defer(() -> {
-                                                                             log.warn("[{}][{}] Don't have permission: {}", requestId, nodeId, actorUserId);
-                                                                             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "User must have the role ADMIN"));})
-                                                                         )
-                                                                         .then(Mono.defer(() -> {
-                                                                             if (project.getArchivedAt() == null) {
-                                                                                 project.setArchivedAt(Instant.now());
-                                                                                 log.debug("Project: {} successfully archived", projectId);
-                                                                                 return projectRepository.save(project)
-                                                                                                         .flatMap(saved ->
-                                                                                                                          outboxEventService.saveProjectArchived(requestId, nodeId, saved, actorUserId).thenReturn(saved));
-                                                                             }
-                                                                             log.debug("Project: {} already archived", projectId);
-                                                                             return Mono.just(project);
-                                                                         }))
+    public Mono<String> getProjectKeyByIdInternal(UUID projectId) {
+        return projectRepository.findProjectKeyById(projectId)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("Project not found: {}", projectId);
+                    return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
+                }))
+                .doOnSuccess(key ->
+                        log.debug("Successfully getting project key: {} for projectId: {}", key, projectId)
                 );
     }
 
-    private ProjectSetting createDefaultProjectSettings(Project project) {
+    @Override
+    public Mono<Map<UUID, ProjectInfo>> getProjectInfoByIds(List<UUID> projectIds) {
+        Set<UUID> uniqueIds = extractUniqueIds(projectIds);
+
+        if (uniqueIds.isEmpty()) {
+            return Mono.just(Collections.emptyMap());
+        }
+
+        return projectRepository.findProjectInfoByIds(uniqueIds)
+                .collectMap(
+                        ProjectInfo::id,
+                        Function.identity()
+                )
+                .doOnSuccess(map -> log.debug("Fetched {}/{} project projections from DB", map.size(), uniqueIds.size()));
+    }
+
+    private Set<UUID> extractUniqueIds(List<UUID> projectIds) {
+        if (projectIds == null) {
+            return Collections.emptySet();
+        }
+
+        return projectIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Формирует JSON-содержимое дефолтных настроек проекта.
+     *
+     * <p>Возвращает именно {@link JsonNode}, а не {@link ProjectSetting}:
+     * запись в БД идёт явным INSERT'ом через
+     * {@link ProjectSettingRepository#insertSetting}, поэтому промежуточная
+     * сущность не нужна.
+     */
+    private JsonNode createDefaultProjectSettingsJson(Project project) {
         ObjectNode defaultSettingsJson = objectMapper.createObjectNode();
         ArrayNode allowedTypes = defaultSettingsJson.putArray("allowedIssueTypes");
         allowedTypes.add("TASK");
@@ -142,12 +241,7 @@ public class ProjectServiceImpl implements ProjectService {
         allowedTypes.add("STORY");
         defaultSettingsJson.put("defaultIssueType", "TASK");
 
-        return ProjectSetting.builder()
-                .projectId(project.getId())
-                .settings(defaultSettingsJson)
-                .updatedBy(project.getCreatedBy())
-                .updatedAt(Instant.now())
-                .build();
+        return defaultSettingsJson;
     }
 
     private ProjectMember createAdminMember(Project savedProject) {
@@ -159,4 +253,24 @@ public class ProjectServiceImpl implements ProjectService {
                             .addedAt(Instant.now())
                             .build();
     }
+
+    private Mono<List<ProjectWorkflowDto>> loadProjectWorkflows(
+            String requestId,
+            String nodeId,
+            UUID projectId,
+            UUID actorUserId,
+            List<ru.taska.domain.ProjectIssueType> issueTypes
+    ) {
+        return Flux.fromIterable(issueTypes)
+                .map(ru.taska.domain.ProjectIssueType::code)
+                // Custom keys enter the registry now; workflow enum expansion is TAS-386.
+                .filter(Set.of("TASK", "BUG", "STORY")::contains)
+                .flatMap(issueType ->
+                        workflowServiceClient.getWorkflowForProject(
+                                projectId, issueType, actorUserId, requestId, nodeId
+                        )
+                )
+                .collectList();
+    }
+
 }

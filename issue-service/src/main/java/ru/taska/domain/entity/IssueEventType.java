@@ -1,0 +1,24 @@
+package ru.taska.domain.entity;
+
+/**
+ * Тип события в истории изменений задачи.
+ */
+public enum IssueEventType {
+    CREATED,
+    UPDATED,
+    ASSIGNED,
+    TRANSITIONED,
+    DELETED,
+    LINK_CREATED,
+    LINK_DELETED,
+    ATTACHMENT_UPLOADED,
+    ATTACHMENT_DELETED,
+    COMMENT_CREATED,
+    COMMENT_UPDATED,
+    COMMENT_DELETED,
+    LABEL_ADDED,
+    LABEL_REMOVED,
+    WORKLOG_ADDED,
+    WORKLOG_UPDATED,
+    WORKLOG_DELETED
+}

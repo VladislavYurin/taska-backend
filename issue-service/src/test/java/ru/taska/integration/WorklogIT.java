@@ -11,16 +11,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.project.v1.GetProjectRequest;
-import ru.taska.api.project.v1.ProjectResponse;
+import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.Issue;
-import ru.taska.domain.IssueEventType;
-import ru.taska.domain.IssuePriority;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssueEventType;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
-import ru.taska.domain.Worklog;
+import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
 import ru.taska.domain.dto.UpdateWorklogDto;
 import ru.taska.exception.DomainException;
@@ -118,9 +118,11 @@ class WorklogIT extends AbstractIT {
     }
 
     private void stubProjectRole(ProjectRole role) {
-        Mockito.when(projectServiceStub.getProject(Mockito.any(GetProjectRequest.class)))
-                .thenReturn(Mono.just(ProjectResponse.newBuilder()
-                        .setCurrentUserRole(role)
+        Mockito.when(projectServiceStub.checkProjectMemberRole(Mockito.any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
+                        .setRole(role)
+                        .setIsMember(true)
+                        .setProjectExists(true).setProjectArchived(false)
                         .build()));
     }
 

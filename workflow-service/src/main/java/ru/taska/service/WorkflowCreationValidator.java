@@ -48,9 +48,13 @@ public class WorkflowCreationValidator {
     }
 
     public String buildViolationMessage(List<WorkflowCreationViolation> violations) {
+        return buildViolationMessage("Workflow creation failed: ", violations);
+    }
+
+    public String buildViolationMessage(String prefix, List<WorkflowCreationViolation> violations) {
         return violations.stream()
                 .map(WorkflowCreationViolation::message)
-                .collect(Collectors.joining(", ", "Workflow creation failed: ", ""));
+                .collect(Collectors.joining(", ", prefix, ""));
     }
 
     // Имена workflow, статусов и переходов не пустые.
