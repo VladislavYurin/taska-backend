@@ -9,6 +9,7 @@ import ru.taska.event.EventType;
 import ru.taska.event.TaskaEvent;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
+import ru.taska.event.payload.projectService.MemberUpdatedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import tools.jackson.databind.JsonNode;
@@ -76,6 +77,13 @@ public class OutboxEventMapper {
                     getUuid(sourcePayload, USER_ID),
                     getString(sourcePayload, ROLE),
                     getUuid(sourcePayload, ADDED_BY),
+                    getString(sourcePayload, PROJECT_KEY)
+            ));
+
+            case MEMBER_UPDATED -> objectMapper.valueToTree(new MemberUpdatedPayload(
+                    getUuid(sourcePayload, USER_ID),
+                    getString(sourcePayload, ROLE),
+                    getUuid(sourcePayload, PROJECT_ID),
                     getString(sourcePayload, PROJECT_KEY)
             ));
 
