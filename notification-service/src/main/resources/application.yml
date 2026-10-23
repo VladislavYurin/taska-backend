@@ -96,6 +96,7 @@ notification:
   comment:
     max-shown-body-length: ${NOTIFICATION_COMMENT_MAX_SHOWN_BODY_LENGTH:100}
   email:
+    from: ${NOTIFICATION_MAIL_FROM:${spring.mail.username:}}
     retry-delay: ${NOTIFICATION_EMAIL_RETRY_DELAY:1m}
 
 logging:

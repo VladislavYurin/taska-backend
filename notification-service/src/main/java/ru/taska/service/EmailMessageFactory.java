@@ -32,12 +32,14 @@ public class EmailMessageFactory {
     private final JavaMailSender sender;
     private final SpringTemplateEngine engine;
     private final String appUrl;
+    private final String fromAddress;
     private final Map<String, String> brand;
 
     public EmailMessageFactory(JavaMailSender sender, SpringTemplateEngine emailTemplateEngine,
             @Value("${notification.app-url:http://localhost:5173}") String appUrl,
             @Value("${notification.brand.accent:#4f46e5}") String accent,
-            @Value("${notification.brand.workspace-name:}") String workspaceName) {
+            @Value("${notification.brand.workspace-name:}") String workspaceName,
+            @Value("${notification.email.from:${spring.mail.username:}}") String fromAddress) {
         URI uri = URI.create(appUrl);
         boolean local = "localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost())
                 || "[::1]".equals(uri.getHost());
@@ -48,6 +50,7 @@ public class EmailMessageFactory {
         }
         this.sender = sender;
         this.engine = emailTemplateEngine;
+        this.fromAddress = fromAddress == null ? "" : fromAddress.strip();
         this.appUrl = appUrl.replaceAll("/+$", "");
         String safeAccent = accent != null && HEX.matcher(accent).matches()
                 ? accent.toLowerCase(Locale.ROOT) : DEFAULT_ACCENT;
@@ -84,9 +87,13 @@ public class EmailMessageFactory {
     }
 
     private MimeMessage message(String template, String subject, String recipient, Context context) {
+        if (fromAddress.isBlank()) {
+            throw new MailPreparationException("Configure notification.email.from or spring.mail.username");
+        }
         try {
             MimeMessage message = sender.createMimeMessage();
             var helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(fromAddress);
             helper.setTo(recipient);
             helper.setSubject(subject == null ? "" : subject);
             helper.setText(engine.process(template + ".txt", context), engine.process(template + ".html", context));

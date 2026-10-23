@@ -41,7 +41,7 @@ class EmailSenderMimeTest {
     @BeforeEach
     void setUp() {
         var factory = new EmailMessageFactory(mail, new EmailTemplateConfiguration().emailTemplateEngine(),
-                "https://taska.ozero.dev/#", "#4f46e5", "");
+                "https://taska.ozero.dev/#", "#4f46e5", "", "notifications@example.test");
         service = new EmailSenderServiceImpl(mail, factory, preferences, attempts, new EmailDeliveryAttemptMapper());
         ReflectionTestUtils.setField(service, "retryDelay", Duration.ofMinutes(1));
     }
