@@ -7,6 +7,7 @@ import java.util.UUID;
  */
 public record MemberRemovedPayload(
         UUID projectId,
-        UUID userId
+        UUID userId,
+        String projectKey
 ) {
 }

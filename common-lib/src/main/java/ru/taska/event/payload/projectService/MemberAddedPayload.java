@@ -9,6 +9,7 @@ public record MemberAddedPayload(
         UUID projectId,
         UUID userId,
         String role,
-        UUID addedBy
+        UUID addedBy,
+        String projectKey
 ) {
 }

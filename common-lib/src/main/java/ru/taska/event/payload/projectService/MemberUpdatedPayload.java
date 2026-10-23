@@ -8,7 +8,8 @@ import java.util.UUID;
 public record MemberUpdatedPayload(
         UUID userId,
         String role,
-        UUID projectId
+        UUID projectId,
+        String projectKey
 ) {
 
 }

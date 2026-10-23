@@ -75,6 +75,9 @@ class IssueLinkExecutorTest {
     @Mock
     private PayloadSerializer payloadSerializer;
 
+    @Mock
+    private ru.taska.repository.IssueRepository issueRepository;
+
     @InjectMocks
     private IssueLinkExecutor executor;
 
@@ -82,6 +85,8 @@ class IssueLinkExecutorTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(issueRepository.findById(TARGET_ISSUE_ID))
+                .thenReturn(Mono.just(Issue.builder().id(TARGET_ISSUE_ID).issueKey("ABC-2").build()));
         link = IssueLink.builder()
                 .id(LINK_ID)
                 .projectId(PROJECT_ID)
@@ -98,9 +103,11 @@ class IssueLinkExecutorTest {
                 .thenReturn(Flux.empty());
     }
 
-    @Test
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={true,false})
     @DisplayName("Должен успешно создать объект issueLink и сохранить все (issueLink, history, outbox) в БД")
-    void executeLinkCreation_shouldSuccessfullyComplete() {
+    void executeLinkCreation_shouldSuccessfullyComplete(boolean targetPresent) {
+        if (!targetPresent) Mockito.when(issueRepository.findById(TARGET_ISSUE_ID)).thenReturn(Mono.empty());
         var payload = new JsonNodeFactory().objectNode()
                 .put("linkType", IssueLinkType.RELATES_TO.name());
 
@@ -122,7 +129,8 @@ class IssueLinkExecutorTest {
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
                         Mockito.any(UUID.class),
-                        Mockito.anyList()
+                        Mockito.anyList(),
+                        Mockito.anyString()
                 ))
                 .thenReturn(payload);
 
@@ -184,7 +192,8 @@ class IssueLinkExecutorTest {
                         Mockito.eq(TARGET_ISSUE_ID),
                         Mockito.eq(LINK_TYPE),
                         Mockito.eq(ACTOR_USER_ID),
-                        Mockito.anyList()
+                        Mockito.anyList(),
+                        Mockito.eq(targetPresent ? "ABC-2" : "")
                 );
 
         Mockito.verify(issueHistoryService)
@@ -223,9 +232,11 @@ class IssueLinkExecutorTest {
         Mockito.verifyNoMoreInteractions(payloadSerializer, issueHistoryService, outboxEventService);
     }
 
-    @Test
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={true,false})
     @DisplayName("Должен успешно произвести мягкое удаление объекта issueLink и сохранить в БД history и outbox")
-    void executeLinkDeletion_shouldSuccessfullyComplete() {
+    void executeLinkDeletion_shouldSuccessfullyComplete(boolean targetPresent) {
+        if (!targetPresent) Mockito.when(issueRepository.findById(TARGET_ISSUE_ID)).thenReturn(Mono.empty());
         var payload = new JsonNodeFactory().objectNode()
                 .put("linkType", IssueLinkType.RELATES_TO.name());
 
@@ -252,7 +263,8 @@ class IssueLinkExecutorTest {
                         Mockito.any(UUID.class),
                         Mockito.any(IssueLinkType.class),
                         Mockito.any(UUID.class),
-                        Mockito.anyList()
+                        Mockito.anyList(),
+                        Mockito.anyString()
                 ))
                 .thenReturn(payload);
 
@@ -296,7 +308,8 @@ class IssueLinkExecutorTest {
                         Mockito.eq(TARGET_ISSUE_ID),
                         Mockito.eq(LINK_TYPE),
                         Mockito.eq(ACTOR_USER_ID),
-                        Mockito.anyList()
+                        Mockito.anyList(),
+                        Mockito.eq(targetPresent ? "ABC-2" : "")
                 );
 
         Mockito.verify(issueHistoryService)
