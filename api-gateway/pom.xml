@@ -139,6 +139,7 @@
                             <!-- PATCH-тело пишется вручную: сгенерированный класс не отличает отсутствующее поле от явного null -->
                             <schemaMappings>
                                 <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
+                                <schemaMapping>NotificationPreferencesPatchDto=ru.taska.domain.dto.NotificationPreferencesPatchDto</schemaMapping>
                             </schemaMappings>
                             <configOptions>
                                 <interfaceOnly>true</interfaceOnly>
