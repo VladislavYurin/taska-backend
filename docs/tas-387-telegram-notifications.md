@@ -42,6 +42,8 @@ NOTIFICATION_DELIVERY_ENABLED=true
 
 Используйте git-ignored `.env` или secret storage Dokploy. Шаблон `.env.docker.example` не содержит настоящих секретов. После изменения конфигурации пересоздайте gateway и notification-service. При выключенной Telegram-интеграции её секреты не нужны; email/inbox продолжают работать.
 
+Для Email заголовок `From` по умолчанию берётся из `NOTIFICATION_MAIL_USERNAME`. Если SMTP использует другой разрешённый адрес отправителя или логин провайдера не является email, задайте `NOTIFICATION_MAIL_FROM`. Это относится и к рабочим уведомлениям, и к приглашениям; SMTP-адрес должен быть разрешён вашим провайдером.
+
 Затем зарегистрировать webhook, запустив из корня backend:
 
 ```bash
