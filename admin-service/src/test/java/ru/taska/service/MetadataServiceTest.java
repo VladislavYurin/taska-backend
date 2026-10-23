@@ -38,7 +38,7 @@ class MetadataServiceTest {
         List<TableDto> tables = buildTables(
                 List.of(
                         col("users", "id", "uuid"),
-                        col("users", "login", "character varying")
+                        col("users", "display_name", "character varying")
                 ),
                 List.of(),
                 allTables()
@@ -50,7 +50,7 @@ class MetadataServiceTest {
                 .extracting(ColumnDto::name, ColumnDto::type)
                 .containsExactly(
                         tuple("id", "uuid"),
-                        tuple("login", "character varying")
+                        tuple("display_name", "character varying")
                 );
     }
 
@@ -75,7 +75,7 @@ class MetadataServiceTest {
     void buildTables_marksSensitiveColumnsFromConfig() {
         List<TableDto> tables = buildTables(
                 List.of(
-                        col("users", "login", "character varying"),
+                        col("users", "display_name", "character varying"),
                         col("users", "password_hash", "character varying"),
                         col("audit", "password_hash", "character varying")
                 ),
@@ -84,7 +84,7 @@ class MetadataServiceTest {
         );
 
         assertThat(column(tables, "users", "password_hash").sensitive()).isTrue();
-        assertThat(column(tables, "users", "login").sensitive()).isFalse();
+        assertThat(column(tables, "users", "display_name").sensitive()).isFalse();
         assertThat(column(tables, "audit", "password_hash").sensitive()).isFalse();
     }
 
@@ -161,7 +161,7 @@ class MetadataServiceTest {
         MetadataSchemaRepository repository = repositoryWith(Set.of("auth"));
         Mockito.when(repository.findColumns("auth", "taska")).thenReturn(Flux.just(
                 col("users", "id", "uuid"),
-                col("users", "login", "character varying")
+                col("users", "display_name", "character varying")
         ));
 
         MetadataService service = new MetadataService(
@@ -181,7 +181,7 @@ class MetadataServiceTest {
                             .extracting(ColumnDto::name, ColumnDto::type)
                             .containsExactly(
                                     tuple("id", "uuid"),
-                                    tuple("login", "character varying")
+                                    tuple("display_name", "character varying")
                             );
                 })
                 .verifyComplete();

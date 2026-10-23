@@ -65,7 +65,6 @@ import java.util.stream.Stream;
 })
 class AdminReadOnlyControllerTest {
 
-    private static final String LOGIN = "admin";
     private static final String EMAIL = "admin@example.com";
     private static final String DISPLAY_NAME = "Admin Adminov";
     private static final String TOKEN = "Bearer JWT-token";
@@ -899,7 +898,6 @@ class AdminReadOnlyControllerTest {
 
         var userContext = GatewayUserContext.builder()
                 .userId(USER_ID)
-                .login(LOGIN)
                 .email(EMAIL)
                 .displayName(DISPLAY_NAME)
                 .status(GatewayUserStatus.ACTIVE)

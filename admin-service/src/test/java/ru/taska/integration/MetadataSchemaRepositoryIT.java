@@ -27,9 +27,9 @@ class MetadataSchemaRepositoryIT extends AbstractIT {
         Assertions.assertThat(columns).isNotNull();
         Assertions.assertThat(columns)
                 .extracting(ColumnMetadata::columnName)
-                .contains("id", "login", "email", "created_at", "age");
+                .contains("id", "display_name", "email", "created_at", "age");
         Assertions.assertThat(columns)
-                .filteredOn(c -> "login".equals(c.columnName()))
+                .filteredOn(c -> "display_name".equals(c.columnName()))
                 .extracting(ColumnMetadata::dataType)
                 .containsExactly("character varying");
     }

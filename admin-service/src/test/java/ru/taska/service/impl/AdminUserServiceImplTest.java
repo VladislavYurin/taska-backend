@@ -33,7 +33,7 @@ class AdminUserServiceImplTest {
 
     private static final String REQUEST_ID = "req-123";
     private static final String NODE_ID = "node-1";
-    private static final String ACTOR_LOGIN = "admin";
+    private static final String ACTOR_NAME = "admin";
     private static final String REASON = "policy violation";
     private static final OffsetDateTime FIXED_TIME = OffsetDateTime.of(
             2026, 9, 2, 0, 0, 0, 0, ZoneOffset.UTC
@@ -69,7 +69,7 @@ class AdminUserServiceImplTest {
         requestDto = UserStatusRequestDto.builder()
                 .targetUserId(targetUserId)
                 .actorUserId(actorUserId)
-                .actorLogin(ACTOR_LOGIN)
+                .actorDisplayName(ACTOR_NAME).actorEmail("admin@example.com")
                 .role(GlobalRole.GLOBAL_ADMIN)
                 .reason(REASON)
                 .build();
@@ -122,7 +122,8 @@ class AdminUserServiceImplTest {
             AuditEventDto auditEvent = auditCaptor.getValue();
             Assertions.assertThat(auditEvent.getRequestId()).isEqualTo(REQUEST_ID);
             Assertions.assertThat(auditEvent.getActorUserId()).isEqualTo(actorUserId);
-            Assertions.assertThat(auditEvent.getActorLogin()).isEqualTo(ACTOR_LOGIN);
+            Assertions.assertThat(auditEvent.getActorDisplayName()).isEqualTo(ACTOR_NAME);
+            Assertions.assertThat(auditEvent.getActorEmail()).isEqualTo("admin@example.com");
             Assertions.assertThat(auditEvent.getActorRoles()).isNotNull();
             Assertions.assertThat(auditEvent.getAction()).isEqualTo("USER_BLOCKED");
             Assertions.assertThat(auditEvent.getTargetService()).isEqualTo(AdminUserServiceImpl.AUTH_SERVICE_KEY);

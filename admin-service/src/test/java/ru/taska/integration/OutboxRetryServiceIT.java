@@ -47,7 +47,7 @@ class OutboxRetryServiceIT {
     private static final String SERVICE = "issue";
     private static final String REQUEST_ID = "tas-106-it-request";
     private static final String REASON = "Manual retry after investigation";
-    private static final String ACTOR_LOGIN = "global-admin";
+    private static final String ACTOR_NAME = "global-admin";
     private static final String NODE_ID = "admin-it-node";
 
     private static final UUID ACTOR_USER_ID =
@@ -204,7 +204,8 @@ class OutboxRetryServiceIT {
                         eventId,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .assertNext(snapshot -> assertSuccessfulSnapshot(
@@ -221,7 +222,8 @@ class OutboxRetryServiceIT {
 
         assertEquals(REQUEST_ID, audit.requestId());
         assertEquals(ACTOR_USER_ID, audit.actorUserId());
-        assertEquals(ACTOR_LOGIN, audit.actorLogin());
+        assertEquals(ACTOR_NAME, audit.actorDisplayName());
+        assertEquals("admin@example.com", audit.actorEmail());
         assertEquals(actorRoles, audit.actorRoles());
 
         assertEquals("RETRY_OUTBOX_EVENT", audit.action());
@@ -289,7 +291,8 @@ class OutboxRetryServiceIT {
                             eventId,
                             REASON,
                             ACTOR_USER_ID,
-                            ACTOR_LOGIN,
+                            ACTOR_NAME,
+                "admin@example.com",
                             actorRoles
                     ))
                     .expectError()
@@ -401,7 +404,8 @@ class OutboxRetryServiceIT {
         String sql = """
                 SELECT request_id,
                        actor_user_id,
-                       actor_login,
+                       actor_display_name,
+                       actor_email,
                        actor_roles::text AS actor_roles,
                        action,
                        target_service,
@@ -427,7 +431,8 @@ class OutboxRetryServiceIT {
                 return new AuditRow(
                         resultSet.getString("request_id"),
                         resultSet.getObject("actor_user_id", UUID.class),
-                        resultSet.getString("actor_login"),
+                        resultSet.getString("actor_display_name"),
+                        resultSet.getString("actor_email"),
                         objectMapper.readTree(
                                 resultSet.getString("actor_roles")
                         ),
@@ -593,7 +598,8 @@ class OutboxRetryServiceIT {
     private record AuditRow(
             String requestId,
             UUID actorUserId,
-            String actorLogin,
+            String actorDisplayName,
+            String actorEmail,
             JsonNode actorRoles,
             String action,
             String targetService,

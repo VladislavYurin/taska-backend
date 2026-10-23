@@ -29,7 +29,7 @@ import static org.mockito.ArgumentMatchers.*;
 class UserServiceImplTest {
     private final ReactorProfileServiceGrpc.ReactorProfileServiceStub stub = Mockito.mock(ReactorProfileServiceGrpc.ReactorProfileServiceStub.class);
     private final GatewayContext context = new GatewayContext("request", "gateway", GatewayUserContext.builder()
-            .userId(UUID.randomUUID().toString()).email("user@example.com").login("user")
+            .userId(UUID.randomUUID().toString()).email("user@example.com")
             .displayName("User").status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
     private final ru.taska.transport.grpc.GrpcNotificationSettingsClient notificationSettings = Mockito.mock(ru.taska.transport.grpc.GrpcNotificationSettingsClient.class);
     private UserServiceImpl service;
@@ -109,7 +109,6 @@ class UserServiceImplTest {
             assertThat(result.getAvatar()).isNull();
             assertThat(result.getAvatarUnavailable()).isEqualTo(avatarUnavailable);
             assertThat(result.getId()).isEqualTo(context.userContext().userId());
-            assertThat(result.getLogin()).isEqualTo("user");
             assertThat(result.getEmail()).isEqualTo("user@example.com");
             assertThat(result.getDisplayName()).isEqualTo("User");
         }).verifyComplete();

@@ -146,6 +146,6 @@ class UserDirectoryControllerTest {
         when(auth.validateAccessToken(any(), any(), eq("token")))
                 .thenReturn(Mono.just(ValidateAccessTokenResponse.newBuilder().setUserContext(userContext).build()));
         when(contextMapper.mapToGatewayUserContext(userContext)).thenReturn(new GatewayUserContext(
-                ACTOR, "actor", "actor@example.test", "Actor", GatewayUserStatus.ACTIVE, role));
+                ACTOR, "actor@example.test", "Actor", GatewayUserStatus.ACTIVE, role));
     }
 }

@@ -18,6 +18,22 @@ public interface IssueRepositoryCustom {
     Mono<Long> countByFilter(UUID projectId, String status, UUID assigneeId);
 
     /**
+     * Находит неудалённые задачи проекта с меткой {@code labelId}, сначала новые.
+     * {@code statusKey} и {@code assigneeId} необязательны: {@code null} снимает фильтр.
+     */
+    Flux<Issue> findByLabelIdWithFilters(
+            UUID projectId,
+            UUID labelId,
+            String statusKey,
+            UUID assigneeId,
+            int limit,
+            long offset
+    );
+
+    /** Считает задачи по тем же условиям, что и {@link #findByLabelIdWithFilters}. */
+    Mono<Long> countByLabelIdWithFilters(UUID projectId, UUID labelId, String statusKey, UUID assigneeId);
+
+    /**
      * Поиск задач с фильтрацией и полнотекстовым поиском.
      *
      * @param projectId   идентификатор проекта (может быть null)
@@ -36,8 +52,8 @@ public interface IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery,
             int limit,
             long offset
@@ -51,8 +67,8 @@ public interface IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery
     );
 
@@ -64,8 +80,8 @@ public interface IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery,
             int limit,
             long offset
@@ -79,8 +95,8 @@ public interface IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery
     );
 

@@ -36,7 +36,9 @@ public class GrpcAdminUserManagementService {
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getActorUserId(), "body.actorUserId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getActorLogin(), "body.actorLogin"),
+                                req.getBody().getActorDisplayName(), "body.actorDisplayName"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getActorEmail(), "body.actorEmail"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getReason(), "body.reason")
                         )
@@ -73,7 +75,9 @@ public class GrpcAdminUserManagementService {
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getActorUserId(), "body.actorUserId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getActorLogin(), "body.actorLogin"),
+                                req.getBody().getActorDisplayName(), "body.actorDisplayName"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getActorEmail(), "body.actorEmail"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getReason(), "body.reason")
                         )
@@ -110,7 +114,9 @@ public class GrpcAdminUserManagementService {
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getActorUserId(), "body.actorUserId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getActorLogin(), "body.actorLogin"),
+                                req.getBody().getActorDisplayName(), "body.actorDisplayName"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                req.getBody().getActorEmail(), "body.actorEmail"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getReason(), "body.reason")
                         )

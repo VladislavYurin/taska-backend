@@ -261,7 +261,6 @@ class AdminUserManagementServiceImplTest {
     private User user(UserStatus status, GlobalRole globalRole) {
         return User.builder()
                 .id(targetUserId)
-                .login("test-user")
                 .email("test@example.com")
                 .status(status)
                 .globalRole(globalRole)

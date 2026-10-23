@@ -573,7 +573,6 @@ public class ProjectControllerTest {
 
         var userContext = GatewayUserContext.builder()
                 .userId(USER_ID)
-                .login("test-login")
                 .email("test@example.com")
                 .displayName("Test User")
                 .status(GatewayUserStatus.ACTIVE)

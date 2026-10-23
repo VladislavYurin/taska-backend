@@ -11,6 +11,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.dto.FilterAuditDTO;
 import ru.taska.entity.AuditLog;
+import ru.taska.filter.CriteriaRenderer;
+import ru.taska.filter.FilterBuilder;
 
 @Slf4j
 @Repository
@@ -55,41 +57,18 @@ public class AdminRepositoryCustomImpl implements AdminRepositoryCustom {
     }
 
     private Criteria buildCriteria(FilterAuditDTO filter) {
-        Criteria criteria = Criteria.empty();
-
-        if (filter != null) {
-            if (filter.actorUserId() != null) {
-                criteria = criteria.and("actor_user_id").is(filter.actorUserId());
-            }
-
-            if (filter.action() != null && !filter.action().isEmpty()) {
-                criteria = criteria.and("action").is(filter.action());
-            }
-
-            if (filter.targetService() != null && !filter.targetService().isEmpty()) {
-                criteria = criteria.and("target_service").is(filter.targetService());
-            }
-
-            if (filter.targetTable() != null && !filter.targetTable().isEmpty()) {
-                criteria = criteria.and("target_table").is(filter.targetTable());
-            }
-
-            if (filter.targetId() != null && !filter.targetId().isEmpty()) {
-                criteria = criteria.and("target_id").is(filter.targetId());
-            }
-
-            if (filter.requestId() != null && !filter.requestId().isEmpty()) {
-                criteria = criteria.and("request_id").is(filter.requestId());
-            }
-
-            if (filter.createdAtFrom() != null) {
-                criteria = criteria.and(CREATED_AT).greaterThanOrEquals(filter.createdAtFrom());
-            }
-
-            if (filter.createdAtTo() != null) {
-                criteria = criteria.and(CREATED_AT).lessThanOrEquals(filter.createdAtTo());
-            }
+        if (filter == null) {
+            return Criteria.empty();
         }
-        return criteria;
+        return CriteriaRenderer.render(FilterBuilder.create()
+                .eq("actor_user_id", filter.actorUserId())
+                .eq("action", filter.action())
+                .eq("target_service", filter.targetService())
+                .eq("target_table", filter.targetTable())
+                .eq("target_id", filter.targetId())
+                .eq("request_id", filter.requestId())
+                .gte(CREATED_AT, filter.createdAtFrom())
+                .lte(CREATED_AT, filter.createdAtTo())
+                .build());
     }
 }

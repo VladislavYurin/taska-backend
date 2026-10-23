@@ -5,8 +5,11 @@ import io.grpc.StatusRuntimeException;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -29,6 +32,9 @@ import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.service.IssueService;
 import ru.taska.transport.grpc.GrpcIssueService;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,6 +62,9 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @Autowired
     private IssueLabelsRepository issueLabelsRepository;
+
+    @Autowired
+    private DatabaseClient databaseClient;
 
     private static final UUID PROJECT_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID PROJECT_ID_2 = UUID.fromString("00000000-0000-0000-0000-000000000002");
@@ -85,6 +94,14 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     private List<Issue> savedIssues;
 
+    /**
+     * {@code null} — выборка через Criteria API, число — сырой SQL с ROW_NUMBER().
+     * Лимит 100 заведомо больше любой колонки, поэтому на результат фильтров он не влияет.
+     */
+    static List<Integer> pageSizesPerColumn() {
+        return Arrays.asList(null, 100);
+    }
+
     @BeforeEach
     void refillDb(){
         attachments.deleteAll().block();
@@ -106,11 +123,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
                         .build()));
     }
 
-    @Test
-    void shouldReturnIssueFromGivenProject(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssueFromGivenProject(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of("DONE"), null, null, null, null)
+                null, null, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(4);
 
@@ -123,11 +141,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void shouldReturnIssuesFilteredByIssueType(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssuesFilteredByIssueType(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null,  null, ISSUE_TYPE_BUG, true, List.of("DONE"),null,  null, null, null)
+                null,  null, ISSUE_TYPE_BUG, true, List.of("DONE"),null,  pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -140,11 +159,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void shouldReturnIssuesFilteredByAssignee(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssuesFilteredByAssignee(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, ASSIGNEE_ID_1, null, true, List.of("DONE"), null, null, null, null)
+                null, ASSIGNEE_ID_1, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -157,11 +177,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void shouldReturnIssuesFilteredByStatusKey(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssuesFilteredByStatusKey(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                ISSUE_STATUS_KEY_TODO, null, null, true, List.of("DONE"), null, null, null, null)
+                ISSUE_STATUS_KEY_TODO, null, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -174,11 +195,12 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void shouldExcludeDoneIssuesWhenIncludeDoneIsFalse(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldExcludeDoneIssuesWhenIncludeDoneIsFalse(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, false, List.of("DONE"), null,null, null, null)
+                null, null, null, false, List.of("DONE"), null, pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).hasSize(2);
 
@@ -191,13 +213,73 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void shouldReturnEmptyListWhenStatusKeyDoesNotMatch(){
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldNotFilterByDoneStatusesWhenDoneStatusKeysIsNull(Integer pageSizePerColumn){
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, false, null, null, pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .sorted()
+                            .toList()
+            ).containsExactly("TEST-1", "TEST-2", "TEST-3", "TEST-4");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnEmptyListWhenStatusKeyDoesNotMatch(Integer pageSizePerColumn){
         StepVerifier.create(issueService.listIssueBoard(
                 REQUEST_ID, NODE_ID,  ACTOR_USER_ID,  PROJECT_ID_1,
-                ISSUE_STATUS_KEY_IN_PROGRESS, null, null, true, List.of("DONE"), null, null, null, null)
+                ISSUE_STATUS_KEY_IN_PROGRESS, null, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
         ).assertNext(result -> {
             Assertions.assertThat(result).isEmpty();
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldExcludeSoftDeletedIssues(Integer pageSizePerColumn){
+        Issue deleted = buildIssue(9, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, ISSUE_TYPE_BUG);
+        deleted.setDeletedAt(Instant.now());
+        issueRepository.save(deleted).block();
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .sorted()
+                            .toList()
+            ).containsExactly("TEST-1", "TEST-2", "TEST-3", "TEST-4");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldSortIssuesByStatusKeyThenByCreatedAt(Integer pageSizePerColumn){
+        // Внутри колонки порядок создания обратен номерам задач, чтобы сортировка
+        // не совпала случайно с порядком вставки
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+        setCreatedAt(savedIssues.get(1), base);                       // TEST-2, TODO
+        setCreatedAt(savedIssues.get(0), base.plusSeconds(60));       // TEST-1, TODO
+        setCreatedAt(savedIssues.get(3), base.plusSeconds(120));      // TEST-4, DONE
+        setCreatedAt(savedIssues.get(2), base.plusSeconds(180));      // TEST-3, DONE
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), null, pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .toList()
+            ).containsExactly("TEST-4", "TEST-3", "TEST-2", "TEST-1");
         }).verifyComplete();
     }
 
@@ -216,6 +298,213 @@ public class ListIssuesForBoardIT extends AbstractIT {
             byStatus.values().forEach(issuesInColumn ->
                     Assertions.assertThat(issuesInColumn).hasSize(1)
             );
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldKeepOldestIssuesInEachColumnWhenPageSizePerColumnIsSet(){
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+        setCreatedAt(savedIssues.get(1), base);                       // TEST-2, TODO
+        setCreatedAt(savedIssues.get(0), base.plusSeconds(60));       // TEST-1, TODO
+        setCreatedAt(savedIssues.get(3), base.plusSeconds(120));      // TEST-4, DONE
+        setCreatedAt(savedIssues.get(2), base.plusSeconds(180));      // TEST-3, DONE
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), null, 1, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .toList()
+            ).containsExactly("TEST-4", "TEST-2");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssuesFilteredByLabelId(Integer pageSizePerColumn){
+        ProjectLabels label = saveLabel("urgent");
+        attachLabel(savedIssues.get(0), label);
+        attachLabel(savedIssues.get(1), label);
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), List.of(label.getId()), pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(result).hasSize(2);
+
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .sorted()
+                            .toList()
+            ).containsExactly("TEST-1", "TEST-2");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnIssuesMatchingAnyOfGivenLabelIds(Integer pageSizePerColumn){
+        ProjectLabels urgent = saveLabel("urgent");
+        ProjectLabels backend = saveLabel("backend");
+        attachLabel(savedIssues.get(0), urgent);
+        attachLabel(savedIssues.get(2), backend);
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), List.of(urgent.getId(), backend.getId()), pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .sorted()
+                            .toList()
+            ).containsExactly("TEST-1", "TEST-3");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldCombineLabelFilterWithOtherFilters(Integer pageSizePerColumn){
+        ProjectLabels label = saveLabel("urgent");
+        attachLabel(savedIssues.get(0), label);   // TEST-1: TODO, ASSIGNEE_1
+        attachLabel(savedIssues.get(1), label);   // TEST-2: TODO, ASSIGNEE_2
+        attachLabel(savedIssues.get(2), label);   // TEST-3: DONE, ASSIGNEE_1
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, ASSIGNEE_ID_1, null, false, List.of("DONE"), List.of(label.getId()), pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .toList()
+            ).containsExactly("TEST-1");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldNotReturnLabeledIssuesFromOtherProject(Integer pageSizePerColumn){
+        ProjectLabels label = saveLabel("urgent");
+        attachLabel(savedIssues.get(0), label);   // TEST-1, PROJECT_ID_1
+        attachLabel(savedIssues.get(4), label);   // TEST-5, PROJECT_ID_2
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), List.of(label.getId()), pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(
+                    result.stream()
+                            .map(IssueBoardResponse::getIssueKey)
+                            .toList()
+            ).containsExactly("TEST-1");
+        }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @MethodSource("pageSizesPerColumn")
+    void shouldReturnEmptyListWhenLabelIdMatchesNothing(Integer pageSizePerColumn){
+        ProjectLabels unusedLabel = saveLabel("unused");
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), List.of(unusedLabel.getId()), pageSizePerColumn, null, null)
+        ).assertNext(result -> {
+            Assertions.assertThat(result).isEmpty();
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldReturnInvalidArgumentWhenLabelIdIsNotAValidUuid(){
+        ListIssuesForBoardRequest request = ListIssuesForBoardRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId(REQUEST_ID)
+                        .setNodeId(NODE_ID)
+                        .build())
+                .setBody(ListIssuesForBoardRequestBody.newBuilder()
+                        .setProjectId(PROJECT_ID_1.toString())
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setIncludeDone(true)
+                        .addLabelIds("not-a-valid-uuid")
+                        .build())
+                .build();
+
+        StepVerifier.create(grpcIssueService.listIssuesForBoard(Mono.just(request)))
+                .expectErrorSatisfies(error -> {
+                    Assertions.assertThat(error).isInstanceOf(StatusRuntimeException.class);
+
+                    StatusRuntimeException ex = (StatusRuntimeException) error;
+                    Assertions.assertThat(ex.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
+                    Assertions.assertThat(ex.getStatus().getDescription()).contains("body.labelIds");
+                })
+                .verify();
+    }
+
+    /**
+     * Явно переданный пустой statusKey считается незаданным: фильтр по колонке не применяется,
+     * а не превращается в {@code status_key = ''}.
+     */
+    @Test
+    void shouldNotFilterByStatusKeyWhenItIsExplicitlyBlank(){
+        ListIssuesForBoardRequest request = ListIssuesForBoardRequest.newBuilder()
+                .setHeader(Header.newBuilder()
+                        .setRequestId(REQUEST_ID)
+                        .setNodeId(NODE_ID)
+                        .build())
+                .setBody(ListIssuesForBoardRequestBody.newBuilder()
+                        .setProjectId(PROJECT_ID_1.toString())
+                        .setActorUserId(ACTOR_USER_ID.toString())
+                        .setIssueType(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG)
+                        .setIncludeDone(true)
+                        .setStatusKey("")
+                        .build())
+                .build();
+
+        Assertions.assertThat(grpcIssueService.listIssuesForBoard(Mono.just(request))
+                        .block(Duration.ofSeconds(10))
+                        .getIssuesList()
+                        .stream()
+                        .map(IssueBoardResponse::getIssueKey)
+                        .sorted()
+                        .toList())
+                .containsExactly("TEST-1", "TEST-4");
+    }
+
+    @Test
+    void shouldReturnBothLabelIdsForIssueWithTwoLabels(){
+        ProjectLabels label1 = saveLabel("bug");
+        ProjectLabels label2 = saveLabel("urgent");
+        attachLabel(savedIssues.get(0), label1);
+        attachLabel(savedIssues.get(0), label2);
+
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), null, null, null, null)
+        ).assertNext(result -> {
+            IssueBoardResponse card = result.stream()
+                    .filter(r -> r.getIssueKey().equals("TEST-1"))
+                    .findFirst()
+                    .orElseThrow();
+
+            Assertions.assertThat(card.getLabelIdsList())
+                    .containsExactlyInAnyOrder(label1.getId().toString(), label2.getId().toString());
+        }).verifyComplete();
+    }
+
+    @Test
+    void shouldReturnEmptyLabelIdsListForIssueWithoutLabels(){
+        StepVerifier.create(issueService.listIssueBoard(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                null, null, null, true, List.of("DONE"), null, null, null, null)
+        ).assertNext(result -> {
+            IssueBoardResponse card = result.stream()
+                    .filter(r -> r.getIssueKey().equals("TEST-1"))
+                    .findFirst()
+                    .orElseThrow();
+
+            Assertions.assertThat(card.getLabelIdsList()).isEmpty();
         }).verifyComplete();
     }
 
@@ -308,155 +597,6 @@ public class ListIssuesForBoardIT extends AbstractIT {
     }
 
     @Test
-    void shouldReturnIssuesFilteredByLabelId(){
-        ProjectLabels label = projectLabelsRepository.save(
-                ProjectLabels.builder()
-                        .projectId(PROJECT_ID_1)
-                        .name("urgent")
-                        .color("#FF0000")
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-
-        issueLabelsRepository.save(
-                IssueLabels.builder()
-                        .issueId(savedIssues.get(0).getId())
-                        .labelId(label.getId())
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-        issueLabelsRepository.save(
-                IssueLabels.builder()
-                        .issueId(savedIssues.get(1).getId())
-                        .labelId(label.getId())
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-
-        StepVerifier.create(issueService.listIssueBoard(
-                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of("DONE"), List.of(label.getId()), null, null, null)
-        ).assertNext(result -> {
-            Assertions.assertThat(result).hasSize(2);
-
-            Assertions.assertThat(
-                    result.stream()
-                            .map(IssueBoardResponse::getIssueKey)
-                            .sorted()
-                            .toList()
-            ).containsExactly("TEST-1", "TEST-2");
-        }).verifyComplete();
-    }
-
-    @Test
-    void shouldReturnEmptyListWhenLabelIdMatchesNothing(){
-        ProjectLabels unusedLabel = projectLabelsRepository.save(
-                ProjectLabels.builder()
-                        .projectId(PROJECT_ID_1)
-                        .name("unused")
-                        .color("#00FF00")
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-
-        StepVerifier.create(issueService.listIssueBoard(
-                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of("DONE"), List.of(unusedLabel.getId()), null, null, null)
-        ).assertNext(result -> {
-            Assertions.assertThat(result).isEmpty();
-        }).verifyComplete();
-    }
-
-    @Test
-    void shouldReturnInvalidArgumentWhenLabelIdIsNotAValidUuid(){
-        ListIssuesForBoardRequest request = ListIssuesForBoardRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(REQUEST_ID)
-                        .setNodeId(NODE_ID)
-                        .build())
-                .setBody(ListIssuesForBoardRequestBody.newBuilder()
-                        .setProjectId(PROJECT_ID_1.toString())
-                        .setActorUserId(ACTOR_USER_ID.toString())
-                        .setIncludeDone(true)
-                        .addLabelIds("not-a-valid-uuid")
-                        .build())
-                .build();
-
-        StepVerifier.create(grpcIssueService.listIssuesForBoard(Mono.just(request)))
-                .expectErrorSatisfies(error -> {
-                    Assertions.assertThat(error).isInstanceOf(StatusRuntimeException.class);
-
-                    StatusRuntimeException ex = (StatusRuntimeException) error;
-                    Assertions.assertThat(ex.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
-                    Assertions.assertThat(ex.getStatus().getDescription()).contains("body.labelIds");
-                })
-                .verify();
-    }
-
-    @Test
-    void shouldReturnBothLabelIdsForIssueWithTwoLabels(){
-        ProjectLabels label1 = projectLabelsRepository.save(
-                ProjectLabels.builder()
-                        .projectId(PROJECT_ID_1)
-                        .name("bug")
-                        .color("#FF0000")
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-        ProjectLabels label2 = projectLabelsRepository.save(
-                ProjectLabels.builder()
-                        .projectId(PROJECT_ID_1)
-                        .name("urgent")
-                        .color("#00FF00")
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-
-        issueLabelsRepository.save(
-                IssueLabels.builder()
-                        .issueId(savedIssues.get(0).getId())
-                        .labelId(label1.getId())
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-        issueLabelsRepository.save(
-                IssueLabels.builder()
-                        .issueId(savedIssues.get(0).getId())
-                        .labelId(label2.getId())
-                        .createdBy(REPORTER_ID)
-                        .build()
-        ).block();
-
-        StepVerifier.create(issueService.listIssueBoard(
-                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of("DONE"), null, null, null, null)
-        ).assertNext(result -> {
-            IssueBoardResponse card = result.stream()
-                    .filter(r -> r.getIssueKey().equals("TEST-1"))
-                    .findFirst()
-                    .orElseThrow();
-
-            Assertions.assertThat(card.getLabelIdsList())
-                    .containsExactlyInAnyOrder(label1.getId().toString(), label2.getId().toString());
-        }).verifyComplete();
-    }
-
-    @Test
-    void shouldReturnEmptyLabelIdsListForIssueWithoutLabels(){
-        StepVerifier.create(issueService.listIssueBoard(
-                REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of("DONE"), null, null, null, null)
-        ).assertNext(result -> {
-            IssueBoardResponse card = result.stream()
-                    .filter(r -> r.getIssueKey().equals("TEST-1"))
-                    .findFirst()
-                    .orElseThrow();
-
-            Assertions.assertThat(card.getLabelIdsList()).isEmpty();
-        }).verifyComplete();
-    }
-
-    @Test
     void boardCountsOnlyActiveAttachmentsAndKeepsCardsWithNullDescription() {
         var issue = savedIssues.getFirst();
         issue.setDescription(null);
@@ -492,6 +632,36 @@ public class ListIssuesForBoardIT extends AbstractIT {
                             .satisfies(card -> Assertions.assertThat(card.getId()).isEqualTo(issue.getId().toString())))
                     .verifyComplete();
         }
+    }
+
+    private ProjectLabels saveLabel(String name){
+        return projectLabelsRepository.save(
+                ProjectLabels.builder()
+                        .projectId(PROJECT_ID_1)
+                        .name(name)
+                        .color("#FF0000")
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+    }
+
+    private void attachLabel(Issue issue, ProjectLabels label){
+        issueLabelsRepository.save(
+                IssueLabels.builder()
+                        .issueId(issue.getId())
+                        .labelId(label.getId())
+                        .createdBy(REPORTER_ID)
+                        .build()
+        ).block();
+    }
+
+    /** created_at выставляется аудитом при сохранении, поэтому для детерминированного порядка он переписывается напрямую. */
+    private void setCreatedAt(Issue issue, Instant createdAt){
+        databaseClient.sql("UPDATE taska.issues SET created_at = :createdAt WHERE id = :id")
+                .bind("createdAt", createdAt)
+                .bind("id", issue.getId())
+                .then()
+                .block();
     }
 
     private Issue buildIssue(int number, UUID projectId, String statusKey, UUID assigneeId, IssueType issueType){

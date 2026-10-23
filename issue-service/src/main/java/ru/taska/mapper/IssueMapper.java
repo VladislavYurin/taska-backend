@@ -438,6 +438,7 @@ public class IssueMapper {
         issue.setDueDate(row.get("due_date", java.time.LocalDate.class));
         issue.setOriginalEstimateMinutes(row.get("original_estimate_minutes", Integer.class));
         issue.setRemainingEstimateMinutes(row.get("remaining_estimate_minutes", Integer.class));
+        issue.setTimeSpentMinutes(row.get("time_spent_minutes", Integer.class));
 
         // Даты
         setOptionalInstantField(issue::setCreatedAt, row.get("created_at", java.time.OffsetDateTime.class));
