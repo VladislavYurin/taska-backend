@@ -62,6 +62,9 @@ enum IssueLinkViewType {
 }
 
 service IssueService {
+  // Controlled workflow administration: refuses unmapped issues or moves them atomically
+  // with history and outbox before workflow-service removes the configuration.
+  rpc MigrateWorkflowIssues(MigrateWorkflowIssuesRequest) returns (MigrateWorkflowIssuesResponse);
   /**
    * Создаёт новую задачу в проекте.
    */
@@ -2472,4 +2475,17 @@ message CountProjectIssuesBatchInternalResponse {
   repeated ProjectIssueCount items = 1;
   // Older servers ignore filters; destructive callers must fail closed.
   bool filters_applied = 2;
+}
+
+message MigrateWorkflowIssuesRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  repeated string issue_type_keys = 4;
+  repeated string valid_status_keys = 5;
+  map<string, string> status_mappings = 6;
+  string workflow_id = 7;
+}
+message MigrateWorkflowIssuesResponse {
+  int64 moved_count = 1;
 }

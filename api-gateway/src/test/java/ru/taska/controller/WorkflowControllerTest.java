@@ -398,9 +398,9 @@ class WorkflowControllerTest {
     @DisplayName("POST /workflows: 201 и созданный workflow")
     void createProjectWorkflow_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
-        var response = new WorkflowResponseDto();
-        response.setId(UUID.randomUUID());
-        response.setName("Development");
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        response.getWorkflow().setId(UUID.randomUUID());
+        response.getWorkflow().setName("Development");
 
         Mockito.when(workflowClient.createWorkflow(Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.any(GatewayContext.class)))
                 .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowRequestDto>>getArgument(1).map(request -> response));
@@ -415,7 +415,7 @@ class WorkflowControllerTest {
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+                .expectBody(ProjectWorkflowDto.class).isEqualTo(response);
     }
 
     @Test
@@ -424,7 +424,7 @@ class WorkflowControllerTest {
         mockAuthenticatedUser();
         Mockito.when(workflowClient.createWorkflow(Mockito.eq(PROJECT_ID), Mockito.any(), Mockito.any(GatewayContext.class)))
                 .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowRequestDto>>getArgument(1)
-                        .map(request -> new WorkflowResponseDto()));
+                        .map(request -> new ProjectWorkflowDto()));
 
         webTestClient.post()
                 .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
@@ -440,9 +440,9 @@ class WorkflowControllerTest {
     void addWorkflowStatus_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
         UUID workflowId = UUID.randomUUID();
-        var response = new WorkflowResponseDto();
-        response.setId(workflowId);
-        response.setVersion(2);
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        response.getWorkflow().setId(workflowId);
+        response.getWorkflow().setVersion(2);
 
         Mockito.when(workflowClient.addWorkflowStatus(Mockito.eq(PROJECT_ID), Mockito.eq(workflowId), Mockito.any(),
                         Mockito.any(GatewayContext.class)))
@@ -455,7 +455,7 @@ class WorkflowControllerTest {
                 .bodyValue(new CreateWorkflowStatusRequestDto("CODE_REVIEW", "Code Review", WorkflowStatusCategoryDto.IN_PROGRESS, 25))
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+                .expectBody(ProjectWorkflowDto.class).isEqualTo(response);
     }
 
     @ParameterizedTest
@@ -482,9 +482,9 @@ class WorkflowControllerTest {
     void addWorkflowTransition_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
         UUID workflowId = UUID.randomUUID();
-        var response = new WorkflowResponseDto();
-        response.setId(workflowId);
-        response.setVersion(3);
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        response.getWorkflow().setId(workflowId);
+        response.getWorkflow().setVersion(3);
 
         Mockito.when(workflowClient.addWorkflowTransition(Mockito.eq(PROJECT_ID), Mockito.eq(workflowId), Mockito.any(),
                         Mockito.any(GatewayContext.class)))
@@ -497,7 +497,7 @@ class WorkflowControllerTest {
                 .bodyValue(new CreateWorkflowTransitionRequestDto("IN_PROGRESS", "TODO", "Stop Progress", 40))
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(WorkflowResponseDto.class).isEqualTo(response);
+                .expectBody(ProjectWorkflowDto.class).isEqualTo(response);
     }
 
     private void mockAuthenticatedUser() {

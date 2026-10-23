@@ -76,6 +76,7 @@ import ru.taska.api.issue.v1.WatchIssueResponse;
 public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServiceImplBase{
 
     private final GrpcIssueService grpcIssueService;
+    private final WorkflowIssueMigrationGrpcService workflowIssueMigration;
     private final GrpcIssueCommentService grpcIssueCommentService;
     private final GrpcIssueLinkService grpcIssueLinkService;
     private final GrpcIssueWatcherService grpcIssueWatcherService;
@@ -314,5 +315,12 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
         return grpcIssueService.listIssuesForBoard(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("ListIssuesForBoard"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.issue.v1.MigrateWorkflowIssuesResponse> migrateWorkflowIssues(
+            Mono<ru.taska.api.issue.v1.MigrateWorkflowIssuesRequest> request) {
+        return workflowIssueMigration.migrate(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("migrateWorkflowIssues"));
     }
 }

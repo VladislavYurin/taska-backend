@@ -10,6 +10,12 @@ import ru.taska.entity.WorkflowEntity;
 import java.util.UUID;
 
 public interface WorkflowRepository extends ReactiveCrudRepository<WorkflowEntity, UUID> {
+    @Query("SELECT * FROM taska.workflows WHERE id=:workflowId FOR UPDATE")
+    Mono<WorkflowEntity> findByIdForUpdate(UUID workflowId);
+
+    @Modifying
+    @Query("UPDATE taska.workflows SET name=:name,version=version+1,updated_at=now() WHERE id=:workflowId AND version=:version")
+    Mono<Integer> updateMetadata(UUID workflowId, String name, int version);
 
     @Query("""
     SELECT w.*

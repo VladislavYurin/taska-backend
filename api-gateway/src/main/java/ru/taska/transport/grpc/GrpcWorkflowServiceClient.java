@@ -14,6 +14,7 @@ import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
+import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.mapper.WorkflowMapper;
 
 import java.util.UUID;
@@ -96,7 +97,7 @@ public class GrpcWorkflowServiceClient {
      * @param context   текущий контекст окружения и сквозной трассировки запроса на Gateway
      * @return {@link Mono} с созданным workflow {@link WorkflowResponseDto}
      */
-    public Mono<WorkflowResponseDto> createWorkflow(
+    public Mono<ProjectWorkflowDto> createWorkflow(
             UUID projectId,
             Mono<CreateWorkflowRequestDto> request,
             GatewayContext context
@@ -106,7 +107,7 @@ public class GrpcWorkflowServiceClient {
         return request
                 .flatMap(dto -> dynamicStub().createWorkflow(
                         workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context)))
-                .map(workflowMapper::toWorkflowResponseRestDto);
+                .map(workflowMapper::toMutationResponseRestDto);
     }
 
     /**
@@ -118,7 +119,7 @@ public class GrpcWorkflowServiceClient {
      * @param context    текущий контекст окружения и сквозной трассировки запроса на Gateway
      * @return {@link Mono} с изменённым workflow {@link WorkflowResponseDto}
      */
-    public Mono<WorkflowResponseDto> addWorkflowStatus(
+    public Mono<ProjectWorkflowDto> addWorkflowStatus(
             UUID projectId,
             UUID workflowId,
             Mono<CreateWorkflowStatusRequestDto> request,
@@ -129,7 +130,7 @@ public class GrpcWorkflowServiceClient {
         return request
                 .flatMap(dto -> dynamicStub().addWorkflowStatus(
                         workflowMapper.toAddWorkflowStatusGrpcRequest(projectId, workflowId, dto, context)))
-                .map(workflowMapper::toWorkflowResponseRestDto);
+                .map(workflowMapper::toMutationResponseRestDto);
     }
 
     /**
@@ -141,7 +142,7 @@ public class GrpcWorkflowServiceClient {
      * @param context    текущий контекст окружения и сквозной трассировки запроса на Gateway
      * @return {@link Mono} с изменённым workflow {@link WorkflowResponseDto}
      */
-    public Mono<WorkflowResponseDto> addWorkflowTransition(
+    public Mono<ProjectWorkflowDto> addWorkflowTransition(
             UUID projectId,
             UUID workflowId,
             Mono<CreateWorkflowTransitionRequestDto> request,
@@ -152,6 +153,6 @@ public class GrpcWorkflowServiceClient {
         return request
                 .flatMap(dto -> dynamicStub().addWorkflowTransition(
                         workflowMapper.toAddWorkflowTransitionGrpcRequest(projectId, workflowId, dto, context)))
-                .map(workflowMapper::toWorkflowResponseRestDto);
+                .map(workflowMapper::toMutationResponseRestDto);
     }
 }

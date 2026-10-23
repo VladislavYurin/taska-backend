@@ -139,6 +139,10 @@
                             <!-- PATCH-тело пишется вручную: сгенерированный класс не отличает отсутствующее поле от явного null -->
                             <schemaMappings>
                                 <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
+                                <schemaMapping>PatchWorkflowRequestDto=ru.taska.domain.dto.PatchWorkflowRequestDto</schemaMapping>
+                                <schemaMapping>PatchWorkflowStatusRequestDto=ru.taska.domain.dto.PatchWorkflowStatusRequestDto</schemaMapping>
+                                <schemaMapping>PatchWorkflowTransitionRequestDto=ru.taska.domain.dto.PatchWorkflowTransitionRequestDto</schemaMapping>
+                                <schemaMapping>DeleteProjectWorkflowRequestDto=ru.taska.domain.dto.DeleteProjectWorkflowRequestDto</schemaMapping>
                                 <schemaMapping>PatchProjectIssueTypeRequestDto=ru.taska.domain.dto.PatchProjectIssueTypeRequestDto</schemaMapping>
                                 <schemaMapping>CreateProjectIssueTypeRequestDto=ru.taska.domain.dto.CreateProjectIssueTypeRequestDto</schemaMapping>
                             </schemaMappings>

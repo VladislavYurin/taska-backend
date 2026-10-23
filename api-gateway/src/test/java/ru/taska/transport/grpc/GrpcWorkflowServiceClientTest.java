@@ -29,6 +29,7 @@ import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
+import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.domain.dto.WorkflowStatusCategoryDto;
 import ru.taska.mapper.WorkflowMapper;
 
@@ -160,11 +161,11 @@ class GrpcWorkflowServiceClientTest {
         var body = new CreateWorkflowRequestDto();
         var grpcRequest = CreateWorkflowRequest.getDefaultInstance();
         var grpcResponse = WorkflowResponse.getDefaultInstance();
-        var restResponse = new WorkflowResponseDto();
+        var restResponse = new ProjectWorkflowDto();
 
         Mockito.when(workflowMapper.toCreateWorkflowGrpcRequest(PROJECT_ID, body, context)).thenReturn(grpcRequest);
         Mockito.when(stub.createWorkflow(grpcRequest)).thenReturn(Mono.just(grpcResponse));
-        Mockito.when(workflowMapper.toWorkflowResponseRestDto(grpcResponse)).thenReturn(restResponse);
+        Mockito.when(workflowMapper.toMutationResponseRestDto(grpcResponse)).thenReturn(restResponse);
 
         StepVerifier.create(client.createWorkflow(PROJECT_ID, Mono.just(body), context))
                 .expectNext(restResponse)
@@ -178,11 +179,11 @@ class GrpcWorkflowServiceClientTest {
         var body = new CreateWorkflowStatusRequestDto("CODE_REVIEW", "Code Review", WorkflowStatusCategoryDto.IN_PROGRESS, 25);
         var grpcRequest = AddWorkflowStatusRequest.getDefaultInstance();
         var grpcResponse = WorkflowResponse.getDefaultInstance();
-        var restResponse = new WorkflowResponseDto();
+        var restResponse = new ProjectWorkflowDto();
 
         Mockito.when(workflowMapper.toAddWorkflowStatusGrpcRequest(PROJECT_ID, workflowId, body, context)).thenReturn(grpcRequest);
         Mockito.when(stub.addWorkflowStatus(grpcRequest)).thenReturn(Mono.just(grpcResponse));
-        Mockito.when(workflowMapper.toWorkflowResponseRestDto(grpcResponse)).thenReturn(restResponse);
+        Mockito.when(workflowMapper.toMutationResponseRestDto(grpcResponse)).thenReturn(restResponse);
 
         StepVerifier.create(client.addWorkflowStatus(PROJECT_ID, workflowId, Mono.just(body), context))
                 .expectNext(restResponse)
@@ -204,6 +205,6 @@ class GrpcWorkflowServiceClientTest {
                 .expectErrorMatches(throwable -> throwable.equals(expectedException))
                 .verify();
 
-        Mockito.verify(workflowMapper, Mockito.never()).toWorkflowResponseRestDto(Mockito.any());
+        Mockito.verify(workflowMapper, Mockito.never()).toMutationResponseRestDto(Mockito.any());
     }
 }

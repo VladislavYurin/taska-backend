@@ -14,6 +14,7 @@ import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
+import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
@@ -89,7 +90,7 @@ public class WorkflowController implements WorkflowApi {
      * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и созданным workflow
      */
     @Override
-    public Mono<ResponseEntity<WorkflowResponseDto>> createProjectWorkflow(
+    public Mono<ResponseEntity<ProjectWorkflowDto>> createProjectWorkflow(
             UUID projectId,
             Mono<CreateWorkflowRequestDto> request,
             ServerWebExchange exchange
@@ -109,7 +110,7 @@ public class WorkflowController implements WorkflowApi {
      * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и workflow целиком
      */
     @Override
-    public Mono<ResponseEntity<WorkflowResponseDto>> addWorkflowStatus(
+    public Mono<ResponseEntity<ProjectWorkflowDto>> addWorkflowStatus(
             UUID projectId,
             UUID workflowId,
             Mono<CreateWorkflowStatusRequestDto> request,
@@ -130,7 +131,7 @@ public class WorkflowController implements WorkflowApi {
      * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и workflow целиком
      */
     @Override
-    public Mono<ResponseEntity<WorkflowResponseDto>> addWorkflowTransition(
+    public Mono<ResponseEntity<ProjectWorkflowDto>> addWorkflowTransition(
             UUID projectId,
             UUID workflowId,
             Mono<CreateWorkflowTransitionRequestDto> request,
