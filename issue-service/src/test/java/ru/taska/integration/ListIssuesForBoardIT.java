@@ -480,6 +480,20 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }
     }
 
+    @Test
+    void queryMatchesPercentUnderscoreAndEscapeCharactersLiterally() {
+        var issue = issueRepository.findById(savedIssues.getFirst().getId()).block();
+        issue.setSummary("100%_ready\\file!");
+        issueRepository.save(issue).block();
+        for (String query : List.of("%", "_", "\\", "!", "100%_ready\\file!")) {
+            StepVerifier.create(issueService.listIssueBoard(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                    null, null, null, true, List.of(), null, null, null, query))
+                    .assertNext(rows -> Assertions.assertThat(rows).singleElement()
+                            .satisfies(card -> Assertions.assertThat(card.getId()).isEqualTo(issue.getId().toString())))
+                    .verifyComplete();
+        }
+    }
+
     private Issue buildIssue(int number, UUID projectId, String statusKey, UUID assigneeId, IssueType issueType){
         return buildIssue(number, projectId, statusKey, assigneeId, issueType, IssuePriority.MEDIUM);
     }

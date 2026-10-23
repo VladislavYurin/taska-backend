@@ -278,10 +278,10 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         String where = toSqlWhere(conditions, params);
 
         if(query != null){
-            where += " AND (i.issue_key ILIKE :searchQuery"
-                    + " OR i.summary ILIKE :searchQuery"
-                    + " OR i.description ILIKE :searchQuery)";
-            params.put("searchQuery", "%" + query + "%");
+            where += " AND (i.issue_key ILIKE :searchQuery ESCAPE '!'"
+                    + " OR i.summary ILIKE :searchQuery ESCAPE '!'"
+                    + " OR i.description ILIKE :searchQuery ESCAPE '!')";
+            params.put("searchQuery", "%" + query.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
         }
 
         String sql = "";
