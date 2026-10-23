@@ -37,6 +37,7 @@ public class NotificationSettingsController implements NotificationSettingsApi {
             dto.setLinkId(UUID.fromString(link.getLinkId()));
             dto.setUrl(java.net.URI.create(link.getUrl()));
             dto.setExpiresAt(OffsetDateTime.parse(link.getExpiresAt()));
+            if (link.hasPreferences()) dto.setPreferences(map(link.getPreferences()));
             return ResponseEntity.ok(dto);
         }));
     }
@@ -57,7 +58,10 @@ public class NotificationSettingsController implements NotificationSettingsApi {
         dto.setTelegramEnabled(p.getTelegramEnabled());
         dto.setEmail(p.getEmail());
         dto.setTelegramAvailable(p.getTelegramAvailable());
-        dto.setTelegramStatus(NotificationPreferencesDto.TelegramStatusEnum.fromValue(p.getTelegramStatus()));
+        var status = java.util.Arrays.stream(NotificationPreferencesDto.TelegramStatusEnum.values())
+                .filter(value -> value.getValue().equals(p.getTelegramStatus())).findFirst()
+                .orElse(NotificationPreferencesDto.TelegramStatusEnum.UNKNOWN);
+        dto.setTelegramStatus(status);
         dto.setTelegramUsername(p.getTelegramUsername().isEmpty()?null:p.getTelegramUsername());
         dto.setTelegramName(p.getTelegramName().isEmpty()?null:p.getTelegramName());
         dto.setTelegramLinkId(p.getTelegramLinkId().isEmpty()?null:UUID.fromString(p.getTelegramLinkId()));

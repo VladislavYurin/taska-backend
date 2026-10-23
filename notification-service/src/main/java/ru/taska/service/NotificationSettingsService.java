@@ -31,10 +31,13 @@ public class NotificationSettingsService {
     public record Preferences(boolean emailEnabled, boolean telegramEnabled, String email,
             boolean telegramAvailable, String telegramStatus, String telegramUsername, String telegramName,
             UUID telegramLinkId, Instant telegramLinkExpiresAt, String telegramError) { }
-    public record Link(UUID linkId, String url, Instant expiresAt) { }
+    public record Link(UUID linkId, String url, Instant expiresAt, Preferences preferences) { }
 
     public Mono<Preferences> get(UUID user, String email) {
-        return ensure(user, email).then(view(user)).as(tx::transactional);
+        if (!validEmail(email)) return Mono.error(invalid("A verified account email is required"));
+        // Ordinary polling is read-only. Provision only missing rows or a changed verified address.
+        return view(user).filter(current -> email.equals(current.email()))
+                .switchIfEmpty(Mono.defer(() -> ensure(user, email).then(view(user)).as(tx::transactional)));
     }
 
     public Mono<Preferences> update(UUID user, String email, Boolean emailEnabled, Boolean telegramEnabled) {
@@ -67,7 +70,7 @@ public class NotificationSettingsService {
             RANDOM.nextBytes(bytes);
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
             UUID link = UUID.randomUUID();
-            Instant expiry = Instant.now().plus(telegram.getLinkTtl());
+            Instant expiry = Instant.now().plus(telegram.getLinkTtl()).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
             return ensure(user, email).then(lock(user)).then(view(user)).flatMap(current -> {
                 if ("CONNECTED".equals(current.telegramStatus()) || "UNAVAILABLE".equals(current.telegramStatus())) {
                     return Mono.error(conflict("Disconnect the previous Telegram account first"));
@@ -81,7 +84,8 @@ public class NotificationSettingsService {
                         """).bind("user", user).bind("link", link).bind("hash", hash(token)).bind("expiry", expiry)
                         .bind("bot", telegram.getBotUsername())
                         .fetch().rowsUpdated()
-                        .thenReturn(new Link(link, "https://t.me/" + telegram.getBotUsername() + "?start=" + token, expiry));
+                        .then(view(user)).map(preferences -> new Link(link,
+                                "https://t.me/" + telegram.getBotUsername() + "?start=" + token, expiry, preferences));
             });
         }).as(tx::transactional);
     }
@@ -119,14 +123,14 @@ public class NotificationSettingsService {
 
     /** email comes only from auth's verified gateway context or trusted auth lifecycle events. */
     public Mono<Void> ensure(UUID user, String email) {
-        if (email == null || email.isBlank() || email.length() > 320 || email.codePoints().anyMatch(Character::isISOControl)) {
+        if (!validEmail(email)) {
             return Mono.error(invalid("A verified account email is required"));
         }
         return db.sql("""
                 INSERT INTO taska.notification_preferences(user_id,email) VALUES (:user,:email)
                 ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,
-                    email_version=CASE WHEN taska.notification_preferences.email IS DISTINCT FROM excluded.email
-                        THEN gen_random_uuid() ELSE taska.notification_preferences.email_version END
+                    email_version=gen_random_uuid(), updated_at=now()
+                WHERE taska.notification_preferences.email IS DISTINCT FROM excluded.email
                 """).bind("user", user).bind("email", email).fetch().rowsUpdated().then();
     }
 
@@ -164,7 +168,8 @@ public class NotificationSettingsService {
         UUID link = r.get("link_id", UUID.class);
         boolean candidate = link != null && r.get("consumed_at", Instant.class) != null;
         String error = r.get("telegram_error", String.class);
-        if (bound && !telegram.getBotUsername().equals(r.get("telegram_bot_username", String.class))) error = "BOT_CHANGED";
+        if (bound && telegram.isEnabled()
+                && !telegram.getBotUsername().equals(r.get("telegram_bot_username", String.class))) error = "BOT_CHANGED";
         String status = bound ? (!telegram.isEnabled() || error != null ? "UNAVAILABLE" : "CONNECTED")
                 : candidate ? "AWAITING_CONFIRMATION" : link != null ? "PENDING" : "NOT_CONNECTED";
         return new Preferences(Boolean.TRUE.equals(r.get("email_enabled", Boolean.class)),
@@ -172,6 +177,11 @@ public class NotificationSettingsService {
                 telegram.isEnabled(), status, r.get(candidate ? "candidate_username" : "telegram_username", String.class),
                 r.get(candidate ? "candidate_name" : "telegram_name", String.class), link,
                 r.get("expires_at", Instant.class), error);
+    }
+
+    private static boolean validEmail(String email) {
+        return email != null && !email.isBlank() && email.length() <= 320
+                && email.codePoints().noneMatch(Character::isISOControl);
     }
 
     static String hash(String token) {
