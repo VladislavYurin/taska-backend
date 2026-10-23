@@ -47,7 +47,7 @@ class OutboxRetryServiceImplTest {
     private static final String REQUEST_ID = "request-123";
     private static final String SERVICE = "issue";
     private static final String REASON = "Manual retry after investigation";
-    private static final String ACTOR_LOGIN = "global-admin";
+    private static final String ACTOR_NAME = "global-admin";
 
     private static final UUID EVENT_ID =
             UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -147,7 +147,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .expectNext(newSnapshot)
@@ -162,7 +163,8 @@ class OutboxRetryServiceImplTest {
 
         assertEquals(REQUEST_ID, audit.getRequestId());
         assertEquals(ACTOR_USER_ID, audit.getActorUserId());
-        assertEquals(ACTOR_LOGIN, audit.getActorLogin());
+        assertEquals(ACTOR_NAME, audit.getActorDisplayName());
+        assertEquals("admin@example.com", audit.getActorEmail());
         assertEquals(actorRoles, audit.getActorRoles());
 
         assertEquals("RETRY_OUTBOX_EVENT", audit.getAction());
@@ -224,7 +226,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .expectNext(newSnapshot)
@@ -264,7 +267,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -314,7 +318,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -364,7 +369,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -406,7 +412,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -455,7 +462,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -521,7 +529,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable -> {
@@ -585,7 +594,8 @@ class OutboxRetryServiceImplTest {
                         EVENT_ID,
                         REASON,
                         ACTOR_USER_ID,
-                        ACTOR_LOGIN,
+                        ACTOR_NAME,
+                "admin@example.com",
                         actorRoles
                 ))
                 .verifyErrorSatisfies(throwable ->

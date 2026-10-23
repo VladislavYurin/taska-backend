@@ -269,13 +269,14 @@ public class GrpcAdminReadonlyService {
                                         "body.actorUserId"
                                 ),
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        req.getBody().getActorLogin(),
-                                        "body.actorLogin"
+                                        req.getBody().getActorDisplayName(),
+                                        "body.actorDisplayName"
                                 ),
-                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                        String.join(",", req.getBody().getActorRolesList()),
-                                        "body.actorRoles"
-                                )
+                                Mono.zip(
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        String.join(",", req.getBody().getActorRolesList()), "body.actorRoles"),
+                                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                        req.getBody().getActorEmail(), "body.actorEmail"))
                         )
                         .doOnError(logValidationError(
                                 req.getHeader().getRequestId(),
@@ -289,7 +290,8 @@ public class GrpcAdminReadonlyService {
                             UUID eventId = t.getT4();
                             String reason = t.getT5();
                             UUID actorUserId = t.getT6();
-                            String actorLogin = t.getT7();
+                            String actorDisplayName = t.getT7();
+                            String actorEmail = t.getT8().getT2();
 
                             JsonNode actorRoles = objectMapper.valueToTree(
                                     req.getBody().getActorRolesList()
@@ -310,7 +312,8 @@ public class GrpcAdminReadonlyService {
                                             eventId,
                                             reason,
                                             actorUserId,
-                                            actorLogin,
+                                            actorDisplayName,
+                                            actorEmail,
                                             actorRoles
                                     )
                                     .doOnSuccess(snapshot ->

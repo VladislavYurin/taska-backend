@@ -37,7 +37,8 @@ public class AdminUserManagementMapper {
         return UserStatusRequestDto.builder()
                 .targetUserId(UUID.fromString(request.getBody().getTargetUserId()))
                 .actorUserId(UUID.fromString(request.getBody().getActorUserId()))
-                .actorLogin(request.getBody().getActorLogin())
+                .actorDisplayName(request.getBody().getActorDisplayName())
+                .actorEmail(request.getBody().getActorEmail())
                 .role(toGlobalRole(request.getBody().getActorRole()))
                 .reason(request.getBody().getReason())
                 .build();
@@ -50,7 +51,8 @@ public class AdminUserManagementMapper {
         return UserStatusRequestDto.builder()
                 .targetUserId(UUID.fromString(request.getBody().getTargetUserId()))
                 .actorUserId(UUID.fromString(request.getBody().getActorUserId()))
-                .actorLogin(request.getBody().getActorLogin())
+                .actorDisplayName(request.getBody().getActorDisplayName())
+                .actorEmail(request.getBody().getActorEmail())
                 .role(toGlobalRole(request.getBody().getActorRole()))
                 .reason(request.getBody().getReason())
                 .build();
@@ -63,7 +65,8 @@ public class AdminUserManagementMapper {
         return UserStatusRequestDto.builder()
                 .targetUserId(UUID.fromString(request.getBody().getTargetUserId()))
                 .actorUserId(UUID.fromString(request.getBody().getActorUserId()))
-                .actorLogin(request.getBody().getActorLogin())
+                .actorDisplayName(request.getBody().getActorDisplayName())
+                .actorEmail(request.getBody().getActorEmail())
                 .role(toGlobalRole(request.getBody().getActorRole()))
                 .reason(request.getBody().getReason())
                 .build();

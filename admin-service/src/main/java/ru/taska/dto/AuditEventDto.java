@@ -17,7 +17,10 @@ public class AuditEventDto {
     private UUID actorUserId;
 
     @NotBlank
-    private String actorLogin;
+    private String actorDisplayName;
+
+    @NotBlank
+    private String actorEmail;
 
     @NotNull
     private JsonNode actorRoles;

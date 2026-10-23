@@ -50,7 +50,7 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
      * @param eventId     идентификатор события
      * @param reason      причина ручного retry
      * @param actorUserId идентификатор администратора
-     * @param actorLogin  логин администратора
+     * @param actorDisplayName  имя администратора
      * @param actorRoles  роли администратора
      * @return snapshot события после изменения
      */
@@ -62,7 +62,8 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
             UUID eventId,
             String reason,
             UUID actorUserId,
-            String actorLogin,
+            String actorDisplayName,
+            String actorEmail,
             JsonNode actorRoles
     ) {
         return outboxRetryRepository.findById(service, eventId)
@@ -107,7 +108,8 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
                                                         service,
                                                         reason,
                                                         actorUserId,
-                                                        actorLogin,
+                                                        actorDisplayName,
+                                                        actorEmail,
                                                         actorRoles,
                                                         oldSnapshot,
                                                         newSnapshot
@@ -126,7 +128,8 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
             String service,
             String reason,
             UUID actorUserId,
-            String actorLogin,
+            String actorDisplayName,
+            String actorEmail,
             JsonNode actorRoles,
             OutboxEventSnapshot oldSnapshot,
             OutboxEventSnapshot newSnapshot
@@ -144,7 +147,8 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
         AuditEventDto auditEvent = AuditEventDto.builder()
                 .requestId(requestId)
                 .actorUserId(actorUserId)
-                .actorLogin(actorLogin)
+                .actorDisplayName(actorDisplayName)
+                .actorEmail(actorEmail)
                 .actorRoles(actorRoles)
                 .action(AUDIT_ACTION)
                 .targetService(service)

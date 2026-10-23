@@ -370,7 +370,6 @@ class NotificationControllerWebTestClientTest {
 
         GatewayUserContext gatewayUserContext = new GatewayUserContext(
                 USER_ID,
-                "testuser",
                 "test@example.com",
                 "Test User",
                 GatewayUserStatus.ACTIVE,

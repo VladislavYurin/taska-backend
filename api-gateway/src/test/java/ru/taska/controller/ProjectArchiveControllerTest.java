@@ -69,6 +69,6 @@ class ProjectArchiveControllerTest {
         when(auth.validateAccessToken(any(),any(),any())).thenReturn(Mono.just(ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(UserContext.newBuilder().setUserId(user.toString())).build()));
         when(contexts.mapToGatewayUserContext(any())).thenReturn(GatewayUserContext.builder().userId(user.toString())
-                .login("user").email("user@example.com").status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
+                .email("user@example.com").status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
     }
 }

@@ -74,7 +74,6 @@ class GrpcAuthServiceClientTest {
         ValidateAccessTokenResponse response = ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(UserContext.newBuilder()
                         .setUserId("user-123")
-                        .setLogin("testuser")
                         .setEmail("test@example.com")
                         .setDisplayName("Test User")
                         .setStatus(UserStatus.USER_STATUS_ACTIVE)
@@ -86,7 +85,6 @@ class GrpcAuthServiceClientTest {
         StepVerifier.create(client.validateAccessToken(REQUEST_ID, NODE_ID, ACCESS_TOKEN))
                 .assertNext(res -> {
                     Assertions.assertThat(res.getUserContext().getUserId()).isEqualTo("user-123");
-                    Assertions.assertThat(res.getUserContext().getLogin()).isEqualTo("testuser");
                     Assertions.assertThat(res.getUserContext().getEmail()).isEqualTo("test@example.com");
                     Assertions.assertThat(res.getUserContext().getDisplayName()).isEqualTo("Test User");
                     Assertions.assertThat(res.getUserContext().getStatus()).isEqualTo(UserStatus.USER_STATUS_ACTIVE);

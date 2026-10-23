@@ -456,7 +456,7 @@ class AdminReadonlyServiceImplTest {
 
         AuditEntriesResponseDto response = result.items().get(0);
         Assertions.assertThat(response.actorUserId()).isEqualTo(auditLog.getActorUserId());
-        Assertions.assertThat(response.actorLogin()).isEqualTo(auditLog.getActorLogin());
+        Assertions.assertThat(response.actorDisplayName()).isEqualTo(auditLog.getActorDisplayName());
         Assertions.assertThat(response.action()).isEqualTo(auditLog.getAction());
         Assertions.assertThat(response.targetService()).isEqualTo(auditLog.getTargetService());
         Assertions.assertThat(response.targetTable()).isEqualTo(auditLog.getTargetTable());
@@ -524,7 +524,8 @@ class AdminReadonlyServiceImplTest {
         AuditLog auditLog = new AuditLog();
         auditLog.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         auditLog.setActorUserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
-        auditLog.setActorLogin("test-login");
+        auditLog.setActorDisplayName("test-login");
+        auditLog.setActorEmail("admin@example.com");
         auditLog.setAction("TEST_ACTION");
         auditLog.setTargetService("test-service");
         auditLog.setTargetTable("test-table");
@@ -540,7 +541,8 @@ class AdminReadonlyServiceImplTest {
     private static AuditEntriesResponseDto getAuditEntriesResponseDto(AuditLog auditLog) {
         AuditEntriesResponseDto expectedResponse = AuditEntriesResponseDto.builder()
                 .actorUserId(auditLog.getActorUserId())
-                .actorLogin(auditLog.getActorLogin())
+                .actorDisplayName(auditLog.getActorDisplayName())
+                .actorEmail(auditLog.getActorEmail())
                 .action(auditLog.getAction())
                 .targetService(auditLog.getTargetService())
                 .targetTable(auditLog.getTargetTable())

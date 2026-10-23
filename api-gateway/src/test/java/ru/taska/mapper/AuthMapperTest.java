@@ -135,7 +135,6 @@ class AuthMapperTest {
         void shouldMapAllFieldsForLockedUser() {
             GatewayUserContext context = GatewayUserContext.builder()
                     .userId("user-1")
-                    .login("john.doe")
                     .email("john.doe@example.com")
                     .displayName("John Doe")
                     .status(GatewayUserStatus.LOCKED)
@@ -146,7 +145,6 @@ class AuthMapperTest {
                     authMapper.toValidateAccessTokenRestResponse(context);
 
             assertThat(dto.getId()).isEqualTo("user-1");
-            assertThat(dto.getLogin()).isEqualTo("john.doe");
             assertThat(dto.getEmail()).isEqualTo("john.doe@example.com");
             assertThat(dto.getDisplayName()).isEqualTo("John Doe");
             assertThat(dto.getStatus().getValue()).isEqualTo("LOCKED");
@@ -157,7 +155,6 @@ class AuthMapperTest {
         void shouldMapAllFieldsForActiveGlobalAdmin() {
             GatewayUserContext context = GatewayUserContext.builder()
                     .userId("admin-1")
-                    .login("admin")
                     .email("admin@example.com")
                     .displayName("Admin")
                     .status(GatewayUserStatus.ACTIVE)
@@ -175,7 +172,6 @@ class AuthMapperTest {
         void shouldReturnNullStatusWhenContextStatusIsNull() {
             GatewayUserContext context = GatewayUserContext.builder()
                     .userId("user-1")
-                    .login("john.doe")
                     .email("john.doe@example.com")
                     .displayName("John Doe")
                     .status(null)
@@ -193,7 +189,6 @@ class AuthMapperTest {
         void shouldFallbackToUnspecifiedWhenGlobalRoleIsNull() {
             GatewayUserContext context = GatewayUserContext.builder()
                     .userId("user-1")
-                    .login("john.doe")
                     .email("john.doe@example.com")
                     .displayName("John Doe")
                     .status(GatewayUserStatus.ACTIVE)

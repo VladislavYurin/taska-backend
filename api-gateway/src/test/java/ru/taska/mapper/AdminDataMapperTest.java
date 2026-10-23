@@ -647,7 +647,7 @@ class AdminDataMapperTest {
                 .addEntries(ListAuditEntry.newBuilder()
                         .setId(entryId.toString())
                         .setActorUserId(actorUserId.toString())
-                        .setActorLogin("test-login")
+                        .setActorDisplayName("test-login").setActorEmail("admin@example.com")
                         .setAction("CREATE")
                         .setTargetService("test-service")
                         .setTargetTable("test-table")
@@ -663,7 +663,7 @@ class AdminDataMapperTest {
                         .build())
                 .addEntries(ListAuditEntry.newBuilder()
                         .setActorUserId(actorUserId.toString())
-                        .setActorLogin("test-login2")
+                        .setActorDisplayName("test-login2").setActorEmail("admin@example.com")
                         .setAction("UPDATE")
                         .setTargetService("test-service2")
                         .setTargetTable("test-table2")
@@ -689,7 +689,7 @@ class AdminDataMapperTest {
         var firstEntry = result.getEntries().getFirst();
         Assertions.assertEquals(entryId, firstEntry.getId());
         Assertions.assertEquals(actorUserId, firstEntry.getActorUserId());
-        Assertions.assertEquals("test-login", firstEntry.getActorLogin());
+        Assertions.assertEquals("test-login", firstEntry.getActorDisplayName());
         Assertions.assertEquals("CREATE", firstEntry.getAction());
         Assertions.assertEquals("test-service", firstEntry.getTargetService());
         Assertions.assertEquals("test-table", firstEntry.getTargetTable());
@@ -703,7 +703,7 @@ class AdminDataMapperTest {
         var secondEntry = result.getEntries().get(1);
         Assertions.assertNull(secondEntry.getId());
         Assertions.assertEquals(actorUserId, secondEntry.getActorUserId());
-        Assertions.assertEquals("test-login2", secondEntry.getActorLogin());
+        Assertions.assertEquals("test-login2", secondEntry.getActorDisplayName());
         Assertions.assertEquals("UPDATE", secondEntry.getAction());
         Assertions.assertEquals("test-service2", secondEntry.getTargetService());
         Assertions.assertEquals("test-table2", secondEntry.getTargetTable());
@@ -738,7 +738,7 @@ class AdminDataMapperTest {
                 .setHasPrev(hasPrev)
                 .addEntries(ListAuditEntry.newBuilder()
                         .setActorUserId(actorUserId.toString())
-                        .setActorLogin("test-login")
+                        .setActorDisplayName("test-login").setActorEmail("admin@example.com")
                         .setAction("CREATE")
                         .setTargetService("test-service")
                         .setTargetTable("test-table")
@@ -763,7 +763,7 @@ class AdminDataMapperTest {
 
         var entry = result.getEntries().getFirst();
         Assertions.assertEquals(actorUserId, entry.getActorUserId());
-        Assertions.assertEquals("test-login", entry.getActorLogin());
+        Assertions.assertEquals("test-login", entry.getActorDisplayName());
         Assertions.assertEquals("CREATE", entry.getAction());
         Assertions.assertEquals("test-service", entry.getTargetService());
         Assertions.assertEquals("test-table", entry.getTargetTable());

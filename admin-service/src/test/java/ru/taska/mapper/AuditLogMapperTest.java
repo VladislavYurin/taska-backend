@@ -28,7 +28,7 @@ class AuditLogMapperTest {
     private static final UUID ACTOR_USER_ID = UUID.randomUUID();
     private static final UUID AUDIT_LOG_ID = UUID.randomUUID();
     private static final String REQUEST_ID = "req-12345";
-    private static final String ACTOR_LOGIN = "admin_user";
+    private static final String ACTOR_NAME = "admin_user";
     private static final String ACTION = "UPDATE_STATUS";
     private static final String TARGET_SERVICE = "issue-service";
     private static final String TARGET_TABLE = "issues";
@@ -58,7 +58,7 @@ class AuditLogMapperTest {
         AuditEventDto dto = AuditEventDto.builder()
                 .requestId("req-12345")
                 .actorUserId(actorUserId)
-                .actorLogin("admin_user")
+                .actorDisplayName("admin_user").actorEmail("admin@example.com")
                 .actorRoles(actorRoles)
                 .action("UPDATE_STATUS")
                 .targetService("issue-service")
@@ -77,7 +77,7 @@ class AuditLogMapperTest {
 
         Assertions.assertThat(auditLog.getRequestId()).isEqualTo("req-12345");
         Assertions.assertThat(auditLog.getActorUserId()).isEqualTo(actorUserId);
-        Assertions.assertThat(auditLog.getActorLogin()).isEqualTo("admin_user");
+        Assertions.assertThat(auditLog.getActorDisplayName()).isEqualTo("admin_user");
         Assertions.assertThat(auditLog.getActorRoles()).isEqualTo(actorRoles);
         Assertions.assertThat(auditLog.getAction()).isEqualTo("UPDATE_STATUS");
         Assertions.assertThat(auditLog.getTargetService()).isEqualTo("issue-service");
@@ -98,7 +98,7 @@ class AuditLogMapperTest {
         Assertions.assertThat(auditLog).isNotNull();
         Assertions.assertThat(auditLog.getRequestId()).isNull();
         Assertions.assertThat(auditLog.getActorUserId()).isNull();
-        Assertions.assertThat(auditLog.getActorLogin()).isNull();
+        Assertions.assertThat(auditLog.getActorDisplayName()).isNull();
         Assertions.assertThat(auditLog.getActorRoles()).isNull();
         Assertions.assertThat(auditLog.getAction()).isNull();
         Assertions.assertThat(auditLog.getTargetService()).isNull();
@@ -151,7 +151,8 @@ class AuditLogMapperTest {
         Assertions.assertThat(result).isNotNull();
         Assertions.assertThat(result.id()).isEqualTo(AUDIT_LOG_ID);
         Assertions.assertThat(result.actorUserId()).isEqualTo(ACTOR_USER_ID);
-        Assertions.assertThat(result.actorLogin()).isEqualTo(ACTOR_LOGIN);
+        Assertions.assertThat(result.actorDisplayName()).isEqualTo(ACTOR_NAME);
+        Assertions.assertThat(result.actorEmail()).isEqualTo("admin@example.com");
         Assertions.assertThat(result.action()).isEqualTo(ACTION);
         Assertions.assertThat(result.targetService()).isEqualTo(TARGET_SERVICE);
         Assertions.assertThat(result.targetTable()).isEqualTo(TARGET_TABLE);
@@ -172,7 +173,8 @@ class AuditLogMapperTest {
 
         Assertions.assertThat(result).isNotNull();
         Assertions.assertThat(result.actorUserId()).isNull();
-        Assertions.assertThat(result.actorLogin()).isNull();
+        Assertions.assertThat(result.actorDisplayName()).isNull();
+        Assertions.assertThat(result.actorEmail()).isNull();
         Assertions.assertThat(result.action()).isNull();
         Assertions.assertThat(result.targetService()).isNull();
         Assertions.assertThat(result.targetTable()).isNull();
@@ -215,7 +217,7 @@ class AuditLogMapperTest {
             items.add(AuditEntriesResponseDto.builder()
                     .id(UUID.randomUUID())
                     .actorUserId(ACTOR_USER_ID)
-                    .actorLogin(ACTOR_LOGIN + "_" + i)
+                    .actorDisplayName(ACTOR_NAME + "_" + i).actorEmail("admin@example.com")
                     .action(ACTION + "_" + i)
                     .targetService(TARGET_SERVICE)
                     .targetTable(TARGET_TABLE)
@@ -260,8 +262,10 @@ class AuditLogMapperTest {
             Assertions.assertThat(result.getEntries(i).getTargetId())
                     .isEqualTo(items.get(i).targetId());
 
-            Assertions.assertThat(result.getEntries(i).getActorLogin())
-                    .isEqualTo(items.get(i).actorLogin());
+            Assertions.assertThat(result.getEntries(i).getActorDisplayName())
+                    .isEqualTo(items.get(i).actorDisplayName());
+
+            Assertions.assertThat(result.getEntries(i).getActorEmail()).isEqualTo(items.get(i).actorEmail());
 
             Assertions.assertThat(result.getEntries(i).getTargetService())
                     .isEqualTo(items.get(i).targetService());
@@ -294,7 +298,8 @@ class AuditLogMapperTest {
         auditLog.setId(AUDIT_LOG_ID);
         auditLog.setRequestId(REQUEST_ID);
         auditLog.setActorUserId(ACTOR_USER_ID);
-        auditLog.setActorLogin(ACTOR_LOGIN);
+        auditLog.setActorDisplayName(ACTOR_NAME);
+        auditLog.setActorEmail("admin@example.com");
         auditLog.setActorRoles(null);
         auditLog.setAction(ACTION);
         auditLog.setTargetService(TARGET_SERVICE);
@@ -312,7 +317,8 @@ class AuditLogMapperTest {
         auditLog.setId(null);
         auditLog.setRequestId(null);
         auditLog.setActorUserId(null);
-        auditLog.setActorLogin(null);
+        auditLog.setActorDisplayName(null);
+        auditLog.setActorEmail(null);
         auditLog.setActorRoles(null);
         auditLog.setAction(null);
         auditLog.setTargetService(null);

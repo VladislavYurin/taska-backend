@@ -22,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.grpc.server.lifecycle.GrpcServerLifecycle;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.LoginRequest;
 import ru.taska.api.auth.v1.LoginRequestBody;
@@ -95,9 +96,9 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
     private String inviteTokenHash;
 
     @BeforeAll
-    static void setUp() {
+    static void setUp(@Autowired GrpcServerLifecycle grpcServer) {
         // Создаем канал к gRPC серверу
-        channel = ManagedChannelBuilder.forAddress("localhost", 9090)
+        channel = ManagedChannelBuilder.forAddress("127.0.0.1", grpcServer.getPort())
                 .usePlaintext()
                 .build();
         authStub = ReactorAuthServiceGrpc.newReactorStub(channel);
@@ -116,7 +117,6 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         log.debug(">>> Invite token hash: {}", inviteTokenHash);
 
         User invitedUser = User.builder()
-                .login("inviteduser_" + uniqueSuffix)
                 .email(invitedUserEmail)
                 .displayName("Invited User")
                 .status(UserStatus.INVITED)
@@ -158,7 +158,6 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         log.debug(">>> Test email: {}", testEmail);
 
         User user = User.builder()
-                .login("testuser_" + uniqueSuffix)
                 .email(testEmail)
                 .displayName("Test User")
                 .status(UserStatus.ACTIVE)
@@ -448,7 +447,6 @@ public class AuthServiceImplIntegrationTest extends AbstractIT {
         String blockedUserPassword = "ValidPassword123!";
 
         User blockedUser = User.builder()
-                .login("blockeduser_" + uniqueSuffix)
                 .email(blockedUserEmail)
                 .displayName("Blocked Test User")
                 .status(UserStatus.BLOCKED)  // Пользователь заблокирован

@@ -15,7 +15,6 @@ public class ContextMapper {
     public GatewayUserContext mapToGatewayUserContext(UserContext proto) {
         return new GatewayUserContext(
                 proto.getUserId(),
-                proto.getLogin(),
                 proto.getEmail(),
                 proto.getDisplayName(),
                 authMapper.toGatewayUserStatus(proto.getStatus()),

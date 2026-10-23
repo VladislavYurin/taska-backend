@@ -85,7 +85,6 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
         var saved = users.findById(UUID.fromString(result.getUserId())).block(TIMEOUT);
         assertThat(saved.getEmail()).isEqualTo(email.toLowerCase(java.util.Locale.ROOT));
         assertThat(saved.getDisplayName()).isEqualTo(saved.getEmail().split("@")[0]);
-        assertThat(saved.getLogin().length()).isLessThanOrEqualTo(64);
         assertThat(Duration.between(Instant.now(), Instant.parse(result.getExpiresAt())))
                 .isBetween(Duration.ofMinutes(119), Duration.ofMinutes(121));
         String token = rawToken(result.getUserId());
@@ -299,7 +298,7 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
     }
 
     private User user(String email, String name, UserStatus status, GlobalRole role) {
-        return users.save(User.builder().email(email).login("test_" + UUID.randomUUID()).displayName(name)
+        return users.save(User.builder().email(email).displayName(name)
                 .status(status).globalRole(role).build()).block(TIMEOUT);
     }
 
