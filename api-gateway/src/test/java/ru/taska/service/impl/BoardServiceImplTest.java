@@ -215,15 +215,11 @@ class BoardServiceImplTest {
         when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
                 .thenReturn(Mono.just(storyWorkflow));
 
-        when(issueClient.listIssuesForBoard(
-                PROJECT_ID.toString(),
-                null,
-                null,
-                null,
-                true, List.of("DONE"),
-                null, null,
-                context
-        )).thenReturn(Mono.just(List.of()));
+        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+            when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true,
+                    type == IssueTypeDto.TASK ? List.of("DONE") : List.of(), null, null, context))
+                    .thenReturn(Mono.just(List.of()));
+        }
 
         StepVerifier.create(boardService.getBoard(
                         PROJECT_ID,
@@ -266,9 +262,10 @@ class BoardServiceImplTest {
         var storyOnlyStatusIssue = boardIssueDto("TAS-7");
         var storyIssueData = new BoardIssueData("STORY_REVIEW", List.of(), storyOnlyStatusIssue);
 
-        when(issueClient.listIssuesForBoard(
-                PROJECT_ID.toString(), null, null, null, true, List.of(), null, null, context
-        )).thenReturn(Mono.just(List.of(storyIssueData)));
+        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+            when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true, List.of(), null, null, context))
+                    .thenReturn(Mono.just(type == IssueTypeDto.STORY ? List.of(storyIssueData) : List.of()));
+        }
 
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
                 .assertNext(response -> {
@@ -407,7 +404,7 @@ class BoardServiceImplTest {
         label.setName("urgent");
         label.setColor("#FF0000");
         var labelsResponse = new ListProjectLabelsResponseDto();
-        labelsResponse.setItems(List.of(label));
+        labelsResponse.setItems(List.of(label, label));
 
         when(labelClient.listProjectLabels(PROJECT_ID.toString(), context))
                 .thenReturn(Mono.just(labelsResponse));
@@ -581,6 +578,38 @@ class BoardServiceImplTest {
         StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, false, null, null, context))
                 .expectErrorMatches(error -> error == failure).verify();
         Mockito.verifyNoInteractions(issueClient, labelClient, profileClient);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void mixedBoardUsesDoneCategoryPerTypeRegardlessOfWorkflowArrivalOrder(boolean taskFirst) {
+        var taskFlow = new WorkflowResponseDto();
+        taskFlow.setStatuses(List.of(workflowStatus("REVIEW", "Task review", "DONE", 1)));
+        var bugFlow = new WorkflowResponseDto();
+        bugFlow.setStatuses(List.of(workflowStatus("REVIEW", "Bug review", "IN_PROGRESS", 1)));
+        var bug = boardIssueDto("BUG-1");
+        bug.setIssueType(IssueTypeDto.BUG);
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
+                .thenReturn(Mono.delay(java.time.Duration.ofMillis(taskFirst ? 1 : 30)).thenReturn(taskFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
+                .thenReturn(Mono.delay(java.time.Duration.ofMillis(taskFirst ? 30 : 1)).thenReturn(bugFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+                .thenReturn(Mono.just(new WorkflowResponseDto().statuses(List.of())));
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.TASK, null, null,
+                false, List.of("REVIEW"), IssuePriorityDto.HIGH, "needle", context)).thenReturn(Mono.just(List.of()));
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.BUG, null, null,
+                false, List.of(), IssuePriorityDto.HIGH, "needle", context))
+                .thenReturn(Mono.just(List.of(new BoardIssueData("REVIEW", List.of(), bug))));
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.STORY, null, null,
+                false, List.of(), IssuePriorityDto.HIGH, "needle", context)).thenReturn(Mono.just(List.of()));
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, false, IssuePriorityDto.HIGH, "needle", context))
+                .assertNext(board -> {
+                    assertThat(board.getColumns()).singleElement().satisfies(column -> {
+                        assertThat(column.getName()).isEqualTo("Task review");
+                        assertThat(column.getIssues()).containsExactly(bug);
+                    });
+                    assertThat(board.getUnplacedIssues()).isEmpty();
+                }).verifyComplete();
     }
 
     private WorkflowStatusDto workflowStatus(

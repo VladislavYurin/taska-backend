@@ -1,13 +1,18 @@
 package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import ru.taska.api.WorkflowApi;
 import ru.taska.domain.EndpointSecurity;
+import ru.taska.domain.dto.CreateWorkflowRequestDto;
+import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
+import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
 import ru.taska.domain.dto.IssueTypeDto;
+import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
@@ -55,4 +60,84 @@ public class WorkflowController implements WorkflowApi {
                         .map(ResponseEntity::ok));
     }
 
+    /**
+     * Возвращает все workflow проекта со всеми статусами и переходами, включая скрытые.
+     * <p>
+     * Как и чтение одного workflow, сначала проверяет, что пользователь видит проект.
+     *
+     * @param projectId идентификатор проекта
+     * @param exchange  текущий серверный обмен (HTTP-запрос/ответ)
+     * @return {@link Mono} с {@link ResponseEntity} 200 (OK) и {@link ProjectWorkflowsResponseDto}
+     */
+    @Override
+    public Mono<ResponseEntity<ProjectWorkflowsResponseDto>> listProjectWorkflows(
+            UUID projectId,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                projectClient.getProject(projectId.toString(), context)
+                        .then(Mono.defer(() -> grpcWorkflowServiceClient.listProjectWorkflows(projectId, context)))
+                        .map(ResponseEntity::ok));
+    }
+
+    /**
+     * Создаёт workflow проекта. Роль пользователя в проекте проверяет workflow-service.
+     *
+     * @param projectId идентификатор проекта
+     * @param request   тело запроса со статусами, переходами и типами задач
+     * @param exchange  текущий серверный обмен (HTTP-запрос/ответ)
+     * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и созданным workflow
+     */
+    @Override
+    public Mono<ResponseEntity<WorkflowResponseDto>> createProjectWorkflow(
+            UUID projectId,
+            Mono<CreateWorkflowRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                grpcWorkflowServiceClient.createWorkflow(projectId, request, context)
+                        .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response)));
+    }
+
+    /**
+     * Добавляет статус в workflow проекта. Роль пользователя в проекте проверяет workflow-service.
+     *
+     * @param projectId  идентификатор проекта
+     * @param workflowId идентификатор workflow проекта
+     * @param request    добавляемый статус
+     * @param exchange   текущий серверный обмен (HTTP-запрос/ответ)
+     * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и workflow целиком
+     */
+    @Override
+    public Mono<ResponseEntity<WorkflowResponseDto>> addWorkflowStatus(
+            UUID projectId,
+            UUID workflowId,
+            Mono<CreateWorkflowStatusRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                grpcWorkflowServiceClient.addWorkflowStatus(projectId, workflowId, request, context)
+                        .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response)));
+    }
+
+    /**
+     * Добавляет переход в workflow проекта. Роль пользователя в проекте проверяет workflow-service.
+     *
+     * @param projectId  идентификатор проекта
+     * @param workflowId идентификатор workflow проекта
+     * @param request    добавляемый переход
+     * @param exchange   текущий серверный обмен (HTTP-запрос/ответ)
+     * @return {@link Mono} с {@link ResponseEntity} 201 (CREATED) и workflow целиком
+     */
+    @Override
+    public Mono<ResponseEntity<WorkflowResponseDto>> addWorkflowTransition(
+            UUID projectId,
+            UUID workflowId,
+            Mono<CreateWorkflowTransitionRequestDto> request,
+            ServerWebExchange exchange
+    ) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
+                grpcWorkflowServiceClient.addWorkflowTransition(projectId, workflowId, request, context)
+                        .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response)));
+    }
 }

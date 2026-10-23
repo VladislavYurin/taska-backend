@@ -34,7 +34,8 @@ public class TaskaEventsKafkaListener {
                     "${kafka.topics.project-events}",
                     "${kafka.topics.user-events}"
             },
-            groupId = "${kafka.consumer-group}"
+            groupId = "${kafka.consumer-group}",
+            autoStartup = "${spring.kafka.listener.auto-startup:true}"
     )
     public void onMessage(String message, Acknowledgment ack,
                           @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {

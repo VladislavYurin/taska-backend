@@ -115,5 +115,7 @@ public interface IssueRepositoryCustom {
     /**
      * Подсчет количества комментариев к задачам по списку их айди.
      */
+    Mono<Map<UUID, Long>> countAttachmentsByIssueIds(List<UUID> issueIds);
+
     Mono<Map<UUID, Long>> countCommentsByIssueIds(List<UUID> issueIds);
 }

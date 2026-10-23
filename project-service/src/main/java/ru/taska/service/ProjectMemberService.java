@@ -3,13 +3,18 @@ package ru.taska.service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.ProjectMember;
-import ru.taska.domain.dto.ProjectMemberDetailsDto;
-import ru.taska.domain.dto.ProjectMembershipInfoDto;
 import ru.taska.domain.ProjectRole;
+import ru.taska.domain.dto.ProjectMemberDetailsDto;
+import ru.taska.domain.dto.ProjectMemberStatsDto;
+import ru.taska.domain.dto.ProjectMembershipInfoDto;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ProjectMemberService {
+
+    Flux<ProjectMemberStatsDto> getMemberStatsBatch(
+            List<UUID> projectIds, UUID actorUserId, String requestId, String nodeId);
 
     /**
      * Добавляет нового участника в проект.

@@ -1,0 +1,17 @@
+Taska[# th:if="${!#strings.isEmpty(brand.workspaceName)}"] · [(${brand.workspaceName})][/]
+
+[# th:if="${#strings.isEmpty(brand.workspaceName)}"]You're invited to Taska[/][# th:unless="${#strings.isEmpty(brand.workspaceName)}"]You're invited to [(${brand.workspaceName})] on Taska[/]
+
+Choose a password to activate your Taska account. After that, sign
+in with this email and your new password.
+
+Set password:
+[(${acceptUrl})]
+
+This link works once and expires on [(${expiresAt})].
+If you got more than one invitation, use the latest.
+
+---
+You're getting this because someone invited this address to Taska.
+If you weren't expecting it, ignore this email — nothing happens
+until a password is set.

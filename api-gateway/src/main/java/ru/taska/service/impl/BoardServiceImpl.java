@@ -78,110 +78,45 @@ public class BoardServiceImpl implements BoardService {
     ) {
         log.info("[{}] Getting board for project: {}", context.requestId(), projectId);
 
-        return resolveWorkflowStatuses(projectId, issueType, context)
-                .flatMap(statuses -> {
-                    List<String> doneStatusKeys = statuses.stream()
-                            .filter(status -> "DONE".equals(status.getCategory()))
-                            .map(WorkflowStatusDto::getStatusKey)
-                            .distinct()
-                            .toList();
-
-                    return issueClient.listIssuesForBoard(
-                            projectId.toString(),
-                            issueType,
-                            assigneeId != null ? assigneeId.toString() : null,
-                            labelId != null ? labelId.toString() : null,
-                            includeDone,
-                            doneStatusKeys,
-                            priority,
-                            query,
-                            context
-                    ).flatMap(issues -> enrichAndBuildBoard(projectId, statuses, issues, context));
-                });
+        return resolveWorkflows(projectId, issueType, context).flatMap(workflows -> {
+            List<WorkflowStatusDto> statuses = mergeStatusesByKey(workflows.stream()
+                    .filter(WorkflowTypeResolution::isFound).map(WorkflowTypeResolution::statuses).toList());
+            // DONE belongs to (issueType, statusKey). Filter in issue-service before merging columns.
+            return Flux.fromIterable(workflows).flatMapSequential(workflow -> {
+                List<String> doneKeys = workflow.isFound() ? workflow.statuses().stream()
+                        .filter(status -> "DONE".equals(status.getCategory()))
+                        .map(WorkflowStatusDto::getStatusKey).distinct().toList() : List.of();
+                return issueClient.listIssuesForBoard(projectId.toString(), workflow.issueType(),
+                        assigneeId != null ? assigneeId.toString() : null,
+                        labelId != null ? labelId.toString() : null, includeDone, doneKeys, priority, query, context);
+            }).flatMapIterable(rows -> rows).collectList()
+                    .flatMap(issues -> enrichAndBuildBoard(projectId, statuses, issues, context));
+        });
     }
 
-    /**
-     * Резолвит статусы workflow для построения колонок доски. При заданном
-     * {@code issueType} — один вызов workflow-service, NOT_FOUND там по-прежнему
-     * роняет доску. При {@code issueType == null} — три параллельных вызова
-     * (TASK, BUG, STORY) с объединением статусов по {@code statusKey} (при дублях
-     * побеждает первый встреченный тип; итог сортируется по {@code sortOrder}).
-     * Тип, для которого у workflow-service нет привязки workflow ни у проекта,
-     * ни у дефолтного (NOT_FOUND), пропускается с warn — доска строится из
-     * оставшихся типов. Если NOT_FOUND пришёл для всех трёх типов, исходная
-     * ошибка пробрасывается, а не подавляется молча. Любая другая ошибка
-     * (UNAVAILABLE, INTERNAL, DEADLINE_EXCEEDED и т.д.) не подавляется и роняет доску.
-     */
-    private Mono<List<WorkflowStatusDto>> resolveWorkflowStatuses(
-            UUID projectId,
-            IssueTypeDto issueType,
-            GatewayContext context
-    ) {
+    private Mono<List<WorkflowTypeResolution>> resolveWorkflows(UUID projectId, IssueTypeDto issueType, GatewayContext context) {
         if (issueType != null) {
             return workflowClient.getWorkflowForProject(projectId, issueType, context)
-                    .map(WorkflowResponseDto::getStatuses);
+                    .map(workflow -> List.of(WorkflowTypeResolution.found(issueType, workflow.getStatuses())));
         }
-
+        // Preserve TASK/BUG/STORY precedence regardless of RPC completion order.
         return Flux.fromIterable(ALL_ISSUE_TYPES)
-                .flatMap(type -> resolveWorkflowStatusesForType(projectId, type, context))
-                .collectList()
-                .flatMap(results -> {
-                    List<List<WorkflowStatusDto>> foundStatuses = results.stream()
-                            .filter(WorkflowTypeResolution::isFound)
-                            .map(WorkflowTypeResolution::statuses)
-                            .toList();
-
-                    if (foundStatuses.isEmpty()) {
-                        return Mono.error(results.getFirst().notFoundError());
-                    }
-
-                    return Mono.just(mergeStatusesByKey(foundStatuses));
-                });
+                .flatMapSequential(type -> workflowClient.getWorkflowForProject(projectId, type, context)
+                        .map(workflow -> WorkflowTypeResolution.found(type, workflow.getStatuses()))
+                        .onErrorResume(StatusRuntimeException.class, error -> {
+                            if (error.getStatus().getCode() != Status.Code.NOT_FOUND) return Mono.error(error);
+                            log.warn("[{}] Workflow missing for {} / {}", context.requestId(), projectId, type);
+                            return Mono.just(new WorkflowTypeResolution(type, null, error));
+                        }))
+                .collectList().flatMap(results -> results.stream().anyMatch(WorkflowTypeResolution::isFound)
+                        ? Mono.just(results) : Mono.error(results.getFirst().notFoundError()));
     }
 
-    /**
-     * Резолвит workflow одного типа задач для режима {@code issueType == null}.
-     * NOT_FOUND превращается в {@link WorkflowTypeResolution#notFound}, чтобы
-     * вызывающий код мог отличить «у типа нет workflow» от реальной ошибки и
-     * решить, пропустить тип или пробросить исключение (если NOT_FOUND для всех).
-     */
-    private Mono<WorkflowTypeResolution> resolveWorkflowStatusesForType(
-            UUID projectId,
-            IssueTypeDto issueType,
-            GatewayContext context
-    ) {
-        return workflowClient.getWorkflowForProject(projectId, issueType, context)
-                .map(WorkflowResponseDto::getStatuses)
-                .map(WorkflowTypeResolution::found)
-                .onErrorResume(StatusRuntimeException.class, e -> {
-                    if (e.getStatus().getCode() != Status.Code.NOT_FOUND) {
-                        return Mono.error(e);
-                    }
-
-                    log.warn(
-                            "[{}] Workflow not found for project {} and issueType {}, skipping this type: {}",
-                            context.requestId(), projectId, issueType, e.getStatus().getDescription()
-                    );
-                    return Mono.just(WorkflowTypeResolution.notFound(e));
-                });
-    }
-
-    /**
-     * Результат резолва workflow одного типа задач: либо список статусов, либо
-     * исходное исключение NOT_FOUND — ровно одно из двух всегда присутствует.
-     */
-    private record WorkflowTypeResolution(List<WorkflowStatusDto> statuses, StatusRuntimeException notFoundError) {
-        static WorkflowTypeResolution found(List<WorkflowStatusDto> statuses) {
-            return new WorkflowTypeResolution(statuses, null);
+    private record WorkflowTypeResolution(IssueTypeDto issueType, List<WorkflowStatusDto> statuses, StatusRuntimeException notFoundError) {
+        static WorkflowTypeResolution found(IssueTypeDto type, List<WorkflowStatusDto> statuses) {
+            return new WorkflowTypeResolution(type, statuses, null);
         }
-
-        static WorkflowTypeResolution notFound(StatusRuntimeException notFoundError) {
-            return new WorkflowTypeResolution(null, notFoundError);
-        }
-
-        boolean isFound() {
-            return statuses != null;
-        }
+        boolean isFound() { return statuses != null; }
     }
 
     private List<WorkflowStatusDto> mergeStatusesByKey(List<List<WorkflowStatusDto>> statusesPerType) {
@@ -228,7 +163,7 @@ public class BoardServiceImpl implements BoardService {
 
         return labelClient.listProjectLabels(projectId.toString(), context)
                 .map(response -> response.getItems().stream()
-                        .collect(Collectors.toMap(ProjectLabelResponseDto::getId, label -> label)))
+                        .collect(Collectors.toMap(ProjectLabelResponseDto::getId, label -> label, (first, duplicate) -> first)))
                 .onErrorResume(e -> {
                     log.warn("[{}] Failed to load project labels for board, labels left unresolved: {}",
                             context.requestId(), e.getMessage());
@@ -253,7 +188,7 @@ public class BoardServiceImpl implements BoardService {
 
         return profileClient.getUserDetailsByIds(assigneeIds, context)
                 .map(response -> response.getUserDetailsList().stream()
-                        .collect(Collectors.toMap(user -> UUID.fromString(user.getUserId()), user -> user)))
+                        .collect(Collectors.toMap(user -> UUID.fromString(user.getUserId()), user -> user, (first, duplicate) -> first)))
                 .onErrorResume(e -> {
                     log.warn("[{}] Failed to load user profiles for board, assignee displayName left unresolved: {}",
                             context.requestId(), e.getMessage());
@@ -273,7 +208,7 @@ public class BoardServiceImpl implements BoardService {
 
         Map<String, List<BoardIssueDto>> issuesByStatus = issues.stream()
                 .collect(Collectors.groupingBy(
-                        BoardIssueData::statusKey,
+                        BoardIssueData::statusKey, LinkedHashMap::new,
                         Collectors.mapping(BoardIssueData::issue, Collectors.toList())
                 ));
 

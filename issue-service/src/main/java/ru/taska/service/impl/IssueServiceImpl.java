@@ -316,13 +316,14 @@ public class IssueServiceImpl implements IssueService {
     }
 
     @Override
+    @Transactional
     public Mono<Issue> deleteIssue(String requestId,
                                    String nodeId,
                                    UUID issueId,
                                    UUID actorUserId
     ) {
 
-        return issueRepository.softDeleteAndReturn(issueId)
+        return issueRepository.findActiveByIdForUpdate(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue with id: " + issueId + " was not found", requestId, nodeId);
                     return Mono.<Issue>error(new DomainException(DomainStatus.NOT_FOUND, "Issue with id: " + issueId));
@@ -331,7 +332,7 @@ public class IssueServiceImpl implements IssueService {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
 
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .thenReturn(issue);
+                            .then(Mono.defer(() -> issueRepository.softDeleteAndReturn(issueId)));
                 })
                 .flatMap(deletedIssue -> {
                     JsonNode payload = payloadSerializer.createIssueDeletedPayload(
@@ -782,7 +783,8 @@ public class IssueServiceImpl implements IssueService {
                     return Mono.zip(
                             issueRepository.findLabelIdsByIssueIds(issueIds),
                             issueRepository.countCommentsByIssueIds(issueIds),
-                            issueRepository.countWatchersByIssueIds(issueIds)
+                            issueRepository.countWatchersByIssueIds(issueIds),
+                            issueRepository.countAttachmentsByIssueIds(issueIds)
                     )
                             .map(t-> {
                                 Map<UUID, List<UUID>> label = t.getT1();
@@ -793,7 +795,8 @@ public class IssueServiceImpl implements IssueService {
                                                 issue,
                                                 label.getOrDefault(issue.getId(), List.of()),
                                                 comment.getOrDefault(issue.getId(), 0L),
-                                                watcher.getOrDefault(issue.getId(), 0L)
+                                                watcher.getOrDefault(issue.getId(), 0L),
+                                                t.getT4().getOrDefault(issue.getId(), 0L)
                                         ))
                                         .toList();
                             });

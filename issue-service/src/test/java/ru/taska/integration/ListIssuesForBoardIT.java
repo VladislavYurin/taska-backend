@@ -49,6 +49,9 @@ public class ListIssuesForBoardIT extends AbstractIT {
     private IssueRepository issueRepository;
 
     @Autowired
+    private ru.taska.repository.IssueAttachmentRepository attachments;
+
+    @Autowired
     private ProjectLabelsRepository projectLabelsRepository;
 
     @Autowired
@@ -84,6 +87,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @BeforeEach
     void refillDb(){
+        attachments.deleteAll().block();
         issueLabelsRepository.deleteAll().block();
         projectLabelsRepository.deleteAll().block();
         issueRepository.deleteAll().block();
@@ -450,6 +454,30 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
             Assertions.assertThat(card.getLabelIdsList()).isEmpty();
         }).verifyComplete();
+    }
+
+    @Test
+    void boardCountsOnlyActiveAttachmentsAndKeepsCardsWithNullDescription() {
+        var issue = savedIssues.getFirst();
+        issue.setDescription(null);
+        issue.setTimeSpentMinutes(0);
+        issueRepository.save(issue).block();
+        for (boolean deleted : List.of(false, true)) {
+            attachments.save(ru.taska.domain.entity.IssueAttachment.builder()
+                    .issueId(issue.getId()).uploadedBy(REPORTER_ID).objectKey(UUID.randomUUID().toString())
+                    .fileName("test.txt").contentType("text/plain").sizeBytes(5L).checksum("test")
+                    .deletedAt(deleted ? java.time.Instant.now() : null).build()).block();
+        }
+        try {
+            StepVerifier.create(issueService.listIssueBoard(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
+                    null, null, null, true, List.of(), null, null, null, issue.getIssueKey()))
+                    .assertNext(rows -> Assertions.assertThat(rows).singleElement().satisfies(card -> {
+                        Assertions.assertThat(card.getId()).isEqualTo(issue.getId().toString());
+                        Assertions.assertThat(card.getAttachmentCount()).isEqualTo(1);
+                    })).verifyComplete();
+        } finally {
+            attachments.deleteAll().block();
+        }
     }
 
     private Issue buildIssue(int number, UUID projectId, String statusKey, UUID assigneeId, IssueType issueType){

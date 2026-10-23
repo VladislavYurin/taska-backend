@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
@@ -34,6 +35,7 @@ import ru.taska.service.impl.CommentServiceImpl;
 import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.util.Map;
@@ -238,6 +240,7 @@ class CommentServiceImplTest {
         );
         verify(issueRepository).findActiveByIdForUpdate(issueId);
         verify(commentRepository).save(any(IssueComment.class));
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_CREATED, EventType.ISSUE_COMMENT_CREATED);
     }
 
     @Test
@@ -323,6 +326,7 @@ class CommentServiceImplTest {
         verify(commentRepository).updateWithVersionCheckAndAuthor(
                 eq(commentId), eq(newBody), eq(1), eq(actorUserId)
         );
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_UPDATED, EventType.ISSUE_COMMENT_UPDATED);
     }
 
     @Test
@@ -451,6 +455,23 @@ class CommentServiceImplTest {
 
         verify(issueRepository).findActiveByIdForUpdate(issueId);
         verify(commentRepository).softDeleteWithVersionCheck(eq(commentId), eq(1));
+        assertMetadataOnlyPayload(IssueEventType.COMMENT_DELETED, EventType.ISSUE_COMMENT_DELETED);
+    }
+
+    private void assertMetadataOnlyPayload(IssueEventType historyType, EventType eventType) {
+        ArgumentCaptor<JsonNode> history = ArgumentCaptor.forClass(JsonNode.class);
+        ArgumentCaptor<JsonNode> outbox = ArgumentCaptor.forClass(JsonNode.class);
+        verify(issueHistoryService).saveIssueHistory(
+                eq(requestId), eq(nodeId), eq(issueId), eq(actorUserId), eq(historyType), history.capture());
+        verify(outboxEventService).saveOutboxEvent(
+                eq(requestId), eq(nodeId), eq(AggregateType.ISSUE), eq(issueId), eq(eventType), outbox.capture());
+        for (JsonNode payload : java.util.List.of(history.getValue(), outbox.getValue())) {
+            Assertions.assertEquals(commentId.toString(), payload.path("commentId").asText());
+            Assertions.assertEquals(actorUserId.toString(), payload.path("actorUserId").asText());
+            Assertions.assertFalse(payload.has("body"));
+            Assertions.assertFalse(payload.has("oldBody"));
+            Assertions.assertFalse(payload.has("newBody"));
+        }
     }
 
     @Test

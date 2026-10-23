@@ -122,7 +122,7 @@ public class ProjectMapper {
     /**
      * ProjectMemberDetailsResponse -> ProjectMemberDetailsDto
      */
-    private ProjectMemberDetailsDto toProjectMemberDetailsDto(ProjectMemberDetailsResponse proto) {
+    public ProjectMemberDetailsDto toProjectMemberDetailsDto(ProjectMemberDetailsResponse proto) {
         ProjectMemberDetailsDto dto = new ProjectMemberDetailsDto();
         dto.setUserId(proto.getUserId());
         dto.setRole(toRestProjectRole(proto.getRole()));
@@ -157,6 +157,8 @@ public class ProjectMapper {
     public ProjectContextResponseDto toRestProjectContextResponse(ProjectContextResponse proto) {
         var dto = new ProjectContextResponseDto();
         dto.setProject(toRestProjectResponse(proto.getProject()));
+        dto.setIssueTypes(proto.getIssueTypesList().stream()
+                .map(ru.taska.transport.grpc.GrpcProjectIssueTypeClient::toRest).toList());
         dto.setMembers(proto.getMembersList().stream()
                 .map(this::toProjectMemberDetailsDto)
                 .toList());

@@ -216,6 +216,7 @@ public class IssueMapper {
         restDto.setStatusKey(protoDto.getStatusKey());
         restDto.setVersion(protoDto.getVersion());
         restDto.setCommentCount(protoDto.getCommentsCount());
+        restDto.setAttachmentCount(protoDto.getAttachmentCount());
         restDto.setCreatedAt(MappingUtils.toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(MappingUtils.toOffsetDateTime(protoDto.getUpdatedAt()));
 

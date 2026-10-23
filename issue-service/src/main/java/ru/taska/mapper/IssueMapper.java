@@ -68,7 +68,7 @@ public class IssueMapper {
                 .setStatusKey(issue.getStatusKey())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .setReporterId(issue.getReporterId().toString())
+                .setReporterId(issue.getReporterId() == null ? "" : issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
                 .setTimeSpentMinutes(issue.getTimeSpentMinutes() != null ? issue.getTimeSpentMinutes() : 0)
@@ -107,7 +107,7 @@ public class IssueMapper {
                 .setEventType(toProtoIssueEventType(history.getEventType()))
                 .setActorUserId(history.getActorUserId().toString())
                 .setOccurredAt(toTimestamp(history.getOccurredAt()))
-                .setPayload(history.getPayload() != null ? history.getPayload().toString() : "")
+                .setPayload(IssueMapperUtils.historyPayload(history))
                 .build();
     }
 
@@ -465,7 +465,7 @@ public class IssueMapper {
         }
     }
 
-    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount){
+    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount, Long attachmentCount){
         IssueBoardResponse.Builder builder = IssueBoardResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
@@ -473,10 +473,11 @@ public class IssueMapper {
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setStatusKey(issue.getStatusKey())
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
-                .setReporterId(issue.getReporterId().toString())
+                .setReporterId(issue.getReporterId() == null ? "" : issue.getReporterId().toString())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setWatchersCount(watchersCount.intValue())
                 .setCommentsCount(commentsCount.intValue())
+                .setAttachmentCount(attachmentCount.intValue())
                 .addAllLabelIds(labelIds.stream().map(UUID::toString).toList())
                 .setCreatedAt(toProtoTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toProtoTimestamp(issue.getUpdatedAt()))

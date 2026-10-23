@@ -1111,6 +1111,7 @@ class IssueMapperTest {
                 .setAssigneeId(ASSIGNEE_ID)
                 .setReporterId(USER_ID)
                 .setCommentsCount(4)
+                .setAttachmentCount(2)
                 .setWatchersCount(2)
                 .addLabelIds(LINK_ID)
                 .setCreatedAt(createdAt)
@@ -1131,6 +1132,7 @@ class IssueMapperTest {
         Assertions.assertEquals(STATUS_KEY, result.getStatusKey());
         Assertions.assertEquals(VERSION, result.getVersion());
         Assertions.assertEquals(4, result.getCommentCount());
+        Assertions.assertEquals(2, result.getAttachmentCount());
         Assertions.assertEquals(OffsetDateTime.parse("1970-01-01T00:00:01Z"), result.getCreatedAt());
         Assertions.assertEquals(OffsetDateTime.parse("1970-01-01T00:00:02Z"), result.getUpdatedAt());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());

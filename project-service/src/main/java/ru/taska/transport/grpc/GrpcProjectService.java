@@ -1,7 +1,7 @@
 package ru.taska.transport.grpc;
 
-import java.util.List;
-import java.util.UUID;
+import static ru.taska.transport.grpc.logging.GrpcProjectLogging.logOnError;
+import static ru.taska.transport.grpc.logging.GrpcProjectLogging.logValidationError;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,19 +16,22 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
-import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
+import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.api.project.v1.ListProjectMemberResponse;
 import ru.taska.api.project.v1.ProjectContextResponse;
 import ru.taska.api.project.v1.ProjectKeyResponse;
+import ru.taska.api.project.v1.ProjectMemberStats;
 import ru.taska.api.project.v1.ProjectResponse;
 import ru.taska.api.project.v1.RmProjectMemberRequest;
 import ru.taska.api.project.v1.RmProjectMemberResponse;
-import ru.taska.api.project.v1.ListMyProjectsResponse;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.ProjectRole;
 import ru.taska.mapper.ProjectMapper;
@@ -37,17 +40,34 @@ import ru.taska.service.ProjectMemberService;
 import ru.taska.service.ProjectService;
 import validator.GrpcRequestValidators;
 
-import static ru.taska.transport.grpc.logging.GrpcProjectLogging.logOnError;
-import static ru.taska.transport.grpc.logging.GrpcProjectLogging.logValidationError;
+import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class GrpcProjectService {
+
     private final ProjectService projectService;
     private final ProjectMemberService projectMemberService;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+
+    public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
+            Mono<GetProjectMemberStatsBatchRequest> request) {
+        return request.flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getActorUserId(), "actorUserId"),
+                        GrpcRequestValidators.parseUuidListOrInvalidArgument(req.getProjectIdsList(), "projectIds"))
+                .flatMapMany(validated -> projectMemberService.getMemberStatsBatch(
+                        validated.getT2().stream().distinct().toList(), validated.getT1(),
+                        req.getHeader().getRequestId(), req.getHeader().getNodeId()))
+                .map(stats -> ProjectMemberStats.newBuilder()
+                        .setProjectId(stats.projectId().toString()).setMemberCount(stats.memberCount())
+                        .addAllMembers(stats.members().stream().map(projectMemberMapper::toProjectMemberResponse).toList())
+                        .build())
+                .collectList().map(items -> GetProjectMemberStatsBatchResponse.newBuilder()
+                        .addAllItems(items).build()));
+    }
 
     @TrackMetrics(counter = "project-service_create-project_grpc_counter",
             timer = "project-service_create-project_grpc_timer")

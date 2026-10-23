@@ -364,6 +364,23 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 
+    @Override
+    public Mono<Map<UUID, Long>> countAttachmentsByIssueIds(List<UUID> issueIds){
+        if (issueIds == null || issueIds.isEmpty()){
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_attachments WHERE issue_id IN (:issueIds) AND deleted_at IS NULL GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
     /**
      * Единый список условий фильтрации задач для доски — общий источник как для Criteria API
      * (путь без {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией

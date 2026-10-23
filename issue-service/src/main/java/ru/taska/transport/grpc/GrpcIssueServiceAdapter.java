@@ -11,6 +11,8 @@ import ru.taska.api.issue.v1.AddIssueLabelResponse;
 import ru.taska.api.issue.v1.AddIssueWorklogRequest;
 import ru.taska.api.issue.v1.AddIssueWorklogResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalResponse;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateProjectLabelRequest;
@@ -78,6 +80,13 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     private final GrpcIssueLinkService grpcIssueLinkService;
     private final GrpcIssueWatcherService grpcIssueWatcherService;
     private final GrpcIssueWorklogService grpcIssueWorklogService;
+
+    @Override
+    public Mono<CountProjectIssuesBatchInternalResponse> countProjectIssuesBatchInternal(
+            Mono<CountProjectIssuesBatchInternalRequest> request) {
+        return grpcIssueService.countProjectIssuesBatchInternal(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("countProjectIssuesBatchInternal"));
+    }
 
     @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {

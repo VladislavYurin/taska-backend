@@ -11,9 +11,13 @@ import ru.taska.annotation.TrackMetrics;
 import reactor.util.function.Tuple8;
 import reactor.util.function.Tuples;
 import ru.taska.api.common.v1.Header;
+import ru.taska.api.workflow.v1.AddWorkflowStatusRequest;
+import ru.taska.api.workflow.v1.AddWorkflowTransitionRequest;
 import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
 import ru.taska.api.workflow.v1.IssueType;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
 import ru.taska.api.workflow.v1.TransitionViolation;
 import ru.taska.api.workflow.v1.ValidateTransitionRequest;
 import ru.taska.api.workflow.v1.ValidateTransitionResponse;
@@ -173,6 +177,84 @@ public class GrpcWorkflowService{
                             return workflowService.createWorkflow(requestId, nodeId, actorUserId, dto);
                         }))
                 .map(workflowMapper::toWorkflowProto);
+    }
+
+    @TrackMetrics(counter = "workflow-service_add-workflow-status_grpc_counter",
+            timer = "workflow-service_add-workflow-status_grpc_timer")
+    public Mono<WorkflowResponse> addWorkflowStatus(Mono<AddWorkflowStatusRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getWorkflowId(), "body.workflowId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "addWorkflowStatus"))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID projectId = t.getT3();
+                            UUID workflowId = t.getT4();
+                            UUID actorUserId = t.getT5();
+
+                            log.info("[{}][{}] addWorkflowStatus: projectId={}, workflowId={}, statusKey={}, actorUserId={}",
+                                    requestId, nodeId, projectId, workflowId, req.getBody().getStatus().getStatusKey(), actorUserId);
+
+                            return workflowService.addStatus(requestId, nodeId, actorUserId, projectId, workflowId,
+                                    workflowCreationMapper.toStatusDto(req.getBody().getStatus()));
+                        }))
+                .map(workflowMapper::toWorkflowProto);
+    }
+
+    @TrackMetrics(counter = "workflow-service_add-workflow-transition_grpc_counter",
+            timer = "workflow-service_add-workflow-transition_grpc_timer")
+    public Mono<WorkflowResponse> addWorkflowTransition(Mono<AddWorkflowTransitionRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getWorkflowId(), "body.workflowId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "addWorkflowTransition"))
+                        .flatMap(t -> {
+                            String requestId = t.getT1();
+                            String nodeId = t.getT2();
+                            UUID projectId = t.getT3();
+                            UUID workflowId = t.getT4();
+                            UUID actorUserId = t.getT5();
+
+                            log.info("[{}][{}] addWorkflowTransition: projectId={}, workflowId={}, from={}, to={}, actorUserId={}",
+                                    requestId, nodeId, projectId, workflowId,
+                                    req.getBody().getTransition().getFromStatusKey(),
+                                    req.getBody().getTransition().getToStatusKey(), actorUserId);
+
+                            return workflowService.addTransition(requestId, nodeId, actorUserId, projectId, workflowId,
+                                    workflowCreationMapper.toTransitionDto(req.getBody().getTransition()));
+                        }))
+                .map(workflowMapper::toWorkflowProto);
+    }
+
+    @TrackMetrics(counter = "workflow-service_list-project-workflows_grpc_counter",
+            timer = "workflow-service_list-project-workflows_grpc_timer")
+    public Mono<ListProjectWorkflowsResponse> listProjectWorkflows(Mono<ListProjectWorkflowsRequest> request) {
+        return request
+                .flatMap(req -> Mono.zip(
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                                GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")
+                        )
+                        .doOnError(StatusRuntimeException.class,
+                                logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listProjectWorkflows"))
+                        .flatMap(t -> {
+                            log.info("[{}][{}] listProjectWorkflows: projectId={}", t.getT1(), t.getT2(), t.getT3());
+                            return workflowService.listProjectWorkflows(t.getT3());
+                        }))
+                .map(workflowMapper::toListProjectWorkflowsProto);
     }
 
     private Consumer<Throwable> logValidationError(String requestId, String nodeId, String operation) {

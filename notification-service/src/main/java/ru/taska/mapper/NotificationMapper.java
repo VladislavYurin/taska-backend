@@ -24,14 +24,13 @@ import java.util.UUID;
 public class NotificationMapper {
 
     private final NotificationProperties notificationProperties;
-    private final String ETC_SIGN = "...";
 
     public Notification toIssueCreated(TaskaEvent event, UUID userId, IssueInfo issueInfo) {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_CREATED)
-                .title("Новая задача")
-                .body("Создана новая задача " + displayKey(issueInfo))
+                .title("New issue")
+                .body(displayKey(issueInfo) + " was created")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -44,8 +43,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(assigneeId)
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
-                .title("Новая задача назначена на вас")
-                .body("Вам назначена задача " + displayKey(issueInfo))
+                .title("Issue assigned to you")
+                .body(displayKey(issueInfo) + " was assigned to you")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -58,8 +57,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_ASSIGNED)
-                .title("Исполнитель снят с задачи")
-                .body("С задачи " + displayKey(issueInfo) + " снят исполнитель")
+                .title("Assignee removed")
+                .body(displayKey(issueInfo) + " no longer has an assignee")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -72,8 +71,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_TRANSITIONED)
-                .title("Статус задачи изменён")
-                .body("Статус задачи " + displayKey(issueInfo) + " был изменён")
+                .title("Status changed")
+                .body("The status of " + displayKey(issueInfo) + " changed")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -86,8 +85,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_UPDATED)
-                .title("Задача обновлена")
-                .body("Задача обновлена " + displayKey(issueInfo))
+                .title("Issue updated")
+                .body(displayKey(issueInfo) + " was updated")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -100,8 +99,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_DELETED)
-                .title("Задача удалена")
-                .body("Задача удалена " + displayKey(issueInfo))
+                .title("Issue deleted")
+                .body(displayKey(issueInfo) + " was deleted")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -121,10 +120,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_CREATED)
-                .title("Для задачи установлена новая связь")
-                .body("Для задачи " + displayKey(issueInfo)
-                        + " установлена связь \"" + linkType + "\" с задачей "
-                        + targetIssueId + ".")
+                .title("Link added")
+                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link added to " + targetIssueId)
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -144,10 +141,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_DELETED)
-                .title("Для задачи удалена связь")
-                .body("Для задачи " + displayKey(issueInfo)
-                        + " удалена связь \"" + linkType + "\" с задачей "
-                        + targetIssueId + ".")
+                .title("Link removed")
+                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link removed from " + targetIssueId)
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -160,8 +155,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(event.aggregateId())
                 .notificationType(NotificationType.USER_INVITED)
-                .title("Добро пожаловать в Taska")
-                .body("Завершите регистрацию, перейдя по ссылке из письма для задания пароля.")
+                .title("Welcome to Taska")
+                .body("Finish signing up: set your password with the link in your invitation email.")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -171,8 +166,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.PROJECT_CREATED)
-                .title("Проект создан")
-                .body("Создан новый проект " + event.aggregateId())
+                .title("Project created")
+                .body("Project " + event.aggregateId() + " was created")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -182,8 +177,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_ADDED)
-                .title("Вас добавили в проект")
-                .body("Вы добавлены в проект " + event.aggregateId())
+                .title("You were added to a project")
+                .body("You were added to " + event.aggregateId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -193,8 +188,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_UPDATED)
-                .title("Ваша роль в проекте изменена")
-                .body("Ваша роль изменена в проекте " + event.aggregateId())
+                .title("Your project role changed")
+                .body("Your role in " + event.aggregateId() + " changed")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -204,8 +199,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_REMOVED)
-                .title("Вас удалили из проекта")
-                .body("Вы удалены из проекта " + event.aggregateId())
+                .title("You were removed from a project")
+                .body("You were removed from " + event.aggregateId())
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -215,11 +210,23 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(event.aggregateId())
                 .notificationType(NotificationType.USER_ACTIVATED)
-                .title("Аккаунт активирован")
-                .body("Ваш аккаунт успешно активирован. Теперь вы можете войти в систему.")
+                .title("Account activated")
+                .body("Your account is active. You can sign in now.")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
+    }
+
+    /** Redacts legacy previews even if an old worker writes after the cleanup migration. */
+    public static String safeBody(Notification notification) {
+        if (notification.getNotificationType() != NotificationType.ISSUE_COMMENT_CREATED) {
+            return notification.getBody();
+        }
+        String key = notification.getIssueKey();
+        if (key == null || key.isBlank()) {
+            key = notification.getIssueId() == null ? null : notification.getIssueId().toString();
+        }
+        return key == null ? "New comment" : "New comment on " + key;
     }
 
     public NotificationResponse toNotificationProto(Notification notification) {
@@ -228,7 +235,7 @@ public class NotificationMapper {
                 .setUserId(toStringOrEmpty(notification.getUserId()))
                 .setNotificationType(toProtoNotificationKind(notification.getNotificationType()))
                 .setTitle(toStringOrEmpty(notification.getTitle()))
-                .setBody(toStringOrEmpty(notification.getBody()))
+                .setBody(toStringOrEmpty(safeBody(notification)))
                 .setSourceEventId(toStringOrEmpty(notification.getSourceEventId()))
                 .setIssueId(toStringOrEmpty(notification.getIssueId()))
                 .setIssueKey(toStringOrEmpty(notification.getIssueKey()))
@@ -264,9 +271,8 @@ public class NotificationMapper {
     ) {        return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.LABEL_ADDED)
-                .title("Метка добавлена к задаче")
-                .body("К задаче " + displayKey(issueInfo)
-                        + " добавлена метка \"" + labelName + "\"")
+                .title("Label added")
+                .body("Label \"" + labelName + "\" added to " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -283,9 +289,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.LABEL_REMOVED)
-                .title("Метка удалена из задачи")
-                .body("Из задачи " + displayKey(issueInfo)
-                        + " удалена метка \"" + labelName + "\"")
+                .title("Label removed")
+                .body("Label \"" + labelName + "\" removed from " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -302,8 +307,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.USER_BLOCKED)
-                .title("Account Blocked")
-                .body(String.format("Your account has been blocked. Reason: %s", reason))
+                .title("Account blocked")
+                .body("Your account was blocked. Reason: " + reason)
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -317,8 +322,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.USER_UNBLOCKED)
-                .title("Account Unblocked")
-                .body(String.format("Your account has been unblocked. Reason: %s", reason))
+                .title("Account unblocked")
+                .body("Your account was unblocked. Reason: " + reason)
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -327,21 +332,13 @@ public class NotificationMapper {
     public Notification toCommentCreated(
             TaskaEvent event,
             UUID userId,
-            IssueInfo issueInfo,
-            String body
+            IssueInfo issueInfo
     ) {
-        int maxCommentBodyLength = notificationProperties.comment().maxShownBodyLength();
-
-        String preview = body != null && body.length() > maxCommentBodyLength
-                ? body.substring(0, maxCommentBodyLength - ETC_SIGN.length()) + ETC_SIGN
-                : body;
-
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_CREATED)
-                .title("Новый комментарий")
-                .body("Новый комментарий к задаче " + displayKey(issueInfo)
-                        + ": " + preview)
+                .title("New comment")
+                .body("New comment on " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -358,8 +355,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_UPDATED)
-                .title("Комментарий обновлён")
-                .body("Комментарий к задаче " + displayKey(issueInfo) + " был обновлён")
+                .title("Comment edited")
+                .body("A comment on " + displayKey(issueInfo) + " was edited")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -376,8 +373,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_COMMENT_DELETED)
-                .title("Комментарий удалён")
-                .body("Комментарий к задаче " + displayKey(issueInfo) + " был удалён")
+                .title("Comment deleted")
+                .body("A comment on " + displayKey(issueInfo) + " was deleted")
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -402,9 +399,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_ATTACHMENT_ADDED)
-                .title("Добавлено вложение")
-                .body("К задаче " + displayKey(issueInfo)
-                + " добавлено вложение \"" + fileName + "\"")
+                .title("Attachment added")
+                .body("\"" + fileName + "\" attached to " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -422,9 +418,8 @@ public class NotificationMapper {
         return Notification.builder()
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_ATTACHMENT_DELETED)
-                .title("Удалено вложение")
-                .body("Из задачи " + displayKey(issueInfo)
-                        + " удалено вложение \"" + fileName + "\"")
+                .title("Attachment removed")
+                .body("\"" + fileName + "\" removed from " + displayKey(issueInfo))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
