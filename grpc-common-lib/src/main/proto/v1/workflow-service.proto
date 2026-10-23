@@ -27,6 +27,12 @@ enum StatusCategory {
 }
 
 service WorkflowService {
+  rpc UpdateWorkflow(WorkflowMutationRequest) returns (ProjectWorkflow);
+  rpc UpdateWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
+  rpc DeleteWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
+  rpc UpdateWorkflowTransition(WorkflowMutationRequest) returns (ProjectWorkflow);
+  rpc DeleteWorkflowTransition(WorkflowMutationRequest) returns (ProjectWorkflow);
+  rpc DeleteProjectWorkflow(WorkflowMutationRequest) returns (ProjectWorkflow);
   /**
    * Возвращает workflow, привязанный к (project_id, issue_type).
    */
@@ -136,6 +142,25 @@ message WorkflowResponse {
    * Переходы workflow.
    */
   repeated WorkflowTransition transitions = 7;
+  // Mutation responses also carry their project binding; old readers ignore these fields.
+  repeated IssueType issue_types = 8;
+  bool is_shared = 9;
+}
+
+message WorkflowMutationRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string workflow_id = 3;
+  string actor_user_id = 4;
+  optional int32 version = 5;
+  optional string status_id = 6;
+  optional string transition_id = 7;
+  optional string name = 8;
+  optional StatusCategory category = 9;
+  optional int32 sort_order = 10;
+  optional bool hidden = 11;
+  optional string target_status_key = 12;
+  map<string, string> status_mappings = 13;
 }
 
 message WorkflowStatus {

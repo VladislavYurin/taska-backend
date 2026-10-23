@@ -341,7 +341,8 @@ public class PayloadSerializer {
             node.putNull(ASSIGNEE);
         }
 
-        node.put(TRANSITIONED_ID, transitionId.toString());
+        if (transitionId != null) node.put(TRANSITIONED_ID, transitionId.toString());
+        else node.putNull(TRANSITIONED_ID);
         node.put(FROM_STATUS, sourceStatus != null ? sourceStatus : "");
         node.put(TO_STATUS, targetStatus != null ? targetStatus : "");
         node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));

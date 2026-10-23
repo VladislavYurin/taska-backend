@@ -51,6 +51,10 @@ import java.util.UUID;
  */
 @Component
 public class WorkflowMapper {
+    public ProjectWorkflowDto toMutationResponseRestDto(WorkflowResponse response) {
+        return toProjectWorkflowDto(ProjectWorkflow.newBuilder().setWorkflow(response)
+                .addAllIssueTypes(response.getIssueTypesList()).setIsShared(response.getIsShared()).build());
+    }
 
     private static final String STATUS_CATEGORY_PREFIX = "STATUS_CATEGORY_";
 
@@ -278,7 +282,7 @@ public class WorkflowMapper {
         return dto;
     }
 
-    private ProjectWorkflowDto toProjectWorkflowDto(ProjectWorkflow projectWorkflow) {
+    public ProjectWorkflowDto toProjectWorkflowDto(ProjectWorkflow projectWorkflow) {
         ProjectWorkflowDto dto = new ProjectWorkflowDto();
 
         dto.setWorkflow(toWorkflowResponseRestDto(projectWorkflow.getWorkflow()));
