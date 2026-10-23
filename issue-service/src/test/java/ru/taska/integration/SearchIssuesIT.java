@@ -19,9 +19,11 @@ import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 import ru.taska.domain.aggregate.IssueWithProject;
+import ru.taska.domain.util.PageResult;
 import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueService;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +47,7 @@ class SearchIssuesIT extends AbstractIT {
     private static final UUID ASSIGNEE_ID_1 = UUID.fromString("00000000-0000-0000-0000-000000000004");
     private static final UUID ASSIGNEE_ID_2 = UUID.fromString("00000000-0000-0000-0000-000000000005");
     private static final UUID ACTOR_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    private static final UUID OTHER_REPORTER_ID = UUID.fromString("00000000-0000-0000-0000-000000000007");
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "issue-service";
     private static final String ISSUE_STATUS_KEY_TODO = "TODO";
@@ -124,6 +127,29 @@ class SearchIssuesIT extends AbstractIT {
                 .setKey(key)
                 .setName(name)
                 .build();
+    }
+
+    private PageResult<IssueWithProject> search(
+            String query,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType
+    ) {
+        return issueService.searchIssues(
+                REQUEST_ID, NODE_ID, ACTOR_USER_ID,
+                query, projectId, statusKey, assigneeId, reporterId, priority, issueType,
+                0, 50
+        ).block();
+    }
+
+    private void assertFound(PageResult<IssueWithProject> result, Integer... issueNumbers) {
+        Assertions.assertThat(result.totalCount()).isEqualTo(issueNumbers.length);
+        Assertions.assertThat(result.items())
+                .extracting(item -> item.issue().getIssueNumber())
+                .containsExactlyInAnyOrder(issueNumbers);
     }
 
     // ==================== ТЕСТЫ ====================
@@ -293,6 +319,110 @@ class SearchIssuesIT extends AbstractIT {
                             .containsExactlyInAnyOrder(PROJECT_KEY_1, PROJECT_KEY_2);
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void shouldFilterByStatusKey() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search(null, PROJECT_ID_1, ISSUE_STATUS_KEY_DONE, null, null, null, null), 3, 4);
+    }
+
+    @Test
+    void shouldFilterByAssigneeId() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2"));
+
+        assertFound(search(null, PROJECT_ID_2, null, ASSIGNEE_ID_2, null, null, null), 6, 8);
+    }
+
+    @Test
+    void shouldFilterByReporterId() {
+        issueRepository.save(buildIssue(9, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, "Чужая задача", IssuePriority.LOW)
+                .toBuilder().reporterId(OTHER_REPORTER_ID).build()).block();
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search(null, PROJECT_ID_1, null, null, OTHER_REPORTER_ID, null, null), 9);
+    }
+
+    @Test
+    void shouldFilterByIssueType() {
+        issueRepository.save(buildIssue(9, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, "Упал логин", IssuePriority.HIGH)
+                .toBuilder().issueType(IssueType.BUG).build()).block();
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search(null, PROJECT_ID_1, null, null, null, null, IssueType.BUG), 9);
+    }
+
+    @Test
+    void shouldCombineQueryWithFiltersInAllProjects() {
+        mockGrpcProjectInfoResponse(
+                projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"),
+                projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2")
+        );
+
+        assertFound(search("документ", null, ISSUE_STATUS_KEY_DONE, null, null, null, null), 4, 7);
+        assertFound(search("документ", null, ISSUE_STATUS_KEY_DONE, ASSIGNEE_ID_2, null, null, null), 4);
+    }
+
+    @Test
+    void shouldSearchByIssueKeyIgnoringCase() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2"));
+
+        assertFound(search("test-5", null, null, null, null, null, null), 5);
+    }
+
+    @Test
+    void shouldSearchByDescription() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2"));
+
+        assertFound(search("задачи 7", null, null, null, null, null, null), 7);
+    }
+
+    @Test
+    void shouldExcludeDeletedIssues() {
+        issueRepository.save(buildIssue(9, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, "Документация удалена", IssuePriority.LOW)
+                .toBuilder().deletedAt(Instant.now()).build()).block();
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search(null, PROJECT_ID_1, null, null, null, null, null), 1, 2, 3, 4);
+        assertFound(search("документ", PROJECT_ID_1, null, null, null, null, null), 1, 4);
+    }
+
+    @Test
+    void shouldIgnoreBlankStatusKey() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search(null, PROJECT_ID_1, "  ", null, null, null, null), 1, 2, 3, 4);
+    }
+
+    @Test
+    void shouldTreatLikeWildcardsLiterally() {
+        issueRepository.save(buildIssue(9, PROJECT_ID_1, ISSUE_STATUS_KEY_TODO, ASSIGNEE_ID_1, "Покрытие 50%_тестами", IssuePriority.LOW))
+                .block();
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1"));
+
+        assertFound(search("50%_", null, null, null, null, null, null), 9);
+        assertFound(search("%%%", null, null, null, null, null, null));
+        assertFound(search("___", null, null, null, null, null, null));
+    }
+
+    @Test
+    void shouldIgnoreProjectFilterForEmptyProjectList() {
+        StepVerifier.create(issueRepository.searchIssuesInProjects(List.of(), null, null, null, null, null, null, 50, 0)
+                        .map(Issue::getIssueNumber)
+                        .collectList())
+                .assertNext(numbers -> Assertions.assertThat(numbers).containsExactlyInAnyOrder(1, 2, 3, 4, 5, 6, 7, 8))
+                .verifyComplete();
+        StepVerifier.create(issueRepository.countSearchIssuesInProjects(List.of(), null, null, null, null, null, null))
+                .expectNext(8L)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldReturnEmptyPageWhenNothingMatches() {
+        mockGrpcProjectInfoResponse();
+
+        assertFound(search("несуществующая", null, null, null, null, null, null));
     }
 
     @Test

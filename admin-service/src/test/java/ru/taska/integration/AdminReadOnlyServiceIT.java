@@ -25,6 +25,9 @@ import java.util.UUID;
  */
 class AdminReadOnlyServiceIT extends AbstractIT {
 
+    private static final UUID FIRST_AUDIT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID SECOND_AUDIT_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+
     @Autowired
     private MetadataService metadataService;
 
@@ -211,6 +214,76 @@ class AdminReadOnlyServiceIT extends AbstractIT {
     }
 
     @Test
+    void listAuditEntries_byActorUserId_findsOnlyThatActor() {
+        FilterAuditDTO filter = FilterAuditDTO.builder()
+                .actorUserId(UUID.fromString(SECOND_AUDIT_ACTOR_ID))
+                .build();
+
+        assertAuditIds(filter, SECOND_AUDIT_ID);
+    }
+
+    @Test
+    void listAuditEntries_byTargetTableAndId_matchesEachColumnExactly() {
+        assertAuditIds(FilterAuditDTO.builder().targetTable(FIXTURE_TABLE).build(), SECOND_AUDIT_ID, FIRST_AUDIT_ID);
+        assertAuditIds(FilterAuditDTO.builder().targetId("00000000-0000-0000-0000-000000000001").build(),
+                FIRST_AUDIT_ID);
+    }
+
+    @Test
+    void listAuditEntries_byCreatedAtFrom_includesLowerBound() {
+        // Ровно created_at второй записи: граница включительно, первая запись (2024-01-15) раньше
+        FilterAuditDTO filter = FilterAuditDTO.builder()
+                .createdAtFrom(Instant.parse("2024-02-01T09:30:00Z"))
+                .build();
+
+        assertAuditIds(filter, SECOND_AUDIT_ID);
+    }
+
+    @Test
+    void listAuditEntries_byCreatedAtTo_includesUpperBound() {
+        // Ровно created_at первой записи: граница включительно, вторая запись (2024-02-01) позже
+        FilterAuditDTO filter = FilterAuditDTO.builder()
+                .createdAtTo(Instant.parse("2024-01-15T12:00:00Z"))
+                .build();
+
+        assertAuditIds(filter, FIRST_AUDIT_ID);
+    }
+
+    @Test
+    void listAuditEntries_byPeriod_excludesEntriesOutsideIt() {
+        assertAuditIds(FilterAuditDTO.builder()
+                        .createdAtFrom(Instant.parse("2024-01-01T00:00:00Z"))
+                        .createdAtTo(Instant.parse("2024-12-31T00:00:00Z"))
+                        .build(),
+                SECOND_AUDIT_ID, FIRST_AUDIT_ID);
+        assertAuditIds(FilterAuditDTO.builder()
+                        .createdAtFrom(Instant.parse("2024-01-15T12:00:00.000001Z"))
+                        .createdAtTo(Instant.parse("2024-02-01T09:29:59.999999Z"))
+                        .build());
+    }
+
+    @Test
+    void listAuditEntries_withWhitespaceOnlyFilters_ignoresThem() {
+        FilterAuditDTO filter = FilterAuditDTO.builder()
+                .action("  ")
+                .requestId(" ")
+                .build();
+
+        assertAuditIds(filter, SECOND_AUDIT_ID, FIRST_AUDIT_ID);
+    }
+
+    @Test
+    void listAuditEntries_byValueOfOtherEntryInEachFilter_findsNothing() {
+        // Все условия объединяются через AND: actor первой записи + action второй не совпадают ни с одной строкой
+        FilterAuditDTO filter = FilterAuditDTO.builder()
+                .actorUserId(UUID.fromString(FIXTURE_USER_ID))
+                .action(SECOND_AUDIT_ACTION)
+                .build();
+
+        assertAuditIds(filter);
+    }
+
+    @Test
     void listAuditEntries_masksSensitiveColumnsInOldAndNewValues_resolvingServiceSuffix() {
         FilterAuditDTO filter = FilterAuditDTO.builder().action(SECOND_AUDIT_ACTION).build();
 
@@ -224,6 +297,18 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                     Assertions.assertThat(entry.oldValue().get("email").asText()).isEqualTo("***");
                     Assertions.assertThat(entry.newValue().get("display_name").asText()).isEqualTo("bob");
                     Assertions.assertThat(entry.newValue().get("email").asText()).isEqualTo("***");
+                })
+                .verifyComplete();
+    }
+
+    /** Проверяет и выборку, и totalCount: они строятся из одного фильтра, но разными запросами. */
+    private void assertAuditIds(FilterAuditDTO filter, UUID... expectedIdsNewestFirst) {
+        StepVerifier.create(adminReadonlyService.listAuditEntries(filter, 0, 10))
+                .assertNext(response -> {
+                    Assertions.assertThat(response.items())
+                            .extracting(AuditEntriesResponseDto::id)
+                            .containsExactly(expectedIdsNewestFirst);
+                    Assertions.assertThat(response.totalCount()).isEqualTo(expectedIdsNewestFirst.length);
                 })
                 .verifyComplete();
     }
