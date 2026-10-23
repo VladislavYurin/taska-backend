@@ -5,11 +5,14 @@ import org.junit.jupiter.api.Test;
 import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Contains;
 import ru.taska.filter.FilterCondition.Eq;
+import ru.taska.filter.FilterCondition.Gte;
 import ru.taska.filter.FilterCondition.In;
 import ru.taska.filter.FilterCondition.IsNull;
+import ru.taska.filter.FilterCondition.Lte;
 import ru.taska.filter.FilterCondition.MatchNone;
 import ru.taska.filter.FilterCondition.NotIn;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +30,9 @@ class FilterBuilderTest {
         Filter filter = FilterBuilder.create()
                 .eq("assignee_id", null)
                 .eq("status_key", "   ")
+                .gte("created_at", null)
+                .lte("created_at", null)
+                .gte("target_id", " ")
                 .in("priority", null)
                 .in("priority", List.of())
                 .notIn("status_key", List.of())
@@ -60,6 +66,42 @@ class FilterBuilderTest {
                 new Contains("issue_key", "TAS", false),
                 new Contains("summary", "bug", true)
         ), filter.conditions());
+    }
+
+    @Test
+    void shouldAddRangeBounds() {
+        Instant from = Instant.parse("2024-01-01T00:00:00Z");
+        Instant to = Instant.parse("2024-01-31T23:59:59Z");
+
+        Filter filter = FilterBuilder.create()
+                .gte("created_at", from)
+                .lte("created_at", to)
+                .build();
+
+        assertEquals(List.of(new Gte("created_at", from), new Lte("created_at", to)), filter.conditions());
+    }
+
+    @Test
+    void shouldKeepOnlyGivenRangeBound_whenOtherIsAbsent() {
+        Instant to = Instant.parse("2024-01-31T23:59:59Z");
+
+        Filter filter = FilterBuilder.create()
+                .gte("created_at", null)
+                .lte("created_at", to)
+                .build();
+
+        assertEquals(List.of(new Lte("created_at", to)), filter.conditions());
+    }
+
+    @Test
+    void shouldSkipWholeAnyOf_whenRangeBoundIsSkipped() {
+        Filter filter = FilterBuilder.create()
+                .anyOf(any -> any
+                        .gte("created_at", null)
+                        .isNull("created_at"))
+                .build();
+
+        assertTrue(filter.isEmpty());
     }
 
     @Test

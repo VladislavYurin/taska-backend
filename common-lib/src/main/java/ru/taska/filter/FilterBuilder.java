@@ -3,8 +3,10 @@ package ru.taska.filter;
 import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Contains;
 import ru.taska.filter.FilterCondition.Eq;
+import ru.taska.filter.FilterCondition.Gte;
 import ru.taska.filter.FilterCondition.In;
 import ru.taska.filter.FilterCondition.IsNull;
+import ru.taska.filter.FilterCondition.Lte;
 import ru.taska.filter.FilterCondition.MatchNone;
 import ru.taska.filter.FilterCondition.NotIn;
 
@@ -55,6 +57,32 @@ public final class FilterBuilder {
             throw new IllegalArgumentException("Required filter value is blank for column " + column);
         }
         conditions.add(new Eq(column, value));
+        return this;
+    }
+
+    /**
+     * {@code column >= value} — нижняя граница диапазона включительно; пропускается, если значение
+     * не задано ({@code null} или пустая строка).
+     */
+    public FilterBuilder gte(String column, Object value) {
+        if (isPresent(value)) {
+            conditions.add(new Gte(column, value));
+        } else {
+            skipped = true;
+        }
+        return this;
+    }
+
+    /**
+     * {@code column <= value} — верхняя граница диапазона включительно; пропускается, если значение
+     * не задано ({@code null} или пустая строка).
+     */
+    public FilterBuilder lte(String column, Object value) {
+        if (isPresent(value)) {
+            conditions.add(new Lte(column, value));
+        } else {
+            skipped = true;
+        }
         return this;
     }
 

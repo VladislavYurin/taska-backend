@@ -4,8 +4,10 @@ import org.springframework.data.relational.core.query.Criteria;
 import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Contains;
 import ru.taska.filter.FilterCondition.Eq;
+import ru.taska.filter.FilterCondition.Gte;
 import ru.taska.filter.FilterCondition.In;
 import ru.taska.filter.FilterCondition.IsNull;
+import ru.taska.filter.FilterCondition.Lte;
 import ru.taska.filter.FilterCondition.MatchNone;
 import ru.taska.filter.FilterCondition.NotIn;
 
@@ -51,6 +53,8 @@ public final class CriteriaRenderer {
     private static Criteria render(FilterCondition condition) {
         return switch (condition) {
             case Eq c -> Criteria.where(c.column()).is(c.value());
+            case Gte c -> Criteria.where(c.column()).greaterThanOrEquals(c.value());
+            case Lte c -> Criteria.where(c.column()).lessThanOrEquals(c.value());
             case In c -> Criteria.where(c.column()).in(c.values());
             case NotIn c -> Criteria.where(c.column()).notIn(c.values());
             case IsNull c -> Criteria.where(c.column()).isNull();

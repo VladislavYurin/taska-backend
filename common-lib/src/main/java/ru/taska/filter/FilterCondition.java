@@ -18,6 +18,22 @@ public sealed interface FilterCondition {
         }
     }
 
+    /** {@code column >= value}. */
+    record Gte(String column, Object value) implements FilterCondition {
+        public Gte {
+            requireValidColumn(column);
+            Objects.requireNonNull(value, () -> "value must not be null for column " + column);
+        }
+    }
+
+    /** {@code column <= value}. */
+    record Lte(String column, Object value) implements FilterCondition {
+        public Lte {
+            requireValidColumn(column);
+            Objects.requireNonNull(value, () -> "value must not be null for column " + column);
+        }
+    }
+
     /** {@code column IN (values)}; список значений непустой и не содержит {@code null}. */
     record In(String column, Collection<?> values) implements FilterCondition {
         public In {

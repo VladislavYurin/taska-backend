@@ -3,8 +3,10 @@ package ru.taska.filter;
 import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Contains;
 import ru.taska.filter.FilterCondition.Eq;
+import ru.taska.filter.FilterCondition.Gte;
 import ru.taska.filter.FilterCondition.In;
 import ru.taska.filter.FilterCondition.IsNull;
+import ru.taska.filter.FilterCondition.Lte;
 import ru.taska.filter.FilterCondition.MatchNone;
 import ru.taska.filter.FilterCondition.NotIn;
 
@@ -71,6 +73,8 @@ public final class SqlRenderer {
     private static String render(FilterCondition condition, Params params) {
         return switch (condition) {
             case Eq c -> c.column() + " = :" + params.bind(c.value());
+            case Gte c -> c.column() + " >= :" + params.bind(c.value());
+            case Lte c -> c.column() + " <= :" + params.bind(c.value());
             case In c -> c.column() + " IN (:" + params.bind(c.values()) + ")";
             case NotIn c -> c.column() + " NOT IN (:" + params.bind(c.values()) + ")";
             case IsNull c -> c.column() + " IS NULL";

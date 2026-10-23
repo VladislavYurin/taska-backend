@@ -590,9 +590,6 @@ public class IssueServiceImpl implements IssueService {
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().searchIssueRoles();
 
-        String priorityStr = priority != null ? priority.name() : null;
-        String issueTypeStr = issueType != null ? issueType.name() : null;
-
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(Mono.zip(
                         issueRepository.countSearchIssues(
@@ -600,8 +597,8 @@ public class IssueServiceImpl implements IssueService {
                                 statusKey,
                                 assigneeId,
                                 reporterId,
-                                priorityStr,
-                                issueTypeStr,
+                                priority,
+                                issueType,
                                 query
                         ),
                         issueRepository.searchIssues(
@@ -609,8 +606,8 @@ public class IssueServiceImpl implements IssueService {
                                 statusKey,
                                 assigneeId,
                                 reporterId,
-                                priorityStr,
-                                issueTypeStr,
+                                priority,
+                                issueType,
                                 query,
                                 pageSize,
                                 offset
@@ -721,17 +718,14 @@ public class IssueServiceImpl implements IssueService {
             int pageSize,
             long offset
     ) {
-        String priorityStr = priority != null ? priority.name() : null;
-        String issueTypeStr = issueType != null ? issueType.name() : null;
-
         return Mono.zip(
                         issueRepository.countSearchIssuesInProjects(
                                 projectIds,
                                 statusKey,
                                 assigneeId,
                                 reporterId,
-                                priorityStr,
-                                issueTypeStr,
+                                priority,
+                                issueType,
                                 query
                         ),
                         issueRepository.searchIssuesInProjects(
@@ -739,8 +733,8 @@ public class IssueServiceImpl implements IssueService {
                                 statusKey,
                                 assigneeId,
                                 reporterId,
-                                priorityStr,
-                                issueTypeStr,
+                                priority,
+                                issueType,
                                 query,
                                 pageSize,
                                 offset

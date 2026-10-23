@@ -11,18 +11,19 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.filter.CriteriaRenderer;
+import ru.taska.filter.Filter;
+import ru.taska.filter.FilterBuilder;
+import ru.taska.filter.SqlRenderer;
+import ru.taska.filter.SqlWhere;
 import ru.taska.mapper.IssueMapper;
-import ru.taska.repository.criteria.SearchCriteria;
-import ru.taska.repository.builder.SearchQueryBuilder;
-import ru.taska.repository.executor.SearchQueryExecutor;
 
 import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,8 +35,6 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     private final R2dbcEntityTemplate r2dbcEntityTemplate;
     private final DatabaseClient databaseClient;
     private final IssueMapper issueMapper;
-    private final SearchQueryBuilder searchQueryBuilder;
-    private final SearchQueryExecutor searchQueryExecutor;
 
     @Override
     public Flux<Issue> findByFilter(UUID projectId, String statusKey, UUID assigneeId, int limit, long offset) {
@@ -54,6 +53,54 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         );
     }
 
+    /**
+     * Метка проверяется подзапросом, а не JOIN с {@code issue_labels}: так в запросе одна таблица
+     * и колонки фильтра не нужно уточнять алиасом. Пара (задача, метка) уникальна, поэтому
+     * результат тот же, что у JOIN.
+     */
+    @Override
+    public Flux<Issue> findByLabelIdWithFilters(
+            UUID projectId,
+            UUID labelId,
+            String statusKey,
+            UUID assigneeId,
+            int limit,
+            long offset
+    ) {
+        SqlWhere where = SqlRenderer.render(listIssuesFilter(projectId, statusKey, assigneeId));
+
+        String sql = """
+                SELECT * FROM taska.issues
+                WHERE %s
+                  AND id IN (SELECT issue_id FROM taska.issue_labels WHERE label_id = :labelId)
+                ORDER BY created_at DESC
+                LIMIT :limit OFFSET :offset
+                """.formatted(where.sql());
+
+        return where.bindTo(databaseClient.sql(sql))
+                .bind("labelId", labelId)
+                .bind("limit", limit)
+                .bind("offset", offset)
+                .map(issueMapper::mapRowToIssue)
+                .all();
+    }
+
+    @Override
+    public Mono<Long> countByLabelIdWithFilters(UUID projectId, UUID labelId, String statusKey, UUID assigneeId) {
+        SqlWhere where = SqlRenderer.render(listIssuesFilter(projectId, statusKey, assigneeId));
+
+        String sql = """
+                SELECT COUNT(*) FROM taska.issues
+                WHERE %s
+                  AND id IN (SELECT issue_id FROM taska.issue_labels WHERE label_id = :labelId)
+                """.formatted(where.sql());
+
+        return where.bindTo(databaseClient.sql(sql))
+                .bind("labelId", labelId)
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
     // ==================== Поиск issues с фильтрами ====================
 
     @Override
@@ -62,26 +109,16 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery,
             int limit,
             long offset
     ) {
-        SearchCriteria criteria = SearchCriteria.builder()
-                .projectId(projectId)
-                .statusKey(statusKey)
-                .assigneeId(assigneeId)
-                .reporterId(reporterId)
-                .priority(priority)
-                .issueType(issueType)
-                .searchQuery(searchQuery)
-                .limit(limit)
-                .offset(offset)
-                .count(false)
+        Filter filter = searchFilter(statusKey, assigneeId, reporterId, priority, issueType, searchQuery)
+                .eq("project_id", projectId)
                 .build();
-
-        return search(criteria);
+        return search(filter, limit, offset);
     }
 
     @Override
@@ -90,51 +127,32 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery
     ) {
-        SearchCriteria criteria = SearchCriteria.builder()
-                .projectId(projectId)
-                .statusKey(statusKey)
-                .assigneeId(assigneeId)
-                .reporterId(reporterId)
-                .priority(priority)
-                .issueType(issueType)
-                .searchQuery(searchQuery)
-                .count(true)
+        Filter filter = searchFilter(statusKey, assigneeId, reporterId, priority, issueType, searchQuery)
+                .eq("project_id", projectId)
                 .build();
-
-        return count(criteria);
+        return count(filter);
     }
 
-    // ★ ЗАМЕНА ДЛЯ searchIssuesInProjects ★
     @Override
     public Flux<Issue> searchIssuesInProjects(
             List<UUID> projectIds,
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery,
             int limit,
             long offset
     ) {
-        SearchCriteria criteria = SearchCriteria.builder()
-                .projectIds(projectIds)  // ← передаем список projectIds
-                .statusKey(statusKey)
-                .assigneeId(assigneeId)
-                .reporterId(reporterId)
-                .priority(priority)
-                .issueType(issueType)
-                .searchQuery(searchQuery)
-                .limit(limit)
-                .offset(offset)
-                .count(false)
+        Filter filter = searchFilter(statusKey, assigneeId, reporterId, priority, issueType, searchQuery)
+                .in("project_id", projectIds)
                 .build();
-
-        return search(criteria);
+        return search(filter, limit, offset);
     }
 
     @Override
@@ -143,56 +161,77 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             String statusKey,
             UUID assigneeId,
             UUID reporterId,
-            String priority,
-            String issueType,
+            IssuePriority priority,
+            IssueType issueType,
             String searchQuery
     ) {
-        SearchCriteria criteria = SearchCriteria.builder()
-                .projectIds(projectIds)  // ← передаем список projectIds
-                .statusKey(statusKey)
-                .assigneeId(assigneeId)
-                .reporterId(reporterId)
-                .priority(priority)
-                .issueType(issueType)
-                .searchQuery(searchQuery)
-                .count(true)
+        Filter filter = searchFilter(statusKey, assigneeId, reporterId, priority, issueType, searchQuery)
+                .in("project_id", projectIds)
                 .build();
-
-        return count(criteria);
+        return count(filter);
     }
 
     private Criteria buildCriteria(UUID projectId, String statusKey, UUID assigneeId) {
-        Criteria criteria = Criteria.where("project_id").is(projectId)
-                .and("deleted_at").isNull();
-
-        if (statusKey != null) {
-            criteria = criteria.and("status_key").is(statusKey);
-        }
-        if (assigneeId != null) {
-            criteria = criteria.and("assignee_id").is(assigneeId);
-        }
-
-        return criteria;
+        return CriteriaRenderer.render(listIssuesFilter(projectId, statusKey, assigneeId));
     }
 
     /**
-     * Универсальный метод поиска задач.
-     * Поддерживает как один projectId, так и список projectIds.
+     * Условия списка задач проекта — общие для выборки с меткой и без неё,
+     * чтобы фильтры по статусу и исполнителю в них не расходились.
      */
-    private Flux<Issue> search(SearchCriteria criteria) {
-        log.debug("Searching issues with criteria: {}", criteria);
-        var query = searchQueryBuilder.build(criteria);
-        return searchQueryExecutor.executeQuery(query);
+    private Filter listIssuesFilter(UUID projectId, String statusKey, UUID assigneeId) {
+        return FilterBuilder.create()
+                .eqRequired("project_id", projectId)
+                .isNull("deleted_at")
+                // Пустой статус не снимает фильтр (в отличие от eq), а даёт пустой результат, как в случае с поиском по меткам
+                .when(statusKey != null, b -> b.in("status_key", List.of(statusKey)))
+                .eq("assignee_id", assigneeId)
+                .build();
     }
 
     /**
-     * Универсальный метод подсчета задач.
-     * Поддерживает как один projectId, так и список projectIds.
+     * Общие условия поиска задач без фильтра по проекту: его добавляет вызывающий метод
+     * (один проект или список доступных проектов). Текст ищется без учёта регистра
+     * в ключе, названии и описании задачи.
      */
-    private Mono<Long> count(SearchCriteria criteria) {
-        log.debug("Counting issues with criteria: {}", criteria);
-        var query = searchQueryBuilder.build(criteria);
-        return searchQueryExecutor.executeCount(query);
+    private FilterBuilder searchFilter(
+            String statusKey,
+            UUID assigneeId,
+            UUID reporterId,
+            IssuePriority priority,
+            IssueType issueType,
+            String searchQuery
+    ) {
+        return FilterBuilder.create()
+                .isNull("deleted_at")
+                .eq("status_key", statusKey)
+                .eq("assignee_id", assigneeId)
+                .eq("reporter_id", reporterId)
+                .eq("priority", priority)
+                .eq("issue_type", issueType)
+                .anyOf(any -> any
+                        .containsIgnoreCase("issue_key", searchQuery)
+                        .containsIgnoreCase("summary", searchQuery)
+                        .containsIgnoreCase("description", searchQuery));
+    }
+
+    /** Страница результатов поиска: сначала новые задачи, при равном времени создания — по убыванию id. */
+    private Flux<Issue> search(Filter filter, int limit, long offset) {
+        if (filter.matchesNothing()) {
+            return Flux.empty();
+        }
+        Query query = Query.query(CriteriaRenderer.render(filter))
+                .sort(Sort.by(Sort.Direction.DESC, "created_at", "id"))
+                .limit(limit)
+                .offset(offset);
+        return r2dbcEntityTemplate.select(query, Issue.class);
+    }
+
+    private Mono<Long> count(Filter filter) {
+        if (filter.matchesNothing()) {
+            return Mono.just(0L);
+        }
+        return r2dbcEntityTemplate.count(Query.query(CriteriaRenderer.render(filter)), Issue.class);
     }
 
     // ==================== Окончание поиска issues с фильтрами ====================
@@ -205,7 +244,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * даёт пустой результат, а не молчаливо снятый фильтр. При {@code null}
      * {@code pageSizePerColumn} выборка не ограничивается и собирается через Criteria API;
      * при заданном значении выполняется сырой SQL с оконной функцией, оставляющей не более
-     * N задач в каждой колонке доски (по {@code status_key}).
+     * N задач в каждой колонке доски (по {@code status_key}). Оба пути строятся из одного
+     * {@link Filter}, поэтому набор условий в них не расходится.
      */
     @Override
     public Flux<Issue> findForBoard(
@@ -218,48 +258,45 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             List<UUID> labelIds,
             Integer pageSizePerColumn
     ) {
-        boolean labelFilterActive = labelIds != null && !labelIds.isEmpty();
-
         return resolveLabelFilterIssueIds(labelIds)
-                .flatMapMany(issueIds -> {
-                    if (labelFilterActive && issueIds.isEmpty()) {
+                .map(issueIds -> boardFilter(
+                        projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
+                        issueIds.orElse(null)
+                ))
+                .flatMapMany(filter -> {
+                    if (filter.matchesNothing()) {
                         return Flux.empty();
                     }
-
-                    List<BoardFilterCondition> conditions = boardFilterConditions(
-                            projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
-                            labelFilterActive ? issueIds : null
-                    );
-
                     return pageSizePerColumn != null
-                            ? findForBoardLimitedPerColumn(conditions, pageSizePerColumn)
-                            : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(conditions), Issue.class);
+                            ? findForBoardLimitedPerColumn(filter, pageSizePerColumn)
+                            : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(filter), Issue.class);
                 });
     }
 
     /**
      * Резолвит {@code labelIds} в список id задач, помеченных хотя бы одной из этих меток.
      * Для {@code null}/пустого {@code labelIds} фильтр по меткам неактивен и возвращается
-     * пустой список; вызывающий код отличает этот случай от «метки заданы, но совпадений нет».
+     * {@link Optional#empty()}; пустой список внутри означает «метки заданы, но совпадений нет».
      */
-    private Mono<List<UUID>> resolveLabelFilterIssueIds(List<UUID> labelIds) {
+    private Mono<Optional<List<UUID>>> resolveLabelFilterIssueIds(List<UUID> labelIds) {
         if (labelIds == null || labelIds.isEmpty()) {
-            return Mono.just(List.of());
+            return Mono.just(Optional.empty());
         }
         return r2dbcEntityTemplate.getDatabaseClient()
                 .sql("SELECT DISTINCT issue_id FROM taska.issue_labels WHERE label_id IN (:labelIds)")
                 .bind("labelIds", labelIds)
                 .map(row -> row.get("issue_id", UUID.class))
                 .all()
-                .collectList();
+                .collectList()
+                .map(Optional::of);
     }
 
     /**
-     * Criteria-запрос для доски (путь без {@code pageSizePerColumn}): фильтры из
-     * {@code conditions} плюс сортировка по колонке ({@code status_key}) и дате создания.
+     * Criteria-запрос для доски (путь без {@code pageSizePerColumn}): условия из
+     * {@code filter} плюс сортировка по колонке ({@code status_key}) и дате создания.
      */
-    private Query buildBoardCriteriaQuery(List<BoardFilterCondition> conditions) {
-        return Query.query(toCriteria(conditions))
+    private Query buildBoardCriteriaQuery(Filter filter) {
+        return Query.query(CriteriaRenderer.render(filter))
                 .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
     }
 
@@ -268,28 +305,24 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
      * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
      */
-    private Flux<Issue> findForBoardLimitedPerColumn(List<BoardFilterCondition> conditions, int pageSizePerColumn) {
-        Map<String, Object> params = new LinkedHashMap<>();
-        String where = toSqlWhere(conditions, params);
-        params.put("pageSizePerColumn", pageSizePerColumn);
+    private Flux<Issue> findForBoardLimitedPerColumn(Filter filter, int pageSizePerColumn) {
+        SqlWhere where = SqlRenderer.render(filter);
 
         String sql = """
                 SELECT * FROM (
-                    SELECT i.*,
-                           ROW_NUMBER() OVER (PARTITION BY i.status_key ORDER BY i.created_at ASC) AS rn
-                    FROM taska.issues i
+                    SELECT *,
+                           ROW_NUMBER() OVER (PARTITION BY status_key ORDER BY created_at ASC) AS rn
+                    FROM taska.issues
                     WHERE %s
                 ) t
                 WHERE rn <= :pageSizePerColumn
                 ORDER BY status_key ASC, created_at ASC
-                """.formatted(where);
+                """.formatted(where.sql());
 
-        DatabaseClient.GenericExecuteSpec spec = r2dbcEntityTemplate.getDatabaseClient().sql(sql);
-        for (var entry : params.entrySet()) {
-            spec = spec.bind(entry.getKey(), entry.getValue());
-        }
-
-        return spec.map(issueMapper::mapRowToIssue).all();
+        return where.bindTo(r2dbcEntityTemplate.getDatabaseClient().sql(sql))
+                .bind("pageSizePerColumn", pageSizePerColumn)
+                .map(issueMapper::mapRowToIssue)
+                .all();
     }
 
     @Override
@@ -345,12 +378,12 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     }
 
     /**
-     * Единый список условий фильтрации задач для доски — общий источник как для Criteria API
-     * (путь без {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией
-     * (путь с {@code pageSizePerColumn}). Раньше эти условия дублировались в двух местах вручную,
-     * что легко было рассинхронизировать при добавлении нового фильтра в будущем.
+     * Фильтр задач для доски — общий источник как для Criteria API (путь без
+     * {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией (путь с
+     * {@code pageSizePerColumn}). {@code labelFilterIssueIds}: {@code null} — фильтр по меткам
+     * не задан, пустой список — метки заданы, но задач с ними нет, и фильтр ничего не пропускает.
      */
-    private List<BoardFilterCondition> boardFilterConditions(
+    private Filter boardFilter(
             UUID projectId,
             IssueType issueType,
             UUID assigneeId,
@@ -359,70 +392,14 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             List<String> doneStatusKeys,
             List<UUID> labelFilterIssueIds
     ) {
-        List<BoardFilterCondition> conditions = new ArrayList<>();
-        conditions.add(new BoardFilterCondition("project_id", "projectId", BoardFilterOperator.EQUALS, projectId));
-        conditions.add(new BoardFilterCondition("deleted_at", null, BoardFilterOperator.IS_NULL, null));
-        if (issueType != null) {
-            conditions.add(new BoardFilterCondition("issue_type", "issueType", BoardFilterOperator.EQUALS, issueType.name()));
-        }
-        if (assigneeId != null) {
-            conditions.add(new BoardFilterCondition("assignee_id", "assigneeId", BoardFilterOperator.EQUALS, assigneeId));
-        }
-        if (statusKey != null) {
-            conditions.add(new BoardFilterCondition("status_key", "statusKey", BoardFilterOperator.EQUALS, statusKey));
-        }
-        if (!includeDone && doneStatusKeys != null && !doneStatusKeys.isEmpty()) {
-            conditions.add(new BoardFilterCondition("status_key", "doneStatusKeys", BoardFilterOperator.NOT_IN, doneStatusKeys));
-        }
-        if (labelFilterIssueIds != null) {
-            conditions.add(new BoardFilterCondition("id", "labelFilterIssueIds", BoardFilterOperator.IN, labelFilterIssueIds));
-        }
-        return conditions;
-    }
-
-    private Criteria toCriteria(List<BoardFilterCondition> conditions) {
-        List<Criteria> criteriaList = conditions.stream()
-                .map(c -> switch (c.operator()) {
-                    case EQUALS -> Criteria.where(c.column()).is(c.value());
-                    case NOT_IN -> Criteria.where(c.column()).notIn((Collection<?>) c.value());
-                    case IN -> Criteria.where(c.column()).in((Collection<?>) c.value());
-                    case IS_NULL -> Criteria.where(c.column()).isNull();
-                })
-                .toList();
-        return Criteria.from(criteriaList);
-    }
-
-    private String toSqlWhere(List<BoardFilterCondition> conditions, Map<String, Object> paramsOut) {
-        return conditions.stream()
-                .map(c -> {
-                    String column = "i." + c.column();
-                    return switch (c.operator()) {
-                        case EQUALS -> {
-                            paramsOut.put(c.paramName(), c.value());
-                            yield column + " = :" + c.paramName();
-                        }
-                        case NOT_IN -> {
-                            paramsOut.put(c.paramName(), c.value());
-                            yield column + " NOT IN (:" + c.paramName() + ")";
-                        }
-                        case IN -> {
-                            paramsOut.put(c.paramName(), c.value());
-                            yield column + " IN (:" + c.paramName() + ")";
-                        }
-                        case IS_NULL -> column + " IS NULL";
-                    };
-                })
-                .collect(Collectors.joining(" AND "));
-    }
-
-    /**
-     * Одно условие фильтрации board-запроса: колонка + оператор + значение.
-     * {@code paramName} используется только для SQL-пути (именованный параметр); для Criteria-пути не нужен.
-     */
-    private record BoardFilterCondition(String column, String paramName, BoardFilterOperator operator, Object value) {
-    }
-
-    private enum BoardFilterOperator {
-        EQUALS, NOT_IN, IN, IS_NULL
+        return FilterBuilder.create()
+                .eqRequired("project_id", projectId)
+                .isNull("deleted_at")
+                .eq("issue_type", issueType)
+                .eq("assignee_id", assigneeId)
+                .eq("status_key", statusKey)
+                .when(!includeDone, b -> b.notIn("status_key", doneStatusKeys))
+                .inOrNone("id", labelFilterIssueIds)
+                .build();
     }
 }

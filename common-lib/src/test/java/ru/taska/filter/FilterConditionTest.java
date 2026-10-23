@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Test;
 import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Contains;
 import ru.taska.filter.FilterCondition.Eq;
+import ru.taska.filter.FilterCondition.Gte;
 import ru.taska.filter.FilterCondition.In;
 import ru.taska.filter.FilterCondition.IsNull;
+import ru.taska.filter.FilterCondition.Lte;
 import ru.taska.filter.FilterCondition.NotIn;
 
 import java.util.ArrayList;
@@ -23,6 +25,12 @@ class FilterConditionTest {
     @Test
     void shouldRejectNullEqValue() {
         assertThrows(NullPointerException.class, () -> new Eq("project_id", null));
+    }
+
+    @Test
+    void shouldRejectNullValue_forGteAndLte() {
+        assertThrows(NullPointerException.class, () -> new Gte("created_at", null));
+        assertThrows(NullPointerException.class, () -> new Lte("created_at", null));
     }
 
     @Test
@@ -77,6 +85,8 @@ class FilterConditionTest {
     @Test
     void shouldRejectInvalidColumn_inEveryConditionType() {
         assertThrows(IllegalArgumentException.class, () -> new Eq(null, 1));
+        assertThrows(IllegalArgumentException.class, () -> new Gte("i.created_at", 1));
+        assertThrows(IllegalArgumentException.class, () -> new Lte("created_at >= 0 OR 1", 1));
         assertThrows(IllegalArgumentException.class, () -> new In("", List.of(1)));
         assertThrows(IllegalArgumentException.class, () -> new NotIn("1st", List.of(1)));
         assertThrows(IllegalArgumentException.class, () -> new IsNull("a-b"));

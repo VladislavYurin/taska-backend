@@ -16,6 +16,7 @@ import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Eq;
 import ru.taska.filter.FilterCondition.MatchNone;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +58,19 @@ class CriteriaRendererTest {
                 + " AND (issues.deleted_at IS NULL)"
                 + " AND (issues.priority IN (?[$2], ?[$3]))"
                 + " AND (issues.status_key NOT IN (?[$4])))", toSql(filter));
+    }
+
+    @Test
+    void shouldRenderRangeBounds() {
+        Instant from = Instant.parse("2024-01-01T00:00:00Z");
+        Instant to = Instant.parse("2024-01-31T23:59:59Z");
+        Filter filter = FilterBuilder.create()
+                .gte("created_at", from)
+                .lte("created_at", to)
+                .build();
+
+        assertEquals("(issues.created_at >= ?[$1] AND (issues.created_at <= ?[$2]))", toSql(filter));
+        assertEquals(List.of(from, to), boundValues(filter));
     }
 
     @Test

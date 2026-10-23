@@ -6,6 +6,7 @@ import ru.taska.filter.FilterCondition.AnyOf;
 import ru.taska.filter.FilterCondition.Eq;
 import ru.taska.filter.FilterCondition.MatchNone;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +55,21 @@ class SqlRendererTest {
                 "filter_3", "%TAS%",
                 "filter_4", "%bug%"
         ), where.params());
+    }
+
+    @Test
+    void shouldRenderRangeBoundsWithParams() {
+        Instant from = Instant.parse("2024-01-01T00:00:00Z");
+        Instant to = Instant.parse("2024-01-31T23:59:59Z");
+        Filter filter = FilterBuilder.create()
+                .gte("created_at", from)
+                .lte("created_at", to)
+                .build();
+
+        SqlWhere where = SqlRenderer.render(filter);
+
+        assertEquals("created_at >= :filter_0 AND created_at <= :filter_1", where.sql());
+        assertEquals(Map.of("filter_0", from, "filter_1", to), where.params());
     }
 
     @Test
