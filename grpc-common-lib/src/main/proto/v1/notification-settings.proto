@@ -44,6 +44,8 @@ message TelegramLinkResponse {
   string link_id = 1;
   string url = 2;
   string expires_at = 3;
+  // Snapshot committed with this link; optional during rolling upgrades.
+  NotificationPreferencesResponse preferences = 4;
 }
 message TelegramUpdateRequest {
   // Validated a second time by notification-service. Never log this request.

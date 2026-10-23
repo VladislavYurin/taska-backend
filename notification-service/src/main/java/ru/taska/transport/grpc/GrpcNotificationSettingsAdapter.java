@@ -31,7 +31,7 @@ public class GrpcNotificationSettingsAdapter extends ReactorNotificationSettings
     public Mono<TelegramLinkResponse> createTelegramLink(Mono<NotificationSettingsUserRequest> request) {
         return request.flatMap(r -> user(r).flatMap(id -> settings.createLink(id,r.getEmail())))
                 .map(link -> TelegramLinkResponse.newBuilder().setLinkId(link.linkId().toString()).setUrl(link.url())
-                        .setExpiresAt(link.expiresAt().toString()).build())
+                        .setExpiresAt(link.expiresAt().toString()).setPreferences(map(link.preferences())).build())
                 .transform(safeErrors("createTelegramLink"));
     }
     @Override

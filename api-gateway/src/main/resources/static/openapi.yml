@@ -30,6 +30,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
     patch:
@@ -55,6 +82,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
+        '400':
+          description: Пустой patch, null, неизвестное поле или неверный тип переключателя
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Telegram ещё не подтверждён или сейчас недоступен для включения
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -76,6 +148,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TelegramLinkDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Сначала отключите существующую привязку Telegram
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -103,6 +211,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
+        '400':
+          description: Отсутствующий или некорректный UUID linkId
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '409':
+          description: Заявка чужая, просрочена, уже использована, не получен Start либо Telegram занят другим аккаунтом
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -124,6 +277,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
+        '401':
+          description: Отсутствующий или недействительный access token
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Доступ пользователя запрещён
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Сервис настроек временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -151,6 +331,51 @@ paths:
       responses:
         '200':
           description: Обработано или уже было обработано
+        '400':
+          description: Некорректное JSON-тело или update_id
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '403':
+          description: Неверный или отсутствующий webhook secret
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '413':
+          description: Тело превышает 32 KiB
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '429':
+          description: Превышен лимит webhook-запросов
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '503':
+          description: Интеграция Telegram выключена либо сервис временно недоступен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -3509,12 +3734,22 @@ components:
         telegramAvailable: {type: boolean}
         telegramStatus:
           type: string
-          enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE]
+          description: UNKNOWN означает неизвестный backend-статус; клиент не должен предлагать подтверждение или включение.
+          enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE, UNKNOWN]
         telegramUsername: {type: string, nullable: true}
         telegramName: {type: string, nullable: true}
         telegramLinkId: {type: string, format: uuid, nullable: true}
         telegramLinkExpiresAt: {type: string, format: date-time, nullable: true}
-        telegramError: {type: string, nullable: true}
+        telegramError:
+          type: string
+          nullable: true
+          description: >-
+            BOT_CHANGED — включён другой бот, требуется переподключение.
+            TELEGRAM_DELIVERY_UNAVAILABLE — постоянный отказ доставки, канал отключён.
+            Выключенная интеграция определяется telegramAvailable=false и сама не создаёт BOT_CHANGED.
+            Временные ошибки доставки не публикуются здесь. Набор открыт для расширения;
+            неизвестный код клиент отображает как общую недоступность без обещания повторной отправки.
+          x-extensible-enum: [BOT_CHANGED, TELEGRAM_DELIVERY_UNAVAILABLE]
     NotificationPreferencesPatchDto:
       type: object
       additionalProperties: false
@@ -3530,6 +3765,10 @@ components:
         linkId: {type: string, format: uuid}
         url: {type: string, format: uri}
         expiresAt: {type: string, format: date-time}
+        preferences:
+          description: Снимок настроек после создания заявки в той же транзакции. При его наличии отдельный GET не требуется; поле опционально для rolling upgrade.
+          allOf:
+            - $ref: '#/components/schemas/NotificationPreferencesDto'
     ConfirmTelegramLinkDto:
       type: object
       additionalProperties: false

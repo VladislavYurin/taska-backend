@@ -20,6 +20,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import ru.taska.domain.Notification;
+import ru.taska.config.props.TelegramProperties;
+import ru.taska.api.common.v1.Header;
+import ru.taska.api.notification.v1.NotificationSettingsUserRequest;
+import ru.taska.transport.grpc.GrpcNotificationSettingsAdapter;
 import ru.taska.domain.NotificationType;
 import ru.taska.event.TaskaEvent;
 import ru.taska.exception.DomainException;
@@ -43,6 +47,8 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
     @Autowired NotificationRepository notifications;
     @Autowired DatabaseClient db;
     @Autowired ObjectMapper mapper;
+    @Autowired TelegramProperties telegramProperties;
+    @Autowired GrpcNotificationSettingsAdapter settingsRpc;
     @MockitoBean TelegramSender telegram;
     @MockitoBean JavaMailSender mail;
     private UUID user;
@@ -82,6 +88,62 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
         assertThat(confirmed.telegramEnabled()).isTrue();
         assertThat(confirmed.emailEnabled()).isTrue();
         assertThatThrownBy(() -> settings.confirm(user,"user@example.test",link.linkId()).block(WAIT)).isInstanceOf(DomainException.class);
+    }
+
+    @Test
+    void pollingAndRepeatedProvisioningDoNotRewritePreferencesButVerifiedEmailChangesDo() {
+        settings.update(user,"user@example.test",false,null).block(WAIT);
+        String version=text("SELECT xmin::text FROM taska.notification_preferences");
+        String channelVersion=text("SELECT email_version::text FROM taska.notification_preferences");
+        for(int i=0;i<3;i++) {
+            settings.get(user,"user@example.test").block(WAIT);
+            settings.ensure(user,"user@example.test").block(WAIT);
+        }
+        assertThat(text("SELECT xmin::text FROM taska.notification_preferences")).isEqualTo(version);
+        var updated=settings.get(user,"changed@example.test").block(WAIT);
+        assertThat(updated.email()).isEqualTo("changed@example.test");
+        assertThat(updated.emailEnabled()).isFalse();
+        assertThat(text("SELECT email_version::text FROM taska.notification_preferences")).isNotEqualTo(channelVersion);
+        assertThat(settings.get(UUID.randomUUID(),"legacy@example.test").block(WAIT).emailEnabled()).isTrue();
+    }
+
+    @Test
+    void linkContainsCommittedPendingSnapshotAndPreservesEmailOptOut() {
+        settings.update(user,"user@example.test",false,null).block(WAIT);
+        var request=NotificationSettingsUserRequest.newBuilder().setUserId(user.toString()).setEmail("user@example.test")
+                .setHeader(Header.newBuilder().setRequestId("link-snapshot").setNodeId("test")).build();
+        var link=settingsRpc.createTelegramLink(Mono.just(request)).block(WAIT);
+        assertThat(link.hasPreferences()).isTrue();
+        assertThat(link.getPreferences().getTelegramStatus()).isEqualTo("PENDING");
+        assertThat(link.getPreferences().getTelegramLinkId()).isEqualTo(link.getLinkId());
+        assertThat(link.getPreferences().getTelegramLinkExpiresAt()).isEqualTo(link.getExpiresAt());
+        assertThat(link.getPreferences().getEmailEnabled()).isFalse();
+        assertThat(link.getPreferences().getTelegramEnabled()).isFalse();
+        assertThat(settings.get(user,"user@example.test").block(WAIT).telegramLinkId().toString()).isEqualTo(link.getLinkId());
+    }
+
+    @Test
+    void disabledIntegrationWithEmptyUsernameDoesNotInventBotChangeOrDiscardBinding() {
+        connect(123);
+        String bot=telegramProperties.getBotUsername();
+        try {
+            telegramProperties.setEnabled(false);
+            telegramProperties.setBotUsername("");
+            var disabled=settings.get(user,"user@example.test").block(WAIT);
+            assertThat(disabled.telegramAvailable()).isFalse();
+            assertThat(disabled.telegramStatus()).isEqualTo("UNAVAILABLE");
+            assertThat(disabled.telegramError()).isNull();
+        } finally {
+            telegramProperties.setBotUsername(bot);
+            telegramProperties.setEnabled(true);
+        }
+        assertThat(settings.get(user,"user@example.test").block(WAIT).telegramStatus()).isEqualTo("CONNECTED");
+        try {
+            telegramProperties.setBotUsername("DifferentTestBot");
+            assertThat(settings.get(user,"user@example.test").block(WAIT).telegramError()).isEqualTo("BOT_CHANGED");
+        } finally {
+            telegramProperties.setBotUsername(bot);
+        }
     }
 
     @Test
