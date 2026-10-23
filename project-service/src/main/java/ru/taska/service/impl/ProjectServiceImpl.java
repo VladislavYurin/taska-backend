@@ -58,11 +58,13 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectMemberService projectMemberService;
     private final GrpcIssueServiceClient issueServiceClient;
     private final GrpcWorkFlowServiceClient workflowServiceClient;
+    private final ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
 
     @Override
     @Transactional
     public Mono<Project> createProject(String requestId, String nodeId, String projectKey, String projectName, UUID userId,
                                        Optional<String> description, Optional<String> color) {
+        ru.taska.service.ProjectInputValidator.validate(Optional.ofNullable(projectName), description, color);
         return projectRepository.findByProjectKey(projectKey)
                 .flatMap(p -> {
                     log.info("[{}][{}] Project already exists: projectKey={}",
@@ -88,6 +90,7 @@ public class ProjectServiceImpl implements ProjectService {
                                                     Instant.now(),
                                                     savedProject.getCreatedBy()
                                             ))
+                                            .then(Mono.defer(() -> issueTypeRepository.seedDefaults(savedProject.getId())))
                                             .then(outboxEventService.saveProjectCreated(requestId, nodeId, savedProject))
                                             .then(Mono.fromRunnable(() ->
                                                     log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
@@ -157,15 +160,19 @@ public class ProjectServiceImpl implements ProjectService {
                     Mono<List<ProjectLabelDto>> labelsMono =
                             issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId);
 
-                    Mono<List<ProjectWorkflowDto>> workflowsMono =
-                            loadProjectWorkflows(requestId, nodeId, projectId, actorUserId);
+                    Mono<List<ru.taska.domain.ProjectIssueType>> typesMono =
+                            issueTypeRepository.list(projectId).collectList().cache();
 
-                    return Mono.zip(labelsMono, workflowsMono, membersMono)
+                    Mono<List<ProjectWorkflowDto>> workflowsMono =
+                            typesMono.flatMap(types -> loadProjectWorkflows(requestId, nodeId, projectId, actorUserId, types));
+
+                    return Mono.zip(labelsMono, workflowsMono, membersMono, typesMono)
                             .map(tuple -> new ProjectContextDto(
                                     projectDto,
                                     tuple.getT1(),   // labels
                                     tuple.getT2(),   // workflows
-                                    tuple.getT3()    // members
+                                    tuple.getT3(),   // members
+                                    tuple.getT4()    // issue types
                             ));
                 });
     }
@@ -260,20 +267,13 @@ public class ProjectServiceImpl implements ProjectService {
             String requestId,
             String nodeId,
             UUID projectId,
-            UUID actorUserId
+            UUID actorUserId,
+            List<ru.taska.domain.ProjectIssueType> issueTypes
     ) {
-        return projectSettingRepository.findById(projectId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("Setting not found for project : {}", projectId);
-                    return Mono.empty();
-                }))
-                .flatMapMany(setting -> {
-                    JsonNode allowed = setting.getSettings().path("allowedIssueTypes");
-                    if (!allowed.isArray() || allowed.isEmpty()) {
-                        return Flux.empty();
-                    }
-                    return Flux.fromIterable(allowed).map(JsonNode::asString);
-                })
+        return Flux.fromIterable(issueTypes)
+                .map(ru.taska.domain.ProjectIssueType::code)
+                // Custom keys enter the registry now; workflow enum expansion is TAS-386.
+                .filter(Set.of("TASK", "BUG", "STORY")::contains)
                 .flatMap(issueType ->
                         workflowServiceClient.getWorkflowForProject(
                                 projectId, issueType, actorUserId, requestId, nodeId
@@ -287,12 +287,13 @@ public class ProjectServiceImpl implements ProjectService {
     public Mono<ProjectUpdateResult> updateProject(String requestId, String nodeId, UUID projectId, UUID actorUserId,
                                        Optional<String> name, Optional<String> description, boolean clearDescription,
                                        Optional<String> color, boolean clearColor) {
-        return projectRepository.findById(projectId)
+        ru.taska.service.ProjectInputValidator.validate(name, description, color);
+        return projectRepository.findByIdForUpdate(projectId)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Project not found: {}", requestId, nodeId, projectId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
                 }))
-                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)
+                .flatMap(project -> projectMemberRepository.findByUserIdAndProjectIdForShare(actorUserId, projectId)
                         .switchIfEmpty(Mono.defer(() -> {
                             log.warn("[{}][{}] User {} is not a member of project {}", requestId, nodeId, actorUserId, projectId);
                             return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "You don't have access to this project"));
@@ -301,6 +302,11 @@ public class ProjectServiceImpl implements ProjectService {
                             if (member.getRole() != ProjectRole.ADMIN) {
                                 log.warn("[{}][{}] User {} is not ADMIN of project {}", requestId, nodeId, actorUserId, projectId);
                                 return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Only project ADMIN can update the project"));
+                            }
+
+                            if (project.getArchivedAt() != null) {
+                                return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                        "Project is archived", Map.of("reason", "PROJECT_ARCHIVED")));
                             }
 
                             if (name.isEmpty() && description.isEmpty() && !clearDescription
@@ -323,6 +329,11 @@ public class ProjectServiceImpl implements ProjectService {
                                     .color(newColor)
                                     .build();
 
+                            if (Objects.equals(updatedProject.getName(), project.getName())
+                                    && Objects.equals(newDescription, project.getDescription())
+                                    && Objects.equals(newColor, project.getColor())) {
+                                return Mono.just(new ProjectUpdateResult(project, member.getRole()));
+                            }
                             return projectRepository.save(updatedProject)
                                     .onErrorMap(OptimisticLockingFailureException.class, ex -> {
                                         log.warn("[{}][{}] Project was concurrently modified: projectId={}", requestId, nodeId, projectId);
@@ -333,6 +344,6 @@ public class ProjectServiceImpl implements ProjectService {
                                             outboxEventService.saveProjectUpdated(requestId, nodeId, savedProject, actorUserId)
                                                     .thenReturn(new ProjectUpdateResult(savedProject, member.getRole())));
                         }))
-                .doOnSuccess(p -> log.info("[{}][{}] Project successfully updated: projectId={}", requestId, nodeId, projectId));
+                ;
     }
 }

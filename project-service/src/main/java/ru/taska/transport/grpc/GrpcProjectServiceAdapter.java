@@ -12,10 +12,12 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
-import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
@@ -34,6 +36,15 @@ import ru.taska.api.project.v1.UpdateProjectRequest;
 public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.ProjectServiceImplBase{
 
     private final GrpcProjectService grpcProjectService;
+    private final ProjectIssueTypeGrpcService issueTypeService;
+
+
+    @Override
+    public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
+            Mono<GetProjectMemberStatsBatchRequest> request) {
+        return grpcProjectService.getProjectMemberStatsBatch(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectMemberStatsBatch"));
+    }
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {
@@ -104,5 +115,29 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<ProjectResponse> updateProject(Mono<UpdateProjectRequest> request) {
         return grpcProjectService.updateProject(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateProject"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ListProjectIssueTypesResponse> listProjectIssueTypes(Mono<ru.taska.api.project.v1.ProjectIssueTypesRequest> request) {
+        return issueTypeService.list(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectIssueTypes"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> createProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.create(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProjectIssueType"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> updateProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.update(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProjectIssueType"));
+    }
+
+    @Override
+    public Mono<com.google.protobuf.Empty> deleteProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.delete(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectIssueType"));
     }
 }

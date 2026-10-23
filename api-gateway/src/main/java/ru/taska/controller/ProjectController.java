@@ -116,7 +116,7 @@ public class ProjectController implements ProjectApi {
             Mono<UpdateProjectRequestDto> updateProjectRequestDto,
             ServerWebExchange exchange
     ) {
-        return readBodyAsJsonNode(exchange).flatMap(bodyNode -> {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context -> readBodyAsJsonNode(exchange).flatMap(bodyNode -> {
             if (isExplicitNull(bodyNode, "name")) {
                 return Mono.error(new ServerWebInputException("Field 'name' must not be null"));
             }
@@ -124,13 +124,15 @@ public class ProjectController implements ProjectApi {
             boolean clearColor = isExplicitNull(bodyNode, "color");
             boolean clearDescription = isExplicitNull(bodyNode, "description");
 
-            UpdateProjectRequestDto dto = objectMapper.treeToValue(bodyNode, UpdateProjectRequestDto.class);
+            UpdateProjectRequestDto dto;
+            try {
+                dto = objectMapper.treeToValue(bodyNode, UpdateProjectRequestDto.class);
+            } catch (RuntimeException error) {
+                return Mono.error(new ServerWebInputException("Invalid project fields", null, error));
+            }
             validate(dto);
-
-            return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                    projectClient.updateProject(projectId, Mono.just(dto), clearColor, clearDescription, context))
-                            .map(ResponseEntity::ok);
-        });
+            return projectClient.updateProject(projectId, Mono.just(dto), clearColor, clearDescription, context);
+        })).map(ResponseEntity::ok);
     }
 
     /**
@@ -206,7 +208,9 @@ public class ProjectController implements ProjectApi {
     ///=================== Utils ======================
 
     private Mono<JsonNode> readBodyAsJsonNode(ServerWebExchange exchange) {
-        return DataBufferUtils.join(exchange.getRequest().getBody())
+        return DataBufferUtils.join(exchange.getRequest().getBody(), 16 * 1024)
+                .onErrorMap(org.springframework.core.io.buffer.DataBufferLimitException.class,
+                        error -> new org.springframework.web.server.ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Project request is too large"))
                 .map(this::parseJsonNode)
                 .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")));
     }
@@ -215,7 +219,14 @@ public class ProjectController implements ProjectApi {
         try {
             byte[] bytes = new byte[dataBuffer.readableByteCount()];
             dataBuffer.read(bytes);
-            return objectMapper.readTree(bytes);
+            JsonNode node = objectMapper.readTree(bytes);
+            if (node == null || !node.isObject()) throw new ServerWebInputException("Project patch must be a JSON object");
+            for (String field : node.propertyNames()) {
+                if (!Set.of("name", "description", "color").contains(field)) throw new ServerWebInputException("Unknown or immutable project field: " + field);
+                if (!node.get(field).isNull() && !node.get(field).isTextual()) throw new ServerWebInputException("Project fields must be strings");
+            }
+            if (node.hasNonNull("name") && node.get("name").asString().isBlank()) throw new ServerWebInputException("name must be nonblank");
+            return node;
         } catch (Exception e) {
             throw new ServerWebInputException("Malformed JSON request body", null, e);
         } finally {

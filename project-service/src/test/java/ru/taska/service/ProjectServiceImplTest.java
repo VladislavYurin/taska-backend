@@ -65,6 +65,9 @@ class ProjectServiceImplTest {
     private ProjectSettingRepository projectSettingRepository;
 
     @Mock
+    private ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
+
+    @Mock
     private OutboxEventService outboxEventService;
 
     @Spy
@@ -98,6 +101,7 @@ class ProjectServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(issueTypeRepository.seedDefaults(Mockito.any())).thenReturn(Mono.empty());
         mockProject = Project.builder()
                 .id(projectId)
                 .projectKey(projectKey)
@@ -118,6 +122,7 @@ class ProjectServiceImplTest {
     @Test
     void createProject_Success() {
         Mockito.when(projectRepository.findByProjectKey(projectKey)).thenReturn(Mono.empty());
+        Mockito.when(issueTypeRepository.seedDefaults(projectId)).thenReturn(Mono.empty());
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class))).thenReturn(Mono.just(mockProject));
 
         Mockito.when(projectMemberRepository.save(ArgumentMatchers.any(ProjectMember.class)))
@@ -142,6 +147,7 @@ class ProjectServiceImplTest {
                 ArgumentMatchers.any(Instant.class),
                 ArgumentMatchers.eq(userId));
 
+        Mockito.verify(issueTypeRepository).seedDefaults(projectId);
         Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
     }
 
@@ -307,8 +313,8 @@ class ProjectServiceImplTest {
                 .role(ProjectRole.ADMIN)
                 .build();
 
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectIdForShare(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
                 .thenReturn(Mono.error(new OptimisticLockingFailureException("Project was concurrently modified")));
 
@@ -334,8 +340,8 @@ class ProjectServiceImplTest {
                 .role(ProjectRole.ADMIN)
                 .build();
 
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(projectWithDescription));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Mono.just(projectWithDescription));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectIdForShare(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         Mockito.when(outboxEventService.saveProjectUpdated(
@@ -360,8 +366,8 @@ class ProjectServiceImplTest {
                 .role(ProjectRole.ADMIN)
                 .build();
 
-        Mockito.when(projectRepository.findById(projectId)).thenReturn(Mono.just(mockProject));
-        Mockito.when(projectMemberRepository.findByUserIdAndProjectId(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
+        Mockito.when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Mono.just(mockProject));
+        Mockito.when(projectMemberRepository.findByUserIdAndProjectIdForShare(actorUserId, projectId)).thenReturn(Mono.just(adminMember));
         Mockito.when(projectRepository.save(ArgumentMatchers.any(Project.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         Mockito.when(outboxEventService.saveProjectUpdated(
@@ -518,7 +524,7 @@ class ProjectServiceImplTest {
             Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
                     .thenReturn(Mono.just(List.of(label)));
 
-            // loadProjectWorkflows: сначала settings, потом workflow-service
+            // Registry drives workflow selection and type metadata.
             mockWorkflowLoad();
 
             StepVerifier.create(projectService.getProjectContext(
@@ -528,6 +534,7 @@ class ProjectServiceImplTest {
                         Assertions.assertEquals(1, ctx.members().size());
                         Assertions.assertEquals(1, ctx.labels().size());
                         Assertions.assertEquals(1, ctx.workflows().size());
+                        Assertions.assertEquals("TASK", ctx.issueTypes().getFirst().code());
                     })
                     .verifyComplete();
         }
@@ -639,18 +646,8 @@ class ProjectServiceImplTest {
         }
 
         private void mockWorkflowLoad() {
-            ObjectNode settings = objectMapper.createObjectNode();
-            settings.putArray("allowedIssueTypes").add("TASK");
-
-            var setting = ProjectSetting.builder()
-                    .projectId(projectId)
-                    .settings(settings)
-                    .updatedAt(Instant.now())
-                    .updatedBy(userId)
-                    .build();
-
-            Mockito.when(projectSettingRepository.findById(projectId))
-                    .thenReturn(Mono.just(setting));
+            Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", "check-square", 10, null, null)));
 
             Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
                             ArgumentMatchers.eq(projectId),

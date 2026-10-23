@@ -4,7 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.taska.domain.ProjectWorkflowAggregate;
 import ru.taska.domain.WorkflowAggregate;
+import ru.taska.dto.CreateWorkflowStatusDto;
+import ru.taska.dto.CreateWorkflowTransitionDto;
 import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.dto.WorkflowCreationDto;
 import ru.taska.exception.DomainException;
@@ -12,6 +15,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -23,6 +27,8 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final WorkflowResolver workflowResolver;
     private final WorkflowCreateService workflowCreateService;
     private final ValidateTransitionService validateTransitionService;
+    private final WorkflowEditService workflowEditService;
+    private final ProjectWorkflowListService projectWorkflowListService;
 
     @Override
     public Mono<WorkflowAggregate> createWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
@@ -59,5 +65,22 @@ public class WorkflowServiceImpl implements WorkflowService {
             UUID actorUserId) {
         return validateTransitionService.validateTransition(requestId, nodeId, projectId, issueType,
                 transitionId, currentStatusKey, payload, actorUserId);
+    }
+
+    @Override
+    public Mono<WorkflowAggregate> addStatus(String requestId, String nodeId, UUID actorUserId,
+                                             UUID projectId, UUID workflowId, CreateWorkflowStatusDto status) {
+        return workflowEditService.addStatus(requestId, nodeId, actorUserId, projectId, workflowId, status);
+    }
+
+    @Override
+    public Mono<WorkflowAggregate> addTransition(String requestId, String nodeId, UUID actorUserId,
+                                                 UUID projectId, UUID workflowId, CreateWorkflowTransitionDto transition) {
+        return workflowEditService.addTransition(requestId, nodeId, actorUserId, projectId, workflowId, transition);
+    }
+
+    @Override
+    public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(UUID projectId) {
+        return projectWorkflowListService.listProjectWorkflows(projectId);
     }
 }

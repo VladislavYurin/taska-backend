@@ -12,6 +12,148 @@ servers:
     description: Current host
 
 paths:
+  /api/v1/users/me/notification-preferences:
+    get:
+      summary: getNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: getNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      summary: updateNotificationPreferences
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: updateNotificationPreferences
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesPatchDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/link:
+    post:
+      summary: createTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: createTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramLinkDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram/confirm:
+    post:
+      summary: confirmTelegramLink
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: confirmTelegramLink
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTelegramLinkDto'
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/users/me/telegram:
+    delete:
+      summary: disconnectTelegram
+      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      operationId: disconnectTelegram
+      tags: [notification-settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Успешно
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/integrations/telegram/webhook:
+    post:
+      summary: Telegram updates
+      description: Отдельный webhook, проверяет secret header; bearer token не нужен. Body до 32 KiB. Дедупликация update_id, private chat only. 200 только после commit. Некорректный секрет — 403, выключенная интеграция — 503.
+      operationId: processTelegramWebhook
+      tags: [telegram-webhook]
+      parameters:
+        - in: header
+          name: X-Telegram-Bot-Api-Secret-Token
+          required: true
+          schema: {type: string, maxLength: 256}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [update_id]
+              properties:
+                update_id: {type: integer, format: int64, minimum: 0}
+              additionalProperties: true
+      responses:
+        '200':
+          description: Обработано или уже было обработано
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/login:
     post:
       summary: Аутентификация пользователя
@@ -350,6 +492,26 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/project-stats:
+    get:
+      summary: Счётчики и первые пять участников всех проектов пользователя
+      operationId: getProjectStats
+      tags: [project-stats]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Статистика доступных проектов; пустой items, если проектов нет
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectStatsDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}:
     get:
       summary: Возвращает проект по идентификатору
@@ -415,6 +577,8 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '403':
           $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
         default:
@@ -449,6 +613,118 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issue-types:
+    get:
+      operationId: listProjectIssueTypes
+      summary: Типы задач проекта, по sortOrder и code; первый тип используется по умолчанию
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectIssueTypesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      operationId: createProjectIssueType
+      summary: Добавить тип задачи — только ADMIN проекта
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectIssueTypeRequestDto'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectIssueTypeDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/issue-types/{code}:
+    patch:
+      operationId: updateProjectIssueType
+      summary: Изменить подпись, цвет, значок или порядок типа — только ADMIN проекта
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchProjectIssueTypeRequestDto'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectIssueTypeDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteProjectIssueType
+      summary: Удалить неиспользуемый тип — только ADMIN; последний тип удалить нельзя
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      responses:
+        '204':
+          description: Success
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1899,6 +2175,212 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/workflows:
+    get:
+      summary: Все workflow проекта со всеми статусами и переходами
+      description: |
+        Возвращает каждый workflow, по которому работают задачи проекта, один раз: с типами задач,
+        которые по нему работают, всеми статусами и всеми переходами, включая скрытые (hidden = true).
+        Тип задачи без своего workflow проекта работает по общему default workflow (shared = true).
+        Default workflow не меняется: чтобы завести свои статусы и переходы, создайте workflow проекта.
+        Доступно любому участнику проекта.
+      operationId: listProjectWorkflows
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workflow проекта получены
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowsResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    post:
+      summary: Создание своего workflow проекта
+      description: |
+        Создаёт workflow проекта со своими статусами и переходами и привязывает к нему указанные типы задач.
+        Тип задачи, у которого в проекте уже есть свой workflow, повторно привязать нельзя (409).
+        Внимание: issue-service пока создаёт новые задачи в статусе с ключом TODO. Если такого статуса
+        в workflow нет, новые задачи этого типа окажутся в статусе, которого в workflow нет.
+        Требуется роль ADMIN в проекте.
+      operationId: createProjectWorkflow
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequestDto'
+      responses:
+        '201':
+          description: Workflow создан
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/statuses:
+    post:
+      summary: Добавление статуса в workflow проекта
+      description: |
+        Добавляет статус в свой workflow проекта. Ключ статуса и sortOrder должны быть уникальны внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowStatus
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+      responses:
+        '201':
+          description: Статус добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Статус с таким ключом в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/transitions:
+    post:
+      summary: Добавление перехода в workflow проекта
+      description: |
+        Разрешает переход между двумя статусами своего workflow проекта. Статусы задаются ключами.
+        Переход из статуса в него же запрещён, пара статусов не повторяется, sortOrder уникален внутри workflow.
+        Общий default workflow (shared = true) не меняется (400 FAILED_PRECONDITION).
+        Требуется роль ADMIN в проекте. Возвращает workflow целиком.
+      operationId: addWorkflowTransition
+      tags:
+        - workflow
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Уникальный идентификатор проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          description: Идентификатор workflow проекта (UUID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+      responses:
+        '201':
+          description: Переход добавлен
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Переход между этими статусами в workflow уже есть
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   ########################## API для project/issue меток ##################
 
   /api/v1/projects/{projectId}/labels:
@@ -3062,6 +3544,44 @@ components:
             $ref: '#/components/schemas/RestErrorResponse'
 
   schemas:
+    NotificationPreferencesDto:
+      type: object
+      required: [emailEnabled, telegramEnabled, email, telegramAvailable, telegramStatus]
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+        email: {type: string, format: email}
+        telegramAvailable: {type: boolean}
+        telegramStatus:
+          type: string
+          enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE]
+        telegramUsername: {type: string, nullable: true}
+        telegramName: {type: string, nullable: true}
+        telegramLinkId: {type: string, format: uuid, nullable: true}
+        telegramLinkExpiresAt: {type: string, format: date-time, nullable: true}
+        telegramError: {type: string, nullable: true}
+    NotificationPreferencesPatchDto:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Независимые переключатели. Оба false оставляют inbox. Включение неподтверждённого/недоступного Telegram — 409. null не допускается.
+      properties:
+        emailEnabled: {type: boolean}
+        telegramEnabled: {type: boolean}
+    TelegramLinkDto:
+      type: object
+      required: [linkId, url, expiresAt]
+      properties:
+        linkId: {type: string, format: uuid}
+        url: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+    ConfirmTelegramLinkDto:
+      type: object
+      additionalProperties: false
+      required: [linkId]
+      description: Подтверждает именно текущую заявку и включает Telegram. Не меняет выбор email. Повторная/просроченная заявка — 409.
+      properties:
+        linkId: {type: string, format: uuid}
     LoginRequestDto:
       type: object
       required: [email, password]
@@ -4196,6 +4716,7 @@ components:
           maxLength: 255
         description:
           type: string
+          nullable: true
           description: >
             Новое описание проекта. Отсутствие поля в теле запроса — «не менять» текущее значение.
             Явная передача null — явный сброс описания в null. Пустая строка или строка из пробелов
@@ -4203,6 +4724,7 @@ components:
           maxLength: 2000
         color:
           type: string
+          nullable: true
           description: >
             Новый цвет проекта в HEX формате. Отсутствие поля в теле запроса — «не менять» текущее
             значение. Явная передача null — явный сброс цвета в null (чтобы клиент снова вычислял
@@ -4250,6 +4772,36 @@ components:
           description: >
             Цвет проекта в HEX формате. null означает, что цвет не выбран пользователем —
             в этом случае клиент вычисляет цвет самостоятельно (например, по id проекта).
+
+    ListProjectStatsDto:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectStatsDto'
+
+    ProjectStatsDto:
+      type: object
+      required: [projectId, issueCount, memberCount, members]
+      properties:
+        projectId:
+          type: string
+        issueCount:
+          type: integer
+          format: int64
+          minimum: 0
+        memberCount:
+          type: integer
+          format: int64
+          minimum: 0
+        members:
+          type: array
+          maxItems: 5
+          description: Первые пять участников по addedAt, затем userId
+          items:
+            $ref: '#/components/schemas/ProjectMemberDetailsDto'
 
     ListMyProjectResponseDto:
       type: object
@@ -4346,9 +4898,83 @@ components:
       type: string
       enum: [ ADMIN, MEMBER, VIEWER ]
 
+    ProjectIssueTypeColorDto:
+      type: string
+      enum: [blue, red, green, amber, purple, teal, slate]
+    ProjectIssueTypeIconDto:
+      type: string
+      enum: [check-square, bug, book-open, headset, megaphone, file-text, flag, layers]
+    ProjectIssueTypeDto:
+      type: object
+      required: [code, name, color, icon, sortOrder]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+          description: Неизменяемый ключ типа внутри проекта.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+    ListProjectIssueTypesDto:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectIssueTypeDto'
+    CreateProjectIssueTypeRequestDto:
+      type: object
+      additionalProperties: false
+      required: [code, name, color, icon]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 100
+    PatchProjectIssueTypeRequestDto:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Пропущенное поле не меняется; явный null запрещён. code неизменяем.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        color:
+          $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        icon:
+          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+
     ProjectContextResponseDto:
       type: object
-      required: [ project, members, labels, workflows ]
+      required: [ project, members, labels, workflows, issueTypes ]
       properties:
         project:
           $ref: '#/components/schemas/ProjectResponseDto'
@@ -4361,9 +4987,14 @@ components:
           description: Порядок — name asc, id asc (сравнение строк по collation БД).
           items:
             $ref: '#/components/schemas/ProjectLabelResponseDto'
+        issueTypes:
+          type: array
+          description: Реестр типов проекта по sortOrder и code; первый тип — по умолчанию.
+          items:
+            $ref: '#/components/schemas/ProjectIssueTypeDto'
         workflows:
           type: array
-          description: Все типы задач проекта
+          description: Workflows поддерживаемых типов проекта
           items:
             $ref: '#/components/schemas/ProjectWorkflowEntryDto'
 
@@ -4611,6 +5242,9 @@ components:
         sortOrder:
           type: integer
           format: int32
+        hidden:
+          type: boolean
+          description: Скрытый переход. GET /projects/{projectId}/workflow скрытые не отдаёт, GET /projects/{projectId}/workflows отдаёт все.
         createdAt:
           type: string
           format: date-time
@@ -4619,6 +5253,106 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    WorkflowStatusCategoryDto:
+      type: string
+      description: Системная категория статуса для группировки и семантики
+      enum:
+        - TODO
+        - IN_PROGRESS
+        - DONE
+
+    CreateWorkflowStatusRequestDto:
+      type: object
+      required: [ statusKey, name, category, sortOrder ]
+      properties:
+        statusKey:
+          type: string
+          description: Стабильный ключ статуса, уникальный внутри workflow. Формат ^[A-Z][A-Z0-9_]{1,63}$
+          example: CODE_REVIEW
+        name:
+          type: string
+          description: Отображаемое имя статуса, до 100 символов
+          example: Code Review
+        category:
+          $ref: '#/components/schemas/WorkflowStatusCategoryDto'
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок колонки на доске, не меньше нуля и уникален внутри workflow
+          example: 25
+
+    CreateWorkflowTransitionRequestDto:
+      type: object
+      required: [ fromStatusKey, toStatusKey, name, sortOrder ]
+      properties:
+        fromStatusKey:
+          type: string
+          description: Ключ исходного статуса workflow
+          example: IN_PROGRESS
+        toStatusKey:
+          type: string
+          description: Ключ целевого статуса workflow
+          example: TODO
+        name:
+          type: string
+          description: Отображаемое имя перехода, до 100 символов
+          example: Stop Progress
+        sortOrder:
+          type: integer
+          format: int32
+          description: Порядок перехода, не меньше нуля и уникален внутри workflow
+          example: 40
+        hidden:
+          type: boolean
+          description: Скрытый переход (не показывается в UI, но доступен программно)
+          default: false
+
+    CreateWorkflowRequestDto:
+      type: object
+      required: [ name, issueTypes, statuses, transitions ]
+      properties:
+        name:
+          type: string
+          description: Отображаемое имя workflow, до 100 символов
+          example: Development
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые будут работать по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowStatusRequestDto'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+
+    ProjectWorkflowDto:
+      type: object
+      required: [ workflow, issueTypes, shared ]
+      properties:
+        workflow:
+          $ref: '#/components/schemas/WorkflowResponseDto'
+        issueTypes:
+          type: array
+          description: Типы задач проекта, которые работают по этому workflow
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        shared:
+          type: boolean
+          description: Общий default workflow. Не меняется; для своих статусов и переходов создайте workflow проекта.
+
+    ProjectWorkflowsResponseDto:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectWorkflowDto'
 
     # ======= начало dto для attachments =========
 

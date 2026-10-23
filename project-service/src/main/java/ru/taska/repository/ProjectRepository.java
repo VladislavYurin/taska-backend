@@ -15,6 +15,9 @@ import ru.taska.domain.projection.ProjectInfo;
 
 @Repository
 public interface ProjectRepository extends R2dbcRepository<Project, UUID> {
+    @Query("SELECT * FROM taska.projects WHERE id=:id FOR UPDATE")
+    Mono<Project> findByIdForUpdate(UUID id);
+
     @Query("""
         SELECT
             p.id AS project_id,

@@ -83,7 +83,7 @@ class NotificationFactoryTest {
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_CREATED));
         Mockito.lenient().when(notificationMapper.toIssueDeleted(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_DELETED));
-        Mockito.lenient().when(notificationMapper.toCommentCreated(any(), any(), any(), any()))
+        Mockito.lenient().when(notificationMapper.toCommentCreated(any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_COMMENT_CREATED));
         Mockito.lenient().when(notificationMapper.toIssueLinkCreated(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(inv -> notificationFor(inv.getArgument(1), NotificationType.ISSUE_LINK_CREATED));

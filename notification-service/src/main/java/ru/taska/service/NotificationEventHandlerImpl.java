@@ -29,7 +29,8 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationFactory notificationFactory;
-    private final EmailSenderService emailSenderService;
+    private final NotificationDeliveryQueue deliveryQueue;
+    private final NotificationSettingsService settings;
     private final InvitationEmailQueue invitationEmailQueue;
     private final TransactionalOperator transactionalOperator;
 
@@ -56,23 +57,14 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
         return Mono.defer(() ->
                         processedEventRepository.save(processedEvent)
-                                .flatMap(saved -> createNotifications(event, eventId))
+                                .flatMap(saved -> provisionActivatedUser(event).then(createNotifications(event, eventId)))
                                 .as(transactionalOperator::transactional)
                 )
                 .onErrorResume(this::isDuplicateEvent, ex -> {
                     log.warn("Event was already processed: eventId={}", eventId);
 
                     return Mono.empty();
-                })
-                .flatMap(notifications ->
-                        sendEmail(notifications, eventId)
-                                .onErrorResume(ex -> {
-                                    log.error("Failed to send email for event: eventId={}, message={}",
-                                            eventId, ex.getMessage());
-
-                                    return Mono.empty();
-                                })
-                );
+                }).then();
     }
 
     private Mono<List<Notification>> createNotifications(TaskaEvent event, UUID eventId) {
@@ -87,7 +79,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
         Mono<Void> invitation = ru.taska.event.EventType.USER_INVITED.getValue().equals(event.eventType())
                 ? invitationEmailQueue.enqueue(event) : Mono.empty();
         return invitation.thenMany(Flux.fromIterable(notifications))
-                .concatMap(notificationRepository::save)
+                .concatMap(n -> notificationRepository.save(n).flatMap(saved -> deliveryQueue.enqueue(saved).thenReturn(saved)))
                 .collectList()
                 .doOnNext(savedNotifications ->
                         log.info("Created {} notifications for event: eventId={}",
@@ -95,17 +87,10 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
                 );
     }
 
-    private Mono<Void> sendEmail(List<Notification> notifications, UUID eventId) {
-        if (notifications == null || notifications.isEmpty()) {
-            log.debug("There aren't any notifications to send for event: eventId={}", eventId);
-
-            return Mono.empty();
-        }
-
-        return Flux.fromIterable(notifications)
-                .filter(notification -> notification.getNotificationType() != ru.taska.domain.NotificationType.USER_INVITED)
-                .flatMap(emailSenderService::sendIfEnabled)
-                .then();
+    private Mono<Void> provisionActivatedUser(TaskaEvent event) {
+        if (!"UserActivated".equals(event.eventType()) || event.aggregateId() == null || event.payload() == null
+                || !event.payload().path("email").isString()) return Mono.empty();
+        return settings.ensure(event.aggregateId(), event.payload().path("email").asText());
     }
 
     private boolean isDuplicateEvent(Throwable ex) {

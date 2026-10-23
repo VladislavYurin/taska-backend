@@ -195,6 +195,16 @@ public class ProjectControllerTest {
                 .jsonPath("$.message").exists();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "null", "[]", "42", "{", "{\"name\":123}", "{\"color\":{}}", "{\"projectKey\":\"NEW\"}", "{\"name\":\"   \"}"})
+    void updateProjectRejectsInvalidBodyWithoutCallingBackend(String body) {
+        mockAuthenticatedUser();
+        var call = webTestClient.patch().uri("/api/v1/projects/{projectId}", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).contentType(MediaType.APPLICATION_JSON);
+        call.bodyValue(body).exchange().expectStatus().isBadRequest();
+        Mockito.verify(projectClient, Mockito.never()).updateProject(Mockito.any(), Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean(), Mockito.any());
+    }
+
     // ========== UPDATE PROJECT ==========
 
     @Test

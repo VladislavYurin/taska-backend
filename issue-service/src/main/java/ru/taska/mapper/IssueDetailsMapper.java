@@ -143,6 +143,7 @@ public abstract class IssueDetailsMapper {
 
     abstract List<IssueHistoryResponse> toHistoryList(List<IssueHistory> history);
 
+    @Mapping(target = "payload", expression = "java(IssueMapperUtils.historyPayload(event))")
     abstract IssueHistoryResponse toHistoryEvent(IssueHistory event);
 }
 

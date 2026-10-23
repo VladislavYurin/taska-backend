@@ -98,6 +98,11 @@ public class GrpcClientConfig {
     }
 
     @Bean
+    public ru.taska.api.notification.v1.ReactorNotificationSettingsServiceGrpc.ReactorNotificationSettingsServiceStub notificationSettingsStub() {
+        return ru.taska.api.notification.v1.ReactorNotificationSettingsServiceGrpc.newReactorStub(notificationManagedChannel());
+    }
+
+    @Bean
     public ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowServiceStub() {
         return ReactorWorkflowServiceGrpc.newReactorStub(workflowManagedChannel());
     }

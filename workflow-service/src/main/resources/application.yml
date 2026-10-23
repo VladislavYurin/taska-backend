@@ -55,6 +55,8 @@ workflow:
   allowed-roles:
     create-workflow-roles:
       - ADMIN
+    edit-workflow-roles:
+      - ADMIN
   validation:
     name-max-length: 100
     status-key-pattern: "^[A-Z][A-Z0-9_]{1,63}$"

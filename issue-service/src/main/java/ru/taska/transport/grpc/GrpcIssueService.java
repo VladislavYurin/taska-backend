@@ -5,14 +5,9 @@ import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationErro
 
 import exception.GrpcExceptionHandler;
 import io.grpc.StatusRuntimeException;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import nullable.NullableFieldParsers;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -20,6 +15,8 @@ import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AddIssueLabelRequest;
 import ru.taska.api.issue.v1.AddIssueLabelResponse;
 import ru.taska.api.issue.v1.AssignIssueRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateProjectLabelRequest;
 import ru.taska.api.issue.v1.DeleteIssueRequest;
@@ -43,6 +40,7 @@ import ru.taska.api.issue.v1.ListProjectLabelsRequest;
 import ru.taska.api.issue.v1.ListProjectLabelsResponse;
 import ru.taska.api.issue.v1.PatchIssueRequest;
 import ru.taska.api.issue.v1.PatchIssueResponse;
+import ru.taska.api.issue.v1.ProjectIssueCount;
 import ru.taska.api.issue.v1.ProjectLabelResponse;
 import ru.taska.api.issue.v1.RemoveIssueLabelRequest;
 import ru.taska.api.issue.v1.RemoveIssueLabelResponse;
@@ -52,13 +50,13 @@ import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueRequest;
 import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.api.issue.v1.UpdateProjectLabelRequest;
-import nullable.NullableFieldParsers;
 import ru.taska.domain.dto.IssuePatch;
 import ru.taska.domain.dto.labels.LabelCommands;
 import ru.taska.exception.DomainException;
 import ru.taska.mapper.IssueDetailsMapper;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
+import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueDetailsService;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
@@ -70,10 +68,20 @@ import ru.taska.transport.grpc.dto.ValidatedIssueRequest;
 import ru.taska.transport.grpc.validator.IssueGrpcRequestValidators;
 import validator.GrpcRequestValidators;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class GrpcIssueService {
+
+    private final IssueRepository issueStatsRepository;
+
 
     private final IssueService issueService;
     private final IssueWatcherService issueWatcherService;
@@ -84,6 +92,24 @@ public class GrpcIssueService {
     private final LabelMapper labelMapper;
     private final IssueDetailsService issueDetailsService;
     private final IssueDetailsMapper issueDetailsMapper;
+
+    public Mono<CountProjectIssuesBatchInternalResponse> countProjectIssuesBatchInternal(
+            Mono<CountProjectIssuesBatchInternalRequest> request) {
+        return request.flatMap(req -> GrpcRequestValidators.parseUuidListOrInvalidArgument(
+                req.getProjectIdsList(), "projectIds").flatMap(ids -> {
+            if (ids.isEmpty()) {
+                return Mono.just(CountProjectIssuesBatchInternalResponse.getDefaultInstance());
+            }
+            var counts = req.hasIssueTypeKey()
+                    ? issueStatsRepository.countProjectIssueTypesBatch(ids, req.getIssueTypeKey(), req.getIncludeDeleted())
+                    : issueStatsRepository.countProjectsBatch(ids);
+            return counts
+                    .map(row -> ProjectIssueCount.newBuilder()
+                            .setProjectId(row.projectId().toString()).setIssueCount(row.issueCount()).build())
+                    .collectList().map(items -> CountProjectIssuesBatchInternalResponse.newBuilder()
+                            .addAllItems(items).setFiltersApplied(true).build());
+        }));
+    }
 
     @TrackMetrics(counter = "issue-service_create-issue_grpc_counter",
             timer = "issue-service_create-issue_grpc_timer")

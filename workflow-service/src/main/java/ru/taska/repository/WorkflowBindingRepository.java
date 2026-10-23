@@ -11,4 +11,8 @@ import ru.taska.entity.WorkflowBindingEntity;
 public interface WorkflowBindingRepository extends R2dbcRepository<WorkflowBindingEntity, UUID> {
 
     Flux<WorkflowBindingEntity> findByProjectIdAndIssueTypeIn(UUID projectId, Collection<String> issueTypes);
+
+    Flux<WorkflowBindingEntity> findByProjectIdIn(Collection<UUID> projectIds);
+
+    Flux<WorkflowBindingEntity> findByWorkflowId(UUID workflowId);
 }

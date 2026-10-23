@@ -222,8 +222,15 @@ public interface ProjectMapper {
         dto.members().forEach(m -> builder.addMembers(toProjectMemberResponse(m)));
         dto.labels().forEach(l -> builder.addLabels(toProjectLabelResponse(l)));
         dto.workflows().forEach(w -> builder.addWorkflows(toProjectWorkflowResponse(w)));
+        dto.issueTypes().forEach(type -> builder.addIssueTypes(toIssueTypeResponse(type)));
 
         return builder.build();
+    }
+
+    default ru.taska.api.project.v1.ProjectIssueTypeResponse toIssueTypeResponse(ru.taska.domain.ProjectIssueType type) {
+        return ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
+                .setCode(type.code()).setName(type.name()).setColor(type.color()).setIcon(type.icon())
+                .setSortOrder(type.sortOrder()).build();
     }
 
     /// ───────── HELPERS ─────────

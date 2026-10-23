@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
@@ -26,8 +25,9 @@ import java.util.UUID;
 public class InvitationEmailQueue {
     private final DatabaseClient database;
     private final JavaMailSender mail;
+    private final EmailMessageFactory emailMessages;
     private final MeterRegistry metrics;
-    @Value("${notification.invitation.accept-url:http://localhost:3001/login}")
+    @Value("${notification.invitation.accept-url:http://localhost:5173/}")
     private String acceptUrl;
 
     private record Delivery(UUID userId, UUID eventId, UUID leaseId, String email, String token, Instant expiresAt) { }
@@ -117,12 +117,7 @@ public class InvitationEmailQueue {
         return Mono.fromRunnable(() -> {
                     String link = UriComponentsBuilder.fromUriString(acceptUrl).queryParam("token", delivery.token())
                             .build().encode().toUriString();
-                    SimpleMailMessage message = new SimpleMailMessage();
-                    message.setTo(delivery.email());
-                    message.setSubject("You're invited to Taska");
-                    message.setText("Set your password to activate your Taska account:\n" + link
-                            + "\nThis one-time link expires at " + delivery.expiresAt()
-                            + ". If you requested another invitation, use the latest email.\nAfter activation, sign in with your email and password.");
+                    var message = emailMessages.invitation(delivery.email(), link, delivery.expiresAt());
                     mail.send(message);
                 }).subscribeOn(Schedulers.boundedElastic())
                 .then(finish(delivery, true))

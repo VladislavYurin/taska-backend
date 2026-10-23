@@ -30,6 +30,7 @@ class UserServiceImplTest {
     private final GatewayContext context = new GatewayContext("request", "gateway", GatewayUserContext.builder()
             .userId(UUID.randomUUID().toString()).email("user@example.com").login("user")
             .displayName("User").status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
+    private final ru.taska.transport.grpc.GrpcNotificationSettingsClient notificationSettings = Mockito.mock(ru.taska.transport.grpc.GrpcNotificationSettingsClient.class);
     private UserServiceImpl service;
 
     @BeforeEach
@@ -39,7 +40,8 @@ class UserServiceImplTest {
         Mockito.when(properties.authService()).thenReturn(authProperties);
         Mockito.when(authProperties.deadlineDuration()).thenReturn(Duration.ofSeconds(2));
         Mockito.when(stub.withDeadlineAfter(anyLong(), any(TimeUnit.class))).thenReturn(stub);
-        service = new UserServiceImpl(new AuthMapper(), new GrpcUserProfileServiceClient(stub, new UserProfileMapper(), properties));
+        Mockito.when(notificationSettings.get(any())).thenReturn(Mono.just(ru.taska.api.notification.v1.NotificationPreferencesResponse.getDefaultInstance()));
+        service = new UserServiceImpl(new AuthMapper(), new GrpcUserProfileServiceClient(stub, new UserProfileMapper(), properties), notificationSettings);
     }
 
     @Test

@@ -13,7 +13,8 @@ public record WorkflowProperties(
 ) {
 
     public record AllowedRoles(
-            Set<ProjectRole> createWorkflowRoles
+            Set<ProjectRole> createWorkflowRoles,
+            Set<ProjectRole> editWorkflowRoles
     ) {
     }
 }

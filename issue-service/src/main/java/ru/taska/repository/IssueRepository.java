@@ -6,12 +6,24 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.domain.entity.Issue;
-import ru.taska.domain.projection.IssueLinkInfoDto;
 import ru.taska.domain.projection.IssueCoreDetails;
+import ru.taska.domain.projection.IssueLinkInfoDto;
+import ru.taska.domain.projection.ProjectIssueCountRow;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, IssueRepositoryCustom {
+    @Query("SELECT project_id, count(*) AS issue_count FROM taska.issues "
+            + "WHERE project_id IN (:projectIds) AND deleted_at IS NULL GROUP BY project_id")
+    Flux<ProjectIssueCountRow> countProjectsBatch(Collection<UUID> projectIds);
+
+    @Query("SELECT project_id, count(*) AS issue_count FROM taska.issues "
+            + "WHERE project_id IN (:projectIds) AND issue_type=:issueType "
+            + "AND (:includeDeleted OR deleted_at IS NULL) GROUP BY project_id")
+    Flux<ProjectIssueCountRow> countProjectIssueTypesBatch(Collection<UUID> projectIds, String issueType,
+                                                         boolean includeDeleted);
+
 
     @Query("SELECT * FROM taska.issues WHERE id = :id AND deleted_at IS NULL")
     Mono<Issue> findActiveById(@Param("id") UUID id);
