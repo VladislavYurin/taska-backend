@@ -55,6 +55,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectMemberService projectMemberService;
     private final GrpcIssueServiceClient issueServiceClient;
     private final GrpcWorkFlowServiceClient workflowServiceClient;
+    private final ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
 
     @Override
     @Transactional
@@ -88,6 +89,7 @@ public class ProjectServiceImpl implements ProjectService {
                                                     Instant.now(),
                                                     savedProject.getCreatedBy()
                                             ))
+                                            .then(Mono.defer(() -> issueTypeRepository.seedDefaults(savedProject.getId())))
                                             .then(outboxEventService.saveProjectCreated(requestId, nodeId, savedProject))
                                             .then(Mono.fromRunnable(() ->
                                                     log.info("[{}][{}] Project successfully created: projectKey={}, projectName={}, userId={}",
@@ -157,15 +159,19 @@ public class ProjectServiceImpl implements ProjectService {
                     Mono<List<ProjectLabelDto>> labelsMono =
                             issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId);
 
-                    Mono<List<ProjectWorkflowDto>> workflowsMono =
-                            loadProjectWorkflows(requestId, nodeId, projectId, actorUserId);
+                    Mono<List<ru.taska.domain.ProjectIssueType>> typesMono =
+                            issueTypeRepository.list(projectId).collectList().cache();
 
-                    return Mono.zip(labelsMono, workflowsMono, membersMono)
+                    Mono<List<ProjectWorkflowDto>> workflowsMono =
+                            typesMono.flatMap(types -> loadProjectWorkflows(requestId, nodeId, projectId, actorUserId, types));
+
+                    return Mono.zip(labelsMono, workflowsMono, membersMono, typesMono)
                             .map(tuple -> new ProjectContextDto(
                                     projectDto,
                                     tuple.getT1(),   // labels
                                     tuple.getT2(),   // workflows
-                                    tuple.getT3()    // members
+                                    tuple.getT3(),   // members
+                                    tuple.getT4()    // issue types
                             ));
                 });
     }
@@ -252,20 +258,13 @@ public class ProjectServiceImpl implements ProjectService {
             String requestId,
             String nodeId,
             UUID projectId,
-            UUID actorUserId
+            UUID actorUserId,
+            List<ru.taska.domain.ProjectIssueType> issueTypes
     ) {
-        return projectSettingRepository.findById(projectId)
-                .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("Setting not found for project : {}", projectId);
-                    return Mono.empty();
-                }))
-                .flatMapMany(setting -> {
-                    JsonNode allowed = setting.getSettings().path("allowedIssueTypes");
-                    if (!allowed.isArray() || allowed.isEmpty()) {
-                        return Flux.empty();
-                    }
-                    return Flux.fromIterable(allowed).map(JsonNode::asString);
-                })
+        return Flux.fromIterable(issueTypes)
+                .map(ru.taska.domain.ProjectIssueType::code)
+                // Custom keys enter the registry now; workflow enum expansion is TAS-386.
+                .filter(Set.of("TASK", "BUG", "STORY")::contains)
                 .flatMap(issueType ->
                         workflowServiceClient.getWorkflowForProject(
                                 projectId, issueType, actorUserId, requestId, nodeId

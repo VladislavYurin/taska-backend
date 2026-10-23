@@ -157,6 +157,8 @@ public class ProjectMapper {
     public ProjectContextResponseDto toRestProjectContextResponse(ProjectContextResponse proto) {
         var dto = new ProjectContextResponseDto();
         dto.setProject(toRestProjectResponse(proto.getProject()));
+        dto.setIssueTypes(proto.getIssueTypesList().stream()
+                .map(ru.taska.transport.grpc.GrpcProjectIssueTypeClient::toRest).toList());
         dto.setMembers(proto.getMembersList().stream()
                 .map(this::toProjectMemberDetailsDto)
                 .toList());
