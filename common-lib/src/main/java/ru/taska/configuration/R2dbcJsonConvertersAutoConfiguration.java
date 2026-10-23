@@ -38,7 +38,9 @@ public class R2dbcJsonConvertersAutoConfiguration {
                 PostgresDialect.INSTANCE,
                 List.of(
                         jsonNodeToJsonBConverter,
-                        jsonBToJsonNodeConverter
+                        jsonBToJsonNodeConverter,
+                        new ru.taska.converter.IssueTypeReadingConverter(),
+                        new ru.taska.converter.IssueTypeWritingConverter()
                 )
         );
     }

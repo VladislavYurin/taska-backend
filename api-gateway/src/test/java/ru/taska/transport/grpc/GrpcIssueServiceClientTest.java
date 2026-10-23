@@ -246,7 +246,7 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC createIssue и вернуть ответ")
     void createIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
+        var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
 
         var grpcRequest = CreateIssueRequest.newBuilder()
                                             .setHeader(

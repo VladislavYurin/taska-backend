@@ -21,7 +21,6 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.domain.dto.WorkflowStatusCategoryDto;
 
@@ -42,7 +41,7 @@ class WorkflowMapperTest {
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID STATUS_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID TRANSITION_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
-    private static final IssueTypeDto ISSUE_TYPE_DTO = IssueTypeDto.BUG;
+    private static final String ISSUE_TYPE_DTO = "BUG";
     private static final Instant TIME = Instant.parse("2026-07-21T15:00:00Z");
 
     private static Timestamp createTimestamp() {
@@ -80,15 +79,15 @@ class WorkflowMapperTest {
     }
 
     @ParameterizedTest
-    @EnumSource(IssueTypeDto.class)
-    @DisplayName("Должен корректно мапить все значения IssueTypeDto в Protobuf IssueType")
-    void shouldMapAllIssueTypes(IssueTypeDto issueTypeDto) {
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"TASK", "BUG", "STORY"})
+    @DisplayName("Должен корректно мапить все значения String в Protobuf IssueType")
+    void shouldMapAllIssueTypes(String issueTypeDto) {
         var grpcType = mapper.toGrpcIssueType(issueTypeDto);
 
         switch (issueTypeDto) {
-            case TASK -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_TASK);
-            case BUG -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_BUG);
-            case STORY -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_STORY);
+            case "TASK" -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_TASK);
+            case "BUG" -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_BUG);
+            case "STORY" -> Assertions.assertThat(grpcType).isEqualTo(IssueType.ISSUE_TYPE_STORY);
         }
     }
 
@@ -166,7 +165,7 @@ class WorkflowMapperTest {
         transition.setHidden(null);
         var request = new CreateWorkflowRequestDto(
                 "Development",
-                List.of(IssueTypeDto.TASK, IssueTypeDto.STORY),
+                List.of("TASK", "STORY"),
                 List.of(new CreateWorkflowStatusRequestDto("TODO", "To Do", WorkflowStatusCategoryDto.TODO, 10),
                         new CreateWorkflowStatusRequestDto("IN_PROGRESS", "In Progress", WorkflowStatusCategoryDto.IN_PROGRESS, 20)),
                 List.of(transition));
@@ -219,6 +218,7 @@ class WorkflowMapperTest {
                                         .setIsHidden(true)))
                         .addIssueTypes(IssueType.ISSUE_TYPE_BUG)
                         .addIssueTypes(IssueType.ISSUE_TYPE_UNSPECIFIED)
+                        .addIssueTypeKeys("BUG").addIssueTypeKeys("REQUEST")
                         .setIsShared(true))
                 .build();
 
@@ -227,7 +227,7 @@ class WorkflowMapperTest {
         Assertions.assertThat(dto.getItems()).hasSize(1);
         ProjectWorkflowDto item = dto.getItems().get(0);
         Assertions.assertThat(item.getShared()).isTrue();
-        Assertions.assertThat(item.getIssueTypes()).containsExactly(IssueTypeDto.BUG);
+        Assertions.assertThat(item.getIssueTypes()).containsExactly("BUG", "REQUEST");
         Assertions.assertThat(item.getWorkflow().getName()).isEqualTo("Default workflow");
         Assertions.assertThat(item.getWorkflow().getTransitions().get(0).getHidden()).isTrue();
     }

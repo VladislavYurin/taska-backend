@@ -16,10 +16,9 @@ import java.util.function.Function;
 /**
  * Сервис словарей допустимых значений перечислений для {@code GET /api/v1/meta}.
  * <p>
- * Коды берутся из OpenAPI DTO-перечислений — тех же, через которые другие маршруты
- * принимают и отдают значения, поэтому словарь не может разойтись с контрактом.
- * Названия заданы исчерпывающими {@code switch}: новое значение в контракте без
- * названия не скомпилируется.
+ * Типы задач здесь — только подписи встроенных TASK/BUG/STORY. Разрешённые типы,
+ * их подписи, цвета и значки нужно брать из реестра конкретного проекта.
+ * Остальные коды берутся из OpenAPI DTO-перечислений.
  * <p>
  * Словари неизменны в пределах версии gateway, поэтому ответ и его ETag
  * вычисляются один раз при старте.
@@ -35,7 +34,7 @@ public class MetaServiceImpl implements MetaService {
 
     public MetaServiceImpl() {
         this.meta = new MetaResponseDto(
-                toPairList(IssueTypeDto.values(), code -> new IssueTypeMetaPairDto(code, issueTypeName(code))),
+                toPairList(new String[]{"TASK", "BUG", "STORY"}, code -> new IssueTypeMetaPairDto(code, issueTypeName(code))),
                 toPairList(IssuePriorityDto.values(), code -> new IssuePriorityMetaPairDto(code, priorityName(code))),
                 toPairList(IssueLinkTypeDto.values(), code -> new IssueLinkTypeMetaPairDto(code, linkTypeName(code))),
                 toPairList(NotificationTypeDto.values(), code -> new NotificationTypeMetaPairDto(code, notificationTypeName(code))
@@ -50,11 +49,12 @@ public class MetaServiceImpl implements MetaService {
         this.etag = computeEtag(meta);
     }
 
-    private static String issueTypeName(IssueTypeDto code) {
+    private static String issueTypeName(String code) {
         return switch (code) {
-            case TASK -> "Task";
-            case BUG -> "Bug";
-            case STORY -> "Story";
+            case "TASK" -> "Task";
+            case "BUG" -> "Bug";
+            case "STORY" -> "Story";
+            default -> throw new IllegalArgumentException("Not a built-in issue type");
         };
     }
 

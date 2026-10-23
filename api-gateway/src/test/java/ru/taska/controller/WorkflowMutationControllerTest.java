@@ -112,7 +112,7 @@ class WorkflowMutationControllerTest {
 
     private ProjectWorkflowDto response() {
         var value = new WorkflowResponseDto(); value.setId(workflow); value.setName("Workflow"); value.setVersion(5);
-        return new ProjectWorkflowDto(value, List.of(IssueTypeDto.TASK), false);
+        return new ProjectWorkflowDto(value, List.of("TASK"), false);
     }
 
     private String url() { return "/api/v1/projects/" + project + "/workflows/" + workflow; }

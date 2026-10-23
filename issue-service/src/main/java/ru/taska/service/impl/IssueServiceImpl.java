@@ -123,7 +123,8 @@ public class IssueServiceImpl implements IssueService {
                                     .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
 
                         }))
-                .switchIfEmpty(grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)
+                .switchIfEmpty(Mono.defer(() -> grpcProjectServiceClient.requireIssueType(requestId, nodeId, projectId, reporterId, issueType)
+                        .then(Mono.defer(() -> grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)))
                         .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                                 .flatMap(number -> {
                                     return issueRepository.save(Issue.builder()
@@ -155,7 +156,7 @@ public class IssueServiceImpl implements IssueService {
                                             .doOnSuccess(savedIssue ->
                                                     log.info("[{}][{}] Issue successfully created by user with id: {}",
                                                             requestId, nodeId, reporterId));
-                                }))
+                                })))
                 );
     }
 

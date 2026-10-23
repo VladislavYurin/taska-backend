@@ -53,15 +53,17 @@ public class WorkflowMapper {
         return ProjectWorkflow.newBuilder()
                 .setWorkflow(toWorkflowProto(projectWorkflow.workflow()))
                 .addAllIssueTypes(projectWorkflow.issueTypes().stream().map(this::toProtoIssueType).toList())
+                .addAllIssueTypeKeys(projectWorkflow.issueTypes().stream().map(IssueType::name).toList())
                 .setIsShared(projectWorkflow.shared())
                 .build();
     }
 
     private ru.taska.api.workflow.v1.IssueType toProtoIssueType(IssueType issueType) {
-        return switch (issueType) {
-            case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
-            case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
-            case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
+        return switch (issueType.name()) {
+            case "TASK" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
+            case "STORY" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+            case "BUG" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
+            default -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_UNSPECIFIED;
         };
     }
 

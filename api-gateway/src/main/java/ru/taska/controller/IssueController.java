@@ -17,7 +17,6 @@ import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
@@ -248,7 +247,7 @@ public class IssueController implements IssueApi {
             String assigneeId,
             String reporterId,
             IssuePriorityDto priority,
-            IssueTypeDto issueType,
+            String issueType,
             Integer page,
             Integer pageSize,
             ServerWebExchange exchange

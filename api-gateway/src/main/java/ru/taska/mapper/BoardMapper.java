@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 
 import java.util.List;
@@ -29,7 +28,7 @@ public class BoardMapper {
      */
     public BoardResponseDto toBoardResponse(
             UUID projectId,
-            IssueTypeDto issueType,
+            String issueType,
             List<BoardColumnDto> columns
     ) {
 

@@ -4,7 +4,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import ru.taska.domain.dto.IssuePriorityDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.OutboxServiceTypeDto;
 import ru.taska.domain.dto.SortOrderDto;
 
@@ -33,7 +32,6 @@ public class WebConfig implements WebFluxConfigurer {
         addStrictConverter(registry, OutboxServiceTypeDto.class, OutboxServiceTypeDto::fromValue);
 
         addLenientConverter(registry, IssuePriorityDto.class, IssuePriorityDto::fromValue);
-        addLenientConverter(registry, IssueTypeDto.class, IssueTypeDto::fromValue);
     }
 
     private static <T> void addStrictConverter(

@@ -34,5 +34,5 @@ public interface WorkflowService {
     Mono<WorkflowAggregate> addTransition(String requestId, String nodeId, UUID actorUserId,
                                           UUID projectId, UUID workflowId, CreateWorkflowTransitionDto transition);
 
-    Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(UUID projectId);
+    Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(String requestId, String nodeId, UUID projectId, UUID actorUserId);
 }

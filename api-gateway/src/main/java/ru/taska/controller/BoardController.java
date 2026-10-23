@@ -8,7 +8,6 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.BoardApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.BoardResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.service.BoardService;
 
@@ -38,7 +37,7 @@ public class BoardController implements BoardApi {
     @Override
     public Mono<ResponseEntity<BoardResponseDto>> getBoard(
             UUID projectId,
-            IssueTypeDto issueType,
+            String issueType,
             UUID assigneeId,
             UUID labelId,
             Boolean includeDone,

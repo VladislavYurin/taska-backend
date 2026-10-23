@@ -13,7 +13,6 @@ import reactor.test.StepVerifier;
 import ru.taska.domain.BoardIssueData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.BoardIssueDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.mapper.BoardMapper;
@@ -40,7 +39,7 @@ class BoardServiceImplTest {
             UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID LABEL_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000003");
-    private static final IssueTypeDto ISSUE_TYPE = IssueTypeDto.TASK;
+    private static final String ISSUE_TYPE = "TASK";
 
     @Mock
     private GrpcWorkflowServiceClient workflowClient;
@@ -86,7 +85,7 @@ class BoardServiceImplTest {
 
         when(issueClient.listIssuesForBoard(
                 PROJECT_ID.toString(),
-                ISSUE_TYPE.name(),
+                ISSUE_TYPE,
                 ASSIGNEE_ID.toString(),
                 LABEL_ID.toString(),
                 true, List.of("DONE"),
@@ -119,7 +118,7 @@ class BoardServiceImplTest {
         verify(workflowClient).getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context);
         verify(issueClient).listIssuesForBoard(
                 PROJECT_ID.toString(),
-                ISSUE_TYPE.name(),
+                ISSUE_TYPE,
                 ASSIGNEE_ID.toString(),
                 LABEL_ID.toString(),
                 true, List.of("DONE"),
@@ -142,7 +141,7 @@ class BoardServiceImplTest {
 
         when(issueClient.listIssuesForBoard(
                 PROJECT_ID.toString(),
-                ISSUE_TYPE.name(),
+                ISSUE_TYPE,
                 null,
                 null,
                 false, List.of(),
@@ -182,14 +181,14 @@ class BoardServiceImplTest {
                 workflowStatus("RELEASED", "Released", "DONE", 3)));
         var activeIssue = boardIssueDto("TAS-1");
         when(workflowClient.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context)).thenReturn(Mono.just(workflow));
-        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE, null, null,
                 includeDone, List.of("CLOSED", "RELEASED"), context))
                 .thenReturn(Mono.just(List.of(new BoardIssueData("DONE", activeIssue))));
 
         StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, includeDone, context))
                 .assertNext(board -> assertThat(board.getColumns().getFirst().getIssues()).containsExactly(activeIssue))
                 .verifyComplete();
-        verify(issueClient).listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+        verify(issueClient).listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE, null, null,
                 includeDone, List.of("CLOSED", "RELEASED"), context);
     }
 
@@ -198,7 +197,7 @@ class BoardServiceImplTest {
         var workflow = new WorkflowResponseDto();
         workflow.setStatuses(List.of(workflowStatus("DONE", "Still open", "TODO", 1)));
         when(workflowClient.getWorkflowForProject(PROJECT_ID, ISSUE_TYPE, context)).thenReturn(Mono.just(workflow));
-        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE.name(), null, null,
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), ISSUE_TYPE, null, null,
                 false, List.of(), context)).thenReturn(Mono.just(List.of()));
         StepVerifier.create(boardService.getBoard(PROJECT_ID, ISSUE_TYPE, null, null, false, context))
                 .assertNext(board -> assertThat(board.getColumns()).hasSize(1)).verifyComplete();

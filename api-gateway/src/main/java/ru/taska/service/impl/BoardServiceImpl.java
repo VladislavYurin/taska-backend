@@ -11,7 +11,6 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.WorkflowStatusDto;
 import ru.taska.mapper.BoardMapper;
 import ru.taska.service.BoardService;
@@ -50,7 +49,7 @@ public class BoardServiceImpl implements BoardService {
     @Override
     public Mono<BoardResponseDto> getBoard(
             UUID projectId,
-            IssueTypeDto issueType,
+            String issueType,
             UUID assigneeId,
             UUID labelId,
             Boolean includeDone,
@@ -67,7 +66,7 @@ public class BoardServiceImpl implements BoardService {
                             .toList();
                     return issueClient.listIssuesForBoard(
                             projectId.toString(),
-                            issueType.name(),
+                            issueType,
                             assigneeId != null ? assigneeId.toString() : null,
                             labelId != null ? labelId.toString() : null,
                             includeDone,

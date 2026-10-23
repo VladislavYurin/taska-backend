@@ -129,9 +129,8 @@ public class GrpcIssueService {
                                                     GrpcRequestValidators.parseUuidOrInvalidArgument(
                                                             req.getBody().getProjectId(), "body.projectId"
                                                     ),
-                                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(
-                                                            req.getBody().getIssueType(), "body.issueType"
-                                                    ),
+                                                    validator.IssueTypeKeys.required(req.getBody().hasIssueTypeKey(),
+                                                            req.getBody().getIssueTypeKey(), req.getBody().getIssueType()),
                                                     GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                                             req.getBody().getSummary(), "body.summary"
                                                     ),
@@ -166,7 +165,7 @@ public class GrpcIssueService {
                             String nodeId = t.getT1().getT2();
                             String idempotencyKey = t.getT1().getT3();
                             UUID projectId = t.getT1().getT4();
-                            IssueType issueType = t.getT1().getT5();
+                            ru.taska.domain.IssueType issueType = t.getT1().getT5();
                             String summary = t.getT1().getT6();
                             IssuePriority priority = t.getT1().getT7();
                             UUID reporterId = t.getT1().getT8();
@@ -188,7 +187,7 @@ public class GrpcIssueService {
                                             nodeId,
                                             idempotencyKey,
                                             projectId,
-                                            issueMapper.toDomainIssueType(issueType),
+                                            issueType,
                                             summary,
                                             description,
                                             issueMapper.toDomainIssuePriority(priority),
@@ -621,7 +620,9 @@ public class GrpcIssueService {
                                     t.getT2().getT4(),
                                     t.getT2().getT5(),
                                     t.getT2().getT6(),
-                                    t.getT2().getT7()
+                                    t.getT2().getT7(),
+                                    req.getBody().hasIssueTypeKey() ? java.util.Optional.of(validator.IssueTypeKeys.read(
+                                            true, req.getBody().getIssueTypeKey(), IssueType.ISSUE_TYPE_UNSPECIFIED)) : java.util.Optional.empty()
                             );
 
                             log.info("[{}][{}] patchIssue: issueId={}, actorUserId={}, ifMatchVersion={}",
@@ -1065,7 +1066,7 @@ public class GrpcIssueService {
                                 .zipWith(
                                         Mono.zip(
                                                 GrpcRequestValidators.requireOptionalSpecifiedOrInvalidArgument(req.getBody().hasPriority(), req.getBody().getPriority(), "body.priority"),
-                                                GrpcRequestValidators.requireOptionalSpecifiedOrInvalidArgument(req.getBody().hasIssueType(), req.getBody().getIssueType(), "body.issueType")
+                                                validator.IssueTypeKeys.optional(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().hasIssueType(), req.getBody().getIssueType())
                                         )
                                 )
                                 .doOnError(
@@ -1090,15 +1091,13 @@ public class GrpcIssueService {
                                     Integer pageSize = values.getT8().orElse(null);
 
                                     IssuePriority protoPriority = enums.getT1().orElse(null);
-                                    IssueType protoIssueType = enums.getT2().orElse(null);
+                                    ru.taska.domain.IssueType protoIssueType = enums.getT2().orElse(null);
 
                                     ru.taska.domain.entity.IssuePriority priority = protoPriority != null
                                             ? issueMapper.toDomainIssuePriority(protoPriority)
                                             : null;
 
-                                    ru.taska.domain.IssueType issueType = protoIssueType != null
-                                            ? issueMapper.toDomainIssueType(protoIssueType)
-                                            : null;
+                                    ru.taska.domain.IssueType issueType = protoIssueType;
 
                                     String query = req.getBody().hasQuery()
                                             ? req.getBody().getQuery()
@@ -1200,7 +1199,8 @@ public class GrpcIssueService {
                             Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
                                     ? req.getBody().getPageSizePerColumn()
                                     : null;
-                            ru.taska.domain.IssueType issueType = issueMapper.toDomainIssueType(req.getBody().getIssueType());
+                            ru.taska.domain.IssueType issueType = (req.getBody().hasIssueTypeKey() || req.getBody().getIssueTypeValue() != 0)
+                                    ? validator.IssueTypeKeys.read(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType()) : null;
                             List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
                             log.info(

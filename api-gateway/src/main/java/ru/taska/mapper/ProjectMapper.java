@@ -22,7 +22,6 @@ import ru.taska.api.project.v1.WorkflowStatusResponse;
 import ru.taska.api.project.v1.WorkflowTransitionResponse;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AvatarDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ListMyProjectResponseDto;
 import ru.taska.domain.dto.ListProjectMemberDetailsDto;
 import ru.taska.domain.dto.ProjectContextResponseDto;
@@ -258,13 +257,8 @@ public class ProjectMapper {
                 .atOffset(ZoneOffset.UTC);
     }
 
-    private IssueTypeDto toRestIssueType(String proto) {
-        return switch (proto) {
-            case "TASK"  -> IssueTypeDto.TASK;
-            case "BUG"   -> IssueTypeDto.BUG;
-            case "STORY" -> IssueTypeDto.STORY;
-            default -> null;
-        };
+    private String toRestIssueType(String proto) {
+        return ru.taska.domain.IssueType.valueOf(proto).name();
     }
 
     public GlobalRoleProto toGlobalRoleProto(GlobalRole role) {
