@@ -38,6 +38,7 @@ class ArchivedProjectIssuesIntegrationTest extends AbstractIT {
     @MockitoBean GrpcProjectServiceClient projects;
     @Autowired IssueRepository repository;
     @Autowired IssueService issues;
+    @Autowired ru.taska.transport.grpc.GrpcIssueService grpcIssues;
     @Autowired CommentService comments;
     @Autowired IssuePatchService patches;
     @Autowired IssueTransitionService transitions;
@@ -62,7 +63,12 @@ class ArchivedProjectIssuesIntegrationTest extends AbstractIT {
     @Test
     void readsAndBoardStillReturnArchivedProjectIssues() {
         assertThat(issues.getIssue("r","n",issue.getId(),actor).block().getIssue().getId()).isEqualTo(issue.getId());
-        assertThat(issues.listIssueBoard("r","n",actor,project,null,null,IssueType.TASK,true,List.of(),List.of(),null).block())
+        var boardRequest = ru.taska.api.issue.v1.ListIssuesForBoardRequest.newBuilder()
+                .setHeader(ru.taska.api.common.v1.Header.newBuilder().setRequestId("r").setNodeId("n"))
+                .setBody(ru.taska.api.issue.v1.ListIssuesForBoardRequestBody.newBuilder()
+                        .setProjectId(project.toString()).setActorUserId(actor.toString()).setIncludeDone(true)
+                        .setIssueType(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK)).build();
+        assertThat(grpcIssues.listIssuesForBoard(Mono.just(boardRequest)).block().getIssuesList())
                 .singleElement().satisfies(row->assertThat(row.getId()).isEqualTo(issue.getId().toString()));
         assertThat(issues.listIssues("r","n",project,actor,null,null,null,0,20).block().items()).hasSize(1);
     }
