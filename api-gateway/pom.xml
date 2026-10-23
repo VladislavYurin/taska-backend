@@ -140,6 +140,8 @@
                             <schemaMappings>
                                 <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
                                 <schemaMapping>NotificationPreferencesPatchDto=ru.taska.domain.dto.NotificationPreferencesPatchDto</schemaMapping>
+                                <schemaMapping>PatchProjectIssueTypeRequestDto=ru.taska.domain.dto.PatchProjectIssueTypeRequestDto</schemaMapping>
+                                <schemaMapping>CreateProjectIssueTypeRequestDto=ru.taska.domain.dto.CreateProjectIssueTypeRequestDto</schemaMapping>
                             </schemaMappings>
                             <configOptions>
                                 <interfaceOnly>true</interfaceOnly>

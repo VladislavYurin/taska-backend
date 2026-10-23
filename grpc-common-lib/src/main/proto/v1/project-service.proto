@@ -18,6 +18,10 @@ enum ProjectRole {
 }
 
 service ProjectService {
+  rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
+  rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
+  rpc UpdateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
+  rpc DeleteProjectIssueType(ChangeProjectIssueTypeRequest) returns (google.protobuf.Empty);
   /**
    * Создаёт новый проект.
    */
@@ -166,6 +170,36 @@ message ProjectContextResponse {
   repeated ProjectMemberDetailsResponse members = 2;
   repeated ProjectLabelResponse labels = 3;
   repeated ProjectWorkflowEntryResponse workflows = 4;
+  repeated ProjectIssueTypeResponse issue_types = 5;
+}
+
+message ProjectIssueTypesRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+}
+
+message ChangeProjectIssueTypeRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  string code = 4;
+  optional string name = 5;
+  optional string color = 6;
+  optional string icon = 7;
+  optional int32 sort_order = 8;
+}
+
+message ProjectIssueTypeResponse {
+  string code = 1;
+  string name = 2;
+  string color = 3;
+  string icon = 4;
+  int32 sort_order = 5;
+}
+
+message ListProjectIssueTypesResponse {
+  repeated ProjectIssueTypeResponse items = 1;
 }
 
 message ProjectWorkflowEntryResponse {

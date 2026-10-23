@@ -23,6 +23,21 @@ public class GrpcIssueServiceClient {
     private final ReactorIssueServiceGrpc.ReactorIssueServiceStub issueServiceStub;
     private final GrpcClientProperties properties;
 
+    public Mono<Long> countIssueTypeUsage(UUID projectId, String code, String requestId, String nodeId) {
+        var request = ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                .addProjectIds(projectId.toString()).setIssueTypeKey(code).setIncludeDeleted(true).build();
+        return dynamicStub().countProjectIssuesBatchInternal(request).flatMap(response -> {
+            if (!response.getFiltersApplied()) {
+                return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAVAILABLE,
+                        "Issue service must be upgraded before deleting issue types"));
+            }
+            return Mono.just(response.getItemsList().stream()
+                    .filter(item -> item.getProjectId().equals(projectId.toString()))
+                    .mapToLong(ru.taska.api.issue.v1.ProjectIssueCount::getIssueCount).sum());
+        });
+    }
+
     /**
      * Возвращает метки проекта в виде доменных DTO.
      */

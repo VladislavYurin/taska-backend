@@ -58,7 +58,7 @@ class ProjectMapperTest {
                 .user_id(USER_ID)
                 .role(ProjectRole.ADMIN)
                 .build();
-        return new ProjectContextDto(project, List.of(), List.of(), List.of(member));
+        return new ProjectContextDto(project, List.of(), List.of(), List.of(member), List.of());
     }
 
     private ProjectContextDto contextWithWorkflow(ProjectWorkflowDto workflow) {
@@ -66,7 +66,7 @@ class ProjectMapperTest {
                 .userId(USER_ID)
                 .role(ProjectRole.ADMIN)
                 .build());
-        return new ProjectContextDto(base.project(), List.of(), List.of(workflow), base.members());
+        return new ProjectContextDto(base.project(), List.of(), List.of(workflow), base.members(), List.of());
     }
 
     @Test

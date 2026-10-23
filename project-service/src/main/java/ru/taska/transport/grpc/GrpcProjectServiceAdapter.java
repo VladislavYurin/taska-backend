@@ -35,6 +35,8 @@ import ru.taska.api.project.v1.RmProjectMemberResponse;
 public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.ProjectServiceImplBase{
 
     private final GrpcProjectService grpcProjectService;
+    private final ProjectIssueTypeGrpcService issueTypeService;
+
 
     @Override
     public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
@@ -106,5 +108,29 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     public Mono<GetProjectInfoBatchInternalResponse> getProjectInfoBatchInternal(Mono<GetProjectInfoBatchInternalRequest> request) {
         return grpcProjectService.getProjectInfoBatchInternal(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getProjectInfoBatchInternal"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ListProjectIssueTypesResponse> listProjectIssueTypes(Mono<ru.taska.api.project.v1.ProjectIssueTypesRequest> request) {
+        return issueTypeService.list(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("listProjectIssueTypes"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> createProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.create(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("createProjectIssueType"));
+    }
+
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> updateProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.update(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateProjectIssueType"));
+    }
+
+    @Override
+    public Mono<com.google.protobuf.Empty> deleteProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.delete(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectIssueType"));
     }
 }
