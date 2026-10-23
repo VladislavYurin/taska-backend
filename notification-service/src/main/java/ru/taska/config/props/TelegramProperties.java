@@ -16,7 +16,7 @@ public class TelegramProperties {
 
     @PostConstruct
     public void validate() {
-        if (enabled && (!botUsername.matches("[A-Za-z0-9_]{5,32}")
+        if (enabled && (botUsername == null || !botUsername.matches("[A-Za-z0-9_]{5,32}")
                 || !botToken.matches("[0-9]+:[A-Za-z0-9_-]+")
                 || !webhookSecret.matches("[A-Za-z0-9_-]{32,256}"))) {
             throw new IllegalArgumentException("Configure Telegram bot username, token and webhook secret before enabling it");

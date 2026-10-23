@@ -77,6 +77,7 @@ public class NotificationFactory {
             case MEMBER_UPDATED -> buildMemberUpdated(event, payload, eventId);
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
             case USER_ACTIVATED -> buildUserActivated(event, eventId);
+            case USER_EMAIL_CHANGED -> List.of();
             case ISSUE_LABEL_ADDED -> buildLabelAdded(event, payload, eventId);
             case ISSUE_LABEL_REMOVED -> buildLabelRemoved(event, payload, eventId);
             case USER_BLOCKED -> buildUserBlocked(event, payload, eventId);
