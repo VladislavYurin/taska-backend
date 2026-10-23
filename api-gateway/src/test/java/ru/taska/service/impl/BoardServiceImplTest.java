@@ -260,6 +260,7 @@ class BoardServiceImplTest {
                 .thenReturn(Mono.error(storyNotFound));
 
         var storyOnlyStatusIssue = boardIssueDto("TAS-7");
+        storyOnlyStatusIssue.setIssueType(IssueTypeDto.STORY);
         var storyIssueData = new BoardIssueData("STORY_REVIEW", List.of(), storyOnlyStatusIssue);
 
         for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
@@ -612,6 +613,27 @@ class BoardServiceImplTest {
                 }).verifyComplete();
     }
 
+    @Test
+    void statusFoundOnlyInAnotherTypeWorkflowDoesNotMisplaceCard() {
+        var taskFlow = new WorkflowResponseDto().statuses(List.of(workflowStatus("REVIEW", "Review", "IN_PROGRESS", 1)));
+        var bugFlow = new WorkflowResponseDto().statuses(List.of(workflowStatus("TODO", "To Do", "TODO", 0)));
+        var bug = boardIssueDto("BUG-1");
+        bug.setIssueType(IssueTypeDto.BUG);
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context)).thenReturn(Mono.just(taskFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context)).thenReturn(Mono.just(bugFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+                .thenReturn(Mono.just(new WorkflowResponseDto().statuses(List.of())));
+        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+            when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true, List.of(), null, null, context))
+                    .thenReturn(Mono.just(type == IssueTypeDto.BUG ? List.of(new BoardIssueData("REVIEW", List.of(), bug)) : List.of()));
+        }
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
+                .assertNext(board -> {
+                    assertThat(board.getUnplacedIssues()).containsExactly(bug);
+                    assertThat(board.getColumns()).allSatisfy(column -> assertThat(column.getIssues()).isEmpty());
+                }).verifyComplete();
+    }
+
     private WorkflowStatusDto workflowStatus(
             String statusKey,
             String name,
@@ -631,6 +653,7 @@ class BoardServiceImplTest {
         issue.setId(UUID.randomUUID());
         issue.setIssueKey(issueKey);
         issue.setSummary("Test issue");
+        issue.setIssueType(IssueTypeDto.TASK);
         return issue;
     }
 }

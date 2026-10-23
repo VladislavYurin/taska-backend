@@ -27,6 +27,8 @@ import ru.taska.transport.grpc.GrpcLabelServiceClient;
 import ru.taska.transport.grpc.GrpcUserProfileServiceClient;
 import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 
+import java.util.ArrayList;
+import java.util.Set;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,6 +83,9 @@ public class BoardServiceImpl implements BoardService {
         return resolveWorkflows(projectId, issueType, context).flatMap(workflows -> {
             List<WorkflowStatusDto> statuses = mergeStatusesByKey(workflows.stream()
                     .filter(WorkflowTypeResolution::isFound).map(WorkflowTypeResolution::statuses).toList());
+            Map<IssueTypeDto, Set<String>> statusKeysByType = workflows.stream().collect(Collectors.toMap(
+                    WorkflowTypeResolution::issueType, workflow -> workflow.isFound()
+                            ? workflow.statuses().stream().map(WorkflowStatusDto::getStatusKey).collect(Collectors.toSet()) : Set.of()));
             // DONE belongs to (issueType, statusKey). Filter in issue-service before merging columns.
             return Flux.fromIterable(workflows).flatMapSequential(workflow -> {
                 List<String> doneKeys = workflow.isFound() ? workflow.statuses().stream()
@@ -90,7 +95,7 @@ public class BoardServiceImpl implements BoardService {
                         assigneeId != null ? assigneeId.toString() : null,
                         labelId != null ? labelId.toString() : null, includeDone, doneKeys, priority, query, context);
             }).flatMapIterable(rows -> rows).collectList()
-                    .flatMap(issues -> enrichAndBuildBoard(projectId, statuses, issues, context));
+                    .flatMap(issues -> enrichAndBuildBoard(projectId, statuses, statusKeysByType, issues, context));
         });
     }
 
@@ -142,13 +147,14 @@ public class BoardServiceImpl implements BoardService {
     private Mono<BoardResponseDto> enrichAndBuildBoard(
             UUID projectId,
             List<WorkflowStatusDto> statuses,
+            Map<IssueTypeDto, Set<String>> statusKeysByType,
             List<BoardIssueData> issues,
             GatewayContext context
     ) {
         return Mono.zip(
                 resolveLabelsById(projectId, issues, context),
                 resolveUsersById(issues, context)
-        ).map(tuple -> buildBoard(projectId, statuses, issues, tuple.getT1(), tuple.getT2(), context));
+        ).map(tuple -> buildBoard(projectId, statuses, statusKeysByType, issues, tuple.getT1(), tuple.getT2(), context));
     }
 
     private Mono<Map<UUID, ProjectLabelResponseDto>> resolveLabelsById(
@@ -199,6 +205,7 @@ public class BoardServiceImpl implements BoardService {
     private BoardResponseDto buildBoard(
             UUID projectId,
             List<WorkflowStatusDto> statuses,
+            Map<IssueTypeDto, Set<String>> statusKeysByType,
             List<BoardIssueData> issues,
             Map<UUID, ProjectLabelResponseDto> labelsById,
             Map<UUID, UserDetails> usersById,
@@ -206,11 +213,15 @@ public class BoardServiceImpl implements BoardService {
     ) {
         issues.forEach(data -> enrichIssue(data, labelsById, usersById, context));
 
-        Map<String, List<BoardIssueDto>> issuesByStatus = issues.stream()
-                .collect(Collectors.groupingBy(
-                        BoardIssueData::statusKey, LinkedHashMap::new,
-                        Collectors.mapping(BoardIssueData::issue, Collectors.toList())
-                ));
+        Map<String, List<BoardIssueDto>> issuesByStatus = new LinkedHashMap<>();
+        List<BoardIssueDto> unplacedIssues = new ArrayList<>();
+        for (BoardIssueData data : issues) {
+            if (statusKeysByType.getOrDefault(data.issue().getIssueType(), Set.of()).contains(data.statusKey())) {
+                issuesByStatus.computeIfAbsent(data.statusKey(), key -> new ArrayList<>()).add(data.issue());
+            } else {
+                unplacedIssues.add(data.issue());
+            }
+        }
 
         List<BoardColumnDto> columns = statuses.stream()
                 .sorted(Comparator.comparingInt(WorkflowStatusDto::getSortOrder))
@@ -223,17 +234,9 @@ public class BoardServiceImpl implements BoardService {
                 })
                 .toList();
 
-        if (!issuesByStatus.isEmpty()) {
-            log.warn(
-                    "[{}] Found issues with statuses outside of workflow, moved to unplacedIssues: {}",
-                    context.requestId(),
-                    issuesByStatus.keySet()
-            );
+        if (!unplacedIssues.isEmpty()) {
+            log.warn("[{}] Found {} issues outside their type workflow, moved to unplacedIssues", context.requestId(), unplacedIssues.size());
         }
-
-        List<BoardIssueDto> unplacedIssues = issuesByStatus.values().stream()
-                .flatMap(List::stream)
-                .toList();
 
         return boardMapper.toBoardResponse(projectId, columns, unplacedIssues);
     }
