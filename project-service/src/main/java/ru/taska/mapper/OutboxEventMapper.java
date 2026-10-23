@@ -75,12 +75,14 @@ public class OutboxEventMapper {
                     getUuid(sourcePayload, PROJECT_ID),
                     getUuid(sourcePayload, USER_ID),
                     getString(sourcePayload, ROLE),
-                    getUuid(sourcePayload, ADDED_BY)
+                    getUuid(sourcePayload, ADDED_BY),
+                    getString(sourcePayload, PROJECT_KEY)
             ));
 
             case MEMBER_REMOVED -> objectMapper.valueToTree(new MemberRemovedPayload(
                     getUuid(sourcePayload, PROJECT_ID),
-                    getUuid(sourcePayload, USER_ID)
+                    getUuid(sourcePayload, USER_ID),
+                    getString(sourcePayload, PROJECT_KEY)
             ));
 
             case PROJECT_UPDATED -> objectMapper.valueToTree(new ProjectUpdatedPayload(

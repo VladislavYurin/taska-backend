@@ -15,6 +15,8 @@ import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
+import ru.taska.repository.IssueRepository;
+import tools.jackson.databind.node.ObjectNode;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
@@ -36,6 +38,7 @@ public class IssueLinkExecutor {
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final PayloadSerializer payloadSerializer;
+    private final IssueRepository issueRepository;
 
     /**
      * Производит атомарное сохранение новой связи, истории задачи и outbox.
@@ -75,7 +78,7 @@ public class IssueLinkExecutor {
                                         List.of(sourceIssue.getId(), targetIssueId))
                                 .distinct()
                                 .collectList()
-                                .flatMap(watcherIds -> {
+                                .flatMap(watcherIds -> targetIssueKey(targetIssueId).flatMap(targetIssueKey -> {
                                     var payload = payloadSerializer.createIssueLinkCreatedPayload(
                                             sourceIssue,
                                             targetIssueId,
@@ -83,6 +86,7 @@ public class IssueLinkExecutor {
                                             actorUserId,
                                             watcherIds
                                     );
+                                    ((ObjectNode) payload).put("targetIssueKey", targetIssueKey);
                                     return issueHistoryService.saveIssueHistory(
                                                     requestId,
                                                     nodeId,
@@ -112,7 +116,7 @@ public class IssueLinkExecutor {
                                                             requestId, nodeId, sourceIssue.getId(), targetIssueId, linkType)
                                             )
                                             .thenReturn(savedLink);
-                                })
+                                }))
                 );
     }
 
@@ -142,7 +146,7 @@ public class IssueLinkExecutor {
                         issueWatcherRepository.findUserIdsByIssueIds(List.of(deletedLink.getSourceIssueId(), deletedLink.getTargetIssueId()))
                                 .distinct()
                                 .collectList()
-                                .flatMap(watcherIds -> {
+                                .flatMap(watcherIds -> targetIssueKey(deletedLink.getTargetIssueId()).flatMap(targetIssueKey -> {
                                     var payload = payloadSerializer.createIssueLinkDeletedPayload(
                                             sourceIssue,
                                             deletedLink.getTargetIssueId(),
@@ -151,6 +155,7 @@ public class IssueLinkExecutor {
                                             watcherIds
                                     );
 
+                                    ((ObjectNode) payload).put("targetIssueKey", targetIssueKey);
                                     return issueHistoryService.saveIssueHistory(
                                                     requestId,
                                                     nodeId,
@@ -181,8 +186,15 @@ public class IssueLinkExecutor {
                                                     )
                                             )
                                             .thenReturn(deletedLink);
-                                })
+                                }))
                 );
+    }
+
+    private Mono<String> targetIssueKey(UUID issueId) {
+        // Soft-deleted targets retain their key and can still have links removed.
+        return issueRepository.findById(issueId)
+                .map(issue -> java.util.Objects.toString(issue.getIssueKey(), ""))
+                .defaultIfEmpty("");
     }
 
 }

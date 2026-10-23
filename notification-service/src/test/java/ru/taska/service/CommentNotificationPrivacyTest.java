@@ -24,7 +24,7 @@ class CommentNotificationPrivacyTest {
         var notification = Notification.builder().notificationType(NotificationType.ISSUE_COMMENT_CREATED)
                 .issueId(issue).issueKey(hasIssueKey ? "PRV-1" : null).body("secret legacy preview").build();
         var mapper = new NotificationMapper(new NotificationProperties(new NotificationProperties.Comment(200)));
-        String expected = "New comment on " + (hasIssueKey ? "PRV-1" : issue);
+        String expected = hasIssueKey ? "New comment on PRV-1" : "New comment";
 
         assertThat(mapper.toNotificationProto(notification).getBody()).isEqualTo(expected);
         for (String body : parts(EmailMessageFactoryTest.factory().notification(notification, "watcher@example.com")).values()) {

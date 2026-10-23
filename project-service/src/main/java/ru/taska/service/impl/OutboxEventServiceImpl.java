@@ -17,6 +17,10 @@ import ru.taska.event.payload.projectService.MemberUpdatedPayload;
 import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import ru.taska.repository.OutboxEventRepository;
+import ru.taska.repository.ProjectRepository;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import tools.jackson.databind.node.ObjectNode;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -35,6 +39,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final ProjectRepository projectRepository;
 
     @Override
     public Mono<OutboxEvent> saveProjectCreated(String requestId, String nodeId, Project project) {
@@ -67,7 +72,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                   requestId, nodeId, EventType.MEMBER_ADDED, member.getUserId(), member.getProjectId());
-        return outboxEventRepository.save(event);
+        return saveMemberEvent(event);
     }
 
     @Override
@@ -84,7 +89,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                   requestId, nodeId, EventType.MEMBER_REMOVED, deletedMemberId, projectId);
-        return outboxEventRepository.save(event);
+        return saveMemberEvent(event);
     }
 
     @Override
@@ -100,7 +105,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .build();
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                 requestId, nodeId, EventType.MEMBER_UPDATED.getValue(), updatedMemberId, projectId);
-        return outboxEventRepository.save(event);
+        return saveMemberEvent(event);
     }
 
     @Override
@@ -118,6 +123,15 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_UPDATED, project.getId());
         return outboxEventRepository.save(event);
+    }
+
+    private Mono<OutboxEvent> saveMemberEvent(OutboxEvent event) {
+        return projectRepository.findById(event.getAggregateId())
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found")))
+                .flatMap(project -> {
+                    ((ObjectNode) event.getPayload()).put("projectKey", project.getProjectKey());
+                    return outboxEventRepository.save(event);
+                });
     }
 
     private JsonNode projectUpdatePayload(Project project , UUID actorUserId){
@@ -148,7 +162,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                         member.getProjectId(),
                         member.getUserId(),
                         member.getRole().toString(),
-                        member.getAddedBy()
+                        member.getAddedBy(),
+                        null
                 )
         );
     }
@@ -158,7 +173,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 new MemberUpdatedPayload(
                         userId,
                         String.valueOf(role),
-                        projectId
+                        projectId,
+                        null
                 )
         );
     }
@@ -167,7 +183,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         return objectMapper.valueToTree(
                 new MemberRemovedPayload(
                         projectId,
-                        deletedMemberId
+                        deletedMemberId,
+                        null
                 )
         );
     }

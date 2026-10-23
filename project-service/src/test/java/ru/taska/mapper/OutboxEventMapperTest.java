@@ -27,6 +27,15 @@ class OutboxEventMapperTest {
                           .build();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"MemberAdded", "MemberUpdated", "MemberRemoved"})
+    void membershipEventsRetainProjectKey(String type) {
+        var payload = objectMapper.createObjectNode().put("projectId", UUID.randomUUID().toString())
+                .put("userId", UUID.randomUUID().toString()).put("role", "MEMBER").put("projectKey", "ABC");
+        var published = mapper.toTaskaEvent(event(type, "project", UUID.randomUUID(), payload));
+        Assertions.assertThat(published.payload().get("projectKey").asString()).isEqualTo("ABC");
+    }
+
     @Nested
     class ToTaskaEvent {
 

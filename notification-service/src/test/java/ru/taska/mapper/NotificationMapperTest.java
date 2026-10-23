@@ -58,8 +58,8 @@ class NotificationMapperTest {
                 mapper.toIssueTransitioned(event, USER_ID, issueInfo),
                 mapper.toIssueUpdated(event, USER_ID, issueInfo),
                 mapper.toIssueDeleted(event, USER_ID, issueInfo),
-                mapper.toIssueLinkCreated(event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID),
-                mapper.toIssueLinkDeleted(event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID),
+                mapper.toIssueLinkCreated(event, USER_ID, issueInfo, "TEST-2", LINK_TYPE, LINK_ID),
+                mapper.toIssueLinkDeleted(event, USER_ID, issueInfo, "TEST-2", LINK_TYPE, LINK_ID),
                 mapper.toUserInvited(event), mapper.toProjectCreated(event, USER_ID),
                 mapper.toMemberAdded(event, USER_ID), mapper.toMemberUpdated(event, USER_ID),
                 mapper.toMemberRemoved(event, USER_ID), mapper.toUserActivated(event),
@@ -86,7 +86,7 @@ class NotificationMapperTest {
         @DisplayName("toIssueLinkDeleted должен заполнять issueId/issueKey/projectId")
         void toIssueLinkDeleted_shouldFillIssueFields() {
             Notification result = mapper.toIssueLinkDeleted(
-                    event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID);
+                    event, USER_ID, issueInfo, "TEST-2", LINK_TYPE, LINK_ID);
 
             assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
             assertThat(result.getIssueKey()).isEqualTo(ISSUE_KEY);
@@ -99,7 +99,7 @@ class NotificationMapperTest {
         @DisplayName("toIssueLinkCreated должен заполнять issueId/issueKey/projectId (симметрия)")
         void toIssueLinkCreated_shouldFillIssueFields() {
             Notification result = mapper.toIssueLinkCreated(
-                    event, USER_ID, issueInfo, TARGET_ISSUE_ID, LINK_TYPE, LINK_ID);
+                    event, USER_ID, issueInfo, "TEST-2", LINK_TYPE, LINK_ID);
 
             assertThat(result.getIssueId()).isEqualTo(ISSUE_ID);
             assertThat(result.getIssueKey()).isEqualTo(ISSUE_KEY);
@@ -257,7 +257,7 @@ class NotificationMapperTest {
     // ==================== displayKey fallback ====================
 
     @Nested
-    @DisplayName("displayKey fallback на aggregateId")
+    @DisplayName("displayKey fallback без UUID")
     class DisplayKeyFallback {
 
         @Test
@@ -274,8 +274,7 @@ class NotificationMapperTest {
 
             Notification result = mapper.toIssueCreated(event, USER_ID, emptyRef);
 
-            // fallback вернёт aggregateId (= ISSUE_ID)
-            assertThat(result.getBody()).contains(ISSUE_ID.toString());
+            assertThat(result.getBody()).contains("the issue").doesNotContain(ISSUE_ID.toString());
         }
 
         @Test
@@ -284,7 +283,7 @@ class NotificationMapperTest {
 
             Notification result = mapper.toIssueCreated(event, USER_ID, blankKeyRef);
 
-            assertThat(result.getBody()).contains(ISSUE_ID.toString());
+            assertThat(result.getBody()).contains("the issue").doesNotContain(ISSUE_ID.toString());
         }
     }
 

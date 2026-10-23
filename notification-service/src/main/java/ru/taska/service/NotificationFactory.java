@@ -246,7 +246,7 @@ public class NotificationFactory {
 
     private List<Notification> buildIssueLinkCreated(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID createdBy  = extractUuid(payload, "createdBy");
-        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String targetIssueKey = extractString(payload, "targetIssueKey");
         String linkType = extractString(payload, "linkType");
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
@@ -265,7 +265,7 @@ public class NotificationFactory {
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
             notifications.add(notificationMapper.toIssueLinkCreated(
-                    event, userId, issueInfo, targetIssueId, linkType, linkId
+                    event, userId, issueInfo, targetIssueKey, linkType, linkId
             ));
         }
         return notifications;
@@ -273,7 +273,7 @@ public class NotificationFactory {
 
     private List<Notification> buildIssueLinkDeleted(TaskaEvent event, JsonNode payload, UUID eventId) {
         UUID deletedBy  = extractUuid(payload, "deletedBy");
-        UUID targetIssueId = extractUuid(payload, "targetIssueId");
+        String targetIssueKey = extractString(payload, "targetIssueKey");
         String linkType = extractString(payload, "linkType");
         UUID linkId = event.aggregateId();
         List<UUID> watcherIds = extractUuidList(payload, "watcherIds");
@@ -292,7 +292,7 @@ public class NotificationFactory {
         List<Notification> notifications = new ArrayList<>(recipients.size());
         for (UUID userId : recipients) {
             notifications.add(notificationMapper.toIssueLinkDeleted(
-                    event, userId, issueInfo, targetIssueId, linkType, linkId
+                    event, userId, issueInfo, targetIssueKey, linkType, linkId
             ));
         }
         return notifications;

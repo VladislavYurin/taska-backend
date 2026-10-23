@@ -11,6 +11,7 @@ public record IssueLinkCreatedPayload(
         UUID sourceIssueId,
         UUID targetIssueId,
         String linkType,
-        List<UUID> watcherIds
+        List<UUID> watcherIds,
+        String targetIssueKey
 ) {
 }

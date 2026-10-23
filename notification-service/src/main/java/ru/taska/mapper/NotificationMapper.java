@@ -119,7 +119,7 @@ public class NotificationMapper {
             TaskaEvent event,
             UUID userId,
             IssueInfo issueInfo,
-            UUID targetIssueId,
+            String targetIssueKey,
             String linkType,
             UUID linkId
     ) {
@@ -127,7 +127,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_CREATED)
                 .title("Link added")
-                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link added to " + targetIssueId)
+                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link added to " + displayIssueKey(targetIssueKey))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -140,7 +140,7 @@ public class NotificationMapper {
             TaskaEvent event,
             UUID userId,
             IssueInfo issueInfo,
-            UUID targetIssueId,
+            String targetIssueKey,
             String linkType,
             UUID linkId
     ) {
@@ -148,7 +148,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.ISSUE_LINK_DELETED)
                 .title("Link removed")
-                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link removed from " + targetIssueId)
+                .body(displayKey(issueInfo) + ": \"" + linkType + "\" link removed from " + displayIssueKey(targetIssueKey))
                 .issueId(issueInfo.issueId())
                 .issueKey(issueInfo.issueKey())
                 .projectId(issueInfo.projectId())
@@ -173,7 +173,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.PROJECT_CREATED)
                 .title("Project created")
-                .body("Project " + event.aggregateId() + " was created")
+                .body(displayProject(event) + " was created")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -184,7 +184,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_ADDED)
                 .title("You were added to a project")
-                .body("You were added to " + event.aggregateId())
+                .body("You were added to " + displayProject(event))
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -195,7 +195,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_UPDATED)
                 .title("Your project role changed")
-                .body("Your role in " + event.aggregateId() + " changed")
+                .body("Your role in " + displayProject(event) + " changed")
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -206,7 +206,7 @@ public class NotificationMapper {
                 .userId(userId)
                 .notificationType(NotificationType.MEMBER_REMOVED)
                 .title("You were removed from a project")
-                .body("You were removed from " + event.aggregateId())
+                .body("You were removed from " + displayProject(event))
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -230,7 +230,7 @@ public class NotificationMapper {
         }
         String key = notification.getIssueKey();
         if (key == null || key.isBlank()) {
-            key = notification.getIssueId() == null ? null : notification.getIssueId().toString();
+            key = null;
         }
         return key == null ? "New comment" : "New comment on " + key;
     }
@@ -480,10 +480,18 @@ public class NotificationMapper {
     /**
      * Возвращает читаемый ключ задачи для текста уведомления
      */
+    private String displayIssueKey(String key) {
+        return key == null || key.isBlank() ? "the issue" : key;
+    }
+
+    private String displayProject(TaskaEvent event) {
+        var payload = event.payload();
+        String key = payload != null && payload.hasNonNull("projectKey")
+                ? payload.get("projectKey").asString() : null;
+        return key == null || key.isBlank() ? "the project" : "project " + key;
+    }
+
     private String displayKey(IssueInfo issueInfo) {
-        if (issueInfo.issueKey() != null && !issueInfo.issueKey().isBlank()) {
-            return issueInfo.issueKey();
-        }
-        return issueInfo.issueId().toString();
+        return displayIssueKey(issueInfo.issueKey());
     }
 }

@@ -75,6 +75,9 @@ class IssueLinkExecutorTest {
     @Mock
     private PayloadSerializer payloadSerializer;
 
+    @Mock
+    private ru.taska.repository.IssueRepository issueRepository;
+
     @InjectMocks
     private IssueLinkExecutor executor;
 
@@ -82,6 +85,8 @@ class IssueLinkExecutorTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(issueRepository.findById(TARGET_ISSUE_ID))
+                .thenReturn(Mono.just(Issue.builder().id(TARGET_ISSUE_ID).issueKey("ABC-2").build()));
         link = IssueLink.builder()
                 .id(LINK_ID)
                 .projectId(PROJECT_ID)
@@ -193,6 +198,7 @@ class IssueLinkExecutorTest {
         Mockito.verify(issueHistoryService)
                 .saveIssueHistory(REQUEST_ID, NODE_ID, TARGET_ISSUE_ID, ACTOR_USER_ID, IssueEventType.LINK_CREATED, payload);
 
+        Assertions.assertThat(payload.get("targetIssueKey").asString()).isEqualTo("ABC-2");
         Mockito.verify(outboxEventService)
                 .saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE_LINK, LINK_ID, EventType.ISSUE_LINK_CREATED, payload);
     }
@@ -305,6 +311,7 @@ class IssueLinkExecutorTest {
         Mockito.verify(issueHistoryService)
                 .saveIssueHistory(REQUEST_ID, NODE_ID, TARGET_ISSUE_ID, ACTOR_USER_ID, IssueEventType.LINK_DELETED, payload);
 
+        Assertions.assertThat(payload.get("targetIssueKey").asString()).isEqualTo("ABC-2");
         Mockito.verify(outboxEventService)
                 .saveOutboxEvent(REQUEST_ID, NODE_ID, AggregateType.ISSUE_LINK, LINK_ID, EventType.ISSUE_LINK_DELETED, payload);
     }

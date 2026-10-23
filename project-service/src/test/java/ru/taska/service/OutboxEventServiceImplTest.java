@@ -33,11 +33,15 @@ class OutboxEventServiceImplTest {
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
+    @Mock
+    private ru.taska.repository.ProjectRepository projectRepository;
+
     private OutboxEventServiceImpl outboxEventService;
 
     @BeforeEach
     void setUp() {
-        outboxEventService = new OutboxEventServiceImpl(outboxEventRepository, new ObjectMapper());
+        outboxEventService = new OutboxEventServiceImpl(outboxEventRepository, new ObjectMapper(), projectRepository);
+        Mockito.lenient().when(projectRepository.findById(PROJECT_ID)).thenReturn(Mono.just(project()));
         Mockito.when(outboxEventRepository.save(ArgumentMatchers.any()))
                .thenAnswer(invocation -> Mono.just((OutboxEvent) invocation.getArgument(0)));
     }
@@ -60,6 +64,12 @@ class OutboxEventServiceImplTest {
                             .build();
     }
 
+    @Test
+    void roleChangesIncludeProjectKeyInStoredEvent() {
+        outboxEventService.saveMemberUpdated(REQUEST_ID, NODE_ID, USER_ID, ProjectRole.ADMIN, PROJECT_ID).block();
+        Assertions.assertThat(capture().getPayload().get("projectKey").asString()).isEqualTo("ABC");
+    }
+
     private OutboxEvent capture() {
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         Mockito.verify(outboxEventRepository).save(captor.capture());
@@ -80,6 +90,7 @@ class OutboxEventServiceImplTest {
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
             Assertions.assertThat(event.getAttempts()).isEqualTo(0);
             Assertions.assertThat(event.getPayload()).isNotNull();
+            Assertions.assertThat(event.getPayload().get("projectKey").asString()).isEqualTo("ABC");
         }
     }
 
@@ -97,6 +108,7 @@ class OutboxEventServiceImplTest {
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
             Assertions.assertThat(event.getAttempts()).isEqualTo(0);
             Assertions.assertThat(event.getPayload()).isNotNull();
+            Assertions.assertThat(event.getPayload().get("projectKey").asString()).isEqualTo("ABC");
         }
     }
 
@@ -110,6 +122,7 @@ class OutboxEventServiceImplTest {
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
             Assertions.assertThat(event.getEventType()).isEqualTo("MemberRemoved");
+            Assertions.assertThat(event.getPayload().get("projectKey").asString()).isEqualTo("ABC");
             Assertions.assertThat(event.getAggregateId()).isEqualTo(PROJECT_ID);
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
         }
