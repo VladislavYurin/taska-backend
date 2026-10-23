@@ -69,6 +69,10 @@ public class OutboxEventMapper {
             // Invitation credentials are consumed only by the private email queue, never the inbox body.
             case USER_INVITED -> sourcePayload.deepCopy();
 
+            case USER_EMAIL_CHANGED -> objectMapper.valueToTree(new ru.taska.event.payload.authService.UserEmailChangedPayload(
+                    getUuid(sourcePayload, USER_ID), getString(sourcePayload, EMAIL)
+            ));
+
             case USER_ACTIVATED -> objectMapper.valueToTree(new UserActivatedPayload(
                     getUuid(sourcePayload, USER_ID),
                     getString(sourcePayload, EMAIL)

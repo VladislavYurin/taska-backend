@@ -15,7 +15,7 @@ paths:
   /api/v1/users/me/notification-preferences:
     get:
       summary: getNotificationPreferences
-      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      description: Первое чтение создаёт запись (emailEnabled true, telegramEnabled false). Email копируется из проверенного auth-контекста; при смене адреса письма в очереди на старый адрес не отправляются. Повторное чтение ничего не меняет. Работает при выключенной интеграции.
       operationId: getNotificationPreferences
       tags: [notification-settings]
       security:
@@ -49,7 +49,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Сервис настроек временно недоступен
+          description: Сервис настроек временно недоступен — сообщение gRPC UNAVAILABLE передаётся без подмены.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -61,7 +61,7 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
     patch:
       summary: updateNotificationPreferences
-      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      description: Неотправленный ключ сохраняет значение; отказ ничего не меняет; выключение канала не отклоняется. Уже отправленный HTTP/SMTP запрос может завершиться.
       operationId: updateNotificationPreferences
       tags: [notification-settings]
       security:
@@ -83,7 +83,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
         '400':
-          description: Пустой patch, null, неизвестное поле или неверный тип переключателя
+          description: Пустой patch — 'Specify a notification channel'; null или неверный тип — 'Notification settings must be booleans'; неизвестное поле — 'Unknown notification setting'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -110,7 +110,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '409':
-          description: Telegram ещё не подтверждён или сейчас недоступен для включения
+          description: Telegram ещё не подтверждён или недоступен — 'Connect and confirm Telegram before enabling notifications'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -119,7 +119,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Сервис настроек временно недоступен
+          description: Сервис настроек временно недоступен — сообщение gRPC UNAVAILABLE передаётся без подмены.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -133,7 +133,7 @@ paths:
   /api/v1/users/me/telegram/link:
     post:
       summary: createTelegramLink
-      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      description: Разрешено из NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION. Новая ссылка заменяет текущую — прежний linkId больше не подтверждается, кандидат сбрасывается. url содержит одноразовый токен и возвращается только этим вызовом. preferences обязательны и содержат снимок настроек после создания заявки.
       operationId: createTelegramLink
       tags: [notification-settings]
       security:
@@ -167,7 +167,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '409':
-          description: Сначала отключите существующую привязку Telegram
+          description: Существующая привязка — 'Disconnect the previous Telegram account first'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -176,7 +176,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Интеграция Telegram выключена либо сервис временно недоступен
+          description: Выключенная интеграция — 'Telegram notifications are not configured'; транспортная ошибка — сообщение gRPC UNAVAILABLE.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -190,7 +190,7 @@ paths:
   /api/v1/users/me/telegram/confirm:
     post:
       summary: confirmTelegramLink
-      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      description: Привязывает кандидата текущей ссылки, включает Telegram, не меняет выбор email, потребляет ссылку. Лишние ключи тела отклоняются с 400.
       operationId: confirmTelegramLink
       tags: [notification-settings]
       security:
@@ -212,7 +212,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationPreferencesDto'
         '400':
-          description: Отсутствующий или некорректный UUID linkId
+          description: Отсутствующий или некорректный UUID linkId — ошибка валидации тела; неизвестный ключ — 'Unknown Telegram confirmation field'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -239,7 +239,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '409':
-          description: Заявка чужая, просрочена, уже использована, не получен Start либо Telegram занят другим аккаунтом
+          description: Заявка недействительна — 'Telegram link expired or has not been started'; аккаунт занят — 'This Telegram account is already connected'.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -248,7 +248,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Интеграция Telegram выключена либо сервис временно недоступен
+          description: Выключенная интеграция — 'Telegram notifications are not configured'; транспортная ошибка — сообщение gRPC UNAVAILABLE.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -262,7 +262,7 @@ paths:
   /api/v1/users/me/telegram:
     delete:
       summary: disconnectTelegram
-      description: Настройки только текущего пользователя. Email берётся из проверенного auth-контекста. Telegram включается после подтверждения привязки. Выключение отменяет ожидающие отправки; уже отправленный HTTP/SMTP запрос может завершиться.
+      description: Идемпотентно — 200 из любого статуса, в том числе NOT_CONNECTED и при выключенной интеграции; отменяет ожидающие отправки в Telegram. Уже отправленный HTTP-запрос может завершиться.
       operationId: disconnectTelegram
       tags: [notification-settings]
       security:
@@ -296,7 +296,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Сервис настроек временно недоступен
+          description: Сервис настроек временно недоступен — сообщение gRPC UNAVAILABLE передаётся без подмены.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -368,7 +368,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestErrorResponse'
         '503':
-          description: Интеграция Telegram выключена либо сервис временно недоступен
+          description: Выключенная интеграция — 'Telegram notifications are not configured'; транспортная ошибка — сообщение gRPC UNAVAILABLE.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -3829,7 +3829,7 @@ components:
         telegramAvailable: {type: boolean}
         telegramStatus:
           type: string
-          description: UNKNOWN означает неизвестный backend-статус; клиент не должен предлагать подтверждение или включение.
+          description: UNKNOWN означает неизвестный backend-статус; клиент не должен предлагать подтверждение или включение. Новое значение сначала добавляется в контракт и gateway, затем начинает выдаваться сервисом; незнакомое значение клиент трактует как UNKNOWN.
           enum: [NOT_CONNECTED, PENDING, AWAITING_CONFIRMATION, CONNECTED, UNAVAILABLE, UNKNOWN]
         telegramUsername: {type: string, nullable: true}
         telegramName: {type: string, nullable: true}
@@ -3855,13 +3855,13 @@ components:
         telegramEnabled: {type: boolean}
     TelegramLinkDto:
       type: object
-      required: [linkId, url, expiresAt]
+      required: [linkId, url, expiresAt, preferences]
       properties:
         linkId: {type: string, format: uuid}
         url: {type: string, format: uri}
         expiresAt: {type: string, format: date-time}
         preferences:
-          description: Снимок настроек после создания заявки в той же транзакции. При его наличии отдельный GET не требуется; поле опционально для rolling upgrade.
+          description: Снимок настроек после создания заявки в той же транзакции. Отдельный GET не требуется; поле возвращается также при rolling upgrade.
           allOf:
             - $ref: '#/components/schemas/NotificationPreferencesDto'
     ConfirmTelegramLinkDto:

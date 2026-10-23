@@ -95,3 +95,5 @@ Telegram отправляется простым текстом без parse mod
 `UserActivated` and `UserEmailChanged` provision notification preferences from trusted auth events. `UserEmailChanged` never creates a welcome notification or delivery. Replays with the same email do not rewrite preferences; a changed email invalidates queued deliveries to the old address. Deploy this consumer before enabling the auth backfill/producer in the second TAS-391 PR.
 
 If Telegram integration is disabled or the connected bot differs from the configured bot, new notifications keep inbox/email behavior and do not enqueue Telegram deliveries. Enabling Telegram later does not replay notifications created while it was disabled.
+
+TAS-391 phase 2 applies auth changeset `0008-notification-email-events` only after the consumer is deployed. It emits one `UserEmailChanged` for each ACTIVE/LOCKED identity with a valid email and uses a transactional database trigger for subsequent email updates. The gateway no longer provisions notification preferences from `/users/me`. Telegram link responses always contain `preferences`; a compatibility read handles older workers during rolling restarts.
