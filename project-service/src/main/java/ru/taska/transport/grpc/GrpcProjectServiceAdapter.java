@@ -12,10 +12,12 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.CreateProjectRequest;
 import ru.taska.api.project.v1.GetListProjectMemberRequest;
+import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest;
 import ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse;
-import ru.taska.api.project.v1.GetProjectContextRequest;
 import ru.taska.api.project.v1.GetProjectKeyInternalRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchResponse;
 import ru.taska.api.project.v1.GetProjectRequest;
 import ru.taska.api.project.v1.ListMyProjectsRequest;
 import ru.taska.api.project.v1.ListMyProjectsResponse;
@@ -33,6 +35,13 @@ import ru.taska.api.project.v1.RmProjectMemberResponse;
 public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.ProjectServiceImplBase{
 
     private final GrpcProjectService grpcProjectService;
+
+    @Override
+    public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
+            Mono<GetProjectMemberStatsBatchRequest> request) {
+        return grpcProjectService.getProjectMemberStatsBatch(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("getProjectMemberStatsBatch"));
+    }
 
     @Override
     public Mono<ProjectResponse> createProject(Mono<CreateProjectRequest> request) {

@@ -25,8 +25,8 @@ import ru.taska.api.common.v1.NullableInt32;
 import ru.taska.api.common.v1.NullableString;
 import ru.taska.api.issue.v1.PatchIssueRequest;
 import ru.taska.api.issue.v1.PatchIssueRequestBody;
-import ru.taska.domain.dto.IssuePatch;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.dto.IssuePatch;
 import ru.taska.domain.dto.PatchIssueResult;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
@@ -35,6 +35,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.IssueDetailsMapper;
 import ru.taska.mapper.IssueMapper;
 import ru.taska.mapper.LabelMapper;
+import ru.taska.repository.IssueRepository;
 import ru.taska.service.IssueDetailsService;
 import ru.taska.service.IssueService;
 import ru.taska.service.IssueWatcherService;
@@ -96,6 +97,7 @@ class GrpcIssueServicePatchIssueTest {
     void setUp() {
         // Реальный маппер: проверяем и конвертацию priority в домен, и сборку PatchIssueResponse
         grpcIssueService = new GrpcIssueService(
+                org.mockito.Mockito.mock(IssueRepository.class),
                 issueService,
                 issueWatcherService,
                 issueTransitionService,

@@ -122,7 +122,7 @@ public class ProjectMapper {
     /**
      * ProjectMemberDetailsResponse -> ProjectMemberDetailsDto
      */
-    private ProjectMemberDetailsDto toProjectMemberDetailsDto(ProjectMemberDetailsResponse proto) {
+    public ProjectMemberDetailsDto toProjectMemberDetailsDto(ProjectMemberDetailsResponse proto) {
         ProjectMemberDetailsDto dto = new ProjectMemberDetailsDto();
         dto.setUserId(proto.getUserId());
         dto.setRole(toRestProjectRole(proto.getRole()));

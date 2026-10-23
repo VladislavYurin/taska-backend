@@ -21,6 +21,9 @@ service ProjectService {
   /**
    * Создаёт новый проект.
    */
+  // Batch member summaries; filters requested projects by current membership.
+  rpc GetProjectMemberStatsBatch(GetProjectMemberStatsBatchRequest) returns (GetProjectMemberStatsBatchResponse);
+
   rpc CreateProject (CreateProjectRequest) returns (ProjectResponse);
 
   /**
@@ -367,4 +370,18 @@ message WorkflowTransitionResponse {
   string to_status_id = 3;
   string name = 4;
   int32 sort_order = 5;
+}
+
+message GetProjectMemberStatsBatchRequest {
+  ru.taska.common.v1.Header header = 1;
+  string actor_user_id = 2;
+  repeated string project_ids = 3;
+}
+message ProjectMemberStats {
+  string project_id = 1;
+  int64 member_count = 2;
+  repeated ProjectMemberDetailsResponse members = 3;
+}
+message GetProjectMemberStatsBatchResponse {
+  repeated ProjectMemberStats items = 1;
 }
