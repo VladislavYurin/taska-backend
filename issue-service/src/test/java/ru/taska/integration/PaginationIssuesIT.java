@@ -406,6 +406,25 @@ class PaginationIssuesIT extends AbstractIT {
     }
 
     @Test
+    void shouldKeepTimeSpentForIssuesWithLabel() {
+        Issue logged = issueRepository.findAll()
+                .filter(issue -> issue.getIssueNumber() == 1)
+                .single()
+                .block();
+        logged.setTimeSpentMinutes(75);
+        issueRepository.save(logged).block();
+
+        StepVerifier.create(listByLabel(labelId1, null, null, 0, 50))
+                .assertNext(result -> Assertions.assertThat(result.items().stream()
+                                .map(IssueWithLabels::issue)
+                                .filter(issue -> issue.getIssueNumber() == 1)
+                                .map(Issue::getTimeSpentMinutes)
+                                .toList())
+                        .containsExactly(75))
+                .verifyComplete();
+    }
+
+    @Test
     void shouldReturnLabelPagesOrderedByCreatedAtDesc() {
         StepVerifier.create(listByLabel(labelId1, null, null, 0, 2))
                 .assertNext(result -> {
