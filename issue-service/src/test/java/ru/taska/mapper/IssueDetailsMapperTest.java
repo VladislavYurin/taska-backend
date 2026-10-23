@@ -52,6 +52,16 @@ class IssueDetailsMapperTest {
     }
 
     @Test
+    void detailsRetainCustomKeyBesideUnspecifiedLegacyEnum() {
+        var issue = Issue.builder().id(UUID.randomUUID()).projectId(UUID.randomUUID()).issueKey("REQ-1")
+                .issueType(IssueType.valueOf("REQUEST")).summary("Request").statusKey("TODO")
+                .priority(IssuePriority.MEDIUM).reporterId(UUID.randomUUID()).build();
+        var result = mapper.toIssueDetails(issue, FetchResult.failed(), FetchResult.failed(), FetchResult.failed(), FetchResult.failed(), Map.of(), false, 0);
+        Assertions.assertEquals("REQUEST", result.getIssueTypeKey());
+        Assertions.assertEquals(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED, result.getIssueType());
+    }
+
+    @Test
     void toProto_ShouldReturnDefaultInstance_WhenAggregateIsNull() {
         GetIssueDetailsResponse response = mapper.toProto(null);
 

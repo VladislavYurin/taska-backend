@@ -26,7 +26,6 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
@@ -63,7 +62,7 @@ class WorkflowControllerTest {
     private static final String TOKEN = "Bearer JWT-token";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000000";
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final IssueTypeDto ISSUE_TYPE = IssueTypeDto.BUG;
+    private static final String ISSUE_TYPE = "BUG";
     @Autowired
     private WebTestClient webTestClient;
 
@@ -176,12 +175,12 @@ class WorkflowControllerTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть 400 Bad Request при передаче неизвестного issueType")
+    @DisplayName("Должен вернуть 400 Bad Request при передаче некорректного ключа issueType")
     void getWorkflowForProject_shouldReturn400_whenIssueTypeIsInvalid() {
         mockAuthenticatedUser();
 
         webTestClient.get()
-                .uri("/api/v1/projects/{projectId}/workflow?issueType={issueType}", PROJECT_ID, "BAD_ISSUE_TYPE")
+                .uri("/api/v1/projects/{projectId}/workflow?issueType={issueType}", PROJECT_ID, "bad-type")
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
                 .expectStatus().isBadRequest()
@@ -357,7 +356,7 @@ class WorkflowControllerTest {
         workflow.setTransitions(List.of(transition));
         var entry = new ProjectWorkflowDto();
         entry.setWorkflow(workflow);
-        entry.setIssueTypes(List.of(IssueTypeDto.TASK, IssueTypeDto.BUG));
+        entry.setIssueTypes(List.of("TASK", "BUG"));
         entry.setShared(true);
         var response = new ProjectWorkflowsResponseDto();
         response.setItems(List.of(entry));
@@ -398,7 +397,7 @@ class WorkflowControllerTest {
     @DisplayName("POST /workflows: 201 и созданный workflow")
     void createProjectWorkflow_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
-        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of("TASK"), false);
         response.getWorkflow().setId(UUID.randomUUID());
         response.getWorkflow().setName("Development");
 
@@ -406,7 +405,7 @@ class WorkflowControllerTest {
                 .thenAnswer(invocation -> invocation.<Mono<CreateWorkflowRequestDto>>getArgument(1).map(request -> response));
 
         var status = new CreateWorkflowStatusRequestDto("TODO", "To Do", WorkflowStatusCategoryDto.TODO, 10);
-        var request = new CreateWorkflowRequestDto("Development", List.of(IssueTypeDto.TASK), List.of(status), List.of());
+        var request = new CreateWorkflowRequestDto("Development", List.of("TASK"), List.of(status), List.of());
 
         webTestClient.post()
                 .uri("/api/v1/projects/{projectId}/workflows", PROJECT_ID)
@@ -440,7 +439,7 @@ class WorkflowControllerTest {
     void addWorkflowStatus_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
         UUID workflowId = UUID.randomUUID();
-        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of("TASK"), false);
         response.getWorkflow().setId(workflowId);
         response.getWorkflow().setVersion(2);
 
@@ -482,7 +481,7 @@ class WorkflowControllerTest {
     void addWorkflowTransition_shouldReturn201_whenRequestIsValid() {
         mockAuthenticatedUser();
         UUID workflowId = UUID.randomUUID();
-        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of(IssueTypeDto.TASK), false);
+        var response = new ProjectWorkflowDto(new WorkflowResponseDto(), List.of("TASK"), false);
         response.getWorkflow().setId(workflowId);
         response.getWorkflow().setVersion(3);
 

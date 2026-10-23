@@ -19,6 +19,17 @@ public class GrpcProjectServiceClient {
 
     private final ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
 
+    public Mono<java.util.List<ru.taska.domain.IssueType>> listIssueTypes(
+            String requestId, String nodeId, UUID projectId, UUID actorUserId) {
+        return client.ProjectIssueTypes.list(projectServiceStub, requestId, nodeId, projectId, actorUserId);
+    }
+
+    public Mono<Void> requireIssueType(String requestId, String nodeId, UUID projectId, UUID actor,
+                                      ru.taska.domain.IssueType type) {
+        return listIssueTypes(requestId, nodeId, projectId, actor)
+                .flatMap(allowed -> client.ProjectIssueTypes.require(allowed, type));
+    }
+
     public Mono<CheckProjectMemberRoleResponse> checkProjectRole(
             String requestId,
             String nodeId,

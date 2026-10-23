@@ -28,7 +28,13 @@ public final class ProtoEnumMapper {
     }
 
     public static ru.taska.api.issue.v1.IssueType toProto(IssueType domain) {
-        return resolve(domain, ru.taska.api.issue.v1.IssueType.class, "ISSUE_TYPE_");
+        if (domain == null) return null;
+        return switch (domain.name()) {
+            case "TASK" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK;
+            case "BUG" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG;
+            case "STORY" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_STORY;
+            default -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED;
+        };
     }
 
     public static ru.taska.api.issue.v1.IssuePriority toProto(IssuePriority domain) {

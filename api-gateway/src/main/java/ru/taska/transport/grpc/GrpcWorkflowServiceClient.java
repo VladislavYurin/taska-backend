@@ -11,7 +11,6 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
@@ -63,7 +62,7 @@ public class GrpcWorkflowServiceClient {
      */
     public Mono<WorkflowResponseDto> getWorkflowForProject(
             UUID projectId,
-            IssueTypeDto issueTypeDto,
+            String issueTypeDto,
             GatewayContext context
     ) {
         log.info("[{}] Calling getWorkflowForProject for project: {}",context.requestId(), projectId);

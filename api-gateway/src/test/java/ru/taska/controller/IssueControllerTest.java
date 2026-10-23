@@ -41,7 +41,6 @@ import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
@@ -144,7 +143,7 @@ class IssueControllerTest {
     void createIssue_shouldReturnsResponseAndStatus201() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
 
         var response = new IssueResponseDto();
         response.setId(ISSUE_ID);
@@ -184,7 +183,7 @@ class IssueControllerTest {
     void createIssue_shouldReturnsResponseAndStatus201_withOptionalFields() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
         request.setStoryPoints(STORY_POINTS);
         request.setStartDate(START_DATE);
         request.setDueDate(DUE_DATE);
@@ -235,7 +234,7 @@ class IssueControllerTest {
     void createIssue_shouldReturnsSameResponse_whenSameIdempotencyKeyAndPayload() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
 
         var response = new IssueResponseDto();
         response.setId(ISSUE_ID);
@@ -282,7 +281,7 @@ class IssueControllerTest {
     void createIssue_shouldThrowsExceptionAndStatus409_whenSameIdempotencyKeyAndDifferentPayload() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
 
         Mockito.when(issueClient.createIssue(
                         Mockito.eq(PROJECT_ID),
@@ -318,7 +317,7 @@ class IssueControllerTest {
     void createIssue_shouldThrowsExceptionAndStatus400_whenIdempotenceKeyIsMissing() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
 
         webTestClient.post()
                 .uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
@@ -342,7 +341,7 @@ class IssueControllerTest {
     void createIssue_shouldThrowsExceptionAndStatus400_whenStoryPointsNegative() {
         mockAuthenticatedUser();
 
-        var request = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue(ISSUE_TYPE_TASK), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
+        var request = new CreateIssueRequestDto(ISSUE_TYPE_TASK, SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue(ISSUE_PRIORITY_MEDIUM));
         request.setStoryPoints(NEGATIVE_STORY_POINTS);
 
         Mockito.when(issueClient.createIssue(
@@ -1227,7 +1226,7 @@ class IssueControllerTest {
                 .assigneeId(ASSIGNEE_ID)
                 .reporterId(USER_ID)
                 .priority(IssuePriorityDto.MEDIUM)
-                .issueType(IssueTypeDto.TASK)
+                .issueType("TASK")
                 .page(0)
                 .pageSize(20);
 
@@ -1607,6 +1606,18 @@ class IssueControllerTest {
 
         Mockito.verify(issueClient, Mockito.never())
                 .searchIssues(Mockito.any(), Mockito.any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REQUEST", "NOPE"})
+    void searchForOpenKeyPassesItToBackend(String key) {
+        mockAuthenticatedUser();
+        Mockito.when(issueClient.searchIssues(Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(new SearchIssuesResponseDto(Collections.emptyList(), 0)));
+        webTestClient.get().uri(builder -> builder.path("/api/v1/issues/search").queryParam("issueType", key).build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.items.length()").isEqualTo(0);
+        Mockito.verify(issueClient).searchIssues(Mockito.argThat(request -> key.equals(request.getIssueType())), Mockito.any());
     }
 
     @Nested

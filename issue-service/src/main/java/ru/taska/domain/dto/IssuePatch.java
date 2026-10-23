@@ -28,14 +28,24 @@ public record IssuePatch(
         NullableField<LocalDate> startDate,
         NullableField<LocalDate> dueDate,
         NullableField<Integer> originalEstimateMinutes,
-        NullableField<Integer> remainingEstimateMinutes
+        NullableField<Integer> remainingEstimateMinutes,
+        Optional<ru.taska.domain.IssueType> issueType
 ) {
+
+    public IssuePatch(Optional<String> summary, Optional<IssuePriority> priority, NullableField<String> description,
+                      NullableField<UUID> assigneeId, NullableField<BigDecimal> storyPoints,
+                      NullableField<LocalDate> startDate, NullableField<LocalDate> dueDate,
+                      NullableField<Integer> originalEstimateMinutes, NullableField<Integer> remainingEstimateMinutes) {
+        this(summary, priority, description, assigneeId, storyPoints, startDate, dueDate,
+                originalEstimateMinutes, remainingEstimateMinutes, Optional.empty());
+    }
 
     /**
      * Возвращает копию {@code issue} с применёнными изменениями. Сам {@code issue} не меняется.
      */
     public Issue applyTo(Issue issue) {
         return issue.toBuilder()
+                .issueType(issueType.orElse(issue.getIssueType()))
                 .summary(summary.orElse(issue.getSummary()))
                 .priority(priority.orElse(issue.getPriority()))
                 .description(description.orElse(issue.getDescription()))

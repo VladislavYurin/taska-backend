@@ -23,7 +23,6 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
@@ -53,7 +52,7 @@ class BoardControllerWebTestClientTest {
     private static final String TOKEN = "Bearer JWT-token";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000000";
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final IssueTypeDto ISSUE_TYPE = IssueTypeDto.TASK;
+    private static final String ISSUE_TYPE = "TASK";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -117,7 +116,7 @@ class BoardControllerWebTestClientTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.projectId").isEqualTo(PROJECT_ID.toString())
-                .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE.name())
+                .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE)
                 .jsonPath("$.columns.length()").isEqualTo(2)
                 .jsonPath("$.columns[0].statusKey").isEqualTo("TODO")
                 .jsonPath("$.columns[0].issues.length()").isEqualTo(1)

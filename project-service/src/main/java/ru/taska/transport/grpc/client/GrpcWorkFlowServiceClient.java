@@ -43,6 +43,7 @@ public class GrpcWorkFlowServiceClient {
                         .setBody(GetWorkflowForProjectRequestBody.newBuilder()
                                 .setProjectId(projectId.toString())
                                 .setIssueType(toGrpcIssueType(issueType))
+                                .setIssueTypeKey(issueType)
                                 .setActorUserId(actorUserId.toString())
                                 .build())
                         .build()

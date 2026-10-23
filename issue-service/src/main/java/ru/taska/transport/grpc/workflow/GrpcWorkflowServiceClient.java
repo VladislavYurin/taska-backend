@@ -25,6 +25,20 @@ public class GrpcWorkflowServiceClient {
     private final ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub reactorWorkflowServiceStub;
     private final IssueMapper issueMapper;
 
+    public Mono<Void> requireStatusForType(String requestId, String nodeId, Issue issue, UUID actorUserId) {
+        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+                .getWorkflowForProject(ru.taska.api.workflow.v1.GetWorkflowForProjectRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                        .setBody(ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody.newBuilder()
+                                .setProjectId(issue.getProjectId().toString()).setActorUserId(actorUserId.toString())
+                                .setIssueType(issueMapper.toIssueValidateSnapshotProto(issue).getIssueType())
+                                .setIssueTypeKey(issue.getIssueType().name())).build())
+                .flatMap(workflow -> workflow.getStatusesList().stream().anyMatch(s -> s.getStatusKey().equals(issue.getStatusKey()))
+                        ? Mono.empty() : Mono.error(new ru.taska.exception.DomainException(
+                                ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
+                                "Current status is not available for the target issue type")));
+    }
+
     /**
      * Отправляет запрос {@link ValidateTransitionRequest} в workflow-service для валидации перехода по workflow.
      */

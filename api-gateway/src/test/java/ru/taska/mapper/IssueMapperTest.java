@@ -148,7 +148,7 @@ class IssueMapperTest {
         Assertions.assertEquals(PROJECT_ID, result.getProjectId());
         Assertions.assertEquals(ISSUE_NUMBER, result.getIssueNumber());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
-        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getIssueType());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
         Assertions.assertEquals(STATUS_KEY, result.getStatus());
@@ -207,7 +207,7 @@ class IssueMapperTest {
         Assertions.assertEquals(PROJECT_ID, result.getProjectId());
         Assertions.assertEquals(ISSUE_NUMBER, result.getIssueNumber());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
-        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getIssueType());
         Assertions.assertEquals(SUMMARY, result.getSummary());
         Assertions.assertEquals(DESCRIPTION, result.getDescription());
         Assertions.assertEquals(STATUS_KEY, result.getStatus());
@@ -277,7 +277,7 @@ class IssueMapperTest {
         var result = mapper.toRestIssueWithHistoryResponse(source);
 
         Assertions.assertNotNull(result.getIssue());
-        Assertions.assertEquals("TASK", result.getIssue().getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getIssue().getIssueType());
         Assertions.assertEquals("MEDIUM", result.getIssue().getPriority().getValue());
         Assertions.assertNotNull(result.getHistory());
         Assertions.assertEquals(2, result.getHistory().size());
@@ -302,7 +302,7 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
         Assertions.assertEquals(SUMMARY, result.getSummary());
-        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getIssueType());
         Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertNull(result.getStoryPoints());
@@ -326,7 +326,7 @@ class IssueMapperTest {
         Assertions.assertEquals(ISSUE_ID, result.getId());
         Assertions.assertEquals(ISSUE_KEY, result.getIssueKey());
         Assertions.assertEquals(SUMMARY, result.getSummary());
-        Assertions.assertEquals("TASK", result.getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getIssueType());
         Assertions.assertEquals("MEDIUM", result.getPriority().getValue());
         Assertions.assertEquals(ASSIGNEE_ID, result.getAssigneeId());
         Assertions.assertEquals(STORY_POINTS, result.getStoryPoints());
@@ -354,9 +354,9 @@ class IssueMapperTest {
 
         Assertions.assertNotNull(result.getItems());
         Assertions.assertEquals(2, result.getItems().size());
-        Assertions.assertEquals("TASK", result.getItems().getFirst().getIssueType().getValue());
+        Assertions.assertEquals("TASK", result.getItems().getFirst().getIssueType());
         Assertions.assertEquals("MEDIUM", result.getItems().getFirst().getPriority().getValue());
-        Assertions.assertEquals("BUG", result.getItems().get(1).getIssueType().getValue());
+        Assertions.assertEquals("BUG", result.getItems().get(1).getIssueType());
         Assertions.assertEquals("HIGH", result.getItems().get(1).getPriority().getValue());
         Assertions.assertEquals(5, result.getTotalCount());
     }
@@ -445,7 +445,7 @@ class IssueMapperTest {
         Assertions.assertEquals(2, result.getItems().size());
 
         var firstResult = result.getItems().get(0);
-        Assertions.assertEquals("TASK", firstResult.getIssueType().getValue());
+        Assertions.assertEquals("TASK", firstResult.getIssueType());
         Assertions.assertEquals("MEDIUM", firstResult.getPriority().getValue());
         Assertions.assertNotNull(firstResult.getLabels());
         Assertions.assertEquals(2, firstResult.getLabels().size());
@@ -455,7 +455,7 @@ class IssueMapperTest {
         Assertions.assertEquals("#E3A008", firstResult.getLabels().get(1).getColor());
 
         var secondResult = result.getItems().get(1);
-        Assertions.assertEquals("BUG", secondResult.getIssueType().getValue());
+        Assertions.assertEquals("BUG", secondResult.getIssueType());
         Assertions.assertEquals("HIGH", secondResult.getPriority().getValue());
         Assertions.assertNotNull(secondResult.getLabels());
         Assertions.assertTrue(secondResult.getLabels().isEmpty());
@@ -573,7 +573,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) без Optional полей")
     void toCreateIssueGrpcRequest_shouldCorrectMapsAllFields_withoutOptionalFields() {
-        var source = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
+        var source = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
 
         var result = mapper.toCreateIssueGrpcRequest(PROJECT_ID, IDEMPOTENCY_KEY, source, CONTEXT);
         var resultBody = result.getBody();
@@ -597,7 +597,7 @@ class IssueMapperTest {
     @Test
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) c Optional полями")
     void toCreateIssueGrpcRequest_shouldCorrectMapsAllFields_withOptionalFields() {
-        var source = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
+        var source = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
         source.setStoryPoints(STORY_POINTS);
         source.setStartDate(LocalDate.parse(START_DATE));
         source.setDueDate(LocalDate.parse(DUE_DATE));

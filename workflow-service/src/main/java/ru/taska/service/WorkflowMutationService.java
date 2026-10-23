@@ -118,13 +118,10 @@ public class WorkflowMutationService {
     }
 
     private Mono<ProjectWorkflowAggregate> deleteWorkflow(EditableWorkflow current, WorkflowMutation c) {
-        // Default bindings may differ by issue type: only one common fallback can be returned safely.
-        return Flux.fromIterable(current.issueTypes())
-                .concatMap(type -> workflows.findWorkflowForProject(properties.defaultProjectId(), type.name())
-                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Default workflow is missing"))))
-                .collectList().flatMap(defaults -> {
-                    if (defaults.stream().map(w -> w.getId()).distinct().count() != 1) return precondition("Issue types have different default workflows");
-                    var fallback = defaults.getFirst();
+        // Every unbound project type uses the same general default workflow.
+        return workflows.findWorkflowForProject(properties.defaultProjectId(), "TASK")
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Default workflow is missing")))
+                .flatMap(fallback -> {
                     return Mono.zip(statuses.findActiveByWorkflowId(fallback.getId()).collectList(),
                                     transitions.findByWorkflowIdOrderBySortOrderAsc(fallback.getId()).collectList())
                             .flatMap(data -> {

@@ -462,6 +462,9 @@ message CreateIssueRequestBody {
    * Оставшееся время в минутах.
    */
   optional int32 remaining_estimate_minutes = 12;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 13;
 }
 
 message GetIssueRequest {
@@ -650,6 +653,8 @@ message PatchIssueRequestBody {
    * Оставшееся время в минутах. Отсутствие поля — не изменять, is_null=true — очистить.
    */
   ru.taska.common.v1.NullableInt32 remaining_estimate_minutes = 12;
+  optional string issue_type_key = 13;
+
 }
 
 message PatchIssueResponse {
@@ -958,6 +963,9 @@ message IssueShortResponse {
    * Ключ статуса задачи.
    */
   string status_key = 10;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 11;
 }
 
 message IssueResponse {
@@ -1080,6 +1088,9 @@ message IssueResponse {
      * Потраченное время в минутах.
      */
   int32 time_spent_minutes = 24;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 25;
 }
 
 // ============ Метки проекта =================
@@ -1600,6 +1611,9 @@ message SearchIssuesRequestBody {
    * Номер страницы, начиная с 0 (если не указан, используется 0 страница).
    */
   optional int32 page = 10;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 11;
 }
 
 message SearchIssuesResponse {
@@ -2172,6 +2186,9 @@ message ListIssuesForBoardRequestBody {
    * При include_done=false исключаются именно эти ключи; пустой список не исключает статусы.
    */
   repeated string done_status_keys = 9;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 10;
 }
 
 /**
@@ -2226,6 +2243,9 @@ message IssueBoardResponse {
    * Количество комментариев к задаче.
    */
   int32 comments_count = 11;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 12;
 }
 
 /**
@@ -2392,6 +2412,9 @@ message IssueDetailsResponse {
    * Общее количество комментариев к задаче.
    */
   int64 comment_count = 27;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 28;
 }
 
 /**

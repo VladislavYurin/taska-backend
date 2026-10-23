@@ -23,7 +23,9 @@ public class WorkflowCreationMapper {
         return WorkflowCreationDto.builder()
                 .projectId(projectId)
                 .name(body.getName().trim())
-                .issueTypes(body.getIssueTypesList().stream().map(this::toDomainIssueType).toList())
+                .issueTypes(body.getIssueTypeKeysCount() > 0
+                        ? body.getIssueTypeKeysList().stream().map(key -> validator.IssueTypeKeys.read(true, key, IssueType.ISSUE_TYPE_UNSPECIFIED)).toList()
+                        : body.getIssueTypesList().stream().map(this::toDomainIssueType).toList())
                 .statuses(body.getStatusesList().stream().map(this::toStatusDto).toList())
                 .transitions(body.getTransitionsList().stream().map(this::toTransitionDto).toList())
                 .build();

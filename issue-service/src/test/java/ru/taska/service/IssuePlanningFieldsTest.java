@@ -34,6 +34,9 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
 
     @BeforeEach
     void setUpRoles() {
+        Mockito.lenient().when(grpcProjectServiceClient.requireIssueType(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.empty());
+
         createRoles = Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN);
         updateRoles = Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN);
 

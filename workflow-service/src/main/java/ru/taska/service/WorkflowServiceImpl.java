@@ -80,7 +80,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     }
 
     @Override
-    public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(UUID projectId) {
-        return projectWorkflowListService.listProjectWorkflows(projectId);
+    public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
+        return projectWorkflowListService.listProjectWorkflows(requestId, nodeId, projectId, actorUserId);
     }
 }

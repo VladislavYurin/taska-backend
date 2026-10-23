@@ -64,22 +64,20 @@ class WorkflowCreationIT extends AbstractIT {
     @MockitoSpyBean
     private TransitionRepository transitionRepository;
 
-    private ManagedChannel channel;
-    private ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub stub;
+    @Autowired
+    private ru.taska.transport.grpc.GrpcWorkflowServiceAdapter stub;
 
     private WorkflowCreationDto validDto;
 
+    @MockitoBean
+    private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
     @BeforeEach
     void setUpGrpcClient() {
-        channel = ManagedChannelBuilder.forAddress("127.0.0.1", grpcPort)
-                .usePlaintext()
-                .build();
-        stub = ReactorWorkflowServiceGrpc.newReactorStub(channel);
-    }
+        org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
 
-    @AfterEach
-    void tearDownGrpcClient() {
-        channel.shutdownNow();
     }
 
     @BeforeEach
@@ -166,15 +164,15 @@ class WorkflowCreationIT extends AbstractIT {
         Assertions.assertEquals(3, statuses.size());
         Assertions.assertEquals("TODO", statuses.get(0).getStatusKey());
         Assertions.assertEquals("To Do", statuses.get(0).getName());
-        Assertions.assertEquals(StatusCategory.TODO.name(), statuses.get(0).getCategory());
+        Assertions.assertEquals(StatusCategory.TODO, statuses.get(0).getCategory());
         Assertions.assertEquals(0, statuses.get(0).getSortOrder());
         Assertions.assertEquals("IN_PROGRESS", statuses.get(1).getStatusKey());
         Assertions.assertEquals("In Progress", statuses.get(1).getName());
-        Assertions.assertEquals(StatusCategory.IN_PROGRESS.name(), statuses.get(1).getCategory());
+        Assertions.assertEquals(StatusCategory.IN_PROGRESS, statuses.get(1).getCategory());
         Assertions.assertEquals(1, statuses.get(1).getSortOrder());
         Assertions.assertEquals("DONE", statuses.get(2).getStatusKey());
         Assertions.assertEquals("Done", statuses.get(2).getName());
-        Assertions.assertEquals(StatusCategory.DONE.name(), statuses.get(2).getCategory());
+        Assertions.assertEquals(StatusCategory.DONE, statuses.get(2).getCategory());
         Assertions.assertEquals(2, statuses.get(2).getSortOrder());
 
         List<TransitionEntity> transitions = aggregate.transitions();
@@ -324,6 +322,17 @@ class WorkflowCreationIT extends AbstractIT {
                     Assertions.assertEquals(2, response.getTransitionsCount());
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void customTypeCreationThroughGrpcRetainsBindingKey() {
+        Mockito.when(projectClient.listIssueTypes(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(List.of(IssueType.valueOf("REQUEST"))));
+        var legacy = buildValidGrpcRequest();
+        var custom = legacy.toBuilder().setBody(legacy.getBody().toBuilder().clearIssueTypes().addIssueTypeKeys("REQUEST")).build();
+        var result = stub.createWorkflow(Mono.just(custom)).block();
+        Assertions.assertEquals(List.of("REQUEST"), result.getIssueTypeKeysList());
+        Assertions.assertEquals(List.of(ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_UNSPECIFIED), result.getIssueTypesList());
     }
 
     @Test

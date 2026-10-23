@@ -36,8 +36,15 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     @MockitoBean WorkflowIssueMigrationClient issues;
     private UUID project, actor, workflow, review;
 
+    @MockitoBean
+    private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
     @BeforeEach
     void createGraph() {
+        org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
+
         project = UUID.randomUUID(); actor = UUID.randomUUID();
         when(roles.checkProjectRole(any(), any(), any(), any(), any())).thenReturn(Mono.empty());
         when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.just(0L));

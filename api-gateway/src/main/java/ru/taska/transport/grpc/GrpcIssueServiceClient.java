@@ -499,6 +499,7 @@ public class GrpcIssueServiceClient {
                 .setIncludeDone(Boolean.TRUE.equals(includeDone))
                 .addAllDoneStatusKeys(doneStatusKeys);
 
+        if (issueType != null) requestBodyBuilder.setIssueTypeKey(issueType);
         if (assigneeId != null && !assigneeId.isBlank()) {
             requestBodyBuilder.setAssigneeId(assigneeId);
         }

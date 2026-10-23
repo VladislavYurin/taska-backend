@@ -59,6 +59,7 @@ public abstract class IssueDetailsMapper {
 
     @Mapping(target = "reporter", expression = "java(IssueMapperUtils.resolveUser(core.getReporterId(), profiles))")
     @Mapping(target = "status", source = "core.statusKey")
+    @Mapping(target = "issueTypeKey", expression = "java(core.getIssueType().name())")
     @Mapping(target = "assignee", ignore = true)
     @Mapping(target = "labels", ignore = true)
     @Mapping(target = "watchers", ignore = true)
