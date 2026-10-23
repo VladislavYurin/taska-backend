@@ -100,11 +100,14 @@ public class GrpcIssueService {
             if (ids.isEmpty()) {
                 return Mono.just(CountProjectIssuesBatchInternalResponse.getDefaultInstance());
             }
-            return issueStatsRepository.countProjectsBatch(ids)
+            var counts = req.hasIssueTypeKey()
+                    ? issueStatsRepository.countProjectIssueTypesBatch(ids, req.getIssueTypeKey(), req.getIncludeDeleted())
+                    : issueStatsRepository.countProjectsBatch(ids);
+            return counts
                     .map(row -> ProjectIssueCount.newBuilder()
                             .setProjectId(row.projectId().toString()).setIssueCount(row.issueCount()).build())
                     .collectList().map(items -> CountProjectIssuesBatchInternalResponse.newBuilder()
-                            .addAllItems(items).build());
+                            .addAllItems(items).setFiltersApplied(true).build());
         }));
     }
 

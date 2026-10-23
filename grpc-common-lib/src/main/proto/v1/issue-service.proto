@@ -2461,6 +2461,8 @@ message GetIssueByKeyRequestBody {
 message CountProjectIssuesBatchInternalRequest {
   ru.taska.common.v1.Header header = 1;
   repeated string project_ids = 2;
+  optional string issue_type_key = 3;
+  bool include_deleted = 4;
 }
 message ProjectIssueCount {
   string project_id = 1;
@@ -2468,4 +2470,6 @@ message ProjectIssueCount {
 }
 message CountProjectIssuesBatchInternalResponse {
   repeated ProjectIssueCount items = 1;
+  // Older servers ignore filters; destructive callers must fail closed.
+  bool filters_applied = 2;
 }

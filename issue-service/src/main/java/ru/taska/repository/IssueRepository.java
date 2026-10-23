@@ -18,6 +18,12 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             + "WHERE project_id IN (:projectIds) AND deleted_at IS NULL GROUP BY project_id")
     Flux<ProjectIssueCountRow> countProjectsBatch(Collection<UUID> projectIds);
 
+    @Query("SELECT project_id, count(*) AS issue_count FROM taska.issues "
+            + "WHERE project_id IN (:projectIds) AND issue_type=:issueType "
+            + "AND (:includeDeleted OR deleted_at IS NULL) GROUP BY project_id")
+    Flux<ProjectIssueCountRow> countProjectIssueTypesBatch(Collection<UUID> projectIds, String issueType,
+                                                         boolean includeDeleted);
+
 
     @Query("SELECT * FROM taska.issues WHERE id = :id AND deleted_at IS NULL")
     Mono<Issue> findActiveById(@Param("id") UUID id);

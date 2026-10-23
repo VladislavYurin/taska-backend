@@ -36,5 +36,10 @@ class ProjectIssueCountIntegrationTest extends AbstractIT {
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst().projectId()).isEqualTo(project);
         assertThat(rows.getFirst().issueCount()).isEqualTo(2);
+        var all = repository.countProjectIssueTypesBatch(List.of(project), "TASK", true).collectList().block();
+        assertThat(all.getFirst().issueCount()).isEqualTo(3);
+        assertThat(repository.countProjectIssueTypesBatch(List.of(project), "TASK", false).collectList().block()
+                .getFirst().issueCount()).isEqualTo(2);
+        assertThat(repository.countProjectIssueTypesBatch(List.of(project), "BUG", true).collectList().block()).isEmpty();
     }
 }

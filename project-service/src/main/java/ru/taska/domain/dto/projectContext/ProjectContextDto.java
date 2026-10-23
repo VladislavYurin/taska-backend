@@ -19,5 +19,7 @@ public record ProjectContextDto (
         List<ProjectWorkflowDto> workflows,
 
         /// Собираем из auth-service
-        List<ProjectMemberDetailsDto> members
+        List<ProjectMemberDetailsDto> members,
+
+        List<ru.taska.domain.ProjectIssueType> issueTypes
 ) {}
