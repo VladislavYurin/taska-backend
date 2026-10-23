@@ -114,7 +114,6 @@ class AuthServiceImplTest {
         testUser = User.builder()
                 .id(testUserId)
                 .email("test@example.com")
-                .login("testuser")
                 .displayName("Test User")
                 .status(UserStatus.ACTIVE)
                 .lockedUntil(null)
@@ -720,7 +719,6 @@ class AuthServiceImplTest {
             invitedUser = User.builder()
                     .id(testUserId)
                     .email("invited@example.com")
-                    .login("inviteduser")
                     .status(UserStatus.INVITED)
                     .build();
 
@@ -886,7 +884,6 @@ class AuthServiceImplTest {
             User activeUser = User.builder()
                     .id(testUserId)
                     .email("active@example.com")
-                    .login("activeuser")
                     .status(UserStatus.ACTIVE)  // ACTIVE, не INVITED
                     .build();
 
@@ -1144,7 +1141,6 @@ class AuthServiceImplTest {
             User blockedUser = User.builder()
                     .id(testUserId)
                     .email("blocked@example.com")
-                    .login("blockeduser")
                     .status(UserStatus.BLOCKED)
                     .build();
 
@@ -1173,7 +1169,6 @@ class AuthServiceImplTest {
             User invitedUser = User.builder()
                     .id(testUserId)
                     .email("invited@example.com")
-                    .login("inviteduser")
                     .status(UserStatus.INVITED)
                     .build();
 
@@ -1204,7 +1199,6 @@ class AuthServiceImplTest {
             User fullUser = User.builder()
                     .id(testUserId)
                     .email("user@example.com")
-                    .login("user")
                     .displayName("User Name")
                     .status(UserStatus.ACTIVE)
                     .build();
@@ -1217,7 +1211,6 @@ class AuthServiceImplTest {
             StepVerifier.create(authServiceImpl.validateAccessToken(accessToken))
                     .expectNextMatches(userContext ->
                             userContext.getUserId().equals(testUserId.toString()) &&
-                                    userContext.getLogin().equals("user") &&
                                     userContext.getEmail().equals("user@example.com") &&
                                     userContext.getDisplayName().equals("User Name")
                     )

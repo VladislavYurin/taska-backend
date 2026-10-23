@@ -142,7 +142,6 @@ class RefreshTokenServiceIntegrationConcurrentTest {
 
         // Создаем пользователя БЕЗ ID (пусть база сгенерирует)
         testUser = User.builder()
-                .login("testuser_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .globalRole(GlobalRole.USER)
                 .displayName("Test User")
@@ -340,7 +339,6 @@ class RefreshTokenServiceIntegrationConcurrentTest {
 
         // Given - второй пользователь (БЕЗ ID)
         User testUser2 = User.builder()
-                .login("testuser2_" + UUID.randomUUID().toString().substring(0, 8))
                 .email("test2_" + UUID.randomUUID().toString().substring(0, 8) + "@example.com")
                 .globalRole(GlobalRole.USER)
                 .displayName("Test User 2")

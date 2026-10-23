@@ -6,7 +6,7 @@ Taska currently has one invite-only workspace per deployment. The directory is s
 
 Only a `GLOBAL_ADMIN` may invite a new account or resend an invitation. Project administrators can find existing users and add eligible accounts to their projects, but cannot create workspace accounts. The gateway checks the global role, and auth-service independently rechecks the actor's existence, status and role. Missing authentication is 401; authenticated lack of permission is 403. `LOCKED` is a temporary login lockout and retains already authorized access; `BLOCKED` and `INVITED` actors cannot access the directory.
 
-`POST /api/v1/auth/invitations` accepts `email`, optional `displayName` and optional `resend` (false by default). The server trims email and compares it case-insensitively. It does not merge provider-specific aliases, remove dots, or strip `+tags`. A new account receives an opaque login and the USER role. Missing display name defaults to the local part of email.
+`POST /api/v1/auth/invitations` accepts `email`, optional `displayName` and optional `resend` (false by default). The server trims email and compares it case-insensitively. It does not merge provider-specific aliases, remove dots, or strip `+tags`. A new account is identified by UUID, receives the USER role and signs in with email. Missing display name defaults to the local part of email.
 
 | Existing state | Result |
 | --- | --- |

@@ -12,7 +12,7 @@ import java.util.UUID;
  *
  * @param id            идентификатор записи журнала (UUID)
  * @param actorUserId   идентификатор пользователя, выполнившего действие (UUID)
- * @param actorLogin    логин пользователя, выполнившего действие
+ * @param actorDisplayName    отображаемое имя пользователя, выполнившего действие
  * @param action        тип действия (например: CREATE, UPDATE, DELETE)
  * @param targetService название сервиса, в котором произошло изменение
  * @param targetTable   название таблицы, в которой произошло изменение
@@ -27,7 +27,8 @@ import java.util.UUID;
 public record AuditEntriesResponseDto(
         UUID id,
         UUID actorUserId,
-        String actorLogin,
+        String actorDisplayName,
+        String actorEmail,
         String action,
         String targetService,
         String targetTable,

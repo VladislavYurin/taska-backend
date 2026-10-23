@@ -3897,8 +3897,6 @@ components:
       properties:
         id:
           type: string
-        login:
-          type: string
         email:
           type: string
         displayName:
@@ -4764,8 +4762,14 @@ components:
         actorUserId:
           type: string
           format: uuid
-        actorLogin:
+        actorDisplayName:
           type: string
+          nullable: true
+          description: Имя автора на момент действия; для старых записей сохранённое обозначение автора.
+        actorEmail:
+          type: string
+          nullable: true
+          description: Email автора на момент действия; null для исторических записей без email.
         action:
           type: string
         targetService:

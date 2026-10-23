@@ -8,7 +8,6 @@ import lombok.Builder;
  * и доступен в {@link ru.taska.domain.GatewayContext} для защищённых эндпоинтов.
  *
  * @param userId      уникальный идентификатор пользователя
- * @param login       логин пользователя
  * @param email       адрес электронной почты пользователя
  * @param displayName отображаемое имя пользователя
  * @param status      статус учётной записи пользователя
@@ -17,7 +16,6 @@ import lombok.Builder;
 @Builder
 public record GatewayUserContext(
         String userId,
-        String login,
         String email,
         String displayName,
         GatewayUserStatus status,

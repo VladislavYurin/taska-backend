@@ -89,7 +89,6 @@ class AuthGrpcServiceTest {
 
         userContext = UserContext.newBuilder()
                 .setUserId(UUID.randomUUID().toString())
-                .setLogin("testuser")
                 .setEmail("test@example.com")
                 .setDisplayName("Test User")
                 .build();
@@ -349,7 +348,6 @@ class AuthGrpcServiceTest {
         void setUpValidateAccessTokenTests() {
             userContext = UserContext.newBuilder()
                     .setUserId(UUID.randomUUID().toString())
-                    .setLogin("testuser")
                     .setEmail("test@example.com")
                     .setDisplayName("Test User")
                     .build();
@@ -376,7 +374,6 @@ class AuthGrpcServiceTest {
             StepVerifier.create(authGrpcService.validateAccessToken(Mono.just(validValidateTokenRequest)))
                     .expectNextMatches(response ->
                             response.getUserContext().getUserId().equals(userContext.getUserId()) &&
-                                    response.getUserContext().getLogin().equals(userContext.getLogin()) &&
                                     response.getUserContext().getEmail().equals(userContext.getEmail()) &&
                                     response.getUserContext().getDisplayName().equals(userContext.getDisplayName())
                     )

@@ -54,7 +54,7 @@ public class AdminInviteUserServiceImpl implements AdminInviteUserService {
                             .then(Mono.defer(() -> users.findByCanonicalEmailForUpdate(email)
                                     .flatMap(user -> inviteExisting(request, user))
                                     .switchIfEmpty(Mono.defer(() -> users.save(User.builder()
-                                                    .email(email).login("invited_" + UUID.randomUUID())
+                                                    .email(email)
                                                     .displayName(name).status(UserStatus.INVITED).globalRole(GlobalRole.USER).build())
                                             .flatMap(user -> queue(request, user, true))))));
                 }));

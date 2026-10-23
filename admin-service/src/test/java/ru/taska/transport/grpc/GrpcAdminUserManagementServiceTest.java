@@ -40,7 +40,7 @@ class GrpcAdminUserManagementServiceTest {
     private static final String NODE_ID = "node-1";
     private static final String TARGET_USER_ID = "11111111-1111-1111-1111-111111111111";
     private static final String ACTOR_USER_ID = "22222222-2222-2222-2222-222222222222";
-    private static final String ACTOR_LOGIN = "admin";
+    private static final String ACTOR_NAME = "admin";
     private static final String REASON = "test reason";
     private static final OffsetDateTime FIXED_TIME = OffsetDateTime.of(
             2026, 9, 2, 0, 0, 0, 0, ZoneOffset.UTC
@@ -72,7 +72,7 @@ class GrpcAdminUserManagementServiceTest {
         requestDto = UserStatusRequestDto.builder()
                 .targetUserId(targetUserId)
                 .actorUserId(actorUserId)
-                .actorLogin(ACTOR_LOGIN)
+                .actorDisplayName(ACTOR_NAME).actorEmail("admin@example.com")
                 .reason(REASON)
                 .build();
 
@@ -127,7 +127,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -146,7 +146,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -165,7 +165,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId("")
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -184,7 +184,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId("")
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -196,14 +196,14 @@ class GrpcAdminUserManagementServiceTest {
         }
 
         @Test
-        @DisplayName("Должен вернуть ошибку INVALID_ARGUMENT при пустом actorLogin")
-        void blockUser_blankActorLogin_fails() {
+        @DisplayName("Должен вернуть ошибку INVALID_ARGUMENT при пустом actorDisplayName")
+        void blockUser_blankActorDisplayName_fails() {
             BlockUserRequest request = BlockUserRequest.newBuilder()
                     .setHeader(validHeader())
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin("")
+                            .setActorDisplayName("").setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -222,7 +222,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason("")
                             .build())
@@ -241,7 +241,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(BlockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -275,7 +275,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(UnblockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -294,7 +294,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(UnblockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -326,7 +326,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(UnblockUserRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -360,7 +360,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -379,7 +379,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -398,7 +398,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId("")
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -417,7 +417,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId("")
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -429,14 +429,14 @@ class GrpcAdminUserManagementServiceTest {
         }
 
         @Test
-        @DisplayName("Должен вернуть ошибку INVALID_ARGUMENT при пустом actorLogin")
-        void resetCredentialLockout_blankActorLogin_fails() {
+        @DisplayName("Должен вернуть ошибку INVALID_ARGUMENT при пустом actorDisplayName")
+        void resetCredentialLockout_blankActorDisplayName_fails() {
             ResetCredentialLockoutRequest request = ResetCredentialLockoutRequest.newBuilder()
                     .setHeader(validHeader())
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin("")
+                            .setActorDisplayName("").setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())
@@ -455,7 +455,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason("")
                             .build())
@@ -475,7 +475,7 @@ class GrpcAdminUserManagementServiceTest {
                     .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                             .setTargetUserId(TARGET_USER_ID)
                             .setActorUserId(ACTOR_USER_ID)
-                            .setActorLogin(ACTOR_LOGIN)
+                            .setActorDisplayName(ACTOR_NAME).setActorEmail("admin@example.com")
                             .setActorRole(GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN)
                             .setReason(REASON)
                             .build())

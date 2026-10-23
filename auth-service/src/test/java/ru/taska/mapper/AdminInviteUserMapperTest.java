@@ -25,7 +25,6 @@ class AdminInviteUserMapperTest {
         InviteUserRequest request = TestGrpcDataGenerator.getInviteUserRequest();
         User user = mapper.buildInvitedUserFromRequest(request);
         Assertions.assertThat(user.getEmail()).isEqualTo(TestConstantHolder.TEST_USER_EMAIL);
-        Assertions.assertThat(user.getLogin()).isNotNull();
         Assertions.assertThat(user.getDisplayName()).isEqualTo(TestConstantHolder.TEST_USER_DISPLAY_NAME);
         Assertions.assertThat(user.getStatus()).isEqualTo(UserStatus.INVITED);
     }

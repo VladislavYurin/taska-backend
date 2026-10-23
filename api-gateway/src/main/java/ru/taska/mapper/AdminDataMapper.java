@@ -313,8 +313,11 @@ public class AdminDataMapper {
             }
         }
 
-        if (grpcAuditEntry.hasActorLogin()) {
-            dto.setActorLogin(grpcAuditEntry.getActorLogin());
+        if (grpcAuditEntry.hasActorDisplayName()) {
+            dto.setActorDisplayName(grpcAuditEntry.getActorDisplayName());
+        }
+        if (grpcAuditEntry.hasActorEmail()) {
+            dto.setActorEmail(grpcAuditEntry.getActorEmail());
         }
 
         if (grpcAuditEntry.hasAction()) {

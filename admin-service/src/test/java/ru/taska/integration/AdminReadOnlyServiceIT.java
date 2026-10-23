@@ -75,7 +75,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                     Assertions.assertThat(response.maskedRows()).hasSize(2);
                     Assertions.assertThat(response.maskedRows())
                             .allSatisfy(row -> Assertions.assertThat(row.get("email")).isEqualTo("***"));
-                    Assertions.assertThat(response.columns()).contains("id", "login", "email");
+                    Assertions.assertThat(response.columns()).contains("id", "display_name", "email");
                 })
                 .verifyComplete();
     }
@@ -89,15 +89,15 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                 20,
                 null,
                 null,
-                Map.of("login.equals", FIXTURE_USER_LOGIN)
+                Map.of("display_name.equals", FIXTURE_USER_NAME)
         );
 
         StepVerifier.create(adminReadonlyService.listTableRows(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.total()).isEqualTo(1L);
                     Assertions.assertThat(response.maskedRows()).hasSize(1);
-                    Assertions.assertThat(response.maskedRows().getFirst().get("login"))
-                            .isEqualTo(FIXTURE_USER_LOGIN);
+                    Assertions.assertThat(response.maskedRows().getFirst().get("display_name"))
+                            .isEqualTo(FIXTURE_USER_NAME);
                     Assertions.assertThat(response.maskedRows().getFirst().get("email"))
                             .isEqualTo("***");
                 })
@@ -115,7 +115,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
         StepVerifier.create(adminReadonlyService.getTableRowById(request, "test-request-id", "test-node-id"))
                 .assertNext(response -> {
                     Assertions.assertThat(response.row().get("id").toString()).isEqualTo(FIXTURE_USER_ID);
-                    Assertions.assertThat(response.row().get("login")).isEqualTo(FIXTURE_USER_LOGIN);
+                    Assertions.assertThat(response.row().get("display_name")).isEqualTo(FIXTURE_USER_NAME);
                     Assertions.assertThat(response.row().get("email")).isEqualTo("***");
                 })
                 .verifyComplete();
@@ -159,7 +159,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
 
                     Assertions.assertThat(entry.id()).isEqualTo(UUID.fromString("33333333-3333-3333-3333-333333333333"));
                     Assertions.assertThat(entry.actorUserId()).isEqualTo(actorUserId);
-                    Assertions.assertThat(entry.actorLogin()).isEqualTo(FIXTURE_USER_LOGIN);
+                    Assertions.assertThat(entry.actorDisplayName()).isEqualTo(FIXTURE_USER_NAME);
                     Assertions.assertThat(entry.action()).isEqualTo("action");
                     Assertions.assertThat(entry.targetService()).isEqualTo(FIXTURE_SERVICE);
                     Assertions.assertThat(entry.targetTable()).isEqualTo(FIXTURE_TABLE);
@@ -205,7 +205,7 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                     Assertions.assertThat(response.totalCount()).isEqualTo(1L);
                     Assertions.assertThat(response.items()).hasSize(1);
                     Assertions.assertThat(response.items().getFirst().requestId()).isEqualTo("requestId-2");
-                    Assertions.assertThat(response.items().getFirst().actorLogin()).isEqualTo(SECOND_AUDIT_ACTOR_LOGIN);
+                    Assertions.assertThat(response.items().getFirst().actorDisplayName()).isEqualTo(SECOND_AUDIT_ACTOR_NAME);
                 })
                 .verifyComplete();
     }
@@ -220,9 +220,9 @@ class AdminReadOnlyServiceIT extends AbstractIT {
                     AuditEntriesResponseDto entry = response.items().getFirst();
 
                     Assertions.assertThat(entry.targetService()).isEqualTo(SECOND_AUDIT_TARGET_SERVICE);
-                    Assertions.assertThat(entry.oldValue().get("login").asText()).isEqualTo("bob");
+                    Assertions.assertThat(entry.oldValue().get("display_name").asText()).isEqualTo("bob");
                     Assertions.assertThat(entry.oldValue().get("email").asText()).isEqualTo("***");
-                    Assertions.assertThat(entry.newValue().get("login").asText()).isEqualTo("bob");
+                    Assertions.assertThat(entry.newValue().get("display_name").asText()).isEqualTo("bob");
                     Assertions.assertThat(entry.newValue().get("email").asText()).isEqualTo("***");
                 })
                 .verifyComplete();

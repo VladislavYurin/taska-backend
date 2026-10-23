@@ -37,7 +37,6 @@ public class JwtServiceImpl implements JwtService {
                 Jwts.builder()
                         .claims()
                         .add("userId", user.getId().toString())
-                        .add("login", user.getLogin())
                         .add("email", user.getEmail())
                         .add("global_role",user.getGlobalRole())
                         .subject(user.getId().toString())    // вместо setSubject()

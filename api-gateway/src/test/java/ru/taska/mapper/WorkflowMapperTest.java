@@ -57,7 +57,6 @@ class WorkflowMapperTest {
     void shouldMapToGetWorkflowGrpcRequest() {
         var userContext = GatewayUserContext.builder()
                 .userId("00000000-0000-0000-0000-000000000000")
-                .login("Login")
                 .email("login@taska.ru")
                 .displayName("Login Name")
                 .status(GatewayUserStatus.ACTIVE)

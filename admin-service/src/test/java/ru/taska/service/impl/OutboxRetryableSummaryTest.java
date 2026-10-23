@@ -74,7 +74,8 @@ class OutboxRetryableSummaryTest {
         Mockito.when(retryRepository.retry(anyString(), any(), any())).thenReturn(Mono.error(reachedAtomicRetry));
         var retryService = new OutboxRetryServiceImpl(retryRepository, Mockito.mock(AuditService.class), retryProperties, json);
         StepVerifier.create(retryService.retryOutboxEvent("request", "admin", "issue", snapshot.id(),
-                        "test", UUID.randomUUID(), "admin", json.createArrayNode()))
+                        "test", UUID.randomUUID(), "admin",
+                "admin@example.com", json.createArrayNode()))
                 .expectErrorMatches(error -> expected ? error == reachedAtomicRetry
                         : error instanceof DomainException domain && domain.getStatus() == DomainStatus.FAILED_PRECONDITION)
                 .verify();

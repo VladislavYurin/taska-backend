@@ -41,10 +41,13 @@ public class AuditLog {
     private UUID actorUserId;
 
     /**
-     * Логин пользователя, выполнившего действие.
+     * Отображаемое имя пользователя, выполнившего действие.
      */
-    @Column("actor_login")
-    private String actorLogin;
+    @Column("actor_display_name")
+    private String actorDisplayName;
+
+    @Column("actor_email")
+    private String actorEmail;
 
     /**
      * Роли пользователя на момент выполнения действия.

@@ -38,7 +38,7 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
         """)
     Flux<UserDetailsDto> searchDirectory(String pattern, int limit, long offset);
 
-    Mono<Boolean> existsByLogin(String login);
+    Mono<Boolean> existsByEmail(String email);
 
     Mono<Long> countByGlobalRoleAndStatus(GlobalRole globalRole, UserStatus status);
 
