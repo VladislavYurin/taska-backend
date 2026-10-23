@@ -79,8 +79,12 @@ public class NotificationDeliveryQueue {
                 SELECT :id::text || ':TELEGRAM', :id, user_id, 'TELEGRAM', telegram_version, telegram_bot_username
                     FROM taska.notification_preferences WHERE user_id=:user AND telegram_enabled
                         AND telegram_chat_id IS NOT NULL AND telegram_error IS NULL
+                        AND :telegramAvailable AND telegram_bot_username=:bot
                 ON CONFLICT DO NOTHING
-                """).bind("id", notification.getId()).bind("user", notification.getUserId()).fetch().rowsUpdated().then();
+                """).bind("id", notification.getId()).bind("user", notification.getUserId())
+                .bind("telegramAvailable", properties.isEnabled())
+                .bind("bot", java.util.Objects.toString(properties.getBotUsername(), ""))
+                .fetch().rowsUpdated().then();
     }
 
     public Mono<Void> dispatchEmail() { return dispatch("EMAIL", 10); }

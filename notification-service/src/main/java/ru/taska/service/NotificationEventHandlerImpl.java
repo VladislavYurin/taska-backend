@@ -57,7 +57,7 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
         return Mono.defer(() ->
                         processedEventRepository.save(processedEvent)
-                                .flatMap(saved -> provisionActivatedUser(event).then(createNotifications(event, eventId)))
+                                .flatMap(saved -> provisionUserEmail(event).then(createNotifications(event, eventId)))
                                 .as(transactionalOperator::transactional)
                 )
                 .onErrorResume(this::isDuplicateEvent, ex -> {
@@ -87,10 +87,13 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
                 );
     }
 
-    private Mono<Void> provisionActivatedUser(TaskaEvent event) {
-        if (!"UserActivated".equals(event.eventType()) || event.aggregateId() == null || event.payload() == null
+    private Mono<Void> provisionUserEmail(TaskaEvent event) {
+        var type = ru.taska.event.EventType.fromValue(event.eventType());
+        if ((type != ru.taska.event.EventType.USER_ACTIVATED && type != ru.taska.event.EventType.USER_EMAIL_CHANGED)
+                || event.aggregateId() == null || event.payload() == null
                 || !event.payload().path("email").isString()) return Mono.empty();
-        return settings.ensure(event.aggregateId(), event.payload().path("email").asText());
+        return settings.ensure(event.aggregateId(), event.payload().path("email").asText())
+                .then(settings.cancelObsolete(event.aggregateId()));
     }
 
     private boolean isDuplicateEvent(Throwable ex) {

@@ -335,6 +335,60 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
         assertThat(count("taska.telegram_updates")).isEqualTo(1);
     }
 
+    @Test
+    void emailEventsProvisionDormantUsersWithoutWelcomeAndPreserveUnchangedRows() {
+        UUID fresh=UUID.randomUUID();
+        handler.handle(emailEvent(fresh,"dormant@example.test")).block(WAIT);
+        assertThat(count("taska.notifications")).isZero();
+        assertThat(count("taska.notification_deliveries")).isZero();
+        String query=" FROM taska.notification_preferences WHERE user_id='"+fresh+"'";
+        String xmin=text("SELECT xmin::text"+query);
+        String updated=text("SELECT updated_at::text"+query);
+        String version=text("SELECT email_version::text"+query);
+        handler.handle(emailEvent(fresh,"dormant@example.test")).block(WAIT);
+        assertThat(text("SELECT xmin::text"+query)).isEqualTo(xmin);
+        assertThat(text("SELECT updated_at::text"+query)).isEqualTo(updated);
+        user=fresh;
+        handler.handle(assignedEvent()).block(WAIT);
+        handler.handle(emailEvent(fresh,"changed@example.test")).block(WAIT);
+        assertThat(text("SELECT email_version::text"+query)).isNotEqualTo(version);
+        assertThat(text("SELECT status FROM taska.notification_deliveries")).isEqualTo("CANCELLED");
+        handler.handle(assignedEvent()).block(WAIT);
+        queue.dispatchEmail().block(WAIT);
+        verify(mail,times(1)).send(any(MimeMessage.class));
+        assertThat(text("SELECT status FROM taska.notification_deliveries WHERE status='SENT'")).isEqualTo("SENT");
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+    void disabledOrChangedBotNeverQueuesTelegramBacklog(boolean changedBot) {
+        connect(123);
+        String bot=telegramProperties.getBotUsername();
+        String throttle=text("SELECT next_send_at::text FROM taska.notification_channel_throttle WHERE channel='TELEGRAM'");
+        try {
+            telegramProperties.setEnabled(changedBot);
+            if(changedBot) telegramProperties.setBotUsername("DifferentTestBot");
+            handler.handle(assignedEvent()).block(WAIT);
+            assertThat(notifications.count().block(WAIT)).isEqualTo(1);
+            assertThat(count("taska.notification_deliveries")).isEqualTo(1);
+            assertThat(text("SELECT channel FROM taska.notification_deliveries")).isEqualTo("EMAIL");
+            assertThat(text("SELECT next_send_at::text FROM taska.notification_channel_throttle WHERE channel='TELEGRAM'"))
+                    .isEqualTo(throttle);
+        } finally {
+            telegramProperties.setBotUsername(bot);
+            telegramProperties.setEnabled(true);
+        }
+        queue.dispatchEmail().then(queue.dispatchTelegram()).block(WAIT);
+        verify(mail,times(1)).send(any(MimeMessage.class));
+        verify(telegram,never()).notification(anyLong(),any());
+    }
+
+    private TaskaEvent emailEvent(UUID userId,String email) {
+        return TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(userId).aggregateType("user")
+                .eventType("UserEmailChanged").occurredAt(Instant.now())
+                .payload(mapper.createObjectNode().put("userId",userId.toString()).put("email",email)).build();
+    }
+
     private TaskaEvent assignedEvent() {
         var payload=mapper.createObjectNode().put("assigneeId",user.toString()).put("issueId",UUID.randomUUID().toString())
                 .put("projectId",UUID.randomUUID().toString()).put("issueKey","TAS-387").put("summary","Assigned");

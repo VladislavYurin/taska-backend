@@ -27,6 +27,7 @@ public enum EventType {
     MEMBER_REMOVED("MemberRemoved"),
     MEMBER_UPDATED("MemberUpdated"),
     USER_ACTIVATED("UserActivated"),
+    USER_EMAIL_CHANGED("UserEmailChanged"),
     UNSUPPORTED("Unsupported"),
     ISSUE_COMMENT_CREATED("CommentCreated"),
     ISSUE_COMMENT_UPDATED("CommentUpdated"),

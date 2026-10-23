@@ -89,3 +89,9 @@ Telegram отправляется простым текстом без parse mod
 Внешние SMTP/Telegram не обеспечивают exactly-once: при timeout после принятия запроса провайдером возможен повтор. Это не потеря durable задания; ограниченные повторы предпочтительнее молчаливого пропуска. Метрики `taska.notification.delivery`, `taska.notification.queue.depth`, `taska.notification.queue.age.seconds` не содержат ID чатов и секретов.
 
 Контракты: [OpenAPI](../api-gateway/src/main/resources/static/openapi.yml), [protobuf](../grpc-common-lib/src/main/proto/v1/notification-settings.proto). Telegram: [deep links](https://core.telegram.org/bots/features#deep-linking), [webhook](https://core.telegram.org/bots/api#setwebhook), [sendMessage](https://core.telegram.org/bots/api#sendmessage).
+
+### Provisioning and Telegram availability (TAS-391)
+
+`UserActivated` and `UserEmailChanged` provision notification preferences from trusted auth events. `UserEmailChanged` never creates a welcome notification or delivery. Replays with the same email do not rewrite preferences; a changed email invalidates queued deliveries to the old address. Deploy this consumer before enabling the auth backfill/producer in the second TAS-391 PR.
+
+If Telegram integration is disabled or the connected bot differs from the configured bot, new notifications keep inbox/email behavior and do not enqueue Telegram deliveries. Enabling Telegram later does not replay notifications created while it was disabled.
