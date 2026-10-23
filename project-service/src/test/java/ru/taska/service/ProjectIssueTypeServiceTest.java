@@ -26,6 +26,9 @@ import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectIssueTypeServiceTest {
+    @Mock private ProjectWriteGuard writeGuard;
+    @org.junit.jupiter.api.BeforeEach
+    void writable() { lenient().when(writeGuard.check(any(), any())).thenReturn(reactor.core.publisher.Mono.empty()); }
     private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
     @Mock ProjectIssueTypeRepository repository;
     @Mock ProjectService projects;

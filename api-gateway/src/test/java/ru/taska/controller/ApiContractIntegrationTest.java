@@ -35,7 +35,7 @@ class ApiContractIntegrationTest {
         assertThat(schemas.get("IssueResponseDto").get("required").toString()).contains("priority");
         assertThat(schemas.get("IssueResponseDto").get("properties").get("priority").get("$ref").asString())
                 .isEqualTo("#/components/schemas/IssuePriorityDto");
-        assertThat(schemas.get("NotificationTypeDto").get("enum").size()).isEqualTo(23);
+        assertThat(schemas.get("NotificationTypeDto").get("enum").size()).isEqualTo(24);
         assertThat(schemas.get("CommentResponseDto").get("properties").get("updatedAt").get("nullable").asBoolean())
                 .isFalse();
         var query = contract.get("paths").get("/api/v1/issues/search").get("get").get("parameters").get(0).get("schema");

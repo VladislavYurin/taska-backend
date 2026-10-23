@@ -33,7 +33,7 @@ class NotificationMapperTest {
         var known = java.util.Arrays.stream(NotificationKind.values())
                 .filter(kind -> kind != NotificationKind.UNRECOGNIZED
                         && kind != NotificationKind.NOTIFICATION_KIND_UNSPECIFIED).toList();
-        assertThat(known).hasSize(22);
+        assertThat(known).hasSize(23);
         for (var kind : known) {
             String expected = kind.name().substring("NOTIFICATION_KIND_".length());
             assertThat(mapper.toRestNotificationType(kind)).isEqualTo(expected);

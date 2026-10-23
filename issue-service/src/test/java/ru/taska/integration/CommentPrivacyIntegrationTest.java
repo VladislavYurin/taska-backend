@@ -131,7 +131,7 @@ class CommentPrivacyIntegrationTest extends AbstractIT {
     private void role(ProjectRole role) {
         when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                        .setProjectExists(true).setIsMember(true).setRole(role).build()));
+                        .setProjectExists(true).setProjectArchived(false).setIsMember(true).setRole(role).build()));
     }
 
     private Issue createIssue() {

@@ -738,6 +738,42 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
   /api/v1/projects/{projectId}:
+    delete:
+      operationId: archiveProject
+      summary: Архивировать проект — только ADMIN проекта, идемпотентно
+      description: >
+        Проект и его данные сохраняются. Архивный проект скрыт из списка проектов, но доступен
+        участникам по прямой ссылке для чтения. Запись отклоняется с FAILED_PRECONDITION и
+        details.reason=PROJECT_ARCHIVED. Повторный DELETE возвращает тот же archivedAt без нового события.
+      tags: [project-archive]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Проект в архиве
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+
     get:
       summary: Возвращает проект по идентификатору
       operationId: getProject
@@ -4741,6 +4777,7 @@ components:
         - USER_INVITED
         - USER_ACTIVATED
         - PROJECT_CREATED
+        - PROJECT_ARCHIVED
         - MEMBER_ADDED
         - MEMBER_UPDATED
         - MEMBER_REMOVED

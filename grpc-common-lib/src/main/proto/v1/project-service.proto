@@ -18,6 +18,7 @@ enum ProjectRole {
 }
 
 service ProjectService {
+  rpc ArchiveProject(ArchiveProjectRequest) returns (ProjectResponse);
   rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
   rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
   rpc UpdateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
@@ -300,6 +301,9 @@ message CheckProjectMemberRoleResponse {
    * Существует ли проект.
    */
   bool project_exists = 3;
+  // Presence confirms that the server supports archive-aware write authorization.
+  optional bool project_archived = 4;
+
 }
 
 /**
@@ -445,4 +449,10 @@ message ProjectMemberStats {
 }
 message GetProjectMemberStatsBatchResponse {
   repeated ProjectMemberStats items = 1;
+}
+
+message ArchiveProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
 }

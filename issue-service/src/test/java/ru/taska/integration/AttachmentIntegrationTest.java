@@ -99,7 +99,7 @@ class AttachmentIntegrationTest extends AbstractIT {
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
                         .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
                         .setIsMember(true)
-                        .setProjectExists(true)
+                        .setProjectExists(true).setProjectArchived(false)
                         .build()));
     }
 

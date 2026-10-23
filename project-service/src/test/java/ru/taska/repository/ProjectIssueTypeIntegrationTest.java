@@ -69,7 +69,7 @@ class ProjectIssueTypeIntegrationTest {
         UUID project = project("FRESH");
         admin(project);
         repository.seedDefaults(project).as(tx::transactional).block();
-        var service = new ProjectIssueTypeService(repository, null, null);
+        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
         var created = service.create(project, actor, "REQUEST", "Заявка", "teal", "headset", 40)
                 .as(tx::transactional).block();
         assertThat(created.name()).isEqualTo("Заявка");
@@ -93,7 +93,7 @@ class ProjectIssueTypeIntegrationTest {
         repository.delete(project, "STORY").block();
         var issues = mock(GrpcIssueServiceClient.class);
         when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues);
+        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
         var results = Flux.merge(
                 service.delete(project, actor, "TASK", "r1", "n").as(tx::transactional).materialize(),
                 service.delete(project, actor, "BUG", "r2", "n").as(tx::transactional).materialize())
@@ -145,7 +145,7 @@ class ProjectIssueTypeIntegrationTest {
         repository.seedDefaults(project).block();
         var issues = mock(GrpcIssueServiceClient.class);
         when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues);
+        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
         service.update(project, actor, "BUG", null, null, null, 0).as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("BUG");
         service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();

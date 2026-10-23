@@ -47,7 +47,7 @@ public class WorklogServiceImpl implements WorklogService {
                 .then(findActiveIssue(requestId, nodeId, issueId))
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().addWorklogRoles();
-                    return projectRoleChecker.checkProjectRole(
+                    return projectRoleChecker.checkProjectWriteRole(
                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
                     );
 
@@ -76,7 +76,7 @@ public class WorklogServiceImpl implements WorklogService {
                                     issueProperties.allowedRoles().manageWorklogRoles();
 
                             return validateWorklogBelongsToIssue(requestId, nodeId, issueId, worklog)
-                                    .then(projectRoleChecker.checkProjectRole(
+                                    .then(projectRoleChecker.checkProjectWriteRole(
                                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles));
                         })
                         .then(Mono.defer(() ->
@@ -116,7 +116,7 @@ public class WorklogServiceImpl implements WorklogService {
                             issueProperties.allowedRoles().manageWorklogRoles();
 
                     return validateWorklogBelongsToIssue(requestId, nodeId, issueId,  worklog)
-                            .then(projectRoleChecker.checkProjectRole(requestId, nodeId, worklog.getProjectId(), actorUserId, allowedRoles)
+                            .then(projectRoleChecker.checkProjectWriteRole(requestId, nodeId, worklog.getProjectId(), actorUserId, allowedRoles)
                             .then(worklogExecutor.executeDelete(requestId, nodeId, issueId, worklogId, actorUserId)));
                 });
     }

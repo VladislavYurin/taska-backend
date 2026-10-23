@@ -54,7 +54,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 .thenReturn(allowedRoles);
 
         Mockito.lenient()
-                .when(projectRoleChecker.checkProjectRole(
+                .when(projectRoleChecker.checkProjectWriteRole(
                         localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles)
                 )
                 .thenReturn(Mono.empty());
@@ -95,7 +95,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
                 .verify();
 
         Mockito.verify(issueProperties.allowedRoles()).deleteIssueRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles
         );
         Mockito.verify(issueRepository).softDeleteAndReturn(localIssueId);
@@ -134,7 +134,7 @@ public class DeleteIssueTest extends IssueServiceImplTest {
         Mockito.when(issueRepository.findActiveByIdForUpdate(localIssueId))
                 .thenReturn(Mono.just(mockIssue));
         DomainException failure = new DomainException(status, "Authorization failed");
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         localRequestId, localNodeId, PROJECT_ID, localActorUserId, allowedRoles))
                 .thenReturn(Mono.error(failure));
 

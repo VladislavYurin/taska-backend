@@ -59,7 +59,7 @@ class BoardWorkflowStatusIntegrationTest extends AbstractIT {
         }
         when(projectService.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder().setIsMember(true)
-                        .setProjectExists(true).setRole(ProjectRole.PROJECT_ROLE_MEMBER).build()));
+                        .setProjectExists(true).setProjectArchived(false).setRole(ProjectRole.PROJECT_ROLE_MEMBER).build()));
     }
 
     static List<Integer> pageLimits() {

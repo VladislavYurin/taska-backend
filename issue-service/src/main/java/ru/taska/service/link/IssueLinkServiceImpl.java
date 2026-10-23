@@ -100,7 +100,7 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .flatMap(projectId -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueLinksRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                             .thenReturn(projectId);
                 })
                 .flatMap(projectId ->
@@ -144,7 +144,7 @@ public class IssueLinkServiceImpl implements IssueLinkService {
                 .flatMap(link -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueLinksRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, link.getProjectId(), actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, link.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(link);
                 })
                 .flatMap(link ->

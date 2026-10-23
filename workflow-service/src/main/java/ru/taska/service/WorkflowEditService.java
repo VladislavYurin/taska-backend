@@ -105,7 +105,7 @@ public class WorkflowEditService {
 
     private Mono<EditableWorkflow> loadEditableWorkflow(String requestId, String nodeId, UUID actorUserId,
                                                         UUID projectId, UUID workflowId) {
-        return projectRoleChecker.checkProjectRole(
+        return projectRoleChecker.checkProjectWriteRole(
                         requestId,
                         nodeId,
                         projectId,

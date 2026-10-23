@@ -84,6 +84,10 @@ class IssueLinkServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         issue = Issue.builder()
                 .id(SOURCE_ISSUE_ID)
                 .projectId(PROJECT_ID)
@@ -213,7 +217,7 @@ class IssueLinkServiceImplTest {
         Mockito.verify(issueRepository).findIssueLinkInfo(SOURCE_ISSUE_ID, TARGET_ISSUE_ID);
         Mockito.verify(properties).allowedRoles();
         Mockito.verify(allowedRoles).createIssueLinksRoles();
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),

@@ -82,7 +82,7 @@ class IssueTransitionServiceImplTest {
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
@@ -127,7 +127,7 @@ class IssueTransitionServiceImplTest {
                 .findActiveById(ISSUE_ID);
 
         Mockito.verify(projectRoleChecker, Mockito.times(1))
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verify(validator, Mockito.times(1))
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
@@ -180,7 +180,7 @@ class IssueTransitionServiceImplTest {
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
@@ -205,7 +205,7 @@ class IssueTransitionServiceImplTest {
                 .findActiveById(ISSUE_ID);
 
         Mockito.verify(projectRoleChecker, Mockito.times(1))
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verifyNoMoreInteractions(validator, executor, issueRepository);
     }
@@ -227,7 +227,7 @@ class IssueTransitionServiceImplTest {
         Mockito.when(issueProperties.allowedRoles().issueTransitionRoles())
                 .thenReturn(allowedRoles);
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
@@ -278,7 +278,7 @@ class IssueTransitionServiceImplTest {
                 .findActiveById(ISSUE_ID);
 
         Mockito.verify(projectRoleChecker, Mockito.times(1))
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles);
 
         Mockito.verify(validator, Mockito.times(1))
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);

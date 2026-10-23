@@ -160,6 +160,9 @@ enum NotificationKind {
    * Уведомление о разблокировке пользователя
    */
   NOTIFICATION_KIND_ISSUE_ATTACHMENT_DELETED = 22;
+  // Project archived; existing notification enum values remain unchanged.
+  NOTIFICATION_KIND_PROJECT_ARCHIVED = 23;
+
 }
 
 /**

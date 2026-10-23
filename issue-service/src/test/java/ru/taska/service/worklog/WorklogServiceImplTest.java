@@ -72,6 +72,10 @@ class WorklogServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         issue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
@@ -101,7 +105,7 @@ class WorklogServiceImplTest {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.addWorklogRoles()).thenReturn(Set.of(ProjectRole.ADMIN, ProjectRole.MEMBER));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeAdd(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, dto))
                 .thenReturn(Mono.just(worklog));
@@ -114,7 +118,7 @@ class WorklogServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, MEMBER_ID,
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, MEMBER_ID,
                 Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
         Mockito.verify(worklogExecutor).executeAdd(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, dto);
     }
@@ -182,7 +186,7 @@ class WorklogServiceImplTest {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.addWorklogRoles()).thenReturn(Collections.emptySet());
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Permission denied")));
 
         StepVerifier.create(worklogService.addIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, dto))
@@ -207,7 +211,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(worklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.updateWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeUpdate(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, MEMBER_ID, dto))
                 .thenReturn(Mono.just(worklog));
@@ -235,7 +239,7 @@ class WorklogServiceImplTest {
         Mockito.when(allowedRoles.manageWorklogRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
 
         ArgumentCaptor<Set<ProjectRole>> rolesCaptor = ArgumentCaptor.forClass(Set.class);
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), rolesCaptor.capture()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), rolesCaptor.capture()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Permission denied")));
 
         StepVerifier.create(worklogService.updateIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, OTHER_MEMBER_ID, dto))
@@ -259,7 +263,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(worklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.manageWorklogRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeUpdate(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, ADMIN_ID, dto))
                 .thenReturn(Mono.just(worklog));
@@ -281,7 +285,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(foreignWorklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.updateWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(worklogService.updateIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, MEMBER_ID, dto))
@@ -358,7 +362,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(worklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.deleteWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeDelete(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, MEMBER_ID))
                 .thenReturn(Mono.just(worklog));
@@ -377,7 +381,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(worklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.manageWorklogRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Permission denied")));
         Mockito.when(worklogExecutor.executeDelete(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(Mono.empty());
@@ -397,7 +401,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(worklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.manageWorklogRoles()).thenReturn(Set.of(ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeDelete(REQUEST_ID, NODE_ID, ISSUE_ID, WORKLOG_ID, ADMIN_ID))
                 .thenReturn(Mono.just(worklog));
@@ -415,7 +419,7 @@ class WorklogServiceImplTest {
         Mockito.when(worklogRepository.findActiveById(WORKLOG_ID)).thenReturn(Mono.just(foreignWorklog));
         Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
         Mockito.when(allowedRoles.deleteWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER, ProjectRole.ADMIN));
-        Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
         Mockito.when(worklogExecutor.executeDelete(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(Mono.empty());

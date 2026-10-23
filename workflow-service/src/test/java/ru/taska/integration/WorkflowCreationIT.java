@@ -99,7 +99,7 @@ class WorkflowCreationIT extends AbstractIT {
 
     @BeforeEach
     void stubRoleChecker() {
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),

@@ -93,6 +93,7 @@ public interface ProjectMemberMapper {
                 .setRole(this.toGrpcRole(dto.role()))
                 .setIsMember(dto.isMember())
                 .setProjectExists(dto.isProjectExists())
+                .setProjectArchived(dto.projectArchived())
                 .build();
     }
 

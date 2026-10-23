@@ -152,7 +152,7 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
         Mockito.verifyNoInteractions(executor);
     }
@@ -186,7 +186,7 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
         Mockito.verify(executor).executePatch(
                 Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(ISSUE_ID),
@@ -291,7 +291,7 @@ class IssuePatchServiceImplTest {
                 .verify();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
         Mockito.verifyNoInteractions(executor);
     }
@@ -309,7 +309,7 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
     }
 
@@ -328,9 +328,9 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, NEW_ASSIGNEE_ID, ASSIGN_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, NEW_ASSIGNEE_ID, ASSIGN_ROLES);
         Mockito.verify(executor).executePatch(
                 Mockito.anyString(), Mockito.anyString(), Mockito.any(UUID.class),
                 Mockito.any(UUID.class), Mockito.anyInt(), Mockito.any(IssuePatch.class));
@@ -350,9 +350,9 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verify(projectRoleChecker, Mockito.times(1))
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
     }
 
@@ -370,9 +370,9 @@ class IssuePatchServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, UPDATE_ROLES);
         Mockito.verify(projectRoleChecker)
-                .checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
+                .checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, ASSIGN_ROLES);
         Mockito.verifyNoMoreInteractions(projectRoleChecker);
     }
 
@@ -456,7 +456,7 @@ class IssuePatchServiceImplTest {
     }
 
     private void stubRoleCheck(UUID userId, Set<ProjectRole> roles, Mono<Void> result) {
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, userId, roles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, userId, roles))
                 .thenReturn(result);
     }
 

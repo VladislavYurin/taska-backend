@@ -94,7 +94,7 @@ class WorkflowEditServiceTest {
                 .active(true)
                 .build();
 
-        lenient().when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), anySet()))
+        lenient().when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), anySet()))
                 .thenReturn(Mono.empty());
         // Первое чтение — перед изменением, второе — после атомарного увеличения версии.
         lenient().when(workflowRepository.findById(WORKFLOW_ID))
@@ -133,7 +133,7 @@ class WorkflowEditServiceTest {
         Assertions.assertEquals("CODE_REVIEW", saved.getValue().getStatusKey());
         Assertions.assertEquals(StatusCategory.IN_PROGRESS, saved.getValue().getCategory());
         Assertions.assertEquals(25, saved.getValue().getSortOrder());
-        verify(projectRoleChecker).checkProjectRole(eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID),
+        verify(projectRoleChecker).checkProjectWriteRole(eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID),
                 eq(Set.of(ProjectRole.ADMIN)));
     }
 
@@ -224,7 +224,7 @@ class WorkflowEditServiceTest {
 
     @Test
     void addStatus_RoleNotAllowed_ShouldNotReadWorkflow() {
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), anySet()))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), anySet()))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Not allowed role")));
 
         StepVerifier.create(service.addStatus(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, WORKFLOW_ID,

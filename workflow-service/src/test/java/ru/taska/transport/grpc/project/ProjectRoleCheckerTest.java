@@ -50,7 +50,7 @@ class ProjectRoleCheckerTest {
         var response = CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_ADMIN)
                 .setIsMember(true)
-                .setProjectExists(true)
+                .setProjectExists(true).setProjectArchived(false)
                 .build();
 
         Mockito.when(client.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID))
@@ -89,7 +89,7 @@ class ProjectRoleCheckerTest {
     @DisplayName("Бросает исключение, если пользователь не является участником проекта")
     void checkProjectRole_shouldThrowException_whenUserNotProjectMember() {
         var response = CheckProjectMemberRoleResponse.newBuilder()
-                .setProjectExists(true)
+                .setProjectExists(true).setProjectArchived(false)
                 .setIsMember(false)
                 .build();
 
@@ -112,7 +112,7 @@ class ProjectRoleCheckerTest {
         var response = CheckProjectMemberRoleResponse.newBuilder()
                 .setRole(ru.taska.api.project.v1.ProjectRole.PROJECT_ROLE_VIEWER)
                 .setIsMember(true)
-                .setProjectExists(true)
+                .setProjectExists(true).setProjectArchived(false)
                 .build();
 
         Mockito.when(client.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, USER_ID))

@@ -21,7 +21,7 @@ import ru.taska.transport.grpc.client.GrpcAuthServiceClient;
 class ProjectMemberStatsTest {
     private final ProjectMemberRepository repository = mock(ProjectMemberRepository.class);
     private final GrpcAuthServiceClient auth = mock(GrpcAuthServiceClient.class);
-    private final ProjectMemberServiceImpl service = new ProjectMemberServiceImpl(repository, null, null, null, auth);
+    private final ProjectMemberServiceImpl service = new ProjectMemberServiceImpl(repository, null, null, null, auth, null);
 
     @Test
     void allProjectsShareOneProfileRequestAndMissingProfilesKeepMembership() {

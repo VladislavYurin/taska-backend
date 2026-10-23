@@ -59,7 +59,7 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+        return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
 
                 .then(Mono.defer(() -> validateLabelNameUniqueness(requestDto.projectId(), requestDto.name())))
                 .then(Mono.defer(() -> {
@@ -87,7 +87,7 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
+        return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
                 .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
                 .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.NOT_FOUND, "Label not found:" + requestDto.labelId()
@@ -124,7 +124,7 @@ public class LabelServiceImpl implements LabelService {
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteProjectLabelRoles();
 
-        return projectRoleChecker.checkProjectRole(
+        return projectRoleChecker.checkProjectWriteRole(
                         requestId, nodeId, requestDto.projectId(), requestDto.actorUserId(), allowedRoles)
                 .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
                         .switchIfEmpty(Mono.error(new DomainException(
@@ -206,7 +206,7 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                        projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
                                 .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId())
                                         .switchIfEmpty(Mono.error(new DomainException(
                                                 DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()
@@ -265,7 +265,7 @@ public class LabelServiceImpl implements LabelService {
                         DomainStatus.NOT_FOUND, "Issue not found: " + requestDto.issueId()
                 )))
                 .flatMap(issue ->
-                        projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
+                        projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), requestDto.actorUserId(), allowedRoles)
                                 .then(projectLabelsRepository.findByIdAndDeletedAtIsNull(requestDto.labelId()))
                                 .switchIfEmpty(Mono.error(new DomainException(
                                         DomainStatus.NOT_FOUND, "Label not found: " + requestDto.labelId()

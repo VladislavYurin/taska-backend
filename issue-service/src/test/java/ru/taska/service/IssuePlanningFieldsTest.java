@@ -44,7 +44,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(idempotencyKeyRepository.findByUserIdAndKey(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                .thenReturn(Mono.empty());
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                        org.mockito.ArgumentMatchers.anySet()))
@@ -58,7 +58,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
     @DisplayName("Создание задачи без planning fields — все поля null")
     @Test
     void createIssue_withoutPlanningFields_success() {
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
                        eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(REPORTER_ID), eq(createRoles)))
                .thenReturn(Mono.empty());
         Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID)))
@@ -97,7 +97,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
     @DisplayName("Создание задачи с валидными planning fields — все поля проставлены")
     @Test
     void createIssue_withValidPlanningFields_success() {
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
                        eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(REPORTER_ID), eq(createRoles)))
                .thenReturn(Mono.empty());
         Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID)))
@@ -151,7 +151,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
         existingIssue.setRemainingEstimateMinutes(null);
 
         when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        when(projectRoleChecker.checkProjectRole(
+        when(projectRoleChecker.checkProjectWriteRole(
                 eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID), eq(updateRoles)))
                 .thenReturn(Mono.empty());
         when(issueRepository.save(any(Issue.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -200,7 +200,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
         existingIssue.setRemainingEstimateMinutes(REMAINING_ESTIMATE_MINUTES);
 
         when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        when(projectRoleChecker.checkProjectRole(
+        when(projectRoleChecker.checkProjectWriteRole(
                 eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID), eq(updateRoles)))
                 .thenReturn(Mono.empty());
         when(issueRepository.save(any(Issue.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
@@ -239,7 +239,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
         existingIssue.setDueDate(DUE_DATE);
 
         when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        when(projectRoleChecker.checkProjectRole(
+        when(projectRoleChecker.checkProjectWriteRole(
                 eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID), eq(updateRoles)))
                 .thenReturn(Mono.empty());
 
@@ -273,7 +273,7 @@ class IssuePlanningFieldsTest extends IssueServiceImplTest {
         existingIssue.setStoryPoints(STORY_POINTS);
 
         when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
-        when(projectRoleChecker.checkProjectRole(
+        when(projectRoleChecker.checkProjectWriteRole(
                 eq(REQUEST_ID), eq(NODE_ID), eq(PROJECT_ID), eq(ACTOR_USER_ID), eq(updateRoles)))
                 .thenReturn(Mono.empty());
         when(issueRepository.save(any(Issue.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));

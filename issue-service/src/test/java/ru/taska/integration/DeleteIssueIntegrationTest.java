@@ -171,7 +171,7 @@ class DeleteIssueIntegrationTest extends AbstractIT {
     private void allowRole(ProjectRole role, boolean member) {
         when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
-                        .setProjectExists(true).setIsMember(member).setRole(role).build()));
+                        .setProjectExists(true).setProjectArchived(false).setIsMember(member).setRole(role).build()));
     }
 
     private Issue createIssue() {

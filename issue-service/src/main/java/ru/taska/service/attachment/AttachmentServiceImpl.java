@@ -43,7 +43,7 @@ public class AttachmentServiceImpl implements AttachmentService {
             String contentType,
             long sizeBytes
     ) {
-        return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
+        return checkUserHasWriteRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
                 .then(storageClient.createPresignedUploadUrl(contentType, sizeBytes));
     }
@@ -58,7 +58,7 @@ public class AttachmentServiceImpl implements AttachmentService {
             String fileName,
             String contentType
     ) {
-        return checkUserHasRoleForIssue(requestId, nodeId, issueId, actorUserId,
+        return checkUserHasWriteRoleForIssue(requestId, nodeId, issueId, actorUserId,
                 issueProperties.allowedRoles().uploadAttachmentRoles())
                 .flatMap(issue -> checkObjectExistsInStorage(requestId, nodeId, objectKey)
                         .then(storageClient.validateAndGetUploadedObjectMetadata(objectKey))
@@ -110,7 +110,7 @@ public class AttachmentServiceImpl implements AttachmentService {
                     var roles = attachment.getUploadedBy().equals(actorUserId)
                             ? issueProperties.allowedRoles().deleteOwnAttachmentRoles()
                             : issueProperties.allowedRoles().deleteAttachmentRoles();
-                    return checkUserHasRoleForIssue(requestId, nodeId, attachment.getIssueId(), actorUserId, roles)
+                    return checkUserHasWriteRoleForIssue(requestId, nodeId, attachment.getIssueId(), actorUserId, roles)
                             .flatMap(issue -> transactionExecutor.deleteAttachment(
                                     requestId, nodeId, actorUserId, attachment, issue));
                 });
@@ -161,6 +161,12 @@ public class AttachmentServiceImpl implements AttachmentService {
      * @param allowedRoles набор допустимых ролей для выполнения операции.
      * @return Mono<Issue> с задачей при наличии прав, или ошибка.
      */
+    private Mono<Issue> checkUserHasWriteRoleForIssue(String requestId, String nodeId, UUID issueId, UUID actorUserId,
+                                                     Set<ProjectRole> allowedRoles) {
+        return findActiveIssue(requestId, nodeId, issueId).flatMap(issue -> projectRoleChecker.checkProjectWriteRole(
+                requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles).thenReturn(issue));
+    }
+
     private Mono<Issue> checkUserHasRoleForIssue(
             String requestId, String nodeId, UUID issueId, UUID actorUserId,
             Set<ProjectRole> allowedRoles) {

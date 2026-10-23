@@ -59,7 +59,7 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().issueTransitionRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(issue);
                 })
                 .flatMap(issue ->

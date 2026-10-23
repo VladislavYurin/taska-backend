@@ -53,6 +53,14 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
     @MockitoBean JavaMailSender mail;
     private UUID user;
 
+    @Test
+    void archivedProjectNotificationTypeIsAcceptedByDatabase() {
+        var saved=notifications.save(Notification.builder().userId(user).notificationType(NotificationType.PROJECT_ARCHIVED)
+                .title("Project archived").body("Business project was archived").projectId(UUID.randomUUID())
+                .sourceEventId(UUID.randomUUID()).createdAt(Instant.now()).build()).block(WAIT);
+        assertThat(notifications.findById(saved.getId()).block(WAIT).getNotificationType()).isEqualTo(NotificationType.PROJECT_ARCHIVED);
+    }
+
     @BeforeEach
     void prepare() {
         sql("DELETE FROM taska.notification_deliveries");

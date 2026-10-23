@@ -190,7 +190,7 @@ public class IssueWatcherServiceImpl implements IssueWatcherService {
                 ? issueProperties.allowedRoles().watchIssueRoles()
                 : issueProperties.allowedRoles().manageWatchersRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles);
+        return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, actorUserId, allowedRoles);
     }
 
     private Mono<Issue> findActiveIssue(String requestId, String nodeId, UUID issueId) {

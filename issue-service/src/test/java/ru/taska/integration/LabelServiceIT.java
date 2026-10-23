@@ -99,7 +99,7 @@ class LabelServiceIT extends AbstractIT {
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
                         .setRole(role)
                         .setIsMember(true)
-                        .setProjectExists(true)
+                        .setProjectExists(true).setProjectArchived(false)
                         .build()));
     }
 

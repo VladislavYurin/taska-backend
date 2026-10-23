@@ -49,6 +49,9 @@ class ProjectMemberServiceImplTest {
     @Mock
     private GrpcAuthServiceClient grpcAuthServiceClient;
 
+    @Mock
+    private ru.taska.service.ProjectWriteGuard writeGuard;
+
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;
 
@@ -67,6 +70,8 @@ class ProjectMemberServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(writeGuard.check(Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+
         mockProjectMember = ProjectMember.builder()
                 .userId(projectMemberId)
                 .projectId(projectId)
@@ -98,7 +103,7 @@ class ProjectMemberServiceImplTest {
                 projectRepository,
                 outboxEventService,
                 projectMemberValidator,
-                grpcAuthServiceClient
+                grpcAuthServiceClient, writeGuard
         );
     }
 

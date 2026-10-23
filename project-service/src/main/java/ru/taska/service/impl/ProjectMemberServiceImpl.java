@@ -41,12 +41,13 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final OutboxEventService outboxEventService;
     private final ProjectMemberValidator projectMemberValidator;
     private final GrpcAuthServiceClient authServiceClient;
+    private final ru.taska.service.ProjectWriteGuard writeGuard;
 
     @Override
     @Transactional
     public Mono<ProjectMember> addProjectMember(String requestId, String nodeId, UUID addedMemberId,
                                                 UUID actorUserId, ProjectRole role, UUID projectId) {
-        return projectMemberValidator.validateBeforeAdd(requestId, nodeId, actorUserId, addedMemberId, projectId)
+        return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeAdd(requestId, nodeId, actorUserId, addedMemberId, projectId)))
                 .flatMap(b -> {
                     ProjectMember addedMember = ProjectMember.builder()
                             .userId(addedMemberId)
@@ -69,7 +70,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     @Transactional
     public Mono<ProjectMember> rmProjectMember(String requestId, String nodeId, UUID deletedMemberId,
                                                UUID actorUserId, UUID projectId) {
-        return projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, deletedMemberId, projectId)
+        return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, deletedMemberId, projectId)))
                 .flatMap( b -> {
                         ProjectMember deletedMember = ProjectMember.builder()
                                 .userId(deletedMemberId)
@@ -89,7 +90,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     @Transactional()
     public Mono<ProjectMember> changeProjectMemberRole(String requestId, String nodeId, UUID changedMemberId,
                                                        UUID actorUserId, ProjectRole role, UUID projectId) {
-    return projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, changedMemberId, projectId)
+    return writeGuard.check(projectId, actorUserId).then(Mono.defer(() -> projectMemberValidator.validateBeforeModify(requestId, nodeId, actorUserId, changedMemberId, projectId)))
             .flatMap(b -> {
                 ProjectMember changedMember = ProjectMember.builder()
                         .userId(changedMemberId)
@@ -114,9 +115,9 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     ) {
         return projectRepository.findById(projectId)
                 .flatMap(project -> projectMemberRepository.findByUserIdAndProjectId(userId, projectId)
-                        .map(pm -> this.createProjectMembershipInfoDto(pm.getRole(), true, true))
+                        .map(pm -> new ProjectMembershipInfoDto(pm.getRole(), true, true, project.getArchivedAt() != null))
                         .switchIfEmpty(Mono.defer(() -> Mono.just(
-                                this.createProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, true)
+                                new ProjectMembershipInfoDto(ProjectRole.UNSPECIFIED, false, true, project.getArchivedAt() != null)
                         )))
                 )
                 .switchIfEmpty(Mono.defer(() -> Mono.just(

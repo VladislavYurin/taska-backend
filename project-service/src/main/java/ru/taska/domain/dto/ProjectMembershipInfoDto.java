@@ -7,6 +7,10 @@ import ru.taska.domain.ProjectRole;
 public record ProjectMembershipInfoDto(
         ProjectRole role,
         Boolean isMember,
-        Boolean isProjectExists
+        Boolean isProjectExists,
+        boolean projectArchived
 ) {
+    public ProjectMembershipInfoDto(ProjectRole role, Boolean isMember, Boolean isProjectExists) {
+        this(role, isMember, isProjectExists, false);
+    }
 }

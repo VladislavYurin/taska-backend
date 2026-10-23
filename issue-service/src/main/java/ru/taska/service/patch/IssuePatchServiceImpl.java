@@ -47,7 +47,7 @@ public class IssuePatchServiceImpl implements IssuePatchService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(issue);
                 })
                 .flatMap(issue -> {
@@ -91,11 +91,11 @@ public class IssuePatchServiceImpl implements IssuePatchService {
         }
 
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().assignIssueRoles();
-        Mono<Void> actorCheck = projectRoleChecker.checkProjectRole(
+        Mono<Void> actorCheck = projectRoleChecker.checkProjectWriteRole(
                 requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles);
         Mono<Void> assigneeCheck = newAssigneeId == null || newAssigneeId.equals(actorUserId)
                 ? Mono.empty()
-                : projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), newAssigneeId, allowedRoles);
+                : projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), newAssigneeId, allowedRoles);
 
         return actorCheck.then(assigneeCheck);
     }

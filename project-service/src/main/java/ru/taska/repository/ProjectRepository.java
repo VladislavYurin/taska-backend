@@ -33,7 +33,7 @@ public interface ProjectRepository extends R2dbcRepository<Project, UUID> {
             pm.role AS role
         FROM taska.projects p
         JOIN taska.project_members pm ON p.id = pm.project_id
-        WHERE pm.user_id = :userId
+        WHERE pm.user_id = :userId AND p.archived_at IS NULL
     """)
     Flux<ProjectCheckMembershipDto> findAllByMemberUserId(UUID userId);
 

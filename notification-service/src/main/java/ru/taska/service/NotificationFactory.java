@@ -72,6 +72,7 @@ public class NotificationFactory {
             case ISSUE_LINK_DELETED -> buildIssueLinkDeleted(event, payload, eventId);
             case USER_INVITED -> buildUserInvited(event, eventId);
             case PROJECT_CREATED -> buildProjectCreated(event, payload, eventId);
+            case PROJECT_ARCHIVED -> buildProjectArchived(event, payload);
             case MEMBER_ADDED -> buildMemberAdded(event, payload, eventId);
             case MEMBER_UPDATED -> buildMemberUpdated(event, payload, eventId);
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
@@ -93,6 +94,17 @@ public class NotificationFactory {
                 notifications.size(), type, eventId);
 
         return notifications;
+    }
+
+    private List<Notification> buildProjectArchived(TaskaEvent event, JsonNode payload) {
+        UUID projectId = extractUuid(payload, "projectId");
+        if (projectId == null) return List.of();
+        UUID actor = extractUuid(payload, "actorUserId");
+        String name = payload.hasNonNull("projectName") ? payload.get("projectName").asString() : "";
+        if (name.isBlank()) name = payload.hasNonNull("projectKey") ? payload.get("projectKey").asString() : "Project";
+        final String displayName = name;
+        return resolveRecipients(actor, extractUuidList(payload, "memberIds"), List.of()).stream()
+                .map(user -> notificationMapper.toProjectArchived(event, user, projectId, displayName)).toList();
     }
 
     private List<Notification> buildIssueAssigned(TaskaEvent event, JsonNode payload, UUID eventId) {

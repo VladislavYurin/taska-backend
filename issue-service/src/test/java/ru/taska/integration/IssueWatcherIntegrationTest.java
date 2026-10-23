@@ -52,6 +52,10 @@ class IssueWatcherIntegrationTest extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         actorId = UUID.randomUUID();
         issue = issueRepository.save(Issue.builder()
                 .projectId(UUID.randomUUID()).issueNumber(1).issueKey("TEST-" + UUID.randomUUID())

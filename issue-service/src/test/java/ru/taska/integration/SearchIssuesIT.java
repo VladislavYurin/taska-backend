@@ -77,7 +77,7 @@ class SearchIssuesIT extends AbstractIT {
                 .thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder()
                         .setRole(ProjectRole.PROJECT_ROLE_MEMBER)
                         .setIsMember(true)
-                        .setProjectExists(true)
+                        .setProjectExists(true).setProjectArchived(false)
                         .build()));
 
         Mockito.when(projectServiceStub.listMyProjects(Mockito.any(ru.taska.api.project.v1.ListMyProjectsRequest.class)))

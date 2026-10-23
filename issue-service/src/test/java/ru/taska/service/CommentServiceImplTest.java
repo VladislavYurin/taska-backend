@@ -99,6 +99,10 @@ class CommentServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         projectId = UUID.randomUUID();
         issueId = UUID.randomUUID();
         actorUserId = UUID.randomUUID();
@@ -206,7 +210,7 @@ class CommentServiceImplTest {
     @DisplayName("addComment: должен успешно добавить комментарий")
     void addComment_success() {
         // Arrange
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -235,7 +239,7 @@ class CommentServiceImplTest {
                 .expectNextMatches(savedComment -> savedComment.getId().equals(commentId))
                 .verifyComplete();
 
-        verify(projectRoleChecker).checkProjectRole(
+        verify(projectRoleChecker).checkProjectWriteRole(
                 eq(requestId), eq(nodeId), eq(projectId), eq(actorUserId), any(Set.class)
         );
         verify(issueRepository).findActiveByIdForUpdate(issueId);
@@ -288,7 +292,7 @@ class CommentServiceImplTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -335,7 +339,7 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -375,7 +379,7 @@ class CommentServiceImplTest {
         // Arrange
         String newBody = "Updated comment body";
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -421,7 +425,7 @@ class CommentServiceImplTest {
                 .deletedAt(Instant.now())
                 .build();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))
@@ -480,7 +484,7 @@ class CommentServiceImplTest {
         // Arrange
         UUID otherUserId = UUID.randomUUID();
 
-        when(projectRoleChecker.checkProjectRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
+        when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), any(Set.class)))
                 .thenReturn(Mono.empty());
 
         when(issueRepository.findActiveByIdForUpdate(issueId))

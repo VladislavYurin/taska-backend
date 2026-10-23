@@ -59,6 +59,10 @@ public class IssueLinkServiceIT extends AbstractIT {
 
     @BeforeEach
     void cleanDb() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         outboxEventRepository.deleteAll().block();
         issueHistoryRepository.deleteAll().block();
         issueLinkRepository.deleteAll().block();

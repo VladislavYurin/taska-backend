@@ -89,6 +89,10 @@ public class AttachmentTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anySet())).thenReturn(Mono.empty());
+
         AttachmentTransactionExecutor transactionExecutor = new AttachmentTransactionExecutor(
                 issueAttachmentRepository,issueWatcherRepository, issueHistoryService, outboxEventService, payloadSerializer);
         attachmentService = new AttachmentServiceImpl(issueProperties, issueRepository, issueAttachmentRepository,
@@ -129,7 +133,7 @@ public class AttachmentTest {
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
 
         Mockito.when(storageClient.createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES)).thenReturn(Mono.just(expectedResult));
@@ -144,7 +148,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles);
         Mockito.verify(storageClient).createPresignedUploadUrl(CONTENT_TYPE, SIZE_BYTES);
     }
@@ -171,7 +175,7 @@ public class AttachmentTest {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID))
                 .thenReturn(Mono.just(issue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
 
@@ -185,7 +189,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles);
     }
 
@@ -200,7 +204,7 @@ public class AttachmentTest {
         savedAttachment.setId(UUID.randomUUID());
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
         Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(OBJECT_KEY))
@@ -227,7 +231,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveById(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles);
         Mockito.verify(storageClient).objectExists(OBJECT_KEY);
         Mockito.verify(storageClient).validateAndGetUploadedObjectMetadata(OBJECT_KEY);
@@ -242,7 +246,7 @@ public class AttachmentTest {
     @Test
     void testConfirmUpload_ObjectNotFound() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(false));
 
@@ -264,7 +268,7 @@ public class AttachmentTest {
         DomainException validationError = new DomainException(DomainStatus.OUT_OF_RANGE, "File too large");
 
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(storageClient.objectExists(OBJECT_KEY)).thenReturn(Mono.just(true));
         Mockito.when(storageClient.validateAndGetUploadedObjectMetadata(OBJECT_KEY))
@@ -305,7 +309,7 @@ public class AttachmentTest {
     @Test
     void testConfirmUpload_PermissionDenied() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
 
@@ -318,7 +322,7 @@ public class AttachmentTest {
                 })
                 .verify();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(
                 REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedUploadRoles);
         Mockito.verifyNoInteractions(issueAttachmentRepository, storageClient);
     }
@@ -511,7 +515,7 @@ public class AttachmentTest {
         Mockito.when(issueAttachmentRepository.findByIdAndDeletedAtIsNull(ATTACHMENT_ID))
                 .thenReturn(Mono.just(attachment));
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
                 .thenReturn(Mono.empty());
         IssueAttachment deletedAttachment = IssueAttachment.createNewAttachment(
                 ISSUE_ID, ACTOR_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
@@ -534,7 +538,7 @@ public class AttachmentTest {
                 .verify();
 
         Mockito.verify(issueAttachmentRepository).findByIdAndDeletedAtIsNull(ATTACHMENT_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles);
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles);
         Mockito.verify(issueAttachmentRepository).softDelete(ATTACHMENT_ID);
     }
 
@@ -553,7 +557,7 @@ public class AttachmentTest {
         Mockito.when(issueAttachmentRepository.findByIdAndDeletedAtIsNull(ATTACHMENT_ID))
                 .thenReturn(Mono.just(attachment));
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles))
                 .thenReturn(Mono.empty());
         IssueAttachment deletedAttachment = IssueAttachment.createNewAttachment(
                 ISSUE_ID, OTHER_USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
@@ -575,7 +579,7 @@ public class AttachmentTest {
                 .expectComplete()
                 .verify();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
         Mockito.verify(issueAttachmentRepository).softDelete(ATTACHMENT_ID);
     }
 
@@ -592,7 +596,7 @@ public class AttachmentTest {
         Mockito.when(issueAttachmentRepository.findByIdAndDeletedAtIsNull(ATTACHMENT_ID))
                 .thenReturn(Mono.just(attachment));
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Access denied")));
 
         StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, ATTACHMENT_ID, ACTOR_USER_ID))
@@ -603,7 +607,7 @@ public class AttachmentTest {
                 })
                 .verify();
 
-        Mockito.verify(projectRoleChecker).checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteRoles);
         Mockito.verify(issueAttachmentRepository, Mockito.never()).softDelete(Mockito.any());
     }
 
@@ -620,7 +624,7 @@ public class AttachmentTest {
         Mockito.when(issueAttachmentRepository.findByIdAndDeletedAtIsNull(ATTACHMENT_ID))
                 .thenReturn(Mono.just(attachment));
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
-        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, deleteOwnRoles))
                 .thenReturn(Mono.empty());
         Mockito.when(issueAttachmentRepository.softDelete(ATTACHMENT_ID))
                 .thenReturn(Mono.empty());

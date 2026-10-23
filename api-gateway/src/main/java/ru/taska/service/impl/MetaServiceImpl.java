@@ -96,6 +96,7 @@ public class MetaServiceImpl implements MetaService {
             case USER_INVITED -> "User invited";
             case USER_ACTIVATED -> "User activated";
             case PROJECT_CREATED -> "Project created";
+            case PROJECT_ARCHIVED -> "Project archived";
             case MEMBER_ADDED -> "Member added";
             case MEMBER_UPDATED -> "Member role changed";
             case MEMBER_REMOVED -> "Member removed";

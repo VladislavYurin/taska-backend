@@ -24,6 +24,7 @@ public class ProjectIssueTypeService {
     private final ProjectIssueTypeRepository repository;
     private final ProjectService projectService;
     private final GrpcIssueServiceClient issueClient;
+    private final ProjectWriteGuard writeGuard;
 
     public Flux<ProjectIssueType> list(UUID projectId, UUID actor, String requestId, String nodeId) {
         return projectService.getProject(requestId, nodeId, projectId, actor)
@@ -84,7 +85,7 @@ public class ProjectIssueTypeService {
                 .then(Mono.defer(() -> repository.lockActorRole(projectId, actor)))
                 .filter(role -> role == ProjectRole.ADMIN)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Project ADMIN role is required")))
-                .then();
+                .then(Mono.defer(() -> writeGuard.check(projectId, actor)));
     }
 
     private Mono<ProjectIssueType> requireType(UUID projectId, String code) {

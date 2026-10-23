@@ -35,7 +35,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
 
         Mockito.lenient().when(issueProperties.allowedRoles().assignIssueRoles()).thenReturn(allowedRoles);
 
-        Mockito.lenient().when(projectRoleChecker.checkProjectRole(
+        Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(
                 Mockito.anyString(),
                 Mockito.anyString(),
                 Mockito.eq(PROJECT_ID),
@@ -96,7 +96,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectWriteRole(
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );
@@ -143,7 +143,7 @@ public class AssignIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueProperties.allowedRoles()).assignIssueRoles();
-        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectRole(
+        Mockito.verify(projectRoleChecker, Mockito.times(2)).checkProjectWriteRole(
                 Mockito.anyString(), Mockito.anyString(), Mockito.eq(PROJECT_ID),
                 Mockito.any(), Mockito.eq(allowedRoles)
         );

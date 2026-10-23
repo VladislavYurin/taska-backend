@@ -54,7 +54,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -90,7 +90,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID),
                 Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
                 Mockito.any(Issue.class),
@@ -132,7 +132,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
 
         Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID)).thenReturn(Mono.just(existingIssue));
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                 Mockito.eq(REQUEST_ID),
                 Mockito.eq(NODE_ID),
                 Mockito.eq(PROJECT_ID),
@@ -149,7 +149,7 @@ public class UpdateIssueTest extends IssueServiceImplTest {
                 .verifyComplete();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
-        Mockito.verify(projectRoleChecker).checkProjectRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
+        Mockito.verify(projectRoleChecker).checkProjectWriteRole(Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID), Mockito.eq(PROJECT_ID), Mockito.eq(ACTOR_USER_ID), Mockito.eq(expectedRoles));
         Mockito.verify(payloadSerializer).createIssueUpdatedPayload(
                 Mockito.any(Issue.class),
                 Mockito.eq(ACTOR_USER_ID),

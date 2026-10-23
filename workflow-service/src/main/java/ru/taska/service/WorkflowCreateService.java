@@ -46,7 +46,7 @@ public class WorkflowCreateService {
 
     @Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
-        return projectRoleChecker.checkProjectRole(
+        return projectRoleChecker.checkProjectWriteRole(
                         requestId,
                         nodeId,
                         dto.getProjectId(),

@@ -36,6 +36,7 @@ import ru.taska.api.project.v1.UpdateProjectRequest;
 public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.ProjectServiceImplBase{
 
     private final GrpcProjectService grpcProjectService;
+    private final ProjectArchiveGrpcService archiveService;
     private final ProjectIssueTypeGrpcService issueTypeService;
 
 
@@ -140,4 +141,9 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
         return issueTypeService.delete(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectIssueType"));
     }
+    @Override
+    public Mono<ru.taska.api.project.v1.ProjectResponse> archiveProject(Mono<ru.taska.api.project.v1.ArchiveProjectRequest> request) {
+        return archiveService.archive(request).transform(GrpcExceptionHandler.withErrorHandling("archiveProject"));
+    }
+
 }

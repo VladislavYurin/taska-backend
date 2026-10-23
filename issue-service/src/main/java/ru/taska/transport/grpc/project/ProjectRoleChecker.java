@@ -45,6 +45,21 @@ public class ProjectRoleChecker {
                 );
     }
 
+
+    public Mono<Void> checkProjectWriteRole(String requestId, String nodeId, UUID projectId, UUID userId, Set<ProjectRole> allowedRoles) {
+        return client.checkProjectRole(requestId, nodeId, projectId, userId).flatMap(response -> {
+            // Do not disclose archive state to a non-member.
+            if (!response.getProjectExists() || !response.getIsMember()) {
+                return validateAccess(requestId, nodeId, projectId, userId, allowedRoles, response);
+            }
+            if (!response.hasProjectArchived()) {
+                return Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "Project service does not support archive-aware writes"));
+            }
+            if (response.getProjectArchived()) return Mono.error(ru.taska.exception.ProjectArchived.error());
+            return validateAccess(requestId, nodeId, projectId, userId, allowedRoles, response);
+        });
+    }
+
     private Mono<Void> validateAccess(
             String requestId,
             String nodeId,

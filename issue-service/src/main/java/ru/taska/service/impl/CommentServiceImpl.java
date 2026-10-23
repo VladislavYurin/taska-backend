@@ -64,7 +64,7 @@ public class CommentServiceImpl implements CommentService {
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();
 
-                    return checkPermissions(requestId, nodeId, projectId, authorUserId)
+                    return checkWritePermissions(requestId, nodeId, projectId, authorUserId)
                             .thenReturn(issue);
                 })
                 .flatMap(issue ->
@@ -118,7 +118,7 @@ public class CommentServiceImpl implements CommentService {
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();
 
-                    return checkPermissions(requestId, nodeId, projectId, actorUserId)
+                    return checkWritePermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
                 .flatMap(issue ->
@@ -171,7 +171,7 @@ public class CommentServiceImpl implements CommentService {
         return findIssueWithLock(requestId, nodeId, issueId)
                 .flatMap(issue -> {
                     UUID projectId = issue.getProjectId();
-                    return checkPermissions(requestId, nodeId, projectId, actorUserId)
+                    return checkWritePermissions(requestId, nodeId, projectId, actorUserId)
                             .thenReturn(issue);
                 })
                 .flatMap(issue ->
@@ -273,6 +273,10 @@ public class CommentServiceImpl implements CommentService {
     /**
      * Проверяет права пользователя в проекте.
      */
+    private Mono<Void> checkWritePermissions(String requestId, String nodeId, UUID projectId, UUID userId) {
+        return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, userId, issueProperties.allowedRoles().commentRoles());
+    }
+
     private Mono<Void> checkPermissions(String requestId, String nodeId, UUID projectId, UUID userId) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().commentRoles();
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, userId, allowedRoles);

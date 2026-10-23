@@ -106,7 +106,7 @@ public class IssueServiceImpl implements IssueService {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
         String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, reporterId, allowedRoles)
+        return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, reporterId, allowedRoles)
                 .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
                         .flatMap(keyEntity -> {
 
@@ -180,13 +180,13 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().assignIssueRoles();
 
-                    Mono<Void> actorCheck = projectRoleChecker.checkProjectRole(
+                    Mono<Void> actorCheck = projectRoleChecker.checkProjectWriteRole(
                             requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles
                     );
 
                     Mono<Void> assigneeCheck = actorUserId.equals(assigneeId)
                             ? Mono.empty()
-                            : projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), assigneeId, allowedRoles);
+                            : projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), assigneeId, allowedRoles);
 
                     return actorCheck
                             .then(assigneeCheck)
@@ -256,7 +256,7 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().updateIssueRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(issue);
                 })
                 .flatMap(updatingIssue -> {
@@ -331,7 +331,7 @@ public class IssueServiceImpl implements IssueService {
                 .flatMap(issue -> {
                     Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().deleteIssueRoles();
 
-                    return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
+                    return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .then(Mono.defer(() -> issueRepository.softDeleteAndReturn(issueId)));
                 })
                 .flatMap(deletedIssue -> {
