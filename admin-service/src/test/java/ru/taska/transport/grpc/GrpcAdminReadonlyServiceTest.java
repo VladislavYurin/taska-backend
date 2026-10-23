@@ -317,7 +317,8 @@ class GrpcAdminReadonlyServiceTest {
                 new AuditEntriesResponseDto(
                         null,
                         ACTOR_USER_ID,
-                        "actorLogin",
+                        "actorDisplayName",
+                        "admin@example.com",
                         "action",
                         "targetService",
                         "targetTable",
@@ -336,7 +337,7 @@ class GrpcAdminReadonlyServiceTest {
         ListAuditEntriesResponse expectedResponse = ListAuditEntriesResponse.newBuilder()
                 .addEntries(ListAuditEntry.newBuilder()
                         .setActorUserId(ACTOR_USER_ID.toString())
-                        .setActorLogin("actorLogin")
+                        .setActorDisplayName("actorDisplayName").setActorEmail("admin@example.com")
                         .setAction("action")
                         .setTargetService("targetService")
                         .setTargetTable("targetTable")

@@ -30,7 +30,8 @@ public class AuditLogMapper {
 
         auditLog.setRequestId(dto.getRequestId());
         auditLog.setActorUserId(dto.getActorUserId());
-        auditLog.setActorLogin(dto.getActorLogin());
+        auditLog.setActorDisplayName(dto.getActorDisplayName());
+        auditLog.setActorEmail(dto.getActorEmail());
         auditLog.setActorRoles(dto.getActorRoles());
         auditLog.setAction(dto.getAction());
         auditLog.setTargetService(dto.getTargetService());
@@ -74,7 +75,8 @@ public class AuditLogMapper {
         return new AuditEntriesResponseDto(
                 auditLog.getId(),
                 auditLog.getActorUserId(),
-                auditLog.getActorLogin(),
+                auditLog.getActorDisplayName(),
+                auditLog.getActorEmail(),
                 auditLog.getAction(),
                 auditLog.getTargetService(),
                 auditLog.getTargetTable(),
@@ -132,7 +134,8 @@ public class AuditLogMapper {
 
         if (dto.id() != null) entryBuilder.setId(dto.id().toString());
         if (dto.actorUserId() != null) entryBuilder.setActorUserId(dto.actorUserId().toString());
-        if (dto.actorLogin() != null) entryBuilder.setActorLogin(dto.actorLogin());
+        if (dto.actorDisplayName() != null) entryBuilder.setActorDisplayName(dto.actorDisplayName());
+        if (dto.actorEmail() != null) entryBuilder.setActorEmail(dto.actorEmail());
         if (dto.action() != null) entryBuilder.setAction(dto.action());
         if (dto.targetService() != null) entryBuilder.setTargetService(dto.targetService());
         if (dto.targetTable() != null) entryBuilder.setTargetTable(dto.targetTable());

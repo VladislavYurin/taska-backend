@@ -38,7 +38,8 @@ enum GlobalRoleProto {
 
 message UserContext {
   string user_id = 1;
-  string login = 2;
+  reserved 2;
+  reserved "login";
   string email = 3;
   string display_name = 4;
   UserStatus status = 5;

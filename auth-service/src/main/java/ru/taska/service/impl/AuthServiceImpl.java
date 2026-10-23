@@ -265,7 +265,6 @@ public class AuthServiceImpl implements AuthService {
     private UserContext buildUserContext(User user) {
         return UserContext.newBuilder()
                 .setUserId(user.getId().toString())
-                .setLogin(user.getLogin())
                 .setEmail(user.getEmail())
                 .setDisplayName(user.getDisplayName())
                 .setStatus(UserStatusMapper.toProtoStatus(user.getStatus()))

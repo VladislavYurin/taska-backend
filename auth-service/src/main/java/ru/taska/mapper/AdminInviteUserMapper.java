@@ -1,6 +1,5 @@
 package ru.taska.mapper;
 
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
@@ -21,11 +20,9 @@ public class AdminInviteUserMapper {
 
     private final ObjectMapper objectMapper;
 
-    /** Generates an opaque login independent of email local-part length. */
     public User buildInvitedUserFromRequest(InviteUserRequest request) {
         return User.builder()
             .email(request.getBody().getEmail())
-            .login("invited_" + UUID.randomUUID())
             .displayName(request.getBody().getDisplayName())
             .status(UserStatus.INVITED)
             .globalRole(GlobalRole.USER)

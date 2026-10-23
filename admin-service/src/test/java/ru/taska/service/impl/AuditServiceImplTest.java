@@ -57,7 +57,7 @@ class AuditServiceImplTest {
         return AuditEventDto.builder()
                 .requestId(REQUEST_ID)
                 .actorUserId(UUID.randomUUID())
-                .actorLogin("admin_user")
+                .actorDisplayName("admin_user").actorEmail("admin@example.com")
                 .actorRoles(actorRoles)
                 .action("CREATE_USER")
                 .targetService("admin-service")

@@ -81,7 +81,6 @@ class GatewayContextFactoryTest {
         ValidateAccessTokenResponse grpcResponse = ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(UserContext.newBuilder()
                         .setUserId("user-1")
-                        .setLogin("testuser")
                         .setEmail("test@example.com")
                         .setDisplayName("Test User")
                         .setStatus(UserStatus.USER_STATUS_ACTIVE)
@@ -92,7 +91,7 @@ class GatewayContextFactoryTest {
                 .thenReturn(Mono.just(grpcResponse));
 
         GatewayUserContext userCtx = new GatewayUserContext(
-                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
+                "user-1", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
         when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(userCtx);
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, PROTECTED))
@@ -145,7 +144,6 @@ class GatewayContextFactoryTest {
         ValidateAccessTokenResponse grpcResponse = ValidateAccessTokenResponse.newBuilder()
                                                                               .setUserContext(UserContext.newBuilder()
                                                                                                          .setUserId("admin-1")
-                                                                                                         .setLogin("admin")
                                                                                                          .setEmail("admin@adminov.ru")
                                                                                                          .setDisplayName("Admin")
                                                                                                          .setStatus(UserStatus.USER_STATUS_ACTIVE)
@@ -156,7 +154,7 @@ class GatewayContextFactoryTest {
                 .thenReturn(Mono.just(grpcResponse));
 
         GatewayUserContext adminCtx = new GatewayUserContext(
-                "admin-1", "admin", "admin@adminov.ru", "Admin", GatewayUserStatus.ACTIVE, GlobalRole.GLOBAL_ADMIN);
+                "admin-1", "admin@adminov.ru", "Admin", GatewayUserStatus.ACTIVE, GlobalRole.GLOBAL_ADMIN);
         when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(adminCtx);
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))
@@ -180,7 +178,6 @@ class GatewayContextFactoryTest {
         ValidateAccessTokenResponse grpcResponse = ValidateAccessTokenResponse.newBuilder()
                                                                               .setUserContext(UserContext.newBuilder()
                                                                                                          .setUserId("user-1")
-                                                                                                         .setLogin("testuser")
                                                                                                          .setEmail("test@example.com")
                                                                                                          .setDisplayName("Test User")
                                                                                                          .setStatus(UserStatus.USER_STATUS_ACTIVE)
@@ -192,7 +189,7 @@ class GatewayContextFactoryTest {
                 .thenReturn(Mono.just(grpcResponse));
 
         GatewayUserContext userCtx = new GatewayUserContext(
-                "user-1", "testuser", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
+                "user-1", "test@example.com", "Test User", GatewayUserStatus.ACTIVE, GlobalRole.USER);
         when(contextMapper.mapToGatewayUserContext(grpcResponse.getUserContext())).thenReturn(userCtx);
 
         StepVerifier.create(factory.buildContext(REQUEST_ID, exchange, GLOBAL_ADMIN_REQUIRED))

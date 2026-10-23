@@ -369,22 +369,6 @@ public final class GrpcRequestValidators {
     }
 
     /**
-     * Проверяет что логин не пустой и не содержит '@'.
-     *
-     * @param raw       строковое значение поля
-     * @param fieldName имя поля (используется в сообщении об ошибке)
-     * @return {@link Mono} со значением или ошибкой {@code INVALID_ARGUMENT} при нарушении валидации
-     *
-     */
-    public static Mono<String> requireValidLogin(String raw, String fieldName) {
-        return requireNonBlank(raw, fieldName)
-                .filter(login -> !login.contains("@"))
-                .switchIfEmpty(Mono.error(Status.INVALID_ARGUMENT
-                                                  .withDescription(fieldName + " must not contain '@'")
-                                                  .asRuntimeException()));
-    }
-
-    /**
      * Проверяет ключ идемпотентности по длине и паттерну.
      *
      * @param raw       строковое значение поля

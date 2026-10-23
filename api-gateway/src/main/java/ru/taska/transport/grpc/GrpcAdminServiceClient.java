@@ -265,7 +265,8 @@ public class GrpcAdminServiceClient {
                         .setEventId(eventId.toString())
                         .setReason(requestDto.getReason())
                         .setActorUserId(userContext.userId())
-                        .setActorLogin(userContext.login())
+                        .setActorDisplayName(userContext.displayName())
+                        .setActorEmail(userContext.email())
                         .addActorRoles(userContext.globalRole().name())
                         .build();
 

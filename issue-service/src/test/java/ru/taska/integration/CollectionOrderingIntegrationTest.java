@@ -9,9 +9,6 @@ import ru.taska.domain.IssueType;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
 import ru.taska.repository.*;
-import ru.taska.repository.builder.SearchQueryBuilder;
-import ru.taska.repository.criteria.SearchCriteria;
-import ru.taska.repository.executor.SearchQueryExecutor;
 import ru.taska.repository.labels.IssueLabelsRepository;
 import ru.taska.repository.labels.ProjectLabelsRepository;
 import ru.taska.transport.kafka.OutboxEventScheduler;
@@ -42,10 +39,6 @@ class CollectionOrderingIntegrationTest extends AbstractIT {
     private ProjectLabelsRepository projectLabels;
     @Autowired
     private IssueLabelsRepository issueLabels;
-    @Autowired
-    private SearchQueryBuilder searchBuilder;
-    @Autowired
-    private SearchQueryExecutor searchExecutor;
 
     @Test
     void collectionsAndSearchUseDocumentedOrderIncludingTiesAndPages() {
@@ -100,9 +93,8 @@ class CollectionOrderingIntegrationTest extends AbstractIT {
                 .containsExactly("Alpha", "Beta", "Zulu");
         List<UUID> tiedTargets = targetIds.subList(1, 3).stream()
                 .sorted((a, b) -> b.toString().compareTo(a.toString())).toList();
-        var criteria = SearchCriteria.builder().projectId(project).searchQuery("ordered-target")
-                .limit(2).offset(1L).build();
-        assertThat(searchExecutor.executeQuery(searchBuilder.build(criteria)).map(Issue::getId).collectList().block())
+        assertThat(issues.searchIssues(project, null, null, null, null, null, "ordered-target", 2, 1L)
+                .map(Issue::getId).collectList().block())
                 .containsExactlyElementsOf(tiedTargets);
     }
 

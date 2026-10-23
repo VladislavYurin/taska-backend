@@ -36,7 +36,7 @@ public class UserInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        userRepository.existsByLogin("admin")
+        userRepository.existsByEmail("admin@adminov.ru")
                       .flatMap(exists -> {
                           if (exists) {
                               log.info("Admin user already exists, skipping initialization");
@@ -44,7 +44,6 @@ public class UserInitializer implements ApplicationRunner {
                           }
                           return userRepository.save(
                                                        User.builder()
-                                                           .login("admin")
                                                            .globalRole(GlobalRole.GLOBAL_ADMIN)
                                                            .email("admin@adminov.ru")
                                                            .displayName("admin")
@@ -70,7 +69,7 @@ public class UserInitializer implements ApplicationRunner {
                                                                                            matches
                                                                                    )));
                       }).block();
-        userRepository.existsByLogin("defaultUser")
+        userRepository.existsByEmail("defaultuser@mail.ru")
                       .flatMap(exists -> {
                           if (exists) {
                               log.info(
@@ -79,7 +78,6 @@ public class UserInitializer implements ApplicationRunner {
                           }
                           return userRepository.save(
                                                        User.builder()
-                                                           .login("defaultUser")
                                                            .globalRole(GlobalRole.USER)
                                                            .email("defaultuser@mail.ru")
                                                            .displayName("defaultUser")

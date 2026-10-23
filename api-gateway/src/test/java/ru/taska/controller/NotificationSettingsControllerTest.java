@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.api.notification.v1.NotificationPreferencesResponse;
+import ru.taska.api.notification.v1.TelegramLinkResponse;
 import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
@@ -67,6 +68,30 @@ class NotificationSettingsControllerTest {
                 .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"emailEnabled\":false}")
                 .exchange().expectStatus().isOk();
         verify(settings).update(argThat(c -> c.userContext().userId().equals(user)),eq(false),isNull());
+    }
+    @ParameterizedTest
+    @ValueSource(strings={"FUTURE_STATUS", ""})
+    void unknownBackendStatusDoesNotBreakSettingsOrInventBindingState(String status) {
+        when(settings.get(any())).thenReturn(Mono.just(prefs.toBuilder().setTelegramStatus(status)
+                .setTelegramError("FUTURE_ERROR").build()));
+        http.get().uri("/api/v1/users/me/notification-preferences").headers(h -> h.setBearerAuth("valid"))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.telegramStatus").isEqualTo("UNKNOWN")
+                .jsonPath("$.telegramError").isEqualTo("FUTURE_ERROR");
+    }
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"true", "false"})
+    void linkReturnsCommittedSettingsSnapshotWhenSupportedAndWorksWithOlderService(boolean withPreferences) {
+        String link=UUID.randomUUID().toString();
+        var response=TelegramLinkResponse.newBuilder().setLinkId(link)
+                .setUrl("https://t.me/test_bot?start=test").setExpiresAt("2026-10-23T12:00:00Z");
+        if(withPreferences) response.setPreferences(prefs.toBuilder().setTelegramStatus("PENDING").setTelegramLinkId(link));
+        when(settings.link(any())).thenReturn(Mono.just(response.build()));
+        var body=http.post().uri("/api/v1/users/me/telegram/link").headers(h -> h.setBearerAuth("valid"))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.linkId").isEqualTo(link);
+        if(withPreferences) body.jsonPath("$.preferences.telegramStatus").isEqualTo("PENDING")
+                .jsonPath("$.preferences.telegramLinkId").isEqualTo(link);
+        else body.jsonPath("$.preferences").doesNotExist();
+        verify(settings,never()).get(any());
     }
     @ParameterizedTest
     @ValueSource(strings={"{\"emailEnabled\":null}","{\"telegramEnabled\":\"true\"}","{\"emailEnabled\":1}",
