@@ -2169,6 +2169,16 @@ message ListIssuesForBoardRequestBody {
    * При include_done=false исключаются именно эти ключи; пустой список не исключает статусы.
    */
   repeated string done_status_keys = 9;
+
+  /**
+   * Фильтр по приоритету задачи (опционально).
+   */
+  IssuePriority priority = 10;
+
+  /**
+   * Полнотекстовый фильтр по ключу, краткому описанию и описанию задачи (опционально).
+   */
+  optional string query = 11;
 }
 
 /**
@@ -2223,7 +2233,41 @@ message IssueBoardResponse {
    * Количество комментариев к задаче.
    */
   int32 comments_count = 11;
+
+  /**
+   * Описание задачи.
+   */
+  optional string description = 12;
+
+  /**
+   * Время создания задачи.
+   */
+  google.protobuf.Timestamp created_at = 13;
+
+  /**
+   * Время последнего обновления задачи.
+   */
+  google.protobuf.Timestamp updated_at = 14;
+
+  /**
+   * Текущая версия задачи.
+   */
+  int32 version = 15;
+
+  /**
+   * Story points задачи.
+   */
+  optional double story_points = 16;
+
+  /**
+   * Сроки выполнения задачи.
+   */
+  optional string due_date = 17;
+
+  // Active, confirmed attachments only.
+  int32 attachment_count = 18;
 }
+
 
 /**
  * Ответ со списком задач для доски.

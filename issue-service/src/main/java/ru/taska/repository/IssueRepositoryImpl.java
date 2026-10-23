@@ -209,6 +209,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .eq("reporter_id", reporterId)
                 .eq("priority", priority)
                 .eq("issue_type", issueType)
+                .eq("priority", priority)
                 .anyOf(any -> any
                         .containsIgnoreCase("issue_key", searchQuery)
                         .containsIgnoreCase("summary", searchQuery)
@@ -256,12 +257,14 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             boolean includeDone,
             List<String> doneStatusKeys,
             List<UUID> labelIds,
-            Integer pageSizePerColumn
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query
     ) {
         return resolveLabelFilterIssueIds(labelIds)
                 .map(issueIds -> boardFilter(
                         projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
-                        issueIds.orElse(null)
+                        issueIds.orElse(null), priority, query
                 ))
                 .flatMapMany(filter -> {
                     if (filter.matchesNothing()) {
@@ -377,6 +380,24 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue);
     }
 
+    @Override
+    public Mono<Map<UUID, Long>> countAttachmentsByIssueIds(List<UUID> issueIds){
+        if (issueIds == null || issueIds.isEmpty()){
+            return Mono.just(Map.of());
+        }
+
+        return r2dbcEntityTemplate.getDatabaseClient()
+                .sql("SELECT issue_id, COUNT(*) AS cnt FROM taska.issue_attachments WHERE issue_id IN (:issueIds) AND deleted_at IS NULL GROUP BY issue_id")
+                .bind("issueIds", issueIds)
+                .map((row, meta) -> new AbstractMap.SimpleEntry<>(
+                        row.get("issue_id", UUID.class),
+                        row.get("cnt", Long.class)
+                ))
+                .all()
+                .collectMap(Map.Entry::getKey, Map.Entry::getValue);
+    }
+
+
     /**
      * Фильтр задач для доски — общий источник как для Criteria API (путь без
      * {@code pageSizePerColumn}), так и для сырого SQL с оконной функцией (путь с
@@ -390,16 +411,21 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             String statusKey,
             boolean includeDone,
             List<String> doneStatusKeys,
-            List<UUID> labelFilterIssueIds
+            List<UUID> labelFilterIssueIds,
+            IssuePriority priority,
+            String query
     ) {
         return FilterBuilder.create()
                 .eqRequired("project_id", projectId)
                 .isNull("deleted_at")
                 .eq("issue_type", issueType)
+                .eq("priority", priority)
                 .eq("assignee_id", assigneeId)
                 .eq("status_key", statusKey)
                 .when(!includeDone, b -> b.notIn("status_key", doneStatusKeys))
                 .inOrNone("id", labelFilterIssueIds)
+                .anyOf(any -> any.containsIgnoreCase("issue_key", query)
+                        .containsIgnoreCase("summary", query).containsIgnoreCase("description", query))
                 .build();
     }
 }

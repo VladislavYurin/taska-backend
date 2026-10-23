@@ -1200,14 +1200,24 @@ public class GrpcIssueService {
                             Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
                                     ? req.getBody().getPageSizePerColumn()
                                     : null;
-                            ru.taska.domain.IssueType issueType = issueMapper.toDomainIssueType(req.getBody().getIssueType());
+                            ru.taska.domain.IssueType issueType =
+                                    req.getBody().getIssueType() == IssueType.ISSUE_TYPE_UNSPECIFIED
+                                    ? null
+                                    : issueMapper.toDomainIssueType(req.getBody().getIssueType());
+                            ru.taska.domain.entity.IssuePriority priority =
+                                    req.getBody().getPriority() == IssuePriority.ISSUE_PRIORITY_UNSPECIFIED
+                                    ? null
+                                    : issueMapper.toDomainIssuePriority(req.getBody().getPriority());
+                            String query = req.getBody().hasQuery() && !req.getBody().getQuery().isBlank()
+                                    ? req.getBody().getQuery()
+                                    : null;
                             List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
 
                             log.info(
                                     "[{}][{}] listIssuesForBoard: projectId={}, actorUserId={}, statusKey={}, " +
-                                            "assigneeId={}, issueType={}, includeDone={}, labelIds={}, pageSizePerColumn={}",
+                                            "assigneeId={}, issueType={}, includeDone={}, labelIds={}, pageSizePerColumn={}, priority={}, query={}",
                                     requestId, nodeId, projectId, actorUserId, statusKey,
-                                    assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn
+                                    assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn, priority, query
                             );
                             return issueService.listIssueBoard(
                                     requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
@@ -1215,7 +1225,9 @@ public class GrpcIssueService {
                                     req.getBody().getIncludeDone(),
                                     req.getBody().getDoneStatusKeysList(),
                                     labelIds,
-                                    pageSizePerColumn
+                                    pageSizePerColumn,
+                                    priority,
+                                    query
                             )
                                     .map(issues -> ListIssuesForBoardResponse.newBuilder()
                                             .addAllIssues(issues)

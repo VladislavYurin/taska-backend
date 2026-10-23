@@ -151,7 +151,9 @@ public interface IssueService {
             boolean includeDone,
             List<String> doneStatusKeys,
             List<UUID> labelIds,
-            Integer pageSizePerColumn
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query
     );
 
 

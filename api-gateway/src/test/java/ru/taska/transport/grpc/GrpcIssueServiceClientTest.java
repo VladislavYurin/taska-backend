@@ -121,12 +121,14 @@ class GrpcIssueServiceClientTest {
 
     @Test
     void listIssuesForBoard_carriesWorkflowFinalKeysInGrpcBody() {
-        Mockito.when(issueMapper.toGrpcIssueType("TASK"))
+        Mockito.when(issueMapper.toGrpcIssueType(ru.taska.domain.dto.IssueTypeDto.TASK))
                 .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
-        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK", ASSIGNEE_ID, LABEL_ID,
-                        false, List.of("CLOSED", "RELEASED"), context))
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, ru.taska.domain.dto.IssueTypeDto.TASK,
+                        ASSIGNEE_ID, LABEL_ID, false, List.of("CLOSED", "RELEASED"), null, null, context))
                 .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
         Mockito.verify(stub).listIssuesForBoard(captor.capture());
@@ -137,6 +139,45 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(body.getProjectId()).isEqualTo(PROJECT_ID);
         Assertions.assertThat(body.getAssigneeId()).isEqualTo(ASSIGNEE_ID);
         Assertions.assertThat(body.getLabelIdsList()).containsExactly(LABEL_ID);
+        Assertions.assertThat(body.hasQuery()).isFalse();
+    }
+
+    @Test
+    void listIssuesForBoard_carriesPriorityAndQueryInGrpcBody() {
+        Mockito.when(issueMapper.toGrpcIssueType((ru.taska.domain.dto.IssueTypeDto) null))
+                .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED);
+        Mockito.when(issueMapper.toGrpcIssuePriority(ru.taska.domain.dto.IssuePriorityDto.HIGH))
+                .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH);
+        Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
+
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, null, null, null,
+                        false, List.of(), ru.taska.domain.dto.IssuePriorityDto.HIGH, "bug fix", context))
+                .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub).listIssuesForBoard(captor.capture());
+        var body = captor.getValue().getBody();
+        Assertions.assertThat(body.getPriority()).isEqualTo(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH);
+        Assertions.assertThat(body.getQuery()).isEqualTo("bug fix");
+    }
+
+    @Test
+    void listIssuesForBoard_blankQueryIsNotSentToGrpc() {
+        Mockito.when(issueMapper.toGrpcIssueType((ru.taska.domain.dto.IssueTypeDto) null))
+                .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+        Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
+
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, null, null, null,
+                        false, List.of(), null, "   ", context))
+                .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
+
+        var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub).listIssuesForBoard(captor.capture());
+        Assertions.assertThat(captor.getValue().getBody().hasQuery()).isFalse();
     }
 
     @Test

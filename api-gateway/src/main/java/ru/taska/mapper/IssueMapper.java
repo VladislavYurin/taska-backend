@@ -11,7 +11,6 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.common.v1.NullableDouble;
 import ru.taska.api.common.v1.NullableInt32;
 import ru.taska.api.common.v1.NullableString;
-import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.CreateIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueRequestBody;
 import ru.taska.api.issue.v1.GetIssueDetailsResponse;
@@ -198,7 +197,10 @@ public class IssueMapper {
 
     /**
      * Преобразует задачу из gRPC-ответа {@link IssueBoardResponse}
-     * в DTO для REST-ответа доски.
+     * в DTO для REST-ответа доски. Метки оставляются пустым списком —
+     * их заполняют объектами {id, name, color} отдельно, на этапе
+     * обогащения в {@link ru.taska.service.impl.BoardServiceImpl},
+     * где доступен список меток проекта.
      *
      * @param protoDto задача из issue-service
      * @return задача для REST Board API
@@ -209,6 +211,18 @@ public class IssueMapper {
         restDto.setId(UUID.fromString(protoDto.getId()));
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setSummary(protoDto.getSummary());
+        restDto.setIssueType(IssueTypeDto.fromValue(toRestIssueType(protoDto.getIssueType())));
+        restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
+        restDto.setStatusKey(protoDto.getStatusKey());
+        restDto.setVersion(protoDto.getVersion());
+        restDto.setCommentCount(protoDto.getCommentsCount());
+        restDto.setAttachmentCount(protoDto.getAttachmentCount());
+        restDto.setCreatedAt(MappingUtils.toOffsetDateTime(protoDto.getCreatedAt()));
+        restDto.setUpdatedAt(MappingUtils.toOffsetDateTime(protoDto.getUpdatedAt()));
+
+        MappingUtils.setIfPresent(protoDto::hasDescription, protoDto::getDescription, restDto::setDescription);
+        MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
+        MappingUtils.setIfPresent(protoDto::hasDueDate, () -> LocalDate.parse(protoDto.getDueDate()), restDto::setDueDate);
 
         if (!protoDto.getAssigneeId().isBlank()) {
             var userDto = new BoardUserDto();
@@ -216,22 +230,26 @@ public class IssueMapper {
             restDto.setAssignee(userDto);
         }
 
-        restDto.setLabels(protoDto.getLabelIdsList().stream().sorted().toList());
+        restDto.setLabels(new ArrayList<>());
 
         return restDto;
     }
 
     /**
      * Преобразует gRPC-модель задачи доски во внутреннюю модель API Gateway.
-     * Ключ статуса сохраняется отдельно для группировки по колонкам и
-     * не попадает в конечный REST DTO.
+     * Ключ статуса и идентификаторы меток сохраняются отдельно — ключ для
+     * группировки по колонкам, метки для последующего обогащения объектами
+     * {id, name, color} — ни то, ни другое не попадает в конечный REST DTO напрямую.
      *
      * @param protoDto задача из issue-service
      * @return внутренняя модель задачи доски
      */
     public BoardIssueData toBoardIssueData(IssueBoardResponse protoDto) {
+        List<UUID> labelIds = protoDto.getLabelIdsList().stream().map(UUID::fromString).toList();
+
         return new BoardIssueData(
                 protoDto.getStatusKey(),
+                labelIds,
                 toRestBoardIssue(protoDto)
         );
     }

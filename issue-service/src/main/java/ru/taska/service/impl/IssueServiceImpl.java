@@ -760,13 +760,15 @@ public class IssueServiceImpl implements IssueService {
                                                   boolean includeDone,
                                                   List<String> doneStatusKeys,
                                                   List<UUID> labelIds,
-                                                  Integer pageSizePerColumn
+                                                  Integer pageSizePerColumn,
+                                                  IssuePriority priority,
+                                                  String query
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
 
         return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
-                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys, labelIds, pageSizePerColumn)
+                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys, labelIds, pageSizePerColumn, priority, query)
                                 .collectList()
                 )
                 .flatMap(issues -> {
@@ -775,7 +777,8 @@ public class IssueServiceImpl implements IssueService {
                     return Mono.zip(
                             issueRepository.findLabelIdsByIssueIds(issueIds),
                             issueRepository.countCommentsByIssueIds(issueIds),
-                            issueRepository.countWatchersByIssueIds(issueIds)
+                            issueRepository.countWatchersByIssueIds(issueIds),
+                            issueRepository.countAttachmentsByIssueIds(issueIds)
                     )
                             .map(t-> {
                                 Map<UUID, List<UUID>> label = t.getT1();
@@ -786,7 +789,8 @@ public class IssueServiceImpl implements IssueService {
                                                 issue,
                                                 label.getOrDefault(issue.getId(), List.of()),
                                                 comment.getOrDefault(issue.getId(), 0L),
-                                                watcher.getOrDefault(issue.getId(), 0L)
+                                                watcher.getOrDefault(issue.getId(), 0L),
+                                                t.getT4().getOrDefault(issue.getId(), 0L)
                                         ))
                                         .toList();
                             });

@@ -68,7 +68,7 @@ public class IssueMapper {
                 .setStatusKey(issue.getStatusKey())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
-                .setReporterId(issue.getReporterId().toString())
+                .setReporterId(issue.getReporterId() == null ? "" : issue.getReporterId().toString())
                 .setCreatedAt(toTimestamp(issue.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(issue.getUpdatedAt()))
                 .setTimeSpentMinutes(issue.getTimeSpentMinutes() != null ? issue.getTimeSpentMinutes() : 0)
@@ -381,6 +381,13 @@ public class IssueMapper {
         };
     }
 
+    private Timestamp toProtoTimestamp(Instant instant){
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
+    }
+
     private IssueLinkViewType resolveViewType(IssueLink link, UUID issueId) {
         var isSourceIssue = link.getSourceIssueId().equals(issueId);
 
@@ -459,19 +466,35 @@ public class IssueMapper {
         }
     }
 
-    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount){
-        return IssueBoardResponse.newBuilder()
+    public IssueBoardResponse toIssueBoardProto(Issue issue, List<UUID> labelIds, Long commentsCount, Long watchersCount, Long attachmentCount){
+        IssueBoardResponse.Builder builder = IssueBoardResponse.newBuilder()
                 .setId(issue.getId().toString())
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
                 .setStatusKey(issue.getStatusKey())
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
-                .setReporterId(issue.getReporterId().toString())
+                .setReporterId(issue.getReporterId() == null ? "" : issue.getReporterId().toString())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setWatchersCount(watchersCount.intValue())
                 .setCommentsCount(commentsCount.intValue())
+                .setAttachmentCount(attachmentCount.intValue())
                 .addAllLabelIds(labelIds.stream().map(UUID::toString).toList())
-                .build();
+                .setCreatedAt(toProtoTimestamp(issue.getCreatedAt()))
+                .setUpdatedAt(toProtoTimestamp(issue.getUpdatedAt()))
+                .setVersion(issue.getVersion());
+
+        if (issue.getDescription() != null){
+            builder.setDescription(issue.getDescription());
+        }
+        if(issue.getStoryPoints() != null){
+            builder.setStoryPoints(issue.getStoryPoints().doubleValue());
+        }
+        if(issue.getDueDate() != null){
+            builder.setDueDate(issue.getDueDate().toString());
+        }
+
+        return builder.build();
+
     }
 }

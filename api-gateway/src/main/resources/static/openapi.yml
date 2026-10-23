@@ -2186,7 +2186,8 @@ paths:
             format: uuid
         - name: issueType
           in: query
-          required: true
+          required: false
+          description: Фильтр по типу задачи. Без параметра возвращаются задачи всех типов.
           schema:
             $ref: '#/components/schemas/IssueTypeDto'
         - name: assigneeId
@@ -2208,6 +2209,19 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: priority
+          in: query
+          required: false
+          description: Фильтр по приоритету задачи.
+          schema:
+            $ref: '#/components/schemas/IssuePriorityDto'
+        - name: query
+          in: query
+          required: false
+          description: Полнотекстовый фильтр по ключу, краткому описанию и описанию задачи (регистронезависимый).
+          schema:
+            type: string
+            minLength: 1
       responses:
         '200':
           description: Доска успешно сформирована
@@ -6202,17 +6216,20 @@ components:
 
     BoardResponseDto:
       type: object
-      required: [ projectId, issueType, columns ]
+      required: [ projectId, columns, unplacedIssues ]
       properties:
         projectId:
           type: string
           format: uuid
-        issueType:
-          $ref: '#/components/schemas/IssueTypeDto'
         columns:
           type: array
           items:
             $ref: '#/components/schemas/BoardColumnDto'
+        unplacedIssues:
+          type: array
+          description: Задачи, чей statusKey не входит ни в один workflow, использованный для построения колонок.
+          items:
+            $ref: '#/components/schemas/BoardIssueDto'
 
     BoardColumnDto:
       type: object
@@ -6236,7 +6253,7 @@ components:
 
     BoardIssueDto:
       type: object
-      required: [ id, issueKey, summary ]
+      required: [ id, issueKey, summary, issueType, priority, statusKey, version, createdAt, updatedAt ]
       properties:
         id:
           type: string
@@ -6245,16 +6262,49 @@ components:
           type: string
         summary:
           type: string
-        storyPoints:
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
+        priority:
+          $ref: '#/components/schemas/IssuePriorityDto'
+        statusKey:
+          type: string
+          description: Открытый ключ статуса из workflow проекта; набор не ограничен enum.
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
           type: integer
           format: int32
+        storyPoints:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        commentCount:
+          type: integer
+          format: int32
+        attachmentCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Число подтверждённых вложений без удалённых файлов.
         assignee:
           $ref: '#/components/schemas/BoardUserDto'
         labels:
           type: array
-          description: Идентификаторы меток в порядке id asc.
+          description: Метки задачи в порядке label_ids карточки; id метки, отсутствующей в проекте, пропускается.
           items:
-            type: string
+            $ref: '#/components/schemas/IssueLabelResponseDto'
 
     BoardUserDto:
       type: object
@@ -6265,3 +6315,7 @@ components:
           format: uuid
         displayName:
           type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true

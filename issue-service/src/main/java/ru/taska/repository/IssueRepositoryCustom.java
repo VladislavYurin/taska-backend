@@ -6,6 +6,7 @@ import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
 
+import javax.annotation.Priority;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -111,7 +112,9 @@ public interface IssueRepositoryCustom {
             boolean includeDone,
             List<String> doneStatusKeys,
             List<UUID> labelIds,
-            Integer pageSizePerColumn
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query
     );
 
     /**
@@ -128,5 +131,7 @@ public interface IssueRepositoryCustom {
     /**
      * Подсчет количества комментариев к задачам по списку их айди.
      */
+    Mono<Map<UUID, Long>> countAttachmentsByIssueIds(List<UUID> issueIds);
+
     Mono<Map<UUID, Long>> countCommentsByIssueIds(List<UUID> issueIds);
 }

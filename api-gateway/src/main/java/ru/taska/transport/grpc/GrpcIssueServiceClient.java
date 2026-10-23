@@ -35,7 +35,9 @@ import ru.taska.domain.dto.CreateIssueLinkRequestDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
 import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
+import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
@@ -469,21 +471,26 @@ public class GrpcIssueServiceClient {
      * Получает список задач для доски проекта с учетом фильтров
      * и преобразует gRPC-модели во внутренние модели API Gateway.
      *
-     * @param projectId  идентификатор проекта
-     * @param issueType  тип задачи
-     * @param assigneeId идентификатор исполнителя
-     * @param labelId    идентификатор метки
-     * @param includeDone включать ли завершенные задачи
-     * @param context    контекст запроса
+     * @param projectId     идентификатор проекта
+     * @param issueType     тип задачи; {@code null} — задачи всех типов
+     * @param assigneeId    идентификатор исполнителя
+     * @param labelId       идентификатор метки
+     * @param includeDone   включать ли завершенные задачи
+     * @param doneStatusKeys ключи статусов категории DONE из workflow проекта
+     * @param priority      приоритет задачи; {@code null} — без фильтра
+     * @param query         полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
+     * @param context       контекст запроса
      * @return список задач для формирования доски
      */
     public Mono<List<BoardIssueData>> listIssuesForBoard(
             String projectId,
-            String issueType,
+            IssueTypeDto issueType,
             String assigneeId,
             String labelId,
             Boolean includeDone,
             List<String> doneStatusKeys,
+            IssuePriorityDto priority,
+            String query,
             GatewayContext context
     ) {
         log.info(
@@ -496,6 +503,7 @@ public class GrpcIssueServiceClient {
                 .setProjectId(projectId)
                 .setActorUserId(context.userContext().userId())
                 .setIssueType(issueMapper.toGrpcIssueType(issueType))
+                .setPriority(issueMapper.toGrpcIssuePriority(priority))
                 .setIncludeDone(Boolean.TRUE.equals(includeDone))
                 .addAllDoneStatusKeys(doneStatusKeys);
 
@@ -505,6 +513,10 @@ public class GrpcIssueServiceClient {
 
         if (labelId != null && !labelId.isBlank()) {
             requestBodyBuilder.addLabelIds(labelId);
+        }
+
+        if (query != null && !query.isBlank()) {
+            requestBodyBuilder.setQuery(query);
         }
 
         return dynamicStub()

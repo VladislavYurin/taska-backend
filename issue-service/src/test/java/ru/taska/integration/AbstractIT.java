@@ -36,8 +36,7 @@ public abstract class AbstractIT {
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
 
-        registry.add("grpc.server.address", () -> "127.0.0.1");
-        registry.add("grpc.server.port", () -> "9090");
+        registry.add("spring.grpc.server.address", () -> "127.0.0.1:0");
         registry.add("app.grpc.client.project-service.host", () -> "127.0.0.1");
         registry.add("app.grpc.client.project-service.port", () -> "9090");
 

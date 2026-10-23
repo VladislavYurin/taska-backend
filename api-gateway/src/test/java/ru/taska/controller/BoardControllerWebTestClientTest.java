@@ -8,12 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
@@ -23,6 +20,7 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.error.GatewayErrorHandler;
@@ -96,8 +94,8 @@ class BoardControllerWebTestClientTest {
 
         var response = new BoardResponseDto();
         response.setProjectId(PROJECT_ID);
-        response.setIssueType(ISSUE_TYPE);
         response.setColumns(List.of(todoColumn, doneColumn));
+        response.setUnplacedIssues(List.of());
 
         Mockito.when(boardService.getBoard(
                         Mockito.eq(PROJECT_ID),
@@ -105,6 +103,8 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.isNull(),
                         Mockito.eq(false),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -117,13 +117,13 @@ class BoardControllerWebTestClientTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.projectId").isEqualTo(PROJECT_ID.toString())
-                .jsonPath("$.issueType").isEqualTo(ISSUE_TYPE.name())
                 .jsonPath("$.columns.length()").isEqualTo(2)
                 .jsonPath("$.columns[0].statusKey").isEqualTo("TODO")
                 .jsonPath("$.columns[0].issues.length()").isEqualTo(1)
                 .jsonPath("$.columns[0].issues[0].issueKey").isEqualTo("TAS-1")
                 .jsonPath("$.columns[1].statusKey").isEqualTo("DONE")
-                .jsonPath("$.columns[1].issues.length()").isEqualTo(0);
+                .jsonPath("$.columns[1].issues.length()").isEqualTo(0)
+                .jsonPath("$.unplacedIssues.length()").isEqualTo(0);
 
         Mockito.verify(boardService).getBoard(
                 Mockito.eq(PROJECT_ID),
@@ -131,15 +131,26 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.isNull(),
                 Mockito.eq(false),
+                Mockito.isNull(),
+                Mockito.isNull(),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);
     }
 
     @Test
-    @DisplayName("Должен вернуть 500 Internal Server Error если статус задачи отсутствует в workflow")
-    void getBoard_shouldReturn500_whenIssueHasUnknownStatus() {
+    @DisplayName("Должен вернуть 200 OK и unplacedIssues, если статус задачи отсутствует в workflow")
+    void getBoard_shouldReturn200_withUnplacedIssues_whenIssueHasUnknownStatus() {
         mockAuthenticatedUser();
+
+        var unplacedIssue = new BoardIssueDto();
+        unplacedIssue.setId(UUID.randomUUID());
+        unplacedIssue.setIssueKey("TAS-99");
+
+        var response = new BoardResponseDto();
+        response.setProjectId(PROJECT_ID);
+        response.setColumns(List.of());
+        response.setUnplacedIssues(List.of(unplacedIssue));
 
         Mockito.when(boardService.getBoard(
                         Mockito.eq(PROJECT_ID),
@@ -147,11 +158,10 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.isNull(),
                         Mockito.eq(false),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
                         Mockito.any(GatewayContext.class)))
-                .thenReturn(Mono.error(new ResponseStatusException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Inconsistent state: issues found with statuses not present in workflow"
-                )));
+                .thenReturn(Mono.just(response));
 
         webTestClient.get()
                 .uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
@@ -159,11 +169,10 @@ class BoardControllerWebTestClientTest {
                         .build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
-                .expectStatus().is5xxServerError()
-                .expectHeader().exists("X-Request-Id")
+                .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.code").exists()
-                .jsonPath("$.message").exists();
+                .jsonPath("$.unplacedIssues.length()").isEqualTo(1)
+                .jsonPath("$.unplacedIssues[0].issueKey").isEqualTo("TAS-99");
 
         Mockito.verify(boardService).getBoard(
                 Mockito.eq(PROJECT_ID),
@@ -171,6 +180,94 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.isNull(),
                 Mockito.eq(false),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.any(GatewayContext.class)
+        );
+        Mockito.verifyNoMoreInteractions(boardService);
+    }
+
+    @Test
+    @DisplayName("Должен вернуть 200 OK, если issueType не передан (все типы)")
+    void getBoard_shouldReturn200_whenIssueTypeIsAbsent() {
+        mockAuthenticatedUser();
+
+        var response = new BoardResponseDto();
+        response.setProjectId(PROJECT_ID);
+        response.setColumns(List.of());
+        response.setUnplacedIssues(List.of());
+
+        Mockito.when(boardService.getBoard(
+                        Mockito.eq(PROJECT_ID),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(false),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder.path("/api/v1/projects/{projectId}/board").build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.projectId").isEqualTo(PROJECT_ID.toString());
+
+        Mockito.verify(boardService).getBoard(
+                Mockito.eq(PROJECT_ID),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq(false),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.any(GatewayContext.class)
+        );
+        Mockito.verifyNoMoreInteractions(boardService);
+    }
+
+    @Test
+    @DisplayName("Должен пробросить фильтры priority и query в BoardService")
+    void getBoard_shouldPassPriorityAndQueryFilters() {
+        mockAuthenticatedUser();
+
+        var response = new BoardResponseDto();
+        response.setProjectId(PROJECT_ID);
+        response.setColumns(List.of());
+        response.setUnplacedIssues(List.of());
+
+        Mockito.when(boardService.getBoard(
+                        Mockito.eq(PROJECT_ID),
+                        Mockito.eq(ISSUE_TYPE),
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(false),
+                        Mockito.eq(IssuePriorityDto.HIGH),
+                        Mockito.eq("auth bug"),
+                        Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("issueType", ISSUE_TYPE)
+                        .queryParam("priority", IssuePriorityDto.HIGH)
+                        .queryParam("query", "auth bug")
+                        .build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus().isOk();
+
+        Mockito.verify(boardService).getBoard(
+                Mockito.eq(PROJECT_ID),
+                Mockito.eq(ISSUE_TYPE),
+                Mockito.isNull(),
+                Mockito.isNull(),
+                Mockito.eq(false),
+                Mockito.eq(IssuePriorityDto.HIGH),
+                Mockito.eq("auth bug"),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);
