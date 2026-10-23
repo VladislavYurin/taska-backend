@@ -70,6 +70,13 @@ class OutboxEventServiceImplTest {
         Assertions.assertThat(capture().getPayload().get("projectKey").asString()).isEqualTo("ABC");
     }
 
+    @Test
+    void missingProjectDoesNotPreventRemovalEvent() {
+        Mockito.when(projectRepository.findById(PROJECT_ID)).thenReturn(Mono.empty());
+        outboxEventService.saveMemberRemoved(REQUEST_ID, NODE_ID, USER_ID, PROJECT_ID).block();
+        Assertions.assertThat(capture().getPayload().get("projectKey").asString()).isEmpty();
+    }
+
     private OutboxEvent capture() {
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         Mockito.verify(outboxEventRepository).save(captor.capture());

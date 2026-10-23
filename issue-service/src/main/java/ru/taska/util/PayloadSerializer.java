@@ -392,12 +392,13 @@ public class PayloadSerializer {
      * @param actorUserId   идентификатор пользователя, создавшего связь.
      * @return исторические данные.
      */
-    public JsonNode createIssueLinkCreatedPayload(
+    public ObjectNode createIssueLinkCreatedPayload(
             Issue sourceIssue,
             UUID targetIssueId,
             IssueLinkType linkType,
             UUID actorUserId,
-            List<UUID> watcherIds
+            List<UUID> watcherIds,
+            String targetIssueKey
     ) {
         var node = objectMapper.createObjectNode();
         putIssueFields(node, sourceIssue);
@@ -427,6 +428,7 @@ public class PayloadSerializer {
         }
 
         node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
+        node.put("targetIssueKey", targetIssueKey);
         return node;
     }
 
@@ -439,12 +441,13 @@ public class PayloadSerializer {
      * @param actorUserId   идентификатор пользователя, удаляющего связь.
      * @return исторические данные.
      */
-    public JsonNode createIssueLinkDeletedPayload(
+    public ObjectNode createIssueLinkDeletedPayload(
             Issue sourceIssue,
             UUID targetIssueId,
             IssueLinkType linkType,
             UUID actorUserId,
-            List<UUID> watcherIds
+            List<UUID> watcherIds,
+            String targetIssueKey
     ) {
         var node = objectMapper.createObjectNode();
         putIssueFields(node, sourceIssue);
@@ -473,6 +476,7 @@ public class PayloadSerializer {
             node.putNull(DELETED_BY);
         }
         node.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds != null ? watcherIds : List.of()));
+        node.put("targetIssueKey", targetIssueKey);
         return node;
     }
 

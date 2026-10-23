@@ -16,7 +16,6 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueLinkRepository;
 import ru.taska.repository.IssueRepository;
-import tools.jackson.databind.node.ObjectNode;
 import ru.taska.repository.IssueWatcherRepository;
 import ru.taska.service.IssueHistoryService;
 import ru.taska.service.OutboxEventService;
@@ -84,9 +83,9 @@ public class IssueLinkExecutor {
                                             targetIssueId,
                                             linkType,
                                             actorUserId,
-                                            watcherIds
+                                            watcherIds,
+                                            targetIssueKey
                                     );
-                                    ((ObjectNode) payload).put("targetIssueKey", targetIssueKey);
                                     return issueHistoryService.saveIssueHistory(
                                                     requestId,
                                                     nodeId,
@@ -152,10 +151,10 @@ public class IssueLinkExecutor {
                                             deletedLink.getTargetIssueId(),
                                             deletedLink.getLinkType(),
                                             actorUserId,
-                                            watcherIds
+                                            watcherIds,
+                                            targetIssueKey
                                     );
 
-                                    ((ObjectNode) payload).put("targetIssueKey", targetIssueKey);
                                     return issueHistoryService.saveIssueHistory(
                                                     requestId,
                                                     nodeId,
@@ -194,7 +193,10 @@ public class IssueLinkExecutor {
         // Soft-deleted targets retain their key and can still have links removed.
         return issueRepository.findById(issueId)
                 .map(issue -> java.util.Objects.toString(issue.getIssueKey(), ""))
-                .defaultIfEmpty("");
+                .switchIfEmpty(Mono.fromSupplier(() -> {
+                    log.warn("Linked target issue is missing: issueId={}", issueId);
+                    return "";
+                }));
     }
 
 }

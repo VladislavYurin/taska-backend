@@ -18,9 +18,6 @@ import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectRepository;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
-import tools.jackson.databind.node.ObjectNode;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -64,15 +61,14 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                                        .aggregateType(AggregateType.PROJECT.getValue())
                                        .aggregateId(member.getProjectId())
                                        .eventType(MEMBER_ADDED)
-                                       .payload(memberAddedPayload(member))
-                                       .attempts(0)
+                                                                              .attempts(0)
                                        .status(OutboxEventStatus.NEW)
                                        .requestId(requestId)
                                        .build();
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                   requestId, nodeId, EventType.MEMBER_ADDED, member.getUserId(), member.getProjectId());
-        return saveMemberEvent(event);
+        return saveMemberEvent(event, key -> memberAddedPayload(member, key));
     }
 
     @Override
@@ -81,15 +77,14 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .aggregateType(AggregateType.PROJECT.getValue())
                 .aggregateId(projectId)
                 .eventType(MEMBER_REMOVED)
-                .payload(memberRemovedPayload(deletedMemberId, projectId))
-                .attempts(0)
+                                .attempts(0)
                 .status(OutboxEventStatus.NEW)
                 .requestId(requestId)
                 .build();
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                   requestId, nodeId, EventType.MEMBER_REMOVED, deletedMemberId, projectId);
-        return saveMemberEvent(event);
+        return saveMemberEvent(event, key -> memberRemovedPayload(deletedMemberId, projectId, key));
     }
 
     @Override
@@ -99,13 +94,12 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .aggregateType(AggregateType.PROJECT.getValue())
                 .aggregateId(projectId)
                 .eventType(EventType.MEMBER_UPDATED.getValue())
-                .payload(memberUpdatedPayload(updatedMemberId, role, projectId))
-                .attempts(0)
+                                .attempts(0)
                 .status(OutboxEventStatus.NEW)
                 .build();
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для участника [ ID = {} ] проекта [ ID = {} ]",
                 requestId, nodeId, EventType.MEMBER_UPDATED.getValue(), updatedMemberId, projectId);
-        return saveMemberEvent(event);
+        return saveMemberEvent(event, key -> memberUpdatedPayload(updatedMemberId, role, projectId, key));
     }
 
     @Override
@@ -125,11 +119,12 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         return outboxEventRepository.save(event);
     }
 
-    private Mono<OutboxEvent> saveMemberEvent(OutboxEvent event) {
+    private Mono<OutboxEvent> saveMemberEvent(OutboxEvent event, java.util.function.Function<String, JsonNode> payload) {
         return projectRepository.findById(event.getAggregateId())
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found")))
-                .flatMap(project -> {
-                    ((ObjectNode) event.getPayload()).put("projectKey", project.getProjectKey());
+                .map(project -> java.util.Objects.toString(project.getProjectKey(), ""))
+                .defaultIfEmpty("")
+                .flatMap(key -> {
+                    event.setPayload(payload.apply(key));
                     return outboxEventRepository.save(event);
                 });
     }
@@ -156,35 +151,35 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         );
     }
 
-    private JsonNode memberAddedPayload(ProjectMember member) {
+    private JsonNode memberAddedPayload(ProjectMember member, String projectKey) {
         return objectMapper.valueToTree(
                 new MemberAddedPayload(
                         member.getProjectId(),
                         member.getUserId(),
                         member.getRole().toString(),
                         member.getAddedBy(),
-                        null
+                        projectKey
                 )
         );
     }
 
-    private JsonNode memberUpdatedPayload(UUID userId, ProjectRole role, UUID projectId) {
+    private JsonNode memberUpdatedPayload(UUID userId, ProjectRole role, UUID projectId, String projectKey) {
         return objectMapper.valueToTree(
                 new MemberUpdatedPayload(
                         userId,
                         String.valueOf(role),
                         projectId,
-                        null
+                        projectKey
                 )
         );
     }
 
-    private JsonNode memberRemovedPayload(UUID deletedMemberId, UUID projectId) {
+    private JsonNode memberRemovedPayload(UUID deletedMemberId, UUID projectId, String projectKey) {
         return objectMapper.valueToTree(
                 new MemberRemovedPayload(
                         projectId,
                         deletedMemberId,
-                        null
+                        projectKey
                 )
         );
     }
