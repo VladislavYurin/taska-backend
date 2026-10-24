@@ -33,7 +33,6 @@ class UserServiceImplTest {
             .displayName("User").status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
     private final ru.taska.transport.grpc.GrpcNotificationSettingsClient notificationSettings = Mockito.mock(ru.taska.transport.grpc.GrpcNotificationSettingsClient.class);
     private UserServiceImpl service;
-    private NotificationPreferencesSynchronizer synchronizer;
 
     @BeforeEach
     void setUp() {
@@ -42,28 +41,15 @@ class UserServiceImplTest {
         Mockito.when(properties.authService()).thenReturn(authProperties);
         Mockito.when(authProperties.deadlineDuration()).thenReturn(Duration.ofSeconds(2));
         Mockito.when(stub.withDeadlineAfter(anyLong(), any(TimeUnit.class))).thenReturn(stub);
-        Mockito.when(notificationSettings.get(any())).thenReturn(Mono.just(ru.taska.api.notification.v1.NotificationPreferencesResponse.getDefaultInstance()));
-        synchronizer = new NotificationPreferencesSynchronizer(notificationSettings);
-        service = new UserServiceImpl(new AuthMapper(), new GrpcUserProfileServiceClient(stub, new UserProfileMapper(), properties), synchronizer);
+        service = new UserServiceImpl(new AuthMapper(), new GrpcUserProfileServiceClient(stub, new UserProfileMapper(), properties));
     }
 
-    @AfterEach
-    void cleanup() { synchronizer.close(); }
-
     @Test
-    void unavailableNotificationServiceDoesNotDelayProfileAndLegacyProvisioningIsAttempted() throws Exception {
-        var subscribed = new java.util.concurrent.CountDownLatch(1);
-        var cancelled = new java.util.concurrent.CountDownLatch(1);
-        Mockito.when(notificationSettings.get(any())).thenReturn(Mono.<ru.taska.api.notification.v1.NotificationPreferencesResponse>never()
-                .doOnSubscribe(ignored -> subscribed.countDown()).doOnCancel(cancelled::countDown));
+    void profileHasNoNotificationServiceDependency() {
         Mockito.when(stub.getUserProfile(any(GetUserProfileRequest.class)))
                 .thenReturn(Mono.just(GetUserProfileResponse.getDefaultInstance()));
-        StepVerifier.create(service.getMyInfo(context)).assertNext(result ->
-                assertThat(result.getId()).isEqualTo(context.userContext().userId()))
-                .expectComplete().verify(Duration.ofSeconds(1));
-        assertThat(subscribed.await(2, TimeUnit.SECONDS)).isTrue();
-        synchronizer.close();
-        assertThat(cancelled.await(2, TimeUnit.SECONDS)).isTrue();
+        StepVerifier.create(service.getMyInfo(context)).expectNextCount(1).verifyComplete();
+        Mockito.verifyNoInteractions(notificationSettings);
     }
 
     @Test

@@ -9,7 +9,6 @@ import ru.taska.domain.dto.ValidateAccessTokenResponseDto;
 import ru.taska.mapper.AuthMapper;
 import ru.taska.service.UserService;
 import ru.taska.transport.grpc.GrpcUserProfileServiceClient;
-import ru.taska.service.NotificationPreferencesSynchronizer;
 
 @Service
 @Slf4j
@@ -18,7 +17,6 @@ public class UserServiceImpl implements UserService {
 
     private final AuthMapper authMapper;
     private final GrpcUserProfileServiceClient profileClient;
-    private final NotificationPreferencesSynchronizer notificationSettings;
 
     /**
      * Извлекает информацию о текущем пользователе из уже верифицированного контекста безопасности.
@@ -47,8 +45,7 @@ public class UserServiceImpl implements UserService {
                         response.setAvatar(null);
                         response.setAvatarUnavailable(true);
                         return Mono.just(response);
-                    })
-                    .doOnNext(ignored -> notificationSettings.submit(context));
+                    });
         });
     }
 }
