@@ -15,10 +15,10 @@ assert csrf_match,'pgAdmin login page has no csrfToken; check the pinned image/l
 csrf=csrf_match.group(1)
 request=urllib.request.Request(base+'/authenticate/login',data=urllib.parse.urlencode(
     {'email':email,'password':password,'csrf_token':csrf}).encode(),
-    headers={'Content-Type':'application/x-www-form-urlencoded','X-pgA-CSRFToken':csrf})
+    headers={'Content-Type':'application/x-www-form-urlencoded','X-pgA-CSRFToken':csrf,'Referer':base+'/login','Origin':base})
 response=session.open(request,timeout=20);response.read()
-assert '/browser/' in response.url,'Login failed'
-session.addheaders.append(('X-pgA-CSRFToken',csrf))
+assert urllib.parse.urlparse(response.url).path=='/browser/','Login failed'
+session.addheaders.extend([('X-pgA-CSRFToken',csrf),('Referer',base+'/browser/'),('Origin',base)])
 def get(path):
     return json.load(session.open(base+path,timeout=20))
 groups=get('/browser/server_group/nodes/')

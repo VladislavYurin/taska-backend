@@ -237,6 +237,12 @@ services:
       - ISSUE_DB_NAME=${ISSUE_DB_NAME}
       - NOTIFICATION_DB_NAME=${NOTIFICATION_DB_NAME}
       - ADMIN_DB_NAME=${ADMIN_DB_NAME}
+    healthcheck:
+      test: ["CMD", "/venv/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/misc/ping', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     depends_on:
       auth-db:
         condition: service_healthy
