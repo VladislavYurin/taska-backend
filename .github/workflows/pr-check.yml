@@ -30,7 +30,9 @@ jobs:
       - name: Prepare local environment file
         run: cp .env.docker.example .env
       - name: Test Compose and Grafana configuration
-        run: node --test infra/tests/*.test.js
+        run: |
+          node --test infra/tests/*.test.js
+          python3 -m unittest discover -s infra/pgadmin -p 'test_*.py'
       - name: Validate Promtail config for local and stage
         run: |
           for environment in local stage; do

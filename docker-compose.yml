@@ -219,7 +219,8 @@ services:
     restart: unless-stopped
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./infra/pgadmin:/taska-pgadmin:ro
+      - ./infra/pgadmin/entrypoint.sh:/taska-pgadmin/entrypoint.sh:ro
+      - ./infra/pgadmin/prepare.py:/taska-pgadmin/prepare.py:ro
       - ./infra/pgadmin/config_local.py:/pgadmin4/config_local.py:ro
     entrypoint: ["/bin/sh", "/taska-pgadmin/entrypoint.sh"]
     environment:
