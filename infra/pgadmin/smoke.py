@@ -10,7 +10,9 @@ assert '/login' in response.url,'Anonymous root did not redirect to login'
 response=session.open(base+'/browser/',timeout=20)
 assert '/login' in response.url,'Anonymous browser was accessible'
 html=response.read().decode().replace(chr(92)+chr(34),chr(34))
-csrf=re.search(r'csrfToken"\s*:\s*"([^"]+)',html).group(1)
+csrf_match=re.search(r'csrfToken"\s*:\s*"([^"]+)',html)
+assert csrf_match,'pgAdmin login page has no csrfToken; check the pinned image/login markup'
+csrf=csrf_match.group(1)
 request=urllib.request.Request(base+'/authenticate/login',data=urllib.parse.urlencode(
     {'email':email,'password':password,'csrf_token':csrf}).encode(),
     headers={'Content-Type':'application/x-www-form-urlencoded','X-pgA-CSRFToken':csrf})

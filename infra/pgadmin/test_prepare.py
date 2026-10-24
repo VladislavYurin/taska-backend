@@ -53,6 +53,14 @@ class PrepareTest(unittest.TestCase):
                         prepare(root)
                         self.assertEqual(sum(call.args[0]=='add-user' for call in setup_mock.call_args_list),1)
                         self.assertEqual(sum(call.args[0]=='load-servers' for call in setup_mock.call_args_list),1)
+                        with patch.dict(os.environ,{'POSTGRES_PASSWORD':'rotated:test'}):
+                            prepare(root)
+                            self.assertIn(r'rotated\:test',pgpass.read_text())
+                        with patch.dict(os.environ,{'PGADMIN_DEFAULT_EMAIL':'new@example.com'}):
+                            prepare(root)
+                        with sqlite3.connect(database) as connection:
+                            self.assertEqual(connection.execute('SELECT count(*) FROM user').fetchone()[0],3)
+                        self.assertEqual(sum(call.args[0]=='load-servers' for call in setup_mock.call_args_list),2)
                     else:
                         setup_mock.assert_not_called()
 
