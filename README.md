@@ -205,6 +205,8 @@ curl http://127.0.0.1:8080/actuator/health
 
 PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue`, `notification`, `admin`.
 
+pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`. После входа группа Taska содержит подключения ко всем шести БД. Пароли берутся из runtime environment и записываются только внутри volume в `.pgpass` с правами 0600; в репозитории их нет. При переходе с desktop mode создаётся отдельная учётная запись администратора и резервная копия конфигурационной БД `pgadmin4.db.pre-tas-302`; существующие пользователи и серверы сохраняются. Смена значения `PGADMIN_DEFAULT_PASSWORD` сама по себе не меняет пароль уже существующей учётной записи. Список серверов импортируется один раз при создании пользователя; последующие ручные настройки сохраняются. Пароль PostgreSQL в `.pgpass` обновляется при каждом старте. Изменения хостов или имён БД для уже созданного пользователя применяются через Import/Export из `/tmp/taska-pgadmin-servers.json`. HTTP smoke запускается командой `python3 infra/pgadmin/smoke.py` с переменными `PGADMIN_CHECK_URL`, `PGADMIN_DEFAULT_EMAIL` и `PGADMIN_DEFAULT_PASSWORD`.
+
 ## API и безопасность
 
 Публичные endpoints: login, refresh и принятие приглашения. Остальные пользовательские операции требуют `Authorization: Bearer <access-token>`. Read-only административные endpoints дополнительно требуют глобальную роль `GLOBAL_ADMIN`.

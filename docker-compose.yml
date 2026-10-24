@@ -219,11 +219,24 @@ services:
     restart: unless-stopped
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./infra/pgadmin/entrypoint.sh:/taska-pgadmin/entrypoint.sh:ro
+      - ./infra/pgadmin/prepare.py:/taska-pgadmin/prepare.py:ro
+      - ./infra/pgadmin/config_local.py:/pgadmin4/config_local.py:ro
+    entrypoint: ["/bin/sh", "/taska-pgadmin/entrypoint.sh"]
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
-      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_SERVER_MODE=True
+      - PGADMIN_SERVER_JSON_FILE=/tmp/taska-pgadmin-servers.json
+      - PGADMIN_DISABLE_POSTFIX=1
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - AUTH_DB_NAME=${AUTH_DB_NAME}
+      - PROJECT_DB_NAME=${PROJECT_DB_NAME}
+      - WORKFLOW_DB_NAME=${WORKFLOW_DB_NAME}
+      - ISSUE_DB_NAME=${ISSUE_DB_NAME}
+      - NOTIFICATION_DB_NAME=${NOTIFICATION_DB_NAME}
+      - ADMIN_DB_NAME=${ADMIN_DB_NAME}
     depends_on:
       auth-db:
         condition: service_healthy
