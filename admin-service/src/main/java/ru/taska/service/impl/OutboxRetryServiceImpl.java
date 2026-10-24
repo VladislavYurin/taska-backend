@@ -14,10 +14,13 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.repository.OutboxRetryRepository;
 import ru.taska.service.AuditService;
 import ru.taska.service.OutboxRetryService;
+import ru.taska.service.readonly.SensitiveDataMaskService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -35,11 +38,14 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
 
     private static final String AUDIT_ACTION = "RETRY_OUTBOX_EVENT";
     private static final String TARGET_TABLE = "outbox_events";
+    //для логов
+    private static final String AUDIT_RETRY_NODE_ID = "outbox-retry-audit-write";
 
     private final OutboxRetryRepository outboxRetryRepository;
     private final AuditService auditService;
     private final OutboxRetryProperties properties;
     private final ObjectMapper objectMapper;
+    private final SensitiveDataMaskService maskService;
 
     /**
      * Выполняет ручной retry FAILED или зависшего PROCESSING outbox-события.
@@ -120,7 +126,7 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
     }
 
     /**
-     * Завершает retry проверкой неизменности payload
+     * Завершает retry проверкой неизменности payload, маскированием чувствительных данных
      * и записью административного аудита.
      */
     private Mono<OutboxEventSnapshot> completeRetry(
@@ -144,6 +150,16 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
             ));
         }
 
+        Map<String, Object> maskedPayload = maskService.maskSensitiveDataForAudit(
+                Map.of("payload", objectMapper.writeValueAsString(oldSnapshot.payload())),
+                service,
+                TARGET_TABLE,
+                requestId,
+                AUDIT_RETRY_NODE_ID
+        );
+        JsonNode oldValue = toAuditJson(oldSnapshot, maskedPayload.get("payload"));
+        JsonNode newValue = toAuditJson(newSnapshot, maskedPayload.get("payload"));
+
         AuditEventDto auditEvent = AuditEventDto.builder()
                 .requestId(requestId)
                 .actorUserId(actorUserId)
@@ -154,13 +170,25 @@ public class OutboxRetryServiceImpl implements OutboxRetryService {
                 .targetService(service)
                 .targetTable(TARGET_TABLE)
                 .targetId(oldSnapshot.id().toString())
-                .oldValue(objectMapper.valueToTree(oldSnapshot))
-                .newValue(objectMapper.valueToTree(newSnapshot))
+                .oldValue(oldValue)
+                .newValue(newValue)
                 .reason(reason.trim())
                 .build();
 
         return auditService.logAudit(auditEvent)
                 .thenReturn(newSnapshot);
+    }
+
+    private JsonNode toAuditJson(OutboxEventSnapshot snapshot, Object maskedPayload) {
+        ObjectNode node = objectMapper.valueToTree(snapshot);
+
+        if (maskedPayload instanceof String jsonString) {
+            node.set("payload", objectMapper.readTree(jsonString));
+        } else {
+            node.set("payload", objectMapper.valueToTree(maskedPayload));
+        }
+
+        return node;
     }
 
     /**
