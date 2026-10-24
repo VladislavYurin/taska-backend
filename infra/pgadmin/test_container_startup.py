@@ -5,13 +5,14 @@ import subprocess
 import sys
 import time
 import unittest
+import uuid
 import urllib.request
 
 
 @unittest.skipUnless(os.environ.get('PGADMIN_CONTAINER_TEST') == '1', 'Enable the Docker startup regression explicitly')
 class PgadminContainerStartupTest(unittest.TestCase):
     def test_recreated_container_bootstraps_before_config_distro_exists(self):
-        prefix = 'taska-pgadmin-test-' + str(os.getpid())
+        prefix = 'taska-pgadmin-test-' + uuid.uuid4().hex[:12]
         network, volume = prefix + '-net', prefix + '-data'
         containers = []
         root = Path(__file__).resolve().parent
@@ -57,9 +58,11 @@ class PgadminContainerStartupTest(unittest.TestCase):
                 if docker('exec', database, 'pg_isready', '-U', 'taska', check=False).returncode == 0:
                     break
                 time.sleep(0.5)
+            else:
+                self.fail('PostgreSQL did not become ready for the pgAdmin startup regression')
             for service in ('project', 'workflow', 'issue', 'notification', 'admin'):
                 docker('exec', database, 'createdb', '-U', 'taska', service + '_db')
-            docker('stop', desktop)
+            docker('rm', '-f', desktop)
             mounts = [value for source, target in (
                 ('entrypoint.sh', '/taska-pgadmin/entrypoint.sh'),
                 ('prepare.py', '/taska-pgadmin/prepare.py'),
