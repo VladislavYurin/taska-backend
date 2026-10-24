@@ -33,6 +33,8 @@ jobs:
         run: |
           node --test infra/tests/*.test.js
           python3 -m unittest discover -s infra/pgadmin -p 'test_*.py'
+      - name: Test pgAdmin startup with an existing volume
+        run: PGADMIN_CONTAINER_TEST=1 python3 -m unittest discover -s infra/pgadmin -p 'test_container_startup.py'
       - name: Validate Promtail config for local and stage
         run: |
           for environment in local stage; do
