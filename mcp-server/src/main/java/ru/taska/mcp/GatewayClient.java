@@ -35,6 +35,7 @@ public class GatewayClient {
     this.properties = properties;
     HttpClient http =
         HttpClient.create()
+            .disableRetry(true)
             .followRedirect(false)
             .option(
                 ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) properties.connectTimeout().toMillis())
@@ -96,6 +97,58 @@ public class GatewayClient {
                     "Taska временно недоступна. Повторите чтение позже."));
   }
 
+  public Mono<JsonNode> write(
+      GatewayMutation operation,
+      McpRequestContext context,
+      Map<String, ?> path,
+      JsonNode body,
+      GatewayWriteOptions options) {
+    var request =
+        client
+            .method(operation.method())
+            .uri(builder -> builder.path(operation.path()).build(path))
+            .headers(
+                headers -> {
+                  headers.setBearerAuth(context.bearerToken());
+                  headers.set("X-Request-Id", context.requestId());
+                  if (options.version() != null)
+                    headers.set(HttpHeaders.IF_MATCH, options.version().toString());
+                  if (options.idempotencyKey() != null)
+                    headers.set("Idempotency-Key", options.idempotencyKey().toString());
+                })
+            .accept(MediaType.APPLICATION_JSON);
+    var ready =
+        body == null ? request : request.contentType(MediaType.APPLICATION_JSON).bodyValue(body);
+    return ready
+        .exchangeToMono(
+            response -> {
+              if (operation.emptyResponse() && response.statusCode().value() == 204)
+                return response
+                    .releaseBody()
+                    .thenReturn(tools.jackson.databind.node.JsonNodeFactory.instance.objectNode());
+              return decode(response);
+            })
+        .timeout(properties.responseTimeout())
+        .onErrorMap(
+            error -> {
+              boolean unknown =
+                  !(error instanceof GatewayToolException)
+                      || "upstream_error".equals(((GatewayToolException) error).code());
+              if (!unknown) return error;
+              String message =
+                  options.idempotencyKey() != null
+                      ? "Результат создания неизвестен. Повтор допустим только с тем же"
+                          + " idempotency_key и аргументами."
+                      : "Результат записи неизвестен. Не повторяйте автоматически: перечитайте"
+                          + " объект, комментарии, worklogs или связи и уточните намерение при"
+                          + " неоднозначности.";
+              return new GatewayToolException(
+                  isTimeout(error) ? "timeout" : "upstream_error",
+                  message,
+                  Map.of("reason", "WRITE_OUTCOME_UNKNOWN"));
+            });
+  }
+
   public Mono<Boolean> healthy() {
     return client
         .get()
@@ -146,6 +199,14 @@ public class GatewayClient {
     if (reason != null && reason.matches("[A-Z0-9_]{1,64}")) details.put("reason", reason);
     String scope = text(source, "requiredScope");
     if ("read".equals(scope) || "write".equals(scope)) details.put("required_scope", scope);
+    String version = text(source, "currentVersion");
+    if (version == null && status == 409) version = text(body, "version");
+    if (version != null && version.matches("[0-9]{1,9}"))
+      details.put("current_version", Integer.parseInt(version));
+    String currentStatus = text(source, "currentStatus");
+    if (currentStatus == null && status == 409) currentStatus = text(body, "status");
+    if (currentStatus != null && currentStatus.matches("[A-Za-z0-9_]{1,64}"))
+      details.put("current_status", currentStatus);
     String retry = headers.getFirst(HttpHeaders.RETRY_AFTER);
     if (retry == null) retry = text(source, "retryAfterSeconds");
     if (retry != null && retry.matches("[0-9]{1,6}"))

@@ -130,15 +130,27 @@ class McpServerIntegrationTest {
       assertThat(client.listTools().tools())
           .extracting(McpSchema.Tool::name)
           .containsExactly(
+              "add_comment",
+              "add_label",
+              "assign_issue",
+              "create_issue",
               "get_board",
               "get_issue",
               "get_project",
+              "link_issues",
               "list_comments",
               "list_notifications",
               "list_projects",
               "list_worklogs",
+              "log_work",
+              "mark_notifications_read",
+              "remove_label",
               "search_issues",
               "search_users",
+              "transition_issue",
+              "unwatch_issue",
+              "update_issue",
+              "watch_issue",
               "whoami");
       var log =
           (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(McpObservability.class);
