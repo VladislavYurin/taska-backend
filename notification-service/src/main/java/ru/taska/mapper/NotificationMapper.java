@@ -185,6 +185,7 @@ public class NotificationMapper {
                 .notificationType(NotificationType.MEMBER_ADDED)
                 .title("You were added to a project")
                 .body("You were added to " + displayProject(event))
+                .projectId(memberProjectId(event))
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -196,6 +197,7 @@ public class NotificationMapper {
                 .notificationType(NotificationType.MEMBER_UPDATED)
                 .title("Your project role changed")
                 .body("Your role in " + displayProject(event) + " changed")
+                .projectId(memberProjectId(event))
                 .createdAt(Instant.now())
                 .sourceEventId(event.id())
                 .build();
@@ -482,6 +484,18 @@ public class NotificationMapper {
      */
     private String displayIssueKey(String key) {
         return key == null || key.isBlank() ? "the issue" : key;
+    }
+
+    private UUID memberProjectId(TaskaEvent event) {
+        var payload = event.payload();
+        if (payload != null && payload.hasNonNull("projectId")) {
+            try {
+                return UUID.fromString(payload.get("projectId").asString());
+            } catch (IllegalArgumentException ignored) {
+                // Legacy events can still identify their project by aggregate.
+            }
+        }
+        return "project".equalsIgnoreCase(event.aggregateType()) ? event.aggregateId() : null;
     }
 
     private String displayProject(TaskaEvent event) {
