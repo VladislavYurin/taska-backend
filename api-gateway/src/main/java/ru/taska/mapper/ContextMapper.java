@@ -20,6 +20,7 @@ public class ContextMapper {
         authMapper.toGatewayUserStatus(proto.getStatus()),
         authMapper.toGlobalRole(proto.getGlobalRole()),
         switch (proto.getTokenKind()) {
+          case ACCESS_TOKEN_KIND_DELEGATION -> GatewayTokenKind.DELEGATION;
           case ACCESS_TOKEN_KIND_PAT -> GatewayTokenKind.PAT;
           // An old auth-service emits UNSPECIFIED only for its legacy JWT path.
           case ACCESS_TOKEN_KIND_JWT, ACCESS_TOKEN_KIND_UNSPECIFIED -> GatewayTokenKind.JWT;

@@ -29,6 +29,7 @@
         <module>metrics-starter</module>
         <module>admin-service</module>
         <module>mcp-server</module>
+        <module>oauth-server</module>
     </modules>
 
     <properties>

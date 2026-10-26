@@ -18,7 +18,7 @@ public class MappingUtils {
     public static Header buildGrpcHeader(GatewayContext context) {
         var builder = Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId());
         if (context.channel() != null) builder.setActionChannel(context.channel().name());
-        if (context.userContext() != null && context.userContext().tokenKind() == ru.taska.domain.GatewayTokenKind.PAT
+        if (context.userContext() != null && context.userContext().tokenKind() != ru.taska.domain.GatewayTokenKind.JWT
                 && context.userContext().tokenId() != null) builder.setTokenId(context.userContext().tokenId());
         return builder.build();
     }

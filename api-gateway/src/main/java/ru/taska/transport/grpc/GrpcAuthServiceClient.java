@@ -80,6 +80,7 @@ public class GrpcAuthServiceClient {
                 .setBody(ValidateAccessTokenRequestBody.newBuilder()
                         .setAccessToken(accessToken)
                         .setAllowPersonalToken(true)
+                        .setAllowDelegatedToken(true)
                         .build())
                 .build();
 

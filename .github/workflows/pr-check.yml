@@ -62,6 +62,7 @@ jobs:
           - { name: notification-service,module: notification-service }
           - { name: admin-service,       module: admin-service }
           - { name: mcp-server,          module: mcp-server }
+          - { name: oauth-server,        module: oauth-server }
 
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +107,7 @@ jobs:
         svc:
           - { name: api-gateway,          module: api-gateway,          img: api-gateway }
           - { name: mcp-server,           module: mcp-server,           img: mcp-server }
+          - { name: oauth-server,         module: oauth-server,         img: oauth-server }
           - { name: auth-service,         module: auth-service,         img: auth-service }
           - { name: project-service,      module: project-service,      img: project-service }
           - { name: workflow-service,     module: workflow-service,     img: workflow-service }

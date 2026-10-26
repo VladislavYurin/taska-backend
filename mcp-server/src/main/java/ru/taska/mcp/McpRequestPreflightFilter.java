@@ -102,7 +102,7 @@ public class McpRequestPreflightFilter implements WebFilter {
         || !(args.isObject() || args.isMissingNode())) return false;
     var metadata = McpCallMetadata.from(params.path("_meta"));
     context =
-        new McpRequestContext(context.requestId(), context.bearerToken(), context.user(), metadata);
+        context.withMetadata(metadata);
     exchange.getAttributes().put(McpRequestContext.KEY, context);
     var registration = registry.find(name.asText());
     if (registration == null
@@ -147,7 +147,10 @@ public class McpRequestPreflightFilter implements WebFilter {
           .getResponse()
           .getHeaders()
           .set(
-              HttpHeaders.WWW_AUTHENTICATE, "Bearer error=\"insufficient_scope\", scope=\"write\"");
+              HttpHeaders.WWW_AUTHENTICATE, exchange.getAttribute(McpOAuthProperties.class.getName()) == null
+                  ? "Bearer error=\"insufficient_scope\", scope=\"write\""
+                  : "Bearer error=\"insufficient_scope\", scope=\"read write\", resource_metadata=\""
+                    + exchange.getAttribute(McpOAuthProperties.class.getName()) + "\"");
     return exchange.getResponse().setComplete();
   }
 }

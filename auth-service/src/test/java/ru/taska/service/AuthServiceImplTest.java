@@ -178,6 +178,27 @@ class AuthServiceImplTest {
         );
     }
 
+    @Test void oauthCredentialValidationReusesPasswordPolicyWithoutCreatingJwtSessions() {
+        Mockito.when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(testUser));
+        Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)).thenReturn(Mono.just(testCredential));
+        Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+        Mockito.when(passwordHashService.matches(testCredential,"correctPassword")).thenReturn(Mono.just(true));
+        Mockito.when(credentialRepository.save(testCredential)).thenReturn(Mono.just(testCredential));
+        StepVerifier.create(authServiceImpl.authenticateOAuthCredentials(" TEST@EXAMPLE.COM ","correctPassword"))
+            .assertNext(user->Assertions.assertThat(user.getUserId()).isEqualTo(testUserId.toString())).verifyComplete();
+        Mockito.verifyNoInteractions(jwtServiceImpl,refreshTokenServiceImpl,personalTokens,outboxEventRepository);
+    }
+
+    @Test void oauthCredentialValidationRejectsBlockedUsersBeforePasswordOrSessionIssuance() {
+        testUser.setStatus(UserStatus.BLOCKED);
+        Mockito.when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(testUser));
+        Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)).thenReturn(Mono.just(testCredential));
+        Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+        StepVerifier.create(authServiceImpl.authenticateOAuthCredentials("test@example.com","password"))
+            .expectErrorMatches(error->error instanceof DomainException domain&&domain.getStatus()==DomainStatus.UNAUTHENTICATED).verify();
+        Mockito.verifyNoInteractions(passwordHashService,jwtServiceImpl,refreshTokenServiceImpl);
+    }
+
     @Nested
     @DisplayName("Login Tests")
     class LoginTests {

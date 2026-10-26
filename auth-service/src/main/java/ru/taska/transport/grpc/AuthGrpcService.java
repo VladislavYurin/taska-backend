@@ -23,6 +23,7 @@ import validator.GrpcRequestValidators;
 public class AuthGrpcService {
 
     private final AuthService authService;
+    private final ru.taska.security.oauth.OAuthTokenService oauthTokens;
 
     public Mono<ru.taska.api.auth.v1.PreviewInvitationResponse> previewInvitation(
             Mono<ru.taska.api.auth.v1.PreviewInvitationRequest> request) {
@@ -114,43 +115,29 @@ public class AuthGrpcService {
                 .thenReturn(Empty.getDefaultInstance());
     }
 
-    @TrackMetrics(counter = "auth-service_validate-accessToken_grpc_counter",
-            timer = "auth-service_validate-accessToken_grpc_timer")
+    @TrackMetrics(counter = "auth-service_validate-accessToken_grpc_counter", timer = "auth-service_validate-accessToken_grpc_timer")
     public Mono<ValidateAccessTokenResponse> validateAccessToken(Mono<ValidateAccessTokenRequest> request) {
-        return request
-                .flatMap(req -> {
-                    if (req.getBody().getAccessToken().startsWith("tsk_") && !req.getBody().getAllowPersonalToken()) {
-                        return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAUTHENTICATED,
-                                "This client does not support personal access tokens"));
-                    }
-                    return Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getRequestId(), "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getAccessToken(), "body.accessToken")
-                );})
-
-                .flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    String accessToken = t.getT3();
-
-                    log.info("[{}][{}] Validating access token", requestId, nodeId);
-
-                    return authService.validateAccessToken(accessToken)
-                            .doOnSuccess(userContext ->
-                                    log.info("[{}][{}] Access token validated successfully for user: {}",
-                                            requestId, nodeId, userContext.getUserId()))
-                            .doOnError(error ->
-                                    log.warn("[{}][{}] Access token validation failed: {}",
-                                            requestId, nodeId, error.getMessage())
-                            );
-                })
-                .map(userContext -> ValidateAccessTokenResponse.newBuilder()
-                        .setUserContext(userContext)
-                        .build()
-                );
+        return request.flatMap(req -> {
+            var body = req.getBody();
+            String token = body.getAccessToken();
+            return Mono.zip(
+                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                    GrpcRequestValidators.requireNonBlankOrInvalidArgument(token, "body.accessToken"))
+                    .flatMap(ignored -> {
+                        if (token.startsWith("tsk_oat_")) {
+                            if (!body.getAllowOauthToken()) return Mono.error(ru.taska.security.oauth.OAuthIntrospectionClient.invalid());
+                            return oauthTokens.validateOriginal(token);
+                        }
+                        if (ru.taska.security.oauth.OAuthTokenService.looksDelegated(token)) {
+                            if (!body.getAllowDelegatedToken()) return Mono.error(ru.taska.security.oauth.OAuthIntrospectionClient.invalid());
+                            return oauthTokens.validateDelegation(token);
+                        }
+                        if (token.startsWith("tsk_") && !body.getAllowPersonalToken())
+                            return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAUTHENTICATED,
+                                    "This client does not support personal access tokens"));
+                        return authService.validateAccessToken(token);
+                    });
+        }).map(user -> ValidateAccessTokenResponse.newBuilder().setUserContext(user).build());
     }
 }

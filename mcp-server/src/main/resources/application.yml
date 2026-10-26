@@ -43,6 +43,11 @@ management:
       version: '@project.version@'
 taska:
   mcp:
+    oauth:
+      enabled: ${MCP_OAUTH_ENABLED:false}
+      issuer: ${OAUTH_ISSUER:}
+      resource: ${MCP_OAUTH_RESOURCE:}
+      exchange-credential: ${MCP_OAUTH_EXCHANGE_CREDENTIAL:}
     gateway-signing-secret: ${MCP_GATEWAY_SIGNING_SECRET:}
     transport:
       max-request-bytes: ${MCP_MAX_REQUEST_BYTES:65536}
