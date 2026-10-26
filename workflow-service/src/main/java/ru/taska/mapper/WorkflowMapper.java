@@ -49,7 +49,7 @@ public class WorkflowMapper {
         };
     }
 
-    private ProjectWorkflow toProjectWorkflowProto(ProjectWorkflowAggregate projectWorkflow) {
+    public ProjectWorkflow toProjectWorkflowProto(ProjectWorkflowAggregate projectWorkflow) {
         return ProjectWorkflow.newBuilder()
                 .setWorkflow(toWorkflowProto(projectWorkflow.workflow()))
                 .addAllIssueTypes(projectWorkflow.issueTypes().stream().map(this::toProtoIssueType).toList())
@@ -86,7 +86,7 @@ public class WorkflowMapper {
         };
     }
 
-    private WorkflowTransition toWorkflowTransitionProto(TransitionEntity transition) {
+    public WorkflowTransition toWorkflowTransitionProto(TransitionEntity transition) {
         return WorkflowTransition.newBuilder()
                 .setId(transition.getId().toString())
                 .setFromStatusId(transition.getFromStatusId().toString())

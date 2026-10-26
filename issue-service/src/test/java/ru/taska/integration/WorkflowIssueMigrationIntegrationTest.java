@@ -1,0 +1,148 @@
+package ru.taska.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.domain.IssueType;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.IssuePriority;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import ru.taska.repository.IssueRepository;
+import ru.taska.service.WorkflowIssueMigrationService;
+import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
+import ru.taska.transport.kafka.OutboxEventScheduler;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
+class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
+    @MockitoBean OutboxEventScheduler scheduler;
+    @MockitoBean GrpcProjectServiceClient projects;
+    @Autowired IssueRepository repository;
+    @Autowired WorkflowIssueMigrationService service;
+    @Autowired DatabaseClient db;
+    private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID(), workflow = UUID.randomUUID();
+
+    @BeforeEach
+    void admin() {
+        when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
+                CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
+                        .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(false).build()));
+    }
+
+    @Test
+    void movesOnlyScopedActiveIssuesAndWritesHistoryOutboxExactlyOnce() {
+        var one = issue(project, IssueType.TASK, 1);
+        var two = issue(project, IssueType.TASK, 2);
+        var bug = issue(project, IssueType.BUG, 3);
+        var other = issue(UUID.randomUUID(), IssueType.TASK, 4);
+        var deleted = issue(project, IssueType.TASK, 5);
+        db.sql("UPDATE taska.issues SET deleted_at=now() WHERE id=:id").bind("id", deleted.getId()).fetch().rowsUpdated().block();
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), "r", "n").block()).isEqualTo(2);
+        for (var changed : List.of(one, two)) {
+            assertThat(repository.findById(changed.getId()).block().getStatusKey()).isEqualTo("DONE");
+            assertThat(count("issue_history", "issue_id", changed.getId())).isEqualTo(1);
+            assertThat(count("outbox_events", "aggregate_id", changed.getId())).isEqualTo(1);
+        }
+        for (var untouched : List.of(bug, other, deleted)) {
+            assertThat(repository.findById(untouched.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+        }
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), "retry", "n").block()).isZero();
+        assertThat(count("issue_history", "issue_id", one.getId())).isEqualTo(1);
+    }
+
+    @Test
+    void missingMappingReturnsCountWithoutChangingAnyIssue() {
+        var one = issue(project, IssueType.TASK, 1);
+        issue(project, IssueType.TASK, 2);
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), Map.of(), "r", "n"))
+                .expectErrorSatisfies(error -> {
+                    assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
+                    assertThat(((DomainException) error).getDetails()).containsEntry("issueCount", "2");
+                }).verify();
+        assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+        assertThat(count("issue_history", "issue_id", one.getId())).isZero();
+    }
+
+    @Test
+    void outboxFailureRollsBackStatusAndHistory() {
+        var one = issue(project, IssueType.TASK, 1);
+        db.sql("ALTER TABLE taska.outbox_events ADD CONSTRAINT workflow_migration_test_check CHECK (aggregate_id <> '" + one.getId() + "'::uuid)")
+                .fetch().rowsUpdated().block();
+        try {
+            StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                            Map.of("REVIEW", "DONE"), "r", "n"))
+                    .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+            assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+            assertThat(count("issue_history", "issue_id", one.getId())).isZero();
+            assertThat(count("outbox_events", "aggregate_id", one.getId())).isZero();
+        } finally {
+            db.sql("ALTER TABLE taska.outbox_events DROP CONSTRAINT workflow_migration_test_check").fetch().rowsUpdated().block();
+        }
+    }
+
+    @Test
+    void memberCannotRunAdministrativeMigration() {
+        when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
+                CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
+                        .setRole(ProjectRole.PROJECT_ROLE_MEMBER).build()));
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO"), Map.of(), "r", "n"))
+                .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.PERMISSION_DENIED)).verify();
+    }
+
+    @Test
+    void archivedProjectDoesNotMoveIssuesOrWriteHistory() {
+        var one = issue(project, IssueType.TASK, 1);
+        when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
+                CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
+                        .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(true).build()));
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), "r", "n"))
+                .expectErrorSatisfies(e -> {
+                    var error = (DomainException) e;
+                    assertThat(error.getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
+                    assertThat(error.getDetails()).containsEntry("reason", "PROJECT_ARCHIVED");
+                }).verify();
+        assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+        assertThat(count("issue_history", "issue_id", one.getId())).isZero();
+        assertThat(count("outbox_events", "aggregate_id", one.getId())).isZero();
+    }
+
+    @Test
+    void missingArchiveCapabilityRejectsMigration() {
+        when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
+                CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
+                        .setRole(ProjectRole.PROJECT_ROLE_ADMIN).build()));
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), "r", "n"))
+                .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.UNAVAILABLE))
+                .verify();
+    }
+
+    private Issue issue(UUID project, IssueType type, int number) {
+        return repository.save(Issue.builder().projectId(project).issueNumber(number).issueKey(UUID.randomUUID().toString())
+                .summary("Migration").description("").statusKey("REVIEW").issueType(type).priority(IssuePriority.MEDIUM)
+                .reporterId(actor).build()).block();
+    }
+
+    private long count(String table, String column, UUID id) {
+        return db.sql("SELECT count(*) AS n FROM taska." + table + " WHERE " + column + "=:id")
+                .bind("id", id).map((r, m) -> r.get("n", Long.class)).one().block();
+    }
+}

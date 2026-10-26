@@ -76,7 +76,7 @@ class WorkflowEditIT extends AbstractIT {
                         .rowsUpdated())
                 .block();
 
-        Mockito.when(projectRoleChecker.checkProjectRole(
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(
                         Mockito.anyString(),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),

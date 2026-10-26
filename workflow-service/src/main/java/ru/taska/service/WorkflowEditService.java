@@ -105,6 +105,11 @@ public class WorkflowEditService {
 
     private Mono<EditableWorkflow> loadEditableWorkflow(String requestId, String nodeId, UUID actorUserId,
                                                         UUID projectId, UUID workflowId) {
+        return loadEditableWorkflow(requestId, nodeId, actorUserId, projectId, workflowId, true);
+    }
+
+    Mono<EditableWorkflow> loadEditableWorkflow(String requestId, String nodeId, UUID actorUserId,
+                                                UUID projectId, UUID workflowId, boolean lock) {
         return projectRoleChecker.checkProjectWriteRole(
                         requestId,
                         nodeId,
@@ -112,7 +117,7 @@ public class WorkflowEditService {
                         actorUserId,
                         workflowProperties.allowedRoles().editWorkflowRoles()
                 )
-                .then(Mono.defer(() -> workflowRepository.findById(workflowId)))
+                .then(Mono.defer(() -> lock ? workflowRepository.findByIdForUpdate(workflowId) : workflowRepository.findById(workflowId)))
                 // Неактивный workflow WorkflowResolver не выбирает, поэтому и менять его нечего.
                 .filter(WorkflowEntity::isActive)
                 .switchIfEmpty(Mono.error(() -> new DomainException(DomainStatus.NOT_FOUND,
@@ -145,10 +150,14 @@ public class WorkflowEditService {
             return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
                     "Workflow not found in project: id=" + workflowId));
         }
+        if (bindings.stream().anyMatch(b -> !b.getProjectId().equals(projectId))) {
+            return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                    "Workflow is shared with another project and cannot be modified"));
+        }
         return Mono.just(issueTypes);
     }
 
-    private WorkflowCreationDto toCreationDto(UUID projectId, EditableWorkflow current) {
+    WorkflowCreationDto toCreationDto(UUID projectId, EditableWorkflow current) {
         Map<UUID, String> statusIdToKey = current.statuses().stream()
                 .collect(Collectors.toMap(StatusEntity::getId, StatusEntity::getStatusKey));
         return WorkflowCreationDto.builder()
@@ -162,7 +171,7 @@ public class WorkflowEditService {
                 .build();
     }
 
-    private Mono<Void> checkViolations(WorkflowCreationDto updated, String requestId, String nodeId) {
+    Mono<Void> checkViolations(WorkflowCreationDto updated, String requestId, String nodeId) {
         List<WorkflowCreationViolation> violations = validator.validateDto(updated);
         if (violations.isEmpty()) {
             return Mono.empty();
@@ -185,7 +194,7 @@ public class WorkflowEditService {
                 ).map(t -> new WorkflowAggregate(saved, t.getT1(), t.getT2())));
     }
 
-    private record EditableWorkflow(
+    record EditableWorkflow(
             WorkflowEntity workflow,
             List<IssueType> issueTypes,
             List<StatusEntity> statuses,
