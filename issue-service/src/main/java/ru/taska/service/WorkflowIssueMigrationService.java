@@ -64,7 +64,8 @@ public class WorkflowIssueMigrationService {
                         return (sourceStatuses.isEmpty()
                                 ? repository.findForWorkflowMigration(project, types, validStatuses,
                                         mapping.isEmpty() ? List.of("") : mapping.keySet())
-                                : repository.findForWorkflowMigrationBySourceStatuses(project, types, sourceStatuses)).collectList();
+                                : repository.findForWorkflowMigrationBySourceStatuses(project, types, sourceStatuses, validStatuses,
+                                        mapping.isEmpty() ? List.of("") : mapping.keySet())).collectList();
                     })
                     .flatMap(issues -> {
                         if (issues.size() > 5000) return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,

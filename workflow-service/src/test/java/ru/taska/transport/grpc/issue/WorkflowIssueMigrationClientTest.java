@@ -44,7 +44,7 @@ class WorkflowIssueMigrationClientTest {
     }
 
     @Test
-    void deletingStatusSendsExplicitSourceWhileWorkflowDeletionRetainsLegacyScope() {
+    void explicitSourcesAreForwardedWhileLegacyCallersKeepTheirFallback() {
         var stub = mock(ReactorIssueServiceGrpc.ReactorIssueServiceStub.class);
         when(stub.withDeadlineAfter(anyLong(), any())).thenReturn(stub);
         when(stub.migrateWorkflowIssues(any(MigrateWorkflowIssuesRequest.class)))

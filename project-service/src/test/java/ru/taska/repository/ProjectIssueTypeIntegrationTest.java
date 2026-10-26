@@ -163,10 +163,15 @@ class ProjectIssueTypeIntegrationTest {
         assertThat(ordered).extracting(t -> t.sortOrder()).containsExactly(10, 20, 30);
         assertThat(defaultType(project)).isEqualTo("STORY");
         var generation = ordered.getFirst().generation();
-        for (var invalid : List.of(List.of("TASK", "BUG"), List.of("TASK", "BUG", "BUG"), List.of("TASK", "BUG", "UNKNOWN"))) {
+        for (var invalid : List.of(List.of("TASK", "BUG"), List.of("TASK", "BUG", "UNKNOWN"))) {
             reactor.test.StepVerifier.create(service.reorder(project, actor, invalid).as(tx::transactional))
-                    .expectErrorSatisfies(error -> assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT)).verify();
+                    .expectErrorSatisfies(error -> {
+                        assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.ABORTED);
+                        assertThat(((DomainException) error).getDetails()).containsEntry("reason", "ISSUE_TYPES_CHANGED");
+                    }).verify();
         }
+        reactor.test.StepVerifier.create(service.reorder(project, actor, List.of("TASK", "BUG", "BUG")).as(tx::transactional))
+                .expectErrorSatisfies(error -> assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT)).verify();
         reactor.test.StepVerifier.create(service.reorder(project, actor, List.of("BUG", "TASK", "STORY"))
                         .then(Mono.error(new IllegalStateException("rollback"))).as(tx::transactional))
                 .expectError(IllegalStateException.class).verify();
@@ -191,6 +196,34 @@ class ProjectIssueTypeIntegrationTest {
         var recreated = service.create(project, actor, "BUG", "New bug", "red", "bug", 20).as(tx::transactional).block();
         assertThat(recreated.generation()).isNotEqualTo(original);
         assertThat(repository.listBatch(List.of(project)).collectList().block()).hasSize(3);
+    }
+
+    @Test
+    void staleOrderAfterRegistryAdditionOrDeletionReturnsConflictWithoutChangingSettings() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("STALE"); admin(project); repository.seedDefaults(project).block();
+        var issues = mock(GrpcIssueServiceClient.class);
+        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
+        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
+        List<String> old = repository.list(project).map(type -> type.code()).collectList().block();
+        service.create(project, actor, "REQUEST", "Request", "blue", "headset", 40).as(tx::transactional).block();
+        var afterAddition = repository.list(project).collectList().block();
+        reactor.test.StepVerifier.create(service.reorder(project, actor, old).as(tx::transactional))
+                .expectErrorSatisfies(error -> {
+                    assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.ABORTED);
+                    assertThat(((DomainException) error).getDetails()).containsExactlyEntriesOf(java.util.Map.of("reason", "ISSUE_TYPES_CHANGED"));
+                }).verify();
+        assertThat(repository.list(project).collectList().block()).isEqualTo(afterAddition);
+        assertThat(defaultType(project)).isEqualTo(old.getFirst());
+        List<String> stale = afterAddition.stream().map(type -> type.code()).toList();
+        service.delete(project, actor, "REQUEST", "r", "n").as(tx::transactional).block();
+        reactor.test.StepVerifier.create(service.reorder(project, actor, stale).as(tx::transactional))
+                .expectErrorSatisfies(error -> {
+                    assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.ABORTED);
+                    assertThat(((DomainException) error).getDetails()).containsEntry("reason", "ISSUE_TYPES_CHANGED");
+                }).verify();
+        assertThat(repository.list(project).map(type -> type.code()).collectList().block()).containsExactlyElementsOf(old);
+        assertThat(defaultType(project)).isEqualTo(old.getFirst());
     }
 
     private String defaultType(UUID project) {
