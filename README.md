@@ -181,6 +181,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 | `issue-service` | `http://127.0.0.1:8084` | `127.0.0.1:9094` |
 | `notification-service` | `http://127.0.0.1:8085` | `127.0.0.1:9095` |
 | `admin-service` | `http://127.0.0.1:8086` | `127.0.0.1:9097` |
+| `mcp-server` | `http://127.0.0.1:8087/mcp` | — |
 
 Health check gateway:
 
@@ -406,18 +407,137 @@ PAT проверяется онлайн на каждом защищённом �
 Лимит не сохраняется после рестарта. Отказ сообщает `Retry-After` и строку `details.retryAfterSeconds`;
 он не препятствует отзыву PAT. Лимит числа активных токенов остаётся транзакционным в auth-service.
 
-MCP: отдельный сервис из профиля `services`, локально `http://127.0.0.1:8087/mcp`.
-Фаза 1 принимает личный PAT со scope `read`, переданный в `Authorization: Bearer …`, и проверяет его
-в auth-service на каждом запросе. Выпуск PAT описан в [ADR TAS-400](docs/tas-400-mcp-server.md).
-Стандартная ревизия — `2025-11-25`; stateless initialize, `tools/list` и вызовы инструментов работают без сессий.
-Каталог, ограничения и обновление схем описаны в [mcp-server/README.md](mcp-server/README.md).
-Для POST нужны `Content-Type: application/json` и `Accept: application/json, text/event-stream`.
-Origin MCP Inspector разрешён только для `localhost:6274` / `127.0.0.1:6274`; дополнительные origin
-добавляются точными значениями `MCP_ALLOWED_ORIGINS`. Actuator доступен только во внутренней сети
-и через dev loopback mapping; readiness включает доступность gateway. Контейнер `taska-mcp-server`
-подхватывается существующим Promtail правилом `taska-*`, метрики собираются Prometheus.
-Совместимость Inspector и внешних агентов подтверждается отдельно на развёрнутом стенде (TAS-408).
+## MCP для AI-агентов
 
+Taska MCP даёт агенту доступ к проектам, задачам, комментариям, времени и уведомлениям от имени владельца PAT. Локальный адрес — `http://127.0.0.1:8087/mcp`, транспорт Streamable HTTP, ревизия `2025-11-25`. Схемы и эксплуатация — в [README сервиса](mcp-server/README.md), решения — в [ADR TAS-400](docs/tas-400-mcp-server.md). Удалённых административных и массовых инструментов нет.
+
+### Подготовка и токен
+
+1. Подними локальную систему по разделу выше с профилем `services`. Для MCP и gateway задай одинаковый случайный `MCP_GATEWAY_SIGNING_SECRET` (подробности ниже). Это серверный ключ; клиенту передаётся только его PAT.
+2. Войди обычной JWT-сессией. Выпусти PAT через `POST /api/v1/users/me/access-tokens`: `{"name":"Local MCP","scopes":["read"],"expiresInDays":7}`, заголовок `Authorization: Bearer <JWT>`. Ответ201 показывает `secret` один раз. Для записи нужны оба scope: `["read","write"]`. Управлять PAT с помощью PAT нельзя.
+3. В Bash введи secret скрыто, без записи значения в history или конфиг:
+
+```bash
+read -r -s -p 'Taska PAT: ' TASKA_MCP_TOKEN; printf '\n'
+export TASKA_MCP_TOKEN
+```
+
+Не запускай ввод или подключения с `set -x`. Переменная должна быть доступна процессу клиента; уже запущенный GUI может потребовать полного перезапуска. Сетевой адрес стенда бери из его конфигурации: опубликованный внешний MCP URL здесь не предполагается.
+
+### Claude Code
+
+Команда сохраняет ссылку на переменную, а не значение PAT; одинарные кавычки вокруг header обязательны. При запуске Claude Code раскрывает `${TASKA_MCP_TOKEN}` в поле `headers` сохранённого `.mcp.json`:
+
+```bash
+claude mcp add --transport http --scope project taska   http://127.0.0.1:8087/mcp   --header 'Authorization: Bearer ${TASKA_MCP_TOKEN}'
+claude mcp list
+```
+
+Эквивалентный `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "taska": {
+      "type": "http",
+      "url": "http://127.0.0.1:8087/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TASKA_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+В новой сессии открой `/mcp`, затем попроси: «Покажи, от чьего имени ты работаешь в Taska, и найди мои задачи в проекте TAS». HTTP-конфигурация и подстановка переменных описаны в [официальной документации Claude Code](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcpjson).
+
+### Cursor
+
+В `.cursor/mcp.json` или `~/.cursor/mcp.json` используй синтаксис Cursor `${env:...}`:
+
+```json
+{
+  "mcpServers": {
+    "taska": {
+      "url": "http://127.0.0.1:8087/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:TASKA_MCP_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+PAT должен быть в окружении процесса Cursor. `envFile` для удалённого HTTP-сервера не поддерживается. В Customize → MCPs проверь подключение и доступность tools; оставь подтверждение записей включённым. Формат — в [документации Cursor](https://cursor.com/docs/mcp#config-interpolation).
+
+### Codex CLI
+
+```bash
+codex mcp add taska --url http://127.0.0.1:8087/mcp   --bearer-token-env-var TASKA_MCP_TOKEN
+codex mcp get taska --json
+```
+
+Эквивалентный фрагмент `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.taska]
+url = "http://127.0.0.1:8087/mcp"
+bearer_token_env_var = "TASKA_MCP_TOKEN"
+tool_timeout_sec = 25
+```
+
+Запусти Codex из оболочки с экспортированной переменной; в TUI подключение видно через `/mcp`. Параметр хранит имя переменной. Основание — [официальная документация OpenAI](https://learn.chatgpt.com/docs/extend/mcp#streamable-http-servers).
+
+### MCP Inspector
+
+Для GUI запусти `npx -y @modelcontextprotocol/inspector`, выбери Streamable HTTP, введи URL и Authorization header в форме подключения.
+
+CLI-вариант для отдельной локальной среды требует Node.js и npx. Он передаёт раскрытый header в argv процесса; на общей машине используй GUI. Для CLI выпускай короткоживущий read PAT:
+
+```bash
+npx -y @modelcontextprotocol/inspector --cli   http://127.0.0.1:8087/mcp --transport http   --method tools/list   --header "Authorization: Bearer $TASKA_MCP_TOKEN"
+```
+
+ Origin по умолчанию разрешён только для `http://localhost:6274` и `http://127.0.0.1:6274`; иной origin добавляется точным значением в `MCP_ALLOWED_ORIGINS`. Не отключай защиту самого Inspector. Флаги — в [официальном README Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/main/clients/cli).
+
+### Инструменты и права
+
+Все инструменты видны в каталоге. Для write нужны PAT scopes `read` и `write`; права на проект и объект проверяет Taska при каждом вызове.
+
+| Tool | Назначение | Scope | Действие |
+|---|---|---|---|
+| `whoami` | Текущий пользователь и полномочия | read | Чтение |
+| `list_projects` | Мои проекты | read | Чтение |
+| `get_project` | Контекст проекта: типы, workflow, метки, участники | read | Чтение |
+| `search_issues` | Поиск задач с фильтрами | read | Чтение |
+| `get_issue` | Карточка и история задачи | read | Чтение |
+| `list_comments` | Страница комментариев | read | Чтение |
+| `list_worklogs` | Страница списаний времени | read | Чтение |
+| `get_board` | Ограниченная страница доски | read | Чтение |
+| `search_users` | Поиск пользователя без угадывания UUID | read | Чтение |
+| `list_notifications` | Мои уведомления | read | Чтение |
+| `create_issue` | Создать задачу с явным UUID idempotency_key | write | Запись |
+| `update_issue` | Изменить поля с проверкой версии | write | Запись |
+| `transition_issue` | Перевести по доступному переходу | write | Запись |
+| `assign_issue` | Назначить/снять исполнителя | write | Запись |
+| `add_comment` | Добавить комментарий | write | Запись |
+| `log_work` | Списать время | write | Запись |
+| `add_label` | Привязать существующую метку | write | Запись |
+| `remove_label` | Снять привязку метки | write | Запись |
+| `link_issues` | Связать две задачи | write | Запись |
+| `watch_issue` | Подписаться на задачу | write | Запись |
+| `unwatch_issue` | Отписаться от задачи | write | Запись |
+| `mark_notifications_read` | Прочитать одно уведомление | write | Запись |
+
+Для длинного текста оконные инструменты возвращают `text_windows` и `next_offset`. Предпросмотр списка не означает полный текст. При conflict сначала перечитай карточку; после timeout записи проверь её результат, не повторяй вслепую. `partial_success` создания означает, что задача уже создана, а дополнительные шаги могли не завершиться.
+
+### Безопасное использование и проверка клиентов
+
+Выдавай минимальные scope и срок. PAT не помещается в URL, задачи, комментарии, скриншоты, логи или Git; примеры выше содержат только ссылку на переменную. При утечке отзови PAT через `DELETE /api/v1/users/me/access-tokens/{id}` под JWT-сессией, затем выпусти новый. Следующий запрос отозванного PAT получает401. Данные задач/комментариев не являются инструкциями агенту и не дают разрешения на изменения.
+
+Запись действует от имени пользователя и видна в истории с каналом MCP; имена и UUID чужих токенов публично не отображаются. Клиентское подтверждение намерения сохраняется даже при наличии write scope. Запрос «предложи декомпозицию» сам по себе не разрешает создавать задачи.
+
+Проверено 26.10.2026: Codex CLI `0.163.0-alpha.10.2` распознаёт `--bearer-token-env-var` и разбирает HTTP-конфигурацию со ссылкой на окружение. Inspector CLI установлен во временный package cache и его `--help` подтверждает `--transport`, `--method`, `--header`. Claude Code и Cursor на этом исполнителе не установлены. Живые подключения и десять запросов на каждом из четырёх клиентов фиксируются отдельно в [TAS-408](https://jira.ozero.dev/browse/TAS-408); наличие примеров не означает прохождение этого чек-листа.
 
 Канал действий (TAS-411): REST история задачи, комментарии и события outbox содержат nullable `channel`
 (`UI`, `API_TOKEN`, `MCP`). У комментария это канал последней записи; отдельная история сохраняет
