@@ -140,6 +140,27 @@ class ArchiveProjectIntegrationTest {
         }
     }
 
+    @Test
+    void projectListHasStableCreationAndIdOrderAndExcludesArchivedProjects() {
+        var first = project();
+        var second = project();
+        var older = project();
+        var hidden = project();
+        db.sql("UPDATE taska.projects SET created_at='2026-01-02T00:00:00Z' WHERE id IN (:one,:two)")
+                .bind("one", first.getId()).bind("two", second.getId()).fetch().rowsUpdated().block();
+        db.sql("UPDATE taska.projects SET created_at='2026-01-01T00:00:00Z' WHERE id=:id")
+                .bind("id", older.getId()).fetch().rowsUpdated().block();
+        archive.archive(hidden.getId(), actor, "archive", "n").block();
+        var tied = java.util.stream.Stream.of(first.getId(), second.getId())
+                .sorted(java.util.Comparator.comparing(UUID::toString)).toList();
+        var expected = java.util.List.of(older.getId(), tied.get(0), tied.get(1));
+        for (int read = 0; read < 2; read++) {
+            assertThat(service.listMyProjects("r", "n", actor).map(item -> item.project_id()).collectList().block())
+                    .containsExactlyElementsOf(expected);
+        }
+        assertThat(service.listMyProjects("r", "n", UUID.randomUUID()).collectList().block()).isEmpty();
+    }
+
     private Project project() {
         var p=projects.save(Project.builder().name("Business").projectKey("P"+UUID.randomUUID().toString().substring(0,8)).createdBy(actor).build()).block();
         members.save(ProjectMember.builder().projectId(p.getId()).userId(actor).role(ProjectRole.ADMIN).addedBy(actor).addedAt(Instant.now()).build()).block();

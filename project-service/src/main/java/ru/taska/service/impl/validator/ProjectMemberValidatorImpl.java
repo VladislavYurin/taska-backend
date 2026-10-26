@@ -105,7 +105,8 @@ public class ProjectMemberValidatorImpl implements ProjectMemberValidator {
                             log.info("[{}][{}] Try to modify last admin: {} in project: {}",
                                     requestId, nodeId, changedMemberId, projectId);
                             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-                                    "Can't modify last admin: " + changedMemberId + " in project: " + projectId));
+                                    "Can't modify last admin: " + changedMemberId + " in project: " + projectId,
+                                    Map.of("reason", "LAST_ADMIN")));
                         }
                     }
                     return Mono.just(true);
