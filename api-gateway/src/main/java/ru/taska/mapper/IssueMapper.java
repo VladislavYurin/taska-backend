@@ -442,11 +442,12 @@ public class IssueMapper {
             GatewayContext context
     ) {
         CreateIssueRequestBody.Builder bodyBuilder = CreateIssueRequestBody.newBuilder();
+        String issueTypeKey = requireIssueTypeKeyFormat(request.getIssueType());
 
         bodyBuilder.setIdempotencyKey(IdempotencyKey)
                    .setProjectId(projectId)
-                   .setIssueType(toGrpcIssueType(requireIssueTypeKeyFormat(request.getIssueType())))
-                   .setIssueTypeKey(request.getIssueType())
+                   .setIssueType(toGrpcIssueType(issueTypeKey))
+                   .setIssueTypeKey(issueTypeKey)
                    .setSummary(request.getSummary())
                    .setDescription(request.getDescription())
                    .setPriority(toGrpcIssuePriority(request.getPriority()))

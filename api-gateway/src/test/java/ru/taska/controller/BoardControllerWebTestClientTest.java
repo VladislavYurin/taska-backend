@@ -47,6 +47,9 @@ import java.util.UUID;
 @DisplayName("BoardController WebTestClient Tests")
 class BoardControllerWebTestClientTest {
 
+    @MockitoBean
+    private ru.taska.transport.grpc.GrpcProjectIssueTypeClient issueTypesClient;
+
     private static final String TOKEN = "Bearer JWT-token";
     private static final String USER_ID = "00000000-0000-0000-0000-000000000000";
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -190,12 +193,41 @@ class BoardControllerWebTestClientTest {
     @org.junit.jupiter.params.provider.ValueSource(strings = {"request", "A", "WITH SPACE", ""})
     void malformedTypeFilterReturnsEmptyBoard(String key) {
         mockAuthenticatedUser();
+        Mockito.when(issueTypesClient.list(Mockito.eq(PROJECT_ID), Mockito.any()))
+                .thenReturn(Mono.just(new ru.taska.domain.dto.ListProjectIssueTypesDto(List.of())));
         webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
                         .queryParam("issueType", key).build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk()
                 .expectBody().jsonPath("$.columns.length()").isEqualTo(0)
                 .jsonPath("$.unplacedIssues.length()").isEqualTo(0);
         Mockito.verifyNoInteractions(boardService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"PERMISSION_DENIED", "NOT_FOUND"})
+    void malformedFilterStillChecksProjectAccess(String code) {
+        mockAuthenticatedUser();
+        Mockito.when(issueTypesClient.list(Mockito.eq(PROJECT_ID), Mockito.any()))
+                .thenReturn(Mono.error(io.grpc.Status.fromCode(io.grpc.Status.Code.valueOf(code)).asRuntimeException()));
+        webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("issueType", "request").build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange()
+                .expectStatus().isEqualTo(code.equals("NOT_FOUND") ? 404 : 403);
+        Mockito.verifyNoInteractions(boardService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"REQUEST", "REQUEST_2", "NOPE"})
+    void validOpenKeyPassesToBoardService(String key) {
+        mockAuthenticatedUser();
+        Mockito.when(boardService.getBoard(Mockito.eq(PROJECT_ID), Mockito.eq(key), Mockito.isNull(), Mockito.isNull(),
+                        Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.any()))
+                .thenReturn(Mono.just(new BoardResponseDto().projectId(PROJECT_ID).columns(List.of()).unplacedIssues(List.of())));
+        webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("issueType", key).build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk();
+        Mockito.verify(boardService).getBoard(Mockito.eq(PROJECT_ID), Mockito.eq(key), Mockito.isNull(), Mockito.isNull(),
+                Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.any());
     }
 
     @Test

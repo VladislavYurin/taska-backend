@@ -25,11 +25,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class OutboxRetryServiceIT {
 
     private static final String SERVICE = "issue";
+    private static final String SERVICE_AUTH = "auth";
     private static final String REQUEST_ID = "tas-106-it-request";
     private static final String REASON = "Manual retry after investigation";
     private static final String ACTOR_NAME = "global-admin";
@@ -311,6 +312,66 @@ class OutboxRetryServiceIT {
                     RENAME TO admin_audit_log
                     """);
         }
+    }
+
+    // TAS-296
+    /**
+      * Проверяет, что при retry события чувствительные данные не попадут в admin_audit_log
+     */
+    @Test
+    @DisplayName("Payload с чувствительными данными маскируется перед записью в audit")
+    void retryWithSensitivePayload_shouldMaskPayloadInAudit() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        JsonNode sensitivePayload = objectMapper.readTree("""
+                {
+                  "email": "user@example.com",
+                  "rawInviteToken": "SECRET-TOKEN-123",
+                  "displayName": "Ivan"
+                }
+                """);
+        JsonNode actorRoles = objectMapper.valueToTree(
+                List.of("GLOBAL_ADMIN")
+        );
+
+        insertEvent(
+                eventId,
+                OutboxStatus.FAILED,
+                3,
+                "Kafka unavailable",
+                sensitivePayload
+        );
+
+        StepVerifier.create(outboxRetryService.retryOutboxEvent(
+                        REQUEST_ID,
+                        NODE_ID,
+                        SERVICE_AUTH,
+                        eventId,
+                        REASON,
+                        ACTOR_USER_ID,
+                        ACTOR_NAME,
+                        "admin@example.com",
+                        actorRoles
+                ))
+                .assertNext(snapshot -> assertSuccessfulSnapshot(
+                        snapshot,
+                        eventId,
+                        sensitivePayload,
+                        3
+                ))
+                .verifyComplete();
+
+        AuditRow audit = readAudit(REQUEST_ID);
+        assertNotNull(audit);
+
+        JsonNode auditedOldPayload = audit.oldValue().get("payload");
+        JsonNode auditedNewPayload = audit.newValue().get("payload");
+
+        assertFalse(auditedOldPayload.has("rawInviteToken"));
+        assertFalse(auditedNewPayload.has("rawInviteToken"));
+        assertEquals("u**************m", auditedOldPayload.get("email").asString());
+        assertEquals("u**************m", auditedNewPayload.get("email").asString());
+        assertEquals("Ivan", auditedOldPayload.get("displayName").asString());
+        assertEquals("Ivan", auditedNewPayload.get("displayName").asString());
     }
 
     /**

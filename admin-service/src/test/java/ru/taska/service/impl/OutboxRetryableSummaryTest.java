@@ -72,7 +72,7 @@ class OutboxRetryableSummaryTest {
         Mockito.when(retryRepository.findById("issue", snapshot.id())).thenReturn(Mono.just(snapshot));
         var reachedAtomicRetry = new IllegalStateException("Reached atomic retry");
         Mockito.when(retryRepository.retry(anyString(), any(), any())).thenReturn(Mono.error(reachedAtomicRetry));
-        var retryService = new OutboxRetryServiceImpl(retryRepository, Mockito.mock(AuditService.class), retryProperties, json);
+        var retryService = new OutboxRetryServiceImpl(retryRepository, Mockito.mock(AuditService.class), retryProperties, json, Mockito.mock(SensitiveDataMaskService.class));
         StepVerifier.create(retryService.retryOutboxEvent("request", "admin", "issue", snapshot.id(),
                         "test", UUID.randomUUID(), "admin",
                 "admin@example.com", json.createArrayNode()))

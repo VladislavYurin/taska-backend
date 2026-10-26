@@ -1607,7 +1607,7 @@ class IssueControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"REQUEST", "NOPE"})
+    @ValueSource(strings = {"REQUEST", "REQUEST_2", "NOPE"})
     void searchForOpenKeyPassesItToBackend(String key) {
         mockAuthenticatedUser();
         Mockito.when(issueClient.searchIssues(Mockito.any(), Mockito.any()))

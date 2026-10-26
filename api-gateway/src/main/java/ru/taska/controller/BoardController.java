@@ -23,6 +23,7 @@ public class BoardController implements BoardApi {
 
     private final GatewayRequestExecutor executor;
     private final BoardService boardService;
+    private final ru.taska.transport.grpc.GrpcProjectIssueTypeClient issueTypesClient;
 
     /**
      * Возвращает доску проекта с учетом фильтров. Без параметра issueType
@@ -54,8 +55,9 @@ public class BoardController implements BoardApi {
                 EndpointSecurity.PROTECTED,
                 context -> {
                     if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
-                        return Mono.just(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
-                                .columns(java.util.List.of()).unplacedIssues(java.util.List.of())));
+                        return issueTypesClient.list(projectId, context)
+                                .thenReturn(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
+                                        .columns(java.util.List.of()).unplacedIssues(java.util.List.of())));
                     }
                     return boardService.getBoard(
                         projectId,
