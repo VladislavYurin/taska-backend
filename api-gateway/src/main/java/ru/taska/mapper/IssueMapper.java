@@ -279,7 +279,7 @@ public class IssueMapper {
 
     public IssueType toGrpcIssueType(String restIssueType) {
         if (restIssueType == null) return IssueType.ISSUE_TYPE_UNSPECIFIED;
-        return switch (restIssueType) {
+        return switch (requireIssueTypeKey(restIssueType)) {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> IssueType.ISSUE_TYPE_BUG;
             case "STORY" -> IssueType.ISSUE_TYPE_STORY;
@@ -515,11 +515,7 @@ public class IssueMapper {
 
         if (body.getIssueType().present()) {
             String key = requireNotCleared(body.getIssueType().value(), "issueType");
-            try {
-                bodyBuilder.setIssueTypeKey(ru.taska.domain.IssueType.valueOf(key).name());
-            } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid issue type key");
-            }
+            bodyBuilder.setIssueTypeKey(requireIssueTypeKey(key));
         }
         if (body.getPriority().present()) {
             bodyBuilder.setPriority(toGrpcIssuePriority(requireNotCleared(body.getPriority().value(), "priority")));
@@ -718,8 +714,16 @@ public class IssueMapper {
         return protoIssue.getIssueLinksList().stream().map(this::toRestIssueLinkResponse).toList();
     }
 
+    private String requireIssueTypeKey(String key) {
+        try {
+            return ru.taska.domain.IssueType.valueOf(key).name();
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid issue type key");
+        }
+    }
+
     private String toIssueTypeDto(boolean hasKey, String key, IssueType issueType) {
-        if (hasKey) return ru.taska.domain.IssueType.valueOf(key).name();
+        if (hasKey) return key;
         return switch (issueType) {
             case ISSUE_TYPE_TASK -> "TASK";
             case ISSUE_TYPE_BUG -> "BUG";

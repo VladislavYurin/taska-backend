@@ -288,7 +288,7 @@ public class ProjectMapper {
     }
 
     private String toRestIssueType(String proto) {
-        return ru.taska.domain.IssueType.valueOf(proto).name();
+        return proto;
     }
 
     public GlobalRoleProto toGlobalRoleProto(GlobalRole role) {

@@ -43,7 +43,7 @@ class WorkflowServiceIT extends AbstractIT{
 
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ISSUE_TYPE = "TASK";
-    private static final String WRONG_ISSUE_TYPE = "ISSUE";
+    private static final String CUSTOM_ISSUE_TYPE = "ISSUE";
     private static final String DEFAULT_WORKFLOW_NAME = "Default workflow";
     private static final String TEST_WORKFLOW_NAME = "Test workflow";
     private static final UUID DEFAULT_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -64,14 +64,10 @@ class WorkflowServiceIT extends AbstractIT{
     }
 
     @Test
-    void shouldThrowInvalidArgument_causeWrongIssueType() {
-        StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, WRONG_ISSUE_TYPE))
-                    .expectErrorSatisfies(error -> {
-                        Assertions.assertInstanceOf(DomainException.class, error);
-                        DomainException ex = (DomainException) error;
-                        Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ex.getStatus());
-                    })
-                    .verify();
+    void customIssueTypeUsesCommonDefaultWorkflow() {
+        StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, CUSTOM_ISSUE_TYPE))
+                .assertNext(result -> Assertions.assertEquals(DEFAULT_WORKFLOW_NAME, result.workflow().getName()))
+                .verifyComplete();
     }
 
     @Test
