@@ -190,3 +190,47 @@ JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -pl mcp-server -am test \
 Проверены все 12 handlers через stateful HTTP stub и реальный Java SDK сценарий с gRPC auth stub:
 создание/повтор, переход, конфликт версии, комментарий и worklog. Доменная история/уведомления
 на развёрнутом стенде и сценарий внешнего агента здесь не подтверждаются — это TAS-408.
+
+
+## Ресурсы и промпты (TAS-410)
+
+`resources/templates/list` публикует `taska://issues/{key}` и `taska://projects/{key}`.
+`resources/read` возвращает Markdown карточки с последними 20 событиями истории либо контекста
+проекта (реестр типов, workflow каждого типа, метки, участники). Это те же `get_issue`/`get_project`
+через общий ToolExecutor: исходные ACL gateway, PAT read, квоты, таймауты, текстовые окна и лимиты
+действуют без отдельного обходного пути. Лимит 128 KiB повторно проверяется после Markdown-экранирования
+по сериализованному `ReadResourceResult`. При усечении описание продолжается через поддерживаемый
+`get_issue text_offset`, комментарии/worklogs — через соответствующие инструменты со страницей.
+Недоступный и отсутствующий ресурс дают одинаковый стандартный resource-not-found, без сведений
+о чужом объекте. Произвольные URL, query/fragment и пути файлов не принимаются.
+
+`resources/list` выполняет один `search_issues page=0,page_size=20` от текущего пользователя:
+не более 20 доступных новых задач в порядке REST `created_at desc,id desc`. Кэширования между
+пользователями и обогащения запросом на каждую строку нет. Cursor не поддерживается; для дальнейших
+страниц служит `search_issues`. Статический список SDK общий для сервера, поэтому узкая обёртка
+публичного `McpStatelessServerTransport.setMcpHandler` переопределяет только `resources/list`.
+Остальные методы, уведомления, версии протокола и завершение работы остаются у SDK; штатный
+WebFlux router не заменяется. Реальный SDK integration test закрепляет wiring этой обёртки.
+
+Промпты на русском: `triage_my_issues` (необязательный project_key), `standup` (project_key,
+period: today/yesterday/7d/14d/30d, UTC) и `decompose_issue` (обязательный issue_key).
+Они читают сначала; декомпозиция требует явного подтверждения перед вызовом `create_issue`.
+Промпт стендапа честно предупреждает, что REST search не фильтрует период, а история ограничена.
+Сам `prompts/get` не вызывает бизнес-API и не меняет данные. Аргументы строго проверяются;
+пользовательские описания, имена и история объявлены недоверенными данными. Markdown описания
+изолированы fence, который длиннее любой последовательности backtick внутри текста.
+
+Для MCP 2025-11-25 используется HTTP `Cache-Control: private, no-store`; выдуманных `ttlMs`,
+`cacheScope`, подписок и уведомлений listChanged нет. Снимок двух templates, трёх определений
+и полных русских prompt templates — `schemas/resources-prompts.json`. Изменение обновляется явно:
+
+```sh
+JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -pl mcp-server -am test \
+  -Dtest=ResourcePromptSnapshotTest -Dsurefire.failIfNoSpecifiedTests=false \
+  -DupdateMcpResourcePromptSnapshot=true
+```
+
+Проверены HTTP/gRPC stubs и настоящий Java SDK: discovery, Markdown, три промпта, два PAT
+с разными списками задач, отсутствие кэша между ними, одинаковая ошибка чужого/отсутствующего
+ресурса и HTTP cache headers. Inspector, внешний агент и развёрнутый стенд проверяются в TAS-408;
+этот локальный прогон не подтверждает их работоспособность.
