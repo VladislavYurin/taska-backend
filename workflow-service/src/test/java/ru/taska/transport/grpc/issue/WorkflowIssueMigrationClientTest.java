@@ -18,6 +18,32 @@ import static org.mockito.Mockito.*;
 
 class WorkflowIssueMigrationClientTest {
     @Test
+    void forwardsRequestLocalChannelAndPrivateTokenAcrossSecondHop() {
+        var stub = mock(ReactorIssueServiceGrpc.ReactorIssueServiceStub.class);
+        when(stub.withDeadlineAfter(anyLong(), any())).thenReturn(stub);
+        when(stub.migrateWorkflowIssues(any(MigrateWorkflowIssuesRequest.class)))
+                .thenReturn(Mono.just(MigrateWorkflowIssuesResponse.newBuilder().build()));
+        var client = new WorkflowIssueMigrationClient(stub);
+        var command = new WorkflowMutation("r", "n", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                1, null, null, null, null, null, null, null, Map.of());
+        var token = UUID.randomUUID();
+        for (var channel : ru.taska.domain.ActionChannel.values()) {
+            var metadata = new ru.taska.domain.ActionMetadata(channel,
+                    channel == ru.taska.domain.ActionChannel.UI ? null : token);
+            client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of())
+                    .contextWrite(context -> context.put(ru.taska.domain.ActionMetadata.class, metadata)).block();
+        }
+        client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of()).block();
+        var request = ArgumentCaptor.forClass(MigrateWorkflowIssuesRequest.class);
+        verify(stub, times(4)).migrateWorkflowIssues(request.capture());
+        assertThat(request.getAllValues()).extracting(r -> r.getHeader().getActionChannel())
+                .containsExactly("UI", "API_TOKEN", "MCP", "");
+        assertThat(request.getAllValues()).extracting(r -> r.getHeader().hasTokenId())
+                .containsExactly(false, true, true, false);
+        assertThat(request.getAllValues().get(2).getHeader().getTokenId()).isEqualTo(token.toString());
+    }
+
+    @Test
     void deletingStatusSendsExplicitSourceWhileWorkflowDeletionRetainsLegacyScope() {
         var stub = mock(ReactorIssueServiceGrpc.ReactorIssueServiceStub.class);
         when(stub.withDeadlineAfter(anyLong(), any())).thenReturn(stub);

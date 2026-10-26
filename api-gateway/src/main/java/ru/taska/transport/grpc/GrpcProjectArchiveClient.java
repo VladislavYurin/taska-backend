@@ -24,7 +24,7 @@ public class GrpcProjectArchiveClient {
         return projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
                 .archiveProject(ArchiveProjectRequest.newBuilder().setProjectId(project.toString())
                         .setActorUserId(context.userContext().userId())
-                        .setHeader(Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId())).build())
+                        .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).build())
                 .map(mapper::toRestProjectResponse);
     }
 }

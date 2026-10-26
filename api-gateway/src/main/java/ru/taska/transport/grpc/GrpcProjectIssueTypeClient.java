@@ -62,7 +62,7 @@ public class GrpcProjectIssueTypeClient {
     }
 
     private Header header(GatewayContext context) {
-        return Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()).build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub dynamicStub() {

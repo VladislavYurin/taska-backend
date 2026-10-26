@@ -152,6 +152,23 @@ MCP request ≤64 KiB; upstream response ≤2 MiB; итоговый сериал
 Решение владельца: участникам проекта показываем **только UI / API_TOKEN / MCP**, без имени и id чужого токена. Internal token_id сохраняется в аудите и доменной истории, но не включается в публичный REST history/comment. Старые channel=null поддерживаются.
 JWT → UI, PAT напрямую → API_TOKEN. MCP → только после проверки gateway внутреннего HMAC-маркера: отдельный общий secret, подпись version/method/raw path+query/request_id/timestamp/nonce/SHA-256 bearer. TTL 60s, constant-time comparison, bounded nonce replay cache; при нескольких gateway репликах replay cache локальный (маркер не расширяет ACL). TLS и запрет логирования внутренних заголовков обязательны. Клиентский `_meta`/X-Taska-Source сам по себе не доверяется. Неверный заявленный marker → 403; JWT не получает канал MCP. Ключ подписи не является PAT и никогда не передаётся клиенту. Граница и формат реализуются/проверяются в TAS-411.
 
+Формат маркера TAS-411: `X-Taska-Mcp-Version: 1`, `X-Taska-Mcp-Timestamp` (целые Unix seconds),
+`X-Taska-Mcp-Nonce` (16 случайных байт, Base64url без padding), `X-Taska-Mcp-Signature`
+(HMAC-SHA256, Base64url без padding). `X-Request-Id` обязателен и подписывается. Каноническая строка
+UTF-8: `1\nMETHOD\nrawPath[?rawQuery]\nrequestId\ntimestamp\nnonce\nlowercaseHex(SHA256(bearer))`,
+без завершающего перевода строки. Регистр percent encoding и порядок query сохраняются; пустой query
+с `?` отличается от отсутствующего. Значения с CR/LF запрещены. Сравнивается ровно 32 байта MAC
+через constant-time comparison. Каждая подписка/повтор upstream-запроса получает новый nonce.
+
+Gateway принимает marker не старше 60 секунд; допустимое опережение часов MCP — 5 секунд.
+Replay cache хранит nonce до `timestamp + 60`, атомарно принимает один запрос с данным nonce и
+очищает только истёкшие записи. При заполнении отказывает 403; неверная подпись не расходует nonce.
+Частичный, дублированный или поддельный marker (включая одиночный `X-Taska-Source: MCP`) даёт 403
+`PERMISSION_DENIED`, `details.reason=INVALID_MCP_MARKER`. JWT с валидной подписью также отклоняется.
+Сервисный ключ — `MCP_GATEWAY_SIGNING_SECRET` (стандартный Base64, минимум 32 байта), максимальное
+число nonce — `GATEWAY_MCP_MAX_NONCES` (по умолчанию 10000). Пустой ключ отключает подпись и
+запрещает аутентифицированный MCP upstream; прямой PAT продолжает работать как `API_TOKEN`.
+
 ## Угрозы и обязательные проверки
 
 | Угроза | Защита / проверка |

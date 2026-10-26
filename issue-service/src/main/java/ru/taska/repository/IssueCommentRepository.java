@@ -45,13 +45,15 @@ public interface IssueCommentRepository extends ReactiveCrudRepository<IssueComm
     @Query("""
             UPDATE taska.issue_comments
             SET deleted_at = NOW(),
+                channel = :channel,
+                token_id = :tokenId,
                 version = version + 1
             WHERE id = :id
               AND version = :version
               AND deleted_at IS NULL
             RETURNING *
             """)
-    Mono<IssueComment> softDeleteWithVersionCheck(UUID id, Integer version);
+    Mono<IssueComment> softDeleteWithVersionCheck(UUID id, Integer version, String channel, UUID tokenId);
 
     /**
      * Подсчёт количества комментариев у задачи.
@@ -79,6 +81,8 @@ public interface IssueCommentRepository extends ReactiveCrudRepository<IssueComm
     @Query("""
     UPDATE taska.issue_comments
     SET body = :body,
+        channel = :channel,
+        token_id = :tokenId,
         version = version + 1,
         updated_at = NOW()
     WHERE id = :id
@@ -88,6 +92,6 @@ public interface IssueCommentRepository extends ReactiveCrudRepository<IssueComm
     RETURNING *
     """)
     Mono<IssueComment> updateWithVersionCheckAndAuthor(
-            UUID id, String body, Integer version, UUID actorUserId
+            UUID id, String body, Integer version, UUID actorUserId, String channel, UUID tokenId
     );
 }

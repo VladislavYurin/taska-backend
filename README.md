@@ -409,4 +409,21 @@ Origin MCP Inspector разрешён только для `localhost:6274` / `12
 подхватывается существующим Promtail правилом `taska-*`, метрики собираются Prometheus.
 Совместимость Inspector и внешних агентов подтверждается отдельно на развёрнутом стенде (TAS-408).
 
+
+Канал действий (TAS-411): REST история задачи, комментарии и события outbox содержат nullable `channel`
+(`UI`, `API_TOKEN`, `MCP`). У комментария это канал последней записи; отдельная история сохраняет
+канал каждого действия. Старые строки остаются с `null`. Внутренний UUID PAT хранится в доменном
+аудите, без имени токена; публичные REST/gRPC DTO истории и комментария его не возвращают.
+
+Для подписанных запросов MCP задайте одинаковый `MCP_GATEWAY_SIGNING_SECRET` в `mcp-server` и
+`api-gateway`: стандартный Base64 от минимум 32 случайных байт (`openssl rand -base64 32`). Пустой
+ключ запрещает аутентифицированные исходящие запросы MCP, а gateway отклоняет заявленный marker.
+Обычные прямые PAT-запросы сохраняют канал `API_TOKEN`. HMAC использует отдельный сервисный ключ,
+не меняет Bearer пользователя и не расширяет его scopes/ACL. Формат подписи и ограничения replay
+описаны в [ADR TAS-400](docs/tas-400-mcp-server.md#ограничения-аудит-и-канал-действий).
+Передавайте MCP → gateway по TLS (локальные тестовые HTTP исключены); исключите Authorization и
+внутренние `X-Taska-Mcp-*` заголовки из access/application logs. `GATEWAY_MCP_MAX_NONCES` ограничивает
+локальный cache gateway (по умолчанию 10000); при заполнении живыми nonce запрос отклоняется 403,
+а живые записи не вытесняются. На нескольких репликах replay-защита локальна каждой реплике.
+
 Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.
