@@ -110,6 +110,16 @@ public class GrpcAuthServiceClient {
      * @param context текущий контекст окружения запроса на Gateway
      * @return {@link Mono<Void>}, завершающийся успешно при успешной обработке на стороне gRPC-сервиса
      */
+    public Mono<ru.taska.domain.dto.InvitationPreviewResponseDto> previewInvitation(
+            Mono<ru.taska.domain.dto.InvitationPreviewRequestDto> request, GatewayContext context) {
+        return request.flatMap(body -> dynamicStub().previewInvitation(ru.taska.api.auth.v1.PreviewInvitationRequest.newBuilder()
+                        .setHeader(ru.taska.api.common.v1.Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()))
+                        .setToken(body.getToken()).build()))
+                .map(preview -> new ru.taska.domain.dto.InvitationPreviewResponseDto().email(preview.getEmail())
+                        .displayName(preview.getDisplayName()).kind(ru.taska.domain.dto.InvitationPreviewResponseDto.KindEnum.fromValue(preview.getKind()))
+                        .expiresAt(ru.taska.mapper.MappingUtils.toOffsetDateTime(preview.getExpiresAt())));
+    }
+
     public Mono<Void> setPasswordByToken(Mono<PasswordByTokenRequestDto> request, GatewayContext context) {
         log.info("[{}] Calling setPasswordByToken", context.requestId());
         return request.flatMap(requestDto ->

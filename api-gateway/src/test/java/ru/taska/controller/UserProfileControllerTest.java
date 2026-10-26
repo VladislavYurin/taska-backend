@@ -81,9 +81,44 @@ class UserProfileControllerTest {
     @MockitoBean
     private ContextMapper contextMapper;
 
+    @MockitoBean
+    private ru.taska.service.UserService userService;
+
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
+    }
+
+    @Test
+    void patchNameReturnsCompleteProfileWithNewNameWithoutClientRefresh() {
+        mockAuthenticatedUser();
+        Mockito.when(grpcClient.updateMyProfile(Mockito.any(), Mockito.any())).thenReturn(Mono.just("New Name"));
+        var profile = new ru.taska.domain.dto.ValidateAccessTokenResponseDto().id(USER_ID)
+                .email("test@example.com").displayName("Old Name")
+                .globalRole(ru.taska.domain.dto.GlobalRoleTypeDto.USER).status(ru.taska.domain.dto.UserStatusDto.ACTIVE)
+                .avatarUnavailable(false);
+        Mockito.when(userService.getMyInfo(Mockito.any())).thenReturn(Mono.just(profile));
+        webTestClient.patch().uri("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"displayName\":\"New Name\",\"globalRole\":\"GLOBAL_ADMIN\"}")
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.id").isEqualTo(USER_ID).jsonPath("$.displayName").isEqualTo("New Name")
+                .jsonPath("$.email").isEqualTo("test@example.com").jsonPath("$.globalRole").isEqualTo("USER");
+    }
+
+    @Test
+    void patchNameRequiresAuthenticationAndPropagatesValidationReason() {
+        webTestClient.patch().uri("/api/v1/users/me").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"displayName\":\"Name\"}").exchange().expectStatus().isUnauthorized();
+        Mockito.verifyNoInteractions(grpcClient);
+        mockAuthenticatedUser();
+        Mockito.when(grpcClient.updateMyProfile(Mockito.any(), Mockito.any())).thenReturn(Mono.defer(() -> {
+            ru.taska.util.DisplayNames.normalize(" "); return Mono.empty();
+        }));
+        webTestClient.patch().uri("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"displayName\":\" \"}")
+                .exchange().expectStatus().isBadRequest().expectBody()
+                .jsonPath("$.details.reason").isEqualTo("DISPLAY_NAME_INVALID");
+        Mockito.verifyNoInteractions(userService);
     }
 
     // ==================== ТЕСТЫ createAvatarUploadUrl ====================

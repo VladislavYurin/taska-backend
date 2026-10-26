@@ -23,6 +23,15 @@ public class UserProfileController implements UserProfileApi {
 
     private final GatewayRequestExecutor executor;
     private final GrpcUserProfileServiceClient grpcClient;
+    private final ru.taska.service.UserService userService;
+
+    @Override
+    public Mono<ResponseEntity<ru.taska.domain.dto.ValidateAccessTokenResponseDto>> updateMyProfile(
+            Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, context -> grpcClient.updateMyProfile(request, context)
+                .flatMap(name -> userService.getMyInfo(context).map(info -> { info.setDisplayName(name); return info; }))
+                .map(ResponseEntity::ok));
+    }
 
     @Override
     public Mono<ResponseEntity<AvatarResponseDto>> confirmAvatarUpload(

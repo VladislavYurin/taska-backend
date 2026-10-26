@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ProfileService {
+    Mono<ru.taska.entity.User> updateMyProfile(UUID actorUserId, String displayName);
+
 
     /**
      * Генерирует presigned URL для скачивания аватара пользователя.

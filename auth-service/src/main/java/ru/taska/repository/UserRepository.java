@@ -38,6 +38,9 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
         """)
     Flux<UserDetailsDto> searchDirectory(String pattern, int limit, long offset);
 
+    @Query("UPDATE taska.users SET display_name=:displayName,updated_at=now() WHERE id=:id RETURNING *")
+    Mono<User> updateDisplayName(UUID id, String displayName);
+
     Mono<Boolean> existsByEmail(String email);
 
     Mono<Long> countByGlobalRoleAndStatus(GlobalRole globalRole, UserStatus status);

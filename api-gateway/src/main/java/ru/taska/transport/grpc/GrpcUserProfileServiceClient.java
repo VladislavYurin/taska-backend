@@ -52,6 +52,13 @@ public class GrpcUserProfileServiceClient {
     private final GrpcClientProperties properties;
 
 
+    public Mono<String> updateMyProfile(Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, GatewayContext context) {
+        return request.flatMap(body -> dynamicStub().updateMyProfile(ru.taska.api.auth.profile.v1.UpdateMyProfileRequest.newBuilder()
+                        .setHeader(buildGrpcHeader(context)).setActorUserId(context.userContext().userId())
+                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build()))
+                .map(ru.taska.api.auth.profile.v1.UpdateMyProfileResponse::getDisplayName);
+    }
+
     public Mono<AvatarResponseDto> confirmAvatarUpload(
             Mono<ConfirmAvatarUploadRequestDto> request,
             GatewayContext context

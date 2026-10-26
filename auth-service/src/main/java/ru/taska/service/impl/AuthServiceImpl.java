@@ -156,6 +156,13 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public Mono<Void> setPasswordByToken(String requestId, String token, String newPassword) {
+        return setPasswordByToken(requestId, token, newPassword, null);
+    }
+
+    @Override
+    @Transactional
+    public Mono<Void> setPasswordByToken(String requestId, String token, String newPassword, String displayName) {
+        String normalizedName = displayName == null ? null : ru.taska.util.DisplayNames.normalize(displayName);
         if (token == null || token.isBlank()) {
             return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Token required"));
         }
@@ -175,12 +182,28 @@ public class AuthServiceImpl implements AuthService {
                 .filter(user -> user.getStatus() == UserStatus.INVITED)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token")))
                 .flatMap(user -> inviteTokenRepository.markTokenAsUsedIfValid(tokenHash)
-                        .flatMap(updated -> updated == 1 ? activateInvitedUser(user, newPassword, requestId)
+                        .flatMap(updated -> updated == 1 ? activateInvitedUser(user, newPassword, requestId, normalizedName)
                                 : Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"))))
                 .then();
     }
 
-    private Mono<Void> activateInvitedUser(User user, String newPassword, String requestId) {
+    @Override
+    public Mono<ru.taska.dto.InvitationPreview> previewInvitation(String token) {
+        if (token == null || token.isBlank() || token.length() > 256) return invalidInvitation();
+        return inviteTokenRepository.findByTokenHash(hashToken(token))
+                .filter(invite -> invite.getUsedAt() == null && invite.getExpiresAt().isAfter(java.time.Instant.now()))
+                .flatMap(invite -> userRepository.findById(invite.getUserId())
+                        .filter(user -> user.getStatus() == UserStatus.INVITED)
+                        .map(user -> new ru.taska.dto.InvitationPreview(user.getEmail(), user.getDisplayName(),
+                                user.getCreatedVia() == ru.taska.entity.UserCreatedVia.SIGNUP ? "SIGNUP" : "INVITATION", invite.getExpiresAt())))
+                .switchIfEmpty(invalidInvitation());
+    }
+
+    private <T> Mono<T> invalidInvitation() {
+        return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid or expired token"));
+    }
+
+    private Mono<Void> activateInvitedUser(User user, String newPassword, String requestId, String displayName) {
         return credentialRepository.findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
                 .defaultIfEmpty(createEmptyCredential(user.getId()))
                 .flatMap(credential -> Mono.fromCallable(() -> passwordHashService.encode(newPassword, HashingAlgorithm.BCRYPT))
@@ -193,6 +216,7 @@ public class AuthServiceImpl implements AuthService {
                 .then(Mono.defer(() -> personalTokens.revokeAll(user, "PASSWORD_CHANGED", requestId)))
                 .then(Mono.defer(() -> {
                     user.setStatus(UserStatus.ACTIVE);
+                    if (displayName != null) user.setDisplayName(displayName);
                     return userRepository.save(user)
                             .then(Mono.fromCallable(() -> userMapper.buildUserActivatedOutboxEvent(user, requestId)))
                             .flatMap(outboxEventRepository::save);

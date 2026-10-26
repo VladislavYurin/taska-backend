@@ -45,6 +45,12 @@ public class AuthController implements AuthApi {
      * @return {@link Mono}, содержащий {@link ResponseEntity} со статусом 200 (OK) и токенами внутри {@link LoginResponseDto}
      */
     @Override
+    public Mono<ResponseEntity<ru.taska.domain.dto.InvitationPreviewResponseDto>> previewInvitation(
+            Mono<ru.taska.domain.dto.InvitationPreviewRequestDto> request, ServerWebExchange exchange) {
+        return executor.execute(exchange, PUBLIC, context -> grpcAuthServiceClient.previewInvitation(request, context).map(ResponseEntity::ok));
+    }
+
+    @Override
     public Mono<ResponseEntity<LoginResponseDto>> login(Mono<LoginRequestDto> loginRequestDto, ServerWebExchange exchange) {
         return executor.execute(exchange, PUBLIC, context ->
                 grpcAuthServiceClient.login(loginRequestDto, context)

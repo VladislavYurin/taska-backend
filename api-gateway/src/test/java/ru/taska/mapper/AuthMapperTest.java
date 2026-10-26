@@ -250,6 +250,20 @@ class AuthMapperTest {
         }
     }
 
+    @Test
+    void optionalActivationNameDistinguishesOmissionFromExplicitNullAndUsesUnicodeContract() {
+        var json = tools.jackson.databind.json.JsonMapper.builder().build();
+        var omitted = json.readValue("{\"token\":\"invite\",\"newPassword\":\"Password123!\"}", PasswordByTokenRequestDto.class);
+        assertThat(authMapper.toPasswordByTokenGrpcRequest(omitted, gatewayContext()).getBody().hasDisplayName()).isFalse();
+        var explicitNull = json.readValue("{\"token\":\"invite\",\"newPassword\":\"Password123!\",\"displayName\":null}", PasswordByTokenRequestDto.class);
+        assertThat(explicitNull.isDisplayNamePresent()).isTrue();
+        assertThatThrownBy(() -> authMapper.toPasswordByTokenGrpcRequest(explicitNull, gatewayContext()))
+                .isInstanceOfSatisfying(DomainException.class, error -> assertThat(error.getDetails()).containsEntry("reason", "DISPLAY_NAME_INVALID"));
+        String astralName = "😀".repeat(128);
+        omitted.setDisplayName("  " + astralName + "  ");
+        assertThat(authMapper.toPasswordByTokenGrpcRequest(omitted, gatewayContext()).getBody().getDisplayName()).isEqualTo(astralName);
+    }
+
     // ============================================================
     // gRPC response mappers
     // ============================================================

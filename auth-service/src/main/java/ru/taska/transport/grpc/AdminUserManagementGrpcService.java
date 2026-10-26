@@ -25,6 +25,20 @@ public class AdminUserManagementGrpcService {
 
     private final AdminUserManagementService adminUserManagementService;
     private final AdminUserMapper adminUserMapper;
+    private final ru.taska.service.UserDisplayNameService userDisplayNameService;
+
+    public Mono<ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameResponse> updateUserDisplayName(
+            Mono<ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest> request) {
+        return request.flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getActorUserId(), "actorUserId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getTargetUserId(), "targetUserId"))
+                .flatMap(ids -> userDisplayNameService.updateByAdmin(ids.getT3(), ids.getT4(), req.getDisplayName())))
+                .map(change -> ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameResponse.newBuilder()
+                        .setUserId(change.userId().toString()).setDisplayName(change.displayName())
+                        .setPreviousDisplayName(change.previousDisplayName()).build());
+    }
 
     @TrackMetrics(counter = "auth-service_blockUser_grpc_counter",
             timer = "auth-service_blockUser_grpc_timer")

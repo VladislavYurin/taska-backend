@@ -37,6 +37,12 @@ public class ProfileServiceImpl implements ProfileService {
     private final TransactionalOperator transactionalOperator;
 
     @Override
+    public Mono<User> updateMyProfile(UUID actorUserId, String displayName) {
+        return Mono.defer(() -> userRepository.updateDisplayName(actorUserId, ru.taska.util.DisplayNames.normalize(displayName)))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found")));
+    }
+
+    @Override
     public Mono<String> getAvatarDownloadUrl(UUID actorUserId) {
         return verifyUserExists(actorUserId)
                 .then(Mono.defer(() -> userAvatarRepository.findByUserId(actorUserId)))

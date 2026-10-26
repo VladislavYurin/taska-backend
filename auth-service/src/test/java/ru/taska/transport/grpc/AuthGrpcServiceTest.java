@@ -53,6 +53,34 @@ class AuthGrpcServiceTest {
     private UserContext userContext;
     private AuthResponseDto authResponseDto;
 
+    @Test
+    void activationWithExplicitNamePreservesProtobufPresence() {
+        var request = validSetPasswordByTokenRequest.toBuilder().setBody(validSetPasswordByTokenRequest.getBody()
+                .toBuilder().setDisplayName(" New Name ")).build();
+        Mockito.when(authService.setPasswordByToken("test-request-id", request.getBody().getToken(),
+                request.getBody().getNewPassword(), " New Name ")).thenReturn(Mono.empty());
+        StepVerifier.create(authGrpcService.setPasswordByToken(Mono.just(request))).expectNext(Empty.getDefaultInstance()).verifyComplete();
+        Mockito.verify(authService).setPasswordByToken("test-request-id", request.getBody().getToken(),
+                request.getBody().getNewPassword(), " New Name ");
+    }
+
+    @Test
+    void previewRequiresHeaderAndMapsKindAndExpiryWithoutTokenInResponse() {
+        var expiry = java.time.Instant.parse("2027-01-01T12:00:00Z");
+        var request = ru.taska.api.auth.v1.PreviewInvitationRequest.newBuilder()
+                .setHeader(validLoginRequest.getHeader()).setToken("secret").build();
+        Mockito.when(authService.previewInvitation("secret")).thenReturn(Mono.just(
+                new ru.taska.dto.InvitationPreview("person@example.test", "Person", "SIGNUP", expiry)));
+        StepVerifier.create(authGrpcService.previewInvitation(Mono.just(request)))
+                .assertNext(value -> { org.junit.jupiter.api.Assertions.assertEquals("SIGNUP", value.getKind());
+                    org.junit.jupiter.api.Assertions.assertEquals(expiry.getEpochSecond(), value.getExpiresAt().getSeconds()); })
+                .verifyComplete();
+        Mockito.clearInvocations(authService);
+        StepVerifier.create(authGrpcService.previewInvitation(Mono.just(request.toBuilder().clearHeader().build())))
+                .expectError(StatusRuntimeException.class).verify();
+        Mockito.verifyNoInteractions(authService);
+    }
+
     @BeforeEach
     void setUp() {
         validLoginRequest = LoginRequest.newBuilder()
