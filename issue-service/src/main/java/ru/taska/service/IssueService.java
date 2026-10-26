@@ -1,18 +1,20 @@
 package ru.taska.service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.issue.v1.IssueBoardResponse;
+import ru.taska.domain.IssueType;
+import ru.taska.domain.aggregate.IssueWithProject;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.labels.IssueWithLabels;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
-import ru.taska.domain.IssueType;
-import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.util.BoardCursorPage;
 import ru.taska.domain.util.PageResult;
-import ru.taska.domain.aggregate.IssueWithProject;
-import ru.taska.domain.dto.labels.IssueWithLabels;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -181,4 +183,21 @@ public interface IssueService {
             String issueKey,
             UUID actorUserId
     );
+
+    Mono<BoardCursorPage<IssueBoardResponse>> listBoardColumnPage(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId);
 }

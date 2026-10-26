@@ -1,7 +1,12 @@
 package ru.taska.service.impl;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,8 +17,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
 import ru.taska.api.auth.profile.v1.AvatarResponse;
 import ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse;
 import ru.taska.api.auth.profile.v1.UserDetails;
@@ -34,10 +41,6 @@ import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 
 import java.util.List;
 import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit-тесты для {@link BoardServiceImpl}.
@@ -697,6 +700,376 @@ class BoardServiceImplTest {
         status.setCategory(category);
         status.setSortOrder(sortOrder);
         return status;
+    }
+
+    @Test
+    void columnPageMergesTypesByInstantAndIdAndEnrichesOnlyItsSelectedRows() {
+        var cursor = java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z");
+        UUID afterId = new UUID(0, 1);
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
+                .thenReturn(
+                        Mono.just(
+                                new WorkflowResponseDto()
+                                        .statuses(
+                                                List.of(
+                                                        workflowStatus(
+                                                                "DONE", "Done", "DONE", 1)))));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
+                .thenReturn(
+                        Mono.just(
+                                new WorkflowResponseDto()
+                                        .statuses(
+                                                List.of(
+                                                        workflowStatus(
+                                                                "DONE",
+                                                                "Active",
+                                                                "IN_PROGRESS",
+                                                                1)))));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
+                .thenReturn(
+                        Mono.just(
+                                new WorkflowResponseDto()
+                                        .statuses(
+                                                List.of(
+                                                        workflowStatus(
+                                                                "TODO", "Todo", "TODO", 1)))));
+        var task = pageIssue("TASK", "DONE", 2, "2026-01-02T00:00:00Z", 3);
+        var bug = pageIssue("BUG", "DONE", 3, "2026-01-02T03:00:00+03:00", 4);
+        // PostgreSQL UUID ordering is unsigned; UUID.compareTo would put this before TASK.
+        bug.issue().setId(UUID.fromString("80000000-0000-0000-0000-000000000003"));
+        bug.issue().setAssignee(new BoardUserDto().id(ASSIGNEE_ID));
+        bug = new BoardIssueData("DONE", List.of(LABEL_ID), bug.issue(), 4L);
+        var excluded = pageIssue("TASK", "DONE", 9, "2026-01-03T00:00:00Z", 3);
+        excluded.issue().setAssignee(new BoardUserDto().id(new UUID(0, 99)));
+        when(issueClient.listBoardColumnPage(
+                        PROJECT_ID.toString(),
+                        "TASK",
+                        "DONE",
+                        ASSIGNEE_ID.toString(),
+                        LABEL_ID.toString(),
+                        false,
+                        List.of("DONE"),
+                        IssuePriorityDto.HIGH,
+                        "%",
+                        2,
+                        cursor,
+                        afterId,
+                        context))
+                .thenReturn(
+                        Mono.just(
+                                new ru.taska.domain.BoardIssuePageData(
+                                        List.of(excluded, task), 3, true)));
+        when(issueClient.listBoardColumnPage(
+                        PROJECT_ID.toString(),
+                        "BUG",
+                        "DONE",
+                        ASSIGNEE_ID.toString(),
+                        LABEL_ID.toString(),
+                        false,
+                        List.of(),
+                        IssuePriorityDto.HIGH,
+                        "%",
+                        2,
+                        cursor,
+                        afterId,
+                        context))
+                .thenReturn(
+                        Mono.just(new ru.taska.domain.BoardIssuePageData(List.of(bug), 4, false)));
+        when(labelClient.listProjectLabels(PROJECT_ID.toString(), context))
+                .thenReturn(
+                        Mono.just(
+                                new ListProjectLabelsResponseDto()
+                                        .items(
+                                                List.of(
+                                                        new ProjectLabelResponseDto()
+                                                                .id(LABEL_ID)
+                                                                .name("Important")
+                                                                .color("#FF0000")))));
+        when(profileClient.getUserDetailsByIds(List.of(ASSIGNEE_ID), context))
+                .thenReturn(
+                        Mono.just(
+                                GetUserDetailsByIdsResponse.newBuilder()
+                                        .addUserDetails(
+                                                UserDetails.newBuilder()
+                                                        .setUserId(ASSIGNEE_ID.toString())
+                                                        .setDisplayName("Alice")
+                                                        .setAvatar(
+                                                                AvatarResponse.newBuilder()
+                                                                        .setDownloadUrl(
+                                                                                "https://example.test/avatar")))
+                                        .build()));
+        final var selectedBug = bug;
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "DONE",
+                                cursor,
+                                afterId,
+                                null,
+                                ASSIGNEE_ID,
+                                LABEL_ID,
+                                false,
+                                IssuePriorityDto.HIGH,
+                                "%",
+                                2,
+                                context))
+                .assertNext(
+                        page -> {
+                            assertThat(page.getIssues())
+                                    .containsExactly(task.issue(), selectedBug.issue());
+                            assertThat(page.getTotalCount()).isEqualTo(7);
+                            assertThat(page.getHasMore()).isTrue();
+                            assertThat(page.getStatusKey()).isEqualTo("DONE");
+                            assertThat(page.getIssues().get(1).getLabels())
+                                    .singleElement()
+                                    .satisfies(
+                                            label -> {
+                                                assertThat(label.getName()).isEqualTo("Important");
+                                                assertThat(label.getColor()).isEqualTo("#FF0000");
+                                            });
+                            assertThat(page.getIssues().get(1).getAssignee().getDisplayName())
+                                    .isEqualTo("Alice");
+                            assertThat(page.getIssues().get(1).getAssignee().getAvatarUrl())
+                                    .isEqualTo("https://example.test/avatar");
+                        })
+                .verifyComplete();
+        Mockito.verify(issueClient, Mockito.never())
+                .listBoardColumnPage(
+                        Mockito.any(),
+                        Mockito.eq("STORY"),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.anyInt(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
+        verify(profileClient).getUserDetailsByIds(List.of(ASSIGNEE_ID), context);
+        verify(labelClient).listProjectLabels(PROJECT_ID.toString(), context);
+    }
+
+    @Test
+    void exhaustedColumnPreservesFullTotalsAcrossTypesAndSkipsEnrichment() {
+        var cursor = java.time.OffsetDateTime.parse("2026-01-01T00:00:00Z");
+        UUID afterId = new UUID(0, 5);
+        for (String type : List.of("TASK", "BUG", "STORY")) {
+            when(workflowClient.getWorkflowForProject(PROJECT_ID, type, context))
+                    .thenReturn(
+                            Mono.just(
+                                    new WorkflowResponseDto()
+                                            .statuses(
+                                                    List.of(
+                                                            workflowStatus(
+                                                                    "TODO", "Todo", "TODO", 1)))));
+            when(issueClient.listBoardColumnPage(
+                            PROJECT_ID.toString(),
+                            type,
+                            "TODO",
+                            null,
+                            null,
+                            true,
+                            List.of(),
+                            null,
+                            null,
+                            50,
+                            cursor,
+                            afterId,
+                            context))
+                    .thenReturn(
+                            Mono.just(
+                                    new ru.taska.domain.BoardIssuePageData(List.of(), 10, false)));
+        }
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "TODO",
+                                cursor,
+                                afterId,
+                                null,
+                                null,
+                                null,
+                                true,
+                                null,
+                                null,
+                                null,
+                                context))
+                .assertNext(
+                        page -> {
+                            assertThat(page.getIssues()).isEmpty();
+                            assertThat(page.getTotalCount()).isEqualTo(30);
+                            assertThat(page.getHasMore()).isFalse();
+                        })
+                .verifyComplete();
+        Mockito.verifyNoInteractions(profileClient, labelClient);
+    }
+
+    @Test
+    void unknownColumnAndTypesWithMissingWorkflowsYieldNoPlacedIssues() {
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
+                .thenReturn(
+                        Mono.just(
+                                new WorkflowResponseDto()
+                                        .statuses(
+                                                List.of(
+                                                        workflowStatus(
+                                                                "TODO", "Todo", "TODO", 1)))));
+        for (String type : List.of("BUG", "STORY")) {
+            when(workflowClient.getWorkflowForProject(PROJECT_ID, type, context))
+                    .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
+        }
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "LEGACY",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                true,
+                                null,
+                                null,
+                                20,
+                                context))
+                .assertNext(
+                        page -> {
+                            assertThat(page.getIssues()).isEmpty();
+                            assertThat(page.getTotalCount()).isZero();
+                            assertThat(page.getHasMore()).isFalse();
+                        })
+                .verifyComplete();
+        Mockito.verifyNoInteractions(issueClient, profileClient, labelClient);
+        verify(issueTypesClient).list(PROJECT_ID, context);
+    }
+
+    @Test
+    void columnDoesNotHideRegistryFailure() {
+        when(issueTypesClient.list(PROJECT_ID, context))
+                .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "TODO",
+                                null,
+                                null,
+                                "NOPE",
+                                null,
+                                null,
+                                false,
+                                null,
+                                null,
+                                20,
+                                context))
+                .expectErrorSatisfies(
+                        error ->
+                                assertThat(Status.fromThrowable(error).getCode())
+                                        .isEqualTo(Status.Code.PERMISSION_DENIED))
+                .verify();
+        Mockito.verifyNoInteractions(issueClient);
+    }
+
+    @Test
+    void columnEnrichmentFailureReturns503() {
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
+                .thenReturn(
+                        Mono.just(
+                                new WorkflowResponseDto()
+                                        .statuses(
+                                                List.of(
+                                                        workflowStatus(
+                                                                "TODO", "Todo", "TODO", 1)))));
+        var row = pageIssue("TASK", "TODO", 1, "2026-01-01T00:00:00Z", 1);
+        row = new BoardIssueData("TODO", List.of(LABEL_ID), row.issue(), 1L);
+        when(issueClient.listBoardColumnPage(
+                        PROJECT_ID.toString(),
+                        "TASK",
+                        "TODO",
+                        null,
+                        null,
+                        false,
+                        List.of(),
+                        null,
+                        null,
+                        20,
+                        null,
+                        null,
+                        context))
+                .thenReturn(
+                        Mono.just(new ru.taska.domain.BoardIssuePageData(List.of(row), 1, false)));
+        when(labelClient.listProjectLabels(PROJECT_ID.toString(), context))
+                .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "TODO",
+                                null,
+                                null,
+                                "TASK",
+                                null,
+                                null,
+                                false,
+                                null,
+                                null,
+                                20,
+                                context))
+                .expectErrorSatisfies(
+                        error ->
+                                assertThat(error)
+                                        .isInstanceOf(
+                                                org.springframework.web.server
+                                                        .ResponseStatusException.class)
+                                        .extracting(
+                                                value ->
+                                                        ((org.springframework.web.server
+                                                                                .ResponseStatusException)
+                                                                        value)
+                                                                .getStatusCode()
+                                                                .value())
+                                        .isEqualTo(503))
+                .verify();
+    }
+
+    @Test
+    void columnRejectsInvalidCursorPairAndPageBounds() {
+        StepVerifier.create(
+                        boardService.listBoardColumnIssues(
+                                PROJECT_ID,
+                                "TODO",
+                                null,
+                                UUID.randomUUID(),
+                                null,
+                                null,
+                                null,
+                                false,
+                                null,
+                                null,
+                                20,
+                                context))
+                .expectError(org.springframework.web.server.ResponseStatusException.class)
+                .verify();
+        for (int size : List.of(0, -1, 201)) {
+            StepVerifier.create(
+                            boardService.listBoardColumnIssues(
+                                    PROJECT_ID,
+                                    "TODO",
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    false,
+                                    null,
+                                    null,
+                                    size,
+                                    context))
+                    .expectError(org.springframework.web.server.ResponseStatusException.class)
+                    .verify();
+        }
+        Mockito.verifyNoInteractions(workflowClient, issueClient);
     }
 
     private ru.taska.domain.dto.ListProjectIssueTypesDto registry(String... codes) {

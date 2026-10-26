@@ -2,17 +2,21 @@ package ru.taska.repository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.data.domain.Sort;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.data.relational.core.query.Criteria;
 import org.springframework.data.relational.core.query.Query;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import ru.taska.domain.IssueType;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
-import ru.taska.domain.IssueType;
+import ru.taska.domain.util.BoardCursorPage;
 import ru.taska.filter.CriteriaRenderer;
 import ru.taska.filter.Filter;
 import ru.taska.filter.FilterBuilder;
@@ -20,9 +24,12 @@ import ru.taska.filter.SqlRenderer;
 import ru.taska.filter.SqlWhere;
 import ru.taska.mapper.IssueMapper;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -271,6 +278,102 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     return findForBoardLimitedPerColumn(filter, pageSizePerColumn);
                 });
     }
+
+    @Override
+    public Mono<BoardCursorPage<Issue>> findBoardColumnPage(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId) {
+        return resolveLabelFilterIssueIds(labelIds)
+                .map(
+                        ids ->
+                                boardFilter(
+                                        projectId,
+                                        issueType,
+                                        assigneeId,
+                                        statusKey,
+                                        includeDone,
+                                        doneStatusKeys,
+                                        ids.orElse(null),
+                                        priority,
+                                        query))
+                .flatMap(
+                        filter ->
+                                filter.matchesNothing()
+                                        ? Mono.just(new BoardCursorPage<>(List.of(), 0, false))
+                                        : findBoardColumnPage(
+                                                filter, pageSize, afterCreatedAt, afterId));
+    }
+
+    /**
+     * Count and cursor window use one statement/snapshot; the LEFT JOIN retains an empty-page
+     * count.
+     */
+    private Mono<BoardCursorPage<Issue>> findBoardColumnPage(
+            Filter filter, int pageSize, Instant afterCreatedAt, UUID afterId) {
+        SqlWhere where = SqlRenderer.render(filter);
+        String sql =
+                """
+                WITH totals AS (
+                    SELECT COUNT(*) AS board_total_count FROM taska.issues WHERE %s
+                ), page AS (
+                    SELECT * FROM taska.issues WHERE %s
+                    %s
+                    ORDER BY created_at ASC, id ASC LIMIT :boardFetchSize
+                )
+                SELECT page.*, totals.board_total_count
+                FROM totals LEFT JOIN page ON TRUE
+                ORDER BY page.created_at ASC, page.id ASC
+                """
+                        .formatted(
+                                where.sql(),
+                                where.sql(),
+                                afterCreatedAt == null
+                                        ? ""
+                                        : "AND (created_at, id) > (:boardAfterCreatedAt,"
+                                              + " :boardAfterId)");
+        var spec = where.bindTo(databaseClient.sql(sql)).bind("boardFetchSize", pageSize + 1);
+        if (afterCreatedAt != null) {
+            spec =
+                    spec.bind("boardAfterCreatedAt", afterCreatedAt.atOffset(ZoneOffset.UTC))
+                            .bind("boardAfterId", afterId);
+        }
+        return spec.map(
+                        (row, metadata) -> {
+                            Long total = row.get("board_total_count", Long.class);
+                            Issue issue =
+                                    row.get("id", UUID.class) == null
+                                            ? null
+                                            : issueMapper.mapRowToIssue(row, metadata);
+                            if (issue != null) issue.setBoardStatusTotalCount(total);
+                            return new BoardCountedRow(issue, total);
+                        })
+                .all()
+                .collectList()
+                .map(
+                        rows -> {
+                            List<Issue> issues =
+                                    rows.stream()
+                                            .map(BoardCountedRow::issue)
+                                            .filter(Objects::nonNull)
+                                            .toList();
+                            return new BoardCursorPage<>(
+                                    issues.stream().limit(pageSize).toList(),
+                                    rows.getFirst().totalCount(),
+                                    issues.size() > pageSize);
+                        });
+    }
+
+    private record BoardCountedRow(Issue issue, long totalCount) {}
 
     /**
      * Резолвит {@code labelIds} в список id задач, помеченных хотя бы одной из этих меток.

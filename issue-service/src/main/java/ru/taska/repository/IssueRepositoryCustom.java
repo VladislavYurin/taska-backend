@@ -2,11 +2,13 @@ package ru.taska.repository;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import ru.taska.domain.IssueType;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssuePriority;
-import ru.taska.domain.IssueType;
+import ru.taska.domain.util.BoardCursorPage;
 
-import javax.annotation.Priority;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -116,6 +118,20 @@ public interface IssueRepositoryCustom {
             IssuePriority priority,
             String query
     );
+
+    Mono<BoardCursorPage<Issue>> findBoardColumnPage(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId);
 
     /**
      * Батчево находит идентификаторы меток для списка задач, сгруппированные по issueId.

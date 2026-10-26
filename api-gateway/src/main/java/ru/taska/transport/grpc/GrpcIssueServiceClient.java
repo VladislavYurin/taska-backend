@@ -1,9 +1,17 @@
 package ru.taska.transport.grpc;
 
+import com.google.protobuf.Timestamp;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.AssignIssueRequestBody;
@@ -19,16 +27,17 @@ import ru.taska.api.issue.v1.GetIssueRequest;
 import ru.taska.api.issue.v1.GetIssueRequestBody;
 import ru.taska.api.issue.v1.ListIssueLinksRequest;
 import ru.taska.api.issue.v1.ListIssueLinksRequestBody;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesRequestBody;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.issue.v1.SearchIssuesRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequest;
 import ru.taska.api.issue.v1.TransitionIssueRequestBody;
-import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
-import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.BoardIssueData;
+import ru.taska.domain.BoardIssuePageData;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.AssignIssueRequestDto;
 import ru.taska.domain.dto.CreateIssueLinkRequestDto;
@@ -40,18 +49,17 @@ import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
+import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.SearchIssuesRequestDto;
 import ru.taska.domain.dto.SearchIssuesResponseDto;
-import ru.taska.domain.dto.PatchIssueRequestDto;
 import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.ResponseEntity;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -502,6 +510,109 @@ public class GrpcIssueServiceClient {
                 projectId
         );
 
+        var requestBodyBuilder =
+                boardRequestBody(
+                        projectId,
+                        issueType,
+                        assigneeId,
+                        labelId,
+                        includeDone,
+                        doneStatusKeys,
+                        priority,
+                        query,
+                        pageSizePerColumn,
+                        context);
+
+        return dynamicStub()
+                .listIssuesForBoard(
+                        ListIssuesForBoardRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(requestBodyBuilder.build())
+                                .build())
+                .map(
+                        response -> {
+                            if (response.getIssuesList().stream()
+                                    .anyMatch(issue -> !issue.hasStatusTotalCount())) {
+                                throw new ResponseStatusException(
+                                        HttpStatus.SERVICE_UNAVAILABLE,
+                                        "Board counts unavailable; issue-service update required");
+                            }
+                            return response.getIssuesList().stream()
+                                    .map(issueMapper::toBoardIssueData)
+                                    .toList();
+                        });
+    }
+
+    public Mono<BoardIssuePageData> listBoardColumnPage(
+            String projectId,
+            String issueType,
+            String statusKey,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            List<String> doneStatusKeys,
+            IssuePriorityDto priority,
+            String query,
+            int pageSize,
+            OffsetDateTime afterCreatedAt,
+            UUID afterId,
+            GatewayContext context) {
+        var body =
+                boardRequestBody(
+                                projectId,
+                                issueType,
+                                assigneeId,
+                                labelId,
+                                includeDone,
+                                doneStatusKeys,
+                                priority,
+                                query,
+                                pageSize,
+                                context)
+                        .setStatusKey(statusKey);
+        if (afterCreatedAt != null) {
+            var instant = afterCreatedAt.toInstant();
+            body.setAfterCreatedAt(
+                            Timestamp.newBuilder()
+                                    .setSeconds(instant.getEpochSecond())
+                                    .setNanos(instant.getNano())
+                                    .build())
+                    .setAfterId(afterId.toString());
+        }
+        return dynamicStub()
+                .listIssuesForBoard(
+                        ListIssuesForBoardRequest.newBuilder()
+                                .setHeader(buildGrpcHeader(context))
+                                .setBody(body)
+                                .build())
+                .map(
+                        response -> {
+                            if (!response.hasTotalCount() || !response.hasHasMore()) {
+                                throw new ResponseStatusException(
+                                        HttpStatus.SERVICE_UNAVAILABLE,
+                                        "Board cursor pagination unavailable; issue-service update"
+                                            + " required");
+                            }
+                            return new BoardIssuePageData(
+                                    response.getIssuesList().stream()
+                                            .map(issueMapper::toBoardIssueData)
+                                            .toList(),
+                                    response.getTotalCount(),
+                                    response.getHasMore());
+                        });
+    }
+
+    private ListIssuesForBoardRequestBody.Builder boardRequestBody(
+            String projectId,
+            String issueType,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            List<String> doneStatusKeys,
+            IssuePriorityDto priority,
+            String query,
+            Integer pageSizePerColumn,
+            GatewayContext context) {
         var requestBodyBuilder = ListIssuesForBoardRequestBody.newBuilder()
                 .setProjectId(projectId)
                 .setActorUserId(context.userContext().userId())
@@ -524,19 +635,7 @@ public class GrpcIssueServiceClient {
             requestBodyBuilder.setQuery(query);
         }
 
-        return dynamicStub()
-                .listIssuesForBoard(
-                        ListIssuesForBoardRequest.newBuilder()
-                                .setHeader(buildGrpcHeader(context))
-                                .setBody(requestBodyBuilder.build())
-                                .build()
-                )
-                .map(response -> {
-                    if (response.getIssuesList().stream().anyMatch(issue -> !issue.hasStatusTotalCount())) {
-                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                                "Board counts unavailable; issue-service update required");
-                    }
-                    return response.getIssuesList().stream().map(issueMapper::toBoardIssueData).toList();
-                });
+        return requestBodyBuilder;
     }
+
 }
