@@ -34,8 +34,11 @@ Streamable HTTP `/mcp`, stateless async, PAT с `read`, запросы к фик
 ## Ответы и ограничения
 
 `structuredContent` содержит `request_id`, `truncated`, `data` либо `error`, при необходимости
-`context` с ключами/именами и `text_windows`. Краткий text fallback содержит итог и подсказку
-продолжения, без второй полной копии JSON.
+`context` с ключами/именами и `text_windows`. Первый TextContent содержит краткий итог и подсказку продолжения; второй — сериализованный JSON
+того же безопасного projected/windowed envelope для клиентов, которые не передают structuredContent модели.
+Общий лимит 128 KiB включает оба блока и structuredContent. Это следует рекомендации
+[MCP 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content)
+для совместимости с текстовыми клиентами.
 
 Поля `description`, `body`, `comment` обрезаются по Unicode code points, без разрыва surrogate pair.
 Карточка, комментарии и worklogs поддерживают `text_offset` (по умолчанию 0) и `text_limit`
@@ -312,3 +315,108 @@ JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -pl mcp-server -am test \
 с разными списками задач, отсутствие кэша между ними, одинаковая ошибка чужого/отсутствующего
 ресурса и HTTP cache headers. Inspector, внешний агент и развёрнутый стенд проверяются в TAS-408;
 этот локальный прогон не подтверждает их работоспособность.
+
+## Автоматические проверки MCP контракта и безопасности (TAS-408)
+
+`McpCatalogSnapshotTest` запускается обычным `test`/`verify`. Reviewed контракт находится в
+`src/test/resources/contracts/catalog-v1.json`: 22 tools с именами, описаниями, полными
+input/output schema и annotations; templates ресурсов, определения prompts и их полные тексты.
+Каталог prompts нормализуется по имени, как SDK listing. Сравнение структурное, порядок вложенных
+массивов (required, enum, arguments) тоже сохраняется. Обычный тест ничего не перезаписывает.
+После осознанного review изменения контракт обновляется только явно:
+
+```sh
+JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp -pl mcp-server -am test \
+  -Dtest=McpCatalogSnapshotTest -Dsurefire.failIfNoSpecifiedTests=false \
+  -DupdateMcpCatalogSnapshot=true
+```
+
+`McpClientSecurityIT` — отдельный Java SDK client против настоящего Spring MCP server и HTTP/gRPC
+заглушек. Проверяет полный public catalog для read/write PAT, реальный вызов и request_id,
+безопасные 400/401/403/404/409/429/500, protocol errors, отсутствие gateway dispatch при неверном
+scope/input/токене/Origin, просроченный и отозванный PAT, размер входа. IT-классы не входят в обычный
+Surefire `verify`; CI запускает security IT отдельным шагом только для mcp-server. Локально запускать явно:
+
+```sh
+JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp -pl mcp-server -am test \
+  -Dtest=McpClientSecurityIT -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+`McpComposeE2EIT` поднимает настоящий стек из собранных jar: auth, project, workflow, issue,
+notification, gateway и MCP; PostgreSQL 16 с отдельными БД, Kafka и RustFS. Dedicated Compose
+`src/test/compose/compose.yml` не наследует пользовательский Compose или `.env`: нет общих
+container_name, внешних сетей, persistent volumes или фиксированных host ports. Уникальное имя
+проекта `taska-mcp-it-<random>`; порты только `127.0.0.1` и выделяются Docker. Приложения используют
+Java 21, heap 256 MiB, Kafka 256 MiB. Отправка email/Telegram выключена; storage blobs и admin-service
+не входят в сценарий. Session-only admin guards проверяются в реальном gateway до вызова admin gRPC.
+
+Runner сначала одним Maven собирает нужные modules, затем явно запускает opt-in IT. Нужны Java 21,
+Docker Compose и работающий daemon. При Docker Desktop на macOS можно явно задать DOCKER_HOST:
+
+```sh
+DOCKER_HOST=unix://$HOME/.docker/run/docker.sock \
+  python3 mcp-server/src/test/compose/run.py
+```
+
+Параметр `--skip-package` использует уже собранные jar этого checkout. По умолчанию runtime image —
+`eclipse-temurin:21-jre`; `--jre-image` позволяет использовать существующий доверенный Java 21 JRE image.
+В данной среде `taska/mcp-server:tas403` пригоден как JRE: ENTRYPOINT и app.jar заменяются fixture
+Compose, приложения берутся из текущего checkout. Сборка сервисов не делегируется этому образу. Перед запуском jar копируются в отдельный ignored
+`target/mcp-e2e/<project>/jars`: повторная сборка checkout не меняет файлы оставленного стека.
+Default teardown и явный cleanup удаляют эти копии после остановки собственного project.
+
+Seed ограничен тремя фикстурными email в новой auth_db. JWT и PAT выдаются настоящими REST API;
+для просроченного PAT fixture сдвигает issued/expires timestamps в собственной БД. Read/write PAT,
+revoked/expired, отсутствие токена, session-only admin/token-management, чужой проект, одинаковый
+not_found для недоступной/отсутствующей задачи и неизменность БД после чтения prompt-injection
+текста проверяются автоматически. Цепочка: fixture issue → найти → прочитать → создать → перевести
+→ комментарий → worklog → история с `channel=MCP`, без имени/id токена; resources/list разделён по
+двум владельцам PAT. Перед сценарием выполняется безопасный GET warmup project/context до готовности
+холодных gRPC агрегатов; production deadlines не увеличиваются, записи автоматически не повторяются.
+
+По умолчанию `finally` удаляет только собственный Compose project и его anonymous volumes, включая
+ошибки теста. Для настоящих внешних клиентов можно оставить успешно проверенный стек:
+
+```sh
+DOCKER_HOST=unix://$HOME/.docker/run/docker.sock \
+  python3 mcp-server/src/test/compose/run.py --keep
+```
+
+После успеха runner выводит только project, URL и путь `target/mcp-e2e/<project>/credentials.json`.
+Файл создаётся с mode 0600 и содержит фикстурные PAT read/write, URL gateway/MCP и ключи/ID actor,
+project, issue. Он находится в ignored target, не коммитится и не печатается. Используйте его локально
+для Codex CLI / Inspector; не переносите фикстурные секреты в отчёт или клиентский конфиг Git.
+Санитизированный Compose log сохраняется рядом. `--keep` никогда не сохраняет неуспешный прогон.
+После клиентских проверок удалите только этот project:
+
+```sh
+DOCKER_HOST=unix://$HOME/.docker/run/docker.sock \
+  python3 mcp-server/src/test/compose/run.py --cleanup \
+  mcp-server/target/mcp-e2e/<project>/credentials.json
+```
+
+Cleanup принимает только credentials.json текущего checkout, проверяет случайное имя проекта и
+точный Compose path; пользовательские containers/volumes не перечисляет и не удаляет. Ручные проверки
+Claude Code/Cursor/Codex CLI/Inspector и stage deployment не считаются пройденными этим автотестом.
+
+### Фактическая проверка внешних клиентов 26.10.2026
+
+На отдельном локальном Compose fixture с 405+410+JSON fallback проверены Codex CLI
+`0.163.0-alpha.10.2` и MCP Inspector CLI `2.12.0`. Codex запущен с `--ignore-user-config --ephemeral`,
+read-only sandbox и read PAT из окружения; пользовательские конфиги не менялись.
+
+- Codex: 10 сценариев чтения — whoami, проекты, контекст проекта, поиск, карточка задачи,
+  комментарии, worklogs, доска, пользователи, уведомления. Для непустых комментария и worklog
+  отдельно подтверждены автор/текст и 30 минут; инструкция в описании проигнорирована.
+  Уведомления не помечались прочитанными, инструменты записи не вызывались.
+- Inspector: 14 успешных операций — шесть read tools, resources/list, два templates,
+  два resources/read, prompts/list и все три prompts/get. Каталог содержит 22 tools.
+  Проверка `--strict`: ноль ошибок; 22 предупреждения о допустимом JSON Schema
+  `type: [integer, null]` у next_offset. Контракт не менялся ради иной схемной диалектики.
+- Ранние отдельные Codex сессии дважды ожидали модель до любого tool call. Повторные проверки
+  завершились; для длинного текста использованы text_limit=80 и явная page=0.
+- Claude Code и Cursor не проверены: установленных авторизованных клиентов нет, пользователь
+  подтвердил отсутствие доступной среды. Это оставшийся пункт ручной приёмки TAS-408.
+
+Этот клиентский smoke не является проверкой stage и не подменяет финальный verify:
+после синхронизации с develop отдельно прошли 105 common +125 MCP тестов и SDK IT (3 теста).

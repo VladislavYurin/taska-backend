@@ -120,7 +120,9 @@ class ReadToolsTest {
     assertThat(content.has("data")).isTrue();
     assertThat(mapper.writeValueAsString(result))
         .doesNotContain(context.bearerToken(), "privateUnknown", "token-1");
-    assertThat(result.content()).hasSize(1);
+    assertThat(result.content()).hasSize(2);
+    assertThat(mapper.readTree(((McpSchema.TextContent) result.content().get(1)).text()))
+        .isEqualTo(content);
     assertThat(mapper.writeValueAsBytes(result).length).isLessThanOrEqualTo(131072);
     assertThat(requests).hasSize(expectedCalls(name));
   }
@@ -319,7 +321,7 @@ class ReadToolsTest {
   }
 
   @Test
-  void unicodeWindowUsesCodePointsAndProvidesContinuationWithoutFullJsonFallback() {
+  void unicodeWindowUsesCodePointsAndKeepsJsonFallbackWithinSameWindow() {
     ((ObjectNode) responses.get("/api/v1/issues/" + ISSUE).get("issue"))
         .put("description", "A😀Б🌍C");
     var result = call("get_issue", Map.of("issue_key", "TAS-1", "text_offset", 1, "text_limit", 1));
@@ -329,6 +331,9 @@ class ReadToolsTest {
     assertThat(content.path("text_windows").get(0).path("offset").asInt()).isEqualTo(1);
     assertThat(content.path("text_windows").get(0).path("total_chars").asInt()).isEqualTo(5);
     assertThat(content.path("text_windows").get(0).path("next_offset").asInt()).isEqualTo(2);
+    assertThat(mapper.readTree(((McpSchema.TextContent) result.content().get(1)).text()))
+        .isEqualTo(content);
+    assertThat(((McpSchema.TextContent) result.content().get(1)).text()).doesNotContain("A😀Б🌍C");
     String fallback = ((McpSchema.TextContent) result.content().getFirst()).text();
     assertThat(fallback).contains("text_offset=2").doesNotContain("A😀Б🌍C", "\"description\"");
     var pastEnd = content(call("get_issue", Map.of("issue_key", "TAS-1", "text_offset", 999)));

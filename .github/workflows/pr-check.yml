@@ -76,6 +76,10 @@ jobs:
       - name: Maven verify
         run: mvn -B -ntp -pl ${{ matrix.mod.module }} -am clean verify
 
+      - name: MCP client security integration
+        if: matrix.mod.module == 'mcp-server'
+        run: mvn -B -ntp -pl mcp-server -am test -Dtest=McpClientSecurityIT -Dsurefire.failIfNoSpecifiedTests=false
+
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4

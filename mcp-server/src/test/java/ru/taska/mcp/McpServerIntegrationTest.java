@@ -196,7 +196,7 @@ class McpServerIntegrationTest {
       assertThat(content.get("request_id")).isEqualTo(FORWARDED_ID.get());
       Map<?, ?> data = (Map<?, ?>) content.get("data");
       assertThat(data.get("token_kind")).isEqualTo("PAT");
-      assertThat(result.content()).hasSize(1);
+      assertThat(result.content()).hasSize(2);
       assertThat(FORWARDED_TOKEN.get()).isEqualTo("Bearer " + McpAuthenticationFilterTest.TOKEN);
       assertThat(FORWARDED_ID.get()).isEqualTo("sdk-test");
       assertThat(AUTH_CALLS.get()).isGreaterThanOrEqualTo(4);
