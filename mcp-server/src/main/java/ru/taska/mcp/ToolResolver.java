@@ -38,6 +38,12 @@ public class ToolResolver {
 
   public final class Session {
     private final McpRequestContext context;
+    private final ToolAuditTarget auditTarget = new ToolAuditTarget();
+
+    public ToolAuditTarget auditTarget() {
+      return auditTarget;
+    }
+
     private final Mono<JsonNode> projects;
     private final Map<String, Mono<Project>> projectLookups = new ConcurrentHashMap<>();
     private final Map<String, Mono<Issue>> issues = new ConcurrentHashMap<>();

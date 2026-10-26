@@ -86,3 +86,46 @@ HTTP stub тестирует все 10 handlers, ошибки, пагинаци�
 Unicode, nullable DTO, отсутствие N+1 и лимиты. Spring startup + настоящий Java SDK клиент
 проверяют initialize, каталог и whoami с HTTP gateway/gRPC auth stub. Проверки MCP Inspector
 и внешних агентов на развёрнутом стенде относятся к TAS-408 и этим прогоном не подтверждаются.
+
+
+## Квоты и аудит TAS-406
+
+На одном инстансе действуют независимые token buckets для token_id (120 read/min, 20 write/min)
+и user_id (240 read/min, 40 write/min). Обе квоты проверяются атомарно: отказ одной не расходует
+другую. Ёмкость burst равна минутной квоте, refill непрерывный. Одновременно допускаются 4 tool
+на токен и 8 на пользователя, суммарно read/write; очереди и автоматического повтора нет.
+`rate_limited` содержит `details.retry_after_seconds`. Отмена/успех/ошибка/timeout освобождают
+concurrency lease; rate cost принятого вызова не возвращается. Отмена не обещает откат принятой
+доменом записи. При неоднозначном write timeout сначала перечитайте объект, не повторяйте запись
+автоматически.
+
+Кэши ограничены `MCP_MAX_TRACKED_TOKENS` / `MCP_MAX_TRACKED_USERS` (по 10000). Активные записи
+не вытесняются. Только неактивная запись после `MCP_QUOTA_IDLE_TTL` (5m, минимум 1m полного refill)
+может быть удалена; заполненный кэш отказывает новым идентификаторам. Без Redis квоты локальны:
+при нескольких репликах доступный поток умножается на их число. Параметры `MCP_TOKEN_READ_PER_MINUTE`,
+`MCP_TOKEN_WRITE_PER_MINUTE`, `MCP_USER_READ_PER_MINUTE`, `MCP_USER_WRITE_PER_MINUTE`,
+`MCP_TOKEN_CONCURRENT`, `MCP_USER_CONCURRENT` переопределяют начальные значения.
+
+Входное тело POST `/mcp` ограничено 64 KiB, включая chunked запросы; превышение — HTTP 413 до
+SDK/tool handler. Для валидного известного write-call недостаточный scope даёт HTTP 403 и
+`WWW-Authenticate: Bearer error="insufficient_scope", scope="write"` до dispatch. Handler повторно
+проверяет scope. Неизвестный method/tool, некорректный JSON/RPC/input schema остаются protocol errors SDK.
+Штатный customizer отключает только дублирующий ранний SDK ToolInputValidator (который иначе
+возвращает tool isError); обязательная проверка в ToolExecutor через SDK schema validator даёт
+`McpError(-32602)` до вызова handler.
+Регистрация и preflight используют один неизменяемый `ToolRegistry`; произвольные URL/path/header
+аргументы отсутствуют в reviewed каталоге и не принимаются typed gateway client.
+
+Финальный результат write-tool (включая rate limit, timeout, отмену и response_too_large) порождает
+JSON запись logger `ru.taska.mcp.audit`: `user_id`, `token_id`, tool, безопасный object_key при наличии,
+request_id, outcome, duration_ms и нормализованный clientInfo. ToolAuditTarget заполняется после
+авторизованного lookup/создания и принимает только ключ/UUID. В записи нет Bearer, token name,
+описания/комментария/имени объекта и полного `_meta`. Из `_meta.clientInfo` принимаются известные
+имена клиентов либо `other`, числовая версия до 32 символов; W3C traceparent принимается только
+в корректном формате с ненулевыми id. Метрики `taska.mcp.tool.calls`, `taska.mcp.tool.duration`,
+`taska.mcp.limit.rejections` используют только фиксированные tool/outcome без user/token/project id.
+
+`McpLimitsLoadSmokeTest` гоняет 40 параллельных вызовов двух токенов одного пользователя против
+локального HTTP stub: в gateway проходят максимум 8, остальные получают rate_limited.
+Это проверка admission и освобождения ресурсов, не измерение мощности реального стенда.
+Нагрузочный прогон развёрнутого стенда остаётся проверкой TAS-408.

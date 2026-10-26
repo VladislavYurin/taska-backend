@@ -12,6 +12,15 @@ import tools.jackson.databind.json.JsonMapper;
 @Configuration
 public class McpTransportConfiguration {
   @Bean
+  org.springframework.ai.mcp.customizer.McpStatelessAsyncServerCustomizer
+      taskaProtocolValidation() {
+    // ToolExecutor uses the SDK schema validator and throws INVALID_PARAMS before the handler.
+    // Avoid the SDK's duplicate early validator, which wraps invalid params in a successful RPC
+    // result.
+    return specification -> specification.validateToolInputs(false);
+  }
+
+  @Bean
   WebFluxStatelessServerTransport webFluxStatelessServerTransport(
       @Qualifier("mcpServerJsonMapper") JsonMapper mapper) {
     return WebFluxStatelessServerTransport.builder()

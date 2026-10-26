@@ -43,12 +43,24 @@ management:
       version: '@project.version@'
 taska:
   mcp:
+    gateway-signing-secret: ${MCP_GATEWAY_SIGNING_SECRET:}
+    transport:
+      max-request-bytes: ${MCP_MAX_REQUEST_BYTES:65536}
+    quota:
+      token-read: ${MCP_TOKEN_READ_PER_MINUTE:120}
+      token-write: ${MCP_TOKEN_WRITE_PER_MINUTE:20}
+      user-read: ${MCP_USER_READ_PER_MINUTE:240}
+      user-write: ${MCP_USER_WRITE_PER_MINUTE:40}
+      token-concurrent: ${MCP_TOKEN_CONCURRENT:4}
+      user-concurrent: ${MCP_USER_CONCURRENT:8}
+      max-tokens: ${MCP_MAX_TRACKED_TOKENS:10000}
+      max-users: ${MCP_MAX_TRACKED_USERS:10000}
+      idle-ttl: ${MCP_QUOTA_IDLE_TTL:5m}
     tools:
       timeout: ${MCP_TOOL_TIMEOUT:20s}
       max-result-bytes: ${MCP_MAX_RESULT_BYTES:131072}
       text-limit: 4000
       max-text-limit: 8192
-    gateway-signing-secret: ${MCP_GATEWAY_SIGNING_SECRET:}
     gateway-url: ${MCP_GATEWAY_URL:http://localhost:8080}
     connect-timeout: ${MCP_CONNECT_TIMEOUT:2s}
     response-timeout: ${MCP_RESPONSE_TIMEOUT:5s}
