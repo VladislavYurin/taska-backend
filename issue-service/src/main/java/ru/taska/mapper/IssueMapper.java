@@ -362,7 +362,7 @@ public class IssueMapper {
         };
     }
 
-    private ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
+    public ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
         return switch (domain.name()) {
             case "TASK" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;

@@ -614,6 +614,7 @@ class IssueMapperTest {
         Assertions.assertEquals(DESCRIPTION, resultBody.getDescription());
         Assertions.assertEquals(IssuePriority.ISSUE_PRIORITY_LOW, resultBody.getPriority());
         Assertions.assertEquals(USER_ID, resultBody.getReporterId());
+        Assertions.assertFalse(resultBody.hasStatusKey());
         Assertions.assertFalse(resultBody.hasStoryPoints());
         Assertions.assertFalse(resultBody.hasStartDate());
         Assertions.assertFalse(resultBody.hasDueDate());
@@ -625,6 +626,7 @@ class IssueMapperTest {
     @DisplayName("Должен корректно преобразовать CreateIssueRequestDto(REST DTO) в CreateIssueRequest(gRPC DTO) c Optional полями")
     void toCreateIssueGrpcRequest_shouldCorrectMapsAllFields_withOptionalFields() {
         var source = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("LOW"));
+        source.setStatusKey("IN_REVIEW");
         source.setStoryPoints(STORY_POINTS);
         source.setStartDate(LocalDate.parse(START_DATE));
         source.setDueDate(LocalDate.parse(DUE_DATE));
@@ -643,6 +645,7 @@ class IssueMapperTest {
         Assertions.assertEquals(DESCRIPTION, resultBody.getDescription());
         Assertions.assertEquals(IssuePriority.ISSUE_PRIORITY_LOW, resultBody.getPriority());
         Assertions.assertEquals(USER_ID, resultBody.getReporterId());
+        Assertions.assertEquals("IN_REVIEW", resultBody.getStatusKey());
         Assertions.assertEquals(STORY_POINTS, resultBody.getStoryPoints());
         Assertions.assertEquals(START_DATE, resultBody.getStartDate());
         Assertions.assertEquals(DUE_DATE, resultBody.getDueDate());

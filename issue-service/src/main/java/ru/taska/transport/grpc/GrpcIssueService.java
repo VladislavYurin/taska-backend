@@ -196,7 +196,8 @@ public class GrpcIssueService {
                                             startDate,
                                             dueDate,
                                             originalEstimateMinutes,
-                                            remainingEstimateMinutes
+                                            remainingEstimateMinutes,
+                                            req.getBody().hasStatusKey() ? req.getBody().getStatusKey() : null
                                     )
                                     .doOnNext(issue ->
                                             log.info("[{}][{}] createIssue: successfully created, issueId={}",

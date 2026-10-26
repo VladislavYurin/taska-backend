@@ -43,6 +43,7 @@ import ru.taska.service.OutboxEventService;
 import ru.taska.service.watcher.IssueAutoWatchService;
 import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
+import ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient;
 import ru.taska.util.PayloadSerializer;
 import ru.taska.util.RequestHasher;
 import ru.taska.util.StoryPointsNormalizer;
@@ -84,6 +85,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueLabelsRepository issueLabelsRepository;
     private final IssueWatcherRepository issueWatcherRepository;
     private final IssueAccessGuard issueAccessGuard;
+    private final GrpcWorkflowServiceClient workflowClient;
 
     @Override
     @Transactional
@@ -103,27 +105,70 @@ public class IssueServiceImpl implements IssueService {
             Integer originalEstimateMinutes,
             Integer remainingEstimateMinutes
     ) {
+        return createIssue(requestId, nodeId, idempotencyKey, projectId, issueType, summary,
+                description, priority, reporterId, storyPoints, startDate, dueDate,
+                originalEstimateMinutes, remainingEstimateMinutes, null);
+    }
+
+    @Override
+    @Transactional
+    public Mono<Issue> createIssue(
+            String requestId,
+            String nodeId,
+            String idempotencyKey,
+            UUID projectId,
+            IssueType issueType,
+            String summary,
+            String description,
+            IssuePriority priority,
+            UUID reporterId,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes,
+            String statusKey
+    ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
-        String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
+        String initialStatus = statusKey == null ? INIT_STATUS : statusKey;
+        String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description,
+                priority, reporterId, storyPoints, startDate, dueDate, originalEstimateMinutes,
+                remainingEstimateMinutes, initialStatus);
 
         return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, reporterId, allowedRoles)
+                .then(Mono.fromRunnable(() -> {
+                    if (statusKey != null && !statusKey.matches("^[A-Z][A-Z0-9_]{1,63}$"))
+                        throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid initial status key");
+                }))
                 .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
                         .flatMap(keyEntity -> {
 
-                            if (!keyEntity.getRequestHash().equals(currentRequestHash)) {
-                                log.warn("[{}][{}] Idempotency Key [{}] already used with a different request body", requestId, nodeId, idempotencyKey);
-                                return Mono.error(new DomainException(
-                                        DomainStatus.FAILED_PRECONDITION,
-                                        "Idempotency Key already used with a different request body"
-                                ));
-                            }
-
-                            return Mono.fromCallable(() ->
-                                            objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
-                                    .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"));
+                            return Mono.fromCallable(() -> objectMapper.treeToValue(keyEntity.getResponse(), Issue.class))
+                                    .onErrorMap(JacksonException.class, e -> new DomainException(DomainStatus.INTERNAL, "Corrupted idempotency response"))
+                                    .flatMap(previous -> {
+                                        boolean matches = currentRequestHash.equals(keyEntity.getRequestHash());
+                                        // Old keys omitted planning. Compare their saved complete response before accepting a retry.
+                                        if (!matches && !keyEntity.getRequestHash().startsWith("v2:")) {
+                                            String legacy = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
+                                            boolean legacyMatches = keyEntity.getRequestHash().equals(legacy);
+                                            // Both null and empty descriptions were persisted as empty text before v2.
+                                            if (!legacyMatches && (description == null || description.isEmpty()))
+                                                legacyMatches = keyEntity.getRequestHash().equals(RequestHasher.hashIssueCreateRequest(
+                                                        projectId, issueType, summary, description == null ? "" : null, priority, reporterId));
+                                            String previousHash = RequestHasher.hashIssueCreateRequest(previous.getProjectId(), previous.getIssueType(),
+                                                    previous.getSummary(), previous.getDescription(), previous.getPriority(), previous.getReporterId(),
+                                                    previous.getStoryPoints(), previous.getStartDate(), previous.getDueDate(), previous.getOriginalEstimateMinutes(),
+                                                    previous.getRemainingEstimateMinutes(), previous.getStatusKey());
+                                            matches = legacyMatches && currentRequestHash.equals(previousHash);
+                                        }
+                                        return matches ? Mono.just(previous) : Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                                "Idempotency Key already used with a different request body"));
+                                    });
 
                         }))
                 .switchIfEmpty(Mono.defer(() -> grpcProjectServiceClient.requireIssueType(requestId, nodeId, projectId, reporterId, issueType)
+                        .then(Mono.defer(() -> statusKey == null ? Mono.empty()
+                                : workflowClient.requireInitialStatus(requestId, nodeId, projectId, issueType, reporterId, statusKey)))
                         .then(Mono.defer(() -> grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)))
                         .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                                 .flatMap(number -> {
@@ -136,7 +181,7 @@ public class IssueServiceImpl implements IssueService {
                                             .description(Objects.requireNonNullElse(description, ""))
                                             .priority(priority)
                                             .reporterId(reporterId)
-                                            .statusKey(INIT_STATUS)
+                                            .statusKey(initialStatus)
                                             .version(INIT_VERSION)
                                             .storyPoints(StoryPointsNormalizer.normalize(storyPoints))
                                             .startDate(startDate)

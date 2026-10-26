@@ -140,6 +140,37 @@ class IssueControllerTest {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", "in_review", "BAD-KEY"})
+    void createIssue_rejectsInvalidInitialStatusBeforeBodyReachesGrpcClient(String status) {
+        mockAuthenticatedUser();
+        var consumed = new java.util.concurrent.atomic.AtomicInteger();
+        Mockito.when(issueClient.createIssue(Mockito.anyString(), Mockito.anyString(), Mockito.any(Mono.class), Mockito.any()))
+            .thenAnswer(invocation -> ((Mono<CreateIssueRequestDto>) invocation.getArgument(2)).map(body -> {
+                consumed.incrementAndGet(); return new IssueResponseDto();
+            }));
+        var request = new CreateIssueRequestDto("TASK", "Initial", "", IssuePriorityDto.MEDIUM);
+        request.setStatusKey(status);
+        webTestClient.post().uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
+            .header(HttpHeaders.AUTHORIZATION, TOKEN).header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON).bodyValue(request).exchange().expectStatus().isBadRequest();
+        Assertions.assertThat(consumed.get()).isZero();
+    }
+
+    @Test void createIssue_preservesStatusNotInWorkflowDetailsInHttpResponse() {
+        mockAuthenticatedUser();
+        Mockito.when(issueClient.createIssue(Mockito.anyString(), Mockito.anyString(), Mockito.any(Mono.class), Mockito.any()))
+            .thenReturn(Mono.error(Status.FAILED_PRECONDITION.withDescription("Initial status is not available for the issue type")
+                .asRuntimeException(mapper.GrpcErrorDetails.encode(Map.of("reason", "STATUS_NOT_IN_WORKFLOW")))));
+        var request = new CreateIssueRequestDto("TASK", "Initial", "", IssuePriorityDto.MEDIUM);
+        request.setStatusKey("IN_REVIEW");
+        webTestClient.post().uri("/api/v1/projects/{projectId}/issues", PROJECT_ID)
+            .header(HttpHeaders.AUTHORIZATION, TOKEN).header("Idempotency-Key", IDEMPOTENCY_KEY)
+            .contentType(MediaType.APPLICATION_JSON).bodyValue(request).exchange().expectStatus().isBadRequest()
+            .expectBody().jsonPath("$.code").isEqualTo("FAILED_PRECONDITION")
+            .jsonPath("$.details.reason").isEqualTo("STATUS_NOT_IN_WORKFLOW");
+    }
+
     @Test
     @DisplayName("Должен вернуть ответ с телом IssueResponseDto и статусом 201")
     void createIssue_shouldReturnsResponseAndStatus201() {

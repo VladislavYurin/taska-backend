@@ -472,6 +472,9 @@ message CreateIssueRequestBody {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   optional string issue_type_key = 13;
+
+  // Optional initial status. Absent preserves the legacy TODO default.
+  optional string status_key = 14;
 }
 
 message GetIssueRequest {

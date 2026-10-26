@@ -40,6 +40,22 @@ public class GrpcWorkflowServiceClient {
                                 java.util.Map.of("reason", "STATUS_NOT_IN_TARGET_WORKFLOW"))));
     }
 
+    public Mono<Void> requireInitialStatus(String requestId, String nodeId, UUID projectId,
+            ru.taska.domain.IssueType issueType, UUID actorUserId, String statusKey) {
+        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+                .getWorkflowForProject(ru.taska.api.workflow.v1.GetWorkflowForProjectRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                        .setBody(ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody.newBuilder()
+                                .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString())
+                                .setIssueType(issueMapper.toWorkflowProtoIssueType(issueType))
+                                .setIssueTypeKey(issueType.name())).build())
+                .flatMap(workflow -> workflow.getStatusesList().stream().anyMatch(s -> s.getStatusKey().equals(statusKey))
+                        ? Mono.empty() : Mono.error(new ru.taska.exception.DomainException(
+                                ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
+                                "Initial status is not available for the issue type",
+                                java.util.Map.of("reason", "STATUS_NOT_IN_WORKFLOW"))));
+    }
+
     /**
      * Отправляет запрос {@link ValidateTransitionRequest} в workflow-service для валидации перехода по workflow.
      */
