@@ -37,8 +37,8 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
      * Валидирует правила перехода задачи по workflow через {@link IssueTransitionValidator}.
      * В случае успешной валидации передает выполнение перехода задачи по workflow
      * в транзакционный блок {@link IssueTransitionExecutor#executeTransition}.
-     * В случае ошибки конкурентной модификации статуса задачи выполнит retry транзакционного блока без
-     * повторного вызова внешних gRPC проверок.
+     * Без ожидаемой версии при конкурентной модификации повторяет транзакционный блок без
+     * повторного вызова внешних gRPC проверок. Явный конфликт версии возвращает вызывающему клиенту.
      */
     @Override
     public Mono<IssueWithHistory> transitionIssue(
@@ -47,7 +47,8 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
             UUID issueId,
             UUID transitionId,
             UUID actorUserId,
-            String payload
+            String payload,
+            Integer expectedVersion
     ) {
         return issueRepository.findActiveById(issueId)
                 .switchIfEmpty(Mono.defer(() -> {
@@ -62,17 +63,25 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
                     return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
                             .thenReturn(issue);
                 })
+                .flatMap(issue -> {
+                    // Version/status may be disclosed only after the project ACL check.
+                    if (expectedVersion != null && !expectedVersion.equals(issue.getVersion())) {
+                        return Mono.error(IssueTransitionExecutor.versionConflict(issue));
+                    }
+                    return Mono.just(issue);
+                })
                 .flatMap(issue ->
                         issueTransitionValidator.validateTransition(requestId, nodeId, issue, transitionId, actorUserId, payload)
                 )
-                .flatMap(targetStatus -> Mono.defer(() ->
-                                        issueTransitionExecutor.executeTransition(requestId, nodeId, issueId, targetStatus, transitionId, actorUserId)
-                                )
-                                .retryWhen(Retry.backoff(issueProperties.retry().maxAttempts(), issueProperties.retry().minBackoff())
-                                        .filter(this::isRetryable)
-                                        .onRetryExhaustedThrow((spec, signal) -> signal.failure())
-                                )
-                );
+                .flatMap(targetStatus -> {
+                    Mono<IssueWithHistory> transition = Mono.defer(() -> issueTransitionExecutor.executeTransition(
+                            requestId, nodeId, issueId, targetStatus, transitionId, actorUserId, expectedVersion));
+                    // A caller's explicit precondition must never be retried against a newer version.
+                    return expectedVersion != null ? transition : transition.retryWhen(
+                            Retry.backoff(issueProperties.retry().maxAttempts(), issueProperties.retry().minBackoff())
+                                    .filter(this::isRetryable)
+                                    .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
+                });
     }
 
     private boolean isRetryable(Throwable t) {

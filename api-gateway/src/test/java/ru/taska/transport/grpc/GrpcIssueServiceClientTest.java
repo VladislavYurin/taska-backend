@@ -555,13 +555,15 @@ class GrpcIssueServiceClientTest {
         Mockito.when(issueMapper.convertPayloadToJsonString(Mockito.any()))
                 .thenReturn(stringPayload);
 
+        Mockito.when(issueMapper.parseIfMatchVersion("\"3\"")).thenReturn(3);
+
         Mockito.when(stub.transitionIssue(Mockito.any(TransitionIssueRequest.class)))
                 .thenReturn(Mono.just(grpcResponse));
 
         Mockito.when(issueMapper.toRestIssueWithHistoryResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, Mono.just(restRequest), context))
+        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, "\"3\"", Mono.just(restRequest), context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -573,6 +575,8 @@ class GrpcIssueServiceClientTest {
 
         Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
         Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().hasExpectedVersion()).isTrue();
+        Assertions.assertThat(request.getBody().getExpectedVersion()).isEqualTo(3);
         Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
         Assertions.assertThat(request.getBody().getTransitionId()).isEqualTo(TRANSITION_ID);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
@@ -598,7 +602,7 @@ class GrpcIssueServiceClientTest {
         Mockito.when(issueMapper.toRestIssueWithHistoryResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, Mono.just(restRequest), context))
+        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, null, Mono.just(restRequest), context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -634,7 +638,7 @@ class GrpcIssueServiceClientTest {
         Mockito.when(issueMapper.toRestIssueWithHistoryResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, Mono.empty(), context))
+        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, null, Mono.empty(), context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -646,6 +650,7 @@ class GrpcIssueServiceClientTest {
 
         Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
         Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
+        Assertions.assertThat(request.getBody().hasExpectedVersion()).isFalse();
         Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
         Assertions.assertThat(request.getBody().getTransitionId()).isEqualTo(TRANSITION_ID);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
