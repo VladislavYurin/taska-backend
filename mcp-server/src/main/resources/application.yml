@@ -17,8 +17,8 @@ spring:
           mcp-endpoint: /mcp
         capabilities:
           tool: true
-          resource: false
-          prompt: false
+          resource: true
+          prompt: true
           completion: false
         tool-callback-converter: false
         annotation-scanner:
