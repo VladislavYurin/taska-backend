@@ -12,6 +12,52 @@ servers:
     description: Current host
 
 paths:
+  /api/v1/auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Request email signup confirmation
+      description: Uniform 202 for free, invited, active, locked and blocked addresses. Confirmation uses invitations/accept. Name is trimmed, 1..128 Unicode code points. Resend does not replace an existing name. IP budget is shared across auth replicas; forwarded IP is trusted only from GATEWAY_TRUSTED_PROXY_CIDRS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequestDto'
+      responses:
+        '202':
+          description: Request accepted without disclosing account state.
+        '403':
+          description: Signup disabled; details.reason SIGNUP_DISABLED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '429':
+          description: Email cooldown (60s) or client IP hourly budget exceeded; details.retryAfterSeconds.
+          headers:
+            Retry-After:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/auth/methods:
+    get:
+      operationId: getAuthMethods
+      tags: [auth]
+      summary: Enabled signup and configured social login providers
+      responses:
+        '200':
+          description: Current authentication methods; no-store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMethodsResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/users/me/access-tokens:
     post:
       x-pat-scope: session
@@ -4692,6 +4738,27 @@ components:
       description: Подтверждает именно текущую заявку и включает Telegram. Не меняет выбор email. Повторная/просроченная заявка — 409.
       properties:
         linkId: {type: string, format: uuid}
+    SignupRequestDto:
+      type: object
+      required: [email, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        displayName:
+          type: string
+          description: Trimmed and validated in auth-service; 1..128 Unicode code points, no control characters.
+    AuthMethodsResponseDto:
+      type: object
+      required: [signupEnabled, providers]
+      properties:
+        signupEnabled:
+          type: boolean
+        providers:
+          type: array
+          items:
+            type: string
     LoginRequestDto:
       type: object
       required: [email, password]

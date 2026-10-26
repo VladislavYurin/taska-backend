@@ -53,6 +53,27 @@ class InvitationEmailQueueIntegrationTest extends AbstractIT {
     }
 
     @Test
+    void signupAndAccountReminderUseDurablePrivateQueueWithoutPublicCredentials() throws Exception {
+        var mapper=JsonMapper.builder().build();
+        var signup=TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(UUID.randomUUID()).aggregateType("user")
+                .eventType("UserInvited").occurredAt(Instant.now()).payload(mapper.createObjectNode()
+                        .put("email","signup@example.test").put("rawInviteToken",TOKEN)
+                        .put("expiresAt",Instant.now().plusSeconds(3600).toString()).put("emailKind","SIGNUP")).build();
+        var reminder=TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(UUID.randomUUID()).aggregateType("user")
+                .eventType("UserSignupExistingAccount").occurredAt(Instant.now())
+                .payload(mapper.createObjectNode().put("email","existing@example.test")).build();
+        handler.handle(signup).block(TIMEOUT);handler.handle(reminder).block(TIMEOUT);
+        assertThat(status(signup.aggregateId())).isEqualTo("PENDING");
+        assertThat(status(reminder.aggregateId())).isEqualTo("PENDING");
+        assertThat(notifications.findAll().filter(n -> reminder.id().equals(n.getSourceEventId())).count().block(TIMEOUT)).isZero();
+        queue.dispatchBatch().block(TIMEOUT);
+        var messages=ArgumentCaptor.forClass(MimeMessage.class);verify(mail,times(2)).send(messages.capture());
+        assertThat(messages.getAllValues()).extracting(m -> { try { return m.getSubject(); } catch(Exception e){ throw new RuntimeException(e); } })
+                .containsExactlyInAnyOrder("Confirm your email","You already have a Taska account");
+        assertThat(status(signup.aggregateId())).isEqualTo("SENT");assertThat(status(reminder.aggregateId())).isEqualTo("SENT");
+    }
+
+    @Test
     void malformedDeliveryPayloadIsObservableAndDoesNotPoisonInboxOrReplay() {
         double before = metrics.counter("taska.invitation.delivery.rejected", "reason", "invalid_payload").count();
         var mapper = JsonMapper.builder().build();

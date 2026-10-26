@@ -30,7 +30,7 @@ public class InvitationEmailQueue {
     @Value("${notification.invitation.accept-url:http://localhost:5173/}")
     private String acceptUrl;
 
-    private record Delivery(UUID userId, UUID eventId, UUID leaseId, String email, String token, Instant expiresAt) { }
+    private record Delivery(UUID userId, UUID eventId, UUID leaseId, String email, String token, Instant expiresAt, String kind) { }
 
     @PostConstruct
     void validateAcceptUrl() {
@@ -45,38 +45,36 @@ public class InvitationEmailQueue {
 
     public Mono<Void> enqueue(TaskaEvent event) {
         var payload = event.payload();
-        if (payload == null || payload.get("rawInviteToken") == null || payload.get("expiresAt") == null) {
-            // Old events had no token on the wire. They remain valid inbox events but cannot be delivered as invitations.
+        boolean existing = ru.taska.event.EventType.USER_SIGNUP_EXISTING_ACCOUNT.getValue().equals(event.eventType());
+        if (!existing && (payload == null || payload.get("rawInviteToken") == null || payload.get("expiresAt") == null)) {
             return reject(event, "missing_credentials");
         }
-        if (event.id() == null || event.aggregateId() == null || event.occurredAt() == null
-                || !payload.path("rawInviteToken").isString() || !payload.path("email").isString()
-                || !payload.path("expiresAt").isString()) {
+        if (payload == null || event.id() == null || event.aggregateId() == null || event.occurredAt() == null
+                || !payload.path("email").isString()) return reject(event, "invalid_payload");
+        String kind = existing ? "EXISTING_ACCOUNT" : payload.path("emailKind").asText("INVITATION");
+        if (!kind.equals("INVITATION") && !kind.equals("SIGNUP") && !existing) return reject(event, "invalid_payload");
+        if (!existing && (!payload.path("rawInviteToken").isString() || !payload.path("expiresAt").isString())) {
             return reject(event, "invalid_payload");
         }
-        String token = payload.get("rawInviteToken").stringValue();
-        String email = payload.get("email").stringValue();
+        String token = existing ? "" : payload.path("rawInviteToken").asText();
+        String email = payload.path("email").asText();
         Instant expiresAt;
         try {
-            expiresAt = Instant.parse(payload.get("expiresAt").stringValue());
-        } catch (DateTimeParseException error) {
-            return reject(event, "invalid_payload");
-        }
-        if (!token.matches("[A-Za-z0-9_-]{43}") || email.isBlank() || email.length() > 320
-                || email.codePoints().anyMatch(Character::isISOControl)) {
-            return reject(event, "invalid_payload");
-        }
+            expiresAt = existing ? event.occurredAt().plusSeconds(86400) : Instant.parse(payload.path("expiresAt").asText());
+        } catch (DateTimeParseException error) { return reject(event, "invalid_payload"); }
+        if ((!existing && !token.matches("[A-Za-z0-9_-]{43}")) || email.isBlank() || email.length() > 320
+                || email.codePoints().anyMatch(Character::isISOControl)) return reject(event, "invalid_payload");
         return database.sql("""
                 INSERT INTO taska.invitation_email_deliveries AS current
-                    (user_id, event_id, email, token, issued_at, expires_at, status)
+                    (user_id, event_id, email, token, issued_at, expires_at, status, message_kind)
                 VALUES (:user, :event, :email, CASE WHEN :expires > now() THEN :token ELSE NULL END,
-                        :issued, :expires, CASE WHEN :expires > now() THEN 'PENDING' ELSE 'EXPIRED' END)
+                        :issued, :expires, CASE WHEN :expires > now() THEN 'PENDING' ELSE 'EXPIRED' END, :kind)
                 ON CONFLICT (user_id) DO UPDATE SET event_id=excluded.event_id, email=excluded.email,
-                    token=excluded.token, issued_at=excluded.issued_at, expires_at=excluded.expires_at,
+                    message_kind=excluded.message_kind, token=excluded.token, issued_at=excluded.issued_at, expires_at=excluded.expires_at,
                     status=excluded.status, attempts=0, next_attempt_at=now(), last_attempt_at=NULL, lease_id=NULL
                 WHERE current.issued_at < excluded.issued_at
                 """).bind("user", event.aggregateId()).bind("event", event.id()).bind("email", email)
-                .bind("token", token).bind("issued", event.occurredAt()).bind("expires", expiresAt)
+                .bind("kind", kind).bind("token", token).bind("issued", event.occurredAt()).bind("expires", expiresAt)
                 .fetch().rowsUpdated().then();
     }
 
@@ -106,10 +104,10 @@ public class InvitationEmailQueue {
                 UPDATE taska.invitation_email_deliveries d SET status='PROCESSING', lease_id=:lease,
                     attempts=d.attempts+1, last_attempt_at=now()
                 FROM due WHERE d.user_id=due.user_id
-                RETURNING d.user_id, d.event_id, d.email, d.token, d.expires_at
+                RETURNING d.user_id, d.event_id, d.email, d.token, d.expires_at, d.message_kind
                 """).bind("lease", lease).map((row, metadata) -> new Delivery(row.get("user_id", UUID.class),
                         row.get("event_id", UUID.class), lease, row.get("email", String.class),
-                        row.get("token", String.class), row.get("expires_at", Instant.class))).all())
+                        row.get("token", String.class), row.get("expires_at", Instant.class), row.get("message_kind", String.class))).all())
                 .flatMap(this::send, 4).then();
     }
 
@@ -117,7 +115,11 @@ public class InvitationEmailQueue {
         return Mono.fromRunnable(() -> {
                     String link = UriComponentsBuilder.fromUriString(acceptUrl).queryParam("token", delivery.token())
                             .build().encode().toUriString();
-                    var message = emailMessages.invitation(delivery.email(), link, delivery.expiresAt());
+                    var message = switch (delivery.kind()) {
+                        case "SIGNUP" -> emailMessages.signup(delivery.email(), link, delivery.expiresAt());
+                        case "EXISTING_ACCOUNT" -> emailMessages.existingAccount(delivery.email());
+                        default -> emailMessages.invitation(delivery.email(), link, delivery.expiresAt());
+                    };
                     mail.send(message);
                 }).subscribeOn(Schedulers.boundedElastic())
                 .then(finish(delivery, true))

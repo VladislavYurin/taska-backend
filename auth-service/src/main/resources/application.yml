@@ -1,9 +1,18 @@
+taska:
+  signup:
+    enabled: ${TASKA_SIGNUP_ENABLED:false}
+    ip-attempts-per-hour: ${AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR:10}
+
 server:
   port: ${AUTH_SERVER_PORT:8081}
 
 grpc:
   server:
     port: ${AUTH_GRPC_SERVER_PORT:9091}
+  client:
+    project-service:
+      host: ${PROJECT_GRPC_HOST:localhost}
+      port: ${PROJECT_GRPC_PORT:9096}
 
 spring:
   application:

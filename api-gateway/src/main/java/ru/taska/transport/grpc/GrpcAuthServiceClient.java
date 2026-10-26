@@ -35,6 +35,17 @@ public class GrpcAuthServiceClient {
     private final ReactorAuthServiceGrpc.ReactorAuthServiceStub authServiceStub;
     private final AuthMapper authMapper;
     private final GrpcClientProperties properties;
+    public Mono<Void> signup(Mono<ru.taska.domain.dto.SignupRequestDto> request, GatewayContext context, String ip) {
+        return request.flatMap(body -> dynamicStub().signup(ru.taska.api.auth.v1.SignupRequest.newBuilder()
+                .setHeader(Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()))
+                .setEmail(body.getEmail()).setDisplayName(body.getDisplayName()).setClientIp(ip).build())).then();
+    }
+    public Mono<ru.taska.domain.dto.AuthMethodsResponseDto> getAuthMethods() {
+        return dynamicStub().getAuthMethods(com.google.protobuf.Empty.getDefaultInstance())
+                .map(response -> new ru.taska.domain.dto.AuthMethodsResponseDto().signupEnabled(response.getSignupEnabled())
+                        .providers(response.getProvidersList()));
+    }
+
 
     /**
      * Создает копию gRPC-стаба с динамически настроенным временем ожидания (Deadline).

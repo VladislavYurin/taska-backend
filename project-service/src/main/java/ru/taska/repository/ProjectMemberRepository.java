@@ -16,6 +16,9 @@ import java.util.UUID;
 
 @Repository
 public interface ProjectMemberRepository extends ReactiveCrudRepository<ProjectMember, UUID> {
+    @Query("SELECT EXISTS(SELECT 1 FROM taska.project_members WHERE user_id=:userId)")
+    Mono<Boolean> hasAnyMembership(UUID userId);
+
     @Query("SELECT * FROM taska.project_members WHERE project_id=:projectId AND user_id=:userId FOR SHARE")
     Mono<ProjectMember> findByUserIdAndProjectIdForShare(UUID userId, UUID projectId);
 

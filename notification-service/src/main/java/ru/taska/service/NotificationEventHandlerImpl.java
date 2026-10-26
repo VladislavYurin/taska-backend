@@ -70,13 +70,8 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
     private Mono<List<Notification>> createNotifications(TaskaEvent event, UUID eventId) {
         List<Notification> notifications = notificationFactory.create(event, eventId);
 
-        if (notifications.isEmpty()) {
-            log.debug("There aren't any notifications for event: eventId={}", eventId);
-
-            return Mono.just(Collections.emptyList());
-        }
-
-        Mono<Void> invitation = ru.taska.event.EventType.USER_INVITED.getValue().equals(event.eventType())
+        Mono<Void> invitation = (ru.taska.event.EventType.USER_INVITED.getValue().equals(event.eventType())
+                || ru.taska.event.EventType.USER_SIGNUP_EXISTING_ACCOUNT.getValue().equals(event.eventType()))
                 ? invitationEmailQueue.enqueue(event) : Mono.empty();
         return invitation.thenMany(Flux.fromIterable(notifications))
                 .concatMap(n -> notificationRepository.save(n).flatMap(saved -> deliveryQueue.enqueue(saved).thenReturn(saved)))

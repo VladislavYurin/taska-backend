@@ -33,6 +33,19 @@ public class AuthController implements AuthApi {
     private final GrpcAuthServiceClient grpcAuthServiceClient;
     private final UserService userService;
     private final GatewayRequestExecutor executor;
+    private final ru.taska.security.SignupClientAddress signupAddress;
+
+    @Override
+    public Mono<ResponseEntity<Void>> signup(Mono<ru.taska.domain.dto.SignupRequestDto> request, ServerWebExchange exchange) {
+        return executor.execute(exchange, PUBLIC, context -> grpcAuthServiceClient.signup(request, context, signupAddress.resolve(exchange))
+                .thenReturn(ResponseEntity.accepted().<Void>build()));
+    }
+    @Override
+    public Mono<ResponseEntity<ru.taska.domain.dto.AuthMethodsResponseDto>> getAuthMethods(ServerWebExchange exchange) {
+        return executor.execute(exchange, PUBLIC, context -> grpcAuthServiceClient.getAuthMethods()
+                .map(result -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(result)));
+    }
+
 
     /**
      * Выполняет аутентификацию пользователя по адресу электронной почты и паролю.

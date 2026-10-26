@@ -436,3 +436,11 @@ Origin MCP Inspector разрешён только для `localhost:6274` / `12
 а живые записи не вытесняются. На нескольких репликах replay-защита локальна каждой реплике.
 
 Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.
+
+### Email signup (TAS-423)
+
+`POST /api/v1/auth/signup` accepts email and a display name and returns the same empty 202 for every account state. Free addresses receive a one-time confirmation; invited addresses keep their original name and use invitation resend rules. Active/locked accounts receive a sign-in reminder, blocked accounts receive no mail. A recent administrative invitation is retained silently rather than disclosing its existence. `GET /api/v1/auth/methods` returns the server signup flag and configured providers, with no-store.
+
+Signup defaults to disabled (`TASKA_SIGNUP_ENABLED=false`). Deploy the auth migrations, project-service membership RPC, notification email migration/service and gateway together before enabling it. Unconfirmed SIGNUP users are absent from directory and profile lookups used by project membership validation. Expired registrations are deleted in batches every minute (and on the next signup for that address); activation and resend share user-row locks. Confirmation uses the existing invitations/accept route.
+
+Limits are persisted in auth PostgreSQL: one request per canonical email per 60 seconds and `AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR` (default10) per client IP per hour, shared across replicas. Email retries also consume the IP budget; refusals return429, Retry-After and details.retryAfterSeconds. Expired rate buckets are removed after two hours. Gateway accepts X-Forwarded-For only through `GATEWAY_TRUSTED_PROXY_CIDRS`, walks proxy hops from the right and stops at the first untrusted address. Configure the actual ingress networks; never trust arbitrary client headers. With an empty setting the socket peer is used. When signup is enabled, directory search also requires GLOBAL_ADMIN or membership in any project; a membership RPC outage fails closed.

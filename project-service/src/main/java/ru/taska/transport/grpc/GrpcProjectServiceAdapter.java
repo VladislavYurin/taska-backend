@@ -38,6 +38,15 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     private final GrpcProjectService grpcProjectService;
     private final ProjectArchiveGrpcService archiveService;
     private final ProjectIssueTypeGrpcService issueTypeService;
+    private final ru.taska.repository.ProjectMemberRepository members;
+    @Override
+    public Mono<ru.taska.api.project.v1.HasProjectMembershipInternalResponse> hasProjectMembershipInternal(
+            Mono<ru.taska.api.project.v1.HasProjectMembershipInternalRequest> request) {
+        return request.flatMap(req -> validator.GrpcRequestValidators.parseUuidOrInvalidArgument(req.getUserId(), "userId"))
+                .flatMap(members::hasAnyMembership)
+                .map(member -> ru.taska.api.project.v1.HasProjectMembershipInternalResponse.newBuilder().setMember(member).build())
+                .transform(GrpcExceptionHandler.withErrorHandling("hasProjectMembershipInternal"));
+    }
 
 
     @Override

@@ -23,6 +23,22 @@ import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 public class AuthGrpcServiceAdapter extends ReactorAuthServiceGrpc.AuthServiceImplBase{
 
     private final AuthGrpcService authGrpcService;
+    private final ru.taska.service.EmailSignupService signup;
+    @Override
+    public Mono<Empty> signup(Mono<ru.taska.api.auth.v1.SignupRequest> request) {
+        return request.flatMap(req -> Mono.when(
+                validator.GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                validator.GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"))
+                .then(Mono.defer(() -> signup.signup(req.getEmail(), req.getDisplayName(), req.getClientIp(), req.getHeader().getRequestId()))))
+                .thenReturn(Empty.getDefaultInstance()).transform(GrpcExceptionHandler.withErrorHandling("signup"));
+    }
+    @Override
+    public Mono<ru.taska.api.auth.v1.AuthMethodsResponse> getAuthMethods(Mono<Empty> request) {
+        return request.map(ignored -> ru.taska.api.auth.v1.AuthMethodsResponse.newBuilder()
+                .setSignupEnabled(signup.enabled()).addAllProviders(signup.providers()).build())
+                .transform(GrpcExceptionHandler.withErrorHandling("getAuthMethods"));
+    }
+
 
     @Override
     public Mono<ru.taska.api.auth.v1.PreviewInvitationResponse> previewInvitation(
