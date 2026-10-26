@@ -258,6 +258,7 @@ class ProjectMemberServiceImplTest {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
                     Assertions.assertEquals(DomainStatus.FAILED_PRECONDITION, exception.getStatus());
+                    Assertions.assertEquals("LAST_ADMIN", exception.getDetails().get("reason"));
                 })
                 .verify();
 
@@ -319,6 +320,7 @@ class ProjectMemberServiceImplTest {
                     Assertions.assertTrue(throwable instanceof DomainException);
                     DomainException exception = (DomainException) throwable;
                     Assertions.assertEquals(DomainStatus.FAILED_PRECONDITION, exception.getStatus());
+                    Assertions.assertEquals("LAST_ADMIN", exception.getDetails().get("reason"));
                 })
                 .verify();
 

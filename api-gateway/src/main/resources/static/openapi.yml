@@ -699,6 +699,7 @@ paths:
 
     get:
       summary: Возвращает проекты текущего пользователя
+      description: Доступные неархивные проекты по createdAt по возрастанию, затем по id по возрастанию.
       operationId: listMyProjects
       tags:
         - project
@@ -720,6 +721,7 @@ paths:
   /api/v1/project-stats:
     get:
       summary: Счётчики и первые пять участников всех проектов пользователя
+      description: Проекты в том же порядке, что GET /projects — createdAt по возрастанию, затем id по возрастанию.
       operationId: getProjectStats
       tags: [project-stats]
       security:
@@ -5559,7 +5561,12 @@ components:
           nullable: true
           additionalProperties:
             type: string
-          description: Параметры ошибки. Для временной блокировки lockedUntil — время разблокировки в ISO 8601 UTC.
+          description: >
+            Параметры ошибки. lockedUntil — время разблокировки в ISO 8601 UTC.
+            reason=PROJECT_ARCHIVED означает запрет записи в архивный проект: изменение проекта,
+            участников, задач, меток и workflow. reason=LAST_ADMIN означает отказ удалить или
+            понизить последнего ADMIN через DELETE/PATCH /projects/{projectId}/members/{userId}.
+            Обе причины возвращаются с FAILED_PRECONDITION (HTTP 400).
           example:
             lockedUntil: '2026-09-22T11:55:50.398486Z'
 
