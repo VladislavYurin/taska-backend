@@ -589,23 +589,35 @@ public class WriteTools implements ToolContributor {
             })
         .onErrorMap(
             GatewayToolException.class,
-            failure ->
-                new GatewayToolException(
-                    "partial_success",
-                    "Задача "
-                        + key
-                        + " создана, дополнительные шаги завершены не полностью. Не создавайте"
-                        + " новую задачу: тот же idempotency_key и аргументы завершат только"
-                        + " отсутствующие шаги. При конфликте исполнителя используйте assign_issue"
-                        + " после согласования.",
-                    Map.of(
-                        "created_issue_key",
-                        key,
-                        "completed_steps",
-                        List.copyOf(completed),
-                        "remaining_steps",
-                        List.copyOf(remaining),
-                        "reason",
-                        failure.code().toUpperCase(java.util.Locale.ROOT))));
+            failure -> {
+              Map<String, Object> details =
+                  new LinkedHashMap<>(
+                      Map.of(
+                          "created_issue_key",
+                          key,
+                          "completed_steps",
+                          List.copyOf(completed),
+                          "remaining_steps",
+                          List.copyOf(remaining),
+                          "reason",
+                          failure.code().toUpperCase(java.util.Locale.ROOT)));
+              if (failure.details().get("current_version") instanceof Number version
+                  && version.longValue() >= 1
+                  && version.longValue() <= Integer.MAX_VALUE)
+                details.put("current_version", version.intValue());
+              if (failure.details().get("current_status") instanceof String status
+                  && !status.isBlank()
+                  && status.codePointCount(0, status.length()) <= 64)
+                details.put("current_status", status);
+              return new GatewayToolException(
+                  "partial_success",
+                  "Задача "
+                      + key
+                      + " создана, дополнительные шаги завершены не полностью. Не создавайте новую"
+                      + " задачу: тот же idempotency_key и аргументы завершат только отсутствующие"
+                      + " шаги. При конфликте исполнителя используйте assign_issue после"
+                      + " согласования.",
+                  details);
+            });
   }
 }

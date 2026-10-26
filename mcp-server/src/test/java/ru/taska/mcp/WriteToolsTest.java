@@ -171,6 +171,29 @@ class WriteToolsTest {
   }
 
   @Test
+  void partialCreateRetainsHumanAssignmentConflictDetailsWithoutOverwriting() {
+    // Current authorized post-create state already has a human's assignment.
+    String humanAssignee = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    fixture.issue.put("assigneeId", humanAssignee).put("version", 4);
+    var result =
+        call(
+            "create_issue",
+            Map.of(
+                "project_key", "TAS", "summary", "New", "assignee", "me", "idempotency_key", KEY));
+    var error = content(result).path("error");
+    assertThat(error.path("code").asText()).isEqualTo("partial_success");
+    assertThat(error.path("details").path("created_issue_key").asText()).isEqualTo("TAS-1");
+    assertThat(error.path("details").path("reason").asText()).isEqualTo("CONFLICT");
+    assertThat(error.path("details").path("current_version").asInt()).isEqualTo(4);
+    assertThat(error.path("details").path("current_status").asText()).isEqualTo("OPEN");
+    assertThat(error.path("details").path("remaining_steps").toString()).contains("assign");
+    assertThat(fixture.creates).hasValue(1);
+    assertThat(fixture.patches).hasValue(0);
+    assertThat(fixture.issue.path("assigneeId").asText()).isEqualTo(humanAssignee);
+    assertThat(error.path("details").has("assigneeId")).isFalse();
+  }
+
+  @Test
   void createValidatesRegistryLabelsAndAssigneeBeforeFirstWrite() {
     for (Map<String, Object> extra :
         List.of(
