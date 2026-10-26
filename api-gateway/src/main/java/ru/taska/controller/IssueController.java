@@ -166,11 +166,12 @@ public class IssueController implements IssueApi {
     public Mono<ResponseEntity<IssueWithHistoryResponseDto>> transitionIssue(
             String issueId,
             String transitionId,
+            String ifMatch,
             Mono<TransitionIssueRequestDto> request,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                issueClient.transitionIssue(issueId, transitionId, request, context)
+                issueClient.transitionIssue(issueId, transitionId, ifMatch, request, context)
                         .map(ResponseEntity::ok)
         );
     }

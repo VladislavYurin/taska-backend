@@ -1644,6 +1644,11 @@ paths:
   /api/v1/issues/{issueId}/transition/{transitionId}:
     put:
       summary: Выполняет переход задачи по workflow (меняет статус задачи)
+      description: >-
+        Необязательный If-Match защищает переход от изменений после чтения задачи.
+        Сравнение версии и переход атомарны. При несовпадении возвращается 409 ABORTED
+        с details.currentVersion и details.currentStatus без изменения задачи, истории и outbox.
+        Без заголовка сохраняется поведение без явной проверки ожидаемой версии.
       operationId: transitionIssue
       tags:
         - issue
@@ -1660,6 +1665,13 @@ paths:
         - name: transitionId
           in: path
           required: true
+          schema:
+            type: string
+
+        - name: If-Match
+          in: header
+          required: false
+          description: Положительная версия Issue.version, например 3 или "3".
           schema:
             type: string
 
@@ -1680,6 +1692,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IssueWithHistoryResponseDto'
+        '409':
+          description: Конфликт ожидаемой версии (ABORTED); details содержит currentVersion и currentStatus.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 

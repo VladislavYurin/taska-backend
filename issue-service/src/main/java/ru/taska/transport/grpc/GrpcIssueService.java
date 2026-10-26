@@ -680,7 +680,10 @@ public class GrpcIssueService {
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(
                                         req.getBody().getActorUserId(), "body.actorUserId"
                                 ),
-                                Mono.just(req.getBody().getPayload())
+                                Mono.just(req.getBody().getPayload()),
+                                validateIfPresent(req.getBody().hasExpectedVersion(), () ->
+                                        GrpcRequestValidators.requirePositiveOrInvalidArgument(
+                                                req.getBody().getExpectedVersion(), "body.expectedVersion"))
                         )
                         .doOnError(StatusRuntimeException.class,
                                 logValidationError(
@@ -705,7 +708,8 @@ public class GrpcIssueService {
                                             issueId,
                                             transitionId,
                                             actorUserId,
-                                            payload
+                                            payload,
+                                            t.getT7().map(Number::intValue).orElse(null)
                                     )
                                     .doOnNext(issueWithHistory ->
                                             log.info(

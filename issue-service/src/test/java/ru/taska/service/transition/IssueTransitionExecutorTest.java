@@ -140,7 +140,8 @@ class IssueTransitionExecutorTest {
                         ISSUE_ID,
                         TARGET_STATUS_KEY,
                         TRANSITION_ID,
-                        ACTOR_USER_ID
+                        ACTOR_USER_ID,
+                        null
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getIssue().getId()).isEqualTo(ISSUE_ID);
@@ -196,7 +197,8 @@ class IssueTransitionExecutorTest {
                         ISSUE_ID,
                         TARGET_STATUS_KEY,
                         TRANSITION_ID,
-                        ACTOR_USER_ID
+                        ACTOR_USER_ID,
+                        null
                 ))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getIssue()).isSameAs(issue);
@@ -222,7 +224,8 @@ class IssueTransitionExecutorTest {
                         ISSUE_ID,
                         TARGET_STATUS_KEY,
                         TRANSITION_ID,
-                        ACTOR_USER_ID
+                        ACTOR_USER_ID,
+                        null
                 ))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
@@ -257,7 +260,8 @@ class IssueTransitionExecutorTest {
                         ISSUE_ID,
                         TARGET_STATUS_KEY,
                         TRANSITION_ID,
-                        ACTOR_USER_ID
+                        ACTOR_USER_ID,
+                        null
                 ))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);

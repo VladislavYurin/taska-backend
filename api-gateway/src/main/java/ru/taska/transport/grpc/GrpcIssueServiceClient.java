@@ -280,6 +280,7 @@ public class GrpcIssueServiceClient {
      *
      * @param issueId      идентификатор задачи
      * @param transitionId идентификатор перехода
+     * @param ifMatch      ожидаемая версия или null для старого поведения
      * @param request      дополнительные данные перехода(необязательное поле)
      * @param context      контекст запроса
      * @return задача с обновлённой историей
@@ -287,6 +288,7 @@ public class GrpcIssueServiceClient {
     public Mono<IssueWithHistoryResponseDto> transitionIssue(
             String issueId,
             String transitionId,
+            String ifMatch,
             Mono<TransitionIssueRequestDto> request,
             GatewayContext context
     ) {
@@ -300,6 +302,9 @@ public class GrpcIssueServiceClient {
                             .setTransitionId(transitionId)
                             .setActorUserId(context.userContext().userId());
 
+                    if (ifMatch != null) {
+                        requestBodyBuilder.setExpectedVersion(issueMapper.parseIfMatchVersion(ifMatch));
+                    }
                     if (requestDto.getPayload() != null) {
                         requestBodyBuilder.setPayload(issueMapper.convertPayloadToJsonString(requestDto.getPayload()));
                     }

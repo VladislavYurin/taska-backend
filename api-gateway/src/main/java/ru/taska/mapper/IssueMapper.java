@@ -565,13 +565,17 @@ public class IssueMapper {
     /**
      * Принимает версию как голым числом ({@code 3}), так и в формате ETag ({@code "3"}).
      */
-    private int parseIfMatchVersion(String ifMatchVersion) {
+    public int parseIfMatchVersion(String ifMatchVersion) {
         String version = ifMatchVersion.trim();
         if (version.length() >= 2 && version.startsWith("\"") && version.endsWith("\"")) {
             version = version.substring(1, version.length() - 1);
         }
         try {
-            return Integer.parseInt(version);
+            int parsedVersion = Integer.parseInt(version);
+            if (parsedVersion <= 0) {
+                throw new NumberFormatException("Version must be positive");
+            }
+            return parsedVersion;
         } catch (NumberFormatException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "If-Match header must contain a valid integer issue version");
