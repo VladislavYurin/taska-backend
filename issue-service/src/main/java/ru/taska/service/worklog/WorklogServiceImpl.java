@@ -6,6 +6,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.entity.Issue;
+import ru.taska.domain.aggregate.WorklogPage;
+import ru.taska.domain.dto.UserSummary;
+import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
 import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
@@ -18,8 +21,10 @@ import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Реализация {@link WorklogService}: валидирует вход, проверяет наличие задачи
@@ -34,6 +39,7 @@ public class WorklogServiceImpl implements WorklogService {
     private final ProjectRoleChecker projectRoleChecker;
     private final IssueProperties issueProperties;
     private final WorklogExecutor worklogExecutor;
+    private final GrpcAuthServiceClient grpcAuthServiceClient;
 
     @Override
     public Mono<Worklog> addIssueWorklog(
@@ -85,19 +91,39 @@ public class WorklogServiceImpl implements WorklogService {
     }
 
     @Override
-    public Mono<List<Worklog>> listIssueWorklog(
+    public Mono<WorklogPage> listIssueWorklog(
             String requestId,
             String nodeId,
             UUID issueId,
-            UUID actorUserId
+            UUID actorUserId,
+            int page,
+            int pageSize
     ) {
+        if (page < 0 || pageSize < 1 || pageSize > 100) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,
+                    "page must be non-negative and pageSize must be between 1 and 100"));
+        }
+        long offset = (long) page * pageSize;
         return findActiveIssue(requestId, nodeId, issueId)
                 .flatMap(issue -> {
                     var allowedRoles = issueProperties.allowedRoles().listWorklogRoles();
-
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .then(worklogRepository.findActiveByIssueId(issue.getId()).collectList());
-                });
+                            .then(Mono.defer(() -> Mono.zip(
+                                    worklogRepository.findActivePageByIssueId(issue.getId(), pageSize, offset).collectList(),
+                                    worklogRepository.countActiveByIssueId(issue.getId()))));
+                })
+                .flatMap(result -> getAuthorProfiles(result.getT1(), requestId, nodeId)
+                        .map(profiles -> new WorklogPage(result.getT1(), page, pageSize, result.getT2(), profiles)));
+    }
+
+    private Mono<Map<UUID, UserSummary>> getAuthorProfiles(List<Worklog> items, String requestId, String nodeId) {
+        Set<UUID> authorIds = items.stream().map(Worklog::getAuthorUserId).collect(Collectors.toSet());
+        if (authorIds.isEmpty()) {
+            return Mono.just(Map.of());
+        }
+        return grpcAuthServiceClient.getUserProfiles(authorIds, requestId, nodeId)
+                .doOnError(error -> log.warn("[{}][{}] Could not load worklog author profiles", requestId, nodeId, error))
+                .onErrorReturn(Map.of());
     }
 
     @Override

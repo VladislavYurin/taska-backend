@@ -75,11 +75,15 @@ public class WorklogController implements WorklogsApi {
     public Mono<ResponseEntity<ListIssueWorklogsResponseDto>> listIssueWorklogs(
             UUID projectId,
             UUID issueId,
+            Integer page,
+            Integer pageSize,
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
                 worklogClient.listIssueWorklogs(
                         issueId.toString(),
+                        page,
+                        pageSize,
                         context
                 ).map(ResponseEntity::ok));
     }

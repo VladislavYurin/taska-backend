@@ -8,9 +8,9 @@ import ru.taska.api.issue.v1.ListIssueWorklogsResponse;
 import ru.taska.api.issue.v1.UpdateIssueWorklogResponse;
 import ru.taska.api.issue.v1.WorklogResponse;
 import ru.taska.domain.entity.Worklog;
+import ru.taska.domain.aggregate.WorklogPage;
 
 import java.time.Instant;
-import java.util.List;
 
 @Component
 public class WorklogMapper {
@@ -23,9 +23,17 @@ public class WorklogMapper {
         return UpdateIssueWorklogResponse.newBuilder().setWorklog(toWorklogProto(w)).build();
     }
 
-    public ListIssueWorklogsResponse toListResponse(List<Worklog> w) {
-        return ListIssueWorklogsResponse.newBuilder().addAllWorklogs(w.stream()
-                .map(this::toWorklogProto).toList()).build();
+    public ListIssueWorklogsResponse toListResponse(WorklogPage page) {
+        return ListIssueWorklogsResponse.newBuilder()
+                .setPage(page.page()).setPageSize(page.pageSize())
+                .setTotalCount(page.totalCount()).setHasMore(page.hasMore())
+                .addAllWorklogs(page.items().stream().map(worklog -> {
+                    var builder = toWorklogProto(worklog).toBuilder();
+                    if (page.authorProfiles().containsKey(worklog.getAuthorUserId())) {
+                        builder.setAuthor(IssueMapperUtils.resolveUser(worklog.getAuthorUserId(), page.authorProfiles()));
+                    }
+                    return builder.build();
+                }).toList()).build();
     }
 
     public DeleteIssueWorklogResponse toDeleteResponse(Worklog w) {

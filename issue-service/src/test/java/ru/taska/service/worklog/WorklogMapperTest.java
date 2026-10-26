@@ -8,12 +8,15 @@ import ru.taska.api.issue.v1.DeleteIssueWorklogResponse;
 import ru.taska.api.issue.v1.ListIssueWorklogsResponse;
 import ru.taska.api.issue.v1.UpdateIssueWorklogResponse;
 import ru.taska.api.issue.v1.WorklogResponse;
+import ru.taska.domain.aggregate.WorklogPage;
+import ru.taska.domain.dto.UserSummary;
 import ru.taska.domain.entity.Worklog;
 import ru.taska.mapper.WorklogMapper;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @DisplayName("WorklogMapper Unit Tests")
@@ -118,16 +121,31 @@ class WorklogMapperTest {
         Worklog first = baseWorklog();
         Worklog second = baseWorklog().toBuilder().id(UUID.randomUUID()).build();
 
-        ListIssueWorklogsResponse response = worklogMapper.toListResponse(List.of(first, second));
+        ListIssueWorklogsResponse response = worklogMapper.toListResponse(new WorklogPage(List.of(first, second), 1, 2, 5,
+                Map.of(first.getAuthorUserId(), new UserSummary(first.getAuthorUserId(), "Former author", null))));
 
         Assertions.assertThat(response.getWorklogsList()).hasSize(2);
+        Assertions.assertThat(response.getPage()).isEqualTo(1);
+        Assertions.assertThat(response.getPageSize()).isEqualTo(2);
+        Assertions.assertThat(response.getTotalCount()).isEqualTo(5);
+        Assertions.assertThat(response.getHasMore()).isTrue();
+        Assertions.assertThat(response.getWorklogs(0).getAuthor().getDisplayName()).isEqualTo("Former author");
     }
 
     @Test
     @DisplayName("toListResponse: должен вернуть пустой список, если входной список пуст")
     void shouldReturnEmptyListWhenInputEmpty() {
-        ListIssueWorklogsResponse response = worklogMapper.toListResponse(List.of());
+        ListIssueWorklogsResponse response = worklogMapper.toListResponse(new WorklogPage(List.of(), 2, 20, 3, Map.of()));
 
         Assertions.assertThat(response.getWorklogsList()).isEmpty();
     }
+
+    @Test
+    void missingProfileShouldNotSynthesizeAuthor() {
+        var worklog = baseWorklog();
+        var response = worklogMapper.toListResponse(new WorklogPage(List.of(worklog), 0, 20, 1, Map.of()));
+        Assertions.assertThat(response.getWorklogs(0).hasAuthor()).isFalse();
+        Assertions.assertThat(response.getWorklogs(0).getAuthorUserId()).isEqualTo(worklog.getAuthorUserId().toString());
+    }
+
 }

@@ -24,9 +24,18 @@ public interface WorklogRepository extends ReactiveCrudRepository<Worklog, UUID>
     Mono<Worklog> findActiveByIdForUpdate(@Param("id") UUID id);
 
 
-        @Query("SELECT * FROM taska.issue_worklogs t WHERE t.issue_id = :id AND deleted_at IS NULL ORDER BY work_date DESC, created_at DESC")
-    Flux<Worklog> findActiveByIssueId(@Param("id") UUID id);
+    @Query("""
+            SELECT * FROM taska.issue_worklogs
+            WHERE issue_id = :id AND deleted_at IS NULL
+            ORDER BY work_date DESC, created_at DESC, id DESC
+            LIMIT :pageSize OFFSET :offset
+            """)
+    Flux<Worklog> findActivePageByIssueId(@Param("id") UUID id,
+                                        @Param("pageSize") int pageSize,
+                                        @Param("offset") long offset);
 
+    @Query("SELECT COUNT(*) FROM taska.issue_worklogs WHERE issue_id = :id AND deleted_at IS NULL")
+    Mono<Long> countActiveByIssueId(@Param("id") UUID id);
 
     /**
      * * Производит мягкое удаление ворклога по айди, устанавливая значение

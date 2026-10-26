@@ -1799,7 +1799,8 @@ paths:
   # ============ API для worklogs ============
   /api/v1/projects/{projectId}/issues/{issueId}/worklogs:
     get:
-      summary: Получение списка worklogs задачи
+      summary: Получение страницы worklogs задачи
+      description: Активные записи в порядке workDate DESC, createdAt DESC, id DESC.
       operationId: listIssueWorklogs
       tags:
         - worklogs
@@ -1818,6 +1819,23 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: page
+          in: query
+          description: Номер страницы с нуля.
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          description: Размер страницы.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
           description: Worklogs задачи получены
@@ -4535,6 +4553,23 @@ components:
           nullable: true
           format: uri
 
+    NullableUserSummaryDto:
+      type: object
+      nullable: true
+      required:
+        - id
+        - displayName
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          format: uri
+
     TargetIssueDto:
       type: object
       required:
@@ -6111,6 +6146,9 @@ components:
         authorUserId:
           type: string
           format: uuid
+        author:
+          description: Профиль автора в списке worklogs, включая бывших участников проекта. Null при недоступном профиле; authorUserId сохраняется. В ответах записи поле может отсутствовать.
+          $ref: '#/components/schemas/NullableUserSummaryDto'
         spentMinutes:
           type: integer
           format: int32
@@ -6130,12 +6168,29 @@ components:
 
     ListIssueWorklogsResponseDto:
       type: object
-      required: [ items ]
+      required: [ items, page, pageSize, totalCount, hasMore ]
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/IssueWorklogResponseDto'
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        pageSize:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        totalCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Общее число активных записей задачи, включая записи за пределами страницы.
+        hasMore:
+          type: boolean
+          description: После этой страницы есть другие записи.
 
     AddIssueWorklogRequestDto:
       type: object

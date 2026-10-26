@@ -70,12 +70,14 @@ public class GrpcIssueWorklogServiceClient {
      */
     public Mono<ListIssueWorklogsResponseDto> listIssueWorklogs(
             String issueId,
+            int page,
+            int pageSize,
             GatewayContext context
     ) {
         log.info("[{}] Calling listIssueWorklogs", context.requestId());
 
         ListIssueWorklogsRequest grpcRequest = issueWorklogMapper
-                .toListIssueWorklogsGrpcRequest(issueId, context);
+                .toListIssueWorklogsGrpcRequest(issueId, page, pageSize, context);
 
         return dynamicStub().listIssueWorklogs(grpcRequest)
                 .map(issueWorklogMapper::toRestListIssueWorklogs);

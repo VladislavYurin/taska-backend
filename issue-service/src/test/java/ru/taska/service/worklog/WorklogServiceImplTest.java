@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
@@ -15,19 +17,22 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.config.props.IssueProperties;
-import ru.taska.domain.entity.Issue;
-import ru.taska.domain.dto.ProjectRole;
-import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
+import ru.taska.domain.dto.ProjectRole;
 import ru.taska.domain.dto.UpdateWorklogDto;
+import ru.taska.domain.dto.UserSummary;
+import ru.taska.domain.entity.Issue;
+import ru.taska.domain.entity.Worklog;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.WorklogRepository;
+import ru.taska.transport.grpc.profile.GrpcAuthServiceClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,6 +57,9 @@ class WorklogServiceImplTest {
 
     @Mock
     private WorklogExecutor worklogExecutor;
+
+    @Mock
+    private GrpcAuthServiceClient grpcAuthServiceClient;
 
     @InjectMocks
     private WorklogServiceImpl worklogService;
@@ -459,12 +467,22 @@ class WorklogServiceImplTest {
                 .thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
         Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
-        Mockito.when(worklogRepository.findActiveByIssueId(ISSUE_ID))
+        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 20, 0L))
                 .thenReturn(Flux.just(worklog, worklog.toBuilder().id(UUID.randomUUID()).build()));
 
-        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID))
-                .assertNext(list -> Assertions.assertThat(list).hasSize(2))
+        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(3L));
+        Mockito.when(grpcAuthServiceClient.getUserProfiles(Set.of(MEMBER_ID), REQUEST_ID, NODE_ID))
+                .thenReturn(Mono.just(Map.of(MEMBER_ID, new UserSummary(MEMBER_ID, "Former member", null))));
+
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 0, 20))
+                .assertNext(list -> {
+                    Assertions.assertThat(list.items()).hasSize(2);
+                    Assertions.assertThat(list.totalCount()).isEqualTo(3);
+                    Assertions.assertThat(list.hasMore()).isTrue();
+                    Assertions.assertThat(list.authorProfiles().get(MEMBER_ID).displayName()).isEqualTo("Former member");
+                })
                 .verifyComplete();
+        Mockito.verify(grpcAuthServiceClient).getUserProfiles(Set.of(MEMBER_ID), REQUEST_ID, NODE_ID);
     }
 
     @Test
@@ -476,11 +494,18 @@ class WorklogServiceImplTest {
                 .thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
         Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
-        Mockito.when(worklogRepository.findActiveByIssueId(ISSUE_ID)).thenReturn(Flux.empty());
+        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 20, 0L)).thenReturn(Flux.empty());
 
-        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID))
-                .assertNext(list -> Assertions.assertThat(list).isEmpty())
+        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 0, 20))
+                .assertNext(list -> {
+                    Assertions.assertThat(list.items()).isEmpty();
+                    Assertions.assertThat(list.totalCount()).isZero();
+                    Assertions.assertThat(list.hasMore()).isFalse();
+                })
                 .verifyComplete();
+        Mockito.verifyNoInteractions(grpcAuthServiceClient);
     }
 
     @Test
@@ -488,7 +513,7 @@ class WorklogServiceImplTest {
     void shouldThrowNotFoundWhenIssueMissingOnList() {
         Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.empty());
 
-        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID))
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 0, 20))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
                     DomainException ex = (DomainException) error;
@@ -496,7 +521,49 @@ class WorklogServiceImplTest {
                 })
                 .verify();
 
-        Mockito.verify(worklogRepository, Mockito.never()).findActiveByIssueId(ArgumentMatchers.any());
+        Mockito.verifyNoInteractions(worklogRepository, grpcAuthServiceClient);
         Mockito.verify(projectRoleChecker, Mockito.never()).checkProjectRole(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
     }
+
+    @ParameterizedTest
+    @CsvSource({"-1,20", "0,0", "0,-1", "0,101"})
+    void invalidPageShouldFailBeforeReadingSources(int page, int pageSize) {
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, page, pageSize))
+                .expectErrorSatisfies(error -> Assertions.assertThat(((DomainException) error).getStatus())
+                        .isEqualTo(DomainStatus.INVALID_ARGUMENT))
+                .verify();
+        Mockito.verifyNoInteractions(issueRepository, worklogRepository, grpcAuthServiceClient, projectRoleChecker);
+    }
+
+    @Test
+    void forbiddenReadShouldNotFetchWorklogsOrProfiles() {
+        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
+        Mockito.when(allowedRoles.listWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER));
+        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, OTHER_MEMBER_ID, Set.of(ProjectRole.MEMBER)))
+                .thenReturn(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Not a member")));
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, OTHER_MEMBER_ID, 0, 20))
+                .expectError(DomainException.class).verify();
+        Mockito.verifyNoInteractions(worklogRepository, grpcAuthServiceClient);
+    }
+
+    @Test
+    void profileFailureShouldKeepPageAndAuthorIds() {
+        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueProperties.allowedRoles()).thenReturn(allowedRoles);
+        Mockito.when(allowedRoles.listWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER));
+        Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, MEMBER_ID, Set.of(ProjectRole.MEMBER)))
+                .thenReturn(Mono.empty());
+        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 1, 2L)).thenReturn(Flux.just(worklog));
+        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(3L));
+        Mockito.when(grpcAuthServiceClient.getUserProfiles(Set.of(MEMBER_ID), REQUEST_ID, NODE_ID))
+                .thenReturn(Mono.error(new IllegalStateException("Auth unavailable")));
+        StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 2, 1))
+                .assertNext(page -> {
+                    Assertions.assertThat(page.items()).containsExactly(worklog);
+                    Assertions.assertThat(page.authorProfiles()).isEmpty();
+                    Assertions.assertThat(page.hasMore()).isFalse();
+                }).verifyComplete();
+    }
+
 }
