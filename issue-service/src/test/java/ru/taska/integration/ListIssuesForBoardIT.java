@@ -292,8 +292,9 @@ public class ListIssuesForBoardIT extends AbstractIT {
     void boundedPageIncludesTotalBeforeLimitAndUuidTieBreak(IssueType type) {
         databaseClient.sql("UPDATE taska.issues SET created_at='2026-01-01T00:00:00Z'")
                 .fetch().rowsUpdated().block();
-        var expected = issueRepository.findForBoard(PROJECT_ID_1, type, null, null, true, List.of(), null, null, null, null)
-                .collectList().block().stream().collect(Collectors.groupingBy(Issue::getStatusKey));
+        var expected = savedIssues.stream().filter(issue -> PROJECT_ID_1.equals(issue.getProjectId()))
+                .filter(issue -> type == null || type.equals(issue.getIssueType()))
+                .collect(Collectors.groupingBy(Issue::getStatusKey));
         var result = issueService.listIssueBoard(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
                 null, null, type, true, List.of(), null, 1, null, null).block();
         Assertions.assertThat(result).hasSize(expected.size());
@@ -313,9 +314,16 @@ public class ListIssuesForBoardIT extends AbstractIT {
                 .bind("issue",id).bind("label",first.getId()).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
         databaseClient.sql("INSERT INTO taska.issue_labels(issue_id,label_id,created_at,created_by) VALUES(:issue,:label,'2026-01-01T00:00:00Z',:actor)")
                 .bind("issue",id).bind("label",second.getId()).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
+        UUID later = new UUID(0, 1); // Smaller UUID must still follow earlier bindings.
+        databaseClient.sql("INSERT INTO taska.project_labels(id,project_id,name,color,created_by) VALUES(:id,:project,'later','#abcdef',:actor)")
+                .bind("id",later).bind("project",PROJECT_ID_1).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
+        databaseClient.sql("INSERT INTO taska.issue_labels(issue_id,label_id,created_at,created_by) VALUES(:issue,:label,'2026-01-02T00:00:00Z',:actor)")
+                .bind("issue",id).bind("label",later).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
+        var expected = new java.util.ArrayList<>(java.util.stream.Stream.of(first.getId(),second.getId())
+                .sorted(java.util.Comparator.comparing(UUID::toString)).toList());
+        expected.add(later);
         Assertions.assertThat(issueRepository.findLabelIdsByIssueIds(List.of(id)).block().get(id))
-                .containsExactlyElementsOf(java.util.stream.Stream.of(first.getId(),second.getId())
-                        .sorted(java.util.Comparator.comparing(UUID::toString)).toList());
+                .containsExactlyElementsOf(expected);
     }
 
     @Test
