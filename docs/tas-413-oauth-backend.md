@@ -63,7 +63,9 @@ The following AS-origin contracts support TAS-414:
 * `POST /oauth2/authorize`: standard consent submission (`client_id`, `state`,
   selected repeated `scope`, `_csrf`). The AS validates persisted state, principal,
   registered scopes and CSRF; client claims cannot approve another user's grant.
-* `GET /oauth/grants`: connected grants belonging to the current session user.
+* `GET /oauth/grants`: connected grants belonging to the current session user with an
+  active access or refresh token. Expired online grants are omitted; an offline grant
+  stays visible while its refresh token is active, even after access expiry.
 * `DELETE /oauth/grants/{id}`: owner only, CSRF required; removes the complete
   grant and consent so the next authorization asks again. Unknown/foreign IDs 404.
 * `POST /oauth2/revoke`: RFC 7009 public-client token possession plus registered

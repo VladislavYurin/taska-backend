@@ -191,6 +191,37 @@ class OAuthTokenSecurityTest {
   }
 
   @Test
+  void exchangeClampsDelegationToTheParentAndValidationRejectsAShortenedOrExpiredParent() {
+    var shortParent = new HashMap<>(claims.get());
+    long parentExpiry = Instant.now().plusSeconds(20).getEpochSecond();
+    shortParent.put("exp", parentExpiry);
+    claims.set(shortParent);
+    var issued = service.exchange(OAT).block();
+    var jwt =
+        Jwts.parser()
+            .verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .build()
+            .parseSignedClaims(issued.getDelegationToken());
+    assertThat(jwt.getPayload().getExpiration().toInstant().getEpochSecond())
+        .isEqualTo(parentExpiry);
+    assertThat(
+            service
+                .validateDelegation(issued.getDelegationToken())
+                .block()
+                .getTokenExpiresAt()
+                .getSeconds())
+        .isEqualTo(parentExpiry);
+    shortParent.put("exp", parentExpiry - 10);
+    claims.set(Map.copyOf(shortParent));
+    reject(service.validateDelegation(issued.getDelegationToken()));
+    shortParent.put("exp", Instant.now().minusSeconds(1).getEpochSecond());
+    claims.set(Map.copyOf(shortParent));
+    reject(service.validateDelegation(issued.getDelegationToken()));
+    assertThat(introspections).hasValue(1);
+    assertThat(parentChecks).hasValue(3);
+  }
+
+  @Test
   void serviceIdentityIsDistinctAndNotDerivedFromHeaderNodeId() {
     var interceptor = new OAuthServiceIdentityInterceptor(properties);
     for (String supplied : List.of("", IDENTITY, "client-controlled-node-id")) {

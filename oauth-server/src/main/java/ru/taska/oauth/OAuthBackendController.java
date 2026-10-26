@@ -76,7 +76,12 @@ public class OAuthBackendController {
   public List<Map<String, Object>> grants(Authentication actor) {
     return jdbc.query(
         "SELECT id,registered_client_id,authorized_scopes FROM oauth2_authorization WHERE"
-            + " principal_name=? AND access_token_value IS NOT NULL ORDER BY id",
+            + " principal_name=? AND access_token_value IS NOT NULL AND"
+            + " ((access_token_expires_at>now() AND"
+            + " COALESCE(access_token_metadata::jsonb->>'metadata.token.invalidated','false')='false')"
+            + " OR (refresh_token_value IS NOT NULL AND refresh_token_expires_at>now() AND"
+            + " COALESCE(refresh_token_metadata::jsonb->>'metadata.token.invalidated','false')='false'))"
+            + " ORDER BY id",
         (row, n) -> {
           var client = clients.findById(row.getString(2));
           return Map.<String, Object>of(

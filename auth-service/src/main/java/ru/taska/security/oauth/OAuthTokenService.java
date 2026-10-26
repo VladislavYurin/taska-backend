@@ -96,7 +96,9 @@ public class OAuthTokenService {
                           parent.subject().equals(subject)
                               && parent.grantId().toString().equals(grant)
                               && parent.tokenId().toString().equals(tokenId)
-                              && parent.scopes().containsAll(scopes))
+                              && parent.scopes().containsAll(scopes)
+                              && parent.expiresAt().isAfter(Instant.now())
+                              && !claims.getExpiration().toInstant().isAfter(parent.expiresAt()))
                   .switchIfEmpty(Mono.error(OAuthIntrospectionClient.invalid()))
                   .flatMap(
                       parent ->

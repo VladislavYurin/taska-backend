@@ -448,6 +448,65 @@ class OAuthProtocolIntegrationTest {
         .isFalse();
   }
 
+  @Test
+  void connectedGrantsOmitAnExpiredCodeOnlyAuthorization() throws Exception {
+    var issued = token(authorize(CLIENT, "read"), VERIFIER, RESOURCE, 200);
+    assertThat(issued.has("refresh_token")).isFalse();
+    String id =
+        grants
+            .findByToken(issued.path("access_token").asText(), OAuth2TokenType.ACCESS_TOKEN)
+            .getId();
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].grant_id").value(id));
+    jdbc.update(
+        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes', access_token_expires_at=now()-interval '1 second' WHERE"
+            + " id=?",
+        id);
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isEmpty());
+  }
+
+  @Test
+  void connectedGrantsKeepActiveOfflineRefreshButOmitFullyExpiredOrInvalidatedTokens()
+      throws Exception {
+    var issued = token(authorize(), VERIFIER, RESOURCE, 200);
+    String id =
+        grants
+            .findByToken(issued.path("access_token").asText(), OAuth2TokenType.ACCESS_TOKEN)
+            .getId();
+    jdbc.update(
+        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes', access_token_expires_at=now()-interval '1 second' WHERE"
+            + " id=?",
+        id);
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].grant_id").value(id));
+    jdbc.update(
+        "UPDATE oauth2_authorization SET refresh_token_issued_at=now()-interval '2 hours', refresh_token_expires_at=now()-interval '1 second' WHERE"
+            + " id=?",
+        id);
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isEmpty());
+    jdbc.update(
+        "UPDATE oauth2_authorization SET refresh_token_expires_at=now()+interval '1 hour' WHERE"
+            + " id=?",
+        id);
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].grant_id").value(id));
+    var authorization = grants.findById(id);
+    grants.save(
+        OAuth2Authorization.from(authorization)
+            .invalidate(authorization.getRefreshToken().getToken())
+            .build());
+    mvc.perform(get("/oauth/grants").with(authentication(actor())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isEmpty());
+  }
+
   private String authorize() throws Exception {
     return authorize(CLIENT, "read write offline_access");
   }
