@@ -140,4 +140,9 @@ public class GrpcClientConfig {
         return ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc.newReactorStub(authManagedChannel());
     }
 
+    @Bean
+    public ru.taska.api.auth.v1.ReactorPersonalAccessTokenServiceGrpc.ReactorPersonalAccessTokenServiceStub personalAccessTokenStub() {
+        return ru.taska.api.auth.v1.ReactorPersonalAccessTokenServiceGrpc.newReactorStub(authManagedChannel());
+    }
+
 }
