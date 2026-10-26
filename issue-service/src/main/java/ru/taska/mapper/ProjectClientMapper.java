@@ -14,6 +14,7 @@ public interface ProjectClientMapper {
         if (proto == null) return null;
         return new ProjectInfo(proto.getId(), proto.getKey(), proto.getName(), proto.getIssueTypesList().stream()
                 .collect(java.util.stream.Collectors.toMap(ru.taska.api.project.v1.ProjectIssueTypeResponse::getCode,
-                        type -> new ru.taska.domain.dto.IssueTypeMetadata(type.getName(), type.getColor(), type.getIcon()))));
+                        type -> new ru.taska.domain.dto.IssueTypeMetadata(type.getName(), type.getColor(),
+                                client.ProjectIssueTypes.icon(type), client.ProjectIssueTypes.shape(type)))));
     }
 }
