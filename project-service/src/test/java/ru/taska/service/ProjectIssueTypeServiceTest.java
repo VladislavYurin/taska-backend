@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.util.UUID;
+import nullable.NullableField;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,7 +41,7 @@ class ProjectIssueTypeServiceTest {
         authorize(ProjectRole.ADMIN);
         when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.create(project, actor, "REQUEST", " Заявка ", "teal", "headset", 40))
+        StepVerifier.create(service.create(project, actor, "REQUEST", " Заявка ", "teal", "headset", null, 40))
                 .assertNext(type -> {
                     assertThat(type.code()).isEqualTo("REQUEST");
                     assertThat(type.name()).isEqualTo("Заявка");
@@ -53,7 +54,7 @@ class ProjectIssueTypeServiceTest {
     @EnumSource(value = ProjectRole.class, names = {"MEMBER", "VIEWER", "UNSPECIFIED"})
     void onlyProjectAdminMayWrite(ProjectRole role) {
         authorize(role);
-        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", "headset", null))
+        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", "headset", null, null))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.PERMISSION_DENIED)).verify();
         verify(repository, never()).insert(any());
     }
@@ -72,7 +73,7 @@ class ProjectIssueTypeServiceTest {
     void duplicateCodeIs409() {
         authorize(ProjectRole.ADMIN);
         when(repository.insert(any())).thenReturn(Mono.error(new DuplicateKeyException("duplicate")));
-        StepVerifier.create(service.create(project, actor, "TASK", "Task", "blue", "check-square", 10))
+        StepVerifier.create(service.create(project, actor, "TASK", "Task", "blue", null, "square", 10))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.ALREADY_EXISTS)).verify();
         verify(repository, never()).syncLegacySettings(any(), any());
     }
@@ -80,7 +81,7 @@ class ProjectIssueTypeServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "a", "request", "A-B", " TASK", "TASK ", "TOO_LONG_12345678901234567890123456789"})
     void invalidCodesAreRejectedBeforeWriting(String code) {
-        StepVerifier.create(service.create(project, actor, code, "Request", "blue", "headset", 1))
+        StepVerifier.create(service.create(project, actor, code, "Request", "blue", "headset", null, 1))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.INVALID_ARGUMENT)).verify();
         verifyNoInteractions(repository);
     }
@@ -91,13 +92,99 @@ class ProjectIssueTypeServiceTest {
         when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
         when(repository.update(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
         when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.update(project, actor, "BUG", "Инцидент", null, null, null))
+        StepVerifier.create(service.update(project, actor, "BUG", "Инцидент", null, NullableField.absent(), null, null))
                 .assertNext(t -> {
                     assertThat(t.code()).isEqualTo("BUG");
                     assertThat(t.name()).isEqualTo("Инцидент");
                     assertThat(t.color()).isEqualTo("blue");
                     assertThat(t.sortOrder()).isEqualTo(10);
                 }).verifyComplete();
+    }
+
+    @Test
+    void createWithoutShapeOrIconIsPlainSquare() {
+        authorize(ProjectRole.ADMIN);
+        when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
+        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "teal", null, null, null))
+                .assertNext(type -> {
+                    assertThat(type.shape()).isEqualTo("square");
+                    assertThat(type.icon()).isNull();
+                    assertThat(type.sortOrder()).isEqualTo(100);
+                }).verifyComplete();
+    }
+
+    @Test
+    void createKeepsChosenShapeAndIcon() {
+        authorize(ProjectRole.ADMIN);
+        when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
+        StepVerifier.create(service.create(project, actor, "MILESTONE", "Milestone", "amber", "flag", "diamond", 40))
+                .assertNext(type -> {
+                    assertThat(type.shape()).isEqualTo("diamond");
+                    assertThat(type.icon()).isEqualTo("flag");
+                }).verifyComplete();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "hexagon", "Square", "SQUARE"})
+    void invalidShapeIsRefusedOnCreateAndPatchWithoutWriting(String shape) {
+        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", null, shape, 1))
+                .expectErrorSatisfies(e -> assertInvalidLook(e)).verify();
+        authorize(ProjectRole.ADMIN);
+        when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
+        StepVerifier.create(service.update(project, actor, "BUG", null, null, NullableField.absent(), shape, null))
+                .expectErrorSatisfies(e -> assertInvalidLook(e)).verify();
+        verify(repository, never()).insert(any());
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void invalidIconIsStillRefused() {
+        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", "rocket", null, 1))
+                .expectErrorSatisfies(e -> assertInvalidLook(e)).verify();
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void patchShapeChangesOnlyTheShape() {
+        patchable();
+        StepVerifier.create(service.update(project, actor, "BUG", null, null, NullableField.absent(), "circle", null))
+                .assertNext(t -> {
+                    assertThat(t.shape()).isEqualTo("circle");
+                    assertThat(t.icon()).isEqualTo("bug");
+                    assertThat(t.name()).isEqualTo("Name");
+                    assertThat(t.color()).isEqualTo("blue");
+                }).verifyComplete();
+    }
+
+    @Test
+    void patchExplicitNullIconRemovesIt() {
+        patchable();
+        StepVerifier.create(service.update(project, actor, "BUG", null, null, NullableField.of(null), null, null))
+                .assertNext(t -> {
+                    assertThat(t.icon()).isNull();
+                    assertThat(t.shape()).isEqualTo("square");
+                }).verifyComplete();
+    }
+
+    @Test
+    void patchAbsentIconKeepsItAndPresentIconReplacesIt() {
+        patchable();
+        StepVerifier.create(service.update(project, actor, "BUG", "Defect", null, NullableField.absent(), null, null))
+                .assertNext(t -> assertThat(t.icon()).isEqualTo("bug")).verifyComplete();
+        StepVerifier.create(service.update(project, actor, "BUG", null, null, NullableField.of("flag"), null, null))
+                .assertNext(t -> assertThat(t.icon()).isEqualTo("flag")).verifyComplete();
+    }
+
+    @Test
+    void emptyPatchIsStillRefusedBeforeAnyRead() {
+        StepVerifier.create(service.update(project, actor, "BUG", null, null, NullableField.absent(), null, null))
+                .expectErrorSatisfies(e -> {
+                    assertStatus(e, DomainStatus.INVALID_ARGUMENT);
+                    assertThat(e).hasMessage("At least one field is required");
+                }).verify();
+        verifyNoInteractions(repository);
     }
 
     @Test
@@ -174,6 +261,18 @@ class ProjectIssueTypeServiceTest {
         verify(repository, never()).syncLegacySettings(any(), any());
     }
 
+    private void patchable() {
+        authorize(ProjectRole.ADMIN);
+        when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
+        when(repository.update(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
+    }
+
+    private void assertInvalidLook(Throwable e) {
+        assertStatus(e, DomainStatus.INVALID_ARGUMENT);
+        assertThat(e).hasMessage("Invalid issue type name, color, icon, shape or sortOrder");
+    }
+
     private void authorize(ProjectRole role) {
         when(repository.lockProject(project)).thenReturn(Mono.just(project));
         when(repository.lockActorRole(project, actor)).thenReturn(Mono.just(role));
@@ -186,7 +285,7 @@ class ProjectIssueTypeServiceTest {
     }
 
     private ProjectIssueType type(String code) {
-        return new ProjectIssueType(project, code, "Name", "blue", "bug", 10, null, null);
+        return new ProjectIssueType(project, code, "Name", "blue", "bug", "square", 10, null, null);
     }
 
     private void assertStatus(Throwable e, DomainStatus status) {

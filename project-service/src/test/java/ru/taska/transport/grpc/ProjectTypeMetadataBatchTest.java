@@ -26,8 +26,8 @@ class ProjectTypeMetadataBatchTest {
         when(projects.getProjectInfoByIds(List.of(one, two))).thenReturn(Mono.just(Map.of(
                 one, new ProjectInfo(one, "ONE", "One"), two, new ProjectInfo(two, "TWO", "Two"))));
         when(types.listBatch(List.of(one, two))).thenReturn(Flux.just(
-                new ProjectIssueType(one, "REQUEST", "Заявка", "teal", "headset", 10, null, null, UUID.randomUUID()),
-                new ProjectIssueType(two, "REQUEST", "Запрос", "blue", "flag", 10, null, null, UUID.randomUUID())));
+                new ProjectIssueType(one, "REQUEST", "Заявка", "teal", "headset", "square", 10, null, null, UUID.randomUUID()),
+                new ProjectIssueType(two, "REQUEST", "Запрос", "blue", null, "diamond", 10, null, null, UUID.randomUUID())));
         var service = new GrpcProjectService(projects, null, new ProjectMapperImpl(), null, types);
         var response = service.getProjectInfoBatchInternal(Mono.just(GetProjectInfoBatchInternalRequest.newBuilder()
                 .setHeader(Header.newBuilder().setRequestId("r").setNodeId("n"))
@@ -35,6 +35,13 @@ class ProjectTypeMetadataBatchTest {
                 .build())).block();
         assertThat(response.getProjectsOrThrow(one.toString()).getIssueTypes(0).getName()).isEqualTo("Заявка");
         assertThat(response.getProjectsOrThrow(two.toString()).getIssueTypes(0).getName()).isEqualTo("Запрос");
+        // TAS-432: issue-service reads shape and the optional icon for search hits from this batch.
+        var withIcon = response.getProjectsOrThrow(one.toString()).getIssueTypes(0);
+        assertThat(withIcon.getShape()).isEqualTo("square");
+        assertThat(withIcon.getIcon()).isEqualTo("headset");
+        var withoutIcon = response.getProjectsOrThrow(two.toString()).getIssueTypes(0);
+        assertThat(withoutIcon.getShape()).isEqualTo("diamond");
+        assertThat(withoutIcon.hasIcon()).isFalse();
         verify(types).listBatch(List.of(one, two));
         verifyNoMoreInteractions(types);
     }
