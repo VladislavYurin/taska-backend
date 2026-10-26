@@ -73,10 +73,7 @@ public class WorkflowMapper {
             GatewayContext context
     ) {
         return GetWorkflowForProjectRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(GetWorkflowForProjectRequestBody.newBuilder()
                         .setProjectId(projectId.toString())
                         .setIssueType(toGrpcIssueType(issueTypeDto))
@@ -332,10 +329,7 @@ public class WorkflowMapper {
     }
 
     private Header toGrpcHeader(GatewayContext context) {
-        return Header.newBuilder()
-                .setRequestId(context.requestId())
-                .setNodeId(context.nodeId())
-                .build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 
     /// ================ UTILITY ====================

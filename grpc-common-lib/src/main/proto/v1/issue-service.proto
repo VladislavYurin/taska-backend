@@ -1482,6 +1482,8 @@ message IssueHistoryResponse {
 
   // Профиль автора, включая бывших участников; отсутствует, если профиль недоступен.
   optional ru.taska.common.v1.UserSummaryResponse actor = 7;
+  // Public attribution; internal token id/name are never exported.
+  optional string channel = 8;
 }
 
 /**
@@ -1696,6 +1698,7 @@ message IssueCommentResponse {
    * Автор комментария
    */
   optional ru.taska.common.v1.UserSummaryResponse author = 9;
+  optional string channel = 10;
 }
 
 /**

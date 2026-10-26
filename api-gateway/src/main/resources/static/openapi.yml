@@ -4860,6 +4860,11 @@ components:
     IssueHistoryResponseDto:
       type: object
       properties:
+        channel:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Канал действия — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются.
         id:
           type: string
         eventType:
@@ -6210,6 +6215,11 @@ components:
     CommentResponseDto:
       type: object
       properties:
+        channel:
+          type: string
+          nullable: true
+          readOnly: true
+          description: Канал последней записи комментария — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются.
         id:
           type: string
           format: uuid

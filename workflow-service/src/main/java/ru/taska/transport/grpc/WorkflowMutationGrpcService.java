@@ -33,7 +33,8 @@ public class WorkflowMutationGrpcService {
                         req.hasName() ? req.getName() : null, category(req),
                         req.hasSortOrder() ? req.getSortOrder() : null, req.hasHidden() ? req.getHidden() : null,
                         req.hasTargetStatusKey() ? req.getTargetStatusKey() : null, req.getStatusMappingsMap()))
-                .flatMap(command -> service.mutate(operation, command)).map(mapper::toProjectWorkflowProto));
+                .flatMap(command -> service.mutate(operation, command)).map(mapper::toProjectWorkflowProto)
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 
     private Mono<UUID> statusId(Operation op, WorkflowMutationRequest req) {

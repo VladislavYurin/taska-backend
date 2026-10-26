@@ -85,84 +85,98 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
     @Override
     public Mono<CountProjectIssuesBatchInternalResponse> countProjectIssuesBatchInternal(
             Mono<CountProjectIssuesBatchInternalRequest> request) {
-        return grpcIssueService.countProjectIssuesBatchInternal(request)
+        return request.flatMap(req -> grpcIssueService.countProjectIssuesBatchInternal(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("countProjectIssuesBatchInternal"));
     }
 
     @Override
     public Mono<IssueResponse> createIssue(Mono<CreateIssueRequest> request) {
-        return grpcIssueService.createIssue(request)
+        return request.flatMap(req -> grpcIssueService.createIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssue"));
     }
 
     @Override
     public Mono<IssueWithHistoryResponse> getIssue(Mono<GetIssueRequest> request) {
-        return grpcIssueService.getIssue(request)
+        return request.flatMap(req -> grpcIssueService.getIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssue"));
     }
 
     @Override
     public Mono<GetIssueDetailsResponse> getIssueDetails(Mono<GetIssueRequest> request) {
-        return grpcIssueService.getIssueDetails(request)
+        return request.flatMap(req -> grpcIssueService.getIssueDetails(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssueDetails"));
     }
 
     @Override
     public Mono<IssueResponse> getIssueByKey(Mono<GetIssueByKeyRequest> request) {
-        return grpcIssueService.getIssueByKey(request)
+        return request.flatMap(req -> grpcIssueService.getIssueByKey(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("getIssueByKey"));
     }
 
     @Override
     public Mono<ListIssuesResponse> listIssues(Mono<ListIssuesRequest> request) {
-        return grpcIssueService.listIssues(request)
+        return request.flatMap(req -> grpcIssueService.listIssues(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssues"));
     }
 
     @Override
     public Mono<IssueResponse> assignIssue(Mono<AssignIssueRequest> request){
-        return grpcIssueService.assignIssue(request)
+        return request.flatMap(req -> grpcIssueService.assignIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("assignIssue"));
     }
 
     @Override
     public Mono<DeleteIssueResponse> deleteIssue(Mono<DeleteIssueRequest> request) {
-        return grpcIssueService.deleteIssue(request)
+        return request.flatMap(req -> grpcIssueService.deleteIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssue"));
     }
 
     @Override
     public Mono<UpdateIssueResponse> updateIssue(Mono<UpdateIssueRequest> request) {
-        return grpcIssueService.updateIssue(request)
+        return request.flatMap(req -> grpcIssueService.updateIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssue"));
     }
 
     @Override
     public Mono<PatchIssueResponse> patchIssue(Mono<PatchIssueRequest> request) {
-        return grpcIssueService.patchIssue(request)
+        return request.flatMap(req -> grpcIssueService.patchIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("patchIssue"));
     }
 
     @Override
     public Mono<IssueWithHistoryResponse> transitionIssue(Mono<TransitionIssueRequest> request) {
-        return grpcIssueService.transitionIssue(request)
+        return request.flatMap(req -> grpcIssueService.transitionIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("transitionIssue"));
     }
 
     @Override
     public Mono<ListIssueLinksResponse> listIssueLinks(Mono<ListIssueLinksRequest> request) {
-        return grpcIssueLinkService.listIssueLinks(request)
+        return request.flatMap(req -> grpcIssueLinkService.listIssueLinks(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueLinks"));    }
 
     @Override
     public Mono<IssueLinkResponse> createIssueLink(Mono<CreateIssueLinkRequest> request) {
-        return grpcIssueLinkService.createIssueLink(request)
+        return request.flatMap(req -> grpcIssueLinkService.createIssueLink(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("createIssueLink"));
     }
 
     @Override
     public Mono<DeleteIssueLinkResponse> deleteIssueLink(Mono<DeleteIssueLinkRequest> request) {
-        return grpcIssueLinkService.deleteIssueLink(request)
+        return request.flatMap(req -> grpcIssueLinkService.deleteIssueLink(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueLink"));
     }
     // --------------------------------- Методы для комментариев к issue --------------------
@@ -174,7 +188,8 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<AddIssueCommentResponse> addIssueComment(Mono<AddIssueCommentRequest> request) {
-        return grpcIssueCommentService.addIssueComment(request)
+        return request.flatMap(req -> grpcIssueCommentService.addIssueComment(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueComment"));
     }
 
@@ -186,7 +201,8 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<UpdateIssueCommentResponse> updateIssueComment(Mono<UpdateIssueCommentRequest> request) {
-        return grpcIssueCommentService.updateIssueComment(request)
+        return request.flatMap(req -> grpcIssueCommentService.updateIssueComment(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssueComment"));
     }
 
@@ -198,7 +214,8 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<DeleteIssueCommentResponse> deleteIssueComment(Mono<DeleteIssueCommentRequest> request) {
-        return grpcIssueCommentService.deleteIssueComment(request)
+        return request.flatMap(req -> grpcIssueCommentService.deleteIssueComment(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueComment"));
     }
 
@@ -210,51 +227,60 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<ListIssueCommentsResponse> listIssueComments(Mono<ListIssueCommentsRequest> request) {
-        return grpcIssueCommentService.listIssueComments(request)
+        return request.flatMap(req -> grpcIssueCommentService.listIssueComments(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueComments"));
     }
 
     @Override
     public Mono<WatchIssueResponse> watchIssue(Mono<WatchIssueRequest> request) {
-        return grpcIssueWatcherService.watchIssue(request);
+        return request.flatMap(req -> grpcIssueWatcherService.watchIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 
     @Override
     public Mono<UnwatchIssueResponse> unwatchIssue(Mono<UnwatchIssueRequest> request) {
-        return grpcIssueWatcherService.unwatchIssue(request);
+        return request.flatMap(req -> grpcIssueWatcherService.unwatchIssue(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 
     @Override
     public Mono<ListIssueWatchersResponse> listIssueWatchers(Mono<ListIssueWatchersRequest> request) {
-        return grpcIssueWatcherService.listIssueWatchers(request);
+        return request.flatMap(req -> grpcIssueWatcherService.listIssueWatchers(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 
     @Override
     public Mono<GetIssueWatchStateResponse> getIssueWatchState(Mono<GetIssueWatchStateRequest> request) {
-        return grpcIssueWatcherService.getIssueWatchState(request);
+        return request.flatMap(req -> grpcIssueWatcherService.getIssueWatchState(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 
     @Override
     public Mono<ProjectLabelResponse> createProjectLabel(Mono<CreateProjectLabelRequest> request) {
-        return grpcIssueService.createProjectLabel(request)
+        return request.flatMap(req -> grpcIssueService.createProjectLabel(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("createProjectLabel"));
     }
 
     @Override
     public Mono<ProjectLabelResponse> updateProjectLabel(Mono<UpdateProjectLabelRequest> request) {
-        return grpcIssueService.updateProjectLabel(request)
+        return request.flatMap(req -> grpcIssueService.updateProjectLabel(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("updateProjectLabel"));
     }
 
     @Override
     public Mono<DeleteProjectLabelResponse> deleteProjectLabel(Mono<DeleteProjectLabelRequest> request) {
-        return grpcIssueService.deleteProjectLabel(request)
+        return request.flatMap(req -> grpcIssueService.deleteProjectLabel(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteProjectLabel"));
     }
 
     @Override
     public Mono<ListProjectLabelsResponse> listProjectLabels(Mono<ListProjectLabelsRequest> request) {
-        return grpcIssueService.listProjectLabels(request)
+        return request.flatMap(req -> grpcIssueService.listProjectLabels(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listProjectLabels"));
     }
 
@@ -262,19 +288,22 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
 
     @Override
     public Mono<AddIssueLabelResponse> addIssueLabel(Mono<AddIssueLabelRequest> request) {
-        return grpcIssueService.addIssueLabel(request)
+        return request.flatMap(req -> grpcIssueService.addIssueLabel(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueLabel"));
     }
 
     @Override
     public Mono<RemoveIssueLabelResponse> removeIssueLabel(Mono<RemoveIssueLabelRequest> request) {
-        return grpcIssueService.removeIssueLabel(request)
+        return request.flatMap(req -> grpcIssueService.removeIssueLabel(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("removeIssueLabel"));
     }
 
     @Override
     public Mono<ListIssueLabelsResponse> listIssueLabels(Mono<ListIssueLabelsRequest> request) {
-        return grpcIssueService.listIssueLabels(request)
+        return request.flatMap(req -> grpcIssueService.listIssueLabels(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueLabels"));
     }
 
@@ -283,44 +312,51 @@ public class GrpcIssueServiceAdapter extends ReactorIssueServiceGrpc.IssueServic
      */
     @Override
     public Mono<SearchIssuesResponse> searchIssues(Mono<SearchIssuesRequest> request) {
-        return grpcIssueService.searchIssues(request)
+        return request.flatMap(req -> grpcIssueService.searchIssues(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("searchIssues"));
     }
 
     @Override
     public Mono<AddIssueWorklogResponse> addIssueWorklog( Mono<AddIssueWorklogRequest> request) {
-        return grpcIssueWorklogService.addIssueWorklog(request)
+        return request.flatMap(req -> grpcIssueWorklogService.addIssueWorklog(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("addIssueWorklog"));
     }
 
     @Override
     public Mono<UpdateIssueWorklogResponse> updateIssueWorklog(Mono<UpdateIssueWorklogRequest> request) {
-        return grpcIssueWorklogService.updateIssueWorklog(request)
+        return request.flatMap(req -> grpcIssueWorklogService.updateIssueWorklog(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("updateIssueWorklog"));
     }
 
     @Override
     public Mono<ListIssueWorklogsResponse> listIssueWorklogs(Mono<ListIssueWorklogsRequest> request) {
-        return grpcIssueWorklogService.listIssueWorklogs(request)
+        return request.flatMap(req -> grpcIssueWorklogService.listIssueWorklogs(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listIssueWorklogs"));
     }
 
     @Override
     public Mono<DeleteIssueWorklogResponse> deleteIssueWorklog(Mono<DeleteIssueWorklogRequest> request) {
-        return grpcIssueWorklogService.deleteIssueWorklog(request)
+        return request.flatMap(req -> grpcIssueWorklogService.deleteIssueWorklog(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteIssueWorklog"));
     }
 
     @Override
     public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
-        return grpcIssueService.listIssuesForBoard(request)
+        return request.flatMap(req -> grpcIssueService.listIssuesForBoard(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("ListIssuesForBoard"));
     }
 
     @Override
     public Mono<ru.taska.api.issue.v1.MigrateWorkflowIssuesResponse> migrateWorkflowIssues(
             Mono<ru.taska.api.issue.v1.MigrateWorkflowIssuesRequest> request) {
-        return workflowIssueMigration.migrate(request)
+        return request.flatMap(req -> workflowIssueMigration.migrate(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("migrateWorkflowIssues"));
     }
 }

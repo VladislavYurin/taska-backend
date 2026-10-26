@@ -80,4 +80,12 @@ public class IssueComment {
      */
     @Column("version")
     private Integer version;
+    /** Channel of the recorded action; null for legacy callers/rows. */
+    @Column("channel")
+    private String channel;
+
+    /** Internal audit identity; never mapped to public protobuf/REST responses. */
+    @Column("token_id")
+    private UUID tokenId;
+
 }

@@ -126,9 +126,11 @@ public class CommentServiceImpl implements CommentService {
                                 .flatMap(comment -> {
                                     int currentVersion = comment.getVersion();
 
-                                    return commentRepository.updateWithVersionCheckAndAuthor(
-                                                    commentId, body, currentVersion, actorUserId
-                                            )
+                                    return Mono.deferContextual(context -> {
+                                                var attribution = ru.taska.domain.ActionMetadata.current(context);
+                                                return commentRepository.updateWithVersionCheckAndAuthor(commentId, body, currentVersion,
+                                                        actorUserId, attribution.channel() == null ? null : attribution.channel().name(), attribution.tokenId());
+                                            })
                                             .switchIfEmpty(Mono.error(new DomainException(
                                                     DomainStatus.FAILED_PRECONDITION,
                                                     "Comment was modified by another user. Please refresh and try again."
@@ -179,9 +181,11 @@ public class CommentServiceImpl implements CommentService {
                                 .flatMap(comment -> {
                                     int currentVersion = comment.getVersion();
 
-                                    return commentRepository.softDeleteWithVersionCheck(
-                                                    commentId, currentVersion
-                                            )
+                                    return Mono.deferContextual(context -> {
+                                                var attribution = ru.taska.domain.ActionMetadata.current(context);
+                                                return commentRepository.softDeleteWithVersionCheck(commentId, currentVersion,
+                                                        attribution.channel() == null ? null : attribution.channel().name(), attribution.tokenId());
+                                            })
                                             .switchIfEmpty(Mono.error(new DomainException(
                                                     DomainStatus.NOT_FOUND,
                                                     "Comment not found or already deleted"
@@ -342,7 +346,12 @@ public class CommentServiceImpl implements CommentService {
                 .build();
 
         log.debug("[{}][{}] Saving comment...", requestId, nodeId);
-        return commentRepository.save(comment)
+        return Mono.deferContextual(context -> {
+                    var attribution = ru.taska.domain.ActionMetadata.current(context);
+                    return commentRepository.save(comment.toBuilder()
+                            .channel(attribution.channel() == null ? null : attribution.channel().name())
+                            .tokenId(attribution.tokenId()).build());
+                })
                 .doOnSuccess(c -> {
                     assert c != null;
                     log.debug("[{}][{}] Comment saved: {}", requestId, nodeId, c.getId());

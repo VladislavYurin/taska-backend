@@ -26,8 +26,7 @@ public class GrpcWorkflowMutationClient {
     public Mono<ProjectWorkflowDto> mutate(Operation op, UUID project, UUID workflow, UUID status, UUID transition,
                                            WorkflowPatchBody body, Integer version, String target, GatewayContext context) {
         var request = WorkflowMutationRequest.newBuilder().setProjectId(project.toString()).setWorkflowId(workflow.toString())
-                .setActorUserId(context.userContext().userId()).setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId()).setNodeId(context.nodeId()));
+                .setActorUserId(context.userContext().userId()).setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context));
         if (status != null) request.setStatusId(status.toString());
         if (transition != null) request.setTransitionId(transition.toString());
         if (version != null) request.setVersion(version);

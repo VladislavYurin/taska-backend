@@ -31,7 +31,7 @@ public class ProjectStatsService {
     private final ProjectMapper mapper;
 
     public Mono<ListProjectStatsDto> getProjectStats(GatewayContext context) {
-        var header = Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()).build();
+        var header = ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
         return projects.listMyProjects(context).flatMap(response -> {
             var ids = response.getItems().stream().map(p -> p.getId()).distinct().toList();
             if (ids.isEmpty()) {
