@@ -20,7 +20,7 @@ public class UserDisplayNameAdminService {
                 .flatMap(change -> audit.logAudit(AuditEventDto.builder().requestId(requestId)
                         .actorUserId(actor.actorUserId()).actorDisplayName(actor.actorDisplayName()).actorEmail(actor.actorEmail())
                         .actorRoles(mapper.valueToTree(actor.role())).action(ru.taska.config.props.AuditAction.USER_DISPLAY_NAME_UPDATED.name())
-                        .targetService("auth").targetTable("users").targetId(actor.targetUserId().toString())
+                        .targetService("auth").targetTable("users").targetId(change.userId().toString())
                         .oldValue(mapper.createObjectNode().put("displayName", change.previousDisplayName()))
                         .newValue(mapper.createObjectNode().put("displayName", change.displayName()))
                         .reason("Display name updated by administrator").build()).thenReturn(change));

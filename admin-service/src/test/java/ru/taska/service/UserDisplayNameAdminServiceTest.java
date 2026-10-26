@@ -22,7 +22,7 @@ class UserDisplayNameAdminServiceTest {
             .role(GlobalRole.GLOBAL_ADMIN).build();
 
     @Test void recordsPreviousAndNewNamesAndAuthenticatedActor() {
-        var change = new UserDisplayNameChangeDto(actor.targetUserId(), "Previous", "Current");
+        var change = new UserDisplayNameChangeDto(UUID.randomUUID(), "Previous", "Current");
         when(client.updateUserDisplayName("req", "node", actor, "Current")).thenReturn(Mono.just(change));
         when(audit.logAudit(any())).thenReturn(Mono.empty());
         assertThat(service.update("req", "node", actor, "Current").block()).isEqualTo(change);
@@ -32,7 +32,7 @@ class UserDisplayNameAdminServiceTest {
         assertThat(event.getAction()).isEqualTo("USER_DISPLAY_NAME_UPDATED");
         assertThat(event.getActorUserId()).isEqualTo(actor.actorUserId());
         assertThat(event.getActorEmail()).isEqualTo(actor.actorEmail());
-        assertThat(event.getTargetId()).isEqualTo(actor.targetUserId().toString());
+        assertThat(event.getTargetId()).isEqualTo(change.userId().toString());
         assertThat(event.getTargetService()).isEqualTo("auth");
         assertThat(event.getOldValue().get("displayName").asString()).isEqualTo("Previous");
         assertThat(event.getNewValue().get("displayName").asString()).isEqualTo("Current");
