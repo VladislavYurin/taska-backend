@@ -41,6 +41,7 @@ build/
 *.env
 .env.*
 !.env.docker.example
+!.env.oauth.example
 
 # Локальные учётные данные Liquibase (не коммитить)
 **/liquibase.properties

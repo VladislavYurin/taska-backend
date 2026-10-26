@@ -138,6 +138,9 @@
                             <modelPackage>ru.taska.domain.dto</modelPackage>
                             <!-- PATCH-тело пишется вручную: сгенерированный класс не отличает отсутствующее поле от явного null -->
                             <schemaMappings>
+                                <schemaMapping>OAuthSignupRequestDto=ru.taska.domain.dto.OAuthSignupRequestDto</schemaMapping>
+                                <schemaMapping>NullableLoginResponseDto=ru.taska.domain.dto.LoginResponseDto</schemaMapping>
+                                <schemaMapping>NullableOAuthSignupStateDto=ru.taska.domain.dto.OAuthSignupStateDto</schemaMapping>
                                 <schemaMapping>UpdateDisplayNameRequestDto=ru.taska.domain.dto.UpdateDisplayNameRequestDto</schemaMapping>
                                 <schemaMapping>PasswordByTokenRequestDto=ru.taska.domain.dto.PasswordByTokenRequestDto</schemaMapping>
                                 <schemaMapping>ReorderProjectIssueTypesRequestDto=ru.taska.domain.dto.ReorderProjectIssueTypesRequestDto</schemaMapping>

@@ -328,6 +328,11 @@ services:
       args:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: taska-auth-service
+    # OAuth provider credentials are scoped to auth-service, never the shared .env.
+    env_file:
+      - .env
+      - path: .env.oauth
+        required: false
     depends_on:
       kafka:
         condition: service_healthy

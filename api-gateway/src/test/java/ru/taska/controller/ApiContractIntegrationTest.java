@@ -21,7 +21,9 @@ class ApiContractIntegrationTest {
 
     @Test
     void publishedJsonAndStaticYamlAreTheSameAuthoritativeContract() {
-        var client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        var client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port)
+                // The growing published contract exceeds the default 256 KiB client buffer.
+                .codecs(config -> config.defaultCodecs().maxInMemorySize(2 * 1024 * 1024)).build();
         String yaml = client.get().uri("/openapi.yml").exchange().expectStatus().isOk()
                 .expectBody(String.class).returnResult().getResponseBody();
         String json = client.get().uri("/v3/api-docs").exchange().expectStatus().isOk()

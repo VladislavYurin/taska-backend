@@ -3,6 +3,24 @@ taska:
     enabled: ${TASKA_SIGNUP_ENABLED:false}
     ip-attempts-per-hour: ${AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR:10}
 
+  oauth:
+    api-base-url: ${TASKA_OAUTH_API_BASE_URL:https://api.taska.ozero.dev}
+    ui-base-url: ${TASKA_OAUTH_UI_BASE_URL:https://taska.ozero.dev}
+    google:
+      enabled: ${TASKA_OAUTH_GOOGLE_ENABLED:true}
+      client-id: ${TASKA_OAUTH_GOOGLE_CLIENT_ID:}
+      client-secret: ${TASKA_OAUTH_GOOGLE_CLIENT_SECRET:}
+    github:
+      enabled: ${TASKA_OAUTH_GITHUB_ENABLED:true}
+      client-id: ${TASKA_OAUTH_GITHUB_CLIENT_ID:}
+      client-secret: ${TASKA_OAUTH_GITHUB_CLIENT_SECRET:}
+    apple:
+      enabled: ${TASKA_OAUTH_APPLE_ENABLED:true}
+      client-id: ${TASKA_OAUTH_APPLE_SERVICE_ID:}
+      team-id: ${TASKA_OAUTH_APPLE_TEAM_ID:}
+      key-id: ${TASKA_OAUTH_APPLE_KEY_ID:}
+      private-key: ${TASKA_OAUTH_APPLE_PRIVATE_KEY:}
+
 server:
   port: ${AUTH_SERVER_PORT:8081}
 
