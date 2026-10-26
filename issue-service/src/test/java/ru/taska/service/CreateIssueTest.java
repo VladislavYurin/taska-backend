@@ -35,7 +35,7 @@ class CreateIssueTest extends IssueServiceImplTest {
 
         expectedHash = "mocked_request_hash";
         mockedRequestHasher = Mockito.mockStatic(RequestHasher.class);
-        mockedRequestHasher.when(() -> RequestHasher.hashIssueCreateRequest(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+        mockedRequestHasher.when(() -> RequestHasher.hashIssueCreateRequest(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(expectedHash);
 
         Mockito.lenient().when(issueProperties.allowedRoles().createIssueRoles()).thenReturn(allowedRoles);

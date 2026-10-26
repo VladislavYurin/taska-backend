@@ -38,6 +38,24 @@ public interface IssueService {
             Integer remainingEstimateMinutes
     );
 
+    Mono<Issue> createIssue(
+            String requestId,
+            String nodeId,
+            String idempotencyKey,
+            UUID projectId,
+            IssueType issueType,
+            String summary,
+            String description,
+            IssuePriority priority,
+            UUID reporterId,
+            BigDecimal storyPoints,
+            LocalDate startDate,
+            LocalDate dueDate,
+            Integer originalEstimateMinutes,
+            Integer remainingEstimateMinutes,
+            String statusKey
+    );
+
     Mono<Issue> assignIssue(
             String requestId,
             String nodeId,

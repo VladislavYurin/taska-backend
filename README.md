@@ -557,6 +557,13 @@ npx -y @modelcontextprotocol/inspector --cli   http://127.0.0.1:8087/mcp --trans
 локальный cache gateway (по умолчанию 10000); при заполнении живыми nonce запрос отклоняется 403,
 а живые записи не вытесняются. На нескольких репликах replay-защита локальна каждой реплике.
 
+Создание задачи (TAS-428): необязательный `statusKey` задаёт начальный статус из workflow
+выбранного типа. Без поля сохраняется `TODO`; пустой/неверный ключ получает 400 INVALID_ARGUMENT,
+ключ вне workflow — 400 FAILED_PRECONDITION с `details.reason=STATUS_NOT_IN_WORKFLOW`.
+История и событие создания содержат фактический статус. Idempotency-Key учитывает статус и все
+поля планирования; старые ключи дополнительно сверяются с полным сохранённым ответом.
+Повторная проверка project ACL выполняется и для сохранённого ответа.
+
 Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.
 
 ### Email signup (TAS-423)

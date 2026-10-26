@@ -116,6 +116,7 @@ public class PayloadSerializer {
         }
         ObjectNode node = objectMapper.createObjectNode();
         putIssueFields(node, issue);
+        if (issue.getStatusKey() != null) node.put("statusKey", issue.getStatusKey());
         if (issue.getIssueType() != null) node.put(ISSUE_TYPE, issue.getIssueType().name());
 
         if (issue.getReporterId() != null) {

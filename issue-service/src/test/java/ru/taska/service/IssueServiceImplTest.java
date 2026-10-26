@@ -70,6 +70,8 @@ public class IssueServiceImplTest {
     @Mock
     protected IssueAccessGuard issueAccessGuard;
 
+    @Mock protected ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
+
     @Mock
     protected ru.taska.service.watcher.IssueAutoWatchService issueAutoWatchService;
 

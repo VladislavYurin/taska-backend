@@ -1642,6 +1642,12 @@ paths:
       x-pat-scope: write
       summary: Создание задачи
       operationId: createIssue
+      description: >-
+        Создаёт задачу сразу в statusKey из workflow её типа; без поля сохраняется TODO.
+        История и событие создания содержат фактический статус. Idempotency-Key связывается
+        со всеми полями создания, включая статус и планирование; другое тело с тем же ключом
+        возвращает FAILED_PRECONDITION. Неверный формат statusKey — 400 INVALID_ARGUMENT;
+        ключ вне workflow типа — 400 FAILED_PRECONDITION, details.reason STATUS_NOT_IN_WORKFLOW.
       tags:
         - issue
       security:
@@ -5116,6 +5122,13 @@ components:
       properties:
         issueType:
           $ref: '#/components/schemas/IssueTypeDto'
+        statusKey:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,63}$'
+          description: >-
+            Необязательный начальный статус из workflow выбранного типа задачи. Без поля — TODO.
+            Пустой/неверный ключ — 400 INVALID_ARGUMENT; отсутствующий в workflow типа —
+            400 FAILED_PRECONDITION с details.reason STATUS_NOT_IN_WORKFLOW.
         summary:
           type: string
         description:

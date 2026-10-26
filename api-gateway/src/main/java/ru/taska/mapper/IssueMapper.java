@@ -461,6 +461,7 @@ public class IssueMapper {
                    .setPriority(toGrpcIssuePriority(request.getPriority()))
                    .setReporterId(context.userContext().userId());
 
+        MappingUtils.setIfPresent(request.getStatusKey(), bodyBuilder::setStatusKey);
         MappingUtils.setIfPresent(request.getStoryPoints(), bodyBuilder::setStoryPoints);
         MappingUtils.setIfPresent(request.getStartDate(), LocalDate::toString, bodyBuilder::setStartDate);
         MappingUtils.setIfPresent(request.getDueDate(), LocalDate::toString, bodyBuilder::setDueDate);
