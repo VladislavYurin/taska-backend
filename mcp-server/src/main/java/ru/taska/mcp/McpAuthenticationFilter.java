@@ -29,18 +29,35 @@ public class McpAuthenticationFilter implements WebFilter {
       List.of("authorization", "content-type", "accept", "mcp-protocol-version", "x-request-id");
   private final PatAuthenticator authenticator;
   private final McpProperties properties;
+  private final McpOAuthProperties oauth;
+  private final McpOAuthAuthenticator oauthAuthenticator;
   private final McpObservability observability;
 
   public McpAuthenticationFilter(PatAuthenticator authenticator, McpProperties properties) {
-    this(authenticator, properties, null);
+    this(authenticator, properties, McpOAuthProperties.disabled(),
+        (token, id) -> Mono.error(Status.UNAUTHENTICATED.asRuntimeException()), null);
+  }
+
+  public McpAuthenticationFilter(PatAuthenticator authenticator, McpProperties properties,
+      McpObservability observability) {
+    this(authenticator, properties, McpOAuthProperties.disabled(),
+        (token, id) -> Mono.error(Status.UNAUTHENTICATED.asRuntimeException()), observability);
+  }
+
+  public McpAuthenticationFilter(PatAuthenticator authenticator, McpProperties properties,
+      McpOAuthProperties oauth, McpOAuthAuthenticator oauthAuthenticator) {
+    this(authenticator, properties, oauth, oauthAuthenticator, null);
   }
 
   @Autowired
-  public McpAuthenticationFilter(
-      PatAuthenticator authenticator, McpProperties properties, McpObservability observability) {
+  public McpAuthenticationFilter(PatAuthenticator authenticator, McpProperties properties,
+      McpOAuthProperties oauth, McpOAuthAuthenticator oauthAuthenticator,
+      McpObservability observability) {
     this.observability = observability;
     this.authenticator = authenticator;
     this.properties = properties;
+    this.oauth = oauth;
+    this.oauthAuthenticator = oauthAuthenticator;
   }
 
   @Override
@@ -65,7 +82,7 @@ public class McpAuthenticationFilter implements WebFilter {
         return reject(exchange, HttpStatus.FORBIDDEN, null);
       }
       responseHeaders.setAccessControlAllowOrigin(origins.getFirst());
-      responseHeaders.setAccessControlExposeHeaders(List.of("X-Request-Id"));
+      responseHeaders.setAccessControlExposeHeaders(List.of("X-Request-Id", "WWW-Authenticate"));
     }
     if (exchange.getRequest().getMethod() == HttpMethod.OPTIONS) {
       if (origins == null
@@ -89,13 +106,38 @@ public class McpAuthenticationFilter implements WebFilter {
       return reject(exchange, HttpStatus.UNAUTHORIZED, "Bearer");
     }
     String token = authorization.getFirst().substring(7);
-    if (!PAT.matcher(token).matches()) {
+    boolean oauthToken = oauth.enabled() && token.matches("tsk_oat_[A-Za-z0-9_-]{43}");
+    if (!PAT.matcher(token).matches() && !oauthToken) {
       return reject(exchange, HttpStatus.UNAUTHORIZED, "Bearer error=\"invalid_token\"");
     }
     String finalRequestId = requestId;
-    return authenticator
-        .authenticate(token, requestId)
-        .filter(McpAuthenticationFilter::validPat)
+    Mono<McpRequestContext> authentication;
+    if (oauthToken) {
+      authentication =
+          oauthAuthenticator
+              .authenticate(token, requestId)
+              .filter(
+                  result ->
+                      validUser(result.getUserContext(), AccessTokenKind.ACCESS_TOKEN_KIND_OAUTH)
+                          && !result.getDelegationToken().isBlank()
+                          && !result.getDelegationToken().startsWith("tsk_")
+                          && !result.getDelegationToken().equals(token))
+              .map(
+                  result ->
+                      new McpRequestContext(
+                          finalRequestId,
+                          result.getDelegationToken(),
+                          result.getUserContext(),
+                          McpCallMetadata.NONE,
+                          McpAuthorizationKind.OAUTH));
+    } else {
+      authentication =
+          authenticator
+              .authenticate(token, requestId)
+              .filter(user -> validUser(user, AccessTokenKind.ACCESS_TOKEN_KIND_PAT))
+              .map(user -> new McpRequestContext(finalRequestId, token, user));
+    }
+    return authentication
         .materialize()
         .flatMap(
             signal -> {
@@ -113,7 +155,12 @@ public class McpAuthenticationFilter implements WebFilter {
               if (!signal.hasValue()) {
                 return reject(exchange, HttpStatus.UNAUTHORIZED, "Bearer error=\"invalid_token\"");
               }
-              UserContext user = signal.get();
+              McpRequestContext authenticated = signal.get();
+              if (oauth.enabled())
+                exchange
+                    .getAttributes()
+                    .put(McpOAuthProperties.class.getName(), oauth.metadataUri());
+              UserContext user = authenticated.user();
               if (!user.getScopesList().contains("read")) {
                 return reject(
                     exchange,
@@ -125,9 +172,7 @@ public class McpAuthenticationFilter implements WebFilter {
                 // MCP 2025 transport requires HTTP 400 for an unsupported version header.
                 return reject(exchange, HttpStatus.BAD_REQUEST, null);
               }
-              exchange
-                  .getAttributes()
-                  .put(McpRequestContext.KEY, new McpRequestContext(finalRequestId, token, user));
+              exchange.getAttributes().put(McpRequestContext.KEY, authenticated);
               return chain.filter(exchange);
             });
   }
@@ -145,8 +190,8 @@ public class McpAuthenticationFilter implements WebFilter {
     return "/mcp".equals(path);
   }
 
-  private static boolean validPat(UserContext user) {
-    return user.getTokenKind() == AccessTokenKind.ACCESS_TOKEN_KIND_PAT
+  private static boolean validUser(UserContext user, AccessTokenKind kind) {
+    return user.getTokenKind() == kind
         && user.getStatus() == UserStatus.USER_STATUS_ACTIVE
         && user.hasTokenId()
         && user.hasTokenExpiresAt()
@@ -171,6 +216,10 @@ public class McpAuthenticationFilter implements WebFilter {
     }
     exchange.getResponse().setStatusCode(status);
     if (challenge != null) {
+      if (oauth.enabled()) {
+        challenge += ", resource_metadata=\"" + oauth.metadataUri() + "\"";
+        if (!challenge.contains("scope=")) challenge += ", scope=\"read\"";
+      }
       exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, challenge);
     }
     return exchange.getResponse().setComplete();

@@ -118,7 +118,7 @@ class ProjectIssueTypeServiceTest {
         StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
                 .expectErrorSatisfies(e -> {
                     assertStatus(e, DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException)e).getDetails()).containsEntry("reason", "LAST_ISSUE_TYPE");
+                    assertThat(((DomainException)e).getDetails()).containsEntry("reason", "LAST_ISSUE_TYPE").doesNotContainKey("issueCount");
                 }).verify();
         verifyNoInteractions(issues);
         verify(repository, never()).delete(any(), any());
@@ -159,6 +159,19 @@ class ProjectIssueTypeServiceTest {
         StepVerifier.create(service.reorder(project, actor, java.util.List.of("TASK", "BUG", "BUG")))
                 .expectErrorSatisfies(error -> assertStatus(error, DomainStatus.INVALID_ARGUMENT)).verify();
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void wellFormedStalePermutationIsConflictAndNeverWrites() {
+        authorize(ProjectRole.ADMIN);
+        when(repository.list(project)).thenReturn(Flux.just(type("TASK"), type("BUG"), type("STORY")));
+        StepVerifier.create(service.reorder(project, actor, java.util.List.of("TASK", "BUG")))
+                .expectErrorSatisfies(error -> {
+                    assertStatus(error, DomainStatus.ABORTED);
+                    assertThat(((DomainException)error).getDetails()).containsExactlyEntriesOf(java.util.Map.of("reason", "ISSUE_TYPES_CHANGED"));
+                }).verify();
+        verify(repository, never()).reorder(any(), any());
+        verify(repository, never()).syncLegacySettings(any(), any());
     }
 
     private void authorize(ProjectRole role) {

@@ -98,6 +98,32 @@ class ProjectIssueTypeControllerTest {
         verify(client).reorder(any(), any(), any());
     }
 
+    @Test
+    void staleRegistryOrderPreserves409AndIssueTypesChangedReason() {
+        authenticated();
+        when(client.reorder(any(), any(), any())).thenReturn(Mono.error(Status.ABORTED
+                .withDescription("Issue type registry changed").asRuntimeException(mapper.GrpcErrorDetails.encode(
+                        java.util.Map.of("reason", "ISSUE_TYPES_CHANGED")))));
+        http.put().uri(url()+"/order").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue("{\"codes\":[\"TASK\",\"BUG\"]}")
+                .exchange().expectStatus().isEqualTo(409).expectBody().jsonPath("$.code").isEqualTo("ABORTED")
+                .jsonPath("$.details.reason").isEqualTo("ISSUE_TYPES_CHANGED");
+    }
+
+    @Test
+    void onlyInUseTypeDeletionCarriesIssueCount() {
+        authenticated();
+        for (var details : List.of(java.util.Map.of("reason", "LAST_ISSUE_TYPE"),
+                java.util.Map.of("reason", "ISSUE_TYPE_IN_USE", "issueCount", "7"))) {
+            when(client.delete(any(), any(), any())).thenReturn(Mono.error(Status.FAILED_PRECONDITION
+                    .withDescription("Cannot delete issue type").asRuntimeException(mapper.GrpcErrorDetails.encode(details))));
+            var body = http.delete().uri(url()+"/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                    .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.details.reason").isEqualTo(details.get("reason"));
+            if (details.containsKey("issueCount")) body.jsonPath("$.details.issueCount").isEqualTo("7");
+            else body.jsonPath("$.details.issueCount").doesNotExist();
+        }
+    }
+
     private String url() { return "/api/v1/projects/" + project + "/issue-types"; }
 
     private ProjectIssueTypeDto type() {

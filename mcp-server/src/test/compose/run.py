@@ -23,7 +23,9 @@ if args.cleanup:
     data = json.loads(fixture.read_text())
     project = data['composeProject']
     compose = root / 'mcp-server/src/test/compose/compose.yml'
-    if not re.fullmatch(r'taska-mcp-it-[0-9a-f]{12}', project) or data['composeFile'] != str(compose):
+    if (not re.fullmatch(r'taska-mcp-it-[0-9a-f]{12}', project)
+            or fixture.parent.parent != expected_root or fixture.parent.name != project
+            or data['composeFile'] != str(compose)):
         parser.error('Invalid isolated project identity')
     # Compose down needs interpolation values, but removes by unique project labels only.
     env = dict(os.environ, TASKA_E2E_ROOT=str(root), TASKA_E2E_JAR_DIR=str(fixture.parent / 'jars'), TASKA_E2E_JWT_SECRET='cleanup-only', TASKA_E2E_SIGNING_SECRET='cleanup-only')

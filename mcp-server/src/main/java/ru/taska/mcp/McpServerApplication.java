@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @SpringBootApplication
 @EnableConfigurationProperties({
   McpProperties.class,
+  McpOAuthProperties.class,
   ToolLimits.class,
   McpQuotaProperties.class,
   McpTransportLimits.class

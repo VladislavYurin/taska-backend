@@ -1,0 +1,47 @@
+server:
+  port: ${OAUTH_SERVER_PORT:8080}
+  forward-headers-strategy: none
+  tomcat:
+    max-http-form-post-size: 64KB
+  servlet:
+    session:
+      timeout: 15m
+      cookie:
+        name: TASKA_OAUTH_SESSION
+        secure: true
+        http-only: true
+        same-site: lax
+spring:
+  application:
+    name: oauth-server
+  datasource:
+    url: ${OAUTH_DB_URL:jdbc:postgresql://oauth-db:5432/taska_oauth}
+    username: ${OAUTH_DB_USER:taska_oauth}
+    password: ${OAUTH_DB_PASSWORD:}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+taska:
+  oauth:
+    issuer: ${OAUTH_ISSUER:}
+    resource: ${MCP_OAUTH_RESOURCE:}
+    metadata-hosts: ${OAUTH_CIMD_HOSTS:}
+    redirect-uris: ${OAUTH_REDIRECT_URIS:}
+    dcr-enabled: ${OAUTH_DCR_ENABLED:false}
+    max-clients: ${OAUTH_MAX_CLIENTS:1000}
+    metadata-ttl: 5m
+    introspection-client-id: ${OAUTH_INTROSPECTION_CLIENT_ID:auth-service}
+    introspection-secret: ${OAUTH_INTROSPECTION_SECRET:}
+    auth:
+      host: ${AUTH_GRPC_HOST:auth-service}
+      port: ${AUTH_GRPC_PORT:9090}
+      timeout: 2s
+      service-credential: ${OAUTH_IDENTITY_SERVICE_CREDENTIAL:}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+logging:
+  level:
+    ru.taska: INFO
+    org.springframework.security: WARN

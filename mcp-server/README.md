@@ -335,7 +335,7 @@ JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp -pl mcp-server -am test \
 заглушек. Проверяет полный public catalog для read/write PAT, реальный вызов и request_id,
 безопасные 400/401/403/404/409/429/500, protocol errors, отсутствие gateway dispatch при неверном
 scope/input/токене/Origin, просроченный и отозванный PAT, размер входа. IT-классы не входят в обычный
-Surefire `verify`; запускать явно:
+Surefire `verify`; CI запускает security IT отдельным шагом только для mcp-server. Локально запускать явно:
 
 ```sh
 JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp -pl mcp-server -am test \
@@ -402,7 +402,7 @@ Claude Code/Cursor/Codex CLI/Inspector и stage deployment не считаютс
 ### Фактическая проверка внешних клиентов 26.10.2026
 
 На отдельном локальном Compose fixture с 405+410+JSON fallback проверены Codex CLI
-`0.163.0-alpha.10.2` и MCP Inspector CLI. Codex запущен с `--ignore-user-config --ephemeral`,
+`0.163.0-alpha.10.2` и MCP Inspector CLI `2.12.0`. Codex запущен с `--ignore-user-config --ephemeral`,
 read-only sandbox и read PAT из окружения; пользовательские конфиги не менялись.
 
 - Codex: 10 сценариев чтения — whoami, проекты, контекст проекта, поиск, карточка задачи,

@@ -200,6 +200,44 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
                 .bind("id", project).map(row -> row.get(0, Long.class)).one().block()).isZero();
     }
 
+    @Test
+    void workflowDeletionMovesOnlyOwnAndExplicitlyMappedStatusesLeavingOtherOrphansUnplaced() {
+        var own = issue(project, IssueType.TASK, 1);
+        var explicit = issue(project, IssueType.TASK, 2);
+        var untouched = issue(project, IssueType.TASK, 3);
+        db.sql("UPDATE taska.issues SET status_key='EXPLICIT_OLD' WHERE id=:id").bind("id", explicit.getId()).then().block();
+        db.sql("UPDATE taska.issues SET status_key='OLD_ORPHAN' WHERE id=:id").bind("id", untouched.getId()).then().block();
+        var sources = List.of("TODO", "REVIEW", "DONE", "EXPLICIT_OLD");
+        var mapping = Map.of("REVIEW", "DONE", "EXPLICIT_OLD", "TODO");
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "r", "n").block()).isEqualTo(2);
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "retry", "n").block()).isZero();
+        assertThat(repository.findById(own.getId()).block().getStatusKey()).isEqualTo("DONE");
+        assertThat(repository.findById(explicit.getId()).block().getStatusKey()).isEqualTo("TODO");
+        assertThat(repository.findById(untouched.getId()).block().getStatusKey()).isEqualTo("OLD_ORPHAN");
+        for (var moved : List.of(own, explicit)) {
+            assertThat(count("issue_history", "issue_id", moved.getId())).isEqualTo(1);
+            assertThat(count("outbox_events", "aggregate_id", moved.getId())).isEqualTo(1);
+        }
+        assertThat(count("issue_history", "issue_id", untouched.getId())).isZero();
+        assertThat(count("outbox_events", "aggregate_id", untouched.getId())).isZero();
+    }
+
+    @Test
+    void unchangedDefaultStatusesAndUnrelatedOrphansDoNotSpendTheWorkflowMigrationLimit() {
+        var one = issue(project, IssueType.TASK, 1);
+        db.sql("""
+                INSERT INTO taska.issues (project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id)
+                SELECT :project, n, 'UNCHANGED-' || gen_random_uuid(), 'TASK', 'Unchanged',
+                    CASE WHEN n%2=0 THEN 'TODO' ELSE 'OLD_ORPHAN' END, 'MEDIUM', :actor
+                FROM generate_series(2,10003) n
+                """).bind("project", project).bind("actor", actor).then().block();
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), List.of("TODO", "REVIEW", "DONE"), "r", "n").block()).isEqualTo(1);
+        assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("DONE");
+        assertThat(db.sql("SELECT count(*) FROM taska.issues WHERE project_id=:id AND status_key IN ('TODO','OLD_ORPHAN') AND version=1")
+                .bind("id", project).map(row -> row.get(0, Long.class)).one().block()).isEqualTo(10002);
+    }
+
     private Issue issue(UUID project, IssueType type, int number) {
         return repository.save(Issue.builder().projectId(project).issueNumber(number).issueKey(UUID.randomUUID().toString())
                 .summary("Migration").description("").statusKey("REVIEW").issueType(type).priority(IssuePriority.MEDIUM)

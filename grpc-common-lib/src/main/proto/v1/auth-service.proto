@@ -71,6 +71,8 @@ message ValidateAccessTokenRequestBody {
   string access_token = 1;
   // Opt-in only after the caller implements PAT scopes and restricted endpoint checks.
   bool allow_personal_token = 2;
+  bool allow_oauth_token = 3;
+  bool allow_delegated_token = 4;
 }
 
 message ValidateAccessTokenResponse {

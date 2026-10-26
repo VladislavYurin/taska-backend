@@ -1287,7 +1287,7 @@ paths:
       x-pat-scope: write
       operationId: reorderProjectIssueTypes
       summary: Атомарно переставить все типы задач — только ADMIN проекта
-      description: codes — полная перестановка текущего реестра без повторов. Записывает sortOrder 10, 20, 30 в одной транзакции; первый тип становится типом по умолчанию. Неполный или устаревший набор кодов даёт 400 INVALID_ARGUMENT без изменений.
+      description: codes — полная перестановка текущего реестра без повторов. Записывает sortOrder 10, 20, 30 в одной транзакции; первый тип становится типом по умолчанию. Если корректно сформированный набор кодов не совпадает с текущим реестром, возвращается 409 ABORTED с details.reason ISSUE_TYPES_CHANGED без изменений; перечитайте реестр. Пустой список, повторы и некорректные коды — 400 INVALID_ARGUMENT.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -1311,6 +1311,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListProjectIssueTypesDto'
+        '409':
+          description: ABORTED с details.reason ISSUE_TYPES_CHANGED — набор типов изменился; перечитайте реестр и повторите перестановку.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1354,7 +1363,7 @@ paths:
       x-pat-scope: write
       operationId: deleteProjectIssueType
       summary: Удалить неиспользуемый тип — только ADMIN; последний тип удалить нельзя
-      description: Считаются только живые задачи. 400 FAILED_PRECONDITION содержит details.reason LAST_ISSUE_TYPE либо ISSUE_TYPE_IN_USE и строковое details.issueCount. Удалённые задачи не запрещают удаление типа.
+      description: Считаются только живые задачи. 400 FAILED_PRECONDITION содержит details.reason LAST_ISSUE_TYPE либо ISSUE_TYPE_IN_USE. Строковое details.issueCount передаётся только при ISSUE_TYPE_IN_USE; у LAST_ISSUE_TYPE его нет. Удалённые задачи не запрещают удаление типа.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -4372,7 +4381,7 @@ paths:
     delete:
       x-pat-scope: write
       operationId: deleteProjectWorkflow
-      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права. Без statusMappings несовместимые статусы задач не переносятся. Целевые статусы должны присутствовать и в текущем, и в общем default workflow. Синхронная миграция ограничена 5000 выбранными задачами; это постоянный предел операции (400 FAILED_PRECONDITION, details.reason=WORKFLOW_MIGRATION_LIMIT), ожидание и повтор без изменения объёма не помогут.
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права. Миграция выбирает только статусы удаляемого workflow и явно указанные ключи statusMappings. Без statusMappings несовместимые статусы выбранных задач требуют сопоставления. Остальные задачи в статусах вне обоих workflow не блокируют удаление и остаются в «Outside their workflow». Уже допустимые в default статусы без явного mapping не расходуют лимит миграции. Целевые статусы должны присутствовать и в текущем, и в общем default workflow. Синхронная миграция ограничена 5000 выбранными задачами; это постоянный предел операции (400 FAILED_PRECONDITION, details.reason=WORKFLOW_MIGRATION_LIMIT), ожидание и повтор без изменения объёма не помогут.
       summary: Удалить собственный workflow; несовместимые статусы задач требуют statusMappings
       tags: [workflow-mutation]
       security:
@@ -6857,7 +6866,7 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: Исходный ключ статуса → ключ статуса общего default workflow. Целевой ключ также должен присутствовать в текущем workflow; при необходимости сначала добавьте его.
+          description: Исходный ключ статуса → ключ статуса общего default workflow. Явно указанный исходный ключ может быть старым статусом вне текущего workflow; остальные такие задачи не мигрируются. Целевой ключ также должен присутствовать в текущем workflow; при необходимости сначала добавьте его.
 
     ProjectWorkflowDto:
       type: object

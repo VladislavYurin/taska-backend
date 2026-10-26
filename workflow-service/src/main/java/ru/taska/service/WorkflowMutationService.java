@@ -136,11 +136,13 @@ public class WorkflowMutationService {
                                 List<String> sourceKeys = current.statuses().stream().map(StatusEntity::getStatusKey).toList();
                                 // Issue DB commits first. Keep every moved status valid in the old graph
                                 // too, so a failure before unlinking the workflow can be retried safely.
-                                if (!sourceKeys.containsAll(mapping.keySet()) || !validKeys.containsAll(mapping.values())
+                                if (!validKeys.containsAll(mapping.values())
                                         || !sourceKeys.containsAll(mapping.values())) {
                                     return invalid("Map to statuses present in both workflows; add a target status to the current workflow first if needed");
                                 }
-                                return issues.migrate(c, current.issueTypes(), validKeys, mapping)
+                                var selectedSources = new java.util.LinkedHashSet<>(sourceKeys);
+                                selectedSources.addAll(mapping.keySet());
+                                return issues.migrate(c, current.issueTypes(), validKeys, mapping, List.copyOf(selectedSources))
                                         .onErrorMap(io.grpc.StatusRuntimeException.class, error -> migrationError(error,
                                                 validKeys.stream().filter(sourceKeys::contains).toList()))
                                         .thenMany(bindings.findByWorkflowId(c.workflow()).concatMap(bindings::delete))

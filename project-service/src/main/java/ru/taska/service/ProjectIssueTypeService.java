@@ -89,7 +89,8 @@ public class ProjectIssueTypeService {
             return authorizeWrite(projectId, actor).then(Mono.defer(() -> repository.list(projectId).collectList()))
                     .flatMap(current -> {
                         if (!current.stream().map(ProjectIssueType::code).collect(java.util.stream.Collectors.toSet()).equals(Set.copyOf(codes))) {
-                            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "codes must contain every current issue type exactly once"));
+                            return Mono.error(new DomainException(DomainStatus.ABORTED, "Issue type registry changed; reload the current types before reordering",
+                                    Map.of("reason", "ISSUE_TYPES_CHANGED")));
                         }
                         return repository.reorder(projectId, codes).then(repository.syncLegacySettings(projectId, actor))
                                 .then(repository.list(projectId).collectList());
