@@ -153,3 +153,11 @@ services:
     profiles: [services]
     ports:
       - "127.0.0.1:8080:8080"
+
+
+  mcp-server:
+    env_file:
+      - .env.docker.example
+    profiles: [services]
+    ports:
+      - "127.0.0.1:8087:8080"

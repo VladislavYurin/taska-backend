@@ -92,3 +92,15 @@ scrape_configs:
         replacement: 'admin-service'
       - source_labels: [ job ]
         target_label: application
+
+
+  - job_name: 'mcp-server'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['mcp-server:8080']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'mcp-server'
+      - source_labels: [job]
+        target_label: application

@@ -79,7 +79,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "up{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service\"}",
+          "expr": "up{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service|mcp-server\"}",
           "instant": true,
           "legendFormat": "{{instance}}",
           "range": false,
@@ -1377,7 +1377,7 @@
           "type": "prometheus",
           "uid": "Prometheus"
         },
-        "definition": "label_values(jvm_info{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service\"}, job)",
+        "definition": "label_values(jvm_info{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service|mcp-server\"}, job)",
         "includeAll": false,
         "label": "Service",
         "multi": false,
@@ -1385,7 +1385,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(jvm_info{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service\"}, job)",
+          "query": "label_values(jvm_info{job=~\"api-gateway|auth-service|project-service|workflow-service|issue-service|notification-service|admin-service|mcp-server\"}, job)",
           "refId": "PrometheusVariableQueryEditor-Service"
         },
         "refresh": 1,
