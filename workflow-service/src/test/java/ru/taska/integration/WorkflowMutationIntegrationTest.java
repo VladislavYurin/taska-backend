@@ -91,10 +91,23 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     @Test
     void deletingOwnWorkflowFallsBackToDefaultAndDropsOnlyItsGraph() {
         var fallback = service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block();
+        verify(issues).migrate(any(), eq(List.of(IssueType.TASK)), any(), eq(Map.of("REVIEW", "DONE")), eq(List.of("TODO", "REVIEW", "DONE")));
         assertThat(fallback.shared()).isTrue();
         assertThat(fallback.workflow().workflow().getId()).isNotEqualTo(workflow);
         assertThat(databaseClient.sql("SELECT count(*) AS n FROM taska.workflows WHERE id=:id").bind("id", workflow)
                 .map((r, m) -> r.get("n", Long.class)).one().block()).isZero();
+    }
+
+    @Test
+    void deletingWorkflowIncludesExplicitOrphanMappingInMigrationScope() {
+        var command = new WorkflowMutation("r", "n", actor, project, workflow, 1,
+                null, null, null, null, null, null, null, Map.of("OLD_ORPHAN", "DONE"));
+        var fallback = service.mutate(Operation.DELETE_WORKFLOW, command).block();
+        assertThat(fallback.shared()).isTrue();
+        verify(issues).migrate(any(), eq(List.of(IssueType.TASK)), any(), eq(Map.of("OLD_ORPHAN", "DONE")),
+                eq(List.of("TODO", "REVIEW", "DONE", "OLD_ORPHAN")));
+        assertThat(databaseClient.sql("SELECT count(*) FROM taska.workflows WHERE id=:id").bind("id", workflow)
+                .map(row -> row.get(0, Long.class)).one().block()).isZero();
     }
 
     @Test
@@ -156,7 +169,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     void workflowDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
         var migrated = new java.util.concurrent.atomic.AtomicBoolean();
         var movedCount = new java.util.concurrent.atomic.AtomicInteger();
-        when(issues.migrate(any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+        when(issues.migrate(any(), any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
             if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
             return 0L;
         }));
@@ -175,7 +188,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         }
         assertThat(service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block().shared()).isTrue();
         assertThat(movedCount.get()).isEqualTo(1);
-        verify(issues, times(2)).migrate(any(), any(), any(), any());
+        verify(issues, times(2)).migrate(any(), any(), any(), any(), any());
     }
 
     @Test
