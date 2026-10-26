@@ -28,6 +28,38 @@ class RequestHasherTest {
         .isEqualTo(hash("summary", "", new BigDecimal("3.00")));
   }
 
+  @Test
+  void absentStatusAndExplicitLegacyTodoShareOneCanonicalHash() {
+    assertThat(
+            RequestHasher.hashIssueCreateRequest(
+                PROJECT,
+                IssueType.TASK,
+                "summary",
+                "",
+                IssuePriority.MEDIUM,
+                ACTOR,
+                new BigDecimal("3.00"),
+                null,
+                null,
+                60,
+                30,
+                null))
+        .isEqualTo(
+            RequestHasher.hashIssueCreateRequest(
+                PROJECT,
+                IssueType.TASK,
+                "summary",
+                "",
+                IssuePriority.MEDIUM,
+                ACTOR,
+                new BigDecimal("3.0"),
+                null,
+                null,
+                60,
+                30,
+                "TODO"));
+  }
+
   private String hash(String summary, String description, BigDecimal story) {
     return RequestHasher.hashIssueCreateRequest(
         PROJECT,

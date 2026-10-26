@@ -130,14 +130,16 @@ public class IssueServiceImpl implements IssueService {
             String statusKey
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().createIssueRoles();
-        if (statusKey != null && !statusKey.matches("^[A-Z][A-Z0-9_]{1,63}$"))
-            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid initial status key"));
         String initialStatus = statusKey == null ? INIT_STATUS : statusKey;
         String currentRequestHash = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description,
                 priority, reporterId, storyPoints, startDate, dueDate, originalEstimateMinutes,
                 remainingEstimateMinutes, initialStatus);
 
         return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, reporterId, allowedRoles)
+                .then(Mono.fromRunnable(() -> {
+                    if (statusKey != null && !statusKey.matches("^[A-Z][A-Z0-9_]{1,63}$"))
+                        throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid initial status key");
+                }))
                 .then(idempotencyKeyRepository.findByUserIdAndKey(reporterId, idempotencyKey)
                         .flatMap(keyEntity -> {
 
@@ -148,11 +150,16 @@ public class IssueServiceImpl implements IssueService {
                                         // Old keys omitted planning. Compare their saved complete response before accepting a retry.
                                         if (!matches && !keyEntity.getRequestHash().startsWith("v2:")) {
                                             String legacy = RequestHasher.hashIssueCreateRequest(projectId, issueType, summary, description, priority, reporterId);
+                                            boolean legacyMatches = keyEntity.getRequestHash().equals(legacy);
+                                            // Both null and empty descriptions were persisted as empty text before v2.
+                                            if (!legacyMatches && (description == null || description.isEmpty()))
+                                                legacyMatches = keyEntity.getRequestHash().equals(RequestHasher.hashIssueCreateRequest(
+                                                        projectId, issueType, summary, description == null ? "" : null, priority, reporterId));
                                             String previousHash = RequestHasher.hashIssueCreateRequest(previous.getProjectId(), previous.getIssueType(),
                                                     previous.getSummary(), previous.getDescription(), previous.getPriority(), previous.getReporterId(),
                                                     previous.getStoryPoints(), previous.getStartDate(), previous.getDueDate(), previous.getOriginalEstimateMinutes(),
                                                     previous.getRemainingEstimateMinutes(), previous.getStatusKey());
-                                            matches = keyEntity.getRequestHash().equals(legacy) && currentRequestHash.equals(previousHash);
+                                            matches = legacyMatches && currentRequestHash.equals(previousHash);
                                         }
                                         return matches ? Mono.just(previous) : Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
                                                 "Idempotency Key already used with a different request body"));

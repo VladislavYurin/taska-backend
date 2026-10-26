@@ -12,6 +12,7 @@ import mapper.GrpcErrorDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -144,6 +145,15 @@ class InitialIssueStatusIT extends AbstractIT {
   }
 
   @Test
+  void forbiddenCallerIsRejectedBeforeCheckingInitialStatusFormat() {
+    when(projects.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
+        .thenReturn(Mono.just(role(ProjectRole.PROJECT_ROLE_VIEWER)));
+    rejects(request("REQUEST", "invalid-key"), Status.Code.PERMISSION_DENIED, null);
+    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    assertEmpty();
+  }
+
+  @Test
   void workflowOutageAndNonWriterCannotCreateOrLearnWorkflow() {
     when(workflows.getWorkflowForProject(any(GetWorkflowForProjectRequest.class)))
         .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
@@ -186,12 +196,21 @@ class InitialIssueStatusIT extends AbstractIT {
     verify(workflows, times(1)).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
   }
 
-  @Test
-  void legacyHashRetriesUseCompleteStoredResponseAndRejectChangedPlanning() {
-    var original =
-        request("TASK", null).toBuilder()
-            .setBody(request("TASK", null).getBody().toBuilder().setOriginalEstimateMinutes(60))
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = "Original description")
+  void legacyHashRetriesUseNormalizedCompleteStoredResponseAndRejectEveryChangedField(
+      String legacyDescription) {
+    var body =
+        request("TASK", null).getBody().toBuilder()
+            .setDescription(legacyDescription == null ? "" : legacyDescription)
+            .setStoryPoints(3.456)
+            .setStartDate("2026-10-01")
+            .setDueDate("2026-10-30")
+            .setOriginalEstimateMinutes(60)
+            .setRemainingEstimateMinutes(30)
             .build();
+    var original = request("TASK", null).toBuilder().setBody(body).build();
     var first = grpc.createIssue(Mono.just(original)).block();
     var stored = keys.findByUserIdAndKey(ACTOR, key).block();
     stored.setRequestHash(
@@ -199,20 +218,33 @@ class InitialIssueStatusIT extends AbstractIT {
             PROJECT,
             ru.taska.domain.IssueType.TASK,
             "Initial status",
-            "",
+            legacyDescription,
             ru.taska.domain.entity.IssuePriority.MEDIUM,
             ACTOR));
     keys.save(stored).block();
     assertThat(grpc.createIssue(Mono.just(original)).block().getId()).isEqualTo(first.getId());
-    rejects(
-        original.toBuilder()
-            .setBody(original.getBody().toBuilder().setOriginalEstimateMinutes(61))
-            .build(),
-        Status.Code.FAILED_PRECONDITION,
-        null);
+    assertThat(
+            grpc.createIssue(
+                    Mono.just(
+                        original.toBuilder()
+                            .setBody(body.toBuilder().setStatusKey("TODO").setStoryPoints(3.46))
+                            .build()))
+                .block()
+                .getId())
+        .isEqualTo(first.getId());
+    for (var changed :
+        List.of(
+            body.toBuilder().setStatusKey("DONE").build(),
+            body.toBuilder().setStoryPoints(4).build(),
+            body.toBuilder().setStartDate("2026-10-02").build(),
+            body.toBuilder().setDueDate("2026-10-29").build(),
+            body.toBuilder().setOriginalEstimateMinutes(61).build(),
+            body.toBuilder().setRemainingEstimateMinutes(31).build()))
+      rejects(original.toBuilder().setBody(changed).build(), Status.Code.FAILED_PRECONDITION, null);
     assertThat(issues.count().block()).isEqualTo(1);
     assertThat(history.count().block()).isEqualTo(1);
     assertThat(outbox.count().block()).isEqualTo(2);
+    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
   }
 
   private CreateIssueRequest request(String type, String status) {
