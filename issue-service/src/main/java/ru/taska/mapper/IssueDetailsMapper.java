@@ -146,6 +146,7 @@ public abstract class IssueDetailsMapper {
 
     @Mapping(target = "payload", expression = "java(IssueMapperUtils.historyPayload(event))")
     @Mapping(target = "actor", ignore = true)
+    @Mapping(target = "participants", ignore = true)
     abstract IssueHistoryResponse toHistoryEvent(IssueHistory event, @Context Map<UUID, UserSummary> profiles);
 
     @AfterMapping
@@ -155,6 +156,9 @@ public abstract class IssueDetailsMapper {
                 && profiles.get(event.getActorUserId()) != null) {
             builder.setActor(IssueMapperUtils.resolveUser(event.getActorUserId(), profiles));
         }
+        if (event != null && profiles != null)
+            for (UUID id : ru.taska.util.HistoryParticipants.ids(event.getPayload()))
+                if (profiles.containsKey(id)) builder.putParticipants(id.toString(), IssueMapperUtils.resolveUser(id, profiles));
     }
 }
 

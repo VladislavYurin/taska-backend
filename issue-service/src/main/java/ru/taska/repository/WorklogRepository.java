@@ -9,7 +9,7 @@ import ru.taska.domain.entity.Worklog;
 
 import java.util.UUID;
 
-public interface WorklogRepository extends ReactiveCrudRepository<Worklog, UUID> {
+public interface WorklogRepository extends ReactiveCrudRepository<Worklog, UUID>, WorklogRepositoryCustom {
 
     @Query("SELECT * FROM taska.issue_worklogs WHERE id = :id AND deleted_at IS NULL")
     Mono<Worklog> findActiveById(@Param("id") UUID id);

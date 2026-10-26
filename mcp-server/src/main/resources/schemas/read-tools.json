@@ -279,7 +279,7 @@
             },
             "labels" : {
               "type" : "array",
-              "description" : "Устойчивый порядок привязки createdAt asc, labelId asc; метка, отсутствующая в проекте, пропускается.",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД); удалённые и отсутствующие в проекте метки пропускаются.",
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
@@ -770,6 +770,11 @@
               "type" : "integer",
               "description" : "Общее количество комментариев к задаче",
               "minimum" : 0
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -825,6 +830,13 @@
             },
             "payload" : {
               "type" : "object"
+            },
+            "participants" : {
+              "type" : "object",
+              "description" : "Profiles keyed by UUIDs from server-owned history payload fields, including former project members. Missing profiles are omitted; UUIDs remain in payload.",
+              "additionalProperties" : {
+                "$ref" : "#/$defs/UserSummaryDto"
+              }
             }
           }
         },

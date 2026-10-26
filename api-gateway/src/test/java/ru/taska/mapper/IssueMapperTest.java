@@ -150,6 +150,7 @@ class IssueMapperTest {
                                   .setCreatedAt(createdAt)
                                   .setUpdatedAt(updatedAt)
                                   .setVersion(VERSION)
+                                  .setTimeSpentMinutes(75)
                                   .build();
 
         var result = mapper.toRestIssueResponse(source);
@@ -171,6 +172,7 @@ class IssueMapperTest {
         Assertions.assertEquals(expectedCreatedAt, result.getCreatedAt());
         Assertions.assertEquals(expectedUpdatedAt, result.getUpdatedAt());
         Assertions.assertEquals(VERSION, result.getVersion());
+        Assertions.assertEquals(75, result.getTimeSpentMinutes());
         Assertions.assertNull(result.getStoryPoints());
         Assertions.assertNull(result.getStartDate());
         Assertions.assertNull(result.getDueDate());
@@ -278,6 +280,36 @@ class IssueMapperTest {
         Assertions.assertEquals("Former member", result.getActor().getDisplayName());
         Assertions.assertEquals("https://example.test/avatar.png", result.getActor().getAvatarUrl().toString());
         Assertions.assertEquals(USER_ID, result.getActorUserId());
+    }
+
+    @Test
+    void historyParticipantsAreMappedWithoutRequiringCurrentMembershipOrActor() {
+        var former = UserSummaryResponse.newBuilder().setId(ASSIGNEE_ID)
+                .setDisplayName("Former assignee").setAvatarUrl("https://example.test/former.png").build();
+        var current = UserSummaryResponse.newBuilder().setId(USER_ID).setDisplayName("Current assignee").build();
+        var event = IssueHistoryResponse.newBuilder().setId(HISTORY_ID)
+                .setEventType(IssueEventType.ISSUE_EVENT_TYPE_ASSIGNED)
+                .setPayload("{\"previousAssigneeId\":\"" + ASSIGNEE_ID + "\",\"assigneeId\":\"" + USER_ID + "\"}")
+                .putParticipants(ASSIGNEE_ID, former).putParticipants(USER_ID, current).build();
+
+        var result = mapper.toRestIssueHistoryResponse(event);
+
+        Assertions.assertNull(result.getActor());
+        Assertions.assertEquals(java.util.Set.of(ASSIGNEE_ID, USER_ID), result.getParticipants().keySet());
+        Assertions.assertEquals(UUID.fromString(ASSIGNEE_ID), result.getParticipants().get(ASSIGNEE_ID).getId());
+        Assertions.assertEquals("Former assignee", result.getParticipants().get(ASSIGNEE_ID).getDisplayName());
+        Assertions.assertEquals("https://example.test/former.png", result.getParticipants().get(ASSIGNEE_ID).getAvatarUrl().toString());
+        Assertions.assertNull(result.getParticipants().get(USER_ID).getAvatarUrl());
+        var withoutProfiles = mapper.toRestIssueHistoryResponse(event.toBuilder().clearParticipants().build());
+        Assertions.assertTrue(withoutProfiles.getParticipants().isEmpty());
+        Assertions.assertEquals(ASSIGNEE_ID, ((JsonNode) withoutProfiles.getPayload()).path("previousAssigneeId").asText());
+    }
+
+    @Test
+    void issueResponseDefaultsLoggedTimeToZero() {
+        var issue = IssueResponse.newBuilder().setPriority(IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                .setIssueType(IssueType.ISSUE_TYPE_TASK).build();
+        Assertions.assertEquals(0, mapper.toRestIssueResponse(issue).getTimeSpentMinutes());
     }
 
     @Test
@@ -1282,6 +1314,7 @@ class IssueMapperTest {
                     .setStatus(STATUS_KEY)
                     .setVersion(VERSION)
                     .setCommentCount(2)
+                    .setTimeSpentMinutes(95)
                     .setIsWatching(true)
                     .setPriority(IssuePriority.ISSUE_PRIORITY_HIGH)
                     .setIssueType(IssueType.ISSUE_TYPE_TASK)
@@ -1326,6 +1359,7 @@ class IssueMapperTest {
             Assertions.assertEquals(STATUS_KEY, issueDto.getStatus());
             Assertions.assertEquals(VERSION, issueDto.getVersion());
             Assertions.assertEquals(2, issueDto.getCommentCount());
+            Assertions.assertEquals(95, issueDto.getTimeSpentMinutes());
             Assertions.assertTrue(issueDto.getIsWatching());
             Assertions.assertEquals(STORY_POINTS, issueDto.getStoryPoints());
             Assertions.assertEquals(ORIGINAL_ESTIMATE_MINUTES, issueDto.getOriginalEstimateMinutes());
@@ -1398,6 +1432,7 @@ class IssueMapperTest {
             Assertions.assertNotNull(result.getIssue());
 
             IssueDetailsResponseDto issueDto = result.getIssue();
+            Assertions.assertEquals(0, issueDto.getTimeSpentMinutes());
             Assertions.assertNull(issueDto.getDescription());
             Assertions.assertNull(issueDto.getStoryPoints());
             Assertions.assertNull(issueDto.getOriginalEstimateMinutes());

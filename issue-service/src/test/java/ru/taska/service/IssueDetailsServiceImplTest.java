@@ -220,6 +220,34 @@ class IssueDetailsServiceImplTest {
         }
 
         @Test
+        void historyParticipantsJoinOneBulkLookupWithoutMembershipFiltering() {
+            UUID previous = UUID.randomUUID(), next = UUID.randomUUID(), textOnly = UUID.randomUUID();
+            var core = buildCoreDetails(buildIssue(null, reporterId));
+            stubAccessGranted(core);
+            stubUnrelatedSourcesEmpty();
+            Mockito.when(watcherService.listIssueWatchers(REQUEST_ID, NODE_ID, issueId, actorUserId))
+                    .thenReturn(Flux.empty());
+            Mockito.when(attachmentService.listAttachments(REQUEST_ID, NODE_ID, issueId, actorUserId))
+                    .thenReturn(Flux.empty());
+            var payload = tools.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+            payload.put("previousAssigneeId", previous.toString());
+            payload.put("assigneeId", next.toString());
+            payload.put("body", textOnly.toString());
+            var event = ru.taska.domain.entity.IssueHistory.builder().issueId(issueId)
+                    .actorUserId(reporterId).payload(payload).build();
+            Mockito.when(issueHistoryService.getHistory(REQUEST_ID, NODE_ID, issueId)).thenReturn(Flux.just(event));
+            var expected = Set.of(reporterId, previous, next);
+            Mockito.when(grpcAuthServiceClient.getUserProfiles(expected, REQUEST_ID, NODE_ID))
+                    .thenReturn(Mono.just(Map.of(previous, summaryOf(previous))));
+
+            StepVerifier.create(service.getIssueDetails(REQUEST_ID, NODE_ID, issueId, actorUserId))
+                    .assertNext(result -> Assertions.assertEquals(Set.of(previous), result.userProfiles().keySet()))
+                    .verifyComplete();
+            Mockito.verify(grpcAuthServiceClient).getUserProfiles(expected, REQUEST_ID, NODE_ID);
+            Mockito.verifyNoMoreInteractions(grpcAuthServiceClient);
+        }
+
+        @Test
         @DisplayName("Резолвит только reporter, если задача не назначена (assignee отсутствует)")
         void shouldResolveOnlyReporterWhenIssueIsUnassigned() {
             IssueCoreDetails core = buildCoreDetails(buildIssue(null, reporterId));

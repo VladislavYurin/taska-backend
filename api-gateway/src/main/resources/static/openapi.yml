@@ -5173,6 +5173,11 @@ components:
       required: [id, projectId, issueNumber, issueKey, issueType, summary, description,
                  priority, assigneeId, reporterId, createdAt, updatedAt,version, labels]
       properties:
+        timeSpentMinutes:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Total active logged minutes, independent of worklog pagination.
         id:
           type: string
         projectId:
@@ -5236,6 +5241,11 @@ components:
     IssueHistoryResponseDto:
       type: object
       properties:
+        participants:
+          type: object
+          description: Profiles keyed by UUIDs from server-owned history payload fields, including former project members. Missing profiles are omitted; UUIDs remain in payload.
+          additionalProperties:
+            $ref: '#/components/schemas/UserSummaryDto'
         channel:
           type: string
           nullable: true
@@ -5276,6 +5286,11 @@ components:
       required: [id, projectId, issueNumber, issueKey, issueType, summary, status,
                  priority, reporter, createdAt, updatedAt, version, isWatching, commentCount]
       properties:
+        timeSpentMinutes:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Total active logged minutes, independent of worklog pagination.
         id:
           type: string
           format: uuid
@@ -7595,7 +7610,7 @@ components:
           $ref: '#/components/schemas/BoardUserDto'
         labels:
           type: array
-          description: Устойчивый порядок привязки createdAt asc, labelId asc; метка, отсутствующая в проекте, пропускается.
+          description: Порядок — name asc, id asc (сравнение строк по collation БД); удалённые и отсутствующие в проекте метки пропускаются.
           items:
             $ref: '#/components/schemas/IssueLabelResponseDto'
 

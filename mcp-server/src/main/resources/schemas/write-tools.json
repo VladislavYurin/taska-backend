@@ -574,6 +574,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -887,6 +892,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -1226,6 +1236,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -2279,6 +2294,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -2523,6 +2543,13 @@
               }, {
                 "type" : "null"
               } ]
+            },
+            "participants" : {
+              "type" : "object",
+              "description" : "Profiles keyed by UUIDs from server-owned history payload fields, including former project members. Missing profiles are omitted; UUIDs remain in payload.",
+              "additionalProperties" : {
+                "$ref" : "#/$defs/UserSummaryDto"
+              }
             }
           }
         },
@@ -2628,6 +2655,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },
@@ -3257,6 +3289,11 @@
               "items" : {
                 "$ref" : "#/$defs/IssueLabelResponseDto"
               }
+            },
+            "timeSpentMinutes" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Total active logged minutes, independent of worklog pagination."
             }
           }
         },

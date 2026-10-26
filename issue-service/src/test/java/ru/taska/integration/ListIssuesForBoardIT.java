@@ -306,24 +306,24 @@ public class ListIssuesForBoardIT extends AbstractIT {
     }
 
     @Test
-    void labelIdsUseBindingTimeThenUuidAsStableOrder() {
+    void labelIdsUseActiveLabelNameThenUuidOrderRegardlessOfBindingTime() {
         var first = saveLabel("z-last-name");
         var second = saveLabel("a-first-name");
-        UUID id = savedIssues.getFirst().getId();
-        databaseClient.sql("INSERT INTO taska.issue_labels(issue_id,label_id,created_at,created_by) VALUES(:issue,:label,'2026-01-01T00:00:00Z',:actor)")
-                .bind("issue",id).bind("label",first.getId()).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
-        databaseClient.sql("INSERT INTO taska.issue_labels(issue_id,label_id,created_at,created_by) VALUES(:issue,:label,'2026-01-01T00:00:00Z',:actor)")
-                .bind("issue",id).bind("label",second.getId()).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
-        UUID later = new UUID(0, 1); // Smaller UUID must still follow earlier bindings.
+        var deleted = saveLabel("0-deleted-first");
+        var issue = savedIssues.getFirst();
+        UUID id = issue.getId();
+        attachLabel(issue, first);
+        attachLabel(issue, second);
+        attachLabel(issue, deleted);
+        databaseClient.sql("UPDATE taska.project_labels SET deleted_at=now() WHERE id=:id")
+                .bind("id", deleted.getId()).then().block();
+        UUID later = new UUID(0, 1); // Binding time and a smaller UUID must not override the label name.
         databaseClient.sql("INSERT INTO taska.project_labels(id,project_id,name,color,created_by) VALUES(:id,:project,'later','#abcdef',:actor)")
                 .bind("id",later).bind("project",PROJECT_ID_1).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
         databaseClient.sql("INSERT INTO taska.issue_labels(issue_id,label_id,created_at,created_by) VALUES(:issue,:label,'2026-01-02T00:00:00Z',:actor)")
                 .bind("issue",id).bind("label",later).bind("actor",ACTOR_USER_ID).fetch().rowsUpdated().block();
-        var expected = new java.util.ArrayList<>(java.util.stream.Stream.of(first.getId(),second.getId())
-                .sorted(java.util.Comparator.comparing(UUID::toString)).toList());
-        expected.add(later);
         Assertions.assertThat(issueRepository.findLabelIdsByIssueIds(List.of(id)).block().get(id))
-                .containsExactlyElementsOf(expected);
+                .containsExactly(second.getId(), later, first.getId());
     }
 
     @Test

@@ -467,10 +467,9 @@ class WorklogServiceImplTest {
                 .thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
         Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
-        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 20, 0L))
-                .thenReturn(Flux.just(worklog, worklog.toBuilder().id(UUID.randomUUID()).build()));
-
-        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(3L));
+        Mockito.when(worklogRepository.findActivePageWithCount(ISSUE_ID, 20, 0L))
+                .thenReturn(Mono.just(new ru.taska.domain.aggregate.WorklogRows(
+                        java.util.List.of(worklog, worklog.toBuilder().id(UUID.randomUUID()).build()), 3L)));
         Mockito.when(grpcAuthServiceClient.getUserProfiles(Set.of(MEMBER_ID), REQUEST_ID, NODE_ID))
                 .thenReturn(Mono.just(Map.of(MEMBER_ID, new UserSummary(MEMBER_ID, "Former member", null))));
 
@@ -494,9 +493,8 @@ class WorklogServiceImplTest {
                 .thenReturn(Set.of(ProjectRole.VIEWER, ProjectRole.MEMBER, ProjectRole.ADMIN));
         Mockito.when(projectRoleChecker.checkProjectRole(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anySet()))
                 .thenReturn(Mono.empty());
-        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 20, 0L)).thenReturn(Flux.empty());
-
-        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(0L));
+        Mockito.when(worklogRepository.findActivePageWithCount(ISSUE_ID, 20, 0L))
+                .thenReturn(Mono.just(new ru.taska.domain.aggregate.WorklogRows(java.util.List.of(), 0L)));
 
         StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 0, 20))
                 .assertNext(list -> {
@@ -554,8 +552,8 @@ class WorklogServiceImplTest {
         Mockito.when(allowedRoles.listWorklogRoles()).thenReturn(Set.of(ProjectRole.MEMBER));
         Mockito.when(projectRoleChecker.checkProjectRole(REQUEST_ID, NODE_ID, PROJECT_ID, MEMBER_ID, Set.of(ProjectRole.MEMBER)))
                 .thenReturn(Mono.empty());
-        Mockito.when(worklogRepository.findActivePageByIssueId(ISSUE_ID, 1, 2L)).thenReturn(Flux.just(worklog));
-        Mockito.when(worklogRepository.countActiveByIssueId(ISSUE_ID)).thenReturn(Mono.just(3L));
+        Mockito.when(worklogRepository.findActivePageWithCount(ISSUE_ID, 1, 2L))
+                .thenReturn(Mono.just(new ru.taska.domain.aggregate.WorklogRows(java.util.List.of(worklog), 3L)));
         Mockito.when(grpcAuthServiceClient.getUserProfiles(Set.of(MEMBER_ID), REQUEST_ID, NODE_ID))
                 .thenReturn(Mono.error(new IllegalStateException("Auth unavailable")));
         StepVerifier.create(worklogService.listIssueWorklog(REQUEST_ID, NODE_ID, ISSUE_ID, MEMBER_ID, 2, 1))
