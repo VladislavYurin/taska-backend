@@ -22,15 +22,17 @@ import ru.taska.api.issue.v1.ListIssueWorklogsBody;
 import ru.taska.api.issue.v1.ListIssueWorklogsRequest;
 import ru.taska.api.issue.v1.UpdateIssueWorklogBody;
 import ru.taska.api.issue.v1.UpdateIssueWorklogRequest;
-import ru.taska.domain.entity.Worklog;
+import ru.taska.domain.aggregate.WorklogPage;
 import ru.taska.domain.dto.CreateWorklogDto;
 import ru.taska.domain.dto.UpdateWorklogDto;
+import ru.taska.domain.entity.Worklog;
 import ru.taska.mapper.WorklogMapper;
 import ru.taska.service.worklog.WorklogService;
 import ru.taska.transport.grpc.GrpcIssueWorklogService;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -283,8 +285,8 @@ class GrpcIssueWorklogServiceTest {
 
         Mockito.when(worklogService.listIssueWorklog(
                         Mockito.eq(REQUEST_ID), Mockito.eq(NODE_ID),
-                        Mockito.eq(ISSUE_ID), Mockito.eq(ACTOR_ID)))
-                .thenReturn(Mono.just(List.of(sampleWorklog())));
+                        Mockito.eq(ISSUE_ID), Mockito.eq(ACTOR_ID), Mockito.eq(0), Mockito.eq(20)))
+                .thenReturn(Mono.just(new WorklogPage(List.of(sampleWorklog()), 0, 20, 1, Map.of())));
 
         StepVerifier.create(grpcIssueWorklogService.listIssueWorklogs(Mono.just(request)))
                 .assertNext(response -> Assertions.assertThat(response.getWorklogsList()).hasSize(1))

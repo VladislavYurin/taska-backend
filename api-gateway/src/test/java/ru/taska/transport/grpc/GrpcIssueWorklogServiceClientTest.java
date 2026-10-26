@@ -33,6 +33,8 @@ import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.AddIssueWorklogRequestDto;
 import ru.taska.domain.dto.UpdateIssueWorklogRequestDto;
 import ru.taska.mapper.IssueWorklogMapper;
+import ru.taska.mapper.UserProfileMapper;
+import ru.taska.api.common.v1.UserSummaryResponse;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -87,9 +89,8 @@ class GrpcIssueWorklogServiceClientTest {
         );
 
         context = new GatewayContext(REQUEST_ID, NODE_ID, userContext);
-        // IssueWorklogMapper без зависимостей, поэтому используем настоящий:
-        // так тесты клиента заодно проверяют маппинг в обе стороны
-        client = new GrpcIssueWorklogServiceClient(issueServiceStub, new IssueWorklogMapper(), properties);
+        // Real mappers verify the REST/protobuf contract in both directions.
+        client = new GrpcIssueWorklogServiceClient(issueServiceStub, new IssueWorklogMapper(new UserProfileMapper()), properties);
     }
 
     // ============ addIssueWorklog ============
@@ -316,13 +317,20 @@ class GrpcIssueWorklogServiceClientTest {
 
         Mockito.when(issueServiceStub.listIssueWorklogs(ArgumentMatchers.any(ListIssueWorklogsRequest.class)))
                 .thenReturn(Mono.just(ListIssueWorklogsResponse.newBuilder()
-                        .addWorklogs(worklog().build())
+                        .setPage(3).setPageSize(2).setTotalCount(10).setHasMore(true)
+                        .addWorklogs(worklog().setAuthor(UserSummaryResponse.newBuilder().setId(USER_ID).setDisplayName("Former author")).build())
                         .addWorklogs(worklog().setId(secondWorklogId).setSpentMinutes(30).build())
                         .build()));
 
-        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, context))
+        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, 3, 2, context))
                 .assertNext(result -> {
                     Assertions.assertThat(result.getItems()).hasSize(2);
+                    Assertions.assertThat(result.getPage()).isEqualTo(3);
+                    Assertions.assertThat(result.getPageSize()).isEqualTo(2);
+                    Assertions.assertThat(result.getTotalCount()).isEqualTo(10);
+                    Assertions.assertThat(result.getHasMore()).isTrue();
+                    Assertions.assertThat(result.getItems().get(0).getAuthor().getDisplayName()).isEqualTo("Former author");
+                    Assertions.assertThat(result.getItems().get(1).getAuthor()).isNull();
                     Assertions.assertThat(result.getItems().get(0).getId()).isEqualTo(UUID.fromString(WORKLOG_ID));
                     Assertions.assertThat(result.getItems().get(1).getId()).isEqualTo(UUID.fromString(secondWorklogId));
                     Assertions.assertThat(result.getItems().get(1).getSpentMinutes()).isEqualTo(30);
@@ -339,6 +347,9 @@ class GrpcIssueWorklogServiceClientTest {
         Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
 
+        Assertions.assertThat(request.getBody().getPage()).isEqualTo(3);
+        Assertions.assertThat(request.getBody().getPageSize()).isEqualTo(2);
+
         Mockito.verify(issueServiceStub).withDeadlineAfter(5000L, TimeUnit.MILLISECONDS);
     }
 
@@ -348,7 +359,7 @@ class GrpcIssueWorklogServiceClientTest {
         Mockito.when(issueServiceStub.listIssueWorklogs(ArgumentMatchers.any(ListIssueWorklogsRequest.class)))
                 .thenReturn(Mono.just(ListIssueWorklogsResponse.newBuilder().build()));
 
-        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, context))
+        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, 3, 2, context))
                 .assertNext(result -> Assertions.assertThat(result.getItems()).isEmpty())
                 .verifyComplete();
     }
@@ -359,7 +370,7 @@ class GrpcIssueWorklogServiceClientTest {
         Mockito.when(issueServiceStub.listIssueWorklogs(ArgumentMatchers.any(ListIssueWorklogsRequest.class)))
                 .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
 
-        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, context))
+        StepVerifier.create(client.listIssueWorklogs(ISSUE_ID, 3, 2, context))
                 .expectErrorMatches(error -> hasStatus(error, Status.Code.UNAVAILABLE))
                 .verify();
     }

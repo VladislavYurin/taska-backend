@@ -199,10 +199,12 @@ public class GrpcIssueWorklogService {
                             return worklogService.listIssueWorklog(requestId,
                                     nodeId,
                                     issueId,
-                                    actorUserId
+                                    actorUserId,
+                                    req.getBody().hasPage() ? req.getBody().getPage() : 0,
+                                    req.getBody().hasPageSize() ? req.getBody().getPageSize() : 20
                             ).doOnNext(worklogs ->
                                     log.info("[{}][{}] listIssueWorklog: found {} worklogs",
-                                            requestId, nodeId, worklogs.size())
+                                            requestId, nodeId, worklogs.items().size())
                             ).doOnError(DomainException.class,
                                     logOnError(requestId, nodeId, "listIssueWorklog")
                             );

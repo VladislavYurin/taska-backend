@@ -100,6 +100,7 @@ class WorklogControllerTest {
 
         Mockito.when(worklogClient.listIssueWorklogs(
                         Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(0), Mockito.eq(20),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -136,6 +137,7 @@ class WorklogControllerTest {
 
         Mockito.when(worklogClient.listIssueWorklogs(
                         Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(0), Mockito.eq(20),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
 
@@ -157,6 +159,7 @@ class WorklogControllerTest {
 
         Mockito.when(worklogClient.listIssueWorklogs(
                         Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(0), Mockito.eq(20),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
 
@@ -166,6 +169,28 @@ class WorklogControllerTest {
                 .exchange()
                 .expectStatus().isNotFound()
                 .expectHeader().exists("X-Request-Id");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"page=-1", "pageSize=0", "pageSize=101", "pageSize=-1", "page=invalid"})
+    void invalidPaginationShouldReturn400BeforeClient(String query) {
+        webTestClient.get()
+                .uri(WORKLOGS_URI + "?" + query, PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange().expectStatus().isBadRequest();
+        Mockito.verifyNoInteractions(worklogClient);
+    }
+
+    @Test
+    void explicitPageShouldReachClient() {
+        mockAuthenticatedUser();
+        var response = new ListIssueWorklogsResponseDto().items(List.of()).page(3).pageSize(100).totalCount(250L).hasMore(false);
+        Mockito.when(worklogClient.listIssueWorklogs(Mockito.eq(ISSUE_ID.toString()), Mockito.eq(3), Mockito.eq(100), Mockito.any()))
+                .thenReturn(Mono.just(response));
+        webTestClient.get().uri(WORKLOGS_URI + "?page=3&pageSize=100", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.page").isEqualTo(3).jsonPath("$.pageSize").isEqualTo(100)
+                .jsonPath("$.totalCount").isEqualTo(250).jsonPath("$.hasMore").isEqualTo(false);
     }
 
     // ============ POST /worklogs ============

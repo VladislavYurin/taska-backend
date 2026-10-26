@@ -1,5 +1,6 @@
 package ru.taska.mapper;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.taska.api.issue.v1.AddIssueWorklogBody;
 import ru.taska.api.issue.v1.AddIssueWorklogRequest;
@@ -21,7 +22,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class IssueWorklogMapper {
+    private final UserProfileMapper userProfileMapper;
 
     public IssueWorklogResponseDto toRestIssueWorklog(WorklogResponse response) {
         var dto = new IssueWorklogResponseDto();
@@ -37,6 +40,9 @@ public class IssueWorklogMapper {
         MappingUtils.setIfPresent(response::hasUpdatedAt, () -> MappingUtils.toOffsetDateTime(response.getUpdatedAt()), dto::setUpdatedAt);
         MappingUtils.setIfPresent(response::hasComment, response::getComment, dto::setComment);
 
+        if (response.hasAuthor()) {
+            dto.setAuthor(userProfileMapper.toUserSummaryDto(response.getAuthor()));
+        }
         return dto;
     }
 
@@ -44,6 +50,10 @@ public class IssueWorklogMapper {
     public ListIssueWorklogsResponseDto toRestListIssueWorklogs(ListIssueWorklogsResponse response) {
         var dto = new ListIssueWorklogsResponseDto();
 
+        dto.setPage(response.getPage());
+        dto.setPageSize(response.getPageSize());
+        dto.setTotalCount(response.getTotalCount());
+        dto.setHasMore(response.getHasMore());
         dto.setItems(response.getWorklogsList().stream()
                 .map(this::toRestIssueWorklog)
                 .toList());
@@ -88,10 +98,14 @@ public class IssueWorklogMapper {
 
     public ListIssueWorklogsRequest toListIssueWorklogsGrpcRequest(
             String issueId,
+            int page,
+            int pageSize,
             GatewayContext context
     ) {
         var requestBodyBuilder = ListIssueWorklogsBody.newBuilder()
                 .setIssueId(issueId)
+                .setPage(page)
+                .setPageSize(pageSize)
                 .setActorUserId(context.userContext().userId());
 
         return ListIssueWorklogsRequest.newBuilder()

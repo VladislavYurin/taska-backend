@@ -1,11 +1,11 @@
 package ru.taska.service.worklog;
 
 import reactor.core.publisher.Mono;
+import ru.taska.domain.aggregate.WorklogPage;
 import ru.taska.domain.entity.Worklog;
 import ru.taska.domain.dto.CreateWorklogDto;
 import ru.taska.domain.dto.UpdateWorklogDto;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -61,20 +61,24 @@ public interface WorklogService {
     );
 
     /**
-     * Возвращает список активных записей о затраченном времени по задаче.
+     * Возвращает страницу активных записей о затраченном времени по задаче.
      *
      * @param requestId   идентификатор запроса (для логирования)
      * @param nodeId      идентификатор узла (для логирования)
      * @param issueId     идентификатор задачи
      * @param actorUserId идентификатор пользователя, выполняющего действие
-     * @return {@link Mono} со списком записей, или ошибкой, если задача не найдена
+     * @param page номер страницы с нуля
+     * @param pageSize размер страницы (1..100)
+     * @return {@link Mono} со страницей записей, или ошибкой, если задача не найдена
      *         либо у пользователя недостаточно прав
      */
-    Mono<List<Worklog>> listIssueWorklog(
+    Mono<WorklogPage> listIssueWorklog(
             String requestId,
             String nodeId,
             UUID issueId,
-            UUID actorUserId
+            UUID actorUserId,
+            int page,
+            int pageSize
     );
 
     /**

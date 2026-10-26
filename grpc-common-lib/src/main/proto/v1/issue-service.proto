@@ -279,6 +279,7 @@ message WorklogResponse {
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
   int32 version = 10;
+  optional ru.taska.common.v1.UserSummaryResponse author = 11;
 }
 
 message AddIssueWorklogBody {
@@ -343,6 +344,8 @@ message ListIssueWorklogsRequest {
 message ListIssueWorklogsBody {
   string issue_id = 1;
   string actor_user_id = 2;
+  optional int32 page = 3; // zero-based, default 0
+  optional int32 page_size = 4; // 1..100, default 20
 }
 
 message AddIssueWorklogResponse {
@@ -359,6 +362,10 @@ message DeleteIssueWorklogResponse {
 
 message ListIssueWorklogsResponse {
   repeated WorklogResponse worklogs = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int64 total_count = 4;
+  bool has_more = 5;
 }
 
 message AssignIssueRequest {
