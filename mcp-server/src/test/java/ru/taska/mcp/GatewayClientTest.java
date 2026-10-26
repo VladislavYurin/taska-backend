@@ -26,9 +26,10 @@ class GatewayClientTest {
   }
 
   @Test
-  void forwardsOnlyCredentialsAndRequestIdToFixedGatewayPath() {
+  void forwardsCredentialsRequestIdAndValidatedTraceToFixedGatewayPath() {
     AtomicReference<String> auth = new AtomicReference<>();
     AtomicReference<String> id = new AtomicReference<>();
+    AtomicReference<String> trace = new AtomicReference<>();
     server =
         HttpServer.create()
             .port(0)
@@ -37,16 +38,38 @@ class GatewayClientTest {
                   assertThat(request.uri()).isEqualTo("/api/v1/users/me");
                   auth.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                   id.set(request.requestHeaders().get("X-Request-Id"));
+                  trace.set(request.requestHeaders().get("traceparent"));
                   return response
                       .header(HttpHeaders.CONTENT_TYPE, "application/json")
                       .sendString(Mono.just("{\"id\":\"user-1\",\"avatarUnavailable\":false}"));
                 })
             .bindNow();
+    String traceparent = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+    var context = context();
     assertThat(
-            client(Duration.ofSeconds(2), 1024).currentUser(context()).block().get("id").asText())
+            client(Duration.ofSeconds(2), 1024)
+                .currentUser(
+                    new McpRequestContext(
+                        context.requestId(),
+                        context.bearerToken(),
+                        context.user(),
+                        new McpCallMetadata("taska-test", "1.0", traceparent)))
+                .block()
+                .get("id")
+                .asText())
         .isEqualTo("user-1");
     assertThat(auth.get()).isEqualTo("Bearer " + McpAuthenticationFilterTest.TOKEN);
     assertThat(id.get()).isEqualTo("request-test");
+    assertThat(trace.get()).isEqualTo(traceparent);
+    client(Duration.ofSeconds(2), 1024)
+        .currentUser(
+            new McpRequestContext(
+                context.requestId(),
+                context.bearerToken(),
+                context.user(),
+                new McpCallMetadata("taska-test", null, "private header\r\nvalue")))
+        .block();
+    assertThat(trace.get()).isNull();
   }
 
   @Test

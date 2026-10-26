@@ -6,6 +6,7 @@ import io.modelcontextprotocol.spec.McpError;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -38,14 +39,17 @@ public class ToolExecutor {
           var definition = registration.definition();
           var context = McpRequestContext.from(transport);
           var args = new ToolArguments(request.arguments());
+          var call = new ToolInvocation(definition, context, args, resolver.session(context));
+          long started = System.nanoTime();
           if (!McpJsonDefaults.getSchemaValidator()
               .validate(definition.inputSchema(), args.values())
               .valid())
-            return Mono.error(
-                ToolArguments.invalid(
-                    "Неверные аргументы " + definition.name() + "; проверьте tools/list."));
-          var call = new ToolInvocation(definition, context, args, resolver.session(context));
-          long started = System.nanoTime();
+            return observed(
+                call,
+                Mono.error(
+                    ToolArguments.invalid(
+                        "Неверные аргументы " + definition.name() + "; проверьте tools/list.")),
+                started);
           if (!context.user().getScopesList().contains(definition.scope()))
             return observed(
                 call,
@@ -98,7 +102,7 @@ public class ToolExecutor {
                                     definition.readOnly()
                                         ? "Taska временно недоступна. Повторите чтение позже."
                                         : "Ответ записи не получен. Сначала перечитайте объект; не"
-                                              + " повторяйте запись автоматически.")));
+                                            + " повторяйте запись автоматически.")));
                       }),
               started);
         });
@@ -106,6 +110,11 @@ public class ToolExecutor {
 
   private Mono<McpSchema.CallToolResult> observed(
       ToolInvocation call, Mono<McpSchema.CallToolResult> result, long started) {
+    var recorded = new AtomicBoolean();
+    java.util.function.Consumer<String> record =
+        outcome -> {
+          if (recorded.compareAndSet(false, true)) observe(call, outcome, started);
+        };
     return result
         .doOnNext(
             value -> {
@@ -114,15 +123,12 @@ public class ToolExecutor {
                   && value.structuredContent() instanceof Map<?, ?> envelope
                   && envelope.get("error") instanceof Map<?, ?> error
                   && error.get("code") instanceof String code) outcome = code;
-              observe(call, outcome, started);
+              record.accept(outcome);
             })
         .doOnError(
             error ->
-                observe(
-                    call,
-                    error instanceof McpError ? "invalid_argument" : "upstream_error",
-                    started))
-        .doOnCancel(() -> observe(call, "cancelled", started));
+                record.accept(error instanceof McpError ? "invalid_argument" : "upstream_error"))
+        .doOnCancel(() -> record.accept("cancelled"));
   }
 
   private void observe(ToolInvocation call, String outcome, long started) {

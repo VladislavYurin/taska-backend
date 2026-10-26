@@ -82,6 +82,8 @@ public class GatewayClient {
             headers -> {
               headers.setBearerAuth(context.bearerToken());
               headers.set("X-Request-Id", context.requestId());
+              if (context.metadata() != null && context.metadata().traceparent() != null)
+                headers.set("traceparent", context.metadata().traceparent());
             })
         .accept(MediaType.APPLICATION_JSON)
         .exchangeToMono(this::decode)

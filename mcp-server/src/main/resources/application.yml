@@ -75,3 +75,5 @@ logging:
     ru.taska: ${MCP_LOG_LEVEL:INFO}
     # SDK initialize logging includes untrusted client metadata; do not log it by default.
     io.modelcontextprotocol: WARN
+    # SDK 2.1 initialize warning echoes the arbitrary protocolVersion; keep that logger at ERROR.
+    io.modelcontextprotocol.server.McpStatelessAsyncServer: ERROR

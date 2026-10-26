@@ -50,7 +50,7 @@ class McpLimitsLoadSmokeTest {
       beans.registerSingleton(
           "policy",
           new McpToolPolicy(
-              new McpQuotaLimiter(McpQuotaProperties.defaults()), meters, McpToolPolicyTest.JSON));
+              new McpQuotaLimiter(McpQuotaProperties.defaults()), McpToolPolicyTest.JSON));
       var executor =
           new ToolExecutor(
               new ToolResolver(gateway),

@@ -129,3 +129,81 @@ request_id, outcome, duration_ms и нормализованный clientInfo. T
 локального HTTP stub: в gateway проходят максимум 8, остальные получают rate_limited.
 Это проверка admission и освобождения ресурсов, не измерение мощности реального стенда.
 Нагрузочный прогон развёрнутого стенда остаётся проверкой TAS-408.
+
+## Наблюдаемость (TAS-407)
+
+`/actuator/prometheus` доступен во внутренней сети, отдельный scrape job `mcp-server` уже
+определён в `infra/prometheus/prometheus.yml`. Публичный ingress должен открывать только `/mcp`.
+Метрики используют общие application/environment/version из metrics-starter и следующие
+ограниченные измерения:
+
+| Prometheus metric | Labels | Смысл |
+| --- | --- | --- |
+| `taska_mcp_tool_calls_total` | tool, outcome | Один финальный исход известного tool-call |
+| `taska_mcp_tool_duration_seconds_bucket/count/sum` | tool (+ le у bucket) | Гистограмма полной длительности, включая output projection и лимиты |
+| `taska_mcp_limit_rejections_total` | tool | Локальный quota reject или rate_limited от gateway |
+| `taska_mcp_auth_rejections_total` | outcome | Отказы на HTTP auth boundary: auth, scope, origin, upstream_error |
+| `taska_mcp_requests_active` | — | Все активные HTTP `/mcp`, включая авторизацию, initialize и list |
+
+Tool берётся из неизменяемого registry, неизвестное значение заменяется на `unknown`.
+Исходы: `ok`, `auth`, `scope`, `not_found`, `conflict`, `rate_limited`, `upstream_error`, `timeout`,
+`invalid_argument`, `failed_precondition`, `response_too_large`, `partial_success`, `cancelled`.
+Прежние внутренние success/unauthenticated/insufficient_scope нормализуются в ok/auth/scope
+только в метриках и общем completion log; публичный envelope и write audit сохраняют контракт.
+Произвольные исходы заменяются на upstream_error. У гистограммы нет outcome: это ограничивает
+число series при добавлении tools. Бакеты 1 ms..30 s, SLO 100/500 ms, 1/5/20 s; p95 агрегируется
+через `histogram_quantile`, клиентские percentile series не создаются.
+
+Один исход регистрируется при успехе, ошибке, timeout или отмене. Ошибки input schema известного
+tool учитываются как invalid_argument и остаются JSON-RPC protocol errors. Неизвестные tools,
+невалидные JSON/RPC и запросы, отвергнутые до определения tool, не создают tool labels.
+HTTP 403 write preflight учитывается как исход scope известного tool; auth counter отражает
+только отказы предшествующего auth filter. Gauge считает HTTP подписки, поэтому отличается
+от числа quota leases tools; отмена и синхронная ошибка освобождают обе величины.
+
+`McpObservability` пишет JSON-события `mcp_tool` для read и write, а также `mcp_auth_rejected`.
+В completion log есть request_id, tool, outcome, duration_ms и только нормализованные client_name,
+client_version и traceparent. В нём нет user/token/project IDs, аргументов, ответов или исключений.
+Существующий отдельный write audit сохраняется. Токеноподобный/некорректный входной X-Request-Id
+заменяется UUID ещё до вызова auth/gateway; допустимое значение сохраняется в envelope и обоих
+HTTP переходах. Из `params._meta.traceparent` передаётся только проверенный W3C v00 с ненулевыми
+trace/span IDs. Он добавляется к запросам gateway, прочие `_meta` и clientInfo не пересылаются.
+SDK 2.1.0 печатает неподтверждённый initialize.protocolVersion на WARN, поэтому только logger
+`io.modelcontextprotocol.server.McpStatelessAsyncServer` ограничен ERROR. Общий SDK остаётся WARN.
+
+Dashboard `infra/grafana/dashboards/taska-mcp.json` автоматически provisioned существующим
+провайдером Grafana: calls/tool/outcome, error fraction, p95, auth rejects, quota rejects,
+active requests, scrape health, upstream errors и поиск логов MCP+gateway по request_id.
+Environment выбирается из app_info, поскольку метрика up создаётся Prometheus без application
+labels; панель scrape health показывает target данного Prometheus независимо от environment.
+Request_id не становится Loki label: панель использует экранированный literal line filter.
+
+В `infra/prometheus/alerts/taska-mcp.yml` определены target down 5m, upstream errors >10% 10m
+(минимум 20 calls/5m), p95 >5s 10m с тем же минимумом, quota/auth rejects >1/s 10m. Эти правила
+не настраивают внешние каналы уведомления: их подключение к Alertmanager выполняет владелец
+окружения. Compose монтирует rules read-only. Без трафика процентные/latency alerts не срабатывают.
+
+Локальная проверка с уже имеющимся образом Prometheus (можно заменить на версию из Compose):
+
+```sh
+docker run --rm --entrypoint /bin/promtool \
+  -v "$PWD/infra/prometheus:/etc/prometheus:ro" prom/prometheus:v3.2.1 \
+  check config /etc/prometheus/prometheus.yml
+docker run --rm --entrypoint /bin/promtool \
+  -v "$PWD/infra/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests \
+  prom/prometheus:v3.2.1 test rules taska-mcp.test.yml
+```
+
+После согласованного развёртывания для stage smoke:
+
+1. Через авторизованный SDK клиент выполнить whoami/list_projects и один доступный get_issue;
+   сохранить только request_id из tool envelope. Проверить отдельный отказ неверного PAT.
+2. Дождаться двух scrape interval (по умолчанию 15s); проверить target up и рост calls/auth counters
+   в Prometheus. Открыть Taska MCP dashboard с правильным environment; p95 появляется после трафика.
+3. В поле request_id dashboard вставить сохранённый ID. В Loki должны находиться `mcp_tool`
+   и gateway `Executing request` с этим ID. Metadata traceparent не заменяет request_id.
+4. Не публиковать PAT, полные аргументы и чувствительные ответы в отчёте. Локальные fake gateway/auth
+   и promtool подтверждают код/конфигурацию, но не подтверждают сбор данных конкретным стендом.
+
+Проверка histogram API: [Micrometer](https://docs.micrometer.io/micrometer/reference/implementations/prometheus.html),
+правил и unit scenarios: [Prometheus](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/).

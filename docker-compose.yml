@@ -152,6 +152,7 @@ services:
       - public
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Монтируем файл конфигурации. (:ro) Режим read-only. Prometheus не сможет случайно испортить ваш файл конфигурации.
+      - ./infra/prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml' # Указываем Prometheus, где именно внутри контейнера искать файл настроек
