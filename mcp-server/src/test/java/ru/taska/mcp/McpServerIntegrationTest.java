@@ -102,7 +102,17 @@ class McpServerIntegrationTest {
       assertThat(buildVersion).doesNotContain("@");
       assertThat(client.listTools().tools())
           .extracting(McpSchema.Tool::name)
-          .containsExactly("whoami");
+          .containsExactly(
+              "get_board",
+              "get_issue",
+              "get_project",
+              "list_comments",
+              "list_notifications",
+              "list_projects",
+              "list_worklogs",
+              "search_issues",
+              "search_users",
+              "whoami");
       var result = client.callTool(new McpSchema.CallToolRequest("whoami", Map.of()));
       assertThat(result.isError()).isFalse();
       Map<?, ?> content = (Map<?, ?>) result.structuredContent();
