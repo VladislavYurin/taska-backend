@@ -36,6 +36,7 @@ class McpServerIntegrationTest {
   static final AtomicInteger AUTH_CALLS = new AtomicInteger();
   static final AtomicReference<String> FORWARDED_TOKEN = new AtomicReference<>();
   static final AtomicReference<String> FORWARDED_ID = new AtomicReference<>();
+  static final AtomicReference<String> FORWARDED_TRACE = new AtomicReference<>();
   static final AtomicBoolean GATEWAY_HEALTHY = new AtomicBoolean(true);
   static final AtomicInteger GATEWAY_STATUS = new AtomicInteger(200);
   static final Server AUTH = startAuth();
@@ -53,16 +54,27 @@ class McpServerIntegrationTest {
                 assertThat(request.uri()).isEqualTo("/api/v1/users/me");
                 FORWARDED_TOKEN.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                 FORWARDED_ID.set(request.requestHeaders().get("X-Request-Id"));
+                FORWARDED_TRACE.set(request.requestHeaders().get("traceparent"));
                 var headers = request.requestHeaders();
-                assertThat(headers.get(ru.taska.security.McpGatewaySignature.VERSION_HEADER)).isEqualTo("1");
-                String timestamp = headers.get(ru.taska.security.McpGatewaySignature.TIMESTAMP_HEADER);
+                assertThat(headers.get(ru.taska.security.McpGatewaySignature.VERSION_HEADER))
+                    .isEqualTo("1");
+                String timestamp =
+                    headers.get(ru.taska.security.McpGatewaySignature.TIMESTAMP_HEADER);
                 String nonce = headers.get(ru.taska.security.McpGatewaySignature.NONCE_HEADER);
-                assertThat(Long.parseLong(timestamp)).isBetween(java.time.Instant.now().getEpochSecond() - 60,
-                    java.time.Instant.now().getEpochSecond() + 5);
+                assertThat(Long.parseLong(timestamp))
+                    .isBetween(
+                        java.time.Instant.now().getEpochSecond() - 60,
+                        java.time.Instant.now().getEpochSecond() + 5);
                 assertThat(nonce).matches("[A-Za-z0-9_-]{22}");
-                byte[] expected = ru.taska.security.McpGatewaySignature.sign(new byte[32], request.method().name(),
-                    java.net.URI.create(request.uri()), FORWARDED_ID.get(), timestamp, nonce,
-                    FORWARDED_TOKEN.get().substring("Bearer ".length()));
+                byte[] expected =
+                    ru.taska.security.McpGatewaySignature.sign(
+                        new byte[32],
+                        request.method().name(),
+                        java.net.URI.create(request.uri()),
+                        FORWARDED_ID.get(),
+                        timestamp,
+                        nonce,
+                        FORWARDED_TOKEN.get().substring("Bearer ".length()));
                 assertThat(headers.get(ru.taska.security.McpGatewaySignature.SIGNATURE_HEADER))
                     .isEqualTo(ru.taska.security.McpGatewaySignature.encode(expected));
                 return response
@@ -83,7 +95,9 @@ class McpServerIntegrationTest {
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry properties) {
-    properties.add("taska.mcp.gateway-signing-secret", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
+    properties.add(
+        "taska.mcp.gateway-signing-secret",
+        () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
     properties.add("taska.mcp.auth.port", AUTH::getPort);
     properties.add("taska.mcp.auth.host", () -> "localhost");
     properties.add("taska.mcp.gateway-url", () -> "http://localhost:" + GATEWAY.port());
@@ -138,15 +152,72 @@ class McpServerIntegrationTest {
               "update_issue",
               "watch_issue",
               "whoami");
-      var result = client.callTool(new McpSchema.CallToolRequest("whoami", Map.of()));
+      var log =
+          (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(McpObservability.class);
+      var captured =
+          new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+      captured.start();
+      log.addAppender(captured);
+      String trace = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+      McpSchema.CallToolResult result;
+      try {
+        result =
+            client.callTool(
+                new McpSchema.CallToolRequest(
+                    "whoami",
+                    Map.of(),
+                    Map.of(
+                        "clientInfo",
+                        Map.of("name", "taska-test", "version", "1.0.0"),
+                        "traceparent",
+                        trace,
+                        "untrusted",
+                        "never-log-private-metadata")));
+        assertThat(captured.list)
+            .anySatisfy(
+                event ->
+                    assertThat(event.getFormattedMessage())
+                        .contains(
+                            "\"request_id\":\"sdk-test\"",
+                            "\"tool\":\"whoami\"",
+                            "\"outcome\":\"ok\"",
+                            trace)
+                        .doesNotContain(
+                            McpAuthenticationFilterTest.TOKEN,
+                            "never-log-private-metadata",
+                            "user@example.test"));
+      } finally {
+        log.detachAppender(captured);
+        captured.stop();
+      }
+      assertThat(FORWARDED_TRACE.get()).isEqualTo(trace);
       assertThat(result.isError()).isFalse();
       Map<?, ?> content = (Map<?, ?>) result.structuredContent();
+      assertThat(content.get("request_id")).isEqualTo(FORWARDED_ID.get());
       Map<?, ?> data = (Map<?, ?>) content.get("data");
       assertThat(data.get("token_kind")).isEqualTo("PAT");
       assertThat(result.content()).hasSize(1);
       assertThat(FORWARDED_TOKEN.get()).isEqualTo("Bearer " + McpAuthenticationFilterTest.TOKEN);
       assertThat(FORWARDED_ID.get()).isEqualTo("sdk-test");
       assertThat(AUTH_CALLS.get()).isGreaterThanOrEqualTo(4);
+      http()
+          .get()
+          .uri("/actuator/prometheus")
+          .exchange()
+          .expectStatus()
+          .isOk()
+          .expectBody(String.class)
+          .value(
+              scrape ->
+                  assertThat(scrape)
+                      .contains(
+                          "taska_mcp_tool_calls_total",
+                          "outcome=\"ok\"",
+                          "tool=\"whoami\"",
+                          "taska_mcp_tool_duration_seconds_bucket",
+                          "taska_mcp_requests_active")
+                      .doesNotContain(
+                          McpAuthenticationFilterTest.TOKEN, "sdk-test", "user@example.test"));
       GATEWAY_STATUS.set(503);
       assertThat(client.callTool(new McpSchema.CallToolRequest("whoami", Map.of())).isError())
           .isTrue();
@@ -164,6 +235,46 @@ class McpServerIntegrationTest {
     } finally {
       REVOKED.set(false);
       GATEWAY_STATUS.set(200);
+    }
+  }
+
+  @Test
+  void unsupportedInitializeVersionAndClientMetadataAreNotLogged() {
+    REVOKED.set(false);
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(
+                "io.modelcontextprotocol.server.McpStatelessAsyncServer");
+    var captured =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    captured.start();
+    logger.addAppender(captured);
+    String privateText = "never-log-private-client-text";
+    try {
+      http()
+          .post()
+          .uri("/mcp")
+          .header(HttpHeaders.AUTHORIZATION, "Bearer " + McpAuthenticationFilterTest.TOKEN)
+          .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
+          .header(HttpHeaders.CONTENT_TYPE, "application/json")
+          .bodyValue(
+              "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"initialize\",\"params\":{"
+                  + "\"protocolVersion\":\""
+                  + privateText
+                  + "\",\"capabilities\":{},\"clientInfo\":{"
+                  + "\"name\":\""
+                  + privateText
+                  + "\",\"version\":\""
+                  + privateText
+                  + "\"}}}")
+          .exchange()
+          .expectStatus()
+          .isOk();
+      assertThat(captured.list)
+          .allSatisfy(event -> assertThat(event.getFormattedMessage()).doesNotContain(privateText));
+    } finally {
+      logger.detachAppender(captured);
+      captured.stop();
     }
   }
 

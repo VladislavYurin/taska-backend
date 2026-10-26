@@ -1,0 +1,76 @@
+rule_files:
+  - ../alerts/taska-mcp.yml
+evaluation_interval: 1m
+tests:
+  - name: idle MCP does not trigger traffic alerts
+    interval: 1m
+    input_series:
+      - series: 'up{job="mcp-server"}'
+        values: '1+0x20'
+      - series: 'taska_mcp_tool_calls_total{environment="test",tool="whoami",outcome="ok"}'
+        values: '0+0x20'
+      - series: 'taska_mcp_auth_rejections_total{environment="test",outcome="auth"}'
+        values: '0+0x20'
+      - series: 'taska_mcp_limit_rejections_total{environment="test",tool="whoami"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TaskaMcpUpstreamErrors
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: TaskaMcpSlowTools
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: TaskaMcpRateLimited
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: TaskaMcpAuthenticationRejects
+        exp_alerts: []
+  - name: sparse upstream errors do not trigger a percentage alert
+    interval: 1m
+    input_series:
+      - series: 'taska_mcp_tool_calls_total{environment="test",tool="whoami",outcome="upstream_error"}'
+        values: '0+1x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TaskaMcpUpstreamErrors
+        exp_alerts: []
+  - name: sustained upstream errors fire after the hold period
+    interval: 1m
+    input_series:
+      - series: 'taska_mcp_tool_calls_total{environment="test",tool="whoami",outcome="ok"}'
+        values: '0+96x20'
+      - series: 'taska_mcp_tool_calls_total{environment="test",tool="whoami",outcome="upstream_error"}'
+        values: '0+24x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: TaskaMcpUpstreamErrors
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: TaskaMcpUpstreamErrors
+        exp_alerts:
+          - exp_labels:
+              environment: test
+              severity: warning
+            exp_annotations:
+              summary: MCP upstream errors exceed 10 percent
+              description: At least 20 calls in five minutes; inspect MCP and gateway logs by request_id.
+  - name: scrape outage fires only after five minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="mcp-server",instance="mcp-server"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: TaskaMcpDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: TaskaMcpDown
+        exp_alerts:
+          - exp_labels:
+              job: mcp-server
+              instance: mcp-server
+              severity: critical
+            exp_annotations:
+              summary: MCP scrape target is unavailable
+              description: Check the mcp-server container and its private actuator endpoint.

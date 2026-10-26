@@ -3,8 +3,8 @@ package ru.taska.mcp;
 import io.grpc.Status;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -24,14 +24,21 @@ import ru.taska.api.common.v1.UserStatus;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class McpAuthenticationFilter implements WebFilter {
   private static final Pattern PAT = Pattern.compile("tsk_pat_[A-Za-z0-9_-]{43}");
-  private static final Pattern REQUEST_ID = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
   private static final List<String> VERSIONS = List.of("2025-03-26", "2025-06-18", "2025-11-25");
   private static final List<String> CORS_HEADERS =
       List.of("authorization", "content-type", "accept", "mcp-protocol-version", "x-request-id");
   private final PatAuthenticator authenticator;
   private final McpProperties properties;
+  private final McpObservability observability;
 
   public McpAuthenticationFilter(PatAuthenticator authenticator, McpProperties properties) {
+    this(authenticator, properties, null);
+  }
+
+  @Autowired
+  public McpAuthenticationFilter(
+      PatAuthenticator authenticator, McpProperties properties, McpObservability observability) {
+    this.observability = observability;
     this.authenticator = authenticator;
     this.properties = properties;
   }
@@ -39,12 +46,16 @@ public class McpAuthenticationFilter implements WebFilter {
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
     if (!matchesMcp(exchange.getRequest())) return chain.filter(exchange);
+    return observability == null
+        ? Mono.defer(() -> authenticate(exchange, chain))
+        : observability.request(() -> authenticate(exchange, chain));
+  }
+
+  private Mono<Void> authenticate(ServerWebExchange exchange, WebFilterChain chain) {
     var headers = exchange.getRequest().getHeaders();
     var responseHeaders = exchange.getResponse().getHeaders();
     String requestId = headers.getFirst("X-Request-Id");
-    if (requestId == null || !REQUEST_ID.matcher(requestId).matches()) {
-      requestId = UUID.randomUUID().toString();
-    }
+    requestId = McpRequestIds.resolve(requestId);
     responseHeaders.set("X-Request-Id", requestId);
     responseHeaders.setCacheControl("private, no-store");
     responseHeaders.setVary(List.of("Origin"));
@@ -144,8 +155,20 @@ public class McpAuthenticationFilter implements WebFilter {
             .isAfter(Instant.now());
   }
 
-  private static Mono<Void> reject(
-      ServerWebExchange exchange, HttpStatus status, String challenge) {
+  private Mono<Void> reject(ServerWebExchange exchange, HttpStatus status, String challenge) {
+    if (observability != null
+        && (status == HttpStatus.UNAUTHORIZED
+            || status == HttpStatus.FORBIDDEN
+            || status == HttpStatus.SERVICE_UNAVAILABLE)) {
+      String outcome =
+          status == HttpStatus.UNAUTHORIZED
+              ? "auth"
+              : status == HttpStatus.SERVICE_UNAVAILABLE
+                  ? "upstream_error"
+                  : challenge == null ? "origin" : "scope";
+      observability.authRejected(
+          exchange.getResponse().getHeaders().getFirst("X-Request-Id"), outcome, status.value());
+    }
     exchange.getResponse().setStatusCode(status);
     if (challenge != null) {
       exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, challenge);

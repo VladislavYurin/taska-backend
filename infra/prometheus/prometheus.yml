@@ -3,6 +3,9 @@ global:
   evaluation_interval: 15s # Как часто проверять правила
   scrape_timeout: 10s      # Тайм-аут для сбора метрик
 
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
 scrape_configs:
   # Мониторинг самого Prometheus
   - job_name: 'prometheus'

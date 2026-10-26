@@ -26,9 +26,10 @@ class GatewayClientTest {
   }
 
   @Test
-  void forwardsOnlyCredentialsAndRequestIdToFixedGatewayPath() {
+  void forwardsCredentialsRequestIdAndValidatedTraceToFixedGatewayPath() {
     AtomicReference<String> auth = new AtomicReference<>();
     AtomicReference<String> id = new AtomicReference<>();
+    AtomicReference<String> trace = new AtomicReference<>();
     server =
         HttpServer.create()
             .port(0)
@@ -37,16 +38,66 @@ class GatewayClientTest {
                   assertThat(request.uri()).isEqualTo("/api/v1/users/me");
                   auth.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                   id.set(request.requestHeaders().get("X-Request-Id"));
+                  trace.set(request.requestHeaders().get("traceparent"));
                   return response
                       .header(HttpHeaders.CONTENT_TYPE, "application/json")
                       .sendString(Mono.just("{\"id\":\"user-1\",\"avatarUnavailable\":false}"));
                 })
             .bindNow();
+    String traceparent = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+    var context = context();
     assertThat(
-            client(Duration.ofSeconds(2), 1024).currentUser(context()).block().get("id").asText())
+            client(Duration.ofSeconds(10), 1024)
+                .currentUser(
+                    new McpRequestContext(
+                        context.requestId(),
+                        context.bearerToken(),
+                        context.user(),
+                        new McpCallMetadata("taska-test", "1.0", traceparent)))
+                .block()
+                .get("id")
+                .asText())
         .isEqualTo("user-1");
     assertThat(auth.get()).isEqualTo("Bearer " + McpAuthenticationFilterTest.TOKEN);
     assertThat(id.get()).isEqualTo("request-test");
+    assertThat(trace.get()).isEqualTo(traceparent);
+    client(Duration.ofSeconds(10), 1024)
+        .currentUser(
+            new McpRequestContext(
+                context.requestId(),
+                context.bearerToken(),
+                context.user(),
+                new McpCallMetadata("taska-test", null, "private header\r\nvalue")))
+        .block();
+    assertThat(trace.get()).isNull();
+  }
+
+  @Test
+  void forwardsValidatedTraceOnWritesAndDropsMalformedTrace() {
+    var trace = new AtomicReference<String>();
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    server = HttpServer.create().port(0).handle((request, response) -> {
+      assertThat(request.method().name()).isEqualTo("POST");
+      assertThat(request.uri()).isEqualTo("/api/v1/projects/project-1/issues");
+      assertThat(request.requestHeaders().get("X-Request-Id")).isEqualTo("request-test");
+      assertThat(request.requestHeaders().get(HttpHeaders.AUTHORIZATION))
+          .isEqualTo("Bearer " + McpAuthenticationFilterTest.TOKEN);
+      trace.set(request.requestHeaders().get("traceparent"));
+      calls.incrementAndGet();
+      return request.receive().then(response.header(HttpHeaders.CONTENT_TYPE, "application/json")
+          .sendString(Mono.just("{}" )).then());
+    }).bindNow();
+    String valid = "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01";
+    for (String value : new String[] {valid, "private\r\nheader"}) {
+      var ctx = context();
+      client(Duration.ofSeconds(10), 1024).write(GatewayMutation.CREATE_ISSUE,
+          new McpRequestContext(ctx.requestId(), ctx.bearerToken(), ctx.user(),
+              new McpCallMetadata("taska-test", null, value)), java.util.Map.of("projectId", "project-1"),
+          tools.jackson.databind.node.JsonNodeFactory.instance.objectNode(), GatewayWriteOptions.none())
+          .block();
+      assertThat(trace.get()).isEqualTo(value.equals(valid) ? valid : null);
+    }
+    assertThat(calls).hasValue(2);
   }
 
   @Test

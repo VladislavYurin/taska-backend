@@ -1,0 +1,48 @@
+groups:
+  - name: taska-mcp
+    rules:
+      - alert: TaskaMcpDown
+        expr: up{job="mcp-server"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: MCP scrape target is unavailable
+          description: Check the mcp-server container and its private actuator endpoint.
+      - alert: TaskaMcpUpstreamErrors
+        expr: |
+          (sum by (environment) (rate(taska_mcp_tool_calls_total{outcome=~"upstream_error|timeout"}[5m]))
+          / clamp_min(sum by (environment) (rate(taska_mcp_tool_calls_total[5m])), 0.001) > 0.1)
+          and on (environment) (sum by (environment) (increase(taska_mcp_tool_calls_total[5m])) >= 20)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP upstream errors exceed 10 percent
+          description: At least 20 calls in five minutes; inspect MCP and gateway logs by request_id.
+      - alert: TaskaMcpSlowTools
+        expr: |
+          (histogram_quantile(0.95, sum by (environment, le) (rate(taska_mcp_tool_duration_seconds_bucket[5m]))) > 5)
+          and on (environment) (sum by (environment) (increase(taska_mcp_tool_duration_seconds_count[5m])) >= 20)
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP tool p95 exceeds five seconds
+          description: Check gateway latency and MCP timeouts before changing admission limits.
+      - alert: TaskaMcpRateLimited
+        expr: sum by (environment) (rate(taska_mcp_limit_rejections_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP sustains more than one quota rejection per second
+          description: Check caller retry behavior and capacity; do not raise limits automatically.
+      - alert: TaskaMcpAuthenticationRejects
+        expr: sum by (environment) (rate(taska_mcp_auth_rejections_total{outcome=~"auth|scope|origin"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: MCP sustains more than one authentication rejection per second
+          description: Check token expiry, scopes and allowed origins; no caller identities are metric labels.

@@ -83,6 +83,8 @@ public class GatewayClient {
             headers -> {
               headers.setBearerAuth(context.bearerToken());
               headers.set("X-Request-Id", context.requestId());
+              if (context.metadata() != null && context.metadata().traceparent() != null)
+                headers.set("traceparent", context.metadata().traceparent());
             })
         .accept(MediaType.APPLICATION_JSON)
         .exchangeToMono(this::decode)
@@ -109,6 +111,8 @@ public class GatewayClient {
                 headers -> {
                   headers.setBearerAuth(context.bearerToken());
                   headers.set("X-Request-Id", context.requestId());
+                  if (context.metadata() != null && context.metadata().traceparent() != null)
+                    headers.set("traceparent", context.metadata().traceparent());
                   if (options.version() != null)
                     headers.set(HttpHeaders.IF_MATCH, options.version().toString());
                   if (options.idempotencyKey() != null)

@@ -1,6 +1,5 @@
 package ru.taska.mcp;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -31,12 +30,10 @@ public class McpToolPolicy implements ToolInterceptor {
           "conflict",
           "partial_success");
   private final McpQuotaLimiter limiter;
-  private final MeterRegistry meters;
   private final JsonMapper mapper;
 
-  public McpToolPolicy(McpQuotaLimiter limiter, MeterRegistry meters, JsonMapper mapper) {
+  public McpToolPolicy(McpQuotaLimiter limiter, JsonMapper mapper) {
     this.limiter = limiter;
-    this.meters = meters;
     this.mapper = mapper;
   }
 
@@ -56,12 +53,6 @@ public class McpToolPolicy implements ToolInterceptor {
   public void observe(ToolInvocation call, String requestedOutcome, long durationNanos) {
     String outcome = OUTCOMES.contains(requestedOutcome) ? requestedOutcome : "upstream_error";
     String tool = call.definition().name();
-    meters.counter("taska.mcp.tool.calls", "tool", tool, "outcome", outcome).increment();
-    meters
-        .timer("taska.mcp.tool.duration", "tool", tool, "outcome", outcome)
-        .record(Math.max(0, durationNanos), TimeUnit.NANOSECONDS);
-    if ("rate_limited".equals(outcome))
-      meters.counter("taska.mcp.limit.rejections", "tool", tool).increment();
     if (!"write".equals(call.definition().scope())) return;
     var context = call.context();
     var fields = new LinkedHashMap<String, Object>();
@@ -87,12 +78,7 @@ public class McpToolPolicy implements ToolInterceptor {
   }
 
   private static String safeRequestId(String value) {
-    return value != null
-            && value.matches("[A-Za-z0-9._:-]{1,128}")
-            && !value.toLowerCase(java.util.Locale.ROOT).contains("tsk_pat_")
-            && !value.toLowerCase(java.util.Locale.ROOT).contains("bearer")
-        ? value
-        : "redacted";
+    return McpRequestIds.safe(value) ? value : "redacted";
   }
 
   private static String objectKey(ToolArguments arguments) {

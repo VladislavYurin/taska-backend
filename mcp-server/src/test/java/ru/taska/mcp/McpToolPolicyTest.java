@@ -98,6 +98,20 @@ class McpToolPolicyTest {
   }
 
   @Test
+  void takingOneResultDoesNotAuditOrCountCancellationAfterSuccess() {
+    var result =
+        run(executor(ToolLimits.defaults()), registration(true, call -> success()))
+            .flux()
+            .take(1)
+            .blockFirst();
+    assertThat(result.isError()).isFalse();
+    assertThat(audit.list).hasSize(1);
+    assertThat(meters.get("taska.mcp.tool.calls").tag("outcome", "ok").counter().count())
+        .isEqualTo(1);
+    assertThat(meters.find("taska.mcp.tool.calls").tag("outcome", "cancelled").counter()).isNull();
+  }
+
+  @Test
   void timeoutCancelsDownstreamAndAuditsTimeoutRatherThanCancellationWithoutAutomaticRetry() {
     var cancels = new AtomicInteger();
     var starts = new AtomicInteger();
@@ -228,8 +242,11 @@ class McpToolPolicyTest {
   private ToolExecutor executor(ToolLimits limits) {
     var beans = new DefaultListableBeanFactory();
     beans.registerSingleton(
-        "policy",
-        new McpToolPolicy(new McpQuotaLimiter(McpQuotaProperties.defaults()), meters, JSON));
+        "policy", new McpToolPolicy(new McpQuotaLimiter(McpQuotaProperties.defaults()), JSON));
+    beans.registerSingleton(
+        "observability",
+        new McpObservability(
+            meters, new ToolRegistry(beans.getBeanProvider(ToolContributor.class)), JSON));
     return new ToolExecutor(
         new ToolResolver(gateway),
         new ToolResultFactory(JSON, limits),
