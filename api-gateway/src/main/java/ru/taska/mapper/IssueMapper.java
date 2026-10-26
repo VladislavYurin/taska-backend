@@ -45,6 +45,7 @@ import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.CreateIssueRequestDto;
 import ru.taska.domain.dto.IssueDetailsResponseDto;
 import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
+import ru.taska.domain.dto.ProjectIssueTypeShapeDto;
 import ru.taska.domain.dto.IssueHistoryResponseDto;
 import ru.taska.domain.dto.IssueLabelResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
@@ -171,7 +172,8 @@ public class IssueMapper {
         MappingUtils.setIfPresent(protoDto::hasIssueTypeName, protoDto::getIssueTypeName, restDto::setIssueTypeName);
         MappingUtils.setIfPresent(protoDto::hasIssueTypeColor, protoDto::getIssueTypeColor, restDto::setIssueTypeColor);
         MappingUtils.setIfPresent(protoDto::hasIssueTypeIcon, protoDto::getIssueTypeIcon, restDto::setIssueTypeIcon);
-        MappingUtils.setIfPresent(protoDto::hasIssueTypeShape, protoDto::getIssueTypeShape, restDto::setIssueTypeShape);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeShape,
+                () -> ProjectIssueTypeShapeDto.fromValue(protoDto.getIssueTypeShape()), restDto::setIssueTypeShape);
         return restDto;
     }
 

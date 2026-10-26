@@ -242,6 +242,7 @@ class ProjectIssueTypeIntegrationTest {
                 .bind("p", configured).fetch().rowsUpdated().block();
         db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,sort_order) VALUES (:p,'INCIDENT','Incident','red','bug',40)")
                 .bind("p", configured).fetch().rowsUpdated().block();
+        var updatedBefore = updatedAt();
         execute("0003-issue-type-shape.sql");
 
         assertThat(repository.list(plain).collectList().block())
@@ -249,7 +250,9 @@ class ProjectIssueTypeIntegrationTest {
                 .containsExactly("TASK:headset:square", "BUG:null:circle", "STORY:null:square");
         assertThat(repository.list(configured).collectList().block())
                 .extracting(t -> t.code() + ":" + t.icon() + ":" + t.shape())
-                .containsExactly("TASK:null:square", "BUG:flag:square", "REQUEST:file-text:square", "INCIDENT:bug:square");
+                .containsExactly("TASK:null:square", "BUG:flag:circle", "REQUEST:file-text:square", "INCIDENT:bug:square");
+        // The backfill restyles rows; it is not an edit, so updated_at stays where it was.
+        assertThat(updatedAt()).isEqualTo(updatedBefore);
         assertThat(db.sql("SELECT count(*) AS n FROM taska.project_issue_types WHERE shape IS NULL")
                 .map((r, m) -> r.get("n", Long.class)).one().block()).isZero();
         reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET shape='hexagon' WHERE project_id=:p")
@@ -299,6 +302,49 @@ class ProjectIssueTypeIntegrationTest {
         service.update(project, actor, "BUG", null, null, NullableField.of("bug"), null, null).as(tx::transactional).block();
         assertThat(repository.find(project, "BUG").block().icon()).isEqualTo("bug");
         assertThat(repository.find(project, "BUG").block().shape()).isEqualTo("circle");
+    }
+
+    @Test
+    void shapeChangesetRollsBackToTheIconsLegacyReadersSee() throws Exception {
+        db.sql("DROP SCHEMA IF EXISTS taska CASCADE").fetch().rowsUpdated().block();
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var liquibase = new liquibase.Liquibase("db/changelog/db.changelog-master.yaml",
+                     new liquibase.resource.ClassLoaderResourceAccessor(), new liquibase.database.jvm.JdbcConnection(connection))) {
+            liquibase.update(new liquibase.Contexts(), new liquibase.LabelExpression());
+            UUID project = project("ROLLBACK");
+            repository.seedDefaults(project).block();
+            db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,shape,sort_order) VALUES "
+                            + "(:p,'MILESTONE','Milestone','amber',NULL,'diamond',40),(:p,'REQUEST','Request','teal','headset','square',50)")
+                    .bind("p", project).fetch().rowsUpdated().block();
+            var before = repository.list(project).collectList().block();
+
+            liquibase.rollback(1, new liquibase.Contexts(), new liquibase.LabelExpression());
+
+            var icons = db.sql("SELECT code, icon FROM taska.project_issue_types WHERE project_id=:p ORDER BY sort_order")
+                    .bind("p", project).map((r, m) -> r.get("code", String.class) + ":" + r.get("icon", String.class)).all()
+                    .collectList().block();
+            assertThat(icons).containsExactly("TASK:check-square", "BUG:bug", "STORY:book-open",
+                    "MILESTONE:check-square", "REQUEST:headset");
+            // The rollback must hand back exactly what pre-TAS-432 readers already see in legacy_icon.
+            assertThat(icons).containsExactlyElementsOf(before.stream().map(t -> t.code() + ":" + client.ProjectIssueTypes
+                    .writeLook(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder(), t.code(), t.shape(), t.icon())
+                    .getLegacyIcon()).toList());
+            assertThat(db.sql("SELECT count(*) AS n FROM information_schema.columns WHERE table_schema='taska' "
+                    + "AND table_name='project_issue_types' AND column_name='shape'").map((r, m) -> r.get("n", Long.class))
+                    .one().block()).isZero();
+            reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET icon=NULL WHERE project_id=:p")
+                            .bind("p", project).fetch().rowsUpdated())
+                    .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        } finally {
+            db.sql("DROP TABLE IF EXISTS public.databasechangelog, public.databasechangeloglock").fetch().rowsUpdated().block();
+        }
+    }
+
+    private java.util.Map<String, java.time.OffsetDateTime> updatedAt() {
+        return db.sql("SELECT project_id, code, updated_at FROM taska.project_issue_types")
+                .map((r, m) -> java.util.Map.entry(r.get("project_id", UUID.class) + ":" + r.get("code", String.class),
+                        r.get("updated_at", java.time.OffsetDateTime.class))).all()
+                .collectMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue).block();
     }
 
     private String defaultType(UUID project) {

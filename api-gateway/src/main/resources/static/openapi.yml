@@ -5572,11 +5572,12 @@ components:
         issueTypeIcon:
           type: string
           nullable: true
-          description: Значок из реестра проекта; отсутствует, если у типа нет значка или тип удалён.
+          description: Значок из реестра проекта; null, если у типа нет значка или тип удалён.
         issueTypeShape:
-          type: string
           nullable: true
-          description: Форма из реестра проекта — square, circle или diamond; есть всегда, когда есть issueTypeName.
+          description: Форма из реестра проекта; null только вместе с issueTypeName (тип удалён).
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeShapeDto'
         priority:
           $ref: '#/components/schemas/IssuePriorityDto'
         assigneeId:

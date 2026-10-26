@@ -51,6 +51,7 @@ class GrpcProjectIssueTypeClientTest {
             assertThat(request.hasIcon()).isFalse();
         });
         assertThat(patch("{\"name\":\"Request\"}")).satisfies(request -> {
+            assertThat(request.hasName()).isTrue();
             assertThat(request.getClearIcon()).isFalse();
             assertThat(request.hasIcon()).isFalse();
             assertThat(request.hasShape()).isFalse();

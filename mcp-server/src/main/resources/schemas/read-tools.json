@@ -3004,15 +3004,17 @@
             "issueTypeIcon" : {
               "anyOf" : [ {
                 "type" : "string",
-                "description" : "Значок из реестра проекта; отсутствует, если у типа нет значка или тип удалён."
+                "description" : "Значок из реестра проекта; null, если у типа нет значка или тип удалён."
               }, {
                 "type" : "null"
               } ]
             },
             "issueTypeShape" : {
               "anyOf" : [ {
-                "type" : "string",
-                "description" : "Форма из реестра проекта — square, circle или diamond; есть всегда, когда есть issueTypeName."
+                "description" : "Форма из реестра проекта; null только вместе с issueTypeName (тип удалён).",
+                "allOf" : [ {
+                  "$ref" : "#/$defs/ProjectIssueTypeShapeDto"
+                } ]
               }, {
                 "type" : "null"
               } ]
@@ -3040,6 +3042,11 @@
               "description" : "Общее количество задач, соответствующих поисковому запросу"
             }
           }
+        },
+        "ProjectIssueTypeShapeDto" : {
+          "type" : "string",
+          "description" : "Форма метки типа. Встроенные типы новых проектов — TASK и STORY square, BUG circle, без значка.",
+          "enum" : [ "square", "circle", "diamond" ]
         }
       }
     },
