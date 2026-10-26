@@ -91,6 +91,16 @@ class BoardServiceImplTest {
     }
 
     @Test
+    void typeMissingFromProjectRegistryReturnsNoColumnsOrIssues() {
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, "REQUEST", null, null, false, null, null, 20, context))
+                .assertNext(board -> {
+                    assertThat(board.getColumns()).isEmpty();
+                    assertThat(board.getUnplacedIssues()).isEmpty();
+                }).verifyComplete();
+        Mockito.verifyNoInteractions(workflowClient, issueClient);
+    }
+
+    @Test
     void pageCombinesTypesBeforeLimitingAndCountsFilteredGroupsOnlyOnce() {
         var flow = new WorkflowResponseDto().statuses(List.of(workflowStatus("TODO", "To Do", "TODO", 1)));
         when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context)).thenReturn(Mono.just(flow));

@@ -152,6 +152,32 @@ class SearchIssuesIT extends AbstractIT {
                 .containsExactlyInAnyOrder(issueNumbers);
     }
 
+    @Autowired private ru.taska.mapper.IssueMapper mapper;
+
+    @Test
+    void searchUsesOneBatchForProjectSpecificTypeMetadata() {
+        mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1").toBuilder()
+                        .addIssueTypes(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
+                                .setCode("TASK").setName("Заявка").setColor("teal").setIcon("headset")).build(),
+                projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2").toBuilder()
+                        .addIssueTypes(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
+                                .setCode("TASK").setName("Внутренняя задача").setColor("purple").setIcon("flag")).build());
+        var result = issueService.searchIssues(REQUEST_ID, NODE_ID, ACTOR_USER_ID,
+                null, null, null, null, null, null, null, 0, 50).block();
+        Assertions.assertThat(result.items()).hasSize(8);
+        for (var item : result.items()) {
+            var proto = mapper.toIssueShortProto(item);
+            Assertions.assertThat(proto.getIssueTypeName()).isEqualTo(item.issue().getProjectId().equals(PROJECT_ID_1)
+                    ? "Заявка" : "Внутренняя задача");
+            Assertions.assertThat(proto.getIssueTypeColor()).isNotBlank();
+            Assertions.assertThat(proto.getIssueTypeIcon()).isNotBlank();
+        }
+        var request = org.mockito.ArgumentCaptor.forClass(GetProjectInfoBatchInternalRequest.class);
+        Mockito.verify(projectServiceStub).getProjectInfoBatchInternal(request.capture());
+        Assertions.assertThat(request.getValue().getBody().getProjectIdsList())
+                .containsExactlyInAnyOrder(PROJECT_ID_1.toString(), PROJECT_ID_2.toString());
+    }
+
     // ==================== ТЕСТЫ ====================
 
     @Test

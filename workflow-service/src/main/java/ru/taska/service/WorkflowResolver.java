@@ -19,11 +19,20 @@ public class WorkflowResolver {
 
     private final WorkflowRepository workflowRepository;
     private final WorkflowProperties workflowProperties;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
 
     public Mono<WorkflowEntity> resolveWorkflow(UUID projectId, String issueType) {
-        return workflowRepository.findWorkflowForProject(projectId, issueType)
-                .switchIfEmpty(
-                        workflowRepository.findWorkflowForProject(workflowProperties.defaultProjectId(), "TASK")
-                );
+        if (projectId.equals(workflowProperties.defaultProjectId())) {
+            return workflowRepository.findWorkflowForProject(projectId, issueType);
+        }
+        return projectClient.getIssueTypesInternal(projectId)
+                .flatMap(types -> reactor.core.publisher.Flux.fromIterable(types)
+                        .filter(type -> type.getCode().equals(issueType)).next()
+                        .flatMap(type -> {
+                            UUID generation = IssueTypeBindingIdentity.generation(type);
+                            return workflowRepository.findWorkflowForProjectGeneration(projectId, issueType, generation,
+                                    generation.equals(IssueTypeBindingIdentity.initialGeneration(projectId, issueType)))
+                                    .switchIfEmpty(workflowRepository.findWorkflowForProject(workflowProperties.defaultProjectId(), "TASK"));
+                        }));
     }
 }

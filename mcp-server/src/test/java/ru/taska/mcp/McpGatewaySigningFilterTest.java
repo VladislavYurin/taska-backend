@@ -50,6 +50,27 @@ class McpGatewaySigningFilterTest {
     }
 
     @Test
+    void webClientAppliesBaseUrlAndEncodingBeforeSigning() {
+        List<ClientRequest> captured = new ArrayList<>();
+        var client = org.springframework.web.reactive.function.client.WebClient.builder()
+                .baseUrl("http://gateway:8080")
+                .filter(new McpGatewaySigningFilter(SECRET, CLOCK))
+                .exchangeFunction(request -> {
+                    captured.add(request);
+                    return Mono.just(ClientResponse.create(HttpStatus.NO_CONTENT).build());
+                }).build();
+        client.get().uri(builder -> builder.path("/api/v1/issues/{id}").queryParam("q", "{query}")
+                        .build("TAS-411", "space & slash/"))
+                .header("Authorization", "Bearer tsk_pat_fixture").header(REQUEST_ID_HEADER, "request-411")
+                .retrieve().toBodilessEntity().block();
+        ClientRequest request = captured.getFirst();
+        assertThat(request.url().toString()).isEqualTo("http://gateway:8080/api/v1/issues/TAS-411?q=space%20%26%20slash%2F");
+        assertThat(request.headers().getFirst(SIGNATURE_HEADER)).isEqualTo(encode(sign(secret(SECRET), "GET",
+                request.url(), "request-411", request.headers().getFirst(TIMESTAMP_HEADER),
+                request.headers().getFirst(NONCE_HEADER), "tsk_pat_fixture")));
+    }
+
+    @Test
     void missingServerCredentialStopsAuthenticatedUpstreamButDoesNotBreakHealth() {
         var filter = new McpGatewaySigningFilter("", CLOCK);
         AtomicInteger calls = new AtomicInteger();

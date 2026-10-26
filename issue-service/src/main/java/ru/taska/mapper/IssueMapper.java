@@ -194,6 +194,8 @@ public class IssueMapper {
         if (projectInfo != null) {
             builder.setProjectKey(projectInfo.key());
             builder.setProjectId(projectInfo.id());
+            var type = projectInfo.issueTypes().get(issue.getIssueType().name());
+            if (type != null) builder.setIssueTypeName(type.name()).setIssueTypeColor(type.color()).setIssueTypeIcon(type.icon());
         }
 
         if (issue.getStoryPoints() != null) {

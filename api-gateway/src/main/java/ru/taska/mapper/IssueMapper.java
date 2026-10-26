@@ -165,6 +165,9 @@ public class IssueMapper {
         restDto.setProjectId(protoDto.getProjectId());
         restDto.projectKey(protoDto.getProjectKey());
         restDto.statusKey(protoDto.getStatusKey());
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeName, protoDto::getIssueTypeName, restDto::setIssueTypeName);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeColor, protoDto::getIssueTypeColor, restDto::setIssueTypeColor);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeIcon, protoDto::getIssueTypeIcon, restDto::setIssueTypeIcon);
         return restDto;
     }
 

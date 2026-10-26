@@ -8,7 +8,6 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.workflow.v1.WorkflowResponse;
-import ru.taska.domain.IssueType;
 import ru.taska.entity.WorkflowBindingEntity;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.repository.TransitionRepository;
@@ -26,12 +25,17 @@ class WorkflowMutationResponseTest {
         var projects = mock(GrpcProjectServiceClient.class);
         var service = new WorkflowMutationResponse(bindings, transitions, new WorkflowMapper(), projects);
         UUID workflow = UUID.randomUUID(), project = UUID.randomUUID(), actor = UUID.randomUUID();
-        var request = IssueType.valueOf("REQUEST");
-        List<IssueType> registryOrder = List.of(IssueType.BUG, request, IssueType.TASK, IssueType.STORY);
-        when(projects.listIssueTypes("r", "n", project, actor)).thenReturn(Mono.just(registryOrder));
+        UUID requestGeneration = UUID.randomUUID();
+        var registryOrder = List.of("BUG", "REQUEST", "RECREATED", "TASK", "STORY").stream().map(key ->
+                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode(key)
+                        .setGeneration((key.equals("RECREATED") ? UUID.randomUUID()
+                                : key.equals("REQUEST") ? requestGeneration : IssueTypeBindingIdentity.initialGeneration(project, key)).toString())
+                        .build()).toList();
+        when(projects.listIssueTypeDetails("r", "n", project, actor)).thenReturn(Mono.just(registryOrder));
         when(bindings.findByWorkflowId(workflow)).thenReturn(Flux.fromIterable(
-                List.of("STORY", "TASK", "REMOVED", "REQUEST", "BUG").stream().map(key ->
-                        WorkflowBindingEntity.builder().issueType(key).projectId(project).workflowId(workflow).build()).toList()));
+                List.of("STORY", "TASK", "REMOVED", "REQUEST", "BUG", "RECREATED").stream().map(key ->
+                        WorkflowBindingEntity.builder().issueType(key).projectId(project).workflowId(workflow)
+                                .issueTypeGeneration(key.equals("REQUEST") ? requestGeneration : null).build()).toList()));
         when(transitions.findByWorkflowIdOrderBySortOrderAsc(workflow)).thenReturn(Flux.empty());
         StepVerifier.create(service.issueTypes(Header.newBuilder().setRequestId("r").setNodeId("n").build(),
                         project.toString(), actor.toString()).flatMap(types -> service.enrich(WorkflowResponse.newBuilder()
@@ -45,4 +49,20 @@ class WorkflowMutationResponseTest {
                             ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY);
                 }).verifyComplete();
     }
+    @Test
+    void oldRegistryWithoutGenerationFailsBeforeAnyMutation() {
+        var bindings = mock(WorkflowBindingRepository.class);
+        var transitions = mock(TransitionRepository.class);
+        var projects = mock(GrpcProjectServiceClient.class);
+        var service = new WorkflowMutationResponse(bindings, transitions, new WorkflowMapper(), projects);
+        UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
+        when(projects.listIssueTypeDetails("r", "n", project, actor)).thenReturn(Mono.just(List.of(
+                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode("TASK").build())));
+        StepVerifier.create(service.issueTypes(Header.newBuilder().setRequestId("r").setNodeId("n").build(),
+                        project.toString(), actor.toString()))
+                .expectErrorMatches(error -> error instanceof ru.taska.exception.DomainException domain
+                        && domain.getStatus() == ru.taska.exception.DomainStatus.UNAVAILABLE).verify();
+        verifyNoInteractions(bindings, transitions);
+    }
+
 }
