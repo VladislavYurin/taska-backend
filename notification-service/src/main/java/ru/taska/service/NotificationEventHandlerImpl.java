@@ -89,6 +89,12 @@ public class NotificationEventHandlerImpl implements NotificationEventHandler {
 
     private Mono<Void> provisionUserEmail(TaskaEvent event) {
         var type = ru.taska.event.EventType.fromValue(event.eventType());
+        if ((type == ru.taska.event.EventType.PERSONAL_ACCESS_TOKEN_CREATED
+                || type == ru.taska.event.EventType.PERSONAL_ACCESS_TOKEN_REVOKED)
+                && event.aggregateId() != null && event.payload() != null
+                && event.payload().path("email").isString()) {
+            return settings.ensureMissing(event.aggregateId(), event.payload().path("email").asText());
+        }
         if ((type != ru.taska.event.EventType.USER_ACTIVATED && type != ru.taska.event.EventType.USER_EMAIL_CHANGED)
                 || event.aggregateId() == null || event.payload() == null
                 || !event.payload().path("email").isString()) return Mono.empty();

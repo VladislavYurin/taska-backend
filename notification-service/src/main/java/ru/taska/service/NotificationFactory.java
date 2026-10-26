@@ -78,6 +78,8 @@ public class NotificationFactory {
             case MEMBER_REMOVED -> buildMemberRemoved(event, payload, eventId);
             case USER_ACTIVATED -> buildUserActivated(event, eventId);
             case USER_EMAIL_CHANGED -> List.of();
+            case PERSONAL_ACCESS_TOKEN_CREATED -> buildPersonalToken(event, payload, true);
+            case PERSONAL_ACCESS_TOKEN_REVOKED -> buildPersonalToken(event, payload, false);
             case ISSUE_LABEL_ADDED -> buildLabelAdded(event, payload, eventId);
             case ISSUE_LABEL_REMOVED -> buildLabelRemoved(event, payload, eventId);
             case USER_BLOCKED -> buildUserBlocked(event, payload, eventId);
@@ -95,6 +97,16 @@ public class NotificationFactory {
                 notifications.size(), type, eventId);
 
         return notifications;
+    }
+
+    private List<Notification> buildPersonalToken(TaskaEvent event, JsonNode payload, boolean created) {
+        UUID owner = extractUuid(payload, "userId");
+        String prefix = extractString(payload, "tokenPrefix");
+        // Only a fixed-length public prefix is allowed into delivery payloads.
+        if (owner == null || prefix == null || !prefix.matches("tsk_pat_[A-Za-z0-9_-]{4}")) {
+            return List.of();
+        }
+        return List.of(notificationMapper.toPersonalToken(event, owner, prefix, created));
     }
 
     private List<Notification> buildProjectArchived(TaskaEvent event, JsonNode payload) {

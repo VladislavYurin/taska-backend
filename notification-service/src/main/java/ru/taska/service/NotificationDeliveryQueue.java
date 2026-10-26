@@ -82,7 +82,9 @@ public class NotificationDeliveryQueue {
                         AND :telegramAvailable AND telegram_bot_username=:bot
                 ON CONFLICT DO NOTHING
                 """).bind("id", notification.getId()).bind("user", notification.getUserId())
-                .bind("telegramAvailable", properties.isEnabled())
+                .bind("telegramAvailable", properties.isEnabled()
+                        && notification.getNotificationType() != NotificationType.PERSONAL_ACCESS_TOKEN_CREATED
+                        && notification.getNotificationType() != NotificationType.PERSONAL_ACCESS_TOKEN_REVOKED)
                 .bind("bot", java.util.Objects.toString(properties.getBotUsername(), ""))
                 .fetch().rowsUpdated().then();
     }

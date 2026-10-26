@@ -38,6 +38,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
     private final OutboxEventMapper outboxEventMapper;
     private final OutboxEventService outboxEventService;
     private final CredentialRepository credentialRepository;
+    private final ru.taska.security.pat.PersonalAccessTokenService personalTokens;
 
     /**
      * Снимает блокировку с пользователя (изменяет статус)
@@ -58,6 +59,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                     user.setStatus(UserStatus.BLOCKED);
 
                     return userRepository.save(user)
+                            .flatMap(saved -> personalTokens.revokeAll(saved, "USER_BLOCKED", requestId).thenReturn(saved))
                             .flatMap(savedUser -> {
 
                                 JsonNode payload = outboxEventMapper.buildUserBlockedPayload(

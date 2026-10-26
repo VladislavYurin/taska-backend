@@ -75,6 +75,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordValidator passwordValidator;
     private final JwtValidator jwtValidator;
     private final AccountLockService accountLockService;
+    private final ru.taska.security.pat.PersonalAccessTokenService personalTokens;
 
     /**
      * Транзакционный оператор с propagation REQUIRES_NEW.
@@ -189,6 +190,7 @@ public class AuthServiceImpl implements AuthService {
                             credential.setAlgo(HashingAlgorithm.BCRYPT);
                             return credentialRepository.save(credential);
                         }))
+                .then(Mono.defer(() -> personalTokens.revokeAll(user, "PASSWORD_CHANGED", requestId)))
                 .then(Mono.defer(() -> {
                     user.setStatus(UserStatus.ACTIVE);
                     return userRepository.save(user)
@@ -214,6 +216,12 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public Mono<UserContext> validateAccessToken(String accessToken) {
+        if (accessToken != null && accessToken.startsWith(ru.taska.security.pat.PersonalAccessTokenService.PREFIX)) {
+            return personalTokens.validate(accessToken);
+        }
+        if (accessToken != null && accessToken.startsWith("tsk_")) {
+            return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid access token"));
+        }
         return jwtValidator.validate(accessToken)
                 .flatMap(claims -> {
                     UUID userId = UUID.fromString(claims.getSubject());
@@ -263,13 +271,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserContext buildUserContext(User user) {
-        return UserContext.newBuilder()
-                .setUserId(user.getId().toString())
-                .setEmail(user.getEmail())
-                .setDisplayName(user.getDisplayName())
-                .setStatus(UserStatusMapper.toProtoStatus(user.getStatus()))
-                .setGlobalRole(GlobalRoleMapper.toProtoGlobalRole(user.getGlobalRole()))
-                .build();
+        return ru.taska.util.UserContexts.builder(user)
+                .setTokenKind(ru.taska.api.common.v1.AccessTokenKind.ACCESS_TOKEN_KIND_JWT).build();
     }
 
     private Mono<AuthResponseDto> authenticate(User user, Credential credential, String password) {

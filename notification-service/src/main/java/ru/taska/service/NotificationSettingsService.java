@@ -121,6 +121,13 @@ public class NotificationSettingsService {
                 """).bind("user", user).fetch().rowsUpdated().then(deleteLink(user)).then(cancelObsolete(user));
     }
 
+    /** A token event may be delayed: provision missing preferences without replacing a newer verified email. */
+    public Mono<Void> ensureMissing(UUID user, String email) {
+        if (!validEmail(email)) return Mono.error(invalid("A verified account email is required"));
+        return db.sql("INSERT INTO taska.notification_preferences(user_id,email) VALUES (:user,:email) ON CONFLICT(user_id) DO NOTHING")
+                .bind("user", user).bind("email", email).fetch().rowsUpdated().then();
+    }
+
     /** email comes only from auth's verified gateway context or trusted auth lifecycle events. */
     public Mono<Void> ensure(UUID user, String email) {
         if (!validEmail(email)) {

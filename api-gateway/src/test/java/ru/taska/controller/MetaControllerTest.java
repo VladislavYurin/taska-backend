@@ -92,8 +92,8 @@ class MetaControllerTest {
                 .jsonPath("$.linkViewTypes[3].name").isEqualTo("Is blocked by")
                 .jsonPath("$.linkViewTypes[3].selectable").isEqualTo(true)
                 .jsonPath("$.linkViewTypes[0].selectable").isEqualTo(false)
-                .jsonPath("$.notificationTypes[23].code").isEqualTo("UNKNOWN")
-                .jsonPath("$.notificationTypes[23].selectable").isEqualTo(false)
+                .jsonPath("$.notificationTypes[?(@.code == 'UNKNOWN')].code").isEqualTo(java.util.List.of("UNKNOWN"))
+                .jsonPath("$.notificationTypes[?(@.code == 'UNKNOWN')].selectable").isEqualTo(java.util.List.of(false))
                 .jsonPath("$.userStatuses[4].code").isEqualTo("UNSPECIFIED")
                 .jsonPath("$.userStatuses[4].selectable").isEqualTo(false);
     }
