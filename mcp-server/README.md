@@ -129,3 +129,64 @@ request_id, outcome, duration_ms и нормализованный clientInfo. T
 локального HTTP stub: в gateway проходят максимум 8, остальные получают rate_limited.
 Это проверка admission и освобождения ресурсов, не измерение мощности реального стенда.
 Нагрузочный прогон развёрнутого стенда остаётся проверкой TAS-408.
+
+## Инструменты записи (TAS-405)
+
+Все 12 инструментов требуют PAT `read,write`; handler повторно проверяет `write`, а gateway
+сохраняет исходные ACL. Публичного удаления задач/проектов/комментариев/worklogs и массовых
+изменений нет. Все annotations имеют `destructiveHint=false` и `readOnlyHint=false`.
+
+| Инструмент | Ограничение / условие |
+| --- | --- |
+| `create_issue` | Один проект/объект, summary 1..255, description до 32768; UUID idempotency_key обязателен |
+| `update_issue` | PATCH, минимум одно изменение, If-Match из аргумента или авторизованного by-key snapshot |
+| `transition_issue` | Точный key/id/уникальное имя статуса собственного workflow типа; только доступный нескрытый переход |
+| `assign_issue` | me/UUID/точное имя/email либо null для снятия; тот же исполнитель — без PATCH |
+| `add_comment` | body 1..10000, не пробелы; без durable idempotency |
+| `log_work` | spent_minutes 1..1440, существующая ISO date, comment до 2000; без durable idempotency |
+| `add_label` / `remove_label` | Только существующая метка проекта, меняется только привязка; повтор — без записи |
+| `link_issues` | Обе задачи разрешаются с ACL, BLOCKS/RELATES_TO/DUPLICATES; без durable idempotency |
+| `watch_issue` / `unwatch_issue` | Только текущий пользователь и одна задача; повтор безопасен |
+| `mark_notifications_read` | Ровно одно собственное уведомление, результат подтверждается id/readAt |
+
+Лимиты body/comment соответствуют REST; дополнительно проверяется длина UTF-16, поскольку
+Bean Validation gateway считает её, а JSON Schema maxLength считает Unicode code points.
+
+`create_issue` использует первый тип реестра, если issue_type отсутствует; неизвестный тип
+не становится TASK. Метки и неоднозначный assignee проверяются до создания. Idempotency-Key
+всегда передаётся в REST: новый UUID на новое намерение, прежний UUID и те же аргументы при повторе.
+Дополнительные назначения/метки не образуют общей транзакции: `partial_success` возвращает
+`created_issue_key`, `completed_steps`, `remaining_steps`. Повтор перечитывает созданную задачу
+и не повторяет уже установленного исполнителя/метки. Если за это время другой исполнитель уже
+назначен, автоматического перезаписывания нет: завершите через `assign_issue` после согласования.
+Не меняйте аргументы, сохраняя прежний idempotency_key. Durable гарантия REST относится к созданию
+базовой задачи; дополнительные шаги восстанавливаются по её текущему состоянию.
+
+Update/assign/transition всегда условные. Явная version не заменяется свежей прочитанной версией.
+409 вызывает повторное авторизованное чтение и возвращает current_version/current_status,
+без повторной записи. Уже достигнутый статус возвращается без нового события.
+
+HTTP client не выполняет автоматических повторов (включая Reactor Netty retry on reset).
+После таймаута/обрыва/5xx результат записи может быть неизвестен: `WRITE_OUTCOME_UNKNOWN`
+требует перечитать объект/комментарии/worklogs/связи и уточнить намерение при неоднозначности.
+Ошибка output schema или превышение result cap после записи также запрещает повтор вслепую.
+Для create безопасен только прежний idempotency_key; для комментария, worklog и связи такой
+гарантии REST нет. Отмена запроса не обещает отката принятой операции.
+
+`ToolAuditTarget` содержит только валидированный ключ/UUID, отдельно от пользовательских имён
+и DTO context. `ToolInvocation` сохраняет совместимый четырёхаргументный constructor.
+Write API принимает только `GatewayMutation` и `GatewayWriteOptions` (version/UUID key),
+без произвольных URL, методов или заголовков. Все используемые REST routes уже имеют
+`x-pat-scope: write`; это закреплено тестом по исходному OpenAPI.
+
+Write snapshot обновляется явно, с сохранением порядка существующих свойств:
+
+```sh
+JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -pl mcp-server -am test \
+  -Dtest=ReadSchemaExportTest,WriteSchemaExportTest -Dsurefire.failIfNoSpecifiedTests=false \
+  -DupdateMcpReadSchemas=true -DupdateMcpWriteSchemas=true
+```
+
+Проверены все 12 handlers через stateful HTTP stub и реальный Java SDK сценарий с gRPC auth stub:
+создание/повтор, переход, конфликт версии, комментарий и worklog. Доменная история/уведомления
+на развёрнутом стенде и сценарий внешнего агента здесь не подтверждаются — это TAS-408.

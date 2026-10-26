@@ -27,7 +27,10 @@ public class ToolResultFactory {
           "current_version",
           "current_status",
           "candidates",
-          "allowed_values");
+          "allowed_values",
+          "created_issue_key",
+          "completed_steps",
+          "remaining_steps");
   private final JsonMapper mapper;
   private final ToolLimits limits;
 
@@ -57,7 +60,11 @@ public class ToolResultFactory {
       return error(
           call.context(),
           new GatewayToolException(
-              "upstream_error", "Taska вернула ответ, несовместимый с контрактом."));
+              "upstream_error",
+              call.definition().readOnly()
+                  ? "Taska вернула ответ, несовместимый с контрактом."
+                  : "Ответ записи не подтверждён контрактом. Не повторяйте запись автоматически;"
+                      + " перечитайте объект, комментарии или worklogs."));
     }
     String text = call.definition().name() + ": " + codePoints(data.summary(), 800);
     if (!windows.isEmpty()) {
@@ -75,7 +82,14 @@ public class ToolResultFactory {
     }
     var result = result(envelope, text, false);
     return mapper.writeValueAsBytes(result).length > limits.maxResultBytes()
-        ? error(call.context(), tooLarge())
+        ? error(
+            call.context(),
+            call.definition().readOnly()
+                ? tooLarge()
+                : new GatewayToolException(
+                    "response_too_large",
+                    "Изменение выполнено, но ответ слишком велик. Не повторяйте запись; прочитайте"
+                        + " get_issue с окном текста, list_comments или list_worklogs."))
         : result;
   }
 

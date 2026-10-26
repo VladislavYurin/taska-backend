@@ -22,8 +22,7 @@ class ReadSchemaExportTest {
                 root.resolve("api-gateway/src/main/resources/static/openapi.yml")));
     Path snapshot = root.resolve("mcp-server/src/main/resources/schemas/read-tools.json");
     if (Boolean.getBoolean("updateMcpReadSchemas"))
-      Files.writeString(
-          snapshot, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(actual) + "\n");
+      ReadSchemaExporter.writeSnapshot(snapshot, mapper.writeValueAsString(actual));
     JsonNode saved = mapper.readTree(Files.readString(snapshot));
     assertThat(actual)
         .as("OpenAPI changed: explicitly review and re-export MCP read schemas")
