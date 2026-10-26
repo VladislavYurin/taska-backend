@@ -215,6 +215,8 @@ pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAUL
 
 ## API и безопасность
 
+OAuth login/registration for Google, GitHub and Apple is implemented behind configured provider credentials (TAS-424). The protocol, scoped secret-file setup, callback URLs and local verification are documented in [OAuth setup](docs/tas-424-oauth.md).
+
 Публичные endpoints: login, refresh, preview и принятие приглашения. Остальные пользовательские операции требуют `Authorization: Bearer <access-token>`. Read-only административные endpoints дополнительно требуют глобальную роль `GLOBAL_ADMIN`.
 
 Personal access tokens are implemented in auth-service (TAS-401). Secrets use `tsk_pat_` plus 256 random bits; only their SHA-256 hashes are stored. Tokens have `read` or `read,write` scopes, expire after 30 days by default, and are listed/revoked only through the owner's JWT session. `AUTH_PAT_MAX_LIFETIME_DAYS` defaults to 90 and `AUTH_PAT_MAX_ACTIVE_TOKENS` to 10. LOCKED accounts temporarily suspend PAT validation; blocking, account deletion and password replacement invalidate tokens permanently. Creation/revocation events produce private owner inbox/email notifications (email preferences apply), without token names or secrets.

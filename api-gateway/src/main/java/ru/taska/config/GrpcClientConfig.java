@@ -19,6 +19,12 @@ import ru.taska.config.props.GrpcClientProperties;
 @RequiredArgsConstructor
 public class GrpcClientConfig {
 
+    @Bean
+    public ru.taska.api.oauth.v1.ReactorOAuthServiceGrpc.ReactorOAuthServiceStub oauthServiceStub() {
+        return ru.taska.api.oauth.v1.ReactorOAuthServiceGrpc.newReactorStub(authManagedChannel());
+    }
+
+
     private final GrpcClientProperties properties;
 
     @Bean

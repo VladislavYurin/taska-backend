@@ -1,0 +1,40 @@
+syntax = "proto3";
+package ru.taska.oauth.v1;
+import "v1/common.proto";
+import "v1/auth-service.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.oauth.v1";
+service OAuthService {
+ rpc StartOAuth(StartOAuthRequest) returns (StartOAuthResponse);
+ rpc CompleteOAuth(CompleteOAuthRequest) returns (CompleteOAuthResponse);
+ rpc ExchangeOAuth(ExchangeOAuthRequest) returns (ExchangeOAuthResponse);
+ rpc SignupOAuth(SignupOAuthRequest) returns (ru.taska.auth.v1.LoginResponse);
+}
+message StartOAuthRequest { ru.taska.common.v1.Header header = 1; string provider = 2; string return_to = 3; string client_ip = 4; }
+message StartOAuthResponse { string authorization_url = 1; string state = 2; string browser_token = 3; }
+message CompleteOAuthRequest {
+ ru.taska.common.v1.Header header = 1;
+ string provider = 2;
+ string state = 3;
+ string browser_token = 4;
+ string code = 5;
+ string error = 6;
+ string apple_user = 7;
+ // Internal gateway-resolved address; never accepted from a public request body.
+ string client_ip = 8;
+}
+message CompleteOAuthResponse { string redirect_url = 1; }
+message ExchangeOAuthRequest { ru.taska.common.v1.Header header = 1; string code = 2; string client_ip = 3; }
+message OAuthSignup {
+ string signup_token = 1;
+ string provider = 2;
+ string email = 3;
+ optional string suggested_display_name = 4;
+}
+message ExchangeOAuthResponse {
+ string status = 1;
+ ru.taska.auth.v1.LoginResponse session = 2;
+ OAuthSignup signup = 3;
+ string return_to = 4;
+}
+message SignupOAuthRequest { ru.taska.common.v1.Header header = 1; string signup_token = 2; string display_name = 3; string client_ip = 4; }

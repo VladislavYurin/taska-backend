@@ -692,6 +692,133 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/auth/oauth/{provider}/start:
+    get:
+      operationId: startOAuth
+      tags: [oauth]
+      summary: Redirect to a configured OAuth provider and bind the flow to this browser
+      parameters:
+        - $ref: '#/components/parameters/OAuthProviderPath'
+        - {name: returnTo, in: query, schema: {type: string, default: /projects}}
+      responses:
+        '302':
+          description: Provider redirect plus a 10-minute HttpOnly Secure SameSite=None browser cookie
+          headers:
+            Location: {schema: {type: string}}
+            Set-Cookie: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/auth/oauth/{provider}/callback:
+    get:
+      operationId: completeOAuthGet
+      tags: [oauth]
+      summary: Google and GitHub callback
+      parameters:
+        - $ref: '#/components/parameters/OAuthProviderPath'
+        - {name: state, in: query, schema: {type: string}}
+        - {name: code, in: query, schema: {type: string}}
+        - {name: error, in: query, schema: {type: string}}
+      responses:
+        '302':
+          description: UI callback with a 60-second one-time code or a stable error code; no session tokens in URLs
+          headers:
+            Location: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+    post:
+      operationId: completeOAuthPost
+      tags: [oauth]
+      summary: Apple form_post callback
+      parameters:
+        - $ref: '#/components/parameters/OAuthProviderPath'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                state: {type: string}
+                code: {type: string}
+                error: {type: string}
+                user: {type: string, description: First-authorization name JSON; identity comes only from the verified id_token}
+      responses:
+        '302':
+          description: UI callback with a one-time code or a stable error code
+          headers:
+            Location: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/auth/oauth/exchange:
+    post:
+      operationId: exchangeOAuth
+      tags: [oauth]
+      summary: Exchange a one-time code for a session or a name-confirmation step
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OAuthExchangeRequestDto'}
+      responses:
+        '200':
+          description: SIGNED_IN or SIGNUP_REQUIRED with a one-time 15-minute signupToken
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OAuthExchangeResponseDto'}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/auth/oauth/signup:
+    post:
+      operationId: signupOAuth
+      tags: [oauth]
+      summary: Complete OAuth registration after entering a display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OAuthSignupRequestDto'}
+      responses:
+        '200':
+          description: Active USER account with OAUTH origin and no password or project membership
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginResponseDto'}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
   /api/v1/auth/invitations/preview:
     post:
       summary: Preview a live invitation without consuming it
@@ -4534,6 +4661,12 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
 components:
+  parameters:
+    OAuthProviderPath:
+      name: provider
+      in: path
+      required: true
+      schema: {type: string, enum: [google, github, apple]}
   securitySchemes:
     bearerAuth:
       type: http
@@ -4855,6 +4988,42 @@ components:
             $ref: '#/components/schemas/DirectoryUserDto'
         hasMore:
           type: boolean
+
+    OAuthExchangeRequestDto:
+      type: object
+      required: [code]
+      properties:
+        code: {type: string}
+    OAuthExchangeResponseDto:
+      type: object
+      required: [status, returnTo]
+      properties:
+        status: {type: string, enum: [SIGNED_IN, SIGNUP_REQUIRED]}
+        session:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/LoginResponseDto'
+        signup:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/OAuthSignupStateDto'
+        returnTo: {type: string}
+    OAuthSignupStateDto:
+      type: object
+      required: [signupToken, provider, email]
+      properties:
+        signupToken: {type: string}
+        provider: {type: string, enum: [GOOGLE, GITHUB, APPLE]}
+        email: {type: string}
+        suggestedDisplayName: {type: string, nullable: true}
+    OAuthSignupRequestDto:
+      type: object
+      required: [signupToken, displayName]
+      properties:
+        signupToken: {type: string}
+        displayName:
+          type: string
+          description: Trimmed name of 1..128 Unicode code points without controls or line breaks; invalid names return DISPLAY_NAME_INVALID before consuming the signup token.
 
     UpdateDisplayNameRequestDto:
       type: object

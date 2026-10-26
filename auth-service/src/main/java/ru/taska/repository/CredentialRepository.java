@@ -13,6 +13,9 @@ import java.util.UUID;
 @Repository
 public interface CredentialRepository extends ReactiveCrudRepository<Credential, UUID> {
 
+    @Query("SELECT * FROM taska.credentials WHERE credential_type=:type AND provider=:provider AND subject=:subject")
+    Mono<Credential> findExternal(CredentialType type, String provider, String subject);
+
     @Query("SELECT * FROM taska.credentials WHERE user_id = :userId AND credential_type = :credentialType")
     Mono<Credential> findByUserIdAndCredentialType(UUID userId, CredentialType credentialType);
 
