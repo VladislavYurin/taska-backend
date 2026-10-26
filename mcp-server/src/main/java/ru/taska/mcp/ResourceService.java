@@ -99,16 +99,19 @@ public class ResourceService {
                 var error = envelope.path("error");
                 if ("not_found".equals(error.path("code").asText(""))) throw ResourceUri.notFound();
                 Map<String, Object> safe = new java.util.LinkedHashMap<>();
-                safe.put("code", error.path("code").asText("upstream_error"));
+                String code = error.path("code").asText("upstream_error");
+                safe.put("code", code);
                 safe.put("request_id", envelope.path("request_id").asText(""));
                 if (error.path("details").path("retry_after_seconds").isIntegralNumber())
                   safe.put(
                       "retry_after_seconds",
                       error.path("details").path("retry_after_seconds").asInt());
                 throw McpError.builder(McpSchema.ErrorCodes.INTERNAL_ERROR)
-                    .message(
-                        "Ресурс временно недоступен; используйте request_id и повторите чтение"
-                            + " позже.")
+                    .message(switch (code) {
+                      case "unauthenticated" -> "Авторизация Taska истекла или отозвана; обновите PAT перед следующим чтением.";
+                      case "insufficient_scope" -> "Для чтения ресурса нужен PAT со scope read; проверьте разрешения токена.";
+                      default -> "Ресурс временно недоступен; используйте request_id и повторите чтение позже.";
+                    })
                     .data(safe)
                     .build();
               }

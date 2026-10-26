@@ -38,8 +38,8 @@ public final class ResourceListTransport implements McpStatelessServerTransport 
                             || !params.keySet().stream()
                                 .allMatch(key -> "cursor".equals(key) || "_meta".equals(key))
                             || params.get("cursor") != null
-                            || params.get("_meta") != null
-                                && !(params.get("_meta") instanceof Map<?, ?>))
+                            || (params.get("_meta") != null
+                                && !(params.get("_meta") instanceof Map<?, ?>)))
                           return Mono.error(
                               ToolArguments.invalid(
                                   "resources/list отдаёт только последние 20 доступных задач без"

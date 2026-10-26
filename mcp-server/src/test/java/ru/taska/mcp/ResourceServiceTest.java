@@ -105,6 +105,20 @@ class ResourceServiceTest {
   }
 
   @Test
+  void authAndScopeErrorsKeepSafeCodeAndExplainRequiredTokenAction() {
+    for (String code : List.of("unauthenticated", "insufficient_scope")) {
+      var denied = service(ToolLimits.defaults(),
+          call -> new GatewayToolException(code, "private upstream details"));
+      assertThatThrownBy(() -> denied.read(context(TOKEN_A), "taska://issues/TAS-1").block())
+          .isInstanceOfSatisfying(McpError.class, failure -> {
+            assertThat(failure.getJsonRpcError().message()).contains("PAT").doesNotContain("private");
+            assertThat(mapper.valueToTree(failure.getJsonRpcError().data()).path("code").asText())
+                .isEqualTo(code);
+          });
+    }
+  }
+
+  @Test
   void issueAndProjectUseReviewedToolsAndRenderMarkdownWithSameAdmission() {
     var issue = service.read(context(TOKEN_A), "taska://issues/tas-1").block();
     assertThat(issue.contents()).hasSize(1);
