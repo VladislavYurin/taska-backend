@@ -283,15 +283,20 @@ public class ListIssuesForBoardIT extends AbstractIT {
         }).verifyComplete();
     }
 
-    @Test
-    void boundedPageIncludesTotalBeforeLimitAndUuidTieBreak() {
+    static List<IssueType> countedTypes() {
+        return Arrays.asList(null, IssueType.TASK, IssueType.BUG, IssueType.STORY);
+    }
+
+    @ParameterizedTest
+    @MethodSource("countedTypes")
+    void boundedPageIncludesTotalBeforeLimitAndUuidTieBreak(IssueType type) {
         databaseClient.sql("UPDATE taska.issues SET created_at='2026-01-01T00:00:00Z'")
                 .fetch().rowsUpdated().block();
-        var expected = issueRepository.findForBoard(PROJECT_ID_1, null, null, null, true, List.of(), null, null, null, null)
+        var expected = issueRepository.findForBoard(PROJECT_ID_1, type, null, null, true, List.of(), null, null, null, null)
                 .collectList().block().stream().collect(Collectors.groupingBy(Issue::getStatusKey));
         var result = issueService.listIssueBoard(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID_1,
-                null, null, null, true, List.of(), null, 1, null, null).block();
-        Assertions.assertThat(result).hasSize(2);
+                null, null, type, true, List.of(), null, 1, null, null).block();
+        Assertions.assertThat(result).hasSize(expected.size());
         for (var row : result) {
             var group = expected.get(row.getStatusKey());
             Assertions.assertThat(row.getStatusTotalCount()).isEqualTo(group.size());
