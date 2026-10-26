@@ -23,8 +23,7 @@ public class BoardMapper {
      *
      * @param projectId идентификатор проекта
      * @param columns список подготовленных колонок доски
-     * @param unplacedIssues задачи, чей statusKey не входит ни в один workflow,
-     *                       использованный для построения колонок
+     * @param unplacedIssues задачи, чей statusKey отсутствует в workflow их собственного типа
      * @return объект {@link BoardResponseDto} для отправки клиенту
      */
     public BoardResponseDto toBoardResponse(
@@ -37,6 +36,8 @@ public class BoardMapper {
         dto.setProjectId(projectId);
         dto.setColumns(columns);
         dto.setUnplacedIssues(unplacedIssues);
+        dto.setUnplacedTotalCount((long) unplacedIssues.size());
+        dto.setUnplacedHasMore(false);
 
         return dto;
     }
@@ -61,6 +62,8 @@ public class BoardMapper {
         dto.setCategory(workflowStatus.getCategory());
         dto.setSortOrder(workflowStatus.getSortOrder());
         dto.setIssues(issues);
+        dto.setTotalCount((long) issues.size());
+        dto.setHasMore(false);
 
         return dto;
     }

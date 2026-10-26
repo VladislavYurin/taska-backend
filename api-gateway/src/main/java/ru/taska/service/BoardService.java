@@ -17,6 +17,7 @@ public interface BoardService {
             Boolean includeDone,
             IssuePriorityDto priority,
             String query,
+            Integer pageSizePerColumn,
             GatewayContext context
     );
 }

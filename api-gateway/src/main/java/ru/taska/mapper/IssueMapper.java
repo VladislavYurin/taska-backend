@@ -252,7 +252,8 @@ public class IssueMapper {
         return new BoardIssueData(
                 protoDto.getStatusKey(),
                 labelIds,
-                toRestBoardIssue(protoDto)
+                toRestBoardIssue(protoDto),
+                protoDto.hasStatusTotalCount() ? protoDto.getStatusTotalCount() : null
         );
     }
 

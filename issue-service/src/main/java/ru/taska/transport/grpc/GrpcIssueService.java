@@ -1199,6 +1199,10 @@ public class GrpcIssueService {
                             Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
                                     ? req.getBody().getPageSizePerColumn()
                                     : null;
+                            if (pageSizePerColumn != null && (pageSizePerColumn < 1 || pageSizePerColumn > 200)) {
+                                return Mono.error(io.grpc.Status.INVALID_ARGUMENT
+                                        .withDescription("body.pageSizePerColumn must be between 1 and 200").asRuntimeException());
+                            }
                             ru.taska.domain.IssueType issueType = (req.getBody().hasIssueTypeKey() || req.getBody().getIssueTypeValue() != 0)
                                     ? validator.IssueTypeKeys.read(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType()) : null;
                             ru.taska.domain.entity.IssuePriority priority =

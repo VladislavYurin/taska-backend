@@ -16,6 +16,10 @@ import java.util.UUID;
 public record BoardIssueData(
         String statusKey,
         List<UUID> labelIds,
-        BoardIssueDto issue
+        BoardIssueDto issue,
+        Long statusTotalCount
 ) {
+    public BoardIssueData(String statusKey, List<UUID> labelIds, BoardIssueDto issue) {
+        this(statusKey, labelIds, issue, null);
+    }
 }

@@ -2290,6 +2290,8 @@ message IssueBoardResponse {
   int32 attachment_count = 18;
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   optional string issue_type_key = 19;
+  // Filtered size of this (type, status) group before page_size_per_column.
+  optional int64 status_total_count = 20;
 }
 
 

@@ -2224,6 +2224,15 @@ paths:
           schema:
             type: string
             minLength: 1
+        - name: pageSizePerColumn
+          in: query
+          required: false
+          description: Первая страница каждой колонки после объединения всех типов. Для продолжения используйте поиск задач по статусу. Та же граница применяется к unplacedIssues.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
       responses:
         '200':
           description: Доска успешно сформирована
@@ -6544,7 +6553,7 @@ components:
 
     BoardResponseDto:
       type: object
-      required: [ projectId, columns, unplacedIssues ]
+      required: [ projectId, columns, unplacedIssues, unplacedTotalCount, unplacedHasMore ]
       properties:
         projectId:
           type: string
@@ -6553,15 +6562,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BoardColumnDto'
+        unplacedTotalCount:
+          type: integer
+          format: int64
+          minimum: 0
+        unplacedHasMore:
+          type: boolean
         unplacedIssues:
           type: array
-          description: Задачи, чей statusKey не входит ни в один workflow, использованный для построения колонок.
+          description: Задачи, чей statusKey отсутствует в workflow их собственного типа (включая тип без workflow). Порядок createdAt asc, id asc независимо от типа; первая страница ограничена pageSizePerColumn.
           items:
             $ref: '#/components/schemas/BoardIssueDto'
 
     BoardColumnDto:
       type: object
-      required: [ statusKey, name, category, sortOrder, issues ]
+      required: [ statusKey, name, category, sortOrder, issues, totalCount, hasMore ]
       properties:
         statusKey:
           type: string
@@ -6574,8 +6589,17 @@ components:
         sortOrder:
           type: integer
           format: int32
+        totalCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Число задач колонки после фильтров, до ограничения страницы; сумма по типам.
+        hasMore:
+          type: boolean
+          description: В колонке есть задачи за пределами первой страницы.
         issues:
           type: array
+          description: Порядок createdAt asc, id asc независимо от типа.
           items:
             $ref: '#/components/schemas/BoardIssueDto'
 
@@ -6630,7 +6654,7 @@ components:
           $ref: '#/components/schemas/BoardUserDto'
         labels:
           type: array
-          description: Метки задачи в порядке label_ids карточки; id метки, отсутствующей в проекте, пропускается.
+          description: Устойчивый порядок привязки createdAt asc, labelId asc; метка, отсутствующая в проекте, пропускается.
           items:
             $ref: '#/components/schemas/IssueLabelResponseDto'
 

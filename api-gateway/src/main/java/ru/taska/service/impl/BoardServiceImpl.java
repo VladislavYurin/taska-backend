@@ -5,6 +5,8 @@ import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.api.auth.profile.v1.UserDetails;
@@ -29,6 +31,7 @@ import ru.taska.transport.grpc.GrpcWorkflowServiceClient;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +65,7 @@ public class BoardServiceImpl implements BoardService {
      * @param includeDone включать ли завершенные задачи
      * @param priority   фильтр по приоритету задачи
      * @param query      полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
+     * @param pageSizePerColumn первая страница колонки, 1..200 (по умолчанию 50)
      * @param context    контекст запроса
      * @return сформированная доска проекта
      */
@@ -74,10 +78,16 @@ public class BoardServiceImpl implements BoardService {
             Boolean includeDone,
             IssuePriorityDto priority,
             String query,
+            Integer pageSizePerColumn,
             GatewayContext context
     ) {
         log.info("[{}] Getting board for project: {}", context.requestId(), projectId);
 
+        int pageSize = pageSizePerColumn == null ? 50 : pageSizePerColumn;
+        if (pageSize < 1 || pageSize > 200) {
+            return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "pageSizePerColumn must be between 1 and 200"));
+        }
         return resolveWorkflows(projectId, issueType, context).flatMap(workflows -> {
             List<WorkflowStatusDto> statuses = mergeStatusesByKey(workflows.stream()
                     .filter(WorkflowTypeResolution::isFound).map(WorkflowTypeResolution::statuses).toList());
@@ -91,10 +101,58 @@ public class BoardServiceImpl implements BoardService {
                         .map(WorkflowStatusDto::getStatusKey).distinct().toList() : List.of();
                 return issueClient.listIssuesForBoard(projectId.toString(), workflow.issueType(),
                         assigneeId != null ? assigneeId.toString() : null,
-                        labelId != null ? labelId.toString() : null, includeDone, doneKeys, priority, query, context);
+                        labelId != null ? labelId.toString() : null, includeDone, doneKeys, priority, query, pageSize, context);
             }).flatMapIterable(rows -> rows).collectList()
-                    .flatMap(issues -> enrichAndBuildBoard(projectId, statuses, statusKeysByType, issues, context));
+                    .map(issues -> selectPage(issues, statusKeysByType, pageSize))
+                    .flatMap(page -> enrichAndBuildBoard(projectId, statuses, statusKeysByType, page.issues(), context)
+                            .map(board -> {
+                                board.getColumns().forEach(column -> {
+                                    long total = page.totals().getOrDefault(column.getStatusKey(), 0L);
+                                    column.setTotalCount(total);
+                                    column.setHasMore(total > column.getIssues().size());
+                                });
+                                board.setUnplacedTotalCount(page.unplacedTotal());
+                                board.setUnplacedHasMore(page.unplacedTotal() > board.getUnplacedIssues().size());
+                                return board;
+                            }));
         });
+    }
+
+    private record StatusGroup(String type, String status) {}
+    private record BoardPage(List<BoardIssueData> issues, Map<String, Long> totals, long unplacedTotal) {}
+
+    private BoardPage selectPage(List<BoardIssueData> candidates, Map<String, Set<String>> statusKeysByType,
+                                 int limit) {
+        // Each type supplied its first N per status. Their union contains the global first N.
+        var groups = candidates.stream().collect(Collectors.groupingBy(data ->
+                new StatusGroup(data.issue().getIssueType(), data.statusKey())));
+        Map<String, Long> totals = new HashMap<>();
+        long unplacedTotal = 0;
+        for (var group : groups.entrySet()) {
+            long count = group.getValue().stream().map(BoardIssueData::statusTotalCount).filter(Objects::nonNull)
+                    .mapToLong(Long::longValue).max().orElse(group.getValue().size());
+            var key = group.getKey();
+            if (statusKeysByType.getOrDefault(key.type(), Set.of()).contains(key.status())) {
+                totals.merge(key.status(), count, Long::sum);
+            } else {
+                unplacedTotal += count;
+            }
+        }
+        var order = Comparator.comparing((BoardIssueData data) -> data.issue().getCreatedAt() == null
+                        ? null : data.issue().getCreatedAt().toInstant(), Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(data -> data.issue().getId().toString());
+        var sorted = candidates.stream().sorted(order).toList();
+        Map<String, Integer> selectedByColumn = new HashMap<>();
+        List<BoardIssueData> selected = new ArrayList<>();
+        for (var data : sorted) {
+            String column = statusKeysByType.getOrDefault(data.issue().getIssueType(), Set.of()).contains(data.statusKey())
+                    ? data.statusKey() : null; // One bounded page for all unplaced statuses/types.
+            if (selectedByColumn.getOrDefault(column, 0) < limit) {
+                selected.add(data);
+                selectedByColumn.merge(column, 1, Integer::sum);
+            }
+        }
+        return new BoardPage(selected, totals, unplacedTotal);
     }
 
     private Mono<List<WorkflowTypeResolution>> resolveWorkflows(UUID projectId, String issueType, GatewayContext context) {
@@ -141,8 +199,7 @@ public class BoardServiceImpl implements BoardService {
     /**
      * Обогащает задачи доски метками ({id, name, color}) и профилем исполнителя
      * (displayName, avatarUrl), затем группирует их по колонкам workflow.
-     * Сбой обогащения (метки или профили) не должен ронять доску — только warn в лог;
-     * задача карточки остаётся без соответствующих полей.
+     * Сбой обогащения виден клиенту как 503, чтобы не выдавать пустые данные за успешное чтение.
      */
     private Mono<BoardResponseDto> enrichAndBuildBoard(
             UUID projectId,
@@ -170,11 +227,8 @@ public class BoardServiceImpl implements BoardService {
         return labelClient.listProjectLabels(projectId.toString(), context)
                 .map(response -> response.getItems().stream()
                         .collect(Collectors.toMap(ProjectLabelResponseDto::getId, label -> label, (first, duplicate) -> first)))
-                .onErrorResume(e -> {
-                    log.warn("[{}] Failed to load project labels for board, labels left unresolved: {}",
-                            context.requestId(), e.getMessage());
-                    return Mono.just(Map.of());
-                });
+                .onErrorMap(error -> new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE, "Board labels unavailable", error));
     }
 
     private Mono<Map<UUID, UserDetails>> resolveUsersById(
@@ -195,11 +249,8 @@ public class BoardServiceImpl implements BoardService {
         return profileClient.getUserDetailsByIds(assigneeIds, context)
                 .map(response -> response.getUserDetailsList().stream()
                         .collect(Collectors.toMap(user -> UUID.fromString(user.getUserId()), user -> user, (first, duplicate) -> first)))
-                .onErrorResume(e -> {
-                    log.warn("[{}] Failed to load user profiles for board, assignee displayName left unresolved: {}",
-                            context.requestId(), e.getMessage());
-                    return Mono.just(Map.of());
-                });
+                .onErrorMap(error -> new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE, "Board profiles unavailable", error));
     }
 
     private BoardResponseDto buildBoard(

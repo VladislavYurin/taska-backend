@@ -490,6 +490,9 @@ public class IssueMapper {
                 .setUpdatedAt(toProtoTimestamp(issue.getUpdatedAt()))
                 .setVersion(issue.getVersion());
 
+        if (issue.getBoardStatusTotalCount() != null) {
+            builder.setStatusTotalCount(issue.getBoardStatusTotalCount());
+        }
         if (issue.getDescription() != null){
             builder.setDescription(issue.getDescription());
         }

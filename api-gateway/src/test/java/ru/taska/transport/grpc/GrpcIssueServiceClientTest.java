@@ -120,6 +120,19 @@ class GrpcIssueServiceClientTest {
     }
 
     @Test
+    void oldIssueServiceCannotSilentlyReportIncompleteCounts() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK")).thenReturn(IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+        Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.newBuilder()
+                        .addIssues(ru.taska.api.issue.v1.IssueBoardResponse.getDefaultInstance()).build()));
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK", null, null, true, List.of(), null, null, 50, context))
+                .expectErrorMatches(error -> error instanceof ResponseStatusException status
+                        && status.getStatusCode().value() == 503).verify();
+    }
+
+    @Test
     void listIssuesForBoard_carriesWorkflowFinalKeysInGrpcBody() {
         Mockito.when(issueMapper.toGrpcIssueType("TASK"))
                 .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK);
@@ -128,12 +141,13 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
         StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK",
-                        ASSIGNEE_ID, LABEL_ID, false, List.of("CLOSED", "RELEASED"), null, null, context))
+                        ASSIGNEE_ID, LABEL_ID, false, List.of("CLOSED", "RELEASED"), null, null, 50, context))
                 .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
         Mockito.verify(stub).listIssuesForBoard(captor.capture());
         var body = captor.getValue().getBody();
         Assertions.assertThat(body.getDoneStatusKeysList()).containsExactly("CLOSED", "RELEASED");
+        Assertions.assertThat(body.getPageSizePerColumn()).isEqualTo(50);
         Assertions.assertThat(body.getIncludeDone()).isFalse();
         Assertions.assertThat(body.getActorUserId()).isEqualTo(USER_ID);
         Assertions.assertThat(body.getProjectId()).isEqualTo(PROJECT_ID);
@@ -152,7 +166,7 @@ class GrpcIssueServiceClientTest {
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
 
         StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, null, null, null,
-                        false, List.of(), ru.taska.domain.dto.IssuePriorityDto.HIGH, "bug fix", context))
+                        false, List.of(), ru.taska.domain.dto.IssuePriorityDto.HIGH, "bug fix", 50, context))
                 .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
 
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
@@ -172,7 +186,7 @@ class GrpcIssueServiceClientTest {
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
 
         StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, null, null, null,
-                        false, List.of(), null, "   ", context))
+                        false, List.of(), null, "   ", 50, context))
                 .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
 
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
