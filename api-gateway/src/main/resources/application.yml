@@ -73,5 +73,10 @@ app:
     allow-credentials: ${GATEWAY_CORS_ALLOW_CREDENTIALS:true}
     allowed-methods: ${GATEWAY_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
     allowed-headers: ${GATEWAY_CORS_ALLOWED_HEADERS:Authorization,Content-Type,Accept,X-Request-Id,Idempotency-Key,If-Match,If-None-Match}
-    exposed-headers: ${GATEWAY_CORS_EXPOSED_HEADERS:X-Request-Id,ETag}
+    exposed-headers: ${GATEWAY_CORS_EXPOSED_HEADERS:X-Request-Id,ETag,Retry-After}
     max-age: ${GATEWAY_CORS_MAX_AGE:7200}
+
+  personal-tokens:
+    creation-attempts: ${GATEWAY_PAT_CREATION_ATTEMPTS:5}
+    creation-window: ${GATEWAY_PAT_CREATION_WINDOW:1h}
+    max-tracked-users: ${GATEWAY_PAT_MAX_TRACKED_USERS:10000}
