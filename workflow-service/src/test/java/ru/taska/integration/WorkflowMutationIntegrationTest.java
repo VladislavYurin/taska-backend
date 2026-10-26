@@ -51,6 +51,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         project = UUID.randomUUID(); actor = UUID.randomUUID();
         when(roles.checkProjectWriteRole(any(), any(), any(), any(), any())).thenReturn(Mono.empty());
         when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.just(0L));
+        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.just(0L));
         var created = creator.validateAndCreateWorkflow("r", "n", actor, WorkflowCreationDto.builder()
                 .projectId(project).name("Test").issueTypes(List.of(IssueType.TASK))
                 .statuses(List.of(status("TODO", 10), status("REVIEW", 20), status("DONE", 30)))
@@ -122,7 +123,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     void statusDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
         var migrated = new java.util.concurrent.atomic.AtomicBoolean();
         var movedCount = new java.util.concurrent.atomic.AtomicInteger();
-        when(issues.migrate(any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+        when(issues.migrate(any(), any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
             if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
             return 0L;
         }));
@@ -142,7 +143,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         assertThat(result.workflow().workflow().getVersion()).isEqualTo(2);
         assertThat(result.workflow().statuses()).noneMatch(status -> status.getId().equals(review));
         assertThat(movedCount.get()).isEqualTo(1);
-        verify(issues, times(2)).migrate(any(), any(), any(), any());
+        verify(issues, times(2)).migrate(any(), any(), any(), any(), any());
     }
 
     @Test

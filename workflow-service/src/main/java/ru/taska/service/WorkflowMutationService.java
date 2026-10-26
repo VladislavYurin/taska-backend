@@ -2,6 +2,7 @@ package ru.taska.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -110,7 +111,8 @@ public class WorkflowMutationService {
             Map<String, String> mapping = c.targetStatusKey() == null ? Map.of()
                     : Map.of(old.getStatusKey(), c.targetStatusKey());
             return validate(changed, c)
-                    .then(Mono.defer(() -> issues.migrate(c, current.issueTypes(), validKeys, mapping)))
+                    .then(Mono.defer(() -> issues.migrate(c, current.issueTypes(), validKeys, mapping, List.of(old.getStatusKey()))
+                            .onErrorMap(io.grpc.StatusRuntimeException.class, error -> migrationError(error, validKeys))))
                     .thenMany(Flux.fromIterable(current.transitions()).filter(t -> !remainingTransitions.contains(t))
                             .concatMap(transitions::delete))
                     .then(Mono.defer(() -> statuses.delete(old)))
@@ -139,12 +141,25 @@ public class WorkflowMutationService {
                                     return invalid("Map to statuses present in both workflows; add a target status to the current workflow first if needed");
                                 }
                                 return issues.migrate(c, current.issueTypes(), validKeys, mapping)
+                                        .onErrorMap(io.grpc.StatusRuntimeException.class, error -> migrationError(error,
+                                                validKeys.stream().filter(sourceKeys::contains).toList()))
                                         .thenMany(bindings.findByWorkflowId(c.workflow()).concatMap(bindings::delete))
-                                        .then(workflows.delete(current.workflow()))
+                                        .then(Mono.defer(() -> workflows.delete(current.workflow())))
                                         .thenReturn(new ProjectWorkflowAggregate(new WorkflowAggregate(fallback,
                                                 data.getT1(), data.getT2()), current.issueTypes(), true));
                             });
                 });
+    }
+
+    private DomainException migrationError(io.grpc.StatusRuntimeException error, List<String> targets) {
+        Map<String, String> details = new LinkedHashMap<>(mapper.GrpcErrorDetails.decode(error.getTrailers()));
+        if ("WORKFLOW_ISSUES_UNMAPPED".equals(details.get("reason"))) {
+            details.put("targetStatusKeys", String.join(",", targets));
+        }
+        var code = error.getStatus().getCode();
+        DomainStatus status = code == io.grpc.Status.Code.OK ? DomainStatus.INTERNAL : DomainStatus.valueOf(code.name());
+        String message = error.getStatus().getDescription();
+        return new DomainException(status, message == null ? "Workflow issue migration failed" : message, details);
     }
 
     private Mono<Void> validate(EditableWorkflow changed, WorkflowMutation c) {

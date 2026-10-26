@@ -21,6 +21,14 @@ public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, Is
             """)
     Flux<Issue> findForWorkflowMigration(UUID projectId, Collection<String> issueTypes,
                                         Collection<String> validStatuses, Collection<String> mappedStatuses);
+    @Query("""
+            SELECT * FROM taska.issues WHERE project_id=:projectId AND issue_type IN (:issueTypes)
+              AND deleted_at IS NULL AND status_key IN (:sourceStatuses)
+            ORDER BY id LIMIT 5001 FOR UPDATE
+            """)
+    Flux<Issue> findForWorkflowMigrationBySourceStatuses(UUID projectId, Collection<String> issueTypes,
+                                                        Collection<String> sourceStatuses);
+
     @Query("SELECT project_id, count(*) AS issue_count FROM taska.issues "
             + "WHERE project_id IN (:projectIds) AND deleted_at IS NULL GROUP BY project_id")
     Flux<ProjectIssueCountRow> countProjectsBatch(Collection<UUID> projectIds);

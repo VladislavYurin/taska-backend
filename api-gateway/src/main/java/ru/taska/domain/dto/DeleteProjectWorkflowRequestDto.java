@@ -6,9 +6,11 @@ import com.fasterxml.jackson.annotation.Nulls;
 import java.math.BigDecimal;
 import java.util.Map;
 import lombok.Getter;
+import jakarta.validation.constraints.Min;
 
 @Getter
 public class DeleteProjectWorkflowRequestDto implements WorkflowPatchBody {
+    @Min(1)
     private Integer version;
     private Map<String, String> statusMappings = Map.of();
 

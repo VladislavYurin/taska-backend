@@ -18,11 +18,16 @@ public class WorkflowIssueMigrationClient {
     private final ReactorIssueServiceGrpc.ReactorIssueServiceStub stub;
 
     public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys, Map<String, String> mapping) {
+        return migrate(c, types, validKeys, mapping, List.of());
+    }
+
+    public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys,
+                              Map<String, String> mapping, List<String> sourceKeys) {
         return stub.withDeadlineAfter(30, TimeUnit.SECONDS).migrateWorkflowIssues(MigrateWorkflowIssuesRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(c.requestId()).setNodeId(c.nodeId()))
                         .setProjectId(c.project().toString()).setActorUserId(c.actor().toString())
                         .setWorkflowId(c.workflow().toString()).addAllIssueTypeKeys(types.stream().map(IssueType::name).toList())
-                        .addAllValidStatusKeys(validKeys).putAllStatusMappings(mapping).build())
+                        .addAllValidStatusKeys(validKeys).putAllStatusMappings(mapping).addAllSourceStatusKeys(sourceKeys).build())
                 .map(response -> response.getMovedCount());
     }
 }

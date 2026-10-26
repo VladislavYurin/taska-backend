@@ -408,3 +408,5 @@ Origin MCP Inspector разрешён только для `localhost:6274` / `12
 и через dev loopback mapping; readiness включает доступность gateway. Контейнер `taska-mcp-server`
 подхватывается существующим Promtail правилом `taska-*`, метрики собираются Prometheus.
 Совместимость Inspector и внешних агентов подтверждается отдельно на развёрнутом стенде (TAS-408).
+
+Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.

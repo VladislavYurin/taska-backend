@@ -4039,6 +4039,7 @@ paths:
     patch:
       x-pat-scope: write
       operationId: updateProjectWorkflow
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права.
       summary: Переименовать собственный workflow проекта
       tags: [workflow-mutation]
       security:
@@ -4065,15 +4066,29 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       x-pat-scope: write
       operationId: deleteProjectWorkflow
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права. Без statusMappings несовместимые статусы задач не переносятся. Целевые статусы должны присутствовать и в текущем, и в общем default workflow. Синхронная миграция ограничена 5000 выбранными задачами; это постоянный предел операции (400 FAILED_PRECONDITION, details.reason=WORKFLOW_MIGRATION_LIMIT), ожидание и повтор без изменения объёма не помогут.
       summary: Удалить собственный workflow; несовместимые статусы задач требуют statusMappings
       tags: [workflow-mutation]
       security:
@@ -4100,10 +4115,32 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
+        '415':
+          description: Тело DELETE должно иметь Content-Type application/json; нетипизированные байты не игнорируются.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -4111,6 +4148,7 @@ paths:
     patch:
       x-pat-scope: write
       operationId: updateWorkflowStatus
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права.
       summary: Изменить имя, категорию или порядок статуса
       tags: [workflow-mutation]
       security:
@@ -4143,15 +4181,29 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       x-pat-scope: write
       operationId: deleteWorkflowStatus
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права. Перенос затрагивает только задачи удаляемого статуса; задачи в остальных старых статусах остаются unplaced. Без targetStatusKey занятый статус не удаляется. Синхронная миграция ограничена 5000 выбранными задачами; это постоянный предел операции (400 FAILED_PRECONDITION, details.reason=WORKFLOW_MIGRATION_LIMIT), ожидание и повтор без изменения объёма не помогут.
       summary: Удалить статус и связанные переходы; задачи можно перенести в targetStatusKey
       tags: [workflow-mutation]
       security:
@@ -4191,10 +4243,23 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -4202,6 +4267,7 @@ paths:
     patch:
       x-pat-scope: write
       operationId: updateWorkflowTransition
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права.
       summary: Изменить имя, порядок или скрытие перехода
       tags: [workflow-mutation]
       security:
@@ -4234,15 +4300,29 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
         default:
           $ref: '#/components/responses/ErrorResponse'
     delete:
       x-pat-scope: write
       operationId: deleteWorkflowTransition
+      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права.
       summary: Удалить переход собственного workflow
       tags: [workflow-mutation]
       security:
@@ -4276,10 +4356,23 @@ paths:
       responses:
         '200':
           description: Полный workflow после изменения или default после удаления собственного workflow
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectWorkflowDto'
+        '400':
+          $ref: '#/components/responses/WorkflowMutationBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/WorkflowMutationForbidden'
+        '404':
+          $ref: '#/components/responses/WorkflowMutationNotFound'
+        '409':
+          $ref: '#/components/responses/WorkflowMutationConflict'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -4310,6 +4403,57 @@ components:
   responses:
     ErrorResponse:
       description: Единая схема ошибки гейтвея
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-RequestId-Header'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+
+    WorkflowMutationBadRequest:
+      description: >-
+        INVALID_ARGUMENT — неверный JSON, неизвестное/неизменяемое поле, отсутствующее name при PATCH workflow,
+        name вне 1..100, sortOrder меньше 0, version меньше 1 либо недопустимый граф/целевой статус.
+        FAILED_PRECONDITION — нельзя менять общий workflow, удалять TODO или использовать отсутствующий/некорректный default workflow.
+        При reason=WORKFLOW_ISSUES_UNMAPPED details содержит issueCount, statusKeys и targetStatusKeys
+        (списки ключей через запятую): требуется выбрать допустимое сопоставление и повторить запрос.
+        При reason=WORKFLOW_MIGRATION_LIMIT details.limit=5000: превышен постоянный предел выбранных задач,
+        сначала уменьшите объём миграции; это не rate limit и не HTTP 429.
+        При reason=PROJECT_ARCHIVED запись запрещена для архивного проекта.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-RequestId-Header'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+
+    WorkflowMutationForbidden:
+      description: >-
+        PERMISSION_DENIED — требуется роль ADMIN проекта, глобальная роль не заменяет membership.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-RequestId-Header'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+
+    WorkflowMutationNotFound:
+      description: >-
+        NOT_FOUND — проект, собственный workflow либо вложенный статус/переход в этом workflow не найден.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-RequestId-Header'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+
+    WorkflowMutationConflict:
+      description: >-
+        ABORTED — ожидаемая версия workflow устарела; перечитайте workflow. ALREADY_EXISTS — конфликт ключа, ребра или sortOrder; исправьте запрос.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-RequestId-Header'
@@ -6222,8 +6366,9 @@ components:
 
     PatchWorkflowRequestDto:
       type: object
+      required: [name]
       additionalProperties: false
-      description: Пропущенные поля не меняются; явный null запрещён. Нельзя менять ключ статуса и endpoints перехода.
+      description: name обязателен и не может быть пустым/пробельным; version необязателен. Явный null и неизвестные поля запрещены.
       properties:
         version:
           type: integer

@@ -34,10 +34,19 @@ public class WorkflowIssueMigrationService {
     @Transactional
     public Mono<Long> migrate(UUID project, UUID actor, UUID workflow, List<String> types,
                                List<String> validStatuses, Map<String, String> mapping, String requestId, String nodeId) {
+        return migrate(project, actor, workflow, types, validStatuses, mapping, List.of(), requestId, nodeId);
+    }
+
+    @Transactional
+    public Mono<Long> migrate(UUID project, UUID actor, UUID workflow, List<String> types,
+                              List<String> validStatuses, Map<String, String> mapping, List<String> sourceStatuses,
+                              String requestId, String nodeId) {
         return Mono.defer(() -> {
             if (types.isEmpty() || validStatuses.isEmpty()
                     || types.stream().anyMatch(t -> !t.matches("^[A-Z][A-Z0-9_]{1,31}$"))
                     || validStatuses.stream().anyMatch(s -> !s.matches("^[A-Z][A-Z0-9_]{1,63}$"))
+                    || sourceStatuses.stream().anyMatch(s -> !s.matches("^[A-Z][A-Z0-9_]{1,63}$"))
+                    || (!sourceStatuses.isEmpty() && !sourceStatuses.containsAll(mapping.keySet()))
                     || mapping.values().stream().anyMatch(v -> !validStatuses.contains(v))) {
                 return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid workflow migration scope or target status"));
             }
@@ -52,19 +61,22 @@ public class WorkflowIssueMigrationService {
                                     "Project service does not support archive-aware writes"));
                         }
                         if (role.getProjectArchived()) return Mono.error(ru.taska.exception.ProjectArchived.error());
-                        return repository.findForWorkflowMigration(project, types, validStatuses,
-                                mapping.isEmpty() ? List.of("") : mapping.keySet()).collectList();
+                        return (sourceStatuses.isEmpty()
+                                ? repository.findForWorkflowMigration(project, types, validStatuses,
+                                        mapping.isEmpty() ? List.of("") : mapping.keySet())
+                                : repository.findForWorkflowMigrationBySourceStatuses(project, types, sourceStatuses)).collectList();
                     })
                     .flatMap(issues -> {
-                        if (issues.size() > 5000) return Mono.error(new DomainException(DomainStatus.RESOURCE_EXHAUSTED,
-                                "Synchronous workflow migration is limited to 5000 issues"));
+                        if (issues.size() > 5000) return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                "Synchronous workflow migration is limited to 5000 issues; reduce the migration scope",
+                                Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000")));
                         var unmapped = issues.stream().filter(issue -> !validStatuses.contains(
                                 mapping.getOrDefault(issue.getStatusKey(), issue.getStatusKey()))).toList();
                         if (!unmapped.isEmpty()) {
                             String keys = unmapped.stream().map(issue -> issue.getStatusKey()).distinct().sorted().collect(Collectors.joining(","));
                             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
                                     "Workflow statuses have " + unmapped.size() + " issues; supply a target status mapping",
-                                    Map.of("issueCount", Integer.toString(unmapped.size()), "statusKeys", keys)));
+                                    Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", Integer.toString(unmapped.size()), "statusKeys", keys)));
                         }
                         return Flux.fromIterable(issues).concatMap(issue -> {
                             String target = mapping.getOrDefault(issue.getStatusKey(), issue.getStatusKey());

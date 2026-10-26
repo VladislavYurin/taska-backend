@@ -74,7 +74,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), Map.of(), "r", "n"))
                 .expectErrorSatisfies(error -> {
                     assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException) error).getDetails()).containsEntry("issueCount", "2");
+                    assertThat(((DomainException) error).getDetails()).containsEntry("reason", "WORKFLOW_ISSUES_UNMAPPED")
+                            .containsEntry("issueCount", "2").containsEntry("statusKeys", "REVIEW");
                 }).verify();
         assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
         assertThat(count("issue_history", "issue_id", one.getId())).isZero();
@@ -143,6 +144,60 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
                 .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT))
                 .verify();
         assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+    }
+
+
+    @Test
+    void deletingOneStatusLeavesOtherUnplacedIssuesUntouchedAndUncounted() {
+        var selected = issue(project, IssueType.TASK, 1);
+        var legacy = issue(project, IssueType.TASK, 2);
+        db.sql("UPDATE taska.issues SET status_key='LEGACY' WHERE id=:id").bind("id", legacy.getId()).then().block();
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of(), List.of("REVIEW"), "r", "n"))
+                .expectErrorSatisfies(error -> assertThat(((DomainException) error).getDetails())
+                        .containsExactlyInAnyOrderEntriesOf(Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "1", "statusKeys", "REVIEW")))
+                .verify();
+        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n").block()).isEqualTo(1);
+        assertThat(repository.findById(selected.getId()).block().getStatusKey()).isEqualTo("DONE");
+        assertThat(repository.findById(legacy.getId()).block().getStatusKey()).isEqualTo("LEGACY");
+        assertThat(count("issue_history", "issue_id", legacy.getId())).isZero();
+        assertThat(count("outbox_events", "aggregate_id", legacy.getId())).isZero();
+    }
+
+    @Test
+    void concurrentScopedMigrationsDoNotDuplicateEvents() {
+        var selected = issue(project, IssueType.TASK, 1);
+        var outcomes = reactor.core.publisher.Flux.merge(
+                service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), List.of("REVIEW"), "first", "n"),
+                service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), List.of("REVIEW"), "second", "n"))
+                .collectList().block();
+        assertThat(outcomes).containsExactlyInAnyOrder(1L, 0L);
+        assertThat(repository.findById(selected.getId()).block().getStatusKey()).isEqualTo("DONE");
+        assertThat(count("issue_history", "issue_id", selected.getId())).isEqualTo(1);
+        assertThat(count("outbox_events", "aggregate_id", selected.getId())).isEqualTo(1);
+    }
+
+    @Test
+    void synchronousLimitIsPermanentPreconditionAndRollsBackAllWrites() {
+        db.sql("""
+                INSERT INTO taska.issues (project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id)
+                SELECT :project, n, 'LIMIT-' || gen_random_uuid(), 'TASK', 'Limit', 'REVIEW', 'MEDIUM', :actor
+                FROM generate_series(1,5001) n
+                """).bind("project", project).bind("actor", actor).then().block();
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n"))
+                .expectErrorSatisfies(error -> {
+                    assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
+                    assertThat(((DomainException) error).getDetails()).containsExactlyInAnyOrderEntriesOf(
+                            Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000"));
+                }).verify();
+        assertThat(db.sql("SELECT count(*) FROM taska.issues WHERE project_id=:id AND status_key='REVIEW' AND version=1")
+                .bind("id", project).map(row -> row.get(0, Long.class)).one().block()).isEqualTo(5001);
+        assertThat(db.sql("SELECT count(*) FROM taska.issue_history h JOIN taska.issues i ON h.issue_id=i.id WHERE i.project_id=:id")
+                .bind("id", project).map(row -> row.get(0, Long.class)).one().block()).isZero();
     }
 
     private Issue issue(UUID project, IssueType type, int number) {

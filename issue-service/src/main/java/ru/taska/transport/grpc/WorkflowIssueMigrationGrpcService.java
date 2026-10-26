@@ -19,7 +19,7 @@ public class WorkflowIssueMigrationGrpcService {
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getActorUserId(), "actorUserId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getWorkflowId(), "workflowId"))
                 .flatMap(ids -> service.migrate(ids.getT1(), ids.getT2(), ids.getT3(), req.getIssueTypeKeysList(),
-                        req.getValidStatusKeysList(), req.getStatusMappingsMap(),
+                        req.getValidStatusKeysList(), req.getStatusMappingsMap(), req.getSourceStatusKeysList(),
                         req.getHeader().getRequestId(), req.getHeader().getNodeId()))
                 .map(count -> MigrateWorkflowIssuesResponse.newBuilder().setMovedCount(count).build()));
     }

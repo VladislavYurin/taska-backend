@@ -35,20 +35,26 @@ public class GrpcWorkflowServiceAdapter  extends ReactorWorkflowServiceGrpc.Work
     }
     @Override
     public Mono<WorkflowResponse> createWorkflow(Mono<CreateWorkflowRequest> request) {
-        return grpcWorkflowService.createWorkflow(request)
-                .flatMap(mutationResponse::enrich)
+        return request.flatMap(req -> mutationResponse.issueTypes(req.getHeader(),
+                        req.getBody().getProjectId(), req.getBody().getActorUserId())
+                .flatMap(types -> grpcWorkflowService.createWorkflow(Mono.just(req))
+                        .flatMap(response -> mutationResponse.enrich(response, types))))
                 .transform(GrpcExceptionHandler.withErrorHandling("createWorkflow"));
     }
     @Override
     public Mono<WorkflowResponse> addWorkflowStatus(Mono<AddWorkflowStatusRequest> request) {
-        return grpcWorkflowService.addWorkflowStatus(request)
-                .flatMap(mutationResponse::enrich)
+        return request.flatMap(req -> mutationResponse.issueTypes(req.getHeader(),
+                        req.getBody().getProjectId(), req.getBody().getActorUserId())
+                .flatMap(types -> grpcWorkflowService.addWorkflowStatus(Mono.just(req))
+                        .flatMap(response -> mutationResponse.enrich(response, types))))
                 .transform(GrpcExceptionHandler.withErrorHandling("addWorkflowStatus"));
     }
     @Override
     public Mono<WorkflowResponse> addWorkflowTransition(Mono<AddWorkflowTransitionRequest> request) {
-        return grpcWorkflowService.addWorkflowTransition(request)
-                .flatMap(mutationResponse::enrich)
+        return request.flatMap(req -> mutationResponse.issueTypes(req.getHeader(),
+                        req.getBody().getProjectId(), req.getBody().getActorUserId())
+                .flatMap(types -> grpcWorkflowService.addWorkflowTransition(Mono.just(req))
+                        .flatMap(response -> mutationResponse.enrich(response, types))))
                 .transform(GrpcExceptionHandler.withErrorHandling("addWorkflowTransition"));
     }
     @Override
