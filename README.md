@@ -382,3 +382,5 @@ node --test .github/codex/scripts/*.test.js
 4. добавьте переменные в `.env.docker.example` без реальных секретов;
 5. добавьте сервис в Prometheus, Grafana/Promtail и CI matrices;
 6. обновите OpenAPI/protobuf-контракты и этот README.
+
+Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.
