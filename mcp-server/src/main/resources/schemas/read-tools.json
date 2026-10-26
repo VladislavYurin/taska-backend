@@ -749,6 +749,15 @@
         "IssueHistoryResponseDto" : {
           "type" : "object",
           "properties" : {
+            "channel" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "readOnly" : true,
+                "description" : "Канал действия — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются."
+              }, {
+                "type" : "null"
+              } ]
+            },
             "id" : {
               "type" : "string"
             },
@@ -1645,6 +1654,15 @@
         "CommentResponseDto" : {
           "type" : "object",
           "properties" : {
+            "channel" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "readOnly" : true,
+                "description" : "Канал последней записи комментария — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются."
+              }, {
+                "type" : "null"
+              } ]
+            },
             "id" : {
               "type" : "string",
               "format" : "uuid",
@@ -2771,6 +2789,37 @@
             "statusKey" : {
               "type" : "string",
               "description" : "Открытый ключ статуса из workflow проекта; набор не ограничен enum."
+            },
+            "issueTypeName" : {
+              "anyOf" : [
+                {
+                  "type" : "string",
+                  "description" : "Имя из текущего реестра проекта; может отсутствовать для удалённого типа."
+                },
+                {
+                  "type" : "null"
+                }
+              ]
+            },
+            "issueTypeColor" : {
+              "anyOf" : [
+                {
+                  "type" : "string"
+                },
+                {
+                  "type" : "null"
+                }
+              ]
+            },
+            "issueTypeIcon" : {
+              "anyOf" : [
+                {
+                  "type" : "string"
+                },
+                {
+                  "type" : "null"
+                }
+              ]
             }
           }
         },

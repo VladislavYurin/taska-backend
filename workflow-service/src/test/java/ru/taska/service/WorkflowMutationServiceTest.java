@@ -37,6 +37,7 @@ class WorkflowMutationServiceTest {
     private final TransitionRepository transitions = mock(TransitionRepository.class);
     private final WorkflowBindingRepository bindings = mock(WorkflowBindingRepository.class);
     private final WorkflowIssueMigrationClient issues = mock(WorkflowIssueMigrationClient.class);
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient = mock(ru.taska.transport.grpc.project.GrpcProjectServiceClient.class);
     private final ProjectRoleChecker roles = mock(ProjectRoleChecker.class);
     private final AtomicReference<List<StatusEntity>> statusData = new AtomicReference<>();
     private final AtomicReference<List<TransitionEntity>> transitionData = new AtomicReference<>();
@@ -46,8 +47,10 @@ class WorkflowMutationServiceTest {
     @BeforeEach
     void setup() {
         var props = new WorkflowProperties(defaultProject, new WorkflowProperties.AllowedRoles(Set.of(ProjectRole.ADMIN), Set.of(ProjectRole.ADMIN)));
+        when(projectClient.listIssueTypeDetails(any(), any(), any(), any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(project, ru.taska.domain.IssueType.values())));
         var editor = new WorkflowEditService(new WorkflowCreationValidator(100, "^[A-Z][A-Z0-9_]{1,63}$"),
-                new WorkflowCreationMapper(), workflows, statuses, transitions, bindings, roles, props);
+                new WorkflowCreationMapper(), workflows, statuses, transitions, bindings, roles, props, projectClient);
         service = new WorkflowMutationService(editor, workflows, statuses, transitions, bindings, issues, props);
         entity = WorkflowEntity.builder().id(workflow).name("Workflow").version(4).active(true).build();
         statusData.set(new ArrayList<>(List.of(status(1, "TODO", 10), status(2, "REVIEW", 20), status(3, "DONE", 30))));

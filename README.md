@@ -208,6 +208,10 @@ PostgreSQL-порты по порядку: `auth`, `project`, `workflow`, `issue
 
 pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`. После входа группа Taska содержит подключения ко всем шести БД. Пароли берутся из runtime environment и записываются только внутри volume в `.pgpass` с правами 0600; в репозитории их нет. При переходе с desktop mode создаётся отдельная учётная запись администратора и резервная копия конфигурационной БД `pgadmin4.db.pre-tas-302`; существующие пользователи и серверы сохраняются. Смена значения `PGADMIN_DEFAULT_PASSWORD` сама по себе не меняет пароль уже существующей учётной записи. Список серверов импортируется один раз при создании пользователя; последующие ручные настройки сохраняются. Пароль PostgreSQL в `.pgpass` обновляется при каждом старте. Изменения хостов или имён БД для уже созданного пользователя применяются через Import/Export из `/tmp/taska-pgadmin-servers.json`. HTTP smoke запускается командой `python3 infra/pgadmin/smoke.py` с переменными `PGADMIN_CHECK_URL`, `PGADMIN_DEFAULT_EMAIL` и `PGADMIN_DEFAULT_PASSWORD`.
 
+Реестр типов проекта задаёт названия/цвета/значки и порядок: `sortOrder ASC`, затем `code` по collation C. `PUT /projects/{projectId}/issue-types/order` принимает полную перестановку кодов и атомарно назначает 10/20/30; первая запись становится типом по умолчанию. `/meta.issueTypes` содержит только имена начального посева.
+
+Поколение записи типа — внутренний UUID жизненного цикла. После удаления или повторного создания кода старый workflow binding исключается из разрешения, списка и редактирования. Старые строки binding физически удаляются при создании нового workflow для этого кода, в той же локальной транзакции, что и новая привязка. Удаление реестра не меняет чужую БД до commit, поэтому его откат сохраняет прежнюю привязку. Миграции project-service и workflow-service и новые gRPC-контракты нужно выкладывать согласованно; старые версии не проверяют поколение. Идентификаторы поколений и их детерминированный backfill для legacy-данных не являются секретами или средствами авторизации.
+
 ## API и безопасность
 
 Публичные endpoints: login, refresh и принятие приглашения. Остальные пользовательские операции требуют `Authorization: Bearer <access-token>`. Read-only административные endpoints дополнительно требуют глобальную роль `GLOBAL_ADMIN`.
@@ -409,5 +413,22 @@ Origin MCP Inspector разрешён только для `localhost:6274` / `12
 и через dev loopback mapping; readiness включает доступность gateway. Контейнер `taska-mcp-server`
 подхватывается существующим Promtail правилом `taska-*`, метрики собираются Prometheus.
 Совместимость Inspector и внешних агентов подтверждается отдельно на развёрнутом стенде (TAS-408).
+
+
+Канал действий (TAS-411): REST история задачи, комментарии и события outbox содержат nullable `channel`
+(`UI`, `API_TOKEN`, `MCP`). У комментария это канал последней записи; отдельная история сохраняет
+канал каждого действия. Старые строки остаются с `null`. Внутренний UUID PAT хранится в доменном
+аудите, без имени токена; публичные REST/gRPC DTO истории и комментария его не возвращают.
+
+Для подписанных запросов MCP задайте одинаковый `MCP_GATEWAY_SIGNING_SECRET` в `mcp-server` и
+`api-gateway`: стандартный Base64 от минимум 32 случайных байт (`openssl rand -base64 32`). Пустой
+ключ запрещает аутентифицированные исходящие запросы MCP, а gateway отклоняет заявленный marker.
+Обычные прямые PAT-запросы сохраняют канал `API_TOKEN`. HMAC использует отдельный сервисный ключ,
+не меняет Bearer пользователя и не расширяет его scopes/ACL. Формат подписи и ограничения replay
+описаны в [ADR TAS-400](docs/tas-400-mcp-server.md#ограничения-аудит-и-канал-действий).
+Передавайте MCP → gateway по TLS (локальные тестовые HTTP исключены); исключите Authorization и
+внутренние `X-Taska-Mcp-*` заголовки из access/application logs. `GATEWAY_MCP_MAX_NONCES` ограничивает
+локальный cache gateway (по умолчанию 10000); при заполнении живыми nonce запрос отклоняется 403,
+а живые записи не вытесняются. На нескольких репликах replay-защита локальна каждой реплике.
 
 Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.

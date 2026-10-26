@@ -21,7 +21,7 @@ public class CommentMapper {
     private final UserDetailsMapper userDetailsMapper;
 
     public IssueCommentResponse toCommentProto(IssueComment comment) {
-        return IssueCommentResponse.newBuilder()
+        var builder = IssueCommentResponse.newBuilder()
                 .setId(comment.getId().toString())
                 .setIssueId(comment.getIssueId().toString())
                 .setProjectId(comment.getProjectId().toString())
@@ -29,8 +29,9 @@ public class CommentMapper {
                 .setBody(comment.getBody())
                 .setCreatedAt(toTimestamp(comment.getCreatedAt()))
                 .setUpdatedAt(toTimestamp(comment.getUpdatedAt()))
-                .setVersion(comment.getVersion())
-                .build();
+                .setVersion(comment.getVersion());
+        if (comment.getChannel() != null) builder.setChannel(comment.getChannel());
+        return builder.build();
     }
 
     public IssueCommentResponse toCommentProto(IssueCommentWithAuthor comment) {

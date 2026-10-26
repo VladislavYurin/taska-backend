@@ -48,6 +48,9 @@ class GatewayContextFactoryTest {
     @Mock
     private ContextMapper contextMapper;
 
+    @org.mockito.Spy
+    private ru.taska.security.McpMarkerVerifier markerVerifier = new ru.taska.security.McpMarkerVerifier("", 10000);
+
     @InjectMocks
     private GatewayContextFactory factory;
 

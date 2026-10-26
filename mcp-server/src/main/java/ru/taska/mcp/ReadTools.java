@@ -370,8 +370,15 @@ public class ReadTools implements ToolContributor {
             : data.has("totalCount")
                 ? ((long) page + 1) * size < data.get("totalCount").asLong()
                 : count == size;
-    return pageSummary(count, page, more)
-        + (approximate && more ? " Наличие следующей страницы определяется её чтением." : "");
+    if (approximate && more)
+      return "элементов="
+          + count
+          + ", page="
+          + page
+          + "; чтобы проверить наличие следующей страницы, вызовите page="
+          + ((long) page + 1)
+          + ". unreadCount не является общим числом элементов списка.";
+    return pageSummary(count, page, more);
   }
 
   private static String pageSummary(int count, int page, boolean more) {

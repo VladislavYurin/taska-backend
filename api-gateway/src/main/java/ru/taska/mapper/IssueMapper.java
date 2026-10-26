@@ -129,6 +129,7 @@ public class IssueMapper {
         restDto.setId(protoDto.getId());
         restDto.setEventType(toRestIssueEventType(protoDto.getEventType()));
         restDto.setActorUserId(protoDto.getActorUserId());
+        if (protoDto.hasChannel()) restDto.setChannel(protoDto.getChannel());
         if (protoDto.hasActor()) {
             restDto.setActor(userProfileMapper.toUserSummaryDto(protoDto.getActor()));
         }
@@ -164,6 +165,9 @@ public class IssueMapper {
         restDto.setProjectId(protoDto.getProjectId());
         restDto.projectKey(protoDto.getProjectKey());
         restDto.statusKey(protoDto.getStatusKey());
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeName, protoDto::getIssueTypeName, restDto::setIssueTypeName);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeColor, protoDto::getIssueTypeColor, restDto::setIssueTypeColor);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeIcon, protoDto::getIssueTypeIcon, restDto::setIssueTypeIcon);
         return restDto;
     }
 
@@ -826,9 +830,6 @@ public class IssueMapper {
     }
 
     public Header buildGrpcHeader(GatewayContext context) {
-        return Header.newBuilder()
-                     .setRequestId(context.requestId())
-                     .setNodeId(context.nodeId())
-                     .build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 }

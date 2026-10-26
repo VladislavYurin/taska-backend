@@ -22,6 +22,9 @@ message Header {
    * Идентификатор узла (сервиса), отправляющего запрос.
    */
   string node_id = 2;
+  // Trusted internal attribution. Missing fields preserve legacy unknown attribution.
+  optional string action_channel = 3;
+  optional string token_id = 4;
 }
 
 enum UserStatus {

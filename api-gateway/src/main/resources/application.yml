@@ -80,3 +80,9 @@ app:
     creation-attempts: ${GATEWAY_PAT_CREATION_ATTEMPTS:5}
     creation-window: ${GATEWAY_PAT_CREATION_WINDOW:1h}
     max-tracked-users: ${GATEWAY_PAT_MAX_TRACKED_USERS:10000}
+
+# TAS-411: a separate server credential, not a user PAT. Blank disables claimed MCP markers.
+gateway:
+  mcp-marker:
+    signing-secret: ${MCP_GATEWAY_SIGNING_SECRET:}
+    max-nonces: ${GATEWAY_MCP_MAX_NONCES:10000}

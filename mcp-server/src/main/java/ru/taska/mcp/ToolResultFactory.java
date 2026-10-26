@@ -141,7 +141,7 @@ public class ToolResultFactory {
     }
     if (schema != null && schema.has("anyOf")) {
       for (JsonNode candidate : schema.get("anyOf")) {
-        if (!"null".equals(candidate.path("type").asText()))
+        if (!"null".equals(candidate.path("type").asText("")))
           return project(node, candidate, definitions, required, depth + 1);
       }
     }
@@ -196,7 +196,7 @@ public class ToolResultFactory {
     if (schema == null || schema.isBoolean() || schema.isEmpty()) return true;
     JsonNode type = schema.get("type");
     if (type != null
-        && ("null".equals(type.asText())
+        && (type.isString() && "null".equals(type.asText())
             || type.isArray()
                 && java.util.stream.StreamSupport.stream(type.spliterator(), false)
                     .anyMatch(t -> "null".equals(t.asText())))) return true;

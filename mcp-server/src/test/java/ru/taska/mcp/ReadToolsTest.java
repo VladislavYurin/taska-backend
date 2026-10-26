@@ -365,6 +365,131 @@ class ReadToolsTest {
   }
 
   @Test
+  void nonNullNullableReferenceProfilesAndInlineAuthorArePreserved() {
+    ((ObjectNode) responses.get("/api/v1/users/me"))
+        .set(
+            "avatar",
+            mapper.valueToTree(
+                Map.of("id", "avatar-1", "downloadUrl", "https://example.test/avatar")));
+    JsonNode actor =
+        mapper.valueToTree(
+            Map.of("id", USER, "displayName", "Alice", "avatarUrl", "https://example.test/avatar"));
+    ((ObjectNode) responses.get(ISSUE_PATH + "/worklogs").path("items").get(0))
+        .set("author", actor);
+    ((ObjectNode) responses.get("/api/v1/issues/" + ISSUE))
+        .set(
+            "history",
+            mapper.valueToTree(
+                List.of(Map.of("id", "history-1", "eventType", "UPDATED", "actor", actor))));
+    for (String name : List.of("whoami", "list_worklogs", "get_issue")) {
+      var result = call(name, arguments(name));
+      assertThat(result.isError()).as(name + " " + result.structuredContent()).isFalse();
+      assertThat(mapper.writeValueAsString(result.structuredContent()))
+          .contains("https://example.test/avatar");
+    }
+  }
+
+  @Test
+  void standardJsonSchemaTypeArrayRetainsRequiredNullField() {
+    Map<String, Object> output =
+        Map.of(
+            "type",
+            "object",
+            "properties",
+            Map.of(
+                "data",
+                Map.of(
+                    "type",
+                    "object",
+                    "properties",
+                    Map.of("nullable", Map.of("type", List.of("string", "null"))),
+                    "required",
+                    List.of("nullable"))));
+    var definition =
+        new ToolDefinition(
+            "type_array",
+            "Schema array nullable",
+            "read",
+            true,
+            true,
+            Map.of("type", "object"),
+            output);
+    var registration =
+        new ToolRegistration(
+            definition,
+            call ->
+                Mono.just(
+                    new ToolData(
+                        mapper.createObjectNode().putNull("nullable"), "nullable retained")));
+    var result =
+        executor
+            .execute(
+                registration,
+                McpTransportContext.create(Map.of(McpRequestContext.KEY, context)),
+                new McpSchema.CallToolRequest("type_array", Map.of()))
+            .block();
+    assertThat(result.isError()).isFalse();
+    assertThat(content(result).path("data").path("nullable").isNull()).isTrue();
+  }
+
+  @Test
+  void previewToolsNeverAdvertiseUnsupportedTextOffsetArgument() {
+    ((ObjectNode) responses.get("/api/v1/projects").path("items").get(0))
+        .put("description", "long project text ".repeat(400));
+    ((ObjectNode) responses.get("/api/v1/notifications").path("items").get(0))
+        .put("body", "long notification text ".repeat(400));
+    for (String name : List.of("list_projects", "list_notifications")) {
+      var result = call(name, Map.of());
+      assertThat(result.isError()).isFalse();
+      assertThat(content(result).path("truncated").asBoolean()).isTrue();
+      assertThat(((McpSchema.TextContent) result.content().getFirst()).text())
+          .contains("ограниченный предпросмотр")
+          .doesNotContain("text_offset", "продолжение:");
+      var tool =
+          tools.stream()
+              .filter(value -> name.equals(value.definition().name()))
+              .findFirst()
+              .orElseThrow();
+      assertThat(
+              ((Map<?, ?>) tool.definition().inputSchema().get("properties"))
+                  .containsKey("text_offset"))
+          .isFalse();
+    }
+  }
+
+  @Test
+  void directoryHasMoreOverridesBothFullAndShortPageHeuristics() {
+    for (boolean more : List.of(false, true)) {
+      responses.put(
+          "/api/v1/users", mapper.valueToTree(Map.of("items", List.of(user()), "hasMore", more)));
+      // False on a full page and true on a short page are both authoritative.
+      var result = call("search_users", Map.of("query", "Alice", "page_size", more ? 50 : 1));
+      assertThat(result.isError()).isFalse();
+      String text = ((McpSchema.TextContent) result.content().getFirst()).text();
+      assertThat(text.contains("следующая страница")).isEqualTo(more);
+      assertThat(text.contains("конец списка")).isEqualTo(!more);
+    }
+  }
+
+  @Test
+  void fullNotificationPageOffersProbeWithoutClaimingAnotherPageExists() {
+    var result = call("list_notifications", Map.of("page_size", 1));
+    assertThat(result.isError()).isFalse();
+    assertThat(((McpSchema.TextContent) result.content().getFirst()).text())
+        .contains("чтобы проверить наличие следующей страницы, вызовите page=1")
+        .doesNotContain("следующая страница:");
+  }
+
+  @Test
+  void nonIntegerAndOversizedInputNumbersAreRejectedBeforeIntegerConversion() {
+    for (Object number : List.of("1", 1.25, 2147483648L, new java.math.BigDecimal("1e30"))) {
+      assertThatThrownBy(() -> call("list_projects", Map.of("page", number)))
+          .isInstanceOf(McpError.class);
+    }
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
   void invalidInputsAreProtocolErrorsBeforeAnyHttpAndMissingScopeIsToolError() {
     for (Map<String, Object> input :
         List.of(

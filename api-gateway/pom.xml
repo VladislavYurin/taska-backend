@@ -138,6 +138,7 @@
                             <modelPackage>ru.taska.domain.dto</modelPackage>
                             <!-- PATCH-тело пишется вручную: сгенерированный класс не отличает отсутствующее поле от явного null -->
                             <schemaMappings>
+                                <schemaMapping>ReorderProjectIssueTypesRequestDto=ru.taska.domain.dto.ReorderProjectIssueTypesRequestDto</schemaMapping>
                                 <schemaMapping>NullableUserSummaryDto=ru.taska.domain.dto.UserSummaryDto</schemaMapping>
                                 <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
                                 <schemaMapping>NotificationPreferencesPatchDto=ru.taska.domain.dto.NotificationPreferencesPatchDto</schemaMapping>

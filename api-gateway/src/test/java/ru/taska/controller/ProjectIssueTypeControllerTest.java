@@ -84,6 +84,20 @@ class ProjectIssueTypeControllerTest {
                 .exchange().expectStatus().isForbidden();
     }
 
+    @Test
+    void orderEndpointPreservesOrderedListAndDuplicatesForRegistryValidation() {
+        authenticated();
+        when(client.reorder(any(), any(), any())).thenAnswer(inv -> {
+            ReorderProjectIssueTypesRequestDto body = inv.getArgument(1);
+            org.assertj.core.api.Assertions.assertThat(body.getCodes()).containsExactly("BUG", "TASK", "BUG");
+            return Mono.error(Status.INVALID_ARGUMENT.withDescription("Duplicate code").asRuntimeException());
+        });
+        http.put().uri(url()+"/order").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json").bodyValue("{\"codes\":[\"BUG\",\"TASK\",\"BUG\"]}")
+                .exchange().expectStatus().isBadRequest();
+        verify(client).reorder(any(), any(), any());
+    }
+
     private String url() { return "/api/v1/projects/" + project + "/issue-types"; }
 
     private ProjectIssueTypeDto type() {

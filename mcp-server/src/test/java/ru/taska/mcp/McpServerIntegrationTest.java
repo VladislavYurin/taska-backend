@@ -53,6 +53,18 @@ class McpServerIntegrationTest {
                 assertThat(request.uri()).isEqualTo("/api/v1/users/me");
                 FORWARDED_TOKEN.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                 FORWARDED_ID.set(request.requestHeaders().get("X-Request-Id"));
+                var headers = request.requestHeaders();
+                assertThat(headers.get(ru.taska.security.McpGatewaySignature.VERSION_HEADER)).isEqualTo("1");
+                String timestamp = headers.get(ru.taska.security.McpGatewaySignature.TIMESTAMP_HEADER);
+                String nonce = headers.get(ru.taska.security.McpGatewaySignature.NONCE_HEADER);
+                assertThat(Long.parseLong(timestamp)).isBetween(java.time.Instant.now().getEpochSecond() - 60,
+                    java.time.Instant.now().getEpochSecond() + 5);
+                assertThat(nonce).matches("[A-Za-z0-9_-]{22}");
+                byte[] expected = ru.taska.security.McpGatewaySignature.sign(new byte[32], request.method().name(),
+                    java.net.URI.create(request.uri()), FORWARDED_ID.get(), timestamp, nonce,
+                    FORWARDED_TOKEN.get().substring("Bearer ".length()));
+                assertThat(headers.get(ru.taska.security.McpGatewaySignature.SIGNATURE_HEADER))
+                    .isEqualTo(ru.taska.security.McpGatewaySignature.encode(expected));
                 return response
                     .status(GATEWAY_STATUS.get())
                     .header(HttpHeaders.CONTENT_TYPE, "application/json")
@@ -71,6 +83,7 @@ class McpServerIntegrationTest {
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry properties) {
+    properties.add("taska.mcp.gateway-signing-secret", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
     properties.add("taska.mcp.auth.port", AUTH::getPort);
     properties.add("taska.mcp.auth.host", () -> "localhost");
     properties.add("taska.mcp.gateway-url", () -> "http://localhost:" + GATEWAY.port());

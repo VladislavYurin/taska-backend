@@ -31,10 +31,7 @@ public class AdminUserManagementMapper {
      */
     public BlockUserRequest toBlockUserGrpcRequest(UUID targetUserId, BlockUserRequestDto requestDto, GatewayContext context) {
         return BlockUserRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(BlockUserRequestBody.newBuilder()
                         .setActorUserId(context.userContext().userId())
                         .setActorDisplayName(context.userContext().displayName())
@@ -51,10 +48,7 @@ public class AdminUserManagementMapper {
      */
     public UnblockUserRequest toUnblockUserGrpcRequest(UUID targetUserId, UnblockUserRequestDto requestDto, GatewayContext context) {
         return UnblockUserRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(UnblockUserRequestBody.newBuilder()
                         .setActorUserId(context.userContext().userId())
                         .setActorDisplayName(context.userContext().displayName())
@@ -71,10 +65,7 @@ public class AdminUserManagementMapper {
      */
     public ResetCredentialLockoutRequest toResetCredentialLockoutRequest(UUID targetUserId, ResetLockoutRequestDto requestDto, GatewayContext context) {
         return ResetCredentialLockoutRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(ResetCredentialLockoutRequestBody.newBuilder()
                         .setTargetUserId(targetUserId.toString())
                         .setActorUserId(context.userContext().userId())

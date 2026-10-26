@@ -45,10 +45,7 @@ public class AuthMapper {
      */
     public LoginRequest toLoginGrpcRequest(LoginRequestDto source, GatewayContext context) {
         return LoginRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(LoginRequestBody.newBuilder()
                         .setEmail(source.getEmail())
                         .setPassword(source.getPassword())
@@ -79,10 +76,7 @@ public class AuthMapper {
      */
     public RefreshRequest toRefreshGrpcRequest(RefreshRequestDto source, GatewayContext context) {
         return RefreshRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(RefreshRequestBody.newBuilder()
                         .setRefreshToken(source.getRefreshToken())
                         .build())
@@ -112,10 +106,7 @@ public class AuthMapper {
      */
     public SetPasswordByTokenRequest toPasswordByTokenGrpcRequest(PasswordByTokenRequestDto source, GatewayContext context) {
         return SetPasswordByTokenRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
+                .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context))
                 .setBody(SetPasswordByTokenRequestBody.newBuilder()
                         .setToken(source.getToken())
                         .setNewPassword(source.getNewPassword())

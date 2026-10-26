@@ -309,9 +309,6 @@ public class GrpcProjectServiceClient {
         return projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
     }
     private Header buildGrpcHeader(GatewayContext context) {
-        return Header.newBuilder()
-                .setRequestId(context.requestId())
-                .setNodeId(context.nodeId())
-                .build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 }

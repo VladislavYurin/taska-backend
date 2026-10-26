@@ -71,6 +71,9 @@ class WorkflowEditServiceTest {
     @Mock
     private ProjectRoleChecker projectRoleChecker;
 
+    @Mock
+    private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
     private WorkflowEditService service;
 
     @BeforeEach
@@ -85,8 +88,10 @@ class WorkflowEditServiceTest {
                 transitionRepository,
                 bindingRepository,
                 projectRoleChecker,
-                properties);
+                properties, projectClient);
 
+        lenient().when(projectClient.listIssueTypeDetails(any(), any(), any(), any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(PROJECT_ID, ru.taska.domain.IssueType.values())));
         WorkflowEntity workflow = WorkflowEntity.builder()
                 .id(WORKFLOW_ID)
                 .name("Project workflow")
@@ -118,6 +123,18 @@ class WorkflowEditServiceTest {
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         lenient().when(transitionRepository.save(any(TransitionEntity.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+    }
+
+    @Test
+    void editableTypesFollowRegistryOrderAndExcludeDeletedCodes() {
+        when(projectClient.listIssueTypeDetails(any(), any(), any(), any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(PROJECT_ID,
+                        ru.taska.domain.IssueType.BUG, ru.taska.domain.IssueType.TASK)));
+        when(bindingRepository.findByWorkflowId(WORKFLOW_ID))
+                .thenReturn(Flux.just(binding(PROJECT_ID, "TASK"), binding(PROJECT_ID, "REMOVED"), binding(PROJECT_ID, "BUG")));
+        StepVerifier.create(service.loadEditableWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, WORKFLOW_ID, true))
+                .assertNext(current -> Assertions.assertEquals(List.of(ru.taska.domain.IssueType.BUG, ru.taska.domain.IssueType.TASK), current.issueTypes()))
+                .verifyComplete();
     }
 
     @Test

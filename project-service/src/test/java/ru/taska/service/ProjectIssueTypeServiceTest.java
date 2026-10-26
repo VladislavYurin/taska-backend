@@ -107,7 +107,7 @@ class ProjectIssueTypeServiceTest {
         StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
                 .expectErrorSatisfies(e -> {
                     assertStatus(e, DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException) e).getDetails()).containsEntry("issueCount", "7");
+                    assertThat(((DomainException) e).getDetails()).containsEntry("issueCount", "7").containsEntry("reason", "ISSUE_TYPE_IN_USE");
                 }).verify();
         verify(repository, never()).delete(any(), any());
     }
@@ -116,7 +116,10 @@ class ProjectIssueTypeServiceTest {
     void lastTypeCannotBeDeletedEvenWhenUnused() {
         authorizeDelete(1);
         StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
-                .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.FAILED_PRECONDITION)).verify();
+                .expectErrorSatisfies(e -> {
+                    assertStatus(e, DomainStatus.FAILED_PRECONDITION);
+                    assertThat(((DomainException)e).getDetails()).containsEntry("reason", "LAST_ISSUE_TYPE");
+                }).verify();
         verifyNoInteractions(issues);
         verify(repository, never()).delete(any(), any());
     }
@@ -139,6 +142,23 @@ class ProjectIssueTypeServiceTest {
         when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
         StepVerifier.create(service.delete(project, actor, "BUG", "r", "n")).verifyComplete();
         verify(repository).syncLegacySettings(project, actor);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProjectRole.class, names = {"MEMBER", "VIEWER", "UNSPECIFIED"})
+    void reorderRequiresAdminBeforeReadingRegistry(ProjectRole role) {
+        authorize(role);
+        StepVerifier.create(service.reorder(project, actor, java.util.List.of("TASK", "BUG", "STORY")))
+                .expectErrorSatisfies(error -> assertStatus(error, DomainStatus.PERMISSION_DENIED)).verify();
+        verify(repository, never()).list(any());
+        verify(repository, never()).reorder(any(), any());
+    }
+
+    @Test
+    void duplicateCodesCannotBeSilentlyCollapsed() {
+        StepVerifier.create(service.reorder(project, actor, java.util.List.of("TASK", "BUG", "BUG")))
+                .expectErrorSatisfies(error -> assertStatus(error, DomainStatus.INVALID_ARGUMENT)).verify();
+        verifyNoInteractions(repository);
     }
 
     private void authorize(ProjectRole role) {

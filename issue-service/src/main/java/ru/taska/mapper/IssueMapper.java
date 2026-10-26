@@ -102,14 +102,15 @@ public class IssueMapper {
     }
 
     public IssueHistoryResponse toIssueHistoryProto(IssueHistory history) {
-        return IssueHistoryResponse.newBuilder()
+        var builder = IssueHistoryResponse.newBuilder()
                 .setId(history.getId().toString())
                 .setIssueId(history.getIssueId().toString())
                 .setEventType(toProtoIssueEventType(history.getEventType()))
                 .setActorUserId(history.getActorUserId().toString())
                 .setOccurredAt(toTimestamp(history.getOccurredAt()))
-                .setPayload(IssueMapperUtils.historyPayload(history))
-                .build();
+                .setPayload(IssueMapperUtils.historyPayload(history));
+        if (history.getChannel() != null) builder.setChannel(history.getChannel());
+        return builder.build();
     }
 
     public IssueWithHistoryResponse toIssueDetailsProto(IssueWithHistory issueWithHistory) {
@@ -193,6 +194,8 @@ public class IssueMapper {
         if (projectInfo != null) {
             builder.setProjectKey(projectInfo.key());
             builder.setProjectId(projectInfo.id());
+            var type = projectInfo.issueTypes().get(issue.getIssueType().name());
+            if (type != null) builder.setIssueTypeName(type.name()).setIssueTypeColor(type.color()).setIssueTypeIcon(type.icon());
         }
 
         if (issue.getStoryPoints() != null) {

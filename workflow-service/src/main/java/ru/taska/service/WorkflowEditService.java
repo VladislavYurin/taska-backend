@@ -64,6 +64,7 @@ public class WorkflowEditService {
     private final WorkflowBindingRepository bindingRepository;
     private final ProjectRoleChecker projectRoleChecker;
     private final WorkflowProperties workflowProperties;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
 
     @Transactional
     public Mono<WorkflowAggregate> addStatus(String requestId, String nodeId, UUID actorUserId,
@@ -123,7 +124,7 @@ public class WorkflowEditService {
                 .switchIfEmpty(Mono.error(() -> new DomainException(DomainStatus.NOT_FOUND,
                         "Workflow not found: id=" + workflowId)))
                 .flatMap(workflow -> bindingRepository.findByWorkflowId(workflowId).collectList()
-                        .flatMap(bindings -> projectIssueTypes(bindings, projectId, workflowId, requestId, nodeId))
+                        .flatMap(bindings -> projectIssueTypes(bindings, projectId, workflowId, requestId, nodeId, actorUserId))
                         .flatMap(issueTypes -> Mono.zip(
                                 statusRepository.findActiveByWorkflowId(workflowId).collectList(),
                                 transitionRepository.findByWorkflowIdOrderBySortOrderAsc(workflowId).collectList()
@@ -132,7 +133,7 @@ public class WorkflowEditService {
 
     // Типы задач проекта, привязанные к workflow. Пусто быть не может: такой workflow проекту не принадлежит.
     private Mono<List<IssueType>> projectIssueTypes(List<WorkflowBindingEntity> bindings, UUID projectId,
-                                                    UUID workflowId, String requestId, String nodeId) {
+                                                    UUID workflowId, String requestId, String nodeId, UUID actorUserId) {
         UUID defaultProjectId = workflowProperties.defaultProjectId();
         if (bindings.stream().anyMatch(b -> b.getProjectId().equals(defaultProjectId))) {
             String message = "Default workflow is shared by all projects and cannot be modified: id=" + workflowId
@@ -141,20 +142,20 @@ public class WorkflowEditService {
             return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, message));
         }
 
-        List<IssueType> issueTypes = bindings.stream()
-                .filter(b -> b.getProjectId().equals(projectId))
-                .map(b -> IssueType.valueOf(b.getIssueType()))
-                .toList();
-        if (issueTypes.isEmpty()) {
-            log.warn("[{}][{}] Workflow {} is not bound to project {}", requestId, nodeId, workflowId, projectId);
-            return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
-                    "Workflow not found in project: id=" + workflowId));
-        }
-        if (bindings.stream().anyMatch(b -> !b.getProjectId().equals(projectId))) {
-            return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-                    "Workflow is shared with another project and cannot be modified"));
-        }
-        return Mono.just(issueTypes);
+        return projectClient.listIssueTypeDetails(requestId, nodeId, projectId, actorUserId)
+                .flatMap(types -> {
+                    List<IssueType> issueTypes = types.stream()
+                            .filter(type -> bindings.stream().anyMatch(binding -> binding.getProjectId().equals(projectId)
+                                    && IssueTypeBindingIdentity.matches(binding, type)))
+                            .map(type -> IssueType.valueOf(type.getCode())).toList();
+                    if (issueTypes.isEmpty()) return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
+                            "Workflow not found in project: id=" + workflowId));
+                    if (bindings.stream().anyMatch(binding -> !binding.getProjectId().equals(projectId))) {
+                        return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                "Workflow is shared with another project and cannot be modified"));
+                    }
+                    return Mono.just(issueTypes);
+                });
     }
 
     WorkflowCreationDto toCreationDto(UUID projectId, EditableWorkflow current) {

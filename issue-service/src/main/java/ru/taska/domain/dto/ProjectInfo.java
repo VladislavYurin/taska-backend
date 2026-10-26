@@ -10,5 +10,8 @@ package ru.taska.domain.dto;
 public record ProjectInfo(
         String id,
         String key,
-        String name
-) {}
+        String name,
+        java.util.Map<String, IssueTypeMetadata> issueTypes
+) {
+    public ProjectInfo(String id, String key, String name) { this(id, key, name, java.util.Map.of()); }
+}

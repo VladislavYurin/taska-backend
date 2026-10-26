@@ -46,6 +46,13 @@ public class GrpcProjectIssueTypeClient {
         return dynamicStub().updateProjectIssueType(request.build()).map(GrpcProjectIssueTypeClient::toRest);
     }
 
+    public Mono<ListProjectIssueTypesDto> reorder(UUID project, ReorderProjectIssueTypesRequestDto body, GatewayContext context) {
+        return dynamicStub().reorderProjectIssueTypes(ru.taska.api.project.v1.ReorderProjectIssueTypesRequest.newBuilder()
+                        .setHeader(header(context)).setProjectId(project.toString()).setActorUserId(context.userContext().userId())
+                        .addAllCodes(body.getCodes()).build())
+                .map(response -> new ListProjectIssueTypesDto(response.getItemsList().stream().map(GrpcProjectIssueTypeClient::toRest).toList()));
+    }
+
     public Mono<Void> delete(UUID project, String code, GatewayContext context) {
         return dynamicStub().deleteProjectIssueType(base(project, code, context).build()).then();
     }
@@ -62,7 +69,7 @@ public class GrpcProjectIssueTypeClient {
     }
 
     private Header header(GatewayContext context) {
-        return Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()).build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub dynamicStub() {

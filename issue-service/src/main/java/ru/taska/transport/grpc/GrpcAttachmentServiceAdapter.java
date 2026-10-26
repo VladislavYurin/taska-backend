@@ -25,33 +25,38 @@ public class GrpcAttachmentServiceAdapter extends ReactorIssueAttachmentServiceG
     @Override
     public Mono<CreateAttachmentUploadUrlResponse> createAttachmentUploadUrl(
             Mono<CreateAttachmentUploadUrlRequest> request) {
-        return grpcAttachmentService.createAttachmentUploadUrl(request)
+        return request.flatMap(req -> grpcAttachmentService.createAttachmentUploadUrl(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("createAttachmentUploadUrl"));
     }
 
     @Override
     public Mono<AttachmentResponse> confirmAttachmentUpload(
             Mono<ConfirmAttachmentUploadRequest> request) {
-        return grpcAttachmentService.confirmAttachmentUpload(request)
+        return request.flatMap(req -> grpcAttachmentService.confirmAttachmentUpload(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("confirmAttachmentUpload"));
     }
 
     @Override
     public Mono<ListAttachmentsResponse> listAttachments(Mono<ListAttachmentsRequest> request) {
-        return grpcAttachmentService.listAttachments(request)
+        return request.flatMap(req -> grpcAttachmentService.listAttachments(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("listAttachments"));
     }
 
     @Override
     public Mono<GetAttachmentDownloadUrlResponse> getAttachmentDownloadUrl(
             Mono<GetAttachmentDownloadUrlRequest> request) {
-        return grpcAttachmentService.getAttachmentDownloadUrl(request)
+        return request.flatMap(req -> grpcAttachmentService.getAttachmentDownloadUrl(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("getAttachmentDownloadUrl"));
     }
 
     @Override
     public Mono<Empty> deleteAttachment(Mono<DeleteAttachmentRequest> request) {
-        return grpcAttachmentService.deleteAttachment(request)
+        return request.flatMap(req -> grpcAttachmentService.deleteAttachment(Mono.just(req))
+                .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())))
                 .transform(GrpcExceptionHandler.withErrorHandling("deleteAttachment"));
     }
 }

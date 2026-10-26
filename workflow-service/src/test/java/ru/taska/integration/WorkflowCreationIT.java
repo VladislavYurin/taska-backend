@@ -77,6 +77,12 @@ class WorkflowCreationIT extends AbstractIT {
         org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
+        org.mockito.Mockito.when(projectClient.listIssueTypeDetails(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> Mono.just(ru.taska.RegistryFixtures.types(inv.getArgument(2), ru.taska.domain.IssueType.values())));
+        org.mockito.Mockito.when(projectClient.getIssueTypesInternal(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> Mono.just(ru.taska.RegistryFixtures.types(inv.getArgument(0), ru.taska.domain.IssueType.values())));
+
 
     }
 
@@ -328,6 +334,8 @@ class WorkflowCreationIT extends AbstractIT {
     void customTypeCreationThroughGrpcRetainsBindingKey() {
         Mockito.when(projectClient.listIssueTypes(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Mono.just(List.of(IssueType.valueOf("REQUEST"))));
+        Mockito.when(projectClient.listIssueTypeDetails(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(PROJECT_ID, IssueType.valueOf("REQUEST"))));
         var legacy = buildValidGrpcRequest();
         var custom = legacy.toBuilder().setBody(legacy.getBody().toBuilder().clearIssueTypes().addIssueTypeKeys("REQUEST")).build();
         var result = stub.createWorkflow(Mono.just(custom)).block();

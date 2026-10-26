@@ -292,9 +292,6 @@ public class GrpcAdminServiceClient {
     }
 
     private Header buildGrpcHeader(GatewayContext context) {
-        return Header.newBuilder()
-                .setRequestId(context.requestId())
-                .setNodeId(context.nodeId())
-                .build();
+        return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
     }
 }

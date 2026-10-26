@@ -979,6 +979,9 @@ message IssueShortResponse {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   optional string issue_type_key = 11;
+  optional string issue_type_name = 12;
+  optional string issue_type_color = 13;
+  optional string issue_type_icon = 14;
 }
 
 message IssueResponse {
@@ -1479,6 +1482,8 @@ message IssueHistoryResponse {
 
   // Профиль автора, включая бывших участников; отсутствует, если профиль недоступен.
   optional ru.taska.common.v1.UserSummaryResponse actor = 7;
+  // Public attribution; internal token id/name are never exported.
+  optional string channel = 8;
 }
 
 /**
@@ -1693,6 +1698,7 @@ message IssueCommentResponse {
    * Автор комментария
    */
   optional ru.taska.common.v1.UserSummaryResponse author = 9;
+  optional string channel = 10;
 }
 
 /**
