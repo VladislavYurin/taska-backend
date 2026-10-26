@@ -35,7 +35,7 @@ public record IssueDetailsSources(
 
     /**
      * Собирает все уникальные ID пользователей, упомянутых в задаче
-     * (исполнитель, автор, наблюдатели, авторы вложений).
+     * (исполнитель, автор, наблюдатели, авторы вложений и событий истории).
      */
     public Set<UUID> extractUserIds() {
         Set<UUID> userIds = new HashSet<>();
@@ -58,6 +58,13 @@ public record IssueDetailsSources(
                     .map(AttachmentDto::issueAttachment)
                     .filter(Objects::nonNull)
                     .map(IssueAttachment::getUploadedBy)
+                    .filter(Objects::nonNull)
+                    .forEach(userIds::add);
+        }
+
+        if (history != null) {
+            history.stream()
+                    .map(IssueHistory::getActorUserId)
                     .filter(Objects::nonNull)
                     .forEach(userIds::add);
         }

@@ -24,7 +24,7 @@ class CommentHistoryPrivacyTest {
                 .actorUserId(UUID.randomUUID()).occurredAt(Instant.now()).eventType(type).payload(payload).build();
 
         var legacy = new IssueMapper(json).toIssueHistoryProto(history);
-        var aggregated = new IssueDetailsMapperImpl().toHistoryEvent(history);
+        var aggregated = new IssueDetailsMapperImpl().toHistoryEvent(history, java.util.Map.of());
 
         for (var response : List.of(legacy, aggregated)) {
             assertThat(response.getPayload()).isEqualTo("{\"commentId\":\"comment-id\"}");

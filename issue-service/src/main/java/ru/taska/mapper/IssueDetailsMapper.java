@@ -53,7 +53,7 @@ public abstract class IssueDetailsMapper {
                         agg.issueCore().issue(), agg.labels(), agg.watchers(),
                         agg.links(), agg.attachments(), agg.userProfiles(),
                         agg.issueCore().isWatching(), agg.issueCore().commentCount()))
-                .addAllHistory(toHistoryList(agg.history()))
+                .addAllHistory(toHistoryList(agg.history(), agg.userProfiles()))
                 .build();
     }
 
@@ -142,9 +142,19 @@ public abstract class IssueDetailsMapper {
                 .build();
     }
 
-    abstract List<IssueHistoryResponse> toHistoryList(List<IssueHistory> history);
+    abstract List<IssueHistoryResponse> toHistoryList(List<IssueHistory> history, @Context Map<UUID, UserSummary> profiles);
 
     @Mapping(target = "payload", expression = "java(IssueMapperUtils.historyPayload(event))")
-    abstract IssueHistoryResponse toHistoryEvent(IssueHistory event);
+    @Mapping(target = "actor", ignore = true)
+    abstract IssueHistoryResponse toHistoryEvent(IssueHistory event, @Context Map<UUID, UserSummary> profiles);
+
+    @AfterMapping
+    protected void mapHistoryActor(IssueHistory event, @Context Map<UUID, UserSummary> profiles,
+                                   @MappingTarget IssueHistoryResponse.Builder builder) {
+        if (event != null && event.getActorUserId() != null && profiles != null
+                && profiles.get(event.getActorUserId()) != null) {
+            builder.setActor(IssueMapperUtils.resolveUser(event.getActorUserId(), profiles));
+        }
+    }
 }
 

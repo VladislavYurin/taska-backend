@@ -60,6 +60,8 @@ public class IssueDetailsServiceIT extends AbstractIT {
     @Autowired
     private IssueRepository issueRepository;
     @Autowired
+    private ru.taska.mapper.IssueDetailsMapper issueDetailsMapper;
+    @Autowired
     private IssueCommentRepository issueCommentRepository;
     @Autowired
     private IssueWatcherRepository issueWatcherRepository;
@@ -258,6 +260,32 @@ public class IssueDetailsServiceIT extends AbstractIT {
                         error instanceof DomainException domainException
                                 && domainException.getStatus() == DomainStatus.NOT_FOUND)
                 .verify();
+    }
+
+    @Test
+    void historyOnlyAuthorsAreFetchedOnceAndMappedEvenWithoutProjectMembership() {
+        UUID formerMember = UUID.randomUUID();
+        UUID unavailable = UUID.randomUUID();
+        var formerEvent = ru.taska.domain.entity.IssueHistory.builder().id(UUID.randomUUID()).issueId(issueId)
+                .actorUserId(formerMember).eventType(ru.taska.domain.entity.IssueEventType.CREATED).build();
+        var missingEvent = formerEvent.toBuilder().id(UUID.randomUUID()).actorUserId(unavailable).build();
+        var systemEvent = formerEvent.toBuilder().id(UUID.randomUUID()).actorUserId(null).build();
+        Mockito.when(issueHistoryService.getHistory(REQUEST_ID, NODE_ID, issueId))
+                .thenReturn(Flux.just(formerEvent, missingEvent, systemEvent, formerEvent));
+        var ids = java.util.Set.of(reporterId, formerMember, unavailable);
+        Mockito.when(grpcAuthServiceClient.getUserProfiles(ids, REQUEST_ID, NODE_ID))
+                .thenReturn(Mono.just(Map.of(formerMember, new UserSummary(formerMember, "Former member", null))));
+
+        StepVerifier.create(issueDetailsService.getIssueDetails(REQUEST_ID, NODE_ID, issueId, actorUserId))
+                .assertNext(aggregate -> {
+                    var response = issueDetailsMapper.toProto(aggregate);
+                    Assertions.assertEquals(4, response.getHistoryCount());
+                    Assertions.assertEquals("Former member", response.getHistory(0).getActor().getDisplayName());
+                    Assertions.assertFalse(response.getHistory(1).hasActor());
+                    Assertions.assertEquals(unavailable.toString(), response.getHistory(1).getActorUserId());
+                    Assertions.assertFalse(response.getHistory(2).hasActor());
+                }).verifyComplete();
+        Mockito.verify(grpcAuthServiceClient).getUserProfiles(ids, REQUEST_ID, NODE_ID);
     }
 
     // ---------- сидинг тестовых данных напрямую через DatabaseClient ----------

@@ -255,6 +255,20 @@ class IssueMapperTest {
     }
 
     @Test
+    void historyActorIsNullableAndIndependentOfMembership() {
+        var event = IssueHistoryResponse.newBuilder().setId(HISTORY_ID).setActorUserId(USER_ID)
+                .setEventType(IssueEventType.ISSUE_EVENT_TYPE_CREATED).setPayload("{}").build();
+        Assertions.assertNull(mapper.toRestIssueHistoryResponse(event).getActor());
+        var actor = UserSummaryResponse.newBuilder().setId(USER_ID).setDisplayName("Former member")
+                .setAvatarUrl("https://example.test/avatar.png").build();
+        var result = mapper.toRestIssueHistoryResponse(event.toBuilder().setActor(actor).build());
+        Assertions.assertEquals(UUID.fromString(USER_ID), result.getActor().getId());
+        Assertions.assertEquals("Former member", result.getActor().getDisplayName());
+        Assertions.assertEquals("https://example.test/avatar.png", result.getActor().getAvatarUrl().toString());
+        Assertions.assertEquals(USER_ID, result.getActorUserId());
+    }
+
+    @Test
     @DisplayName("Должен корректно преобразовать IssueWithHistoryResponse(gRPC DTO) в IssueWithHistoryResponseDto(REST DTO)")
     void toRestIssueWithHistoryResponse_shouldCorrectMapsAllFields() {
         var issue = IssueResponse.newBuilder()

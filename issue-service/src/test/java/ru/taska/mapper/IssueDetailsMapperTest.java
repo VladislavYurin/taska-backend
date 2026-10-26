@@ -237,6 +237,33 @@ class IssueDetailsMapperTest {
         Assertions.assertEquals(1, response.getHistoryCount());
     }
 
+    @Test
+    void historyResolvesFormerMemberWithoutOtherReferencesAndPreservesMissingActors() {
+        UUID reporter = UUID.randomUUID();
+        UUID formerMember = UUID.randomUUID();
+        UUID unavailable = UUID.randomUUID();
+        var core = createCoreDetails(UUID.randomUUID(), null, reporter);
+        var history = List.of(createHistory(core.issue().getId(), formerMember),
+                createHistory(core.issue().getId(), unavailable), createHistory(core.issue().getId(), null));
+        var sources = new IssueDetailsSources(core, FetchResult.failed(), FetchResult.failed(),
+                FetchResult.failed(), FetchResult.failed(), history);
+        var aggregate = new IssueDetailsAggregate(sources,
+                Map.of(formerMember, new UserSummary(formerMember, "Former member", "https://example.test/avatar.png")));
+
+        var result = mapper.toProto(aggregate);
+
+        Assertions.assertEquals(3, result.getHistoryCount());
+        var resolved = result.getHistory(0);
+        Assertions.assertEquals(formerMember.toString(), resolved.getActorUserId());
+        Assertions.assertTrue(resolved.hasActor());
+        Assertions.assertEquals(formerMember.toString(), resolved.getActor().getId());
+        Assertions.assertEquals("Former member", resolved.getActor().getDisplayName());
+        Assertions.assertEquals("https://example.test/avatar.png", resolved.getActor().getAvatarUrl());
+        Assertions.assertEquals(unavailable.toString(), result.getHistory(1).getActorUserId());
+        Assertions.assertFalse(result.getHistory(1).hasActor());
+        Assertions.assertFalse(result.getHistory(2).hasActor());
+    }
+
     private IssueCoreDetails createCoreDetails(UUID id, UUID assigneeId, UUID reporterId) {
         Issue issue = new Issue();
         issue.setId(id);
