@@ -105,3 +105,8 @@ invitation:
 
 directory:
   avatar-timeout: ${AUTH_DIRECTORY_AVATAR_TIMEOUT:250ms}
+
+# Personal access token policy (TAS-400). Scope enforcement is mandatory in callers.
+personal-tokens:
+  max-lifetime-days: ${AUTH_PAT_MAX_LIFETIME_DAYS:90}
+  max-active-tokens: ${AUTH_PAT_MAX_ACTIVE_TOKENS:10}

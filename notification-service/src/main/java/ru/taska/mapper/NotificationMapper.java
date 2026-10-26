@@ -307,6 +307,18 @@ public class NotificationMapper {
                 .build();
     }
 
+    public Notification toPersonalToken(TaskaEvent event, UUID owner, String prefix, boolean created) {
+        return Notification.builder()
+                .userId(owner)
+                .notificationType(created ? NotificationType.PERSONAL_ACCESS_TOKEN_CREATED
+                        : NotificationType.PERSONAL_ACCESS_TOKEN_REVOKED)
+                .title(created ? "Personal access token created" : "Personal access token revoked")
+                .body("Personal access token " + prefix + "... was " + (created ? "created." : "revoked."))
+                .createdAt(Instant.now())
+                .sourceEventId(event.id())
+                .build();
+    }
+
     public Notification toUserBlocked(
             TaskaEvent event,
             UUID userId,
@@ -460,6 +472,8 @@ public class NotificationMapper {
             case LABEL_REMOVED -> NotificationKind.NOTIFICATION_KIND_LABEL_REMOVED;
             case USER_BLOCKED-> NotificationKind.NOTIFICATION_KIND_USER_BLOCKED;
             case USER_UNBLOCKED -> NotificationKind.NOTIFICATION_KIND_USER_UNBLOCKED;
+            case PERSONAL_ACCESS_TOKEN_CREATED -> NotificationKind.NOTIFICATION_KIND_PERSONAL_ACCESS_TOKEN_CREATED;
+            case PERSONAL_ACCESS_TOKEN_REVOKED -> NotificationKind.NOTIFICATION_KIND_PERSONAL_ACCESS_TOKEN_REVOKED;
             case ISSUE_COMMENT_CREATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_CREATED;
             case ISSUE_COMMENT_UPDATED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_UPDATED;
             case ISSUE_COMMENT_DELETED -> NotificationKind.NOTIFICATION_KIND_ISSUE_COMMENT_DELETED;

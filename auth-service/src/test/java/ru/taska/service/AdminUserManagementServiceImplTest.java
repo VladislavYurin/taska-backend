@@ -40,6 +40,9 @@ class AdminUserManagementServiceImplTest {
     private static final Instant FIXED_UPDATED_AT = Instant.parse("2026-08-22T07:00:00Z");
 
     @Mock
+    private ru.taska.security.pat.PersonalAccessTokenService personalTokens;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
@@ -59,11 +62,14 @@ class AdminUserManagementServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(personalTokens.revokeAll(org.mockito.Mockito.any(), org.mockito.Mockito.anyString(), org.mockito.Mockito.any()))
+                .thenReturn(Mono.empty());
         service = new AdminUserManagementServiceImpl(
                 userRepository,
                 outboxEventMapper,
                 outboxEventService,
-                credentialRepository
+                credentialRepository,
+                personalTokens
         );
         targetUserId = UUID.randomUUID();
         actorUserId = UUID.randomUUID();
@@ -78,7 +84,8 @@ class AdminUserManagementServiceImplTest {
                 userRepository,
                 outboxEventMapper,
                 outboxEventService,
-                credentialRepository
+                credentialRepository,
+                personalTokens
         );
     }
 

@@ -121,14 +121,19 @@ public class AuthGrpcService {
             timer = "auth-service_validate-accessToken_grpc_timer")
     public Mono<ValidateAccessTokenResponse> validateAccessToken(Mono<ValidateAccessTokenRequest> request) {
         return request
-                .flatMap(req -> Mono.zip(
+                .flatMap(req -> {
+                    if (req.getBody().getAccessToken().startsWith("tsk_") && !req.getBody().getAllowPersonalToken()) {
+                        return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAUTHENTICATED,
+                                "This client does not support personal access tokens"));
+                    }
+                    return Mono.zip(
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                                 req.getBody().getAccessToken(), "body.accessToken")
-                ))
+                );})
 
                 .flatMap(t -> {
                     String requestId = t.getT1();

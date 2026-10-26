@@ -106,6 +106,8 @@ public class MetaServiceImpl implements MetaService {
             case LABEL_REMOVED -> "Label removed";
             case USER_BLOCKED -> "User blocked";
             case USER_UNBLOCKED -> "User unblocked";
+            case PERSONAL_ACCESS_TOKEN_CREATED -> "Personal access token created";
+            case PERSONAL_ACCESS_TOKEN_REVOKED -> "Personal access token revoked";
             case ISSUE_COMMENT_CREATED -> "Issue comment created";
             case ISSUE_COMMENT_UPDATED -> "Issue comment updated";
             case ISSUE_COMMENT_DELETED -> "Issue comment deleted";

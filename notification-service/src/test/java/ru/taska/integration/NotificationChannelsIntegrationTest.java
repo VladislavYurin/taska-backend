@@ -61,6 +61,76 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
         assertThat(notifications.findById(saved.getId()).block(WAIT).getNotificationType()).isEqualTo(NotificationType.PROJECT_ARCHIVED);
     }
 
+    @Test
+    void databaseAcceptsAllPublishedNotificationTypes() {
+        reactor.core.publisher.Flux.fromArray(NotificationType.values())
+                .concatMap(type -> notifications.save(Notification.builder().userId(user).notificationType(type)
+                        .title("Migration compatibility").body("Safe test text").sourceEventId(UUID.randomUUID())
+                        .createdAt(Instant.now()).build()))
+                .collectList().as(reactor.test.StepVerifier::create)
+                .assertNext(items -> assertThat(items).hasSize(NotificationType.values().length))
+                .verifyComplete();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PersonalAccessTokenCreated,PERSONAL_ACCESS_TOKEN_CREATED", "PersonalAccessTokenRevoked,PERSONAL_ACCESS_TOKEN_REVOKED"})
+    void personalTokenSecurityEventsReachOnlyOwnerInboxAndEnabledEmail(String eventType, NotificationType type) throws Exception {
+        connect(123);
+        var payload=mapper.createObjectNode().put("userId",user.toString()).put("email","user@example.test")
+                .put("tokenPrefix","tsk_pat_Ab12").put("tokenId",UUID.randomUUID().toString())
+                .put("name","PRIVATE TOKEN NAME").put("secret","PRIVATE RAW SECRET").put("hash","PRIVATE HASH");
+        var event=TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType(eventType).occurredAt(Instant.now()).payload(payload).build();
+        handler.handle(event).then(handler.handle(event)).block(WAIT);
+        var saved=notifications.findAll().collectList().block(WAIT);
+        assertThat(saved).singleElement().satisfies(n -> {
+            assertThat(n.getUserId()).isEqualTo(user);
+            assertThat(n.getNotificationType()).isEqualTo(type);
+            assertThat(n.getBody()).contains("tsk_pat_Ab12").doesNotContain("PRIVATE",payload.get("tokenId").asString());
+        });
+        assertThat(count("taska.notification_deliveries")).isEqualTo(1);
+        assertThat(text("SELECT channel FROM taska.notification_deliveries")).isEqualTo("EMAIL");
+        queue.dispatchEmail().then(queue.dispatchTelegram()).block(WAIT);
+        var mime=org.mockito.ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mail).send(mime.capture());
+        var bytes=new java.io.ByteArrayOutputStream();
+        mime.getValue().writeTo(bytes);
+        assertThat(bytes.toString(java.nio.charset.StandardCharsets.UTF_8)).doesNotContain("PRIVATE");
+        verify(telegram,never()).notification(anyLong(),any());
+        settings.update(user,"user@example.test",false,null).block(WAIT);
+        handler.handle(TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType(eventType).occurredAt(Instant.now()).payload(payload).build()).block(WAIT);
+        assertThat(count("taska.notifications")).isEqualTo(2);
+        assertThat(count("taska.notification_deliveries")).isEqualTo(1);
+    }
+
+    @Test
+    void tokenEventProvisionsLegacyOwnerButCannotOverwriteNewerEmailOrOptOut() {
+        sql("DELETE FROM taska.notification_preferences");
+        var payload=mapper.createObjectNode().put("userId",user.toString()).put("email","old@example.test")
+                .put("tokenPrefix","tsk_pat_Ab12");
+        handler.handle(TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType("PersonalAccessTokenCreated").occurredAt(Instant.now()).payload(payload).build()).block(WAIT);
+        assertThat(text("SELECT email FROM taska.notification_preferences")).isEqualTo("old@example.test");
+        assertThat(count("taska.notification_deliveries")).isEqualTo(1);
+        settings.update(user,"new@example.test",false,null).block(WAIT);
+        handler.handle(TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType("PersonalAccessTokenRevoked").occurredAt(Instant.now()).payload(payload).build()).block(WAIT);
+        assertThat(text("SELECT email FROM taska.notification_preferences")).isEqualTo("new@example.test");
+        assertThat(text("SELECT email_enabled::text FROM taska.notification_preferences")).isEqualTo("false");
+        assertThat(count("taska.notification_deliveries")).isEqualTo(1);
+    }
+
+    @Test
+    void malformedTokenEventCannotExposeASecretDisguisedAsPrefix() {
+        var payload=mapper.createObjectNode().put("userId",user.toString()).put("email","user@example.test")
+                .put("tokenPrefix","tsk_pat_Ab12THIS_IS_A_RAW_TOKEN");
+        handler.handle(TaskaEvent.builder().id(UUID.randomUUID()).aggregateId(user).aggregateType("user")
+                .eventType("PersonalAccessTokenCreated").occurredAt(Instant.now()).payload(payload).build()).block(WAIT);
+        assertThat(count("taska.notifications")).isZero();
+        assertThat(count("taska.notification_deliveries")).isZero();
+    }
+
     @BeforeEach
     void prepare() {
         sql("DELETE FROM taska.notification_deliveries");

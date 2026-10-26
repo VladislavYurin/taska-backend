@@ -41,7 +41,9 @@ public enum EventType {
     WORKLOG_DELETED("WorklogDeleted"),
     USER_BLOCKED("UserBlocked"),
     USER_UNBLOCKED("UserUnblocked"),
-    PROJECT_UPDATED("ProjectUpdated");
+    PROJECT_UPDATED("ProjectUpdated"),
+    PERSONAL_ACCESS_TOKEN_CREATED("PersonalAccessTokenCreated"),
+    PERSONAL_ACCESS_TOKEN_REVOKED("PersonalAccessTokenRevoked");
 
     private final String value;
 

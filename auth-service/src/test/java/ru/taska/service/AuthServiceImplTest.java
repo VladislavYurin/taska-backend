@@ -55,6 +55,9 @@ class AuthServiceImplTest {
     private static final String REQUEST_ID = "test-request-id";
 
     @Mock
+    private ru.taska.security.pat.PersonalAccessTokenService personalTokens;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
@@ -154,6 +157,9 @@ class AuthServiceImplTest {
         Mockito.lenient().when(securityProperties.getMaxFailedAttempts()).thenReturn(5);
         Mockito.lenient().when(securityProperties.getLockDuration()).thenReturn(Duration.ofMinutes(15));
 
+        Mockito.lenient().when(personalTokens.revokeAll(Mockito.any(), Mockito.anyString(), Mockito.any()))
+                .thenReturn(Mono.empty());
+
         authServiceImpl = new AuthServiceImpl(
                 userRepository,
                 credentialRepository,
@@ -167,6 +173,7 @@ class AuthServiceImplTest {
                 passwordValidator,
                 jwtValidator,
                 accountLockService,
+                personalTokens,
                 requiresNewTransactionalOperator
         );
     }

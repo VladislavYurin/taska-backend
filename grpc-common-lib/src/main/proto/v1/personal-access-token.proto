@@ -1,0 +1,49 @@
+syntax = "proto3";
+package ru.taska.auth.v1;
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.v1";
+option java_outer_classname = "PersonalAccessTokenApiProto";
+
+service PersonalAccessTokenService {
+  rpc CreatePersonalAccessToken(CreatePersonalAccessTokenRequest) returns (CreatePersonalAccessTokenResponse);
+  rpc ListPersonalAccessTokens(ListPersonalAccessTokensRequest) returns (ListPersonalAccessTokensResponse);
+  rpc RevokePersonalAccessToken(RevokePersonalAccessTokenRequest) returns (google.protobuf.Empty);
+}
+message PersonalAccessTokenMetadata {
+  string id = 1;
+  string name = 2;
+  string token_prefix = 3;
+  repeated string scopes = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  google.protobuf.Timestamp last_used_at = 7;
+}
+message CreatePersonalAccessTokenRequest {
+  ru.taska.common.v1.Header header = 1;
+  // Ownership derives from this validated JWT session, never a caller-supplied user id.
+  string session_access_token = 2;
+  string name = 3;
+  repeated string scopes = 4;
+  optional int32 expires_in_days = 5;
+}
+message CreatePersonalAccessTokenResponse {
+  PersonalAccessTokenMetadata token = 1;
+  string secret = 2;
+}
+message ListPersonalAccessTokensRequest {
+  ru.taska.common.v1.Header header = 1;
+  string session_access_token = 2;
+}
+message ListPersonalAccessTokensResponse {
+  repeated PersonalAccessTokenMetadata items = 1;
+  int32 max_lifetime_days = 2;
+  int32 max_active_tokens = 3;
+}
+message RevokePersonalAccessTokenRequest {
+  ru.taska.common.v1.Header header = 1;
+  string session_access_token = 2;
+  string token_id = 3;
+}

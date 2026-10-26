@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package ru.taska.common.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option java_multiple_files = true;
 option java_package = "ru.taska.api.common.v1";
 option java_outer_classname = "CommonApiProto";
@@ -36,6 +38,12 @@ enum GlobalRoleProto {
   GLOBAL_ROLE_GLOBAL_ADMIN = 2;
 }
 
+enum AccessTokenKind {
+  ACCESS_TOKEN_KIND_UNSPECIFIED = 0;
+  ACCESS_TOKEN_KIND_JWT = 1;
+  ACCESS_TOKEN_KIND_PAT = 2;
+}
+
 message UserContext {
   string user_id = 1;
   reserved 2;
@@ -44,6 +52,10 @@ message UserContext {
   string display_name = 4;
   UserStatus status = 5;
   GlobalRoleProto global_role = 6;
+  AccessTokenKind token_kind = 7;
+  optional string token_id = 8;
+  repeated string scopes = 9;
+  google.protobuf.Timestamp token_expires_at = 10;
 }
 
 /**
