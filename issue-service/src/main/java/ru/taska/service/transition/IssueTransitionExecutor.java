@@ -22,6 +22,7 @@ import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -51,15 +52,22 @@ public class IssueTransitionExecutor {
             UUID issueId,
             String targetStatusKey,
             UUID transitionId,
-            UUID actorUserId
+            UUID actorUserId,
+            Integer expectedVersion
     ) {
-        return issueRepository.findActiveById(issueId)
+        // Lock before comparing the explicit precondition, including a same-status no-op.
+        // The lock and history/outbox writes share this transaction.
+        return (expectedVersion == null ? issueRepository.findActiveById(issueId)
+                : issueRepository.findActiveByIdForUpdate(issueId))
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue with ID {} was not found", requestId, nodeId, issueId);
 
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Issue not found"));
                 }))
                 .flatMap(issue -> {
+                    if (expectedVersion != null && !expectedVersion.equals(issue.getVersion())) {
+                        return Mono.error(versionConflict(issue));
+                    }
                     String sourceStatusKey = issue.getStatusKey();
 
                     if (Objects.equals(sourceStatusKey, targetStatusKey)) {
@@ -101,6 +109,11 @@ public class IssueTransitionExecutor {
                                 requestId, nodeId, result.getIssue().getId(), result.getIssue().getStatusKey());
                     }
                 });
+    }
+
+    static DomainException versionConflict(Issue issue) {
+        return new DomainException(DomainStatus.ABORTED, "Issue version does not match expected version",
+                Map.of("currentVersion", issue.getVersion().toString(), "currentStatus", issue.getStatusKey()));
     }
 
     private Mono<IssueWithHistory> loadIssueWithHistory(Issue issue) {

@@ -760,6 +760,12 @@ message TransitionIssueRequestBody {
    * Дополнительные данные для перехода.
    */
   string payload = 4;
+
+  /**
+   * Ожидаемая версия задачи. Отсутствие сохраняет поведение старых клиентов.
+   * При несовпадении переход не выполняется (ABORTED).
+   */
+  optional int32 expected_version = 5;
 }
 
 message ListIssueLinksRequest {

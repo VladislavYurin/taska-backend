@@ -108,7 +108,8 @@ class IssueTransitionServiceImplTest {
                         Mockito.any(UUID.class),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(UUID.class)
+                        Mockito.any(UUID.class),
+                        Mockito.isNull()
                 ))
                 .thenReturn(Mono.just(expectedResponse));
 
@@ -118,7 +119,8 @@ class IssueTransitionServiceImplTest {
                         ISSUE_ID,
                         TRANSITION_ID,
                         ACTOR_USER_ID,
-                        PAYLOAD
+                        PAYLOAD,
+                        null
                 ))
                 .expectNext(expectedResponse)
                 .verifyComplete();
@@ -133,7 +135,7 @@ class IssueTransitionServiceImplTest {
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
 
         Mockito.verify(executor, Mockito.times(1))
-                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID);
+                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null);
     }
 
     @Test
@@ -148,7 +150,8 @@ class IssueTransitionServiceImplTest {
                         ISSUE_ID,
                         TRANSITION_ID,
                         ACTOR_USER_ID,
-                        PAYLOAD
+                        PAYLOAD,
+                        null
                 ))
                 .expectErrorSatisfies(error -> {
                     Assertions.assertThat(error).isInstanceOf(DomainException.class);
@@ -195,7 +198,8 @@ class IssueTransitionServiceImplTest {
                         ISSUE_ID,
                         TRANSITION_ID,
                         ACTOR_USER_ID,
-                        PAYLOAD
+                        PAYLOAD,
+                        null
                 ))
                 .expectErrorSatisfies(error ->
                         Assertions.assertThat(error).isSameAs(expectedException))
@@ -252,7 +256,8 @@ class IssueTransitionServiceImplTest {
                         Mockito.any(UUID.class),
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
-                        Mockito.any(UUID.class)
+                        Mockito.any(UUID.class),
+                        Mockito.isNull()
                 ))
                 .thenReturn(Mono.error(new DomainException(DomainStatus.ABORTED, "Issue status was modified concurrently")),
                         Mono.just(expectedResponse));
@@ -269,7 +274,8 @@ class IssueTransitionServiceImplTest {
                         ISSUE_ID,
                         TRANSITION_ID,
                         ACTOR_USER_ID,
-                        PAYLOAD
+                        PAYLOAD,
+                        null
                 ))
                 .expectNext(expectedResponse)
                 .verifyComplete();
@@ -284,7 +290,26 @@ class IssueTransitionServiceImplTest {
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
 
         Mockito.verify(executor, Mockito.times(2))
-                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID);
+                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null);
+    }
+
+    @Test
+    void explicitVersionConflictIsNeverRetried() {
+        var issue = Issue.builder().id(ISSUE_ID).projectId(PROJECT_ID)
+                .statusKey(SOURCE_STATUS_KEY).version(1).build();
+        var conflict = IssueTransitionExecutor.versionConflict(issue.toBuilder().version(2).build());
+        Mockito.when(issueRepository.findActiveById(ISSUE_ID)).thenReturn(Mono.just(issue));
+        Mockito.when(issueProperties.allowedRoles().issueTransitionRoles()).thenReturn(allowedRoles);
+        Mockito.when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, ACTOR_USER_ID, allowedRoles))
+                .thenReturn(Mono.empty());
+        Mockito.when(validator.validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD))
+                .thenReturn(Mono.just(TARGET_STATUS_KEY));
+        Mockito.when(executor.executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, 1))
+                .thenReturn(Mono.error(conflict));
+        StepVerifier.create(processor.transitionIssue(REQUEST_ID, NODE_ID, ISSUE_ID, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD, 1))
+                .expectErrorMatches(error -> error == conflict).verify();
+        Mockito.verify(executor).executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, 1);
+        Mockito.verifyNoMoreInteractions(executor);
     }
 
 }

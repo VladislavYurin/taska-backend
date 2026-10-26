@@ -1,6 +1,9 @@
 package ru.taska.controller;
 
 import io.grpc.Status;
+import mapper.GrpcExceptionMapper;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import java.time.LocalDate;
 import nullable.NullableField;
 import org.assertj.core.api.Assertions;
@@ -948,6 +951,7 @@ class IssueControllerTest {
         Mockito.when(issueClient.transitionIssue(
                         Mockito.eq(ISSUE_ID),
                         Mockito.eq(TRANSITION_ID),
+                        Mockito.eq("\"3\""),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)
                 ))
@@ -956,6 +960,7 @@ class IssueControllerTest {
         webTestClient.put()
                 .uri("/api/v1/issues/{issueId}/transition/{transitionId}", ISSUE_ID, TRANSITION_ID)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header(HttpHeaders.IF_MATCH, "\"3\"")
                 .bodyValue(request)
                 .exchange()
                 .expectStatus().isOk()
@@ -965,9 +970,29 @@ class IssueControllerTest {
         Mockito.verify(issueClient).transitionIssue(
                 Mockito.eq(ISSUE_ID),
                 Mockito.eq(TRANSITION_ID),
+                Mockito.eq("\"3\""),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class)
         );
+    }
+
+    @Test
+    void transitionVersionConflictReturnsSafeDetailsAndRequestId() {
+        mockAuthenticatedUser();
+        var conflict = GrpcExceptionMapper.toStatusRuntimeException(
+                new DomainException(DomainStatus.ABORTED,
+                        "Issue version does not match expected version",
+                        Map.of("currentVersion", "4", "currentStatus", "IN_PROGRESS")));
+        Mockito.when(issueClient.transitionIssue(Mockito.eq(ISSUE_ID), Mockito.eq(TRANSITION_ID),
+                Mockito.eq("3"), Mockito.any(Mono.class), Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(conflict));
+        webTestClient.put().uri("/api/v1/issues/{issueId}/transition/{transitionId}", ISSUE_ID, TRANSITION_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).header(HttpHeaders.IF_MATCH, "3")
+                .exchange().expectStatus().isEqualTo(409)
+                .expectHeader().exists("X-Request-Id")
+                .expectBody().jsonPath("$.code").isEqualTo("ABORTED")
+                .jsonPath("$.details.currentVersion").isEqualTo("4")
+                .jsonPath("$.details.currentStatus").isEqualTo("IN_PROGRESS");
     }
 
     @Test
@@ -980,6 +1005,7 @@ class IssueControllerTest {
         Mockito.when(issueClient.transitionIssue(
                         Mockito.eq(ISSUE_ID),
                         Mockito.eq(TRANSITION_ID),
+                        Mockito.isNull(),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)
                 ))
@@ -996,6 +1022,7 @@ class IssueControllerTest {
         Mockito.verify(issueClient).transitionIssue(
                 Mockito.eq(ISSUE_ID),
                 Mockito.eq(TRANSITION_ID),
+                Mockito.isNull(),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class)
         );

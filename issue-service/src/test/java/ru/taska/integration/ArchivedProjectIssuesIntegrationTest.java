@@ -83,7 +83,7 @@ class ArchivedProjectIssuesIntegrationTest extends AbstractIT {
                 issues.updateIssue("r","n",issue.getId(),actor,"Changed","",IssuePriority.MEDIUM,null,null,null,null,null),
                 issues.deleteIssue("r","n",issue.getId(),actor),issues.assignIssue("r","n",issue.getId(),actor,actor),
                 patches.patchIssue("r","n",issue.getId(),actor,issue.getVersion(),emptyPatch),
-                transitions.transitionIssue("r","n",issue.getId(),UUID.randomUUID(),actor,""),
+                transitions.transitionIssue("r","n",issue.getId(),UUID.randomUUID(),actor,"",null),
                 comments.addComment("r","n",issue.getId(),actor,"Comment"),
                 attachments.createUploadUrl("r","n",issue.getId(),actor,"image/png",100),
                 labels.createProjectLabel("r","n",new ru.taska.domain.dto.labels.LabelCommands.CreateProjectLabelRequestDto(project,"Label","#abcdef",actor)),

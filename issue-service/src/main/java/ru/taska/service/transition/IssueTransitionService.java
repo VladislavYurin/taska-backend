@@ -19,6 +19,7 @@ public interface IssueTransitionService {
      * @param transitionId ID перехода по workflow
      * @param actorUserId  ID пользователя, инициировавшего запрос
      * @param payload      дополнительные данные для перехода
+     * @param expectedVersion ожидаемая версия, null для безусловного перехода
      * @return Mono<{@link IssueWithHistory}> включающим задачу с обновленным статусом,
      * а так же историю изменений
      */
@@ -28,6 +29,7 @@ public interface IssueTransitionService {
             UUID issueId,
             UUID transitionId,
             UUID actorUserId,
-            String payload
+            String payload,
+            Integer expectedVersion
     );
 }

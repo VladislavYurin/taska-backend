@@ -1070,6 +1070,9 @@ class IssueMapperTest {
     private static Stream<Arguments> invalidIfMatchArguments() {
         return Stream.of(
                 Arguments.of("abc"),
+                Arguments.of("0"),
+                Arguments.of("-1"),
+                Arguments.of("2147483648"),
                 Arguments.of(""),
                 Arguments.of("\""),
                 Arguments.of("\"\""),
