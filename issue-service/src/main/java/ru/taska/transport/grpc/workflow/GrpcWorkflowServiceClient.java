@@ -36,7 +36,8 @@ public class GrpcWorkflowServiceClient {
                 .flatMap(workflow -> workflow.getStatusesList().stream().anyMatch(s -> s.getStatusKey().equals(issue.getStatusKey()))
                         ? Mono.empty() : Mono.error(new ru.taska.exception.DomainException(
                                 ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
-                                "Current status is not available for the target issue type")));
+                                "Current status is not available for the target issue type",
+                                java.util.Map.of("reason", "STATUS_NOT_IN_TARGET_WORKFLOW"))));
     }
 
     /**

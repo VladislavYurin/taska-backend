@@ -140,6 +140,7 @@
                             <schemaMappings>
                                 <schemaMapping>UpdateDisplayNameRequestDto=ru.taska.domain.dto.UpdateDisplayNameRequestDto</schemaMapping>
                                 <schemaMapping>PasswordByTokenRequestDto=ru.taska.domain.dto.PasswordByTokenRequestDto</schemaMapping>
+                                <schemaMapping>ReorderProjectIssueTypesRequestDto=ru.taska.domain.dto.ReorderProjectIssueTypesRequestDto</schemaMapping>
                                 <schemaMapping>NullableUserSummaryDto=ru.taska.domain.dto.UserSummaryDto</schemaMapping>
                                 <schemaMapping>PatchIssueRequestDto=ru.taska.domain.dto.PatchIssueRequestDto</schemaMapping>
                                 <schemaMapping>NotificationPreferencesPatchDto=ru.taska.domain.dto.NotificationPreferencesPatchDto</schemaMapping>

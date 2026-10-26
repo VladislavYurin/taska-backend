@@ -23,6 +23,7 @@ service ProjectService {
   rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
   rpc UpdateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
   rpc DeleteProjectIssueType(ChangeProjectIssueTypeRequest) returns (google.protobuf.Empty);
+  rpc ReorderProjectIssueTypes(ReorderProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
   /**
    * Создаёт новый проект.
    */
@@ -200,12 +201,20 @@ message ChangeProjectIssueTypeRequest {
   optional int32 sort_order = 8;
 }
 
+message ReorderProjectIssueTypesRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  repeated string codes = 4;
+}
+
 message ProjectIssueTypeResponse {
   string code = 1;
   string name = 2;
   string color = 3;
   string icon = 4;
   int32 sort_order = 5;
+  string generation = 6; // internal lifecycle identity; changes when a deleted code is recreated
 }
 
 message ListProjectIssueTypesResponse {
@@ -363,6 +372,7 @@ message ProjectShortInfo {
    * Полное наименование проекта (опционально, заложено на будущее)
    */
   string name = 3;
+  repeated ProjectIssueTypeResponse issue_types = 4;
 }
 
 message GetListProjectMemberRequest {

@@ -55,6 +55,7 @@ public class GrpcProjectService {
     private final ProjectMemberService projectMemberService;
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ru.taska.repository.ProjectIssueTypeRepository issueTypeRepository;
 
     public Mono<GetProjectMemberStatsBatchResponse> getProjectMemberStatsBatch(
             Mono<GetProjectMemberStatsBatchRequest> request) {
@@ -464,8 +465,15 @@ public class GrpcProjectService {
                         return Mono.just(GetProjectInfoBatchInternalResponse.getDefaultInstance());
                     }
 
-                    return projectService.getProjectInfoByIds(projectIds)
-                            .map(projectMapper::toProtoMap)
+                    return Mono.zip(projectService.getProjectInfoByIds(projectIds).map(projectMapper::toProtoMap),
+                                    issueTypeRepository.listBatch(projectIds).collectMultimap(ru.taska.domain.ProjectIssueType::projectId))
+                            .map(data -> {
+                                var projects = new java.util.HashMap<String, ru.taska.api.project.v1.ProjectShortInfo>();
+                                data.getT1().forEach((id, project) -> projects.put(id, project.toBuilder()
+                                        .addAllIssueTypes(data.getT2().getOrDefault(UUID.fromString(id), java.util.List.of()).stream()
+                                                .map(projectMapper::toIssueTypeResponse).toList()).build()));
+                                return projects;
+                            })
                             .map(projectInfoMap -> GetProjectInfoBatchInternalResponse.newBuilder()
                                     .putAllProjects(projectInfoMap)
                                     .build())

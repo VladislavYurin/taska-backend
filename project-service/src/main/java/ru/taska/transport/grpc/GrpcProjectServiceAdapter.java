@@ -119,6 +119,12 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     }
 
     @Override
+    public Mono<ru.taska.api.project.v1.ListProjectIssueTypesResponse> reorderProjectIssueTypes(
+            Mono<ru.taska.api.project.v1.ReorderProjectIssueTypesRequest> request) {
+        return issueTypeService.reorder(request).transform(GrpcExceptionHandler.withErrorHandling("reorderProjectIssueTypes"));
+    }
+
+    @Override
     public Mono<ru.taska.api.project.v1.ListProjectIssueTypesResponse> listProjectIssueTypes(Mono<ru.taska.api.project.v1.ProjectIssueTypesRequest> request) {
         return issueTypeService.list(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("listProjectIssueTypes"));

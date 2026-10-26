@@ -1058,7 +1058,8 @@ paths:
     get:
       x-pat-scope: read
       operationId: listProjectIssueTypes
-      summary: Типы задач проекта, по sortOrder и code; первый тип используется по умолчанию
+      summary: Типы задач проекта; первый тип используется по умолчанию
+      description: Порядок sortOrder ASC, затем code по байтовой collation C.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -1108,6 +1109,38 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/issue-types/order:
+    put:
+      x-pat-scope: write
+      operationId: reorderProjectIssueTypes
+      summary: Атомарно переставить все типы задач — только ADMIN проекта
+      description: codes — полная перестановка текущего реестра без повторов. Записывает sortOrder 10, 20, 30 в одной транзакции; первый тип становится типом по умолчанию. Неполный или устаревший набор кодов даёт 400 INVALID_ARGUMENT без изменений.
+      tags: [project-issue-type]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderProjectIssueTypesRequestDto'
+      responses:
+        '200':
+          description: Новый порядок сохранён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectIssueTypesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issue-types/{code}:
     patch:
       x-pat-scope: write
@@ -1148,6 +1181,7 @@ paths:
       x-pat-scope: write
       operationId: deleteProjectIssueType
       summary: Удалить неиспользуемый тип — только ADMIN; последний тип удалить нельзя
+      description: Считаются только живые задачи. 400 FAILED_PRECONDITION содержит details.reason LAST_ISSUE_TYPE либо ISSUE_TYPE_IN_USE и строковое details.issueCount. Удалённые задачи не запрещают удаление типа.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -2467,7 +2501,7 @@ paths:
         - name: issueType
           in: query
           required: false
-          description: Фильтр по ключу типа задачи проекта. Без параметра возвращаются все типы. Неизвестное значение или неверный формат дают пустую доску.
+          description: Фильтр по ключу типа задачи проекта. Без параметра возвращаются все типы. Тип, которого нет в реестре проекта, или неверный формат дают пустую доску без колонок и задач.
           schema:
             type: string
         - name: assigneeId
@@ -5151,6 +5185,16 @@ components:
           type: string
         issueType:
           $ref: '#/components/schemas/IssueTypeDto'
+        issueTypeName:
+          type: string
+          nullable: true
+          description: Имя из текущего реестра проекта; может отсутствовать для удалённого типа.
+        issueTypeColor:
+          type: string
+          nullable: true
+        issueTypeIcon:
+          type: string
+          nullable: true
         priority:
           $ref: '#/components/schemas/IssuePriorityDto'
         assigneeId:
@@ -5223,6 +5267,7 @@ components:
         (schemaMappings в openapi-generator), который различает отсутствующее поле и явный null.
       properties:
         issueType:
+          description: При смене типа текущий статус должен быть в workflow нового типа, иначе 400 FAILED_PRECONDITION с details.reason STATUS_NOT_IN_TARGET_WORKFLOW.
           $ref: '#/components/schemas/IssueTypeDto'
         summary:
           type: string
@@ -6052,6 +6097,18 @@ components:
     ProjectIssueTypeIconDto:
       type: string
       enum: [check-square, bug, book-open, headset, megaphone, file-text, flag, layers]
+    ReorderProjectIssueTypesRequestDto:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+
     ProjectIssueTypeDto:
       type: object
       required: [code, name, color, icon, sortOrder]
@@ -7051,6 +7108,7 @@ components:
       required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
       properties:
         issueTypes:
+          description: Имена начального посева TASK/BUG/STORY; актуальные названия, цвет и значок берутся из реестра конкретного проекта.
           type: array
           items:
             $ref: '#/components/schemas/IssueTypeMetaPairDto'
