@@ -73,7 +73,7 @@ flowchart LR
 
 | Модуль | Назначение |
 |---|---|
-| `mcp-server` | Streamable HTTP `/mcp`, PAT, request-scoped auth context и вызовы REST gateway; 10 инструментов чтения проектов, задач, доски, комментариев, worklogs и уведомлений |
+| `mcp-server` | Streamable HTTP `/mcp`, PAT, request-scoped auth context и вызовы REST gateway; 22 инструмента чтения и записи задач, проектов, доски, комментариев, worklogs и уведомлений |
 | `api-gateway` | REST/BFF, OpenAPI, CORS, проверка access-токена и формирование контекста запроса |
 | `auth-service` | пользователи, credentials, JWT, refresh/invite tokens, профиль и аватары |
 | `project-service` | проекты, участники, проектные роли и события проектов |

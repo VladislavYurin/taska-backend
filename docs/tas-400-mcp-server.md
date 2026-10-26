@@ -106,8 +106,8 @@ Consent отдаёт **oauth-server на своём origin**, с CSRF, HttpOnly/
 | update_issue | `{issue_key:K!,version:V,summary:string[1,255],description:string≤32768\|null,priority,issue_type,story_points:number≥0\|null,start_date:date\|null,due_date:date\|null,original_estimate_minutes:integer≥0\|null,remaining_estimate_minutes:integer≥0\|null}`; минимум одно поле изменения | IssueResponseDto; PATCH `/issues/{id}`, If-Match | write; false |
 | transition_issue | `{issue_key:K!,target_status:string[1,64]!,version:V}` | IssueWithHistoryResponseDto; PUT `/issues/{id}/transition/{transitionId}`, If-Match из TAS-422 | write; true только если целевой статус уже текущий |
 | assign_issue | `{issue_key:K!,assignee:U\|null!,version:V}` | IssueResponseDto; PATCH `/issues/{id}` c assigneeId и If-Match (null снимает исполнителя) | write; true для того же исполнителя |
-| add_comment | `{issue_key:K!,body:string[1,16384]!}` | CommentResponseDto; POST `/projects/{pid}/issues/{id}/comments` | write; false |
-| log_work | `{issue_key:K!,spent_minutes:integer[1,1440]!,work_date:date!,comment:string≤16384}` | IssueWorklogResponseDto; POST `/projects/{pid}/issues/{id}/worklogs` | write; false |
+| add_comment | `{issue_key:K!,body:string[1,10000]!}` | CommentResponseDto; POST `/projects/{pid}/issues/{id}/comments` | write; false |
+| log_work | `{issue_key:K!,spent_minutes:integer[1,1440]!,work_date:date!,comment:string≤2000}` | IssueWorklogResponseDto; POST `/projects/{pid}/issues/{id}/worklogs` | write; false |
 | add_label | `{issue_key:K!,label:string[1,100]!}` | `{issue:IssueResponseDto,labels:IssueLabelResponseDto[]}`; POST `/projects/{pid}/issues/{id}/labels`; только существующая проектная метка | write; true, если привязка уже есть — без повторной записи |
 | remove_label | `{issue_key:K!,label:string[1,100]!}` | `{issue:IssueResponseDto,labels:IssueLabelResponseDto[]}`; DELETE `/projects/{pid}/issues/{id}/labels/{labelId}`; удаляет только привязку | write; true, если привязки уже нет — без записи |
 | link_issues | `{issue_key:K!,target_issue_key:K!,link_type:enum[BLOCKS,RELATES_TO,DUPLICATES] !}` | IssueLinkResponseDto; POST `/issues/{id}/links` | write; false |
@@ -128,7 +128,7 @@ add_comment/log_work/link_issues не имеют durable idempotency key в те
 MCP request ≤64 KiB; upstream response ≤2 MiB; итоговый сериализованный MCP result (с text fallback) ≤128 KiB. Текстовое окно по умолчанию 4000, максимум 8192 Unicode code points. При обрезке: `truncated=true`, `text_windows` с путём поля, offset, total_chars, next_offset; следующая страница/окно задаётся в подсказке и аргументах. Полный текст читается последовательными окнами, а не неограниченным full_text=true. Текстовый fallback содержит краткий результат, ключ/статус/версию и подсказку следующего шага, без второй полной копии большого JSON.
 Списки сохраняют описанный в REST порядок. Локальная страница проектов не заменяет server-side лимиты issue/worklog/comment-запросов. Слишком крупный обязательный context/объект — `response_too_large`, без повреждённого JSON или ложного «пусто».
 
-Ошибка tool: `isError=true`, structuredContent `{request_id,truncated:false,error:{code,message,details}}`, текст с исправимым следующим шагом. OutputSchema — union success/error (ровно одно из data/error). `details` содержит только разрешённые reason/required_scope/retry_after_seconds/current_version/current_status/candidates/allowed_values, без upstream stack/SQL/секретов.
+Ошибка tool: `isError=true`, structuredContent `{request_id,truncated:false,error:{code,message,details}}`, текст с исправимым следующим шагом. OutputSchema — union success/error (ровно одно из data/error). `details` содержит только разрешённые reason/required_scope/retry_after_seconds/current_version/current_status/candidates/allowed_values и для partial_success created_issue_key/completed_steps/remaining_steps, без upstream stack/SQL/секретов.
 
 | Ситуация | Результат |
 |---|---|

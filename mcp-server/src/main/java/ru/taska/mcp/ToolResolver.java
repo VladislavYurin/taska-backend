@@ -30,7 +30,12 @@ public class ToolResolver {
   }
 
   public record Issue(
-      String id, String projectId, String key, String summary, Map<String, Object> context) {
+      String id,
+      String projectId,
+      String key,
+      String summary,
+      Map<String, Object> context,
+      JsonNode value) {
     public Map<String, Object> path() {
       return Map.of("projectId", projectId, "issueId", id);
     }
@@ -83,6 +88,7 @@ public class ToolResolver {
                                   item);
                         }
                         if (found == null) throw GatewayClient.notFound();
+                        auditTarget.record(found.key());
                         return found;
                       })
                   .share());
@@ -132,8 +138,9 @@ public class ToolResolver {
                             break;
                           }
                         }
+                        auditTarget.record(issueKey);
                         return new Issue(
-                            issueId, projectId, issueKey, summary, Map.copyOf(metadata));
+                            issueId, projectId, issueKey, summary, Map.copyOf(metadata), value);
                       })
                   .share());
     }
