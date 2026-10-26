@@ -1,0 +1,3515 @@
+{
+  "add_comment" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "body" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 10000
+        }
+      },
+      "required" : [ "issue_key", "body" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/CommentResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "CommentResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Уникальный идентификатор комментария"
+            },
+            "issueId" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор задачи"
+            },
+            "projectId" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор проекта"
+            },
+            "authorUserId" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор автора комментария"
+            },
+            "author" : {
+              "$ref" : "#/$defs/UserSummaryDto"
+            },
+            "body" : {
+              "type" : "string",
+              "description" : "Текст комментария"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time",
+              "description" : "Дата и время создания"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time",
+              "description" : "Проставляется при создании и равен createdAt, пока комментарий не редактировали; после правки строго больше createdAt."
+            },
+            "version" : {
+              "type" : "integer",
+              "description" : "Версия для оптимистической блокировки — 1 при создании, увеличивается на 1 при каждом изменении, включая мягкое удаление."
+            },
+            "channel" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "readOnly" : true,
+                "description" : "Канал последней записи комментария — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются."
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        },
+        "UserSummaryDto" : {
+          "type" : "object",
+          "required" : [ "id", "displayName" ],
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "displayName" : {
+              "type" : "string"
+            },
+            "avatarUrl" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "format" : "uri"
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "add_label" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "label" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 100
+        }
+      },
+      "required" : [ "issue_key", "label" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "type" : "object",
+          "properties" : {
+            "issue" : {
+              "$ref" : "#/$defs/IssueResponseDto"
+            },
+            "labels" : {
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              },
+              "type" : "array"
+            }
+          },
+          "required" : [ "issue", "labels" ]
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        }
+      }
+    }
+  },
+  "assign_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "assignee" : {
+          "anyOf" : [ {
+            "type" : "string",
+            "minLength" : 1,
+            "maxLength" : 320
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "version" : {
+          "type" : "integer",
+          "minimum" : 1,
+          "maximum" : 2147483647
+        }
+      },
+      "required" : [ "issue_key", "assignee" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        }
+      }
+    }
+  },
+  "create_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "project_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 32
+        },
+        "summary" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 255
+        },
+        "issue_type" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "maxLength" : 32
+        },
+        "description" : {
+          "type" : "string",
+          "minLength" : 0,
+          "maxLength" : 32768
+        },
+        "priority" : {
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ],
+          "type" : "string"
+        },
+        "assignee" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 320
+        },
+        "labels" : {
+          "type" : "array",
+          "items" : {
+            "type" : "string",
+            "minLength" : 1,
+            "maxLength" : 100
+          },
+          "minItems" : 0,
+          "maxItems" : 20,
+          "uniqueItems" : true
+        },
+        "idempotency_key" : {
+          "type" : "string",
+          "format" : "uuid",
+          "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        }
+      },
+      "required" : [ "project_key", "summary", "idempotency_key" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        }
+      }
+    }
+  },
+  "link_issues" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "target_issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "link_type" : {
+          "enum" : [ "BLOCKS", "RELATES_TO", "DUPLICATES" ],
+          "type" : "string"
+        }
+      },
+      "required" : [ "issue_key", "target_issue_key", "link_type" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueLinkResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLinkResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "sourceIssueId" : {
+              "type" : "string"
+            },
+            "targetIssueId" : {
+              "type" : "string"
+            },
+            "viewLinkType" : {
+              "$ref" : "#/$defs/IssueLinkViewTypeDto"
+            },
+            "createdBy" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "target" : {
+              "$ref" : "#/$defs/TargetIssueDto"
+            }
+          }
+        },
+        "IssueLinkViewTypeDto" : {
+          "type" : "string",
+          "description" : "Направление связи относительно текущей задачи; значения существующего REST-ответа с gRPC-префиксом.",
+          "enum" : [ "ISSUE_LINK_VIEW_TYPE_UNSPECIFIED", "ISSUE_LINK_VIEW_TYPE_RELATES_TO", "ISSUE_LINK_VIEW_TYPE_BLOCKS", "ISSUE_LINK_VIEW_TYPE_IS_BLOCKED_BY", "ISSUE_LINK_VIEW_TYPE_DUPLICATES", "ISSUE_LINK_VIEW_TYPE_IS_DUPLICATED_BY", "UNRECOGNIZED" ]
+        },
+        "TargetIssueDto" : {
+          "type" : "object",
+          "required" : [ "id", "issueKey", "summary", "projectId", "statusKey" ],
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "statusKey" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса из workflow проекта; набор не ограничен enum."
+            }
+          }
+        }
+      }
+    }
+  },
+  "log_work" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "spent_minutes" : {
+          "type" : "integer",
+          "minimum" : 1,
+          "maximum" : 1440,
+          "default" : 1
+        },
+        "work_date" : {
+          "format" : "date",
+          "type" : "string"
+        },
+        "comment" : {
+          "type" : "string",
+          "minLength" : 0,
+          "maxLength" : 2000
+        }
+      },
+      "required" : [ "issue_key", "spent_minutes", "work_date" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueWorklogResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueWorklogResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "issueId", "projectId", "authorUserId", "spentMinutes", "workDate", "createdAt" ],
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "issueId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "projectId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "authorUserId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "author" : {
+              "description" : "Профиль автора в списке worklogs, включая бывших участников проекта. Null при недоступном профиле; authorUserId сохраняется. В ответах записи поле может отсутствовать.",
+              "$ref" : "#/$defs/NullableUserSummaryDto"
+            },
+            "spentMinutes" : {
+              "type" : "integer"
+            },
+            "workDate" : {
+              "type" : "string",
+              "format" : "date"
+            },
+            "comment" : {
+              "anyOf" : [ {
+                "type" : "string"
+              }, {
+                "type" : "null"
+              } ]
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "format" : "date-time"
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        },
+        "NullableUserSummaryDto" : {
+          "anyOf" : [ {
+            "type" : "object",
+            "required" : [ "id", "displayName" ],
+            "properties" : {
+              "id" : {
+                "type" : "string",
+                "format" : "uuid"
+              },
+              "displayName" : {
+                "type" : "string"
+              },
+              "avatarUrl" : {
+                "anyOf" : [ {
+                  "type" : "string",
+                  "format" : "uri"
+                }, {
+                  "type" : "null"
+                } ]
+              }
+            }
+          }, {
+            "type" : "null"
+          } ]
+        }
+      }
+    }
+  },
+  "mark_notifications_read" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "notification_id" : {
+          "type" : "string",
+          "format" : "uuid",
+          "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        }
+      },
+      "required" : [ "notification_id" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "type" : "object",
+          "properties" : {
+            "notification_id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+            },
+            "read" : {
+              "type" : "boolean"
+            }
+          },
+          "required" : [ "notification_id", "read" ]
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : { }
+    }
+  },
+  "remove_label" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "label" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 100
+        }
+      },
+      "required" : [ "issue_key", "label" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "type" : "object",
+          "properties" : {
+            "issue" : {
+              "$ref" : "#/$defs/IssueResponseDto"
+            },
+            "labels" : {
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              },
+              "type" : "array"
+            }
+          },
+          "required" : [ "issue", "labels" ]
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        }
+      }
+    }
+  },
+  "transition_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "target_status" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "version" : {
+          "type" : "integer",
+          "minimum" : 1,
+          "maximum" : 2147483647
+        }
+      },
+      "required" : [ "issue_key", "target_status" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueWithHistoryResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueHistoryResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "eventType" : {
+              "type" : "string"
+            },
+            "actorUserId" : {
+              "type" : "string"
+            },
+            "actor" : {
+              "anyOf" : [ {
+                "description" : "Профиль автора события, в том числе бывшего участника проекта. Null, если профиль недоступен; actorUserId сохраняется.",
+                "allOf" : [ {
+                  "$ref" : "#/$defs/UserSummaryDto"
+                } ]
+              }, {
+                "type" : "null"
+              } ]
+            },
+            "occurredAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "payload" : {
+              "type" : "object"
+            },
+            "channel" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "readOnly" : true,
+                "description" : "Канал действия — UI, API_TOKEN или MCP; открытая строка для будущих каналов. Null/отсутствие у старых записей. Имя и id токена приватны и не возвращаются."
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        },
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        },
+        "IssueWithHistoryResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "issue" : {
+              "$ref" : "#/$defs/IssueResponseDto"
+            },
+            "history" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/$defs/IssueHistoryResponseDto"
+              }
+            }
+          }
+        },
+        "UserSummaryDto" : {
+          "type" : "object",
+          "required" : [ "id", "displayName" ],
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "displayName" : {
+              "type" : "string"
+            },
+            "avatarUrl" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "format" : "uri"
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "unwatch_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        }
+      },
+      "required" : [ "issue_key" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/UnwatchIssueResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "UnwatchIssueResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "issueId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "removed" : {
+              "type" : "boolean",
+              "description" : "Была ли подписка фактически удалена"
+            },
+            "watchersCount" : {
+              "type" : "integer",
+              "description" : "Количество подписчиков после операции"
+            }
+          }
+        }
+      }
+    }
+  },
+  "update_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "summary" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 255
+        },
+        "description" : {
+          "anyOf" : [ {
+            "type" : "string",
+            "minLength" : 0,
+            "maxLength" : 32768
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "priority" : {
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ],
+          "type" : "string"
+        },
+        "issue_type" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "maxLength" : 32
+        },
+        "story_points" : {
+          "anyOf" : [ {
+            "type" : "number",
+            "minimum" : 0
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "start_date" : {
+          "anyOf" : [ {
+            "type" : "string",
+            "format" : "date"
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "due_date" : {
+          "anyOf" : [ {
+            "type" : "string",
+            "format" : "date"
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "original_estimate_minutes" : {
+          "anyOf" : [ {
+            "minimum" : 0,
+            "maximum" : 2147483647,
+            "type" : "integer"
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "remaining_estimate_minutes" : {
+          "anyOf" : [ {
+            "minimum" : 0,
+            "maximum" : 2147483647,
+            "type" : "integer"
+          }, {
+            "type" : "null"
+          } ]
+        },
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        },
+        "version" : {
+          "type" : "integer",
+          "minimum" : 1,
+          "maximum" : 2147483647
+        }
+      },
+      "required" : [ "issue_key" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "anyOf" : [ {
+        "required" : [ "summary" ]
+      }, {
+        "required" : [ "description" ]
+      }, {
+        "required" : [ "priority" ]
+      }, {
+        "required" : [ "issue_type" ]
+      }, {
+        "required" : [ "story_points" ]
+      }, {
+        "required" : [ "start_date" ]
+      }, {
+        "required" : [ "due_date" ]
+      }, {
+        "required" : [ "original_estimate_minutes" ]
+      }, {
+        "required" : [ "remaining_estimate_minutes" ]
+      } ]
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/IssueResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueLabelResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор метки"
+            },
+            "name" : {
+              "type" : "string",
+              "description" : "Название метки"
+            },
+            "color" : {
+              "type" : "string",
+              "description" : "Цвет метки"
+            }
+          }
+        },
+        "IssuePriorityDto" : {
+          "type" : "string",
+          "enum" : [ "LOW", "MEDIUM", "HIGH" ]
+        },
+        "IssueResponseDto" : {
+          "type" : "object",
+          "required" : [ "id", "projectId", "issueNumber", "issueKey", "issueType", "summary", "description", "priority", "assigneeId", "reporterId", "createdAt", "updatedAt", "version", "labels" ],
+          "properties" : {
+            "id" : {
+              "type" : "string"
+            },
+            "projectId" : {
+              "type" : "string"
+            },
+            "issueNumber" : {
+              "type" : "integer"
+            },
+            "issueKey" : {
+              "type" : "string"
+            },
+            "issueType" : {
+              "$ref" : "#/$defs/IssueTypeDto"
+            },
+            "summary" : {
+              "type" : "string"
+            },
+            "description" : {
+              "type" : "string"
+            },
+            "status" : {
+              "type" : "string",
+              "description" : "Открытый ключ статуса workflow проекта."
+            },
+            "priority" : {
+              "$ref" : "#/$defs/IssuePriorityDto"
+            },
+            "assigneeId" : {
+              "type" : "string"
+            },
+            "reporterId" : {
+              "type" : "string"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "updatedAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "version" : {
+              "type" : "integer"
+            },
+            "storyPoints" : {
+              "type" : "number",
+              "description" : "Оценка сложности задачи в story points",
+              "minimum" : 0
+            },
+            "startDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Дата начала работы над задачей"
+            },
+            "dueDate" : {
+              "type" : "string",
+              "format" : "date",
+              "description" : "Крайний срок выполнения задачи"
+            },
+            "originalEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Первоначальная оценка времени в минутах",
+              "minimum" : 0
+            },
+            "remainingEstimateMinutes" : {
+              "type" : "integer",
+              "description" : "Оставшееся время в минутах",
+              "minimum" : 0
+            },
+            "labels" : {
+              "type" : "array",
+              "description" : "Порядок — name asc, id asc (сравнение строк по collation БД).",
+              "items" : {
+                "$ref" : "#/$defs/IssueLabelResponseDto"
+              }
+            }
+          }
+        },
+        "IssueTypeDto" : {
+          "type" : "string",
+          "pattern" : "^[A-Z][A-Z0-9_]{1,31}$",
+          "description" : "Stable key from the project issue type registry."
+        }
+      }
+    }
+  },
+  "watch_issue" : {
+    "inputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "issue_key" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 64
+        }
+      },
+      "required" : [ "issue_key" ],
+      "additionalProperties" : false,
+      "$schema" : "https://json-schema.org/draft/2020-12/schema"
+    },
+    "outputSchema" : {
+      "type" : "object",
+      "properties" : {
+        "request_id" : {
+          "type" : "string",
+          "minLength" : 1,
+          "maxLength" : 128
+        },
+        "truncated" : {
+          "type" : "boolean"
+        },
+        "data" : {
+          "$ref" : "#/$defs/WatchIssueResponseDto"
+        },
+        "error" : {
+          "type" : "object",
+          "properties" : {
+            "code" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 64
+            },
+            "message" : {
+              "type" : "string",
+              "minLength" : 1,
+              "maxLength" : 2000
+            },
+            "details" : {
+              "type" : "object",
+              "properties" : {
+                "reason" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "required_scope" : {
+                  "enum" : [ "read", "write" ],
+                  "type" : "string"
+                },
+                "retry_after_seconds" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_version" : {
+                  "minimum" : 0,
+                  "type" : "integer"
+                },
+                "current_status" : {
+                  "type" : "string",
+                  "minLength" : 0,
+                  "maxLength" : 64
+                },
+                "candidates" : {
+                  "items" : {
+                    "type" : "object",
+                    "properties" : {
+                      "id" : {
+                        "type" : "string",
+                        "minLength" : 1,
+                        "maxLength" : 100
+                      },
+                      "displayName" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      },
+                      "email" : {
+                        "type" : "string",
+                        "minLength" : 0,
+                        "maxLength" : 320
+                      }
+                    },
+                    "required" : [ "id" ]
+                  },
+                  "type" : "array"
+                },
+                "allowed_values" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 0,
+                    "maxLength" : 500
+                  },
+                  "type" : "array"
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                },
+                "remaining_steps" : {
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  },
+                  "type" : "array"
+                }
+              },
+              "required" : [ ]
+            }
+          },
+          "required" : [ "code", "message", "details" ]
+        },
+        "context" : {
+          "type" : "object",
+          "properties" : {
+            "project_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 32
+            },
+            "project_name" : {
+              "type" : "string"
+            },
+            "issue_key" : {
+              "type" : "string",
+              "minLength" : 0,
+              "maxLength" : 64
+            },
+            "issue_summary" : {
+              "type" : "string"
+            }
+          },
+          "required" : [ ]
+        },
+        "text_windows" : {
+          "items" : {
+            "type" : "object",
+            "properties" : {
+              "path" : {
+                "type" : "string"
+              },
+              "offset" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "total_chars" : {
+                "minimum" : 0,
+                "type" : "integer"
+              },
+              "next_offset" : {
+                "minimum" : 0,
+                "type" : [ "integer", "null" ]
+              }
+            },
+            "required" : [ "path", "offset", "total_chars", "next_offset" ]
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "request_id", "truncated" ],
+      "$schema" : "https://json-schema.org/draft/2020-12/schema",
+      "oneOf" : [ {
+        "required" : [ "data" ],
+        "not" : {
+          "required" : [ "error" ]
+        }
+      }, {
+        "required" : [ "error" ],
+        "not" : {
+          "required" : [ "data" ]
+        }
+      } ],
+      "$defs" : {
+        "IssueWatcherResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "id" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Идентификатор подписки"
+            },
+            "issueId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "projectId" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "userId" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Подписанный пользователь"
+            },
+            "createdAt" : {
+              "type" : "string",
+              "format" : "date-time"
+            },
+            "createdBy" : {
+              "type" : "string",
+              "format" : "uuid",
+              "description" : "Кто создал подписку"
+            },
+            "displayName" : {
+              "type" : "string"
+            },
+            "avatarUrl" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "format" : "uri"
+              }, {
+                "type" : "null"
+              } ]
+            }
+          }
+        },
+        "WatchIssueResponseDto" : {
+          "type" : "object",
+          "properties" : {
+            "watcher" : {
+              "$ref" : "#/$defs/IssueWatcherResponseDto"
+            },
+            "watchersCount" : {
+              "type" : "integer",
+              "description" : "Количество подписчиков после операции"
+            }
+          }
+        }
+      }
+    }
+  }
+}

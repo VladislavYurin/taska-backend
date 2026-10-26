@@ -21,7 +21,44 @@ public final class ReadSchemaExporter {
     String json = export(root.resolve("api-gateway/src/main/resources/static/openapi.yml"));
     Path destination = root.resolve("mcp-server/src/main/resources/schemas/read-tools.json");
     Files.createDirectories(destination.getParent());
-    Files.writeString(destination, json);
+    writeSnapshot(destination, json);
+  }
+
+  /**
+   * Explicit refresh keeps existing property order, so a small DTO change has a small review diff.
+   */
+  static void writeSnapshot(Path path, String json) throws IOException {
+    var mapper = JsonMapper.builder().build();
+    var incoming = mapper.readTree(json);
+    var ordered =
+        Files.exists(path)
+            ? preserveOrder(mapper.readTree(Files.readString(path)), incoming, mapper)
+            : incoming;
+    Files.writeString(
+        path, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(ordered) + "\n");
+  }
+
+  private static tools.jackson.databind.JsonNode preserveOrder(
+      tools.jackson.databind.JsonNode old,
+      tools.jackson.databind.JsonNode incoming,
+      JsonMapper mapper) {
+    if (!old.isObject() || !incoming.isObject()) return incoming;
+    var result = mapper.createObjectNode();
+    old.properties()
+        .forEach(
+            entry -> {
+              if (incoming.has(entry.getKey()))
+                result.set(
+                    entry.getKey(),
+                    preserveOrder(entry.getValue(), incoming.get(entry.getKey()), mapper));
+            });
+    incoming
+        .properties()
+        .forEach(
+            entry -> {
+              if (!old.has(entry.getKey())) result.set(entry.getKey(), entry.getValue());
+            });
+    return result;
   }
 
   static String export(Path source) throws IOException {
@@ -173,7 +210,7 @@ public final class ReadSchemaExporter {
         + "\n";
   }
 
-  private static void add(
+  static void add(
       Map<String, Object> target,
       Map<String, Object> source,
       String name,
@@ -217,7 +254,13 @@ public final class ReadSchemaExporter {
                                     string(0, 320)),
                                 List.of("id"))),
                         "allowed_values",
-                        array(string(0, 500))),
+                        array(string(0, 500)),
+                        "created_issue_key",
+                        string(1, 64),
+                        "completed_steps",
+                        array(string(1, 100)),
+                        "remaining_steps",
+                        array(string(1, 100))),
                     List.of())),
             List.of("code", "message", "details"));
     Map<String, Object> output =
@@ -353,29 +396,29 @@ public final class ReadSchemaExporter {
   }
 
   @SafeVarargs
-  private static Map<String, Object> merge(Map<String, Object>... maps) {
+  static Map<String, Object> merge(Map<String, Object>... maps) {
     Map<String, Object> map = new LinkedHashMap<>();
     for (var item : maps) map.putAll(item);
     return map;
   }
 
-  private static Map<String, Object> string(int min, int max) {
+  static Map<String, Object> string(int min, int max) {
     return props("type", "string", "minLength", min, "maxLength", max);
   }
 
-  private static Map<String, Object> integer(int min, int max, int fallback) {
+  static Map<String, Object> integer(int min, int max, int fallback) {
     return props("type", "integer", "minimum", min, "maximum", max, "default", fallback);
   }
 
-  private static Map<String, Object> ref(String name) {
+  static Map<String, Object> ref(String name) {
     return Map.of("$ref", "#/components/schemas/" + name);
   }
 
-  private static Map<String, Object> array(Object items) {
+  static Map<String, Object> array(Object items) {
     return Map.of("type", "array", "items", items);
   }
 
-  private static Map<String, Object> object(Map<String, Object> properties, List<String> required) {
+  static Map<String, Object> object(Map<String, Object> properties, List<String> required) {
     return props("type", "object", "properties", properties, "required", required);
   }
 }

@@ -83,6 +83,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -140,15 +161,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "BoardColumnDto" : {
@@ -481,6 +502,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -538,15 +580,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "IssueAttachmentDto" : {
@@ -1048,6 +1090,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -1105,15 +1168,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "AvatarDto" : {
@@ -1583,6 +1646,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -1640,15 +1724,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "CommentResponseDto" : {
@@ -1868,6 +1952,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -1925,15 +2030,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "NotificationListResponseDto" : {
@@ -2148,6 +2253,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -2205,15 +2331,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "ProjectResponseDto" : {
@@ -2382,6 +2508,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -2439,15 +2586,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "IssueWorklogResponseDto" : {
@@ -2681,6 +2828,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -2738,15 +2906,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "IssuePriorityDto" : {
@@ -2791,35 +2959,26 @@
               "description" : "Открытый ключ статуса из workflow проекта; набор не ограничен enum."
             },
             "issueTypeName" : {
-              "anyOf" : [
-                {
-                  "type" : "string",
-                  "description" : "Имя из текущего реестра проекта; может отсутствовать для удалённого типа."
-                },
-                {
-                  "type" : "null"
-                }
-              ]
+              "anyOf" : [ {
+                "type" : "string",
+                "description" : "Имя из текущего реестра проекта; может отсутствовать для удалённого типа."
+              }, {
+                "type" : "null"
+              } ]
             },
             "issueTypeColor" : {
-              "anyOf" : [
-                {
-                  "type" : "string"
-                },
-                {
-                  "type" : "null"
-                }
-              ]
+              "anyOf" : [ {
+                "type" : "string"
+              }, {
+                "type" : "null"
+              } ]
             },
             "issueTypeIcon" : {
-              "anyOf" : [
-                {
-                  "type" : "string"
-                },
-                {
-                  "type" : "null"
-                }
-              ]
+              "anyOf" : [ {
+                "type" : "string"
+              }, {
+                "type" : "null"
+              } ]
             }
           }
         },
@@ -2987,6 +3146,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -3044,15 +3224,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "DirectoryUserDto" : {
@@ -3227,6 +3407,27 @@
                     "minLength" : 0,
                     "maxLength" : 500
                   }
+                },
+                "created_issue_key" : {
+                  "type" : "string",
+                  "minLength" : 1,
+                  "maxLength" : 64
+                },
+                "completed_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
+                },
+                "remaining_steps" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string",
+                    "minLength" : 1,
+                    "maxLength" : 100
+                  }
                 }
               },
               "required" : [ ]
@@ -3284,15 +3485,15 @@
       "required" : [ "request_id", "truncated" ],
       "$schema" : "https://json-schema.org/draft/2020-12/schema",
       "oneOf" : [ {
+        "required" : [ "data" ],
         "not" : {
           "required" : [ "error" ]
-        },
-        "required" : [ "data" ]
+        }
       }, {
+        "required" : [ "error" ],
         "not" : {
           "required" : [ "data" ]
-        },
-        "required" : [ "error" ]
+        }
       } ],
       "$defs" : {
         "AvatarDto" : {
