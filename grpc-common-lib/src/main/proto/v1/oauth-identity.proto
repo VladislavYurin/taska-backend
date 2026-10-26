@@ -1,0 +1,26 @@
+syntax = "proto3";
+package ru.taska.auth.oauth.v1;
+import "v1/common.proto";
+import "v1/auth-service.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.auth.oauth.v1";
+
+// Private service-to-service API, authenticated independently of the user's credential.
+service OAuthIdentityService {
+  rpc AuthenticateCredentials(ru.taska.auth.v1.LoginRequest) returns (ru.taska.auth.v1.ValidateAccessTokenResponse);
+  rpc ValidateSubject(ValidateOAuthSubjectRequest) returns (ru.taska.auth.v1.ValidateAccessTokenResponse);
+  rpc ExchangeToken(ExchangeOAuthTokenRequest) returns (ExchangeOAuthTokenResponse);
+}
+message ValidateOAuthSubjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  string subject = 2;
+}
+message ExchangeOAuthTokenRequest {
+  ru.taska.common.v1.Header header = 1;
+  string access_token = 2;
+  // No caller-supplied actor, audience or scopes: all authority derives from introspection.
+}
+message ExchangeOAuthTokenResponse {
+  string delegation_token = 1;
+  ru.taska.common.v1.UserContext user_context = 2;
+}

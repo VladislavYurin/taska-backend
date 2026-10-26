@@ -164,6 +164,23 @@ class PersonalTokenSecurityTest {
     denied(factory, HttpMethod.POST, "/api/gateway/me", EndpointSecurity.PROTECTED, "SESSION_REQUIRED", null);
   }
 
+  @Test void delegatedMcpHasTheSameRestrictedScopePolicyAndNoSpoofableMarker() {
+    var factory=factory(AccessTokenKind.ACCESS_TOKEN_KIND_DELEGATION,List.of("read"));
+    StepVerifier.create(factory.buildContext("request",exchange(HttpMethod.GET,"/api/v1/issues/search"),EndpointSecurity.PROTECTED))
+        .assertNext(context->{assertThat(context.channel()).isEqualTo(ru.taska.domain.ActionChannel.MCP);
+          assertThat(context.userContext().tokenKind()).isEqualTo(GatewayTokenKind.DELEGATION);}).verifyComplete();
+    denied(factory,HttpMethod.POST,"/api/v1/projects",EndpointSecurity.PROTECTED,"INSUFFICIENT_SCOPE","write");
+    denied(factory,HttpMethod.GET,"/api/v1/admin/users",EndpointSecurity.GLOBAL_ADMIN_REQUIRED,"SESSION_REQUIRED",null);
+    denied(factory,HttpMethod.GET,"/api/v1/future-endpoint",EndpointSecurity.PROTECTED,"SESSION_REQUIRED",null);
+    denied(factory,HttpMethod.GET,"/api/v1/users/me/access-tokens",EndpointSecurity.JWT_SESSION_REQUIRED,"SESSION_REQUIRED",null);
+    var spoofed=MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/issues/search").header("Authorization","Bearer value")
+        .header(ru.taska.security.McpGatewaySignature.VERSION_HEADER,"1"));
+    StepVerifier.create(factory.buildContext("request",spoofed,EndpointSecurity.PROTECTED)).expectError(StatusRuntimeException.class).verify();
+    var mapper=new ContextMapper(new AuthMapper());
+    org.assertj.core.api.Assertions.assertThatThrownBy(()->mapper.mapToGatewayUserContext(ru.taska.api.common.v1.UserContext.newBuilder()
+        .setTokenKind(AccessTokenKind.ACCESS_TOKEN_KIND_OAUTH).build())).isInstanceOf(StatusRuntimeException.class);
+  }
+
   private static GatewayContextFactory factory(AccessTokenKind kind, List<String> scopes) {
     var auth = mock(GrpcAuthServiceClient.class);
     var user =

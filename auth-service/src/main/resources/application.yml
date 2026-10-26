@@ -138,3 +138,16 @@ directory:
 personal-tokens:
   max-lifetime-days: ${AUTH_PAT_MAX_LIFETIME_DAYS:90}
   max-active-tokens: ${AUTH_PAT_MAX_ACTIVE_TOKENS:10}
+
+# Opt-in TAS-413 bridge; original opaque tokens are never accepted by gateway.
+oauth-bridge:
+  enabled: ${AUTH_OAUTH_ENABLED:false}
+  issuer: ${OAUTH_ISSUER:}
+  resource: ${MCP_OAUTH_RESOURCE:}
+  introspection-uri: ${OAUTH_INTROSPECTION_URL:}
+  grant-validation-uri: ${OAUTH_GRANT_VALIDATION_URL:}
+  introspection-client-id: ${OAUTH_INTROSPECTION_CLIENT_ID:auth-service}
+  introspection-secret: ${OAUTH_INTROSPECTION_SECRET:}
+  identity-service-credential: ${OAUTH_IDENTITY_SERVICE_CREDENTIAL:}
+  mcp-exchange-credential: ${MCP_OAUTH_EXCHANGE_CREDENTIAL:}
+  delegation-signing-secret: ${OAUTH_DELEGATION_SIGNING_SECRET:}

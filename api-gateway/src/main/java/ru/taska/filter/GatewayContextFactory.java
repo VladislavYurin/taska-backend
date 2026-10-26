@@ -77,7 +77,11 @@ public class GatewayContextFactory {
               log.info("[{}] User context resolved: userId={}, tokenKind={}, tokenId={}",
                   requestId, proto.getUserId(), proto.getTokenKind(), proto.hasTokenId() ? proto.getTokenId() : null);
               var user = contextMapper.mapToGatewayUserContext(proto);
-              var channel = markerVerifier.resolve(exchange.getRequest(), requestId, token, user.tokenKind() == GatewayTokenKind.PAT);
+              ru.taska.domain.ActionChannel channel;
+              if (user.tokenKind() == GatewayTokenKind.DELEGATION) {
+                if (markerVerifier.hasMarker(exchange.getRequest())) throw ru.taska.security.McpMarkerVerifier.rejected();
+                channel = ru.taska.domain.ActionChannel.MCP;
+              } else channel = markerVerifier.resolve(exchange.getRequest(), requestId, token, user.tokenKind() == GatewayTokenKind.PAT);
               return new GatewayContext(requestId, nodeId, user, channel);
             }));
   }
@@ -129,7 +133,7 @@ public class GatewayContextFactory {
     if (security == EndpointSecurity.JWT_SESSION_REQUIRED) {
       exchange.getResponse().getHeaders().setCacheControl("private, no-store");
     }
-    if (user.tokenKind() != GatewayTokenKind.PAT) return;
+    if (user.tokenKind() == GatewayTokenKind.JWT) return;
     String path = EndpointAccessPolicy.canonicalPath(exchange.getRequest());
     String scope = PAT_POLICY.scope(exchange.getRequest());
     if (security == EndpointSecurity.GLOBAL_ADMIN_REQUIRED

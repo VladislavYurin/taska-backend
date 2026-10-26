@@ -21,6 +21,9 @@ public interface AuthService {
      */
     Mono<AuthResponseDto> login(String email, String password);
 
+    /** Private OAuth login: applies existing lock/password policy without creating a JWT/refresh session. */
+    Mono<UserContext> authenticateOAuthCredentials(String email, String password);
+
     /**
      * Обновляет пару токенов с использованием валидного refresh-токена.
      *

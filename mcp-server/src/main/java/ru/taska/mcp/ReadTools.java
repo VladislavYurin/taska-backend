@@ -96,7 +96,7 @@ public class ReadTools implements ToolContributor {
                           "user",
                           user,
                           "token_kind",
-                          "PAT",
+                          call.context().authorizationKind().name(),
                           "scopes",
                           call.context().user().getScopesList(),
                           "expires_at",
@@ -104,7 +104,7 @@ public class ReadTools implements ToolContributor {
                               .toString()));
               return new ToolData(
                   data,
-                  "пользователь получен; token_kind=PAT, scopes="
+                  "пользователь получен; token_kind=" + call.context().authorizationKind().name() + ", scopes="
                       + String.join(",", call.context().user().getScopesList()));
             });
   }

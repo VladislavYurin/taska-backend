@@ -35,6 +35,8 @@ public class McpGatewaySigningFilter implements ExchangeFilterFunction {
         return Mono.defer(() -> {
             String authorization = request.headers().getFirst(HttpHeaders.AUTHORIZATION);
             if (authorization == null) return next.exchange(request); // Internal readiness is unsigned.
+            // Delegation JWT carries cryptographically authenticated MCP identity from auth-service.
+            if (authorization.startsWith("Bearer ") && !authorization.startsWith("Bearer tsk_pat_")) return next.exchange(request);
             String requestId = request.headers().getFirst(REQUEST_ID_HEADER);
             if (!authorization.startsWith("Bearer ") || requestId == null || requestId.isBlank())
                 return Mono.error(new IllegalStateException("MCP upstream authentication context is missing"));

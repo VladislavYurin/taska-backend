@@ -21,6 +21,7 @@ public record GatewayContext(
 ) {
     public GatewayContext(String requestId, String nodeId, GatewayUserContext userContext) {
         this(requestId, nodeId, userContext, userContext == null ? null
+                : userContext.tokenKind() == GatewayTokenKind.DELEGATION ? ru.taska.domain.ActionChannel.MCP
                 : userContext.tokenKind() == GatewayTokenKind.PAT ? ru.taska.domain.ActionChannel.API_TOKEN
                 : ru.taska.domain.ActionChannel.UI);
     }

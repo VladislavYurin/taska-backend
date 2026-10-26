@@ -130,6 +130,23 @@ public class AuthServiceImpl implements AuthService {
                 );
     }
 
+    @Override
+    @Transactional
+    public Mono<UserContext> authenticateOAuthCredentials(String email, String password) {
+        if (email == null || email.isBlank() || email.length() > 320 || password == null
+                || password.isBlank() || password.length() > 128)
+            return Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials"));
+        return userRepository.findByEmail(email.trim().toLowerCase(java.util.Locale.ROOT))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
+                .flatMap(user -> credentialRepository.findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
+                        .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
+                        .flatMap(credential -> accountLockService.resolveLockState(user)
+                                .filter(current -> current.getStatus() == UserStatus.ACTIVE)
+                                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
+                                .flatMap(current -> verifyPassword(credential, password, current)
+                                        .flatMap(valid -> resetFailedAttempts(current, valid).thenReturn(buildUserContext(current))))));
+    }
+
     /**
      * {@inheritDoc}
      */

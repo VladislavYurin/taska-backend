@@ -1,0 +1,60 @@
+# Explicit optional overlay. Requires real HTTPS AS/resource URLs and separately provisioned secrets.
+services:
+  oauth-db:
+    image: postgres:16.3
+    profiles: [oauth]
+    networks: [taskanetwork]
+    environment:
+      POSTGRES_DB: taska_oauth
+      POSTGRES_USER: taska_oauth
+      POSTGRES_PASSWORD: ${OAUTH_DB_PASSWORD:?Set OAUTH_DB_PASSWORD}
+    volumes:
+      - oauth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U taska_oauth -d taska_oauth]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  oauth-server:
+    build:
+      context: .
+      dockerfile: oauth-server/Dockerfile
+    profiles: [oauth]
+    networks: [taskanetwork]
+    ports:
+      - '127.0.0.1:${OAUTH_LOCAL_PORT:-8088}:8080'
+    environment:
+      OAUTH_DB_PASSWORD: ${OAUTH_DB_PASSWORD:?Set OAUTH_DB_PASSWORD}
+      OAUTH_ISSUER: ${OAUTH_ISSUER:?Set canonical HTTPS OAUTH_ISSUER}
+      MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE:?Set canonical HTTPS MCP_OAUTH_RESOURCE}
+      OAUTH_CIMD_HOSTS: ${OAUTH_CIMD_HOSTS:?Set approved exact CIMD hosts}
+      OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:?Set approved exact redirect URIs}
+      OAUTH_DCR_ENABLED: ${OAUTH_DCR_ENABLED:-false}
+      OAUTH_INTROSPECTION_CLIENT_ID: ${OAUTH_INTROSPECTION_CLIENT_ID:-auth-service}
+      OAUTH_INTROSPECTION_SECRET: ${OAUTH_INTROSPECTION_SECRET:?Set separate introspection secret}
+      OAUTH_IDENTITY_SERVICE_CREDENTIAL: ${OAUTH_IDENTITY_SERVICE_CREDENTIAL:?Set separate identity secret}
+      AUTH_GRPC_HOST: auth-service
+      AUTH_GRPC_PORT: 9090
+    depends_on:
+      oauth-db:
+        condition: service_healthy
+  auth-service:
+    environment:
+      AUTH_OAUTH_ENABLED: 'true'
+      OAUTH_ISSUER: ${OAUTH_ISSUER}
+      MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE}
+      OAUTH_INTROSPECTION_URL: ${OAUTH_INTROSPECTION_URL:?Set HTTPS introspection endpoint}
+      OAUTH_GRANT_VALIDATION_URL: ${OAUTH_GRANT_VALIDATION_URL:?Set HTTPS parent grant endpoint}
+      OAUTH_INTROSPECTION_CLIENT_ID: ${OAUTH_INTROSPECTION_CLIENT_ID:-auth-service}
+      OAUTH_INTROSPECTION_SECRET: ${OAUTH_INTROSPECTION_SECRET}
+      OAUTH_IDENTITY_SERVICE_CREDENTIAL: ${OAUTH_IDENTITY_SERVICE_CREDENTIAL}
+      MCP_OAUTH_EXCHANGE_CREDENTIAL: ${MCP_OAUTH_EXCHANGE_CREDENTIAL:?Set separate MCP exchange secret}
+      OAUTH_DELEGATION_SIGNING_SECRET: ${OAUTH_DELEGATION_SIGNING_SECRET:?Set separate delegation signing secret}
+  mcp-server:
+    environment:
+      MCP_OAUTH_ENABLED: 'true'
+      OAUTH_ISSUER: ${OAUTH_ISSUER}
+      MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE}
+      MCP_OAUTH_EXCHANGE_CREDENTIAL: ${MCP_OAUTH_EXCHANGE_CREDENTIAL}
+volumes:
+  oauth-db-data:
