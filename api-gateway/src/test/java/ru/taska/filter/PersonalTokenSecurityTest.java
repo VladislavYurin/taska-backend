@@ -43,10 +43,13 @@ class PersonalTokenSecurityTest {
         .verifyComplete();
     for (HttpMethod method :
         List.of(HttpMethod.POST, HttpMethod.PATCH, HttpMethod.PUT, HttpMethod.DELETE)) {
+      String path = method == HttpMethod.POST ? "/api/v1/projects"
+          : method == HttpMethod.PATCH ? "/api/v1/issues/id"
+          : "/api/v1/projects/p/issues/i/watchers/me";
       denied(
           factory,
           method,
-          "/api/v1/projects",
+          path,
           EndpointSecurity.PROTECTED,
           "INSUFFICIENT_SCOPE",
           "write");
@@ -148,6 +151,17 @@ class PersonalTokenSecurityTest {
                     exchange(HttpMethod.GET, "/api/v1/users/me/access-tokens;ignored=value")
                         .getRequest()))
         .isEqualTo("session");
+  }
+
+  @Test
+  void undocumentedEndpointsRejectPatButLegacySelfReadHasExplicitPolicy() {
+    var factory = factory(AccessTokenKind.ACCESS_TOKEN_KIND_PAT, List.of("read", "write"));
+    for (HttpMethod method : List.of(HttpMethod.GET, HttpMethod.POST, HttpMethod.DELETE)) {
+      denied(factory, method, "/api/v1/future-endpoint", EndpointSecurity.PROTECTED, "SESSION_REQUIRED", null);
+    }
+    StepVerifier.create(factory.buildContext("request", exchange(HttpMethod.GET, "/api/gateway/me"),
+        EndpointSecurity.PROTECTED)).expectNextCount(1).verifyComplete();
+    denied(factory, HttpMethod.POST, "/api/gateway/me", EndpointSecurity.PROTECTED, "SESSION_REQUIRED", null);
   }
 
   private static GatewayContextFactory factory(AccessTokenKind kind, List<String> scopes) {

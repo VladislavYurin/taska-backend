@@ -2,6 +2,7 @@ FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
 COPY pom.xml ./
+COPY mcp-server ./mcp-server
 COPY common-lib ./common-lib
 COPY grpc-common-lib ./grpc-common-lib
 COPY kafka-lib ./kafka-lib

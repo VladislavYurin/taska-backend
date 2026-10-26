@@ -47,6 +47,8 @@ final class EndpointAccessPolicy {
                               PathPatternParser.defaultInstance.parse(path.toString()),
                               scope.toString()));
                     }));
+    // The only protected legacy endpoint outside the authoritative OpenAPI has an explicit policy.
+    parsed.add(new Route(HttpMethod.GET, PathPatternParser.defaultInstance.parse("/api/gateway/me"), "read"));
     parsed.sort(Comparator.comparing(Route::pattern, PathPattern.SPECIFICITY_COMPARATOR));
     routes = List.copyOf(parsed);
   }
@@ -73,7 +75,7 @@ final class EndpointAccessPolicy {
                     && route.pattern().matches(request.getPath().pathWithinApplication()))
         .findFirst()
         .map(Route::scope)
-        .orElse(method == HttpMethod.GET ? "read" : "write");
+        .orElse("session");
   }
 
   static String canonicalPath(ServerHttpRequest request) {
