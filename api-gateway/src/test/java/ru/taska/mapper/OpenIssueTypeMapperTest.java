@@ -63,15 +63,13 @@ class OpenIssueTypeMapperTest {
     }
 
     @Test
-    void createSearchAndPatchRejectMalformedKeysConsistently() {
+    void createAndPatchRejectMalformedKeysConsistently() {
         for (String key : List.of("request", "A", "A".repeat(33), "WITH SPACE")) {
             var create = new CreateIssueRequestDto(key, "Request", "", IssuePriorityDto.MEDIUM);
-            var search = new SearchIssuesRequestDto().issueType(key);
             var patch = new PatchIssueRequestDto();
             patch.setIssueType(key);
             java.util.List<org.assertj.core.api.ThrowableAssert.ThrowingCallable> actions = List.of(
                     () -> mapper.toCreateIssueGrpcRequest(project.toString(), "key", create, context),
-                    () -> mapper.toSearchIssuesGrpcRequest(search, context),
                     () -> mapper.toPatchIssueRequest("id", "1", patch, context));
             for (var action : actions) {
                 assertThatThrownBy(action).isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,

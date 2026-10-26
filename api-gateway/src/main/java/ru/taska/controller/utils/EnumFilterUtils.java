@@ -19,7 +19,8 @@ public final class EnumFilterUtils {
      * <p>
      * {@code null} сам по себе не считается неизвестным значением, поскольку параметр
      * может отсутствовать в запросе. Неизвестным считается параметр, который присутствует
-     * в запросе, но не был преобразован в соответствующее значение enum.
+     * в запросе, но не был преобразован в enum, либо ключ типа не соответствует формату.
+     * Корректный открытый ключ передаётся сервису для поиска по реестру проекта.
      *
      * @param exchange текущий {@link ServerWebExchange}
      * @param priority значение фильтра приоритета
@@ -32,7 +33,18 @@ public final class EnumFilterUtils {
             String issueType
     ) {
         return isUnknownFilter(exchange, PRIORITY_PARAMETER, priority)
-                || isUnknownFilter(exchange, ISSUE_TYPE_PARAMETER, issueType);
+                || isUnknownFilter(exchange, ISSUE_TYPE_PARAMETER, issueType)
+                || hasMalformedIssueType(issueType);
+    }
+
+    private static boolean hasMalformedIssueType(String key) {
+        if (key == null) return false;
+        try {
+            ru.taska.domain.IssueType.valueOf(key);
+            return false;
+        } catch (IllegalArgumentException invalidFormat) {
+            return true;
+        }
     }
 
     private static boolean isUnknownFilter(

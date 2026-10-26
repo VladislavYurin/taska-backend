@@ -186,6 +186,26 @@ class BoardControllerWebTestClientTest {
         Mockito.verifyNoMoreInteractions(boardService);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"request", "A", "WITH SPACE", ""})
+    void malformedTypeFilterReturnsEmptyBoard(String key) {
+        mockAuthenticatedUser();
+        webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("issueType", key).build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.columns.length()").isEqualTo(0)
+                .jsonPath("$.unplacedIssues.length()").isEqualTo(0);
+        Mockito.verifyNoInteractions(boardService);
+    }
+
+    @Test
+    void malformedFilterDoesNotBypassAuthentication() {
+        webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("issueType", "request").build(PROJECT_ID))
+                .exchange().expectStatus().isUnauthorized();
+        Mockito.verifyNoInteractions(boardService);
+    }
+
     @Test
     @DisplayName("Должен вернуть 200 OK, если issueType не передан (все типы)")
     void getBoard_shouldReturn200_whenIssueTypeIsAbsent() {

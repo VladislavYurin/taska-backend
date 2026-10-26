@@ -1618,6 +1618,16 @@ class IssueControllerTest {
         Mockito.verify(issueClient).searchIssues(Mockito.argThat(request -> key.equals(request.getIssueType())), Mockito.any());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"request", "A", "WITH SPACE", ""})
+    void malformedTypeFilterReturnsEmptyAfterAuthentication(String key) {
+        mockAuthenticatedUser();
+        webTestClient.get().uri(builder -> builder.path("/api/v1/issues/search").queryParam("issueType", key).build())
+                .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.items.length()").isEqualTo(0).jsonPath("$.totalCount").isEqualTo(0);
+        Mockito.verifyNoInteractions(issueClient);
+    }
+
     @Nested
     @DisplayName("Сценарии резолва задачи по ключу")
     class GetIssueByKey {

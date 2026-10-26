@@ -52,7 +52,12 @@ public class BoardController implements BoardApi {
         return executor.execute(
                 exchange,
                 EndpointSecurity.PROTECTED,
-                context -> boardService.getBoard(
+                context -> {
+                    if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
+                        return Mono.just(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
+                                .columns(java.util.List.of()).unplacedIssues(java.util.List.of())));
+                    }
+                    return boardService.getBoard(
                         projectId,
                         issueType,
                         assigneeId,
@@ -61,7 +66,8 @@ public class BoardController implements BoardApi {
                         priority,
                         query,
                         context
-                ).map(ResponseEntity::ok)
+                ).map(ResponseEntity::ok);
+                }
         );
     }
 }

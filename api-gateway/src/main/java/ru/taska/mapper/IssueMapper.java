@@ -279,7 +279,7 @@ public class IssueMapper {
 
     public IssueType toGrpcIssueType(String restIssueType) {
         if (restIssueType == null) return IssueType.ISSUE_TYPE_UNSPECIFIED;
-        return switch (requireIssueTypeKey(restIssueType)) {
+        return switch (restIssueType) {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> IssueType.ISSUE_TYPE_BUG;
             case "STORY" -> IssueType.ISSUE_TYPE_STORY;
@@ -445,7 +445,7 @@ public class IssueMapper {
 
         bodyBuilder.setIdempotencyKey(IdempotencyKey)
                    .setProjectId(projectId)
-                   .setIssueType(toGrpcIssueType(request.getIssueType()))
+                   .setIssueType(toGrpcIssueType(requireIssueTypeKeyFormat(request.getIssueType())))
                    .setIssueTypeKey(request.getIssueType())
                    .setSummary(request.getSummary())
                    .setDescription(request.getDescription())
@@ -515,7 +515,7 @@ public class IssueMapper {
 
         if (body.getIssueType().present()) {
             String key = requireNotCleared(body.getIssueType().value(), "issueType");
-            bodyBuilder.setIssueTypeKey(requireIssueTypeKey(key));
+            bodyBuilder.setIssueTypeKey(requireIssueTypeKeyFormat(key));
         }
         if (body.getPriority().present()) {
             bodyBuilder.setPriority(toGrpcIssuePriority(requireNotCleared(body.getPriority().value(), "priority")));
@@ -714,7 +714,7 @@ public class IssueMapper {
         return protoIssue.getIssueLinksList().stream().map(this::toRestIssueLinkResponse).toList();
     }
 
-    private String requireIssueTypeKey(String key) {
+    private String requireIssueTypeKeyFormat(String key) {
         try {
             return ru.taska.domain.IssueType.valueOf(key).name();
         } catch (IllegalArgumentException e) {
