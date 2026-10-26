@@ -3,6 +3,7 @@ syntax = "proto3";
 package ru.taska.auth.v1;
 
 import "v1/common.proto";
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
@@ -10,6 +11,7 @@ option java_package = "ru.taska.api.auth.v1";
 option java_outer_classname = "AuthApiProto";
 
 service AuthService {
+  rpc PreviewInvitation(PreviewInvitationRequest) returns (PreviewInvitationResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc Refresh (RefreshRequest) returns (RefreshResponse);
   rpc SetPasswordByToken(SetPasswordByTokenRequest) returns (google.protobuf.Empty);
@@ -55,6 +57,7 @@ message SetPasswordByTokenRequest {
 message SetPasswordByTokenRequestBody {
   string token = 1;
   string new_password = 2;
+  optional string display_name = 3;
 }
 
 message ValidateAccessTokenRequest {
@@ -70,4 +73,15 @@ message ValidateAccessTokenRequestBody {
 
 message ValidateAccessTokenResponse {
   ru.taska.common.v1.UserContext user_context = 1;
+}
+
+message PreviewInvitationRequest {
+  ru.taska.common.v1.Header header = 1;
+  string token = 2;
+}
+message PreviewInvitationResponse {
+  string email = 1;
+  string display_name = 2;
+  string kind = 3;
+  google.protobuf.Timestamp expires_at = 4;
 }

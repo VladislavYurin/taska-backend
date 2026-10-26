@@ -59,6 +59,10 @@ public class User {
     @Column("display_name")
     private String displayName;
 
+    @Column("created_via")
+    @Builder.Default
+    private UserCreatedVia createdVia = UserCreatedVia.INVITATION;
+
     /**
      * Текущий статус пользователя (INVITED, ACTIVE, BLOCKED, LOCKED).
      */

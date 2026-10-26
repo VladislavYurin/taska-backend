@@ -71,6 +71,28 @@ class AuthControllerWebTestClientTest {
     }
 
     @Test
+    void invitationPreviewIsPublicAndReceivesTokenInBody() {
+        var response = new ru.taska.domain.dto.InvitationPreviewResponseDto().email("person@example.test")
+                .displayName("Person").kind(ru.taska.domain.dto.InvitationPreviewResponseDto.KindEnum.SIGNUP)
+                .expiresAt(java.time.OffsetDateTime.parse("2027-01-01T00:00:00Z"));
+        Mockito.when(grpcAuthServiceClient.previewInvitation(Mockito.any(), Mockito.any())).thenAnswer(call -> {
+            Mono<ru.taska.domain.dto.InvitationPreviewRequestDto> body = call.getArgument(0);
+            return body.map(value -> {
+                org.assertj.core.api.Assertions.assertThat(value.getToken()).isEqualTo("invitation-secret"); return response;
+            });
+        });
+        webTestClient.post().uri("/api/v1/auth/invitations/preview").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"token\":\"invitation-secret\"}").exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.kind").isEqualTo("SIGNUP").jsonPath("$.email").isEqualTo("person@example.test")
+                .jsonPath("$.token").doesNotExist();
+        Mockito.verify(grpcAuthServiceClient, Mockito.never()).validateAccessToken(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doReturn(Mono.error(Status.UNAUTHENTICATED.withDescription("Invalid or expired token").asRuntimeException()))
+                .when(grpcAuthServiceClient).previewInvitation(Mockito.any(), Mockito.any());
+        webTestClient.post().uri("/api/v1/auth/invitations/preview").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"token\":\"unknown\"}").exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
     @DisplayName("POST /api/v1/auth/login - Успешный login")
     void login_Success_Returns200AndTokens() {
         LoginResponseDto responseDto = new LoginResponseDto();

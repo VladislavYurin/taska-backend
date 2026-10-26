@@ -24,6 +24,13 @@ public class AdminUserManagementController implements AdminUserManagementApi {
     private final GrpcAdminServiceClient adminServiceClient;
 
     @Override
+    public Mono<ResponseEntity<ru.taska.domain.dto.UserDisplayNameResponseDto>> updateUserDisplayName(UUID userId,
+            Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.GLOBAL_ADMIN_REQUIRED, context ->
+                adminServiceClient.updateUserDisplayName(userId, request, context).map(ResponseEntity::ok));
+    }
+
+    @Override
     public Mono<ResponseEntity<UserStatusResponseDto>> blockUser(
             UUID userId,
             Mono<BlockUserRequestDto> requestDto,

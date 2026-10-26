@@ -23,6 +23,30 @@ public class GrpcAdminUserManagementService {
 
     private final AdminUserService adminUserService;
     private final AdminUserManagementMapper managementMapper;
+    private final ru.taska.service.UserDisplayNameAdminService displayNames;
+
+    public Mono<ru.taska.api.admin.v1.UpdateUserDisplayNameResponse> updateUserDisplayName(
+            Mono<ru.taska.api.admin.v1.UpdateUserDisplayNameRequest> request) {
+        return request.flatMap(req -> {
+            if (req.getActorRole() != ru.taska.api.common.v1.GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN) {
+                return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.PERMISSION_DENIED, "Global admin role is required"));
+            }
+            return Mono.zip(
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getTargetUserId(), "targetUserId"),
+                            GrpcRequestValidators.parseUuidOrInvalidArgument(req.getActorUserId(), "actorUserId"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getActorDisplayName(), "actorDisplayName"),
+                            GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getActorEmail(), "actorEmail"))
+                    .flatMap(ids -> displayNames.update(ids.getT1(), ids.getT2(),
+                            UserStatusRequestDto.builder().targetUserId(ids.getT3()).actorUserId(ids.getT4())
+                                    .actorDisplayName(req.getActorDisplayName()).actorEmail(req.getActorEmail())
+                                    .role(ru.taska.domain.GlobalRole.GLOBAL_ADMIN).reason("Display name updated by administrator").build(),
+                            ru.taska.util.DisplayNames.normalize(req.getDisplayName())))
+                    .map(change -> ru.taska.api.admin.v1.UpdateUserDisplayNameResponse.newBuilder()
+                            .setUserId(change.userId().toString()).setDisplayName(change.displayName()).build());
+        });
+    }
 
     public Mono<UserStatusResponse> blockUser(Mono<BlockUserRequest> request) {
         return request

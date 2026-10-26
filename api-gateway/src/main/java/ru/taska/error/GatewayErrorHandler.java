@@ -41,6 +41,13 @@ public class GatewayErrorHandler {
             message = grpcStatus.getDescription() != null ? grpcStatus.getDescription() : code;
             httpStatus = restErrorMapper.mapGrpcCodeToHttpStatus(grpcStatus.getCode());
             log.warn("[{}] gRPC error: {} - {}", requestId, code, message);
+        // The shared validators also run in the gateway before making a gRPC call.
+        } else if (error instanceof ru.taska.exception.DomainException domainEx) {
+            code = domainEx.getStatus().name();
+            details = domainEx.getDetails();
+            message = domainEx.getMessage();
+            httpStatus = restErrorMapper.mapGrpcCodeToHttpStatus(Status.Code.valueOf(code));
+            log.warn("[{}] Validation error: {} - {}", requestId, code, message);
         // http ошибка из BearerTokenExtractor
         } else if (error instanceof ResponseStatusException rse) {
             httpStatus = HttpStatus.resolve(rse.getStatusCode().value());

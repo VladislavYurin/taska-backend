@@ -52,6 +52,16 @@ public class GrpcAdminUserManagementServiceClient {
     private final AdminUserManagementMapper managementMapper;
     private final GrpcClientProperties properties;
 
+    public Mono<ru.taska.dto.UserDisplayNameChangeDto> updateUserDisplayName(String requestId, String nodeId,
+            UserStatusRequestDto actor, String displayName) {
+        return dynamicStub().updateUserDisplayName(ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest.newBuilder()
+                        .setHeader(ru.taska.api.common.v1.Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                        .setActorUserId(actor.actorUserId().toString()).setTargetUserId(actor.targetUserId().toString())
+                        .setDisplayName(displayName).build())
+                .map(response -> new ru.taska.dto.UserDisplayNameChangeDto(java.util.UUID.fromString(response.getUserId()),
+                        response.getPreviousDisplayName(), response.getDisplayName()));
+    }
+
     /**
      * Выполняет блокировку пользователя.
      *

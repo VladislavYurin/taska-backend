@@ -26,10 +26,7 @@ public class DirectoryInput {
     }
 
     public String displayName(String value, String email) {
-        String name = value == null || value.isBlank() ? email.substring(0, email.indexOf('@')) : value.strip();
-        if (name.codePointCount(0, name.length()) > 128 || name.codePoints().anyMatch(Character::isISOControl)) {
-            throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Display name must contain at most 128 characters and no control characters");
-        }
-        return name;
+        String name = value == null || value.isEmpty() ? email.substring(0, email.indexOf('@')) : value;
+        return DisplayNames.normalize(name);
     }
 }

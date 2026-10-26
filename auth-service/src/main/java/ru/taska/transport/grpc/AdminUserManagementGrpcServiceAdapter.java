@@ -18,6 +18,13 @@ public class AdminUserManagementGrpcServiceAdapter extends ReactorAdminUserManag
     private final AdminUserManagementGrpcService adminUserManagementGrpcService;
 
     @Override
+    public Mono<ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameResponse> updateUserDisplayName(
+            Mono<ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest> request) {
+        return adminUserManagementGrpcService.updateUserDisplayName(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateUserDisplayName"));
+    }
+
+    @Override
     public Mono<UserStatusAuthResponse> blockUser(Mono<BlockUserRequest> request) {
         return adminUserManagementGrpcService.blockUser(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("blockUser"));

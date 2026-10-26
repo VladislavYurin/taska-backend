@@ -11,6 +11,7 @@ option java_package = "ru.taska.api.auth.profile.v1";
 option java_outer_classname = "ProfileApiProto";
 
 service ProfileService {
+  rpc UpdateMyProfile(UpdateMyProfileRequest) returns (UpdateMyProfileResponse);
   rpc GetAvatarDownloadUrl(GetAvatarDownloadUrlRequest) returns (GetAvatarDownloadUrlResponse);
   rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
   rpc CreateAvatarUploadUrl(CreateAvatarUploadUrlRequest) returns (CreateAvatarUploadUrlResponse);
@@ -285,3 +286,9 @@ message UserDetails {
   string email = 3;
   optional AvatarResponse avatar = 4;
 }
+message UpdateMyProfileRequest {
+  ru.taska.common.v1.Header header = 1;
+  string actor_user_id = 2;
+  string display_name = 3;
+}
+message UpdateMyProfileResponse { string display_name = 1; }

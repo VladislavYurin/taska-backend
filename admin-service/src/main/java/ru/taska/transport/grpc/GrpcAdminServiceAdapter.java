@@ -34,6 +34,13 @@ public class GrpcAdminServiceAdapter extends ReactorAdminServiceGrpc.AdminServic
     private final GrpcAdminUserManagementService grpcAdminUserManagementService;
 
     @Override
+    public Mono<ru.taska.api.admin.v1.UpdateUserDisplayNameResponse> updateUserDisplayName(
+            Mono<ru.taska.api.admin.v1.UpdateUserDisplayNameRequest> request) {
+        return grpcAdminUserManagementService.updateUserDisplayName(request)
+                .transform(GrpcExceptionHandler.withErrorHandling("updateUserDisplayName"));
+    }
+
+    @Override
     public Mono<GetCatalogResponse> getCatalog(Mono<GetCatalogRequest> request) {
         return grpcAdminReadonlyService.getCatalog(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("getCatalog"));

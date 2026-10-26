@@ -210,12 +210,16 @@ pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAUL
 
 ## API и безопасность
 
-Публичные endpoints: login, refresh и принятие приглашения. Остальные пользовательские операции требуют `Authorization: Bearer <access-token>`. Read-only административные endpoints дополнительно требуют глобальную роль `GLOBAL_ADMIN`.
+Публичные endpoints: login, refresh, preview и принятие приглашения. Остальные пользовательские операции требуют `Authorization: Bearer <access-token>`. Read-only административные endpoints дополнительно требуют глобальную роль `GLOBAL_ADMIN`.
 
 Personal access tokens are implemented in auth-service (TAS-401). Secrets use `tsk_pat_` plus 256 random bits; only their SHA-256 hashes are stored. Tokens have `read` or `read,write` scopes, expire after 30 days by default, and are listed/revoked only through the owner's JWT session. `AUTH_PAT_MAX_LIFETIME_DAYS` defaults to 90 and `AUTH_PAT_MAX_ACTIVE_TOKENS` to 10. LOCKED accounts temporarily suspend PAT validation; blocking, account deletion and password replacement invalidate tokens permanently. Creation/revocation events produce private owner inbox/email notifications (email preferences apply), without token names or secrets.
 
 Rollout: deploy auth-service first. PAT validation through gRPC requires `allow_personal_token=true`; older gateways omit it and continue rejecting PAT. Only enable it in clients that enforce scopes and deny PAT access to all admin endpoints (TAS-402/TAS-403). A PAT never grants administrative access through `GLOBAL_ADMIN` in its user context.
 
+
+TAS-420: `PATCH /api/v1/users/me` changes only `displayName` and returns the full profile, including the normalized name and avatar availability. `PATCH /api/v1/admin/users/{userId}` requires a global administrator and records the previous/new name in the existing admin audit path. All name inputs share trim + 1–128 Unicode code points validation; controls and line breaks return `400` with `details.reason=DISPLAY_NAME_INVALID`. Live profile/directory lookups reflect renames; existing notification actor snapshots keep their historical name.
+
+`POST /api/v1/auth/invitations/preview` accepts a token only in the body and returns email, name, INVITATION/SIGNUP kind and expiry without consuming it. Acceptance optionally replaces the invited name; an omitted name preserves it, and validation failures leave the token usable. The `users.created_via` migration defaults existing accounts to INVITATION and supports SIGNUP/OAUTH for subsequent registration providers. Deploy the auth migration/service and updated gRPC consumers together before enabling the new REST operations.
 
 Основные группы REST API:
 

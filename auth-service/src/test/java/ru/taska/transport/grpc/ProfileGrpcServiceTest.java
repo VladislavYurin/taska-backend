@@ -78,6 +78,25 @@ class ProfileGrpcServiceTest {
                 .build();
     }
 
+    @Test
+    void updateProfileUsesActorAndReturnsPersistedNormalizedName() {
+        var request = ru.taska.api.auth.profile.v1.UpdateMyProfileRequest.newBuilder().setHeader(validHeader)
+                .setActorUserId(USER_ID_STR).setDisplayName("  Name  ").build();
+        Mockito.when(profileService.updateMyProfile(USER_ID, "  Name  "))
+                .thenReturn(Mono.just(ru.taska.entity.User.builder().displayName("Name").build()));
+        StepVerifier.create(profileGrpcService.updateMyProfile(Mono.just(request)))
+                .assertNext(result -> Assertions.assertEquals("Name", result.getDisplayName())).verifyComplete();
+    }
+
+    @Test
+    void missingHeaderPreventsProfileMutation() {
+        var request = ru.taska.api.auth.profile.v1.UpdateMyProfileRequest.newBuilder()
+                .setActorUserId(USER_ID_STR).setDisplayName("Name").build();
+        StepVerifier.create(profileGrpcService.updateMyProfile(Mono.just(request)))
+                .expectError(StatusRuntimeException.class).verify();
+        Mockito.verifyNoInteractions(profileService);
+    }
+
     // ==================== CONFIRM AVATAR UPLOAD TESTS ====================
 
     @Nested

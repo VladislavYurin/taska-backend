@@ -27,7 +27,7 @@ public class GrpcUserDirectoryClient {
     public Mono<InvitationResult> invite(InvitationRequestDto body, GatewayContext context) {
         var request = InviteUserRequest.newBuilder().setHeader(header(context))
                 .setBody(InviteUserRequestBody.newBuilder().setActorUserId(context.userContext().userId())
-                        .setEmail(body.getEmail()).setDisplayName(body.getDisplayName() == null ? "" : body.getDisplayName())
+                        .setEmail(body.getEmail()).setDisplayName(body.getDisplayName() == null ? "" : ru.taska.util.DisplayNames.normalize(body.getDisplayName()))
                         .setResend(Boolean.TRUE.equals(body.getResend()))).build();
         return invitations.withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
                 .inviteUser(request).map(result -> {

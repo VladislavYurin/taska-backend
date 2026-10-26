@@ -487,6 +487,30 @@ class AdminUserManagementControllerTest {
 
     // ==================== HELPER METHODS ====================
 
+    @Test
+    void patchNameIsAdminOnlyAndReturnsTargetNameOrMissingTarget() {
+        mockAuthenticatedUser();
+        var target = UUID.fromString(TARGET_USER_ID);
+        Mockito.when(adminClient.updateUserDisplayName(Mockito.eq(target), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(new ru.taska.domain.dto.UserDisplayNameResponseDto().userId(target).displayName("Current")));
+        webTestClient.patch().uri("/api/v1/admin/users/{userId}", target).header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"displayName\":\"Current\"}")
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.displayName").isEqualTo("Current")
+                .jsonPath("$.userId").isEqualTo(TARGET_USER_ID);
+        Mockito.when(adminClient.updateUserDisplayName(Mockito.eq(target), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
+        webTestClient.patch().uri("/api/v1/admin/users/{userId}", target).header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"displayName\":\"Current\"}")
+                .exchange().expectStatus().isNotFound();
+        Mockito.clearInvocations(adminClient);
+        Mockito.when(contextMapper.mapToGatewayUserContext(Mockito.any(UserContext.class))).thenReturn(GatewayUserContext.builder()
+                .userId(USER_ID).email(EMAIL).displayName(DISPLAY_NAME).status(GatewayUserStatus.ACTIVE).globalRole(GlobalRole.USER).build());
+        webTestClient.patch().uri("/api/v1/admin/users/{userId}", target).header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"displayName\":\"Current\"}")
+                .exchange().expectStatus().isForbidden();
+        Mockito.verifyNoInteractions(adminClient);
+    }
+
     private void mockAuthenticatedUser() {
         var accessToken = ValidateAccessTokenResponse.newBuilder()
                 .setUserContext(

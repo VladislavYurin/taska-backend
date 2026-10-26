@@ -25,6 +25,12 @@ public class AuthGrpcServiceAdapter extends ReactorAuthServiceGrpc.AuthServiceIm
     private final AuthGrpcService authGrpcService;
 
     @Override
+    public Mono<ru.taska.api.auth.v1.PreviewInvitationResponse> previewInvitation(
+            Mono<ru.taska.api.auth.v1.PreviewInvitationRequest> request) {
+        return authGrpcService.previewInvitation(request).transform(GrpcExceptionHandler.withErrorHandling("previewInvitation"));
+    }
+
+    @Override
     public Mono<LoginResponse> login(Mono<LoginRequest> request){
         return authGrpcService.login(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("login"));

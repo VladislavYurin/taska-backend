@@ -16,6 +16,7 @@ option java_outer_classname = "AdminApiProto";
  * и манипуляций по состоянию пользователя.
  */
 service AdminService {
+  rpc UpdateUserDisplayName(UpdateUserDisplayNameRequest) returns (UpdateUserDisplayNameResponse);
 
   /**
    * Возвращает каталог метаданных всех сервисов (таблицы, колонки, типы).
@@ -525,3 +526,14 @@ message RetryOutboxEventResponse {
   optional int32 attempts = 3;
 }
 
+
+message UpdateUserDisplayNameRequest {
+  ru.taska.common.v1.Header header = 1;
+  string target_user_id = 2;
+  string actor_user_id = 3;
+  string display_name = 4;
+  string actor_display_name = 5;
+  string actor_email = 6;
+  ru.taska.common.v1.GlobalRoleProto actor_role = 7;
+}
+message UpdateUserDisplayNameResponse { string user_id = 1; string display_name = 2; }

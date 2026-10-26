@@ -646,6 +646,29 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/auth/invitations/preview:
+    post:
+      summary: Preview a live invitation without consuming it
+      operationId: previewInvitation
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationPreviewRequestDto'
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreviewResponseDto'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/auth/invitations/accept:
     post:
       summary: Принятие инвайта и установка пароля
@@ -673,6 +696,29 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
   /api/v1/users/me:
+    patch:
+      summary: Change the current user's display name
+      description: Only displayName changes. Invalid names return 400 with details.reason DISPLAY_NAME_INVALID.
+      x-pat-scope: write
+      operationId: updateMyProfile
+      tags: [user-profile]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDisplayNameRequestDto'
+      responses:
+        '200':
+          description: Updated profile including the normalized displayName
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateAccessTokenResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
     get:
       x-pat-scope: read
       summary: Получение данных текущего пользователя
@@ -1246,6 +1292,37 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/users/{userId}:
+    patch:
+      summary: Change a user's display name (GLOBAL_ADMIN)
+      x-pat-scope: session
+      operationId: updateUserDisplayName
+      tags: [admin-user-management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDisplayNameRequestDto'
+      responses:
+        '200':
+          description: Updated name; previous and new names are recorded in the admin audit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDisplayNameResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -4628,7 +4705,6 @@ components:
           maxLength: 320
         displayName:
           type: string
-          maxLength: 128
           description: Только при создании; если не задано, используется локальная часть email.
         resend:
           type: boolean
@@ -4679,12 +4755,54 @@ components:
         hasMore:
           type: boolean
 
+    UpdateDisplayNameRequestDto:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          description: Trimmed Unicode name, 1 to 128 code points, no control characters or line breaks. Invalid values return details.reason DISPLAY_NAME_INVALID.
+    UserDisplayNameResponseDto:
+      type: object
+      required: [userId, displayName]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    InvitationPreviewRequestDto:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: Token stays in the request body, never in the URL.
+    InvitationPreviewResponseDto:
+      type: object
+      required: [email, displayName, kind, expiresAt]
+      properties:
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        kind:
+          type: string
+          enum: [INVITATION, SIGNUP]
+        expiresAt:
+          type: string
+          format: date-time
+
     PasswordByTokenRequestDto:
       type: object
       required: [token, newPassword]
       properties:
         token:
           type: string
+        displayName:
+          type: string
+          description: Optional normalized name, 1 to 128 Unicode code points, no controls or line breaks. Omission keeps the invited name; invalid values do not consume the token (400 DISPLAY_NAME_INVALID).
         newPassword:
           type: string
 

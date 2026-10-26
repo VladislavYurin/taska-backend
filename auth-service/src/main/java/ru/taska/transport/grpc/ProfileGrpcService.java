@@ -32,6 +32,16 @@ public class ProfileGrpcService {
     private final ProfileService profileService;
     private final ProfileMapper profileMapper;
 
+    public Mono<ru.taska.api.auth.profile.v1.UpdateMyProfileResponse> updateMyProfile(
+            Mono<ru.taska.api.auth.profile.v1.UpdateMyProfileRequest> request) {
+        return request.flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getActorUserId(), "actorUserId"))
+                .flatMap(values -> profileService.updateMyProfile(values.getT3(), req.getDisplayName()))
+                .map(user -> ru.taska.api.auth.profile.v1.UpdateMyProfileResponse.newBuilder().setDisplayName(user.getDisplayName()).build()));
+    }
+
     @TrackMetrics(counter = "auth-service_confirmAvatarUpload_grpc_counter",
             timer = "auth-service_confirmAvatarUpload_grpc_timer")
     public Mono<ConfirmAvatarUploadResponse> confirmAvatarUpload(Mono<ConfirmAvatarUploadRequest> request) {

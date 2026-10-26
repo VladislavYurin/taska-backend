@@ -32,5 +32,8 @@ public interface AuthService {
 
     Mono<Void> setPasswordByToken(String requestId, String token, String newPassword);
 
+    Mono<Void> setPasswordByToken(String requestId, String token, String newPassword, String displayName);
+    Mono<ru.taska.dto.InvitationPreview> previewInvitation(String token);
+
     Mono<UserContext> validateAccessToken(String accessToken);
 }

@@ -24,6 +24,17 @@ public class AuthGrpcService {
 
     private final AuthService authService;
 
+    public Mono<ru.taska.api.auth.v1.PreviewInvitationResponse> previewInvitation(
+            Mono<ru.taska.api.auth.v1.PreviewInvitationRequest> request) {
+        return request.flatMap(req -> Mono.when(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"))
+                .then(Mono.defer(() -> authService.previewInvitation(req.getToken())))).map(preview ->
+                ru.taska.api.auth.v1.PreviewInvitationResponse.newBuilder().setEmail(preview.email()).setDisplayName(preview.displayName())
+                        .setKind(preview.kind()).setExpiresAt(com.google.protobuf.Timestamp.newBuilder()
+                                .setSeconds(preview.expiresAt().getEpochSecond()).setNanos(preview.expiresAt().getNano())).build());
+    }
+
     @TrackMetrics(counter = "auth-service_login_grpc_counter",
             timer = "auth-service_login_grpc_timer")
     public Mono<LoginResponse> login(Mono<LoginRequest> request) {
@@ -92,28 +103,14 @@ public class AuthGrpcService {
     @TrackMetrics(counter = "auth-service_setPassword-byToken_grpc_counter",
             timer = "auth-service_setPassword-byToken_grpc_timer")
     public Mono<Empty> setPasswordByToken(Mono<SetPasswordByTokenRequest> request) {
-        return request
-                .flatMap(req -> Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getRequestId(), "header.requestId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getNodeId(), "header.nodeId"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getToken(), "body.token"),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getBody().getNewPassword(), "body.newPassword")
-                ))
-                .flatMap(t -> {
-                    String requestId = t.getT1();
-                    String nodeId = t.getT2();
-                    String token = t.getT3();
-                    String newPassword = t.getT4();
-
-                    log.info("[{}][{}] Set new password request", requestId, nodeId);
-                    return authService.setPasswordByToken(requestId, token, newPassword)
-                            .doOnSuccess(response -> log.debug("[{}][{}] Set new password successful", requestId, nodeId))
-                            .doOnError(error -> log.warn("[{}][{}] Set new password failed: {}", requestId, nodeId, error.getMessage()));
-                })
+        return request.flatMap(req -> Mono.zip(
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getToken(), "body.token"),
+                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getNewPassword(), "body.newPassword"))
+                .flatMap(values -> req.getBody().hasDisplayName()
+                        ? authService.setPasswordByToken(values.getT1(), values.getT3(), values.getT4(), req.getBody().getDisplayName())
+                        : authService.setPasswordByToken(values.getT1(), values.getT3(), values.getT4())))
                 .thenReturn(Empty.getDefaultInstance());
     }
 

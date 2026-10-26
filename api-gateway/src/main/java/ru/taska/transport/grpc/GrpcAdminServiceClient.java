@@ -183,6 +183,18 @@ public class GrpcAdminServiceClient {
                 .map(adminDataMapper::toRestProblematicOutboxEventsSummaryResponse);
     }
 
+    public Mono<ru.taska.domain.dto.UserDisplayNameResponseDto> updateUserDisplayName(java.util.UUID userId,
+            Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, GatewayContext context) {
+        return request.flatMap(body -> dynamicStub().updateUserDisplayName(ru.taska.api.admin.v1.UpdateUserDisplayNameRequest.newBuilder()
+                        .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).setTargetUserId(userId.toString())
+                        .setActorUserId(context.userContext().userId()).setActorDisplayName(context.userContext().displayName())
+                        .setActorEmail(context.userContext().email()).setActorRole(context.userContext().globalRole() == ru.taska.domain.GlobalRole.GLOBAL_ADMIN
+                                ? ru.taska.api.common.v1.GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN : ru.taska.api.common.v1.GlobalRoleProto.GLOBAL_ROLE_USER)
+                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build()))
+                .map(response -> new ru.taska.domain.dto.UserDisplayNameResponseDto().userId(java.util.UUID.fromString(response.getUserId()))
+                        .displayName(response.getDisplayName()));
+    }
+
     public Mono<UserStatusResponseDto> blockUser(
             UUID userId,
             Mono<BlockUserRequestDto> request,

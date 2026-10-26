@@ -28,6 +28,12 @@ public class ProfileGrpcServiceAdapter extends ReactorProfileServiceGrpc.Profile
     private final ProfileGrpcService profileGrpcService;
 
     @Override
+    public Mono<ru.taska.api.auth.profile.v1.UpdateMyProfileResponse> updateMyProfile(
+            Mono<ru.taska.api.auth.profile.v1.UpdateMyProfileRequest> request) {
+        return profileGrpcService.updateMyProfile(request).transform(GrpcExceptionHandler.withErrorHandling("updateMyProfile"));
+    }
+
+    @Override
     public Mono<ConfirmAvatarUploadResponse> confirmAvatarUpload(Mono<ConfirmAvatarUploadRequest> request) {
         return profileGrpcService.confirmAvatarUpload(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("confirmAvatarUpload"));

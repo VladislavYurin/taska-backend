@@ -111,16 +111,10 @@ public class AuthMapper {
      * @return сформированный gRPC-объект {@link SetPasswordByTokenRequest} с заполненным заголовком и телом
      */
     public SetPasswordByTokenRequest toPasswordByTokenGrpcRequest(PasswordByTokenRequestDto source, GatewayContext context) {
-        return SetPasswordByTokenRequest.newBuilder()
-                .setHeader(Header.newBuilder()
-                        .setRequestId(context.requestId())
-                        .setNodeId(context.nodeId())
-                        .build())
-                .setBody(SetPasswordByTokenRequestBody.newBuilder()
-                        .setToken(source.getToken())
-                        .setNewPassword(source.getNewPassword())
-                        .build())
-                .build();
+        var body = SetPasswordByTokenRequestBody.newBuilder().setToken(source.getToken()).setNewPassword(source.getNewPassword());
+        if (source.isDisplayNamePresent()) body.setDisplayName(ru.taska.util.DisplayNames.normalize(source.getDisplayName()));
+        return SetPasswordByTokenRequest.newBuilder().setHeader(Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()))
+                .setBody(body).build();
     }
 
     /**
