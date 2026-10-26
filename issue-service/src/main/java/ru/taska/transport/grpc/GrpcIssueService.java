@@ -4,13 +4,19 @@ import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logOnError;
 import static ru.taska.transport.grpc.logging.GrpcIssueLogging.logValidationError;
 
 import exception.GrpcExceptionHandler;
+
 import io.grpc.StatusRuntimeException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import nullable.NullableFieldParsers;
+
 import org.springframework.stereotype.Service;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
 import ru.taska.annotation.TrackMetrics;
 import ru.taska.api.issue.v1.AddIssueLabelRequest;
 import ru.taska.api.issue.v1.AddIssueLabelResponse;
@@ -33,6 +39,7 @@ import ru.taska.api.issue.v1.IssueWithHistoryResponse;
 import ru.taska.api.issue.v1.ListIssueLabelsRequest;
 import ru.taska.api.issue.v1.ListIssueLabelsResponse;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
+import ru.taska.api.issue.v1.ListIssuesForBoardRequestBody;
 import ru.taska.api.issue.v1.ListIssuesForBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesRequest;
 import ru.taska.api.issue.v1.ListIssuesResponse;
@@ -66,9 +73,11 @@ import ru.taska.service.transition.IssueTransitionService;
 import ru.taska.transport.grpc.dto.ValidatedIssueByKeyRequest;
 import ru.taska.transport.grpc.dto.ValidatedIssueRequest;
 import ru.taska.transport.grpc.validator.IssueGrpcRequestValidators;
+
 import validator.GrpcRequestValidators;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -1182,7 +1191,8 @@ public class GrpcIssueService {
                                         ? GrpcRequestValidators.parseUuidOrInvalidArgument(req
                                         .getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
                                         : Mono.just(Optional.<UUID>empty()),
-                                validateLabelIds(req.getBody().getLabelIdsList())
+                                validateLabelIds(req.getBody().getLabelIdsList()),
+                                validateBoardCursor(req.getBody())
 
                 ).doOnError(
                         StatusRuntimeException.class,
@@ -1198,7 +1208,7 @@ public class GrpcIssueService {
                             UUID projectId = t.getT3();
                             UUID actorUserId = t.getT4();
                             UUID assigneeId = t.getT5().orElse(null);
-                            String statusKey = req.getBody().hasStatusKey()
+                            String statusKey = req.getBody().hasStatusKey() && !req.getBody().getStatusKey().isBlank()
                                     ? req.getBody().getStatusKey()
                                     : null;
                             Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
@@ -1225,19 +1235,24 @@ public class GrpcIssueService {
                                     requestId, nodeId, projectId, actorUserId, statusKey,
                                     assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn, priority, query
                             );
-                            return issueService.listIssueBoard(
-                                    requestId, nodeId,actorUserId, projectId, statusKey, assigneeId,
-                                    issueType,
-                                    req.getBody().getIncludeDone(),
-                                    req.getBody().getDoneStatusKeysList(),
-                                    labelIds,
-                                    pageSizePerColumn,
-                                    priority,
-                                    query
-                            )
-                                    .map(issues -> ListIssuesForBoardResponse.newBuilder()
-                                            .addAllIssues(issues)
-                                            .build())
+                            BoardCursor cursor = t.getT7().orElse(null);
+                            Mono<ListIssuesForBoardResponse> result;
+                            if (statusKey != null && (cursor != null || pageSizePerColumn != null)) {
+                                result = issueService.listBoardColumnPage(requestId, nodeId, actorUserId, projectId,
+                                                statusKey, assigneeId, issueType, req.getBody().getIncludeDone(),
+                                                req.getBody().getDoneStatusKeysList(), labelIds,
+                                                pageSizePerColumn == null ? 50 : pageSizePerColumn, priority, query,
+                                                cursor == null ? null : cursor.createdAt(), cursor == null ? null : cursor.id())
+                                        .map(page -> ListIssuesForBoardResponse.newBuilder().addAllIssues(page.items())
+                                                .setTotalCount(page.totalCount()).setHasMore(page.hasMore()).build());
+                            } else {
+                                // Legacy status-only requests without pagination remain unbounded.
+                                result = issueService.listIssueBoard(requestId, nodeId, actorUserId, projectId,
+                                                statusKey, assigneeId, issueType, req.getBody().getIncludeDone(),
+                                                req.getBody().getDoneStatusKeysList(), labelIds, pageSizePerColumn, priority, query)
+                                        .map(issues -> ListIssuesForBoardResponse.newBuilder().addAllIssues(issues).build());
+                            }
+                            return result
                                     .doOnSuccess(response ->
                                             log.info("[{}][{}] listIssuesForBoard: successfully found {} issues",
                                             requestId, nodeId, response.getIssuesCount()))
@@ -1250,6 +1265,41 @@ public class GrpcIssueService {
                                     );
                         })
                 );
+    }
+
+    private record BoardCursor(Instant createdAt, UUID id) {}
+
+    private Mono<Optional<BoardCursor>> validateBoardCursor(ListIssuesForBoardRequestBody body) {
+        if (body.hasAfterCreatedAt() != body.hasAfterId()
+                || (body.hasAfterCreatedAt()
+                        && (!body.hasStatusKey() || body.getStatusKey().isBlank()))) {
+            return Mono.error(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription(
+                                    "afterCreatedAt and afterId must be supplied together with"
+                                        + " statusKey")
+                            .asRuntimeException());
+        }
+        if (!body.hasAfterCreatedAt()) return Mono.just(Optional.empty());
+        var timestamp = body.getAfterCreatedAt();
+        if (timestamp.getSeconds() < -62135596800L
+                || timestamp.getSeconds() > 253402300799L
+                || timestamp.getNanos() < 0
+                || timestamp.getNanos() > 999999999) {
+            return Mono.error(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription("body.afterCreatedAt is invalid")
+                            .asRuntimeException());
+        }
+        return GrpcRequestValidators.parseUuidOrInvalidArgument(body.getAfterId(), "body.afterId")
+                .map(
+                        id ->
+                                Optional.of(
+                                        new BoardCursor(
+                                                Instant.ofEpochSecond(
+                                                        timestamp.getSeconds(),
+                                                        timestamp.getNanos()),
+                                                id)));
     }
 
     /**

@@ -1,8 +1,5 @@
 package ru.taska.transport.grpc;
 
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,8 +12,10 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.AssignIssueRequest;
 import ru.taska.api.issue.v1.CreateIssueLinkRequest;
@@ -63,6 +62,10 @@ import ru.taska.domain.dto.TransitionIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @ExtendWith(MockitoExtension.class)
 class GrpcIssueServiceClientTest {
@@ -117,6 +120,100 @@ class GrpcIssueServiceClientTest {
 
         Mockito.when(stub.withDeadlineAfter(Mockito.anyLong(), Mockito.any(TimeUnit.class)))
                 .thenReturn(stub);
+    }
+
+    @Test
+    void columnPageCarriesExclusiveCursorAndAllBoardFiltersAndEmptyPageCount() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK")).thenReturn(IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority(ru.taska.domain.dto.IssuePriorityDto.HIGH))
+                .thenReturn(IssuePriority.ISSUE_PRIORITY_HIGH);
+        Mockito.when(
+                        stub.listIssuesForBoard(
+                                Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                ru.taska.api.issue.v1.ListIssuesForBoardResponse.newBuilder()
+                                        .setTotalCount(312)
+                                        .setHasMore(false)
+                                        .build()));
+        var date = java.time.OffsetDateTime.parse("2026-01-01T15:30:00.123456+03:00");
+        var cursor = java.util.UUID.fromString(ISSUE_ID);
+        StepVerifier.create(
+                        client.listBoardColumnPage(
+                                PROJECT_ID,
+                                "TASK",
+                                "DONE",
+                                ASSIGNEE_ID,
+                                LABEL_ID,
+                                true,
+                                List.of("DONE", "CLOSED"),
+                                ru.taska.domain.dto.IssuePriorityDto.HIGH,
+                                "%",
+                                2,
+                                date,
+                                cursor,
+                                context))
+                .assertNext(
+                        page -> {
+                            Assertions.assertThat(page.issues()).isEmpty();
+                            Assertions.assertThat(page.totalCount()).isEqualTo(312);
+                            Assertions.assertThat(page.hasMore()).isFalse();
+                        })
+                .verifyComplete();
+        var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub).listIssuesForBoard(captor.capture());
+        var body = captor.getValue().getBody();
+        Assertions.assertThat(body.getStatusKey()).isEqualTo("DONE");
+        Assertions.assertThat(body.getAfterId()).isEqualTo(ISSUE_ID);
+        Assertions.assertThat(body.getAfterCreatedAt().getSeconds())
+                .isEqualTo(date.toEpochSecond());
+        Assertions.assertThat(body.getAfterCreatedAt().getNanos()).isEqualTo(123456000);
+        Assertions.assertThat(body.getAssigneeId()).isEqualTo(ASSIGNEE_ID);
+        Assertions.assertThat(body.getIssueTypeKey()).isEqualTo("TASK");
+        Assertions.assertThat(body.getLabelIdsList()).containsExactly(LABEL_ID);
+        Assertions.assertThat(body.getPriority()).isEqualTo(IssuePriority.ISSUE_PRIORITY_HIGH);
+        Assertions.assertThat(body.getQuery()).isEqualTo("%");
+        Assertions.assertThat(body.getDoneStatusKeysList()).containsExactly("DONE", "CLOSED");
+        Assertions.assertThat(body.getPageSizePerColumn()).isEqualTo(2);
+    }
+
+    @Test
+    void columnPageRequiresUpdatedIssueServiceEvenForEmptyResponses() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK")).thenReturn(IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+        Mockito.when(
+                        stub.listIssuesForBoard(
+                                Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                ru.taska.api.issue.v1.ListIssuesForBoardResponse
+                                        .getDefaultInstance()));
+        StepVerifier.create(
+                        client.listBoardColumnPage(
+                                PROJECT_ID,
+                                "TASK",
+                                "TODO",
+                                null,
+                                null,
+                                false,
+                                List.of(),
+                                null,
+                                null,
+                                50,
+                                null,
+                                null,
+                                context))
+                .expectErrorSatisfies(
+                        error ->
+                                Assertions.assertThat(error)
+                                        .isInstanceOf(ResponseStatusException.class)
+                                        .extracting(
+                                                value ->
+                                                        ((ResponseStatusException) value)
+                                                                .getStatusCode())
+                                        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE))
+                .verify();
     }
 
     @Test

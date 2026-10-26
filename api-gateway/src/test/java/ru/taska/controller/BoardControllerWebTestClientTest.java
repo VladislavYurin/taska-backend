@@ -11,7 +11,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.domain.GatewayContext;
@@ -20,8 +22,8 @@ import ru.taska.domain.GatewayUserStatus;
 import ru.taska.domain.GlobalRole;
 import ru.taska.domain.dto.BoardColumnDto;
 import ru.taska.domain.dto.BoardIssueDto;
-import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.BoardResponseDto;
+import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.error.GatewayErrorHandler;
 import ru.taska.error.RestErrorMapper;
 import ru.taska.filter.BearerTokenExtractor;
@@ -363,6 +365,180 @@ class BoardControllerWebTestClientTest {
                 .jsonPath("$.code").exists()
                 .jsonPath("$.message").exists();
 
+        Mockito.verifyNoInteractions(boardService);
+    }
+
+    @Test
+    void columnRoutePassesCursorAndBoardFiltersAndReturnsTheSameCardDto() {
+        mockAuthenticatedUser();
+        UUID id = new UUID(0, 9);
+        var date = java.time.OffsetDateTime.parse("2026-01-01T12:00:00.123456Z");
+        var card =
+                new BoardIssueDto()
+                        .id(id)
+                        .issueKey("TAS-9")
+                        .summary("Card")
+                        .issueType("TASK")
+                        .statusKey("DONE")
+                        .version(7)
+                        .createdAt(date)
+                        .updatedAt(date)
+                        .labels(
+                                List.of(
+                                        new ru.taska.domain.dto.IssueLabelResponseDto()
+                                                .id(id)
+                                                .name("Label")
+                                                .color("#FF0000")))
+                        .assignee(
+                                new ru.taska.domain.dto.BoardUserDto()
+                                        .id(id)
+                                        .displayName("Alice")
+                                        .avatarUrl("https://example.test/avatar"));
+        Mockito.when(
+                        boardService.listBoardColumnIssues(
+                                Mockito.eq(PROJECT_ID),
+                                Mockito.eq("DONE"),
+                                Mockito.eq(date),
+                                Mockito.eq(id),
+                                Mockito.eq("TASK"),
+                                Mockito.eq(id),
+                                Mockito.eq(id),
+                                Mockito.eq(true),
+                                Mockito.eq(IssuePriorityDto.HIGH),
+                                Mockito.eq("%"),
+                                Mockito.eq(2),
+                                Mockito.any()))
+                .thenReturn(
+                        Mono.just(
+                                new ru.taska.domain.dto.BoardColumnPageResponseDto()
+                                        .statusKey("DONE")
+                                        .issues(List.of(card))
+                                        .totalCount(312L)
+                                        .hasMore(true)));
+        webTestClient
+                .get()
+                .uri(
+                        builder ->
+                                builder.path(
+                                                "/api/v1/projects/{projectId}/board/columns/DONE/issues")
+                                        .queryParam("afterCreatedAt", date)
+                                        .queryParam("afterId", id)
+                                        .queryParam("pageSize", 2)
+                                        .queryParam("issueType", "TASK")
+                                        .queryParam("assigneeId", id)
+                                        .queryParam("labelId", id)
+                                        .queryParam("includeDone", true)
+                                        .queryParam("priority", "HIGH")
+                                        .queryParam("query", "%")
+                                        .build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .exists("X-Request-Id")
+                .expectBody()
+                .jsonPath("$.statusKey")
+                .isEqualTo("DONE")
+                .jsonPath("$.totalCount")
+                .isEqualTo(312)
+                .jsonPath("$.hasMore")
+                .isEqualTo(true)
+                .jsonPath("$.issues[0].version")
+                .isEqualTo(7)
+                .jsonPath("$.issues[0].createdAt")
+                .isEqualTo(date.toString())
+                .jsonPath("$.issues[0].labels[0].name")
+                .isEqualTo("Label")
+                .jsonPath("$.issues[0].assignee.displayName")
+                .isEqualTo("Alice")
+                .jsonPath("$.issues[0].assignee.avatarUrl")
+                .isEqualTo("https://example.test/avatar");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "pageSize=0",
+                "pageSize=-1",
+                "pageSize=201",
+                "afterCreatedAt=2026-01-01T00:00:00Z",
+                "afterId=00000000-0000-0000-0000-000000000001",
+                "afterCreatedAt=not-a-date&afterId=invalid",
+                "afterCreatedAt=2026-01-01T00:00:00Z&afterId=invalid",
+                "query="
+            })
+    void columnRouteRejectsInvalidPaginationAndCursorBeforeDispatch(String queryString) {
+        mockAuthenticatedUser();
+        webTestClient
+                .get()
+                .uri("/api/v1/projects/" + PROJECT_ID + "/board/columns/TODO/issues?" + queryString)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectHeader()
+                .exists("X-Request-Id");
+        Mockito.verifyNoInteractions(boardService);
+    }
+
+    @Test
+    void columnRouteDefaultsAndUnknownFilterStillChecksProjectAccess() {
+        mockAuthenticatedUser();
+        Mockito.when(
+                        boardService.listBoardColumnIssues(
+                                Mockito.eq(PROJECT_ID),
+                                Mockito.eq("TODO"),
+                                Mockito.isNull(),
+                                Mockito.isNull(),
+                                Mockito.isNull(),
+                                Mockito.isNull(),
+                                Mockito.isNull(),
+                                Mockito.eq(false),
+                                Mockito.isNull(),
+                                Mockito.isNull(),
+                                Mockito.eq(50),
+                                Mockito.any()))
+                .thenReturn(
+                        Mono.just(
+                                new ru.taska.domain.dto.BoardColumnPageResponseDto()
+                                        .statusKey("TODO")
+                                        .issues(List.of())
+                                        .totalCount(0L)
+                                        .hasMore(false)));
+        webTestClient
+                .get()
+                .uri("/api/v1/projects/{projectId}/board/columns/TODO/issues", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.issues.length()")
+                .isEqualTo(0)
+                .jsonPath("$.totalCount")
+                .isEqualTo(0);
+        Mockito.when(issueTypesClient.list(Mockito.eq(PROJECT_ID), Mockito.any()))
+                .thenReturn(Mono.error(io.grpc.Status.PERMISSION_DENIED.asRuntimeException()));
+        webTestClient
+                .get()
+                .uri(
+                        "/api/v1/projects/{projectId}/board/columns/TODO/issues?issueType=bad",
+                        PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+    }
+
+    @Test
+    void columnRouteRequiresAuthentication() {
+        webTestClient
+                .get()
+                .uri("/api/v1/projects/{projectId}/board/columns/TODO/issues", PROJECT_ID)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
         Mockito.verifyNoInteractions(boardService);
     }
 

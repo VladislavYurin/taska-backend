@@ -2,6 +2,7 @@ package ru.taska.integration;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,8 +12,10 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.api.issue.v1.ListIssuesForBoardRequest;
@@ -21,10 +24,10 @@ import ru.taska.api.project.v1.CheckProjectMemberRoleRequest;
 import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
 import ru.taska.api.project.v1.ProjectRole;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
-import ru.taska.domain.entity.Issue;
-import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.IssueType;
+import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssueLabels;
+import ru.taska.domain.entity.IssuePriority;
 import ru.taska.domain.entity.ProjectLabels;
 import ru.taska.repository.IssueRepository;
 import ru.taska.repository.labels.IssueLabelsRepository;
@@ -50,6 +53,9 @@ public class ListIssuesForBoardIT extends AbstractIT {
 
     @Autowired
     private GrpcIssueService grpcIssueService;
+
+    @Autowired
+    private ru.taska.transport.grpc.GrpcIssueServiceAdapter grpcIssueAdapter;
 
     @Autowired
     private IssueRepository issueRepository;
@@ -675,6 +681,325 @@ public class ListIssuesForBoardIT extends AbstractIT {
                             .satisfies(card -> Assertions.assertThat(card.getId()).isEqualTo(issue.getId().toString())))
                     .verifyComplete();
         }
+    }
+
+    @Test
+    void cursorOrdersEqualTimestampsAndSurvivesConcurrentInsertsBeforeAndAfterIt() {
+        Instant sameTime = Instant.parse("2026-01-01T12:00:00.123456Z");
+        var ten = saveCursorIssue(110, 10, "CURSOR", sameTime);
+        var twenty = saveCursorIssue(120, 20, "CURSOR", sameTime);
+        var thirty = saveCursorIssue(130, 30, "CURSOR", sameTime);
+        var forty = saveCursorIssue(140, 40, "CURSOR", sameTime);
+        var first = boardColumnRequest("CURSOR").setPageSizePerColumn(2);
+        var firstPage = callBoardColumn(first);
+        Assertions.assertThat(firstPage.getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(ten.getId().toString(), twenty.getId().toString());
+        Assertions.assertThat(firstPage.getTotalCount()).isEqualTo(4);
+        Assertions.assertThat(firstPage.getHasMore()).isTrue();
+
+        // Inserts committed between page reads must not shift an offset or repeat the cursor row.
+        var before = buildIssue(115, PROJECT_ID_1, "CURSOR", ASSIGNEE_ID_1, ISSUE_TYPE_TASK);
+        var after = buildIssue(125, PROJECT_ID_1, "CURSOR", ASSIGNEE_ID_1, ISSUE_TYPE_TASK);
+        var last = buildIssue(150, PROJECT_ID_1, "CURSOR", ASSIGNEE_ID_1, ISSUE_TYPE_TASK);
+        Mono.when(
+                        saveCursorIssue(before, 15, sameTime),
+                        saveCursorIssue(after, 25, sameTime),
+                        saveCursorIssue(last, 50, sameTime))
+                .block(Duration.ofSeconds(10));
+        var second =
+                callBoardColumn(
+                        first.clone()
+                                .setAfterCreatedAt(firstPage.getIssues(1).getCreatedAt())
+                                .setAfterId(twenty.getId().toString()));
+        Assertions.assertThat(second.getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(new UUID(0, 25).toString(), thirty.getId().toString());
+        Assertions.assertThat(second.getTotalCount()).isEqualTo(7);
+        Assertions.assertThat(second.getHasMore()).isTrue();
+        var third =
+                callBoardColumn(
+                        first.clone()
+                                .setAfterCreatedAt(second.getIssues(1).getCreatedAt())
+                                .setAfterId(thirty.getId().toString()));
+        Assertions.assertThat(third.getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(forty.getId().toString(), new UUID(0, 50).toString());
+        Assertions.assertThat(third.getHasMore()).isFalse();
+        var exhausted =
+                callBoardColumn(
+                        first.clone()
+                                .setAfterCreatedAt(third.getIssues(1).getCreatedAt())
+                                .setAfterId(third.getIssues(1).getId()));
+        Assertions.assertThat(exhausted.getIssuesList()).isEmpty();
+        Assertions.assertThat(exhausted.getTotalCount()).isEqualTo(7);
+        Assertions.assertThat(exhausted.getHasMore()).isFalse();
+        Assertions.assertThat(callBoardColumn(first).getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(ten.getId().toString(), new UUID(0, 15).toString());
+    }
+
+    @Test
+    void cursorKeepsBoardFiltersMetadataAndFullCountsIncludingEmptyAndDonePages() {
+        Instant date = Instant.parse("2026-01-01T00:00:00Z");
+        var included = saveCursorIssue(101, 1, "CUSTOM_CLOSED", date);
+        var second = saveCursorIssue(102, 2, "CUSTOM_CLOSED", date.plusSeconds(1));
+        var deleted = saveCursorIssue(103, 3, "CUSTOM_CLOSED", date.plusSeconds(2));
+        for (Issue issue : List.of(included, second, deleted)) {
+            issue.setSummary("100%_hello");
+            issue.setPriority(IssuePriority.HIGH);
+            issue.setDescription("board description");
+            issue.setVersion(7);
+            issue.setTimeSpentMinutes(30);
+            issueRepository.save(issue).block();
+        }
+        deleted.setDeletedAt(Instant.now());
+        issueRepository.save(deleted).block();
+        var label = saveLabel("cursor-label");
+        var otherLabel = saveLabel("second-label");
+        for (Issue issue : List.of(included, second, deleted)) {
+            attachLabel(issue, otherLabel);
+            attachLabel(issue, label);
+        }
+        var excludedType = saveCursorIssue(104, 4, "CUSTOM_CLOSED", date);
+        excludedType.setIssueType(ISSUE_TYPE_BUG);
+        excludedType.setSummary("100%_hello");
+        excludedType.setPriority(IssuePriority.HIGH);
+        issueRepository.save(excludedType).block();
+        attachLabel(excludedType, label);
+        var request =
+                boardColumnRequest("CUSTOM_CLOSED")
+                        .setPageSizePerColumn(1)
+                        .setIssueTypeKey("TASK")
+                        .setAssigneeId(ASSIGNEE_ID_1.toString())
+                        .setPriority(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH)
+                        .setQuery("%")
+                        .addLabelIds(label.getId().toString())
+                        .addLabelIds(otherLabel.getId().toString())
+                        .addDoneStatusKeys("CUSTOM_CLOSED");
+        var first = callBoardColumn(request);
+        Assertions.assertThat(first.getIssuesList())
+                .singleElement()
+                .satisfies(
+                        issue -> {
+                            Assertions.assertThat(issue.getId())
+                                    .isEqualTo(included.getId().toString());
+                            Assertions.assertThat(issue.getLabelIdsList())
+                                    .containsExactly(
+                                            label.getId().toString(),
+                                            otherLabel.getId().toString());
+                            Assertions.assertThat(issue.getVersion()).isEqualTo(7);
+                            Assertions.assertThat(issue.getDescription())
+                                    .isEqualTo("board description");
+                            Assertions.assertThat(issue.getAssigneeId())
+                                    .isEqualTo(ASSIGNEE_ID_1.toString());
+                        });
+        Assertions.assertThat(first.getTotalCount()).isEqualTo(2);
+        Assertions.assertThat(first.getHasMore()).isTrue();
+        var last =
+                callBoardColumn(
+                        request.clone()
+                                .setAfterId(included.getId().toString())
+                                .setAfterCreatedAt(first.getIssues(0).getCreatedAt()));
+        Assertions.assertThat(last.getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(second.getId().toString());
+        Assertions.assertThat(last.getTotalCount()).isEqualTo(2);
+        Assertions.assertThat(last.getHasMore()).isFalse();
+        var hiddenDone = callBoardColumn(request.clone().setIncludeDone(false));
+        Assertions.assertThat(hiddenDone.getIssuesList()).isEmpty();
+        Assertions.assertThat(hiddenDone.getTotalCount()).isZero();
+        Assertions.assertThat(hiddenDone.getHasMore()).isFalse();
+        var noLabelMatches =
+                callBoardColumn(
+                        request.clone().clearLabelIds().addLabelIds(UUID.randomUUID().toString()));
+        Assertions.assertThat(noLabelMatches.getIssuesList()).isEmpty();
+        Assertions.assertThat(noLabelMatches.getTotalCount()).isZero();
+        var noAssigneeMatches =
+                callBoardColumn(request.clone().setAssigneeId(ASSIGNEE_ID_2.toString()));
+        Assertions.assertThat(noAssigneeMatches.getTotalCount()).isZero();
+        var noPriorityMatches =
+                callBoardColumn(
+                        request.clone()
+                                .setPriority(
+                                        ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_LOW));
+        Assertions.assertThat(noPriorityMatches.getTotalCount()).isZero();
+        var noQueryMatches = callBoardColumn(request.clone().setQuery("no match"));
+        Assertions.assertThat(noQueryMatches.getTotalCount()).isZero();
+    }
+
+    @Test
+    void grpcRejectsPartialOrInvalidBoardCursorsAndInvalidPageSizes() {
+        var timestamp = com.google.protobuf.Timestamp.newBuilder().setSeconds(1).build();
+        List<ListIssuesForBoardRequestBody.Builder> invalid =
+                List.of(
+                        boardColumnRequest("TODO").setAfterCreatedAt(timestamp),
+                        boardColumnRequest("TODO").setAfterId(UUID.randomUUID().toString()),
+                        boardColumnRequest("TODO")
+                                .setAfterCreatedAt(timestamp)
+                                .setAfterId("invalid"),
+                        boardColumnRequest("TODO")
+                                .setAfterCreatedAt(timestamp)
+                                .setAfterId(UUID.randomUUID().toString())
+                                .clearStatusKey(),
+                        boardColumnRequest(" ")
+                                .setAfterCreatedAt(timestamp)
+                                .setAfterId(UUID.randomUUID().toString()),
+                        boardColumnRequest("TODO").setPageSizePerColumn(0),
+                        boardColumnRequest("TODO").setPageSizePerColumn(201),
+                        boardColumnRequest("TODO")
+                                .setAfterId(UUID.randomUUID().toString())
+                                .setAfterCreatedAt(timestamp.toBuilder().setNanos(1000000000)),
+                        boardColumnRequest("TODO")
+                                .setAfterId(UUID.randomUUID().toString())
+                                .setAfterCreatedAt(
+                                        timestamp.toBuilder().setSeconds(253402300800L)));
+        for (var body : invalid) {
+            StepVerifier.create(
+                            grpcIssueService.listIssuesForBoard(
+                                    Mono.just(
+                                            ListIssuesForBoardRequest.newBuilder()
+                                                    .setHeader(
+                                                            Header.newBuilder()
+                                                                    .setRequestId(REQUEST_ID)
+                                                                    .setNodeId(NODE_ID))
+                                                    .setBody(body)
+                                                    .build())))
+                    .expectErrorSatisfies(
+                            error ->
+                                    Assertions.assertThat(Status.fromThrowable(error).getCode())
+                                            .isEqualTo(Status.Code.INVALID_ARGUMENT))
+                    .verify(Duration.ofSeconds(5));
+        }
+    }
+
+    @Test
+    void legacyStatusOnlyStaysUnboundedWhileExplicitAndCursorPagesAreBounded() {
+        reactor.core.publisher.Flux.range(200, 51)
+                .concatMap(
+                        number ->
+                                saveCursorIssue(
+                                        buildIssue(
+                                                number,
+                                                PROJECT_ID_1,
+                                                "PAGE_DEFAULT",
+                                                ASSIGNEE_ID_1,
+                                                ISSUE_TYPE_TASK),
+                                        number,
+                                        Instant.parse("2026-01-01T00:00:00Z")))
+                .then()
+                .block(Duration.ofSeconds(10));
+        var legacy = callBoardColumn(boardColumnRequest("PAGE_DEFAULT"));
+        Assertions.assertThat(legacy.getIssuesCount()).isEqualTo(51);
+        Assertions.assertThat(legacy.hasTotalCount()).isFalse();
+        Assertions.assertThat(legacy.hasHasMore()).isFalse();
+        var page = callBoardColumn(boardColumnRequest("PAGE_DEFAULT").setPageSizePerColumn(50));
+        Assertions.assertThat(page.getIssuesCount()).isEqualTo(50);
+        Assertions.assertThat(page.getTotalCount()).isEqualTo(51);
+        Assertions.assertThat(page.getHasMore()).isTrue();
+        Assertions.assertThat(page.hasHasMore()).isTrue();
+        var cursorDefault = callBoardColumn(boardColumnRequest("PAGE_DEFAULT")
+                .setAfterCreatedAt(page.getIssues(0).getCreatedAt()).setAfterId(new UUID(0, 0).toString()));
+        Assertions.assertThat(cursorDefault.getIssuesCount()).isEqualTo(50);
+        Assertions.assertThat(cursorDefault.getTotalCount()).isEqualTo(51);
+        Assertions.assertThat(cursorDefault.getHasMore()).isTrue();
+        Mockito.when(
+                        projectServiceStub.checkProjectMemberRole(
+                                Mockito.any(CheckProjectMemberRoleRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                CheckProjectMemberRoleResponse.newBuilder()
+                                        .setProjectExists(true)
+                                        .build()));
+        StepVerifier.create(
+                        grpcIssueAdapter.listIssuesForBoard(
+                                Mono.just(
+                                        ListIssuesForBoardRequest.newBuilder()
+                                                .setHeader(
+                                                        Header.newBuilder()
+                                                                .setRequestId(REQUEST_ID)
+                                                                .setNodeId(NODE_ID))
+                                                .setBody(boardColumnRequest("TODO").setPageSizePerColumn(50))
+                                                .build())))
+                .expectErrorSatisfies(
+                        error ->
+                                Assertions.assertThat(Status.fromThrowable(error).getCode())
+                                        .isEqualTo(Status.Code.PERMISSION_DENIED))
+                .verify(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void cursorDoesNotRequireItsAnchorRowToStillExist() {
+        Instant date = Instant.parse("2026-01-01T00:00:00Z");
+        var first = saveCursorIssue(101, 1, "DELETED_CURSOR", date);
+        var second = saveCursorIssue(102, 2, "DELETED_CURSOR", date);
+        var initial = callBoardColumn(boardColumnRequest("DELETED_CURSOR").setPageSizePerColumn(1));
+        first.setDeletedAt(Instant.now());
+        issueRepository.save(first).block();
+        var continued =
+                callBoardColumn(
+                        boardColumnRequest("DELETED_CURSOR")
+                                .setPageSizePerColumn(1)
+                                .setAfterId(first.getId().toString())
+                                .setAfterCreatedAt(initial.getIssues(0).getCreatedAt()));
+        Assertions.assertThat(continued.getIssuesList())
+                .extracting(IssueBoardResponse::getId)
+                .containsExactly(second.getId().toString());
+        Assertions.assertThat(continued.getTotalCount()).isEqualTo(1);
+        Assertions.assertThat(continued.getHasMore()).isFalse();
+    }
+
+    private ListIssuesForBoardRequestBody.Builder boardColumnRequest(String status) {
+        return ListIssuesForBoardRequestBody.newBuilder()
+                .setProjectId(PROJECT_ID_1.toString())
+                .setActorUserId(ACTOR_USER_ID.toString())
+                .setStatusKey(status)
+                .setIncludeDone(true);
+    }
+
+    private ru.taska.api.issue.v1.ListIssuesForBoardResponse callBoardColumn(
+            ListIssuesForBoardRequestBody.Builder body) {
+        return grpcIssueAdapter
+                .listIssuesForBoard(
+                        Mono.just(
+                                ListIssuesForBoardRequest.newBuilder()
+                                        .setHeader(
+                                                Header.newBuilder()
+                                                        .setRequestId(REQUEST_ID)
+                                                        .setNodeId(NODE_ID))
+                                        .setBody(body)
+                                        .build()))
+                .block(Duration.ofSeconds(10));
+    }
+
+    private Issue saveCursorIssue(int number, int id, String status, Instant date) {
+        return saveCursorIssue(
+                        buildIssue(number, PROJECT_ID_1, status, ASSIGNEE_ID_1, ISSUE_TYPE_TASK),
+                        id,
+                        date)
+                .block();
+    }
+
+    private Mono<Issue> saveCursorIssue(Issue issue, int id, Instant date) {
+        issue.setTimeSpentMinutes(0);
+        return issueRepository
+                .save(issue)
+                .flatMap(
+                        saved ->
+                                databaseClient
+                                        .sql(
+                                                "UPDATE taska.issues SET id = :id, created_at ="
+                                                    + " :date WHERE id = :oldId")
+                                        .bind("id", new UUID(0, id))
+                                        .bind("oldId", saved.getId())
+                                        .bind("date", date)
+                                        .then()
+                                        .thenReturn(saved)
+                                        .doOnNext(
+                                                row -> {
+                                                    row.setId(new UUID(0, id));
+                                                    row.setCreatedAt(date);
+                                                }));
     }
 
     private ProjectLabels saveLabel(String name){

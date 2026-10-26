@@ -578,3 +578,25 @@ Workflow mutation replies use the current project issue-type registry for their 
 Signup defaults to disabled (`TASKA_SIGNUP_ENABLED=false`). Deploy the auth migrations, project-service membership RPC, notification email migration/service and gateway together before enabling it. Unconfirmed SIGNUP users are absent from directory and profile lookups used by project membership validation. Expired registrations are deleted in batches every minute (and on the next signup for that address); activation and resend share user-row locks. Confirmation uses the existing invitations/accept route.
 
 Limits are persisted in auth PostgreSQL: one request per canonical email per 60 seconds and `AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR` (default10) per client IP per hour, shared across replicas. Email retries also consume the IP budget; refusals return429, Retry-After and details.retryAfterSeconds. Expired rate buckets are removed after two hours. Gateway accepts X-Forwarded-For only through `GATEWAY_TRUSTED_PROXY_CIDRS`, walks proxy hops from the right and stops at the first untrusted address. Configure the actual ingress networks; never trust arbitrary client headers. With an empty setting the socket peer is used. When signup is enabled, directory search also requires GLOBAL_ADMIN or membership in any project; a membership RPC outage fails closed.
+
+
+### Продолжение колонки доски (TAS-430)
+
+`GET /api/v1/projects/{projectId}/board/columns/{statusKey}/issues` возвращает
+`{statusKey, issues: BoardIssueDto[], totalCount, hasMore}`. Для следующей страницы
+передавайте `afterCreatedAt` и `afterId` последней полученной карточки вместе с теми
+же `issueType`, `assigneeId`, `labelId`, `includeDone`, `priority`, `query`.
+`pageSize` — 1..200, по умолчанию 50; без пары курсоров возвращается первая страница.
+Порядок тот же, что на доске: `createdAt asc, id asc`, включая DONE. Статус считается
+колонкой только для типов, в чей собственный workflow он входит; `unplacedIssues`
+в этот маршрут не попадают. Метки и профиль исполнителя совпадают с карточкой доски.
+`totalCount` считает все задачи после фильтров, независимо от курсора, в том числе
+на пустой последней странице. Счётчик и окно каждого типа читаются одним SQL-снимком.
+При вставке между запросами продолжение включает новые задачи после курсора;
+задачи перед ним видны после обновления доски. Удаление самой карточки курсора не
+мешает продолжению. Это чтение текущей доски, а не сохранённого снимка между HTTP-запросами.
+
+Разворачивайте issue-service с миграцией `0012-board-column-cursor.sql` перед
+api-gateway: новый gateway возвращает 503, если старый issue-service не прислал
+метаданные курсорной страницы. Старый маршрут доски и пустой gRPC `status_key`
+без курсора сохраняют поведение. Для нового GET задана PAT scope `read`.

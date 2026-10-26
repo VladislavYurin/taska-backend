@@ -1,31 +1,32 @@
 package ru.taska.service.impl;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.issue.v1.IssueBoardResponse;
 import ru.taska.config.props.IssueProperties;
+import ru.taska.domain.IssueType;
+import ru.taska.domain.aggregate.IssueWithProject;
+import ru.taska.domain.dto.IssueWithHistory;
+import ru.taska.domain.dto.ProjectInfo;
+import ru.taska.domain.dto.ProjectRole;
+import ru.taska.domain.dto.labels.IssueWithLabels;
 import ru.taska.domain.entity.IdempotencyKey;
 import ru.taska.domain.entity.Issue;
 import ru.taska.domain.entity.IssueEventType;
 import ru.taska.domain.entity.IssueHistory;
 import ru.taska.domain.entity.IssuePriority;
-import ru.taska.domain.IssueType;
-import ru.taska.domain.dto.IssueWithHistory;
-import ru.taska.domain.util.PageResult;
-import ru.taska.domain.dto.ProjectRole;
-import ru.taska.domain.aggregate.IssueWithProject;
-import ru.taska.domain.dto.ProjectInfo;
-import ru.taska.domain.dto.labels.IssueWithLabels;
-import ru.taska.domain.projection.ProjectLabelWithIssuesId;
 import ru.taska.domain.entity.ProjectLabels;
+import ru.taska.domain.projection.ProjectLabelWithIssuesId;
+import ru.taska.domain.util.BoardCursorPage;
+import ru.taska.domain.util.PageResult;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.exception.DomainException;
@@ -47,11 +48,14 @@ import ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient;
 import ru.taska.util.PayloadSerializer;
 import ru.taska.util.RequestHasher;
 import ru.taska.util.StoryPointsNormalizer;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -812,13 +816,76 @@ public class IssueServiceImpl implements IssueService {
     ) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
 
-        return projectRoleChecker.checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
+        return projectRoleChecker
+                .checkProjectRole(requestId, nodeId, projectId, actorUserId, allowedRoles)
                 .then(
-                        issueRepository.findForBoard(projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys, labelIds, pageSizePerColumn, priority, query)
-                                .collectList()
-                )
-                .flatMap(issues -> {
-                    List<UUID> issueIds = issues.stream().map(Issue::getId).toList();
+                        issueRepository
+                                .findForBoard(
+                                        projectId,
+                                        issueType,
+                                        assigneeId,
+                                        statusKey,
+                                        includeDone,
+                                        doneStatusKeys,
+                                        labelIds,
+                                        pageSizePerColumn,
+                                        priority,
+                                        query)
+                                .collectList())
+                .flatMap(this::mapBoardIssues);
+    }
+
+    @Override
+    public Mono<BoardCursorPage<IssueBoardResponse>> listBoardColumnPage(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId) {
+        return projectRoleChecker
+                .checkProjectRole(
+                        requestId,
+                        nodeId,
+                        projectId,
+                        actorUserId,
+                        issueProperties.allowedRoles().listIssueRoles())
+                .then(
+                        issueRepository.findBoardColumnPage(
+                                projectId,
+                                issueType,
+                                assigneeId,
+                                statusKey,
+                                includeDone,
+                                doneStatusKeys,
+                                labelIds,
+                                pageSize,
+                                priority,
+                                query,
+                                afterCreatedAt,
+                                afterId))
+                .flatMap(
+                        page ->
+                                mapBoardIssues(page.items())
+                                        .map(
+                                                items ->
+                                                        new BoardCursorPage<>(
+                                                                items,
+                                                                page.totalCount(),
+                                                                page.hasMore())));
+    }
+
+    private Mono<List<IssueBoardResponse>> mapBoardIssues(List<Issue> issues) {
+        List<UUID> issueIds = issues.stream().map(Issue::getId).toList();
 
                     return Mono.zip(
                             issueRepository.findLabelIdsByIssueIds(issueIds),
@@ -840,7 +907,6 @@ public class IssueServiceImpl implements IssueService {
                                         ))
                                         .toList();
                             });
-                });
     }
 
     @Override

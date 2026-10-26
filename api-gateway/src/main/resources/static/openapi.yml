@@ -2727,7 +2727,7 @@ paths:
         - name: pageSizePerColumn
           in: query
           required: false
-          description: Первая страница каждой колонки после объединения всех типов. Для продолжения используйте поиск задач по статусу. Та же граница применяется к unplacedIssues.
+          description: Первая страница каждой колонки после объединения всех типов. Продолжение колонки доступно через GET /api/v1/projects/{projectId}/board/columns/{statusKey}/issues с курсором последней задачи. Та же граница применяется к unplacedIssues.
           schema:
             type: integer
             minimum: 1
@@ -2743,6 +2743,104 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BoardResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/board/columns/{statusKey}/issues:
+    get:
+      x-pat-scope: read
+      summary: Страница задач колонки доски
+      description: Порядок createdAt asc, id asc для всех колонок, включая DONE. Передайте оба курсора из последней задачи предыдущей страницы и те же фильтры, что при чтении доски. Курсор исключительный; задачи, добавленные перед ним, появятся после обновления доски. Задачи входят только в статусы workflow своего типа.
+      operationId: listBoardColumnIssues
+      tags:
+        - board
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: statusKey
+          in: path
+          required: true
+          description: Открытый ключ статуса колонки; неизвестная колонка даёт пустую страницу после проверки доступа к проекту.
+          schema:
+            type: string
+            minLength: 1
+        - name: afterCreatedAt
+          in: query
+          required: false
+          description: createdAt последней задачи; обязателен вместе с afterId.
+          schema:
+            type: string
+            format: date-time
+        - name: afterId
+          in: query
+          required: false
+          description: id последней задачи; обязателен вместе с afterCreatedAt.
+          schema:
+            type: string
+            format: uuid
+        - name: issueType
+          in: query
+          required: false
+          description: Фильтр по ключу типа задачи проекта. Без параметра возвращаются все типы. Тип, которого нет в реестре проекта, или неверный формат дают пустую страницу.
+          schema:
+            type: string
+        - name: assigneeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: labelId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: includeDone
+          in: query
+          required: false
+          description: Включать задачи в статусах категории DONE из workflow проекта. При false исключаются ключи всех таких статусов, а не буквальный ключ DONE.
+          schema:
+            type: boolean
+            default: false
+        - name: priority
+          in: query
+          required: false
+          description: Фильтр по приоритету задачи.
+          schema:
+            $ref: '#/components/schemas/IssuePriorityDto'
+        - name: query
+          in: query
+          required: false
+          description: Полнотекстовый фильтр по ключу, краткому описанию и описанию задачи (регистронезависимый).
+          schema:
+            type: string
+            minLength: 1
+        - name: pageSize
+          in: query
+          required: false
+          description: Размер страницы после объединения всех типов.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Страница колонки успешно получена
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardColumnPageResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -7529,6 +7627,26 @@ components:
           description: Задачи, чей statusKey отсутствует в workflow их собственного типа (включая тип без workflow). Порядок createdAt asc, id asc независимо от типа; первая страница ограничена pageSizePerColumn.
           items:
             $ref: '#/components/schemas/BoardIssueDto'
+
+    BoardColumnPageResponseDto:
+      type: object
+      required: [ statusKey, issues, totalCount, hasMore ]
+      properties:
+        statusKey:
+          type: string
+        issues:
+          type: array
+          description: Те же BoardIssueDto и порядок createdAt asc, id asc, что в первой странице доски.
+          items:
+            $ref: '#/components/schemas/BoardIssueDto'
+        totalCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Все задачи колонки после фильтров и проверки workflow своего типа, независимо от курсора.
+        hasMore:
+          type: boolean
+          description: Есть задачи после последней задачи возвращённой страницы.
 
     BoardColumnDto:
       type: object

@@ -1,17 +1,22 @@
 package ru.taska.controller;
 
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.BoardApi;
 import ru.taska.domain.EndpointSecurity;
+import ru.taska.domain.dto.BoardColumnPageResponseDto;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.service.BoardService;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -75,5 +80,59 @@ public class BoardController implements BoardApi {
                 ).map(ResponseEntity::ok);
                 }
         );
+    }
+
+    @Override
+    public Mono<ResponseEntity<BoardColumnPageResponseDto>> listBoardColumnIssues(
+            UUID projectId,
+            String statusKey,
+            OffsetDateTime afterCreatedAt,
+            UUID afterId,
+            String issueType,
+            UUID assigneeId,
+            UUID labelId,
+            Boolean includeDone,
+            IssuePriorityDto priority,
+            String query,
+            Integer pageSize,
+            ServerWebExchange exchange) {
+        return executor.execute(
+                exchange,
+                EndpointSecurity.PROTECTED,
+                context -> {
+                    if ((afterCreatedAt == null) != (afterId == null)) {
+                        return Mono.error(
+                                new org.springframework.web.server.ResponseStatusException(
+                                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                                        "afterCreatedAt and afterId must be supplied together"));
+                    }
+                    if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(
+                            exchange, priority, issueType)) {
+                        return issueTypesClient
+                                .list(projectId, context)
+                                .thenReturn(
+                                        ResponseEntity.ok(
+                                                new BoardColumnPageResponseDto()
+                                                        .statusKey(statusKey)
+                                                        .issues(java.util.List.of())
+                                                        .totalCount(0L)
+                                                        .hasMore(false)));
+                    }
+                    return boardService
+                            .listBoardColumnIssues(
+                                    projectId,
+                                    statusKey,
+                                    afterCreatedAt,
+                                    afterId,
+                                    issueType,
+                                    assigneeId,
+                                    labelId,
+                                    includeDone,
+                                    priority,
+                                    query,
+                                    pageSize,
+                                    context)
+                            .map(ResponseEntity::ok);
+                });
     }
 }
