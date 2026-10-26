@@ -41,6 +41,12 @@ public class ProjectIssueTypeGrpcService {
                         req.hasSortOrder() ? req.getSortOrder() : null).map(mapper::toIssueTypeResponse)));
     }
 
+    public Mono<ListProjectIssueTypesResponse> reorder(Mono<ru.taska.api.project.v1.ReorderProjectIssueTypesRequest> request) {
+        return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
+                service.reorder(project, actor, req.getCodesList()).map(items -> ListProjectIssueTypesResponse.newBuilder()
+                        .addAllItems(items.stream().map(mapper::toIssueTypeResponse).toList()).build())));
+    }
+
     public Mono<Empty> delete(Mono<ChangeProjectIssueTypeRequest> request) {
         return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
                 service.delete(project, actor, req.getCode(), req.getHeader().getRequestId(),

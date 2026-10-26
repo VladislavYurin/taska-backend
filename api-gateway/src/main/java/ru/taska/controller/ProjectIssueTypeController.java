@@ -38,6 +38,13 @@ public class ProjectIssueTypeController implements ProjectIssueTypeApi {
     }
 
     @Override
+    public Mono<ResponseEntity<ListProjectIssueTypesDto>> reorderProjectIssueTypes(UUID projectId,
+            Mono<ReorderProjectIssueTypesRequestDto> body, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, c -> body.flatMap(b -> client.reorder(projectId, b, c)))
+                .map(ResponseEntity::ok);
+    }
+
+    @Override
     public Mono<ResponseEntity<Void>> deleteProjectIssueType(UUID projectId, String code, ServerWebExchange exchange) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, c -> client.delete(projectId, code, c))
                 .thenReturn(ResponseEntity.noContent().build());

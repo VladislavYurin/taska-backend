@@ -43,14 +43,17 @@ public class ProjectWorkflowListService {
     @Transactional(readOnly = true)
     public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
         UUID defaultProjectId = workflowProperties.defaultProjectId();
-        return projectClient.listIssueTypes(requestId, nodeId, projectId, actorUserId).flatMap(allowedTypes -> bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId)).collectList()
+        return projectClient.listIssueTypeDetails(requestId, nodeId, projectId, actorUserId).flatMap(allowedTypes -> bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId))
+                .filter(binding -> binding.getProjectId().equals(defaultProjectId) || allowedTypes.stream().anyMatch(type -> IssueTypeBindingIdentity.matches(binding, type)))
+                .collectList()
                 .flatMap(bindings -> workflowRepository
                         .findAllById(bindings.stream().map(WorkflowBindingEntity::getWorkflowId).distinct().toList())
                         .filter(WorkflowEntity::isActive)
                         .collectMap(WorkflowEntity::getId)
                         .flatMap(activeWorkflows -> {
                             Map<UUID, List<IssueType>> issueTypesByWorkflow = new LinkedHashMap<>();
-                            for (IssueType issueType : allowedTypes) {
+                            for (var type : allowedTypes) {
+                                IssueType issueType = IssueType.valueOf(type.getCode());
                                 findBoundWorkflow(bindings, activeWorkflows, projectId, issueType)
                                         .or(() -> findBoundWorkflow(bindings, activeWorkflows, defaultProjectId, IssueType.TASK))
                                         .ifPresent(workflowId -> issueTypesByWorkflow

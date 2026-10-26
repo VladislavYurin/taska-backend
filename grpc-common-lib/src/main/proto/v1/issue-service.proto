@@ -979,6 +979,9 @@ message IssueShortResponse {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   optional string issue_type_key = 11;
+  optional string issue_type_name = 12;
+  optional string issue_type_color = 13;
+  optional string issue_type_icon = 14;
 }
 
 message IssueResponse {

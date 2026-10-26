@@ -56,7 +56,7 @@ public class ProjectIssueTypeService {
                     .map(old -> validate(new ProjectIssueType(projectId, code,
                             name == null ? old.name() : name, color == null ? old.color() : color,
                             icon == null ? old.icon() : icon, sortOrder == null ? old.sortOrder() : sortOrder,
-                            old.createdAt(), old.updatedAt())))
+                            old.createdAt(), old.updatedAt(), old.generation())))
                     .flatMap(repository::update)
                     .flatMap(saved -> repository.syncLegacySettings(projectId, actor).thenReturn(saved));
         });
@@ -69,13 +69,31 @@ public class ProjectIssueTypeService {
             return authorizeWrite(projectId, actor).then(Mono.defer(() -> requireType(projectId, code)))
                     .then(Mono.defer(() -> repository.list(projectId).count()))
                     .flatMap(count -> count <= 1
-                            ? Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Cannot delete the last issue type"))
+                            ? Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Cannot delete the last issue type", Map.of("reason", "LAST_ISSUE_TYPE")))
                             : issueClient.countIssueTypeUsage(projectId, code, requestId, nodeId))
                     .flatMap(count -> count > 0
                             ? Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-                                    "Issue type " + code + " has " + count + " issues", Map.of("issueCount", count.toString())))
+                                    "Issue type " + code + " has " + count + " issues", Map.of("reason", "ISSUE_TYPE_IN_USE", "issueCount", count.toString())))
                             : repository.delete(projectId, code))
                     .then(Mono.defer(() -> repository.syncLegacySettings(projectId, actor)));
+        });
+    }
+
+    @Transactional
+    public Mono<java.util.List<ProjectIssueType>> reorder(UUID projectId, UUID actor, java.util.List<String> codes) {
+        return Mono.defer(() -> {
+            if (codes == null || codes.isEmpty() || codes.stream().distinct().count() != codes.size()) {
+                return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "codes must be a complete permutation without duplicates"));
+            }
+            codes.forEach(ProjectIssueTypeService::validateCode);
+            return authorizeWrite(projectId, actor).then(Mono.defer(() -> repository.list(projectId).collectList()))
+                    .flatMap(current -> {
+                        if (!current.stream().map(ProjectIssueType::code).collect(java.util.stream.Collectors.toSet()).equals(Set.copyOf(codes))) {
+                            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "codes must contain every current issue type exactly once"));
+                        }
+                        return repository.reorder(projectId, codes).then(repository.syncLegacySettings(projectId, actor))
+                                .then(repository.list(projectId).collectList());
+                    });
         });
     }
 
@@ -106,6 +124,6 @@ public class ProjectIssueTypeService {
             throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid issue type name, color, icon or sortOrder");
         }
         return new ProjectIssueType(type.projectId(), type.code(), type.name().strip(), type.color(),
-                type.icon(), type.sortOrder(), type.createdAt(), type.updatedAt());
+                type.icon(), type.sortOrder(), type.createdAt(), type.updatedAt(), type.generation());
     }
 }

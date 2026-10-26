@@ -44,6 +44,7 @@ public class WorkflowCreateService {
     private final ProjectRoleChecker projectRoleChecker;
     private final WorkflowProperties workflowProperties;
     private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+    private final org.springframework.r2dbc.core.DatabaseClient databaseClient;
 
     @Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
@@ -56,18 +57,29 @@ public class WorkflowCreateService {
                 )
                 .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
                 .flatMap(violations -> handleViolations(violations, requestId, nodeId))
-                .then(Mono.defer(() -> projectClient.listIssueTypes(requestId, nodeId, dto.getProjectId(), actorUserId)))
-                .flatMap(allowed -> reactor.core.publisher.Flux.fromIterable(dto.getIssueTypes())
-                        .concatMap(key -> client.ProjectIssueTypes.require(allowed, key)).then())
-                .then(Mono.defer(() -> {
-                    List<String> issueTypeNames = dto.getIssueTypes().stream().map(ru.taska.domain.IssueType::name).toList();
-                    return bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(), issueTypeNames).collectList();
-                }))
-                .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))
-                .then(Mono.defer(() -> createWorkflow(dto)
-                        .doOnSuccess(aggregate ->
-                                log.info("[{}][{}] Workflow successfully created: name={}", requestId, nodeId, dto.getName()))
-                ));
+                // Serialize cleanup and creation in this database. No external mutation precedes registry commit.
+                .then(Mono.defer(() -> databaseClient.sql("SELECT pg_advisory_xact_lock(hashtextextended(:project, 418))")
+                        .bind("project", dto.getProjectId().toString()).map((row, metadata) -> 1).one().then()))
+                .then(Mono.defer(() -> projectClient.listIssueTypeDetails(requestId, nodeId, dto.getProjectId(), actorUserId)))
+                .flatMap(types -> {
+                    var allowed = types.stream().map(type -> ru.taska.domain.IssueType.valueOf(type.getCode())).toList();
+                    var requested = types.stream().filter(type -> dto.getIssueTypes().contains(ru.taska.domain.IssueType.valueOf(type.getCode())))
+                            .collect(Collectors.toMap(ru.taska.api.project.v1.ProjectIssueTypeResponse::getCode,
+                                    java.util.function.Function.identity()));
+                    requested.values().forEach(IssueTypeBindingIdentity::generation);
+                    return reactor.core.publisher.Flux.fromIterable(dto.getIssueTypes())
+                            .concatMap(key -> client.ProjectIssueTypes.require(allowed, key)).then()
+                            .then(Mono.defer(() -> bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(),
+                                    dto.getIssueTypes().stream().map(ru.taska.domain.IssueType::name).toList()).collectList()))
+                            .flatMap(bindings -> {
+                                var obsolete = bindings.stream().filter(binding -> !IssueTypeBindingIdentity.matches(binding, requested.get(binding.getIssueType()))).toList();
+                                var current = bindings.stream().filter(binding -> !obsolete.contains(binding)).toList();
+                                return checkNoExistingBindings(current, dto, requestId, nodeId)
+                                        .then(Mono.defer(() -> bindingRepository.deleteAll(obsolete)))
+                                        .then(Mono.defer(() -> createWorkflow(dto, requested)));
+                            });
+                })
+                .doOnSuccess(aggregate -> log.info("[{}][{}] Workflow successfully created: name={}", requestId, nodeId, dto.getName()));
     }
 
     private Mono<Void> checkNoExistingBindings(List<WorkflowBindingEntity> existingBindings, WorkflowCreationDto dto,
@@ -84,7 +96,7 @@ public class WorkflowCreateService {
         return Mono.error(new DomainException(DomainStatus.ALREADY_EXISTS, message));
     }
 
-    private Mono<WorkflowAggregate> createWorkflow(WorkflowCreationDto dto) {
+    private Mono<WorkflowAggregate> createWorkflow(WorkflowCreationDto dto, Map<String, ru.taska.api.project.v1.ProjectIssueTypeResponse> types) {
         WorkflowEntity workflow = WorkflowEntity.builder()
                 .name(dto.getName())
                 .version(INIT_VERSION)
@@ -96,7 +108,7 @@ public class WorkflowCreateService {
                         .flatMap(savedStatuses -> {
                             Map<String, UUID> statusKeyToId = savedStatuses.stream()
                                     .collect(Collectors.toMap(StatusEntity::getStatusKey, StatusEntity::getId));
-                            return saveTransitionsAndBindings(savedWorkflow.getId(), statusKeyToId, dto)
+                            return saveTransitionsAndBindings(savedWorkflow.getId(), statusKeyToId, dto, types)
                                     .map(savedTransitions -> new WorkflowAggregate(savedWorkflow, savedStatuses, savedTransitions));
                         }));
     }
@@ -110,13 +122,14 @@ public class WorkflowCreateService {
     }
 
     private Mono<List<TransitionEntity>> saveTransitionsAndBindings(UUID workflowId, Map<String, UUID> statusKeyToId,
-                                                                    WorkflowCreationDto dto) {
+                                                                    WorkflowCreationDto dto, Map<String, ru.taska.api.project.v1.ProjectIssueTypeResponse> types) {
         List<TransitionEntity> transitions = dto.getTransitions().stream()
                 .map(t -> mapper.toTransitionEntity(workflowId, statusKeyToId, t))
                 .toList();
 
         List<WorkflowBindingEntity> bindings = dto.getIssueTypes().stream()
-                .map(issueType -> mapper.toBindingEntity(dto.getProjectId(), workflowId, issueType))
+                .map(issueType -> mapper.toBindingEntity(dto.getProjectId(), workflowId, issueType).toBuilder()
+                        .issueTypeGeneration(IssueTypeBindingIdentity.generation(types.get(issueType.name()))).build())
                 .toList();
 
         return transitionRepository.saveAll(transitions).collectList()
