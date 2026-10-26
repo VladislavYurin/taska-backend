@@ -30,7 +30,8 @@ public record McpProperties(
         || responseTimeout == null
         || responseTimeout.isNegative()
         || responseTimeout.isZero()
-        || maxResponseBytes < 1024) {
+        || maxResponseBytes < 1024
+        || maxResponseBytes > 2097152) {
       throw new IllegalArgumentException("Invalid MCP upstream limits");
     }
     allowedOrigins = allowedOrigins == null ? List.of() : List.copyOf(allowedOrigins);

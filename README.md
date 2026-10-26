@@ -73,7 +73,7 @@ flowchart LR
 
 | Модуль | Назначение |
 |---|---|
-| `mcp-server` | Streamable HTTP `/mcp`, PAT, request-scoped auth context и вызовы REST gateway; первый tool `whoami` |
+| `mcp-server` | Streamable HTTP `/mcp`, PAT, request-scoped auth context и вызовы REST gateway; 10 инструментов чтения проектов, задач, доски, комментариев, worklogs и уведомлений |
 | `api-gateway` | REST/BFF, OpenAPI, CORS, проверка access-токена и формирование контекста запроса |
 | `auth-service` | пользователи, credentials, JWT, refresh/invite tokens, профиль и аватары |
 | `project-service` | проекты, участники, проектные роли и события проектов |
@@ -405,7 +405,8 @@ PAT проверяется онлайн на каждом защищённом �
 MCP: отдельный сервис из профиля `services`, локально `http://127.0.0.1:8087/mcp`.
 Фаза 1 принимает личный PAT со scope `read`, переданный в `Authorization: Bearer …`, и проверяет его
 в auth-service на каждом запросе. Выпуск PAT описан в [ADR TAS-400](docs/tas-400-mcp-server.md).
-Стандартная ревизия — `2025-11-25`; stateless initialize, `tools/list` и `whoami` работают без сессий.
+Стандартная ревизия — `2025-11-25`; stateless initialize, `tools/list` и вызовы инструментов работают без сессий.
+Каталог, ограничения и обновление схем описаны в [mcp-server/README.md](mcp-server/README.md).
 Для POST нужны `Content-Type: application/json` и `Accept: application/json, text/event-stream`.
 Origin MCP Inspector разрешён только для `localhost:6274` / `127.0.0.1:6274`; дополнительные origin
 добавляются точными значениями `MCP_ALLOWED_ORIGINS`. Actuator доступен только во внутренней сети
