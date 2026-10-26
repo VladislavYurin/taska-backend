@@ -113,12 +113,22 @@ class McpClientSecurityIT {
                         .definitions().stream()
                             .sorted(java.util.Comparator.comparing(McpSchema.Prompt::name))
                             .toList()));
-        assertThat((JsonNode) JSON.valueToTree(client.listResourceTemplates().resourceTemplates()))
+        assertThat(
+                (JsonNode)
+                    JSON.valueToTree(
+                        client.listResourceTemplates().resourceTemplates().stream()
+                            .sorted(
+                                java.util.Comparator.comparing(
+                                    McpSchema.ResourceTemplate::uriTemplate))
+                            .toList()))
             .isEqualTo(
                 JSON.valueToTree(
                     new ResourceCatalog()
                         .taskaResourceTemplates(null).stream()
                             .map(spec -> spec.resourceTemplate())
+                            .sorted(
+                                java.util.Comparator.comparing(
+                                    McpSchema.ResourceTemplate::uriTemplate))
                             .toList()));
         var result = client.callTool(new McpSchema.CallToolRequest("whoami", Map.of()));
         assertThat(result.isError()).isFalse();
