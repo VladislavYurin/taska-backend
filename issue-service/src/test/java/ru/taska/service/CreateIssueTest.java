@@ -44,6 +44,8 @@ class CreateIssueTest extends IssueServiceImplTest {
         Mockito.lenient().when(projectRoleChecker.checkProjectWriteRole(REQUEST_ID, NODE_ID, PROJECT_ID, REPORTER_ID, allowedRoles))
                 .thenReturn(Mono.empty());
 
+        Mockito.lenient().when(grpcProjectServiceClient.requireIssueType(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.empty());
         Mockito.lenient().when(grpcProjectServiceClient.getProjectKeyInternal(REQUEST_ID, NODE_ID, PROJECT_ID))
                 .thenReturn(Mono.just("TSK"));
         Mockito.lenient().when(projectCounterRepository.getNextIssueNumberAndIncrement(PROJECT_ID))

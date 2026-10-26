@@ -28,6 +28,8 @@ public class IssuePatchServiceImpl implements IssuePatchService {
     private final IssueRepository issueRepository;
     private final ProjectRoleChecker projectRoleChecker;
     private final IssuePatchExecutor issuePatchExecutor;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+    private final ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
 
     @Override
     public Mono<PatchIssueResult> patchIssue(
@@ -60,6 +62,10 @@ public class IssuePatchServiceImpl implements IssuePatchService {
                     Issue patched = patch.applyTo(issue);
 
                     return validateStartNotAfterDue(requestId, nodeId, patched.getStartDate(), patched.getDueDate())
+                            .then(Mono.defer(() -> patch.issueType().isPresent()
+                                    ? projectClient.requireIssueType(requestId, nodeId, issue.getProjectId(), actorUserId, patched.getIssueType())
+                                        .then(Mono.defer(() -> workflowClient.requireStatusForType(requestId, nodeId, patched, actorUserId)))
+                                    : Mono.empty()))
                             .then(Mono.defer(() -> checkPatchAssigneeRoles(requestId, nodeId, issue, patched, actorUserId)))
                             .then(Mono.defer(() -> issuePatchExecutor.executePatch(
                                     requestId, nodeId, issueId, actorUserId, ifMatchVersion, patch)));

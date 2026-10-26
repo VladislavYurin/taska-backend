@@ -43,6 +43,7 @@ public class WorkflowCreateService {
     private final WorkflowBindingRepository bindingRepository;
     private final ProjectRoleChecker projectRoleChecker;
     private final WorkflowProperties workflowProperties;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
 
     @Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
@@ -55,8 +56,11 @@ public class WorkflowCreateService {
                 )
                 .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
                 .flatMap(violations -> handleViolations(violations, requestId, nodeId))
+                .then(Mono.defer(() -> projectClient.listIssueTypes(requestId, nodeId, dto.getProjectId(), actorUserId)))
+                .flatMap(allowed -> reactor.core.publisher.Flux.fromIterable(dto.getIssueTypes())
+                        .concatMap(key -> client.ProjectIssueTypes.require(allowed, key)).then())
                 .then(Mono.defer(() -> {
-                    List<String> issueTypeNames = dto.getIssueTypes().stream().map(Enum::name).toList();
+                    List<String> issueTypeNames = dto.getIssueTypes().stream().map(ru.taska.domain.IssueType::name).toList();
                     return bindingRepository.findByProjectIdAndIssueTypeIn(dto.getProjectId(), issueTypeNames).collectList();
                 }))
                 .flatMap(existingBindings -> checkNoExistingBindings(existingBindings, dto, requestId, nodeId))

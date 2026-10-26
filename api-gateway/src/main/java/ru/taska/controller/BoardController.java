@@ -9,7 +9,6 @@ import ru.taska.api.BoardApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.BoardResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.service.BoardService;
 
@@ -24,6 +23,7 @@ public class BoardController implements BoardApi {
 
     private final GatewayRequestExecutor executor;
     private final BoardService boardService;
+    private final ru.taska.transport.grpc.GrpcProjectIssueTypeClient issueTypesClient;
 
     /**
      * Возвращает доску проекта с учетом фильтров. Без параметра issueType
@@ -42,7 +42,7 @@ public class BoardController implements BoardApi {
     @Override
     public Mono<ResponseEntity<BoardResponseDto>> getBoard(
             UUID projectId,
-            IssueTypeDto issueType,
+            String issueType,
             UUID assigneeId,
             UUID labelId,
             Boolean includeDone,
@@ -53,7 +53,13 @@ public class BoardController implements BoardApi {
         return executor.execute(
                 exchange,
                 EndpointSecurity.PROTECTED,
-                context -> boardService.getBoard(
+                context -> {
+                    if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
+                        return issueTypesClient.list(projectId, context)
+                                .thenReturn(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
+                                        .columns(java.util.List.of()).unplacedIssues(java.util.List.of())));
+                    }
+                    return boardService.getBoard(
                         projectId,
                         issueType,
                         assigneeId,
@@ -62,7 +68,8 @@ public class BoardController implements BoardApi {
                         priority,
                         query,
                         context
-                ).map(ResponseEntity::ok)
+                ).map(ResponseEntity::ok);
+                }
         );
     }
 }

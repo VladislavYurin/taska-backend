@@ -116,6 +116,7 @@ public class PayloadSerializer {
         }
         ObjectNode node = objectMapper.createObjectNode();
         putIssueFields(node, issue);
+        if (issue.getIssueType() != null) node.put(ISSUE_TYPE, issue.getIssueType().name());
 
         if (issue.getReporterId() != null) {
             node.put(REPORTER, issue.getReporterId().toString());
@@ -177,6 +178,22 @@ public class PayloadSerializer {
      * @param newPriority    новый приоритет задачи.
      * @return Mono<{@link JsonNode}> исторические данные.
      */
+    public JsonNode createIssuePatchedPayload(Issue issue, Issue patched, UUID actorUserId, List<UUID> watcherIds) {
+        ObjectNode payload = (ObjectNode) createIssueUpdatedPayload(issue, actorUserId, patched.getAssigneeId(),
+                patched.getSummary(), patched.getDescription(), patched.getPriority(), patched.getStoryPoints(),
+                patched.getStartDate(), patched.getDueDate(), patched.getOriginalEstimateMinutes(),
+                patched.getRemainingEstimateMinutes(), watcherIds);
+        if (!Objects.equals(issue.getIssueType(), patched.getIssueType())) {
+            putIssueFields(payload, patched);
+            payload.put(ISSUE_TYPE, patched.getIssueType().name());
+            payload.put("oldIssueType", issue.getIssueType().name());
+            payload.put("newIssueType", patched.getIssueType().name());
+            payload.put(ACTOR_USER_ID, actorUserId.toString());
+            payload.set(WATCHER_IDS, objectMapper.valueToTree(watcherIds));
+        }
+        return payload;
+    }
+
     public JsonNode createIssueUpdatedPayload(
             Issue issue,
             UUID actorUserId,

@@ -1734,9 +1734,9 @@ paths:
         - name: issueType
           in: query
           required: false
-          description: Фильтр по типу задачи (TASK, BUG, STORY)
+          description: Фильтр по ключу типа задачи проекта. Неизвестное значение или неверный формат дают пустой результат.
           schema:
-            $ref: '#/components/schemas/IssueTypeDto'
+            type: string
         - name: page
           in: query
           required: false
@@ -2187,9 +2187,9 @@ paths:
         - name: issueType
           in: query
           required: false
-          description: Фильтр по типу задачи. Без параметра возвращаются задачи всех типов.
+          description: Фильтр по ключу типа задачи проекта. Без параметра возвращаются все типы. Неизвестное значение или неверный формат дают пустую доску.
           schema:
-            $ref: '#/components/schemas/IssueTypeDto'
+            type: string
         - name: assigneeId
           in: query
           required: false
@@ -4614,6 +4614,8 @@ components:
         В коде отображается на собственный класс ru.taska.domain.dto.PatchIssueRequestDto
         (schemaMappings в openapi-generator), который различает отсутствующее поле и явный null.
       properties:
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
         summary:
           type: string
           description: Краткое описание задачи. Не может быть null.
@@ -5563,10 +5565,9 @@ components:
 
     IssueTypeDto:
       type: string
-      enum:
-        - TASK
-        - BUG
-        - STORY
+      pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      description: Stable key from the project issue type registry.
+      example: REQUEST
 
     IssuePriorityDto:
       type: string

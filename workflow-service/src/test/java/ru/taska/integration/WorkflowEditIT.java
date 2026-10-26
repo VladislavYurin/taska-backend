@@ -62,8 +62,15 @@ class WorkflowEditIT extends AbstractIT {
     @MockitoBean
     private ProjectRoleChecker projectRoleChecker;
 
+    @MockitoBean
+    private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
+
         databaseClient.sql("DELETE FROM taska.workflow_bindings WHERE project_id = :projectId")
                 .bind("projectId", PROJECT_ID)
                 .fetch()
@@ -197,6 +204,43 @@ class WorkflowEditIT extends AbstractIT {
         StepVerifier.create(duplicate)
                 .expectError()
                 .verify();
+    }
+
+    @Test
+    void customTypeUsesGeneralDefaultThenItsOwnWorkflowAndRegistryList() {
+        var request = ru.taska.domain.IssueType.valueOf("REQUEST");
+        Mockito.when(projectClient.listIssueTypes(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Mono.just(List.of(request)));
+        var initial = workflowService.getWorkflow(PROJECT_ID, "REQUEST").block();
+        Assertions.assertEquals(DEFAULT_WORKFLOW_ID, initial.workflow().getId());
+        var reply = stub.getWorkflowForProject(Mono.just(ru.taska.api.workflow.v1.GetWorkflowForProjectRequest.newBuilder()
+                .setHeader(header()).setBody(ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody.newBuilder()
+                        .setProjectId(PROJECT_ID.toString()).setActorUserId(ACTOR_USER_ID.toString()).setIssueTypeKey("REQUEST")).build())).block();
+        Assertions.assertEquals(List.of("REQUEST"), reply.getIssueTypeKeysList());
+        var todo = initial.statuses().stream().filter(status -> status.getStatusKey().equals("TODO")).findFirst().orElseThrow();
+        var transition = initial.transitions().stream().filter(edge -> edge.getFromStatusId().equals(todo.getId())).findFirst().orElseThrow();
+        var validated = stub.validateTransition(Mono.just(ru.taska.api.workflow.v1.ValidateTransitionRequest.newBuilder()
+                .setHeader(header()).setBody(ru.taska.api.workflow.v1.ValidateTransitionRequestBody.newBuilder()
+                        .setActorUserId(ACTOR_USER_ID.toString()).setTransitionId(transition.getId().toString())
+                        .setIssueSnapshot(ru.taska.api.workflow.v1.IssueValidateSnapshot.newBuilder().setIssueId(UUID.randomUUID().toString())
+                                .setProjectId(PROJECT_ID.toString()).setIssueTypeKey("REQUEST").setStatusKey("TODO"))).build())).block();
+        Assertions.assertTrue(validated.getBody().getIsValid());
+        var shared = stub.listProjectWorkflows(Mono.just(listRequest())).block().getWorkflows(0);
+        Assertions.assertEquals(List.of("REQUEST"), shared.getIssueTypeKeysList());
+        Assertions.assertTrue(shared.getIsShared());
+
+        var dto = projectWorkflow();
+        dto.setIssueTypes(List.of(request));
+        var own = workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, dto).block();
+        Assertions.assertEquals(own.workflow().getId(), workflowService.getWorkflow(PROJECT_ID, "REQUEST").block().workflow().getId());
+        var listed = stub.listProjectWorkflows(Mono.just(listRequest())).block();
+        Assertions.assertEquals(1, listed.getWorkflowsCount());
+        Assertions.assertEquals(List.of("REQUEST"), listed.getWorkflows(0).getIssueTypeKeysList());
+        Assertions.assertFalse(listed.getWorkflows(0).getIsShared());
+        dto.setIssueTypes(List.of(ru.taska.domain.IssueType.BUG));
+        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, dto))
+                .expectErrorSatisfies(e -> Assertions.assertEquals(ru.taska.exception.DomainStatus.INVALID_ARGUMENT,
+                        ((ru.taska.exception.DomainException) e).getStatus())).verify();
     }
 
     private static void assertGrpcCode(Throwable error, io.grpc.Status.Code expected) {

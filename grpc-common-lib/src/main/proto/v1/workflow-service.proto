@@ -100,6 +100,9 @@ message GetWorkflowForProjectRequestBody {
    * Идентификатор текущего пользователя
    */
   string actor_user_id = 3;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 4;
 }
 
 /**
@@ -145,6 +148,9 @@ message WorkflowResponse {
   // Mutation responses also carry their project binding; old readers ignore these fields.
   repeated IssueType issue_types = 8;
   bool is_shared = 9;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  repeated string issue_type_keys = 10;
 }
 
 message WorkflowMutationRequest {
@@ -300,6 +306,9 @@ message IssueValidateSnapshot {
    * Текущий статус задачи.
    */
   string status_key = 4;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  optional string issue_type_key = 5;
 }
 
 message ValidateTransitionResponse {
@@ -423,6 +432,9 @@ message CreateWorkflowRequestBody {
    * Используется для проверки прав доступа к проекту.
    */
   string actor_user_id = 6;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  repeated string issue_type_keys = 7;
 }
 
 message CreateWorkflowRequest {
@@ -547,6 +559,9 @@ message ProjectWorkflow {
    * Чтобы завести свои статусы и переходы, проекту нужен свой workflow (CreateWorkflow).
    */
   bool is_shared = 3;
+
+  // Expand-contract: key takes precedence; legacy enum remains for old clients.
+  repeated string issue_type_keys = 4;
 }
 
 message ListProjectWorkflowsResponse {
