@@ -43,6 +43,7 @@ management:
       version: '@project.version@'
 taska:
   mcp:
+    gateway-signing-secret: ${MCP_GATEWAY_SIGNING_SECRET:}
     gateway-url: ${MCP_GATEWAY_URL:http://localhost:8080}
     connect-timeout: ${MCP_CONNECT_TIMEOUT:2s}
     response-timeout: ${MCP_RESPONSE_TIMEOUT:5s}

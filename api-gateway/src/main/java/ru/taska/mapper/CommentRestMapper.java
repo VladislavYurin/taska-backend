@@ -44,6 +44,7 @@ public class CommentRestMapper {
         dto.setCreatedAt(toOffsetDateTime(proto.getCreatedAt()));
         dto.setUpdatedAt(toOffsetDateTime(proto.getUpdatedAt()));
         dto.setVersion(proto.getVersion());
+        if (proto.hasChannel()) dto.setChannel(proto.getChannel());
 
         if (proto.hasAuthor()) {
             dto.setAuthor(userProfileMapper.toUserSummaryDto(proto.getAuthor()));

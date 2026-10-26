@@ -16,7 +16,12 @@ package ru.taska.domain;
 public record GatewayContext(
         String requestId,
         String nodeId,
-        GatewayUserContext userContext
+        GatewayUserContext userContext,
+        ru.taska.domain.ActionChannel channel
 ) {
-
+    public GatewayContext(String requestId, String nodeId, GatewayUserContext userContext) {
+        this(requestId, nodeId, userContext, userContext == null ? null
+                : userContext.tokenKind() == GatewayTokenKind.PAT ? ru.taska.domain.ActionChannel.API_TOKEN
+                : ru.taska.domain.ActionChannel.UI);
+    }
 }

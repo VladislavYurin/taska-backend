@@ -86,6 +86,8 @@ class ProfileNamesAndInvitationsIT extends AbstractIT {
     void profileUpdateChangesOnlyNameAndIsImmediatelyVisibleInBatchAndDirectory() {
         User user = user(UserStatus.LOCKED, GlobalRole.GLOBAL_ADMIN, UserCreatedVia.OAUTH);
         String name = "Directory" + UUID.randomUUID().toString().substring(0, 8);
+        Instant previousUpdate = database.sql("UPDATE taska.users SET updated_at=now()-interval '1 day' WHERE id=:id RETURNING updated_at")
+                .bind("id", user.getId()).map(row -> row.get("updated_at", Instant.class)).one().block(TIMEOUT);
         profiles.updateMyProfile(user.getId(), "  " + name + "  ").block(TIMEOUT);
         User saved = users.findById(user.getId()).block(TIMEOUT);
         assertThat(saved.getDisplayName()).isEqualTo(name);
@@ -93,7 +95,7 @@ class ProfileNamesAndInvitationsIT extends AbstractIT {
         assertThat(saved.getStatus()).isEqualTo(user.getStatus());
         assertThat(saved.getGlobalRole()).isEqualTo(user.getGlobalRole());
         assertThat(saved.getCreatedVia()).isEqualTo(UserCreatedVia.OAUTH);
-        assertThat(saved.getUpdatedAt()).isAfter(user.getUpdatedAt());
+        assertThat(saved.getUpdatedAt()).isAfter(previousUpdate);
         assertThat(profiles.getUserDetailsByIds(List.of(user.getId())).single().block(TIMEOUT).displayName()).isEqualTo(name);
         assertThat(directory.search(user.getId(), name, 0, 20).block(TIMEOUT).getItemsList())
                 .extracting(item -> item.getDisplayName()).containsExactly(name);

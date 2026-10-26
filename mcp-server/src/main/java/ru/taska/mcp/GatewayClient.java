@@ -18,6 +18,13 @@ public class GatewayClient {
   private final McpProperties properties;
 
   public GatewayClient(WebClient.Builder builder, McpProperties properties) {
+    this(builder, properties, java.util.Optional.empty());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public GatewayClient(WebClient.Builder builder, McpProperties properties,
+      @org.springframework.beans.factory.annotation.Qualifier("mcpGatewaySigningFilter")
+      java.util.Optional<org.springframework.web.reactive.function.client.ExchangeFilterFunction> signing) {
     this.properties = properties;
     HttpClient http =
         HttpClient.create()
@@ -29,6 +36,7 @@ public class GatewayClient {
         builder
             .clone()
             .baseUrl(properties.gatewayUrl().toString())
+            .filters(filters -> signing.ifPresent(filters::add))
             .clientConnector(new ReactorClientHttpConnector(http))
             .codecs(config -> config.defaultCodecs().maxInMemorySize(properties.maxResponseBytes()))
             .build();

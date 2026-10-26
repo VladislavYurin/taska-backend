@@ -41,7 +41,12 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
                 .build();
 
         log.debug("[{}][{}] Save created history for issue: {}", requestId, nodeId, issue.getId());
-        return issueHistoryRepository.save(issueHistory);
+        return Mono.deferContextual(context -> {
+            var attribution = ru.taska.domain.ActionMetadata.current(context);
+            return issueHistoryRepository.save(issueHistory.toBuilder()
+                    .channel(attribution.channel() == null ? null : attribution.channel().name())
+                    .tokenId(attribution.tokenId()).build());
+        });
     }
 
     @Transactional
@@ -56,7 +61,12 @@ public class IssueHistoryServiceImpl implements IssueHistoryService {
                 .build();
 
         log.debug("[{}][{}] Save modified history for issue: {}", requestId, nodeId, issueId);
-        return issueHistoryRepository.save(issueHistory);
+        return Mono.deferContextual(context -> {
+            var attribution = ru.taska.domain.ActionMetadata.current(context);
+            return issueHistoryRepository.save(issueHistory.toBuilder()
+                    .channel(attribution.channel() == null ? null : attribution.channel().name())
+                    .tokenId(attribution.tokenId()).build());
+        });
     }
 
     @Override

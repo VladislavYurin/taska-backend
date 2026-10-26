@@ -27,14 +27,14 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Override
     @Transactional
     public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, AggregateType aggregateType, Issue issue) {
-        return outboxEventRepository.save(
+        return Mono.deferContextual(context -> outboxEventRepository.save(
                 OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(issue.getId())
                         .eventType(EventType.ISSUE_CREATED.getValue())
-                        .payload(payloadSerializer.createIssueCreatedPayload(issue))
+                        .payload(withChannel(payloadSerializer.createIssueCreatedPayload(issue), context))
                         .requestId(requestId)
-                        .build());
+                        .build()));
     }
 
     @Override
@@ -47,13 +47,23 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             EventType type,
             JsonNode payload
     ) {
-        return outboxEventRepository.save(
+        return Mono.deferContextual(context -> outboxEventRepository.save(
                 OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(aggregateId)
                         .eventType(type.getValue())
-                        .payload(payload)
+                        .payload(withChannel(payload, context))
                         .requestId(requestId)
-                        .build());
+                        .build()));
     }
+    private JsonNode withChannel(JsonNode payload, reactor.util.context.ContextView context) {
+        var channel = ru.taska.domain.ActionMetadata.current(context).channel();
+        if (channel == null) return payload;
+        if (!(payload instanceof tools.jackson.databind.node.ObjectNode object))
+            throw new IllegalStateException("Issue event payload must be an object");
+        var copy = object.deepCopy();
+        copy.put("channel", channel.name());
+        return copy;
+    }
+
 }

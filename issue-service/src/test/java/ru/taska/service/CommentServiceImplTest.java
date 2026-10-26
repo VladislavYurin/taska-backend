@@ -302,7 +302,7 @@ class CommentServiceImplTest {
                 .thenReturn(Mono.just(comment));
 
         when(commentRepository.updateWithVersionCheckAndAuthor(
-                eq(commentId), eq(newBody), eq(1), eq(actorUserId)))
+                eq(commentId), eq(newBody), eq(1), eq(actorUserId), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(Mono.just(updatedComment));
 
         when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(UUID.class), any(UUID.class), any(IssueEventType.class), any()))
@@ -329,7 +329,7 @@ class CommentServiceImplTest {
         verify(issueRepository).findActiveByIdForUpdate(issueId);
         verify(commentRepository).updateWithVersionCheckAndAuthor(
                 eq(commentId), eq(newBody), eq(1), eq(actorUserId)
-        );
+        , org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
         assertMetadataOnlyPayload(IssueEventType.COMMENT_UPDATED, EventType.ISSUE_COMMENT_UPDATED);
     }
 
@@ -349,7 +349,7 @@ class CommentServiceImplTest {
                 .thenReturn(Mono.just(comment));
 
         when(commentRepository.updateWithVersionCheckAndAuthor(
-                eq(commentId), eq(newBody), eq(1), eq(actorUserId)))
+                eq(commentId), eq(newBody), eq(1), eq(actorUserId), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(Mono.empty());
 
         // Act
@@ -434,7 +434,7 @@ class CommentServiceImplTest {
         when(commentRepository.findActiveById(commentId))
                 .thenReturn(Mono.just(comment));
 
-        when(commentRepository.softDeleteWithVersionCheck(eq(commentId), eq(1)))
+        when(commentRepository.softDeleteWithVersionCheck(eq(commentId), eq(1), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(Mono.just(deletedComment));
 
         when(issueHistoryService.saveIssueHistory(anyString(), anyString(), any(UUID.class), any(UUID.class), any(IssueEventType.class), any()))
@@ -458,7 +458,7 @@ class CommentServiceImplTest {
                 .verifyComplete();
 
         verify(issueRepository).findActiveByIdForUpdate(issueId);
-        verify(commentRepository).softDeleteWithVersionCheck(eq(commentId), eq(1));
+        verify(commentRepository).softDeleteWithVersionCheck(eq(commentId), eq(1), org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
         assertMetadataOnlyPayload(IssueEventType.COMMENT_DELETED, EventType.ISSUE_COMMENT_DELETED);
     }
 

@@ -23,7 +23,8 @@ import ru.taska.transport.grpc.GrpcAuthServiceClient;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
+@org.springframework.context.annotation.Import(ru.taska.security.McpMarkerVerifier.class)
+@RequiredArgsConstructor(onConstructor_ = @org.springframework.beans.factory.annotation.Autowired)
 public class GatewayContextFactory {
 
   @Value("${spring.application.name}")
@@ -34,6 +35,11 @@ public class GatewayContextFactory {
   private final BearerTokenExtractor bearerTokenExtractor;
   private final GrpcAuthServiceClient authServiceClient;
   private final ContextMapper contextMapper;
+  private final ru.taska.security.McpMarkerVerifier markerVerifier;
+
+  public GatewayContextFactory(BearerTokenExtractor extractor, GrpcAuthServiceClient auth, ContextMapper mapper) {
+    this(extractor, auth, mapper, new ru.taska.security.McpMarkerVerifier("", 10000));
+  }
 
   /**
    * Строит {@link ru.taska.domain.GatewayContext} в соответствии с типом безопасности эндпоинта.
@@ -46,7 +52,10 @@ public class GatewayContextFactory {
   public Mono<GatewayContext> buildContext(
       String requestId, ServerWebExchange exchange, EndpointSecurity secured) {
     return switch (secured) {
-      case PUBLIC -> Mono.just(new GatewayContext(requestId, nodeId, null));
+      case PUBLIC -> Mono.fromSupplier(() -> {
+        if (markerVerifier.hasMarker(exchange.getRequest())) throw ru.taska.security.McpMarkerVerifier.rejected();
+        return new GatewayContext(requestId, nodeId, null);
+      });
       case PROTECTED, JWT_SESSION_REQUIRED -> buildSecuredContext(exchange, requestId, secured);
       case GLOBAL_ADMIN_REQUIRED -> buildAdminContext(exchange, requestId);
     };
@@ -60,21 +69,17 @@ public class GatewayContextFactory {
    * @param requestId идентификатор запроса
    * @return контекст запроса с заполненным {@link ru.taska.domain.GatewayUserContext}
    */
-  private Mono<GatewayUserContext> resolveUserContext(
-      ServerWebExchange exchange, String requestId) {
+  private Mono<GatewayContext> resolveUserContext(ServerWebExchange exchange, String requestId) {
     return Mono.fromCallable(() -> bearerTokenExtractor.extract(exchange, requestId))
-        .flatMap(token -> authServiceClient.validateAccessToken(requestId, nodeId, token))
-        .map(
-            response -> {
+        .flatMap(token -> authServiceClient.validateAccessToken(requestId, nodeId, token)
+            .map(response -> {
               var proto = response.getUserContext();
-              log.info(
-                  "[{}] User context resolved: userId={}, tokenKind={}, tokenId={}",
-                  requestId,
-                  proto.getUserId(),
-                  proto.getTokenKind(),
-                  proto.hasTokenId() ? proto.getTokenId() : null);
-              return contextMapper.mapToGatewayUserContext(proto);
-            });
+              log.info("[{}] User context resolved: userId={}, tokenKind={}, tokenId={}",
+                  requestId, proto.getUserId(), proto.getTokenKind(), proto.hasTokenId() ? proto.getTokenId() : null);
+              var user = contextMapper.mapToGatewayUserContext(proto);
+              var channel = markerVerifier.resolve(exchange.getRequest(), requestId, token, user.tokenKind() == GatewayTokenKind.PAT);
+              return new GatewayContext(requestId, nodeId, user, channel);
+            }));
   }
 
   /**
@@ -88,9 +93,9 @@ public class GatewayContextFactory {
       ServerWebExchange exchange, String requestId, EndpointSecurity security) {
     return resolveUserContext(exchange, requestId)
         .map(
-            userContext -> {
-              enforcePatPolicy(exchange, userContext, security);
-              return new GatewayContext(requestId, nodeId, userContext);
+            context -> {
+              enforcePatPolicy(exchange, context.userContext(), security);
+              return context;
             });
   }
 
@@ -105,7 +110,8 @@ public class GatewayContextFactory {
   private Mono<GatewayContext> buildAdminContext(ServerWebExchange exchange, String requestId) {
     return resolveUserContext(exchange, requestId)
         .flatMap(
-            userContext -> {
+            context -> {
+              var userContext = context.userContext();
               enforcePatPolicy(exchange, userContext, EndpointSecurity.GLOBAL_ADMIN_REQUIRED);
               if (!userContext.globalRole().equals(GlobalRole.GLOBAL_ADMIN)) {
                 log.debug("User doesn't have permission: {}", userContext.userId());
@@ -114,7 +120,7 @@ public class GatewayContextFactory {
                         .withDescription("User doesn't have permission")
                         .asRuntimeException());
               }
-              return Mono.just(new GatewayContext(requestId, nodeId, userContext));
+              return Mono.just(context);
             });
   }
 

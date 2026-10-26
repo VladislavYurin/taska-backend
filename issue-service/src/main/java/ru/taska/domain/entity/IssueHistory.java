@@ -68,4 +68,12 @@ public class IssueHistory {
      */
     @Column("payload")
     private JsonNode payload;
+    /** Channel of the recorded action; null for legacy callers/rows. */
+    @Column("channel")
+    private String channel;
+
+    /** Internal audit identity; never mapped to public protobuf/REST responses. */
+    @Column("token_id")
+    private UUID tokenId;
+
 }
