@@ -27,6 +27,12 @@ import java.time.LocalDate;
 public class PatchIssueRequestDto {
 
     private NullableField<String> summary = NullableField.absent();
+    private NullableField<String> issueType = NullableField.absent();
+
+    @JsonProperty("issueType")
+    public void setIssueType(String issueType) {
+        this.issueType = NullableField.of(issueType);
+    }
     private NullableField<String> description = NullableField.absent();
     private NullableField<IssuePriorityDto> priority = NullableField.absent();
     private NullableField<String> assigneeId = NullableField.absent();

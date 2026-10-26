@@ -121,13 +121,13 @@ class GrpcIssueServiceClientTest {
 
     @Test
     void listIssuesForBoard_carriesWorkflowFinalKeysInGrpcBody() {
-        Mockito.when(issueMapper.toGrpcIssueType(ru.taska.domain.dto.IssueTypeDto.TASK))
+        Mockito.when(issueMapper.toGrpcIssueType("TASK"))
                 .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK);
         Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
                 .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
-        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, ru.taska.domain.dto.IssueTypeDto.TASK,
+        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK",
                         ASSIGNEE_ID, LABEL_ID, false, List.of("CLOSED", "RELEASED"), null, null, context))
                 .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
@@ -144,7 +144,7 @@ class GrpcIssueServiceClientTest {
 
     @Test
     void listIssuesForBoard_carriesPriorityAndQueryInGrpcBody() {
-        Mockito.when(issueMapper.toGrpcIssueType((ru.taska.domain.dto.IssueTypeDto) null))
+        Mockito.when(issueMapper.toGrpcIssueType((String) null))
                 .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED);
         Mockito.when(issueMapper.toGrpcIssuePriority(ru.taska.domain.dto.IssuePriorityDto.HIGH))
                 .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_HIGH);
@@ -164,7 +164,7 @@ class GrpcIssueServiceClientTest {
 
     @Test
     void listIssuesForBoard_blankQueryIsNotSentToGrpc() {
-        Mockito.when(issueMapper.toGrpcIssueType((ru.taska.domain.dto.IssueTypeDto) null))
+        Mockito.when(issueMapper.toGrpcIssueType((String) null))
                 .thenReturn(ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED);
         Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
                 .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
@@ -287,7 +287,7 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC createIssue и вернуть ответ")
     void createIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new CreateIssueRequestDto(ru.taska.domain.dto.IssueTypeDto.fromValue("TASK"), SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
+        var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
 
         var grpcRequest = CreateIssueRequest.newBuilder()
                                             .setHeader(

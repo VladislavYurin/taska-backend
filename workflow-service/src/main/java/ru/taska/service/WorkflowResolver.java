@@ -23,7 +23,7 @@ public class WorkflowResolver {
     public Mono<WorkflowEntity> resolveWorkflow(UUID projectId, String issueType) {
         return workflowRepository.findWorkflowForProject(projectId, issueType)
                 .switchIfEmpty(
-                        workflowRepository.findWorkflowForProject(workflowProperties.defaultProjectId(), issueType)
+                        workflowRepository.findWorkflowForProject(workflowProperties.defaultProjectId(), "TASK")
                 );
     }
 }

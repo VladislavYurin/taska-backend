@@ -86,13 +86,7 @@ public class IssuePatchExecutor {
         return issueWatcherRepository.findUserIdsByIssueId(issue.getId())
                 .collectList()
                 .flatMap(watcherIds -> {
-                    JsonNode updatedPayload = payloadSerializer.createIssueUpdatedPayload(
-                            issue, actorUserId, patched.getAssigneeId(),
-                            patched.getSummary(), patched.getDescription(), patched.getPriority(),
-                            patched.getStoryPoints(), patched.getStartDate(), patched.getDueDate(),
-                            patched.getOriginalEstimateMinutes(), patched.getRemainingEstimateMinutes(),
-                            watcherIds
-                    );
+                    JsonNode updatedPayload = payloadSerializer.createIssuePatchedPayload(issue, patched, actorUserId, watcherIds);
 
                     if (updatedPayload.isEmpty() && !assigneeChanged) {
                         log.info("[{}][{}] Issue with id: {} not changed by patch from user with id: {}",

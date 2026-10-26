@@ -11,7 +11,6 @@ import ru.taska.domain.dto.IssueLinkViewTypeMetaPairDto;
 import ru.taska.domain.dto.IssueLinkTypeMetaPairDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssuePriorityMetaPairDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueTypeMetaPairDto;
 import ru.taska.domain.dto.MetaResponseDto;
 import ru.taska.domain.dto.NotificationTypeDto;
@@ -33,7 +32,7 @@ class MetaServiceImplTest {
         MetaResponseDto meta = service.getMeta();
 
         assertThat(meta.getIssueTypes()).extracting(IssueTypeMetaPairDto::getCode)
-                .containsExactly(IssueTypeDto.values());
+                .containsExactly(new String[]{"TASK", "BUG", "STORY"});
         assertThat(meta.getPriorities()).extracting(IssuePriorityMetaPairDto::getCode)
                 .containsExactly(IssuePriorityDto.values());
         assertThat(meta.getLinkTypes()).extracting(IssueLinkTypeMetaPairDto::getCode)
@@ -67,7 +66,7 @@ class MetaServiceImplTest {
         MetaResponseDto meta = service.getMeta();
 
         assertThat(meta.getIssueTypes())
-                .allSatisfy(item -> assertThat(conversionService.convert(item.getCode().getValue(), IssueTypeDto.class))
+                .allSatisfy(item -> assertThat(conversionService.convert(item.getCode(), String.class))
                         .isEqualTo(item.getCode()));
         assertThat(meta.getPriorities())
                 .allSatisfy(item -> assertThat(conversionService.convert(item.getCode().getValue(), IssuePriorityDto.class))

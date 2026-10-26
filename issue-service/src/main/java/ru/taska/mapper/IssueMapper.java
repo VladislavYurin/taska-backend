@@ -63,6 +63,7 @@ public class IssueMapper {
                 .setIssueNumber(issue.getIssueNumber())
                 .setIssueKey(issue.getIssueKey())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setIssueTypeKey(issue.getIssueType().name())
                 .setSummary(issue.getSummary())
                 .setDescription(issue.getDescription() != null ? issue.getDescription() : "")
                 .setStatusKey(issue.getStatusKey())
@@ -183,6 +184,7 @@ public class IssueMapper {
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setIssueTypeKey(issue.getIssueType().name())
                 .setPriority(toProtoIssuePriority(issue.getPriority()))
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString() : "")
                 .setStatusKey(issue.getStatusKey());
@@ -292,6 +294,7 @@ public class IssueMapper {
                 .setIssueId(issue.getId().toString())
                 .setProjectId(issue.getProjectId().toString())
                 .setIssueType(toWorkflowProtoIssueType(issue.getIssueType()))
+                .setIssueTypeKey(issue.getIssueType().name())
                 .setStatusKey(issue.getStatusKey())
                 .build();
     }
@@ -348,18 +351,20 @@ public class IssueMapper {
     }
 
     private ru.taska.api.issue.v1.IssueType toProtoIssueType(IssueType domain) {
-        return switch (domain) {
-            case TASK -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK;
-            case BUG -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG;
-            case STORY -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_STORY;
+        return switch (domain.name()) {
+            case "TASK" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_TASK;
+            case "BUG" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_BUG;
+            case "STORY" -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_STORY;
+            default -> ru.taska.api.issue.v1.IssueType.ISSUE_TYPE_UNSPECIFIED;
         };
     }
 
     private ru.taska.api.workflow.v1.IssueType toWorkflowProtoIssueType(IssueType domain) {
-        return switch (domain) {
-            case TASK -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
-            case BUG -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
-            case STORY -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+        return switch (domain.name()) {
+            case "TASK" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_TASK;
+            case "BUG" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_BUG;
+            case "STORY" -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_STORY;
+            default -> ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_UNSPECIFIED;
         };
     }
 
@@ -472,6 +477,7 @@ public class IssueMapper {
                 .setIssueKey(issue.getIssueKey())
                 .setSummary(issue.getSummary())
                 .setIssueType(toProtoIssueType(issue.getIssueType()))
+                .setIssueTypeKey(issue.getIssueType().name())
                 .setStatusKey(issue.getStatusKey())
                 .setAssigneeId(issue.getAssigneeId() != null ? issue.getAssigneeId().toString(): "")
                 .setReporterId(issue.getReporterId() == null ? "" : issue.getReporterId().toString())

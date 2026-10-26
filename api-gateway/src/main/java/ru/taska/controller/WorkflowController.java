@@ -11,7 +11,6 @@ import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
@@ -51,7 +50,7 @@ public class WorkflowController implements WorkflowApi {
      */
     public Mono<ResponseEntity<WorkflowResponseDto>> getWorkflowForProject(
             UUID projectId,
-            IssueTypeDto issueType,
+            String issueType,
             ServerWebExchange exchange)
     {
 

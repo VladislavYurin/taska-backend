@@ -91,6 +91,12 @@ class IssuePatchIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        Mockito.when(projectServiceStub.withDeadlineAfter(Mockito.anyLong(), Mockito.any())).thenReturn(projectServiceStub);
+        Mockito.when(projectServiceStub.listProjectIssueTypes(Mockito.any(ru.taska.api.project.v1.ProjectIssueTypesRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.project.v1.ListProjectIssueTypesResponse.newBuilder()
+                        .addAllItems(java.util.List.of("TASK", "BUG", "STORY").stream().map(key ->
+                                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode(key).build()).toList()).build()));
+
         issueRepository.deleteAll().block();
 
         Mockito.when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
@@ -256,7 +262,7 @@ class IssuePatchIT extends AbstractIT {
         Assertions.assertThat(countHistoryEvents(issue.getId(), IssueEventType.ASSIGNED)).isEqualTo(1);
         Assertions.assertThat(countWatchers(issue.getId(), NEW_ASSIGNEE_ID)).isEqualTo(1);
 
-        List<String> updatedKeys = List.of("actorUserId", "assigneeId", "oldSummary", "newSummary", "watcherIds");
+        List<String> updatedKeys = List.of("issueId", "issueKey", "projectId", "actorUserId", "assigneeId", "oldSummary", "newSummary", "watcherIds");
         Assertions.assertThat(outboxPayloadKeys(issue.getId(), EventType.ISSUE_UPDATED))
                   .containsExactlyInAnyOrderElementsOf(updatedKeys);
         Assertions.assertThat(historyPayloadKeys(issue.getId(), IssueEventType.UPDATED))
@@ -266,7 +272,7 @@ class IssuePatchIT extends AbstractIT {
         Assertions.assertThat(outboxPayloadValue(issue.getId(), EventType.ISSUE_UPDATED, "assigneeId"))
                   .isEqualTo(NEW_ASSIGNEE_ID.toString());
 
-        List<String> assignedKeys = List.of("previousAssigneeId", "assigneeId", "actorUserId", "watcherIds");
+        List<String> assignedKeys = List.of("issueId", "issueKey", "projectId", "previousAssigneeId", "assigneeId", "actorUserId", "watcherIds");
         Assertions.assertThat(outboxPayloadKeys(issue.getId(), EventType.ISSUE_ASSIGNED))
                   .containsExactlyInAnyOrderElementsOf(assignedKeys);
         Assertions.assertThat(historyPayloadKeys(issue.getId(), IssueEventType.ASSIGNED))

@@ -526,6 +526,11 @@ class ProjectServiceImplTest {
 
             // Registry drives workflow selection and type metadata.
             mockWorkflowLoad();
+            Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", "check-square", 10, null, null),
+                    new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "Request", "teal", "headset", 20, null, null)));
+            Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "REQUEST", actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(new ProjectWorkflowDto("REQUEST", workflow.workflow())));
 
             StepVerifier.create(projectService.getProjectContext(
                             requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
@@ -533,7 +538,8 @@ class ProjectServiceImplTest {
                         Assertions.assertEquals(memberProjectDto, ctx.project());
                         Assertions.assertEquals(1, ctx.members().size());
                         Assertions.assertEquals(1, ctx.labels().size());
-                        Assertions.assertEquals(1, ctx.workflows().size());
+                        Assertions.assertEquals(2, ctx.workflows().size());
+                        Assertions.assertTrue(ctx.workflows().stream().anyMatch(w -> w.issueType().equals("REQUEST")));
                         Assertions.assertEquals("TASK", ctx.issueTypes().getFirst().code());
                     })
                     .verifyComplete();

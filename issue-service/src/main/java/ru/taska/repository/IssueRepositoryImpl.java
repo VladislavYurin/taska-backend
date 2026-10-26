@@ -208,7 +208,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .eq("assignee_id", assigneeId)
                 .eq("reporter_id", reporterId)
                 .eq("priority", priority)
-                .eq("issue_type", issueType)
+                .eq("issue_type", issueType == null ? null : issueType.name())
                 .eq("priority", priority)
                 .anyOf(any -> any
                         .containsIgnoreCase("issue_key", searchQuery)
@@ -418,7 +418,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         return FilterBuilder.create()
                 .eqRequired("project_id", projectId)
                 .isNull("deleted_at")
-                .eq("issue_type", issueType)
+                .eq("issue_type", issueType == null ? null : issueType.name())
                 .eq("priority", priority)
                 .eq("assignee_id", assigneeId)
                 .eq("status_key", statusKey)

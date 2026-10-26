@@ -26,7 +26,6 @@ import ru.taska.domain.GatewayUserContext;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
@@ -44,7 +43,7 @@ class GrpcWorkflowServiceClientTest {
     private static final String NODE_ID = "api-gateway-service";
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String USER_ID = "00000000-0000-0000-0000-000000000002";
-    private static final IssueTypeDto ISSUE_TYPE_DTO = IssueTypeDto.BUG;
+    private static final String ISSUE_TYPE_DTO = "BUG";
 
     @Mock
     private ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub stub;

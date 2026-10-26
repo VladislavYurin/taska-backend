@@ -272,8 +272,6 @@ public class ProjectServiceImpl implements ProjectService {
     ) {
         return Flux.fromIterable(issueTypes)
                 .map(ru.taska.domain.ProjectIssueType::code)
-                // Custom keys enter the registry now; workflow enum expansion is TAS-386.
-                .filter(Set.of("TASK", "BUG", "STORY")::contains)
                 .flatMap(issueType ->
                         workflowServiceClient.getWorkflowForProject(
                                 projectId, issueType, actorUserId, requestId, nodeId

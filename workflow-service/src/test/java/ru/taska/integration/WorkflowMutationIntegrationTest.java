@@ -33,12 +33,21 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     @Autowired WorkflowCreateService creator;
     @Autowired WorkflowMutationService service;
     @Autowired ru.taska.service.WorkflowEditService edits;
+    @Autowired ru.taska.service.WorkflowResolver resolver;
+    @Autowired ru.taska.service.ProjectWorkflowListService listing;
     @MockitoBean ProjectRoleChecker roles;
     @MockitoBean WorkflowIssueMigrationClient issues;
     private UUID project, actor, workflow, review;
 
+    @MockitoBean
+    private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
     @BeforeEach
     void createGraph() {
+        org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
+
         project = UUID.randomUUID(); actor = UUID.randomUUID();
         when(roles.checkProjectWriteRole(any(), any(), any(), any(), any())).thenReturn(Mono.empty());
         when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.just(0L));
@@ -160,6 +169,33 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         assertThat(service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block().shared()).isTrue();
         assertThat(movedCount.get()).isEqualTo(1);
         verify(issues, times(2)).migrate(any(), any(), any(), any());
+    }
+
+    @Test
+    void customTypeUsesDefaultAndCanCreateEditListAndDeleteOwnWorkflow() {
+        var request = IssueType.valueOf("REQUEST");
+        when(projectClient.listIssueTypes(any(), any(), any(), any())).thenReturn(Mono.just(List.of(IssueType.TASK, request)));
+        var fallback = resolver.resolveWorkflow(project, "REQUEST").block();
+        assertThat(fallback).isNotNull();
+        var own = creator.validateAndCreateWorkflow("r", "n", actor, WorkflowCreationDto.builder()
+                .projectId(project).name("Requests").issueTypes(List.of(request))
+                .statuses(List.of(status("TODO", 10), status("DONE", 20)))
+                .transitions(List.of(edge("TODO", "DONE", 10))).build()).block();
+        UUID custom = own.workflow().getId();
+        assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isEqualTo(custom);
+        assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).anySatisfy(item -> {
+            assertThat(item.issueTypes()).contains(request);
+            assertThat(item.shared()).isFalse();
+        });
+        var renamed = service.mutate(Operation.UPDATE_WORKFLOW, new WorkflowMutation("r", "n", actor, project,
+                custom, 1, null, null, "Service requests", null, null, null, null, Map.of())).block();
+        assertThat(renamed.issueTypes()).containsExactly(request);
+        assertThat(renamed.workflow().workflow().getName()).isEqualTo("Service requests");
+        var deleted = service.mutate(Operation.DELETE_WORKFLOW, new WorkflowMutation("r", "n", actor, project,
+                custom, 2, null, null, null, null, null, null, null, Map.of())).block();
+        assertThat(deleted.shared()).isTrue();
+        assertThat(deleted.issueTypes()).containsExactly(request);
+        assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isEqualTo(fallback.getId());
     }
 
     private WorkflowMutation command(String name, UUID status, String target) {

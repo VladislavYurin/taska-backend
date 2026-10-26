@@ -22,7 +22,6 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.BoardIssueDto;
 import ru.taska.domain.dto.BoardUserDto;
 import ru.taska.domain.dto.IssuePriorityDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ListProjectLabelsResponseDto;
 import ru.taska.domain.dto.ProjectLabelResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
@@ -53,7 +52,7 @@ class BoardServiceImplTest {
             UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final UUID LABEL_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000003");
-    private static final IssueTypeDto ISSUE_TYPE = IssueTypeDto.TASK;
+    private static final String ISSUE_TYPE = "TASK";
 
     @Mock
     private GrpcWorkflowServiceClient workflowClient;
@@ -67,6 +66,9 @@ class BoardServiceImplTest {
     @Mock
     private GrpcUserProfileServiceClient profileClient;
 
+    @Mock
+    private ru.taska.transport.grpc.GrpcProjectIssueTypeClient issueTypesClient;
+
     private BoardServiceImpl boardService;
     private GatewayContext context;
 
@@ -77,7 +79,7 @@ class BoardServiceImplTest {
                 issueClient,
                 labelClient,
                 profileClient,
-                new BoardMapper()
+                new BoardMapper(), issueTypesClient
         );
 
         context = new GatewayContext(
@@ -85,6 +87,7 @@ class BoardServiceImplTest {
                 "api-gateway",
                 null
         );
+        Mockito.lenient().when(issueTypesClient.list(PROJECT_ID, context)).thenReturn(Mono.just(registry("TASK", "BUG", "STORY")));
     }
 
     @Test
@@ -208,16 +211,16 @@ class BoardServiceImplTest {
         var storyWorkflow = new WorkflowResponseDto();
         storyWorkflow.setStatuses(List.of());
 
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
                 .thenReturn(Mono.just(taskWorkflow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
                 .thenReturn(Mono.just(bugWorkflow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
                 .thenReturn(Mono.just(storyWorkflow));
 
-        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+        for (String type : List.of("TASK", "BUG", "STORY")) {
             when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true,
-                    type == IssueTypeDto.TASK ? List.of("DONE") : List.of(), null, null, context))
+                    "TASK".equals(type) ? List.of("DONE") : List.of(), null, null, context))
                     .thenReturn(Mono.just(List.of()));
         }
 
@@ -238,9 +241,9 @@ class BoardServiceImplTest {
                 })
                 .verifyComplete();
 
-        verify(workflowClient).getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context);
-        verify(workflowClient).getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context);
-        verify(workflowClient).getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context);
+        verify(workflowClient).getWorkflowForProject(PROJECT_ID, "TASK", context);
+        verify(workflowClient).getWorkflowForProject(PROJECT_ID, "BUG", context);
+        verify(workflowClient).getWorkflowForProject(PROJECT_ID, "STORY", context);
     }
 
     @Test
@@ -252,20 +255,20 @@ class BoardServiceImplTest {
         bugWorkflow.setStatuses(List.of(workflowStatus("IN_PROGRESS", "In Progress", "IN_PROGRESS", 2)));
         var storyNotFound = new StatusRuntimeException(Status.NOT_FOUND.withDescription("Default Workflow not found"));
 
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
                 .thenReturn(Mono.just(taskWorkflow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
                 .thenReturn(Mono.just(bugWorkflow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
                 .thenReturn(Mono.error(storyNotFound));
 
         var storyOnlyStatusIssue = boardIssueDto("TAS-7");
-        storyOnlyStatusIssue.setIssueType(IssueTypeDto.STORY);
+        storyOnlyStatusIssue.setIssueType("STORY");
         var storyIssueData = new BoardIssueData("STORY_REVIEW", List.of(), storyOnlyStatusIssue);
 
-        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+        for (String type : List.of("TASK", "BUG", "STORY")) {
             when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true, List.of(), null, null, context))
-                    .thenReturn(Mono.just(type == IssueTypeDto.STORY ? List.of(storyIssueData) : List.of()));
+                    .thenReturn(Mono.just("STORY".equals(type) ? List.of(storyIssueData) : List.of()));
         }
 
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
@@ -278,27 +281,30 @@ class BoardServiceImplTest {
                 .verifyComplete();
     }
 
-    @Test
-    @DisplayName("Без issueType: если NOT_FOUND workflow пришёл для всех трёх типов, доска падает с исходной ошибкой")
-    void getBoard_withoutIssueType_failsWhenAllThreeTypesHaveNoWorkflow() {
-        var notFound = new StatusRuntimeException(Status.NOT_FOUND.withDescription("Default Workflow not found"));
-
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
-                .thenReturn(Mono.error(notFound));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
-                .thenReturn(Mono.error(notFound));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
-                .thenReturn(Mono.error(notFound));
-
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void customProjectTypeIsVisibleInColumnOrUnplaced(boolean hasWorkflow) {
+        when(issueTypesClient.list(PROJECT_ID, context)).thenReturn(Mono.just(registry("REQUEST")));
+        var workflow = new WorkflowResponseDto();
+        workflow.setStatuses(List.of(workflowStatus("TODO", "To Do", "TODO", 1)));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "REQUEST", context))
+                .thenReturn(hasWorkflow ? Mono.just(workflow) : Mono.error(Status.NOT_FOUND.asRuntimeException()));
+        var issue = boardIssueDto("REQ-1");
+        issue.setIssueType("REQUEST");
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), "REQUEST", null, null, true,
+                List.of(), null, null, context)).thenReturn(Mono.just(List.of(new BoardIssueData("TODO", List.of(), issue))));
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
-                .expectErrorSatisfies(error -> {
-                    assertThat(error).isInstanceOf(StatusRuntimeException.class);
-                    assertThat(((StatusRuntimeException) error).getStatus().getCode())
-                            .isEqualTo(Status.Code.NOT_FOUND);
-                })
-                .verify();
-
-        Mockito.verifyNoInteractions(issueClient, labelClient, profileClient);
+                .assertNext(board -> {
+                    if (hasWorkflow) {
+                        assertThat(board.getColumns()).singleElement().satisfies(column -> assertThat(column.getIssues()).containsExactly(issue));
+                        assertThat(board.getUnplacedIssues()).isEmpty();
+                    } else {
+                        assertThat(board.getColumns()).isEmpty();
+                        assertThat(board.getUnplacedIssues()).containsExactly(issue);
+                    }
+                }).verifyComplete();
+        verify(workflowClient).getWorkflowForProject(PROJECT_ID, "REQUEST", context);
+        Mockito.verifyNoMoreInteractions(workflowClient);
     }
 
     @Test
@@ -308,11 +314,11 @@ class BoardServiceImplTest {
         taskWorkflow.setStatuses(List.of(workflowStatus("TODO", "To Do", "TODO", 1)));
         var unavailable = new StatusRuntimeException(Status.UNAVAILABLE.withDescription("workflow-service down"));
 
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
                 .thenReturn(Mono.just(taskWorkflow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
                 .thenReturn(Mono.error(unavailable));
-        Mockito.lenient().when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+        Mockito.lenient().when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
                 .thenReturn(Mono.just(new WorkflowResponseDto()));
 
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
@@ -589,19 +595,19 @@ class BoardServiceImplTest {
         var bugFlow = new WorkflowResponseDto();
         bugFlow.setStatuses(List.of(workflowStatus("REVIEW", "Bug review", "IN_PROGRESS", 1)));
         var bug = boardIssueDto("BUG-1");
-        bug.setIssueType(IssueTypeDto.BUG);
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context))
+        bug.setIssueType("BUG");
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
                 .thenReturn(Mono.delay(java.time.Duration.ofMillis(taskFirst ? 1 : 30)).thenReturn(taskFlow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
                 .thenReturn(Mono.delay(java.time.Duration.ofMillis(taskFirst ? 30 : 1)).thenReturn(bugFlow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
                 .thenReturn(Mono.just(new WorkflowResponseDto().statuses(List.of())));
-        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.TASK, null, null,
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), "TASK", null, null,
                 false, List.of("REVIEW"), IssuePriorityDto.HIGH, "needle", context)).thenReturn(Mono.just(List.of()));
-        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.BUG, null, null,
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), "BUG", null, null,
                 false, List.of(), IssuePriorityDto.HIGH, "needle", context))
                 .thenReturn(Mono.just(List.of(new BoardIssueData("REVIEW", List.of(), bug))));
-        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), IssueTypeDto.STORY, null, null,
+        when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), "STORY", null, null,
                 false, List.of(), IssuePriorityDto.HIGH, "needle", context)).thenReturn(Mono.just(List.of()));
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, false, IssuePriorityDto.HIGH, "needle", context))
                 .assertNext(board -> {
@@ -618,14 +624,14 @@ class BoardServiceImplTest {
         var taskFlow = new WorkflowResponseDto().statuses(List.of(workflowStatus("REVIEW", "Review", "IN_PROGRESS", 1)));
         var bugFlow = new WorkflowResponseDto().statuses(List.of(workflowStatus("TODO", "To Do", "TODO", 0)));
         var bug = boardIssueDto("BUG-1");
-        bug.setIssueType(IssueTypeDto.BUG);
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.TASK, context)).thenReturn(Mono.just(taskFlow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.BUG, context)).thenReturn(Mono.just(bugFlow));
-        when(workflowClient.getWorkflowForProject(PROJECT_ID, IssueTypeDto.STORY, context))
+        bug.setIssueType("BUG");
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context)).thenReturn(Mono.just(taskFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context)).thenReturn(Mono.just(bugFlow));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "STORY", context))
                 .thenReturn(Mono.just(new WorkflowResponseDto().statuses(List.of())));
-        for (IssueTypeDto type : List.of(IssueTypeDto.TASK, IssueTypeDto.BUG, IssueTypeDto.STORY)) {
+        for (String type : List.of("TASK", "BUG", "STORY")) {
             when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null, true, List.of(), null, null, context))
-                    .thenReturn(Mono.just(type == IssueTypeDto.BUG ? List.of(new BoardIssueData("REVIEW", List.of(), bug)) : List.of()));
+                    .thenReturn(Mono.just("BUG".equals(type) ? List.of(new BoardIssueData("REVIEW", List.of(), bug)) : List.of()));
         }
         StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null, true, null, null, context))
                 .assertNext(board -> {
@@ -648,12 +654,20 @@ class BoardServiceImplTest {
         return status;
     }
 
+    private ru.taska.domain.dto.ListProjectIssueTypesDto registry(String... codes) {
+        return new ru.taska.domain.dto.ListProjectIssueTypesDto(java.util.Arrays.stream(codes).map(code -> {
+            var type = new ru.taska.domain.dto.ProjectIssueTypeDto();
+            type.setCode(code);
+            return type;
+        }).toList());
+    }
+
     private BoardIssueDto boardIssueDto(String issueKey) {
         var issue = new BoardIssueDto();
         issue.setId(UUID.randomUUID());
         issue.setIssueKey(issueKey);
         issue.setSummary("Test issue");
-        issue.setIssueType(IssueTypeDto.TASK);
+        issue.setIssueType("TASK");
         return issue;
     }
 }

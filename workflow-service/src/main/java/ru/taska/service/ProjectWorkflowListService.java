@@ -38,20 +38,21 @@ public class ProjectWorkflowListService {
     private final StatusRepository statusRepository;
     private final TransitionRepository transitionRepository;
     private final WorkflowProperties workflowProperties;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
 
     @Transactional(readOnly = true)
-    public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(UUID projectId) {
+    public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
         UUID defaultProjectId = workflowProperties.defaultProjectId();
-        return bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId)).collectList()
+        return projectClient.listIssueTypes(requestId, nodeId, projectId, actorUserId).flatMap(allowedTypes -> bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId)).collectList()
                 .flatMap(bindings -> workflowRepository
                         .findAllById(bindings.stream().map(WorkflowBindingEntity::getWorkflowId).distinct().toList())
                         .filter(WorkflowEntity::isActive)
                         .collectMap(WorkflowEntity::getId)
                         .flatMap(activeWorkflows -> {
                             Map<UUID, List<IssueType>> issueTypesByWorkflow = new LinkedHashMap<>();
-                            for (IssueType issueType : IssueType.values()) {
+                            for (IssueType issueType : allowedTypes) {
                                 findBoundWorkflow(bindings, activeWorkflows, projectId, issueType)
-                                        .or(() -> findBoundWorkflow(bindings, activeWorkflows, defaultProjectId, issueType))
+                                        .or(() -> findBoundWorkflow(bindings, activeWorkflows, defaultProjectId, IssueType.TASK))
                                         .ifPresent(workflowId -> issueTypesByWorkflow
                                                 .computeIfAbsent(workflowId, id -> new ArrayList<>())
                                                 .add(issueType));
@@ -63,7 +64,7 @@ public class ProjectWorkflowListService {
                                                     entry.getValue(),
                                                     isBoundTo(bindings, entry.getKey(), defaultProjectId))))
                                     .collectList();
-                        }));
+                        })));
     }
 
     private Optional<UUID> findBoundWorkflow(List<WorkflowBindingEntity> bindings, Map<UUID, WorkflowEntity> activeWorkflows,

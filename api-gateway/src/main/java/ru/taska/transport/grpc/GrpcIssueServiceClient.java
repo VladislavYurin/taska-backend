@@ -37,7 +37,6 @@ import ru.taska.domain.dto.IssueDetailsWithHistoryResponseDto;
 import ru.taska.domain.dto.IssueLinkResponseDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
@@ -484,7 +483,7 @@ public class GrpcIssueServiceClient {
      */
     public Mono<List<BoardIssueData>> listIssuesForBoard(
             String projectId,
-            IssueTypeDto issueType,
+            String issueType,
             String assigneeId,
             String labelId,
             Boolean includeDone,
@@ -507,6 +506,7 @@ public class GrpcIssueServiceClient {
                 .setIncludeDone(Boolean.TRUE.equals(includeDone))
                 .addAllDoneStatusKeys(doneStatusKeys);
 
+        if (issueType != null) requestBodyBuilder.setIssueTypeKey(issueType);
         if (assigneeId != null && !assigneeId.isBlank()) {
             requestBodyBuilder.setAssigneeId(assigneeId);
         }

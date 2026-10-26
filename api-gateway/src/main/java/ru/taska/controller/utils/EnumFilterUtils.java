@@ -2,7 +2,6 @@ package ru.taska.controller.utils;
 
 import org.springframework.web.server.ServerWebExchange;
 import ru.taska.domain.dto.IssuePriorityDto;
-import ru.taska.domain.dto.IssueTypeDto;
 
 /**
  * Утилиты для определения неизвестных значений enum-фильтров из query-параметров.
@@ -30,7 +29,7 @@ public final class EnumFilterUtils {
     public static boolean hasUnknownFilter(
             ServerWebExchange exchange,
             IssuePriorityDto priority,
-            IssueTypeDto issueType
+            String issueType
     ) {
         return isUnknownFilter(exchange, PRIORITY_PARAMETER, priority)
                 || isUnknownFilter(exchange, ISSUE_TYPE_PARAMETER, issueType);

@@ -26,7 +26,6 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.CreateWorkflowRequestDto;
 import ru.taska.domain.dto.CreateWorkflowStatusRequestDto;
 import ru.taska.domain.dto.CreateWorkflowTransitionRequestDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.ProjectWorkflowDto;
 import ru.taska.domain.dto.ProjectWorkflowsResponseDto;
 import ru.taska.domain.dto.WorkflowResponseDto;
@@ -53,7 +52,7 @@ import java.util.UUID;
 public class WorkflowMapper {
     public ProjectWorkflowDto toMutationResponseRestDto(WorkflowResponse response) {
         return toProjectWorkflowDto(ProjectWorkflow.newBuilder().setWorkflow(response)
-                .addAllIssueTypes(response.getIssueTypesList()).setIsShared(response.getIsShared()).build());
+                .addAllIssueTypes(response.getIssueTypesList()).addAllIssueTypeKeys(response.getIssueTypeKeysList()).setIsShared(response.getIsShared()).build());
     }
 
     private static final String STATUS_CATEGORY_PREFIX = "STATUS_CATEGORY_";
@@ -70,7 +69,7 @@ public class WorkflowMapper {
      */
     public GetWorkflowForProjectRequest toGetWorkflowGrpcRequest(
             UUID projectId,
-            IssueTypeDto issueTypeDto,
+            String issueTypeDto,
             GatewayContext context
     ) {
         return GetWorkflowForProjectRequest.newBuilder()
@@ -81,6 +80,7 @@ public class WorkflowMapper {
                 .setBody(GetWorkflowForProjectRequestBody.newBuilder()
                         .setProjectId(projectId.toString())
                         .setIssueType(toGrpcIssueType(issueTypeDto))
+                        .setIssueTypeKey(issueTypeDto)
                         .setActorUserId(context.userContext().userId()))
                 .build();
 
@@ -105,6 +105,7 @@ public class WorkflowMapper {
                         .setProjectId(projectId.toString())
                         .setName(request.getName())
                         .addAllIssueTypes(request.getIssueTypes().stream().map(this::toGrpcIssueType).toList())
+                        .addAllIssueTypeKeys(request.getIssueTypes())
                         .addAllStatuses(request.getStatuses().stream().map(this::toGrpcStatusCreateRequest).toList())
                         .addAllTransitions(request.getTransitions().stream().map(this::toGrpcTransitionCreateRequest).toList())
                         .setActorUserId(context.userContext().userId()))
@@ -286,10 +287,9 @@ public class WorkflowMapper {
         ProjectWorkflowDto dto = new ProjectWorkflowDto();
 
         dto.setWorkflow(toWorkflowResponseRestDto(projectWorkflow.getWorkflow()));
-        dto.setIssueTypes(projectWorkflow.getIssueTypesList().stream()
-                .map(this::toRestIssueType)
-                .filter(Objects::nonNull)
-                .toList());
+        dto.setIssueTypes(projectWorkflow.getIssueTypeKeysCount() > 0
+                ? projectWorkflow.getIssueTypeKeysList().stream().map(key -> ru.taska.domain.IssueType.valueOf(key).name()).toList()
+                : projectWorkflow.getIssueTypesList().stream().map(this::toRestIssueType).toList());
         dto.setShared(projectWorkflow.getIsShared());
 
         return dto;
@@ -322,13 +322,12 @@ public class WorkflowMapper {
         };
     }
 
-    // Тип, которого REST-контракт не знает, не отдаётся: так же workflow-service молчит о непривязанных типах.
-    private IssueTypeDto toRestIssueType(IssueType issueType) {
+    private String toRestIssueType(IssueType issueType) {
         return switch (issueType) {
-            case ISSUE_TYPE_TASK -> IssueTypeDto.TASK;
-            case ISSUE_TYPE_BUG -> IssueTypeDto.BUG;
-            case ISSUE_TYPE_STORY -> IssueTypeDto.STORY;
-            default -> null;
+            case ISSUE_TYPE_TASK -> "TASK";
+            case ISSUE_TYPE_BUG -> "BUG";
+            case ISSUE_TYPE_STORY -> "STORY";
+            default -> throw new IllegalStateException("Workflow response has no issue type key");
         };
     }
 
@@ -356,11 +355,12 @@ public class WorkflowMapper {
      * @param issueTypeDto тип задачи из REST API
      * @return соответствующее значение {@link IssueType}
      */
-    public IssueType toGrpcIssueType(IssueTypeDto issueTypeDto) {
+    public IssueType toGrpcIssueType(String issueTypeDto) {
         return switch (issueTypeDto) {
-            case TASK -> IssueType.ISSUE_TYPE_TASK;
-            case BUG -> IssueType.ISSUE_TYPE_BUG;
-            case STORY -> IssueType.ISSUE_TYPE_STORY;
+            case "TASK" -> IssueType.ISSUE_TYPE_TASK;
+            case "BUG" -> IssueType.ISSUE_TYPE_BUG;
+            case "STORY" -> IssueType.ISSUE_TYPE_STORY;
+            default -> IssueType.ISSUE_TYPE_UNSPECIFIED;
         };
     }
 }

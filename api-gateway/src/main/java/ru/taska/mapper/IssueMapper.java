@@ -52,7 +52,6 @@ import ru.taska.domain.dto.IssueLinkTypeDto;
 import ru.taska.domain.dto.IssuePriorityDto;
 import ru.taska.domain.dto.IssueResponseDto;
 import ru.taska.domain.dto.IssueShortResponseDto;
-import ru.taska.domain.dto.IssueTypeDto;
 import ru.taska.domain.dto.IssueWithHistoryResponseDto;
 import ru.taska.domain.dto.ListIssueLinksResponseDto;
 import ru.taska.domain.dto.ListIssuesResponseDto;
@@ -91,7 +90,7 @@ public class IssueMapper {
         restDto.setProjectId(protoDto.getProjectId());
         restDto.setIssueNumber(protoDto.getIssueNumber());
         restDto.setIssueKey(protoDto.getIssueKey());
-        restDto.setIssueType(toIssueTypeDto(protoDto.getIssueType()));
+        restDto.setIssueType(toIssueTypeDto(protoDto.hasIssueTypeKey(), protoDto.getIssueTypeKey(), protoDto.getIssueType()));
         restDto.setSummary(protoDto.getSummary());
         restDto.setDescription(protoDto.getDescription());
         restDto.setStatus(protoDto.getStatusKey());
@@ -154,7 +153,7 @@ public class IssueMapper {
         restDto.setId(protoDto.getId());
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setSummary(protoDto.getSummary());
-        restDto.setIssueType(toIssueTypeDto(protoDto.getIssueType()));
+        restDto.setIssueType(toIssueTypeDto(protoDto.hasIssueTypeKey(), protoDto.getIssueTypeKey(), protoDto.getIssueType()));
         restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
         restDto.setAssigneeId(protoDto.getAssigneeId());
         MappingUtils.setIfPresent(protoDto::hasStoryPoints, protoDto::getStoryPoints, restDto::setStoryPoints);
@@ -211,7 +210,7 @@ public class IssueMapper {
         restDto.setId(UUID.fromString(protoDto.getId()));
         restDto.setIssueKey(protoDto.getIssueKey());
         restDto.setSummary(protoDto.getSummary());
-        restDto.setIssueType(IssueTypeDto.fromValue(toRestIssueType(protoDto.getIssueType())));
+        restDto.setIssueType(toIssueTypeDto(protoDto.hasIssueTypeKey(), protoDto.getIssueTypeKey(), protoDto.getIssueType()));
         restDto.setPriority(IssuePriorityDto.fromValue(toRestIssuePriority(protoDto.getPriority())));
         restDto.setStatusKey(protoDto.getStatusKey());
         restDto.setVersion(protoDto.getVersion());
@@ -279,6 +278,7 @@ public class IssueMapper {
     }
 
     public IssueType toGrpcIssueType(String restIssueType) {
+        if (restIssueType == null) return IssueType.ISSUE_TYPE_UNSPECIFIED;
         return switch (restIssueType) {
             case "TASK" -> IssueType.ISSUE_TYPE_TASK;
             case "BUG" -> IssueType.ISSUE_TYPE_BUG;
@@ -301,16 +301,7 @@ public class IssueMapper {
         };
     }
 
-    public IssueType toGrpcIssueType(IssueTypeDto issueType) {
-        if (issueType == null) {
-            return IssueType.ISSUE_TYPE_UNSPECIFIED;
-        }
-        return switch (issueType) {
-            case TASK -> IssueType.ISSUE_TYPE_TASK;
-            case BUG -> IssueType.ISSUE_TYPE_BUG;
-            case STORY -> IssueType.ISSUE_TYPE_STORY;
-        };
-    }
+
 
     public IssuePriority toGrpcIssuePriority(String restIssuePriority) {
         return switch (restIssuePriority) {
@@ -414,6 +405,7 @@ public class IssueMapper {
 
         MappingUtils.setIfPresent(request.getPriority(),this::toGrpcIssuePriority,bodyBuilder::setPriority);
         MappingUtils.setIfPresent(request.getIssueType(),this::toGrpcIssueType,bodyBuilder::setIssueType);
+        MappingUtils.setIfPresent(request.getIssueType(), bodyBuilder::setIssueTypeKey);
 
         MappingUtils.setIfPresent(request.getPage(), bodyBuilder::setPage);
         MappingUtils.setIfPresent(request.getPageSize(), bodyBuilder::setPageSize);
@@ -454,6 +446,7 @@ public class IssueMapper {
         bodyBuilder.setIdempotencyKey(IdempotencyKey)
                    .setProjectId(projectId)
                    .setIssueType(toGrpcIssueType(request.getIssueType()))
+                   .setIssueTypeKey(request.getIssueType())
                    .setSummary(request.getSummary())
                    .setDescription(request.getDescription())
                    .setPriority(toGrpcIssuePriority(request.getPriority()))
@@ -520,6 +513,14 @@ public class IssueMapper {
             bodyBuilder.setSummary(requireNotCleared(body.getSummary().value(), "summary"));
         }
 
+        if (body.getIssueType().present()) {
+            String key = requireNotCleared(body.getIssueType().value(), "issueType");
+            try {
+                bodyBuilder.setIssueTypeKey(ru.taska.domain.IssueType.valueOf(key).name());
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid issue type key");
+            }
+        }
         if (body.getPriority().present()) {
             bodyBuilder.setPriority(toGrpcIssuePriority(requireNotCleared(body.getPriority().value(), "priority")));
         }
@@ -634,15 +635,15 @@ public class IssueMapper {
     }
 
     /**
-     * Безопасно преобразует строку в IssueTypeDto.
+     * Безопасно преобразует строку в String.
      * Возвращает null если строка null или невалидна.
      */
-    public IssueTypeDto safeParseIssueType(String value) {
+    public String safeParseIssueType(String value) {
         if (value == null) {
             return null;
         }
         try {
-            return IssueTypeDto.valueOf(value.toUpperCase());
+            return ru.taska.domain.IssueType.valueOf(value).name();
         } catch (IllegalArgumentException e) {
             log.warn("Invalid issueType value: {}, ignoring", value);
             return null;
@@ -676,7 +677,7 @@ public class IssueMapper {
         }
 
         restIssue.setPriority(toIssuePriorityDto(protoIssue.getPriority()));
-        restIssue.setIssueType(toIssueTypeDto(protoIssue.getIssueType()));
+        restIssue.setIssueType(toIssueTypeDto(protoIssue.hasIssueTypeKey(), protoIssue.getIssueTypeKey(), protoIssue.getIssueType()));
         restIssue.setCreatedAt(MappingUtils.toOffsetDateTime(protoIssue.getCreatedAt()));
         restIssue.setUpdatedAt(MappingUtils.toOffsetDateTime(protoIssue.getUpdatedAt()));
 
@@ -717,11 +718,12 @@ public class IssueMapper {
         return protoIssue.getIssueLinksList().stream().map(this::toRestIssueLinkResponse).toList();
     }
 
-    private IssueTypeDto toIssueTypeDto(IssueType issueType) {
+    private String toIssueTypeDto(boolean hasKey, String key, IssueType issueType) {
+        if (hasKey) return ru.taska.domain.IssueType.valueOf(key).name();
         return switch (issueType) {
-            case ISSUE_TYPE_TASK -> IssueTypeDto.TASK;
-            case ISSUE_TYPE_BUG -> IssueTypeDto.BUG;
-            case ISSUE_TYPE_STORY -> IssueTypeDto.STORY;
+            case ISSUE_TYPE_TASK -> "TASK";
+            case ISSUE_TYPE_BUG -> "BUG";
+            case ISSUE_TYPE_STORY -> "STORY";
             default ->  throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Unknown issue type: " + issueType
@@ -774,7 +776,7 @@ public class IssueMapper {
             String assigneeId,
             String reporterId,
             IssuePriorityDto priority,
-            IssueTypeDto issueType,
+            String issueType,
             Integer page,
             Integer pageSize
     ) {

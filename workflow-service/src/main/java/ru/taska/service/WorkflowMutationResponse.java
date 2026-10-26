@@ -32,8 +32,9 @@ public class WorkflowMutationResponse {
                         case "TASK" -> IssueType.ISSUE_TYPE_TASK;
                         case "BUG" -> IssueType.ISSUE_TYPE_BUG;
                         case "STORY" -> IssueType.ISSUE_TYPE_STORY;
-                        default -> throw new IllegalStateException("Unsupported issue type: " + b.getIssueType());
+                        default -> IssueType.ISSUE_TYPE_UNSPECIFIED;
                     }));
+                    builder.addAllIssueTypeKeys(data.getT1().stream().map(b -> b.getIssueType()).toList());
                     return builder.setIsShared(false).build();
                 });
     }

@@ -15,7 +15,7 @@ import ru.taska.api.workflow.v1.AddWorkflowStatusRequest;
 import ru.taska.api.workflow.v1.AddWorkflowTransitionRequest;
 import ru.taska.api.workflow.v1.CreateWorkflowRequest;
 import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
-import ru.taska.api.workflow.v1.IssueType;
+import ru.taska.domain.IssueType;
 import ru.taska.api.workflow.v1.ListProjectWorkflowsRequest;
 import ru.taska.api.workflow.v1.ListProjectWorkflowsResponse;
 import ru.taska.api.workflow.v1.TransitionViolation;
@@ -51,7 +51,7 @@ public class GrpcWorkflowService{
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                        GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueType(), "body.issueType")
+                        validator.IssueTypeKeys.required(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType())
                 ))
                 .flatMap(t -> {
                     String requestId = t.getT1();
@@ -61,10 +61,11 @@ public class GrpcWorkflowService{
 
                     log.info("[{}][{}] getWorkflowForProject: projectId={}, issueType={}", requestId, nodeId, projectId, issueType);
 
-                    return workflowService.getWorkflow(projectId, workflowMapper.toDomainIssueType(issueType).name())
-                            .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()));
-                })
-                .map(workflowMapper::toWorkflowProto);
+                    return workflowService.getWorkflow(projectId, issueType.name())
+                            .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()))
+                            .map(workflowMapper::toWorkflowProto)
+                            .map(response -> response.toBuilder().addIssueTypeKeys(issueType.name()).build());
+                });
     }
 
     @TrackMetrics(counter = "workflow-service_get-validate-transition_grpc_counter",
@@ -80,7 +81,7 @@ public class GrpcWorkflowService{
                                     GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getActorUserId(), "body.actor_user_id"),
                                     GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueId(), "body.issue_snapshot.issue_id"),
                                     GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getIssueSnapshot().getProjectId(), "body.issue_snapshot.project_id"),
-                                    GrpcRequestValidators.requireSpecifiedOrInvalidArgument(req.getBody().getIssueSnapshot().getIssueType(), "body.issue_snapshot.issue_type"),
+                                    validator.IssueTypeKeys.required(req.getBody().getIssueSnapshot().hasIssueTypeKey(), req.getBody().getIssueSnapshot().getIssueTypeKey(), req.getBody().getIssueSnapshot().getIssueType()),
                                     GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getBody().getIssueSnapshot().getStatusKey(), "body.issue_snapshot.status_key")
                             )
                             .map(tuple8 -> Tuples.of(tuple8, req.getBody().getPayload()))
@@ -110,7 +111,7 @@ public class GrpcWorkflowService{
                                                 requestId,
                                                 nodeId,
                                                 projectId,
-                                                workflowMapper.toDomainIssueType(issueType).name(),
+                                                issueType.name(),
                                                 UUID.fromString(transitionId),
                                                 currentStatusKey,
                                                 payload,
@@ -161,9 +162,11 @@ public class GrpcWorkflowService{
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
                                 GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId"),
-                                Flux.fromIterable(req.getBody().getIssueTypesList())
-                                        .flatMap(issueType -> GrpcRequestValidators.requireSpecifiedOrInvalidArgument(issueType, "body.issueTypes"))
-                                        .collectList()
+                                req.getBody().getIssueTypeKeysCount() > 0
+                                        ? Flux.fromIterable(req.getBody().getIssueTypeKeysList())
+                                            .concatMap(key -> validator.IssueTypeKeys.required(true, key, ru.taska.api.workflow.v1.IssueType.ISSUE_TYPE_UNSPECIFIED)).collectList()
+                                        : Flux.fromIterable(req.getBody().getIssueTypesList())
+                                            .concatMap(type -> validator.IssueTypeKeys.required(false, "", type)).collectList()
                         )
                         .flatMap(t -> {
                             String requestId = t.getT1();
@@ -246,13 +249,14 @@ public class GrpcWorkflowService{
                 .flatMap(req -> Mono.zip(
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                                 GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
-                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId")
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
+                                GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(), "body.actorUserId")
                         )
                         .doOnError(StatusRuntimeException.class,
                                 logValidationError(req.getHeader().getRequestId(), req.getHeader().getNodeId(), "listProjectWorkflows"))
                         .flatMap(t -> {
                             log.info("[{}][{}] listProjectWorkflows: projectId={}", t.getT1(), t.getT2(), t.getT3());
-                            return workflowService.listProjectWorkflows(t.getT3());
+                            return workflowService.listProjectWorkflows(t.getT1(), t.getT2(), t.getT3(), t.getT4());
                         }))
                 .map(workflowMapper::toListProjectWorkflowsProto);
     }

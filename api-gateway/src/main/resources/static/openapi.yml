@@ -4614,6 +4614,8 @@ components:
         В коде отображается на собственный класс ru.taska.domain.dto.PatchIssueRequestDto
         (schemaMappings в openapi-generator), который различает отсутствующее поле и явный null.
       properties:
+        issueType:
+          $ref: '#/components/schemas/IssueTypeDto'
         summary:
           type: string
           description: Краткое описание задачи. Не может быть null.
@@ -5563,10 +5565,9 @@ components:
 
     IssueTypeDto:
       type: string
-      enum:
-        - TASK
-        - BUG
-        - STORY
+      pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      description: Stable key from the project issue type registry.
+      example: REQUEST
 
     IssuePriorityDto:
       type: string

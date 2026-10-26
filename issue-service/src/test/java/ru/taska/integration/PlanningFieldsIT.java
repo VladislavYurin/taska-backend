@@ -70,6 +70,15 @@ class PlanningFieldsIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        Mockito.when(projectServiceStub.getProjectInfoBatchInternal(Mockito.any(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse.getDefaultInstance()));
+
+        Mockito.when(projectServiceStub.withDeadlineAfter(Mockito.anyLong(), Mockito.any())).thenReturn(projectServiceStub);
+        Mockito.when(projectServiceStub.listProjectIssueTypes(Mockito.any(ru.taska.api.project.v1.ProjectIssueTypesRequest.class)))
+                .thenReturn(Mono.just(ru.taska.api.project.v1.ListProjectIssueTypesResponse.newBuilder()
+                        .addAllItems(java.util.List.of("TASK", "BUG", "STORY").stream().map(key ->
+                                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode(key).build()).toList()).build()));
+
         issueRepository.deleteAll().block();
 
         Mockito.when(projectServiceStub.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
