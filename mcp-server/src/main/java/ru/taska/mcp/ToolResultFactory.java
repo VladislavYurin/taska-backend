@@ -139,6 +139,7 @@ public class ToolResultFactory {
         .isError(error)
         .structuredContent(content)
         .addTextContent(text)
+        .addTextContent(mapper.writeValueAsString(content))
         .build();
   }
 
