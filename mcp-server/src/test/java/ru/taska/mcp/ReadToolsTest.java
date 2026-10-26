@@ -395,6 +395,43 @@ class ReadToolsTest {
   }
 
   @Test
+  void loggedTimeAndHistoryParticipantProfilesSurviveReviewedProjection() {
+    ((ObjectNode) responses.get("/api/v1/issues/" + ISSUE).get("issue"))
+        .put("timeSpentMinutes", 95);
+    var participant =
+        mapper
+            .createObjectNode()
+            .put("id", USER)
+            .put("displayName", "Former assignee")
+            .putNull("avatarUrl")
+            .put("email", "private@example.test")
+            .put("tokenId", ITEM);
+    ((ObjectNode) responses.get("/api/v1/issues/" + ISSUE))
+        .set(
+            "history",
+            mapper.valueToTree(
+                List.of(
+                    Map.of(
+                        "id",
+                        "history-1",
+                        "eventType",
+                        "ASSIGNED",
+                        "participants",
+                        Map.of(USER, participant)))));
+
+    var result = call("get_issue", Map.of("issue_key", "TAS-1"));
+
+    assertThat(result.isError()).isFalse();
+    var data = content(result).path("data");
+    assertThat(data.path("issue").path("timeSpentMinutes").asInt()).isEqualTo(95);
+    var profile = data.path("history").get(0).path("participants").path(USER);
+    assertThat(profile.path("displayName").asText()).isEqualTo("Former assignee");
+    assertThat(profile.path("avatarUrl").isNull()).isTrue();
+    assertThat(profile.has("email")).isFalse();
+    assertThat(profile.has("tokenId")).isFalse();
+  }
+
+  @Test
   void standardJsonSchemaTypeArrayRetainsRequiredNullField() {
     Map<String, Object> output =
         Map.of(

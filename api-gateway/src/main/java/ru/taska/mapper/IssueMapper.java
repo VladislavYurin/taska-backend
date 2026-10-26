@@ -100,6 +100,7 @@ public class IssueMapper {
         restDto.setCreatedAt(toOffsetDateTime(protoDto.getCreatedAt()));
         restDto.setUpdatedAt(toOffsetDateTime(protoDto.getUpdatedAt()));
         restDto.setVersion(protoDto.getVersion());
+        restDto.setTimeSpentMinutes(protoDto.getTimeSpentMinutes());
         restDto.setLabels(
                 protoDto.getLabelsList().stream()
                         .map(this::toRestIssueLabelResponseDto)
@@ -135,6 +136,8 @@ public class IssueMapper {
         }
         restDto.setOccurredAt(toOffsetDateTime(protoDto.getOccurredAt()));
         restDto.setPayload(parsePayload(protoDto.getPayload()));
+        protoDto.getParticipantsMap().forEach((id, profile) ->
+                restDto.putParticipantsItem(id, userProfileMapper.toUserSummaryDto(profile)));
 
         return restDto;
     }
@@ -679,6 +682,7 @@ public class IssueMapper {
         restIssue.setSummary(protoIssue.getSummary());
         restIssue.setStatus(protoIssue.getStatus());
         restIssue.setVersion(protoIssue.getVersion());
+        restIssue.setTimeSpentMinutes(protoIssue.getTimeSpentMinutes());
         restIssue.setCommentCount(protoIssue.getCommentCount());
         restIssue.setIsWatching(protoIssue.getIsWatching());
         restIssue.reporterId(UUID.fromString(protoIssue.getReporterId()));

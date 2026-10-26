@@ -108,12 +108,10 @@ public class WorklogServiceImpl implements WorklogService {
                 .flatMap(issue -> {
                     var allowedRoles = issueProperties.allowedRoles().listWorklogRoles();
                     return projectRoleChecker.checkProjectRole(requestId, nodeId, issue.getProjectId(), actorUserId, allowedRoles)
-                            .then(Mono.defer(() -> Mono.zip(
-                                    worklogRepository.findActivePageByIssueId(issue.getId(), pageSize, offset).collectList(),
-                                    worklogRepository.countActiveByIssueId(issue.getId()))));
+                            .then(Mono.defer(() -> worklogRepository.findActivePageWithCount(issue.getId(), pageSize, offset)));
                 })
-                .flatMap(result -> getAuthorProfiles(result.getT1(), requestId, nodeId)
-                        .map(profiles -> new WorklogPage(result.getT1(), page, pageSize, result.getT2(), profiles)));
+                .flatMap(result -> getAuthorProfiles(result.items(), requestId, nodeId)
+                        .map(profiles -> new WorklogPage(result.items(), page, pageSize, result.totalCount(), profiles)));
     }
 
     private Mono<Map<UUID, UserSummary>> getAuthorProfiles(List<Worklog> items, String requestId, String nodeId) {

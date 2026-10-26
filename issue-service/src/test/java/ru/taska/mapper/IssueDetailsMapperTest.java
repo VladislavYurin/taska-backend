@@ -264,6 +264,31 @@ class IssueDetailsMapperTest {
         Assertions.assertFalse(result.getHistory(2).hasActor());
     }
 
+    @Test
+    void assignmentHistoryResolvesFormerAssigneesAndIgnoresUserTextUUIDs() {
+        UUID previous = UUID.randomUUID(), next = UUID.randomUUID(), textOnly = UUID.randomUUID();
+        var core = createCoreDetails(UUID.randomUUID(), null, UUID.randomUUID());
+        core.issue().setTimeSpentMinutes(75);
+        var event = createHistory(core.issue().getId(), null);
+        event.setEventType(IssueEventType.ASSIGNED);
+        var payload = tools.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        payload.put("previousAssigneeId", previous.toString());
+        payload.put("assigneeId", next.toString());
+        payload.put("body", textOnly.toString());
+        event.setPayload(payload);
+        var sources = new IssueDetailsSources(core, FetchResult.failed(), FetchResult.failed(),
+                FetchResult.failed(), FetchResult.failed(), List.of(event));
+        Assertions.assertTrue(sources.extractUserIds().containsAll(List.of(previous, next)));
+        Assertions.assertFalse(sources.extractUserIds().contains(textOnly));
+        var result = mapper.toProto(new IssueDetailsAggregate(sources, Map.of(
+                previous, new UserSummary(previous, "Former assignee", null),
+                next, new UserSummary(next, "Next assignee", null))));
+        Assertions.assertEquals(75, result.getIssue().getTimeSpentMinutes());
+        Assertions.assertEquals("Former assignee", result.getHistory(0).getParticipantsOrThrow(previous.toString()).getDisplayName());
+        Assertions.assertEquals("Next assignee", result.getHistory(0).getParticipantsOrThrow(next.toString()).getDisplayName());
+        Assertions.assertEquals(2, result.getHistory(0).getParticipantsCount());
+    }
+
     private IssueCoreDetails createCoreDetails(UUID id, UUID assigneeId, UUID reporterId) {
         Issue issue = new Issue();
         issue.setId(id);

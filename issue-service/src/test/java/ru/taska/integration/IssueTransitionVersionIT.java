@@ -84,6 +84,18 @@ class IssueTransitionVersionIT extends AbstractIT {
     }
 
     @Test
+    void absentIfMatchPinsTheVersionWhoseSourceStatusWasValidated() {
+        Mockito.when(validator.validateTransition(anyString(), anyString(), any(), any(), any(), anyString()))
+                .thenReturn(Mono.defer(() -> database.sql(
+                        "UPDATE taska.issues SET status_key='DONE', version=version+1 WHERE id=:id")
+                        .bind("id", issueId).then().thenReturn("IN_PROGRESS")));
+        StepVerifier.create(transition(null)).expectErrorSatisfies(error -> assertConflict(error, 2, "DONE")).verify();
+        assertThat(repository.findById(issueId).block().getStatusKey()).isEqualTo("DONE");
+        assertEvents(0);
+        Mockito.verify(validator).validateTransition(anyString(), anyString(), any(), any(), any(), anyString());
+    }
+
+    @Test
     void twoWritersWithSameVersionOnlyOneCommits() {
         // Both requests read version 1 and validate it before either enters the transaction.
         Sinks.One<Void> bothValidated = Sinks.one();

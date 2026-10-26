@@ -1487,6 +1487,9 @@ message IssueHistoryResponse {
   optional ru.taska.common.v1.UserSummaryResponse actor = 7;
   // Public attribution; internal token id/name are never exported.
   optional string channel = 8;
+  // Profiles referenced by server-owned history payload UUIDs, including former project members.
+  map<string, ru.taska.common.v1.UserSummaryResponse> participants = 9;
+
 }
 
 /**
@@ -2484,6 +2487,9 @@ message IssueDetailsResponse {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   optional string issue_type_key = 28;
+  // Total active logged minutes, independent of worklog pagination.
+  int32 time_spent_minutes = 29;
+
 }
 
 /**

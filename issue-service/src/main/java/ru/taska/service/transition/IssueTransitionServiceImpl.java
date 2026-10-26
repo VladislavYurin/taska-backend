@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 import ru.taska.config.props.IssueProperties;
 import ru.taska.domain.dto.IssueWithHistory;
 import ru.taska.domain.dto.ProjectRole;
@@ -37,8 +36,8 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
      * Валидирует правила перехода задачи по workflow через {@link IssueTransitionValidator}.
      * В случае успешной валидации передает выполнение перехода задачи по workflow
      * в транзакционный блок {@link IssueTransitionExecutor#executeTransition}.
-     * Без ожидаемой версии при конкурентной модификации повторяет транзакционный блок без
-     * повторного вызова внешних gRPC проверок. Явный конфликт версии возвращает вызывающему клиенту.
+     * The transaction compares the version whose source status was validated, even without If-Match.
+     * A concurrent change returns a conflict instead of replaying an already validated transition.
      */
     @Override
     public Mono<IssueWithHistory> transitionIssue(
@@ -70,22 +69,11 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
                     }
                     return Mono.just(issue);
                 })
-                .flatMap(issue ->
-                        issueTransitionValidator.validateTransition(requestId, nodeId, issue, transitionId, actorUserId, payload)
-                )
-                .flatMap(targetStatus -> {
-                    Mono<IssueWithHistory> transition = Mono.defer(() -> issueTransitionExecutor.executeTransition(
-                            requestId, nodeId, issueId, targetStatus, transitionId, actorUserId, expectedVersion));
-                    // A caller's explicit precondition must never be retried against a newer version.
-                    return expectedVersion != null ? transition : transition.retryWhen(
-                            Retry.backoff(issueProperties.retry().maxAttempts(), issueProperties.retry().minBackoff())
-                                    .filter(this::isRetryable)
-                                    .onRetryExhaustedThrow((spec, signal) -> signal.failure()));
-                });
-    }
-
-    private boolean isRetryable(Throwable t) {
-        return t instanceof DomainException ex && ex.getStatus() == DomainStatus.ABORTED;
+                .flatMap(issue -> issueTransitionValidator
+                        .validateTransition(requestId, nodeId, issue, transitionId, actorUserId, payload)
+                        .flatMap(targetStatus -> issueTransitionExecutor.executeTransition(
+                                requestId, nodeId, issueId, targetStatus, transitionId, actorUserId,
+                                expectedVersion != null ? expectedVersion : issue.getVersion())));
     }
 
 }

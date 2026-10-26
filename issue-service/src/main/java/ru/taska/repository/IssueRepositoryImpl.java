@@ -320,7 +320,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         }
 
         return r2dbcEntityTemplate.getDatabaseClient()
-                .sql("SELECT issue_id, label_id FROM taska.issue_labels WHERE issue_id IN (:issueIds) ORDER BY issue_id, created_at, label_id")
+                .sql("SELECT il.issue_id, il.label_id FROM taska.issue_labels il JOIN taska.project_labels pl ON pl.id=il.label_id WHERE il.issue_id IN (:issueIds) AND pl.deleted_at IS NULL ORDER BY il.issue_id, pl.name ASC, pl.id ASC")
                 .bind("issueIds", issueIds)
                 .map((row, meta) -> new AbstractMap.SimpleEntry<>(
                         row.get("issue_id", UUID.class),

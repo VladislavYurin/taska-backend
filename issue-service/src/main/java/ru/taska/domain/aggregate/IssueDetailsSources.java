@@ -67,6 +67,7 @@ public record IssueDetailsSources(
                     .map(IssueHistory::getActorUserId)
                     .filter(Objects::nonNull)
                     .forEach(userIds::add);
+            history.forEach(event -> userIds.addAll(ru.taska.util.HistoryParticipants.ids(event.getPayload())));
         }
 
         return userIds;

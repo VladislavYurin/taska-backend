@@ -215,15 +215,14 @@ class IssueTransitionServiceImplTest {
     }
 
     @Test
-    @DisplayName("Retry должен сработать только для executor при попытке конкурентной смене статуса")
-    void transitionIssue_shouldRetryOnlyExecutor_whenOptimisticLockConflict() {
+    @DisplayName("A concurrent change must not replay a validated transition")
+    void transitionIssue_shouldReturnConflictWithoutReplayingValidatedTransition() {
         var issue = Issue.builder()
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
                 .statusKey(SOURCE_STATUS_KEY)
+                .version(1)
                 .build();
-
-        var expectedResponse = Mockito.mock(IssueWithHistory.class);
 
         Mockito.when(issueRepository.findActiveById(Mockito.any(UUID.class)))
                 .thenReturn(Mono.just(issue));
@@ -257,16 +256,9 @@ class IssueTransitionServiceImplTest {
                         Mockito.anyString(),
                         Mockito.any(UUID.class),
                         Mockito.any(UUID.class),
-                        Mockito.isNull()
+                        Mockito.eq(1)
                 ))
-                .thenReturn(Mono.error(new DomainException(DomainStatus.ABORTED, "Issue status was modified concurrently")),
-                        Mono.just(expectedResponse));
-
-        Mockito.when(issueProperties.retry().maxAttempts())
-                .thenReturn(2);
-
-        Mockito.when(issueProperties.retry().minBackoff())
-                .thenReturn(Duration.ofMillis(1));
+                .thenReturn(Mono.error(new DomainException(DomainStatus.ABORTED, "Issue status was modified concurrently")));
 
         StepVerifier.create(processor.transitionIssue(
                         REQUEST_ID,
@@ -277,8 +269,10 @@ class IssueTransitionServiceImplTest {
                         PAYLOAD,
                         null
                 ))
-                .expectNext(expectedResponse)
-                .verifyComplete();
+                .expectErrorSatisfies(error -> Assertions.assertThat(error)
+                        .isInstanceOfSatisfying(DomainException.class, failure ->
+                                Assertions.assertThat(failure.getStatus()).isEqualTo(DomainStatus.ABORTED)))
+                .verify();
 
         Mockito.verify(issueRepository, Mockito.times(1))
                 .findActiveById(ISSUE_ID);
@@ -289,8 +283,8 @@ class IssueTransitionServiceImplTest {
         Mockito.verify(validator, Mockito.times(1))
                 .validateTransition(REQUEST_ID, NODE_ID, issue, TRANSITION_ID, ACTOR_USER_ID, PAYLOAD);
 
-        Mockito.verify(executor, Mockito.times(2))
-                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, null);
+        Mockito.verify(executor, Mockito.times(1))
+                .executeTransition(REQUEST_ID, NODE_ID, ISSUE_ID, TARGET_STATUS_KEY, TRANSITION_ID, ACTOR_USER_ID, 1);
     }
 
     @Test
