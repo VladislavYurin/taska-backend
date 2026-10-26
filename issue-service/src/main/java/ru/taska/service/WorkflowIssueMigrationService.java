@@ -38,7 +38,7 @@ public class WorkflowIssueMigrationService {
             if (types.isEmpty() || validStatuses.isEmpty()
                     || types.stream().anyMatch(t -> !t.matches("^[A-Z][A-Z0-9_]{1,31}$"))
                     || validStatuses.stream().anyMatch(s -> !s.matches("^[A-Z][A-Z0-9_]{1,63}$"))
-                    || mapping.values().stream().anyMatch(v -> !v.isEmpty() && !validStatuses.contains(v))) {
+                    || mapping.values().stream().anyMatch(v -> !validStatuses.contains(v))) {
                 return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid workflow migration scope or target status"));
             }
             return projects.checkProjectRole(requestId, nodeId, project, actor)

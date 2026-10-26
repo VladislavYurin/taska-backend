@@ -109,6 +109,59 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
                 .map((r, m) -> r.get("name", String.class)).one().block()).isEqualTo("Test");
     }
 
+    @Test
+    void statusDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
+        var migrated = new java.util.concurrent.atomic.AtomicBoolean();
+        var movedCount = new java.util.concurrent.atomic.AtomicInteger();
+        when(issues.migrate(any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+            if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
+            return 0L;
+        }));
+        databaseClient.sql("ALTER TABLE taska.workflows ADD CONSTRAINT mutation_retry_test CHECK (id <> '" + workflow + "'::uuid OR version=1)")
+                .fetch().rowsUpdated().block();
+        try {
+            reactor.test.StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(null, review, "DONE")))
+                    .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+            assertThat(databaseClient.sql("SELECT version FROM taska.workflows WHERE id=:id").bind("id", workflow)
+                    .map((r, m) -> r.get("version", Integer.class)).one().block()).isEqualTo(1);
+            assertThat(databaseClient.sql("SELECT count(*) AS n FROM taska.statuses WHERE id=:id").bind("id", review)
+                    .map((r, m) -> r.get("n", Long.class)).one().block()).isEqualTo(1);
+        } finally {
+            databaseClient.sql("ALTER TABLE taska.workflows DROP CONSTRAINT mutation_retry_test").fetch().rowsUpdated().block();
+        }
+        var result = service.mutate(Operation.DELETE_STATUS, command(null, review, "DONE")).block();
+        assertThat(result.workflow().workflow().getVersion()).isEqualTo(2);
+        assertThat(result.workflow().statuses()).noneMatch(status -> status.getId().equals(review));
+        assertThat(movedCount.get()).isEqualTo(1);
+        verify(issues, times(2)).migrate(any(), any(), any(), any());
+    }
+
+    @Test
+    void workflowDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
+        var migrated = new java.util.concurrent.atomic.AtomicBoolean();
+        var movedCount = new java.util.concurrent.atomic.AtomicInteger();
+        when(issues.migrate(any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+            if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
+            return 0L;
+        }));
+        databaseClient.sql("CREATE TABLE taska.workflow_retry_test (workflow_id uuid REFERENCES taska.workflows(id))")
+                .fetch().rowsUpdated().block();
+        databaseClient.sql("INSERT INTO taska.workflow_retry_test VALUES (:id)").bind("id", workflow).fetch().rowsUpdated().block();
+        try {
+            reactor.test.StepVerifier.create(service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)))
+                    .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+            assertThat(databaseClient.sql("SELECT version FROM taska.workflows WHERE id=:id").bind("id", workflow)
+                    .map((r, m) -> r.get("version", Integer.class)).one().block()).isEqualTo(1);
+            assertThat(databaseClient.sql("SELECT count(*) AS n FROM taska.workflow_bindings WHERE workflow_id=:id")
+                    .bind("id", workflow).map((r, m) -> r.get("n", Long.class)).one().block()).isEqualTo(1);
+        } finally {
+            databaseClient.sql("DROP TABLE taska.workflow_retry_test").fetch().rowsUpdated().block();
+        }
+        assertThat(service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block().shared()).isTrue();
+        assertThat(movedCount.get()).isEqualTo(1);
+        verify(issues, times(2)).migrate(any(), any(), any(), any());
+    }
+
     private WorkflowMutation command(String name, UUID status, String target) {
         return new WorkflowMutation("r", "n", actor, project, workflow, 1, status, null,
                 name, null, null, null, target, Map.of("REVIEW", "DONE"));

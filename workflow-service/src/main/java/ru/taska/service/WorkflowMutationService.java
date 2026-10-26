@@ -107,7 +107,8 @@ public class WorkflowMutationService {
             var changed = copy(current, current.workflow(), remainingStatuses, remainingTransitions);
             List<String> validKeys = remainingStatuses.stream().map(StatusEntity::getStatusKey).toList();
             if (c.targetStatusKey() != null && !validKeys.contains(c.targetStatusKey())) return invalid("Target status is not in this workflow");
-            Map<String, String> mapping = Map.of(old.getStatusKey(), c.targetStatusKey() == null ? "" : c.targetStatusKey());
+            Map<String, String> mapping = c.targetStatusKey() == null ? Map.of()
+                    : Map.of(old.getStatusKey(), c.targetStatusKey());
             return validate(changed, c)
                     .then(Mono.defer(() -> issues.migrate(c, current.issueTypes(), validKeys, mapping)))
                     .thenMany(Flux.fromIterable(current.transitions()).filter(t -> !remainingTransitions.contains(t))

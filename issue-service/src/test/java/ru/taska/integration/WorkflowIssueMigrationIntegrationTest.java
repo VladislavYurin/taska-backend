@@ -135,6 +135,16 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
                 .verify();
     }
 
+    @Test
+    void emptyMappingTargetIsInvalidAndDoesNotChangeIssue() {
+        var one = issue(project, IssueType.TASK, 1);
+        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", ""), "r", "n"))
+                .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT))
+                .verify();
+        assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
+    }
+
     private Issue issue(UUID project, IssueType type, int number) {
         return repository.save(Issue.builder().projectId(project).issueNumber(number).issueKey(UUID.randomUUID().toString())
                 .summary("Migration").description("").statusKey("REVIEW").issueType(type).priority(IssuePriority.MEDIUM)
