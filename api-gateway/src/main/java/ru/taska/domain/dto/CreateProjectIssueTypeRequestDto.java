@@ -12,13 +12,18 @@ import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
 
+/** Absent or null icon creates a type without one; absent shape is left to the registry default (square). */
 @Getter
 public class CreateProjectIssueTypeRequestDto {
     @Setter @NotBlank @Pattern(regexp = "^[A-Z][A-Z0-9_]{1,31}$") private String code;
     @Setter @NotBlank @Size(max = 50) private String name;
     @Setter @NotNull private ProjectIssueTypeColorDto color;
-    @Setter @NotNull private ProjectIssueTypeIconDto icon;
+    private ProjectIssueTypeShapeDto shape;
+    @Setter private ProjectIssueTypeIconDto icon;
     @PositiveOrZero private Integer sortOrder = 100;
+
+    @JsonSetter(nulls = Nulls.FAIL)
+    public void setShape(ProjectIssueTypeShapeDto shape) { this.shape = shape; }
 
     @JsonSetter(nulls = Nulls.FAIL)
     public void setSortOrder(BigDecimal value) { sortOrder = value.intValueExact(); }

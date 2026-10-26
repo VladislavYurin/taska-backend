@@ -1,5 +1,6 @@
 package ru.taska.transport.grpc;
 
+import client.ProjectIssueTypes;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class GrpcProjectIssueTypeClient {
         var request = base(project, body.getCode(), context);
         if (body.getName() != null) request.setName(body.getName());
         if (body.getColor() != null) request.setColor(body.getColor().getValue());
+        if (body.getShape() != null) request.setShape(body.getShape().getValue());
         if (body.getIcon() != null) request.setIcon(body.getIcon().getValue());
         if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
         return dynamicStub().createProjectIssueType(request.build()).map(GrpcProjectIssueTypeClient::toRest);
@@ -41,7 +43,12 @@ public class GrpcProjectIssueTypeClient {
         var request = base(project, code, context);
         if (body.getName() != null) request.setName(body.getName());
         if (body.getColor() != null) request.setColor(body.getColor());
-        if (body.getIcon() != null) request.setIcon(body.getIcon());
+        if (body.getShape() != null) request.setShape(body.getShape());
+        // An explicit JSON null travels as clear_icon: an unset optional string already means "unchanged".
+        if (body.getIcon().present()) {
+            if (body.getIcon().value() == null) request.setClearIcon(true);
+            else request.setIcon(body.getIcon().value());
+        }
         if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
         return dynamicStub().updateProjectIssueType(request.build()).map(GrpcProjectIssueTypeClient::toRest);
     }
@@ -58,9 +65,11 @@ public class GrpcProjectIssueTypeClient {
     }
 
     public static ProjectIssueTypeDto toRest(ProjectIssueTypeResponse type) {
+        String icon = ProjectIssueTypes.icon(type);
         return new ProjectIssueTypeDto(type.getCode(), type.getName(),
-                ProjectIssueTypeColorDto.fromValue(type.getColor()), ProjectIssueTypeIconDto.fromValue(type.getIcon()),
-                type.getSortOrder());
+                ProjectIssueTypeColorDto.fromValue(type.getColor()),
+                ProjectIssueTypeShapeDto.fromValue(ProjectIssueTypes.shape(type)),
+                icon == null ? null : ProjectIssueTypeIconDto.fromValue(icon), type.getSortOrder());
     }
 
     private ChangeProjectIssueTypeRequest.Builder base(UUID project, String code, GatewayContext context) {

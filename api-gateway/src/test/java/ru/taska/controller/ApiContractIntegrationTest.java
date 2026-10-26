@@ -41,6 +41,20 @@ class ApiContractIntegrationTest {
                 .contains("PERSONAL_ACCESS_TOKEN_CREATED", "PERSONAL_ACCESS_TOKEN_REVOKED", "UNKNOWN");
         assertThat(schemas.get("CommentResponseDto").get("properties").get("updatedAt").get("nullable").asBoolean())
                 .isFalse();
+        // TAS-432: every registry entry has a shape; its icon is optional and explicit null clears it on PATCH.
+        var issueType = schemas.get("ProjectIssueTypeDto");
+        assertThat(issueType.get("required").toString()).contains("\"shape\"", "\"icon\"");
+        assertThat(issueType.get("properties").get("shape").get("$ref").asString())
+                .isEqualTo("#/components/schemas/ProjectIssueTypeShapeDto");
+        assertThat(issueType.get("properties").get("icon").get("nullable").asBoolean()).isTrue();
+        assertThat(schemas.get("ProjectIssueTypeShapeDto").get("enum").toString())
+                .isEqualTo("[\"square\",\"circle\",\"diamond\"]");
+        assertThat(schemas.get("CreateProjectIssueTypeRequestDto").get("required").toString())
+                .doesNotContain("icon", "shape");
+        assertThat(schemas.get("PatchProjectIssueTypeRequestDto").get("properties").get("icon").get("nullable").asBoolean())
+                .isTrue();
+        assertThat(schemas.get("PatchProjectIssueTypeRequestDto").get("properties").has("shape")).isTrue();
+        assertThat(schemas.get("IssueShortResponseDto").get("properties").has("issueTypeShape")).isTrue();
         var query = contract.get("paths").get("/api/v1/issues/search").get("get").get("parameters").get(0).get("schema");
         assertThat(query.get("minLength").asInt()).isEqualTo(3);
         assertThat(query.has("default")).isFalse();

@@ -171,6 +171,7 @@ public class IssueMapper {
         MappingUtils.setIfPresent(protoDto::hasIssueTypeName, protoDto::getIssueTypeName, restDto::setIssueTypeName);
         MappingUtils.setIfPresent(protoDto::hasIssueTypeColor, protoDto::getIssueTypeColor, restDto::setIssueTypeColor);
         MappingUtils.setIfPresent(protoDto::hasIssueTypeIcon, protoDto::getIssueTypeIcon, restDto::setIssueTypeIcon);
+        MappingUtils.setIfPresent(protoDto::hasIssueTypeShape, protoDto::getIssueTypeShape, restDto::setIssueTypeShape);
         return restDto;
     }
 

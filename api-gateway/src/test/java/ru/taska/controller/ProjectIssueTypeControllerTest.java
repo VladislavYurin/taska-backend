@@ -76,6 +76,66 @@ class ProjectIssueTypeControllerTest {
     }
 
     @Test
+    void typeWithoutIconIsServedWithExplicitNullIconAndItsShape() {
+        authenticated();
+        when(client.list(any(), any())).thenReturn(Mono.just(new ListProjectIssueTypesDto(List.of(new ProjectIssueTypeDto(
+                "BUG", "Bug", ProjectIssueTypeColorDto.RED, ProjectIssueTypeShapeDto.CIRCLE, null, 20)))));
+        http.get().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token").exchange()
+                .expectStatus().isOk().expectBody()
+                .jsonPath("$.items[0].shape").isEqualTo("circle")
+                .jsonPath("$.items[0]").value(java.util.Map.class, item -> org.assertj.core.api.Assertions
+                        .assertThat(item).containsEntry("icon", null));
+    }
+
+    @Test
+    void createWithoutShapeOrIconReachesRegistryAndInvalidShapeDoesNot() {
+        authenticated();
+        when(client.create(any(), any(), any())).thenReturn(Mono.just(type()));
+        for (String body : List.of("{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\"}",
+                "{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"icon\":null}",
+                "{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"shape\":\"diamond\",\"icon\":\"flag\"}")) {
+            http.post().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token").bodyValue(body)
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json").exchange().expectStatus().isCreated();
+        }
+        verify(client, times(3)).create(any(), any(), any());
+        clearInvocations(client);
+        for (String body : List.of("{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"shape\":\"hexagon\"}",
+                "{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"shape\":null}")) {
+            http.post().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token").bodyValue(body)
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json").exchange().expectStatus().isBadRequest();
+        }
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void patchNullIconReachesRegistryAsClearWhileNullShapeIsRefused() {
+        authenticated();
+        when(client.update(any(), any(), any(), any())).thenReturn(Mono.just(type()));
+        http.patch().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .bodyValue("{\"icon\":null,\"shape\":\"circle\"}").header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .exchange().expectStatus().isOk();
+        var captor = org.mockito.ArgumentCaptor.forClass(PatchProjectIssueTypeRequestDto.class);
+        verify(client).update(any(), any(), captor.capture(), any());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getIcon()).isEqualTo(nullable.NullableField.of(null));
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getShape()).isEqualTo("circle");
+        clearInvocations(client);
+        http.patch().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .bodyValue("{\"shape\":null}").header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .exchange().expectStatus().isBadRequest();
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void emptyPatchIsStillRefusedByRegistry() {
+        authenticated();
+        when(client.update(any(), any(), any(), any())).thenReturn(Mono.error(Status.INVALID_ARGUMENT
+                .withDescription("At least one field is required").asRuntimeException()));
+        http.patch().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .bodyValue("{}").header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("INVALID_ARGUMENT");
+    }
+
+    @Test
     void memberCannotModifyType() {
         authenticated();
         when(client.delete(any(), any(), any())).thenReturn(Mono.error(Status.PERMISSION_DENIED
@@ -128,7 +188,7 @@ class ProjectIssueTypeControllerTest {
 
     private ProjectIssueTypeDto type() {
         return new ProjectIssueTypeDto("REQUEST", "Заявка", ProjectIssueTypeColorDto.TEAL,
-                ProjectIssueTypeIconDto.HEADSET, 40);
+                ProjectIssueTypeShapeDto.SQUARE, ProjectIssueTypeIconDto.HEADSET, 40);
     }
 
     private void authenticated() {

@@ -153,6 +153,8 @@ class ResourceServiceTest {
                     "Задача",
                     "color",
                     "blue",
+                    "shape",
+                    "square",
                     "icon",
                     "check-square",
                     "sortOrder",
