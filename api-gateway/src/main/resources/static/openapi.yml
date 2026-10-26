@@ -2527,7 +2527,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkflowResponseDto'
+                $ref: '#/components/schemas/ProjectWorkflowDto'
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '401':
@@ -2583,7 +2583,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkflowResponseDto'
+                $ref: '#/components/schemas/ProjectWorkflowDto'
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '401':
@@ -2641,7 +2641,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkflowResponseDto'
+                $ref: '#/components/schemas/ProjectWorkflowDto'
         '400':
           $ref: '#/components/responses/ErrorResponse'
         '401':
@@ -3787,6 +3787,248 @@ paths:
               $ref: '#/components/headers/X-RequestId-Header'
             ETag:
               $ref: '#/components/headers/ETag-Header'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}:
+    patch:
+      operationId: updateProjectWorkflow
+      summary: Переименовать собственный workflow проекта
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchWorkflowRequestDto'
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteProjectWorkflow
+      summary: Удалить собственный workflow; несовместимые статусы задач требуют statusMappings
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteProjectWorkflowRequestDto'
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/statuses/{statusId}:
+    patch:
+      operationId: updateWorkflowStatus
+      summary: Изменить имя, категорию или порядок статуса
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: statusId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchWorkflowStatusRequestDto'
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteWorkflowStatus
+      summary: Удалить статус и связанные переходы; задачи можно перенести в targetStatusKey
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: statusId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - name: targetStatusKey
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,63}$'
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/projects/{projectId}/workflows/{workflowId}/transitions/{transitionId}:
+    patch:
+      operationId: updateWorkflowTransition
+      summary: Изменить имя, порядок или скрытие перехода
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: transitionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchWorkflowTransitionRequestDto'
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      operationId: deleteWorkflowTransition
+      summary: Удалить переход собственного workflow
+      tags: [workflow-mutation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: workflowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: transitionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+      responses:
+        '200':
+          description: Полный workflow после изменения или default после удаления собственного workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWorkflowDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -5623,6 +5865,79 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
+
+    PatchWorkflowRequestDto:
+      type: object
+      additionalProperties: false
+      description: Пропущенные поля не меняются; явный null запрещён. Нельзя менять ключ статуса и endpoints перехода.
+      properties:
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Ожидаемая версия workflow; конфликт возвращает 409 ABORTED.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    PatchWorkflowStatusRequestDto:
+      type: object
+      additionalProperties: false
+      description: Пропущенные поля не меняются; явный null запрещён. Нельзя менять ключ статуса и endpoints перехода.
+      properties:
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Ожидаемая версия workflow; конфликт возвращает 409 ABORTED.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category:
+          $ref: '#/components/schemas/WorkflowStatusCategoryDto'
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+
+    PatchWorkflowTransitionRequestDto:
+      type: object
+      additionalProperties: false
+      description: Пропущенные поля не меняются; явный null запрещён. Нельзя менять ключ статуса и endpoints перехода.
+      properties:
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Ожидаемая версия workflow; конфликт возвращает 409 ABORTED.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        sortOrder:
+          type: integer
+          format: int32
+          minimum: 0
+        hidden:
+          type: boolean
+
+    DeleteProjectWorkflowRequestDto:
+      type: object
+      additionalProperties: false
+      description: Пропущенные поля не меняются; явный null запрещён. Нельзя менять ключ статуса и endpoints перехода.
+      properties:
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Ожидаемая версия workflow; конфликт возвращает 409 ABORTED.
+        statusMappings:
+          type: object
+          additionalProperties:
+            type: string
+          description: Исходный ключ статуса → ключ статуса общего default workflow. Целевой ключ также должен присутствовать в текущем workflow; при необходимости сначала добавьте его.
 
     ProjectWorkflowDto:
       type: object

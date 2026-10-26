@@ -97,8 +97,9 @@ class WorkflowEditServiceTest {
         lenient().when(projectRoleChecker.checkProjectWriteRole(anyString(), anyString(), any(UUID.class), any(UUID.class), anySet()))
                 .thenReturn(Mono.empty());
         // Первое чтение — перед изменением, второе — после атомарного увеличения версии.
+        lenient().when(workflowRepository.findByIdForUpdate(WORKFLOW_ID)).thenReturn(Mono.just(workflow));
         lenient().when(workflowRepository.findById(WORKFLOW_ID))
-                .thenReturn(Mono.just(workflow), Mono.just(workflow.toBuilder().version(2).build()));
+                .thenReturn(Mono.just(workflow.toBuilder().version(2).build()));
         lenient().when(workflowRepository.incrementVersion(WORKFLOW_ID)).thenReturn(Mono.just(1));
         lenient().when(bindingRepository.findByWorkflowId(WORKFLOW_ID))
                 .thenReturn(Flux.just(binding(PROJECT_ID, "TASK")));
@@ -197,7 +198,7 @@ class WorkflowEditServiceTest {
     @Test
     void addStatus_UnknownWorkflow_ShouldReturnNotFound() {
         UUID unknownWorkflowId = UUID.randomUUID();
-        when(workflowRepository.findById(unknownWorkflowId)).thenReturn(Mono.empty());
+        when(workflowRepository.findByIdForUpdate(unknownWorkflowId)).thenReturn(Mono.empty());
 
         StepVerifier.create(service.addStatus(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, unknownWorkflowId,
                         statusDto("CODE_REVIEW", 25)))
@@ -207,7 +208,7 @@ class WorkflowEditServiceTest {
 
     @Test
     void addStatus_InactiveWorkflow_ShouldReturnNotFound() {
-        when(workflowRepository.findById(WORKFLOW_ID)).thenReturn(Mono.just(WorkflowEntity.builder()
+        when(workflowRepository.findByIdForUpdate(WORKFLOW_ID)).thenReturn(Mono.just(WorkflowEntity.builder()
                 .id(WORKFLOW_ID)
                 .name("Project workflow")
                 .version(1)
