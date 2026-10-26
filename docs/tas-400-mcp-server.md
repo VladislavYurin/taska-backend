@@ -20,7 +20,7 @@ Production URL задаётся конфигурацией; существова
 ## Версии и транспорт
 
 Фаза 1: Java 21, существующий Spring Boot **4.0.3**, BOM Spring AI **2.0.2**, MCP Java SDK **2.1.0** из этого BOM, `spring-ai-starter-mcp-server-webflux`.
-Настройки: `spring.ai.mcp.server.protocol=STATELESS`, `type=ASYNC`, `stateless.mcp-endpoint=/mcp`, serverInfo `taska`, version `1.0.0`.
+Настройки: `spring.ai.mcp.server.protocol=STATELESS`, `type=ASYNC`, `streamable-http.mcp-endpoint=/mcp`, serverInfo `taska`, version `${project.version}` (Maven resource filtering).
 Изменять версии Boot остальных сервисов для MCP не требуется. TAS-403 проверяет dependency tree, запуск контекста и обмен реальным Java SDK client на этой комбинации.
 [Spring AI поддерживает Boot 4.0.x/4.1.x](https://docs.spring.io/spring-ai/reference/2.1/getting-started.html); точные SDK/Boot зависимости сверены с [POM 2.0.2](https://github.com/spring-projects/spring-ai/blob/v2.0.2/pom.xml).
 

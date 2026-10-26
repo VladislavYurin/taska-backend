@@ -454,3 +454,19 @@ services:
         condition: service_healthy
       notification-service:
         condition: service_healthy
+
+  mcp-server:
+    <<: *app-defaults
+    networks:
+      - taskanetwork
+    build:
+      context: .
+      dockerfile: mcp-server/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    container_name: taska-mcp-server
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
