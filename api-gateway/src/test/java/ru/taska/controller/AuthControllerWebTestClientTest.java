@@ -37,7 +37,7 @@ import ru.taska.service.UserService;
 import ru.taska.transport.grpc.GrpcAuthServiceClient;
 
 @WebFluxTest(controllers = AuthController.class)
-@Import({
+@Import({ru.taska.security.SignupClientAddress.class,
         GatewayRequestExecutor.class,
         GatewayContextFactory.class,
         RequestIdProvider.class,
@@ -68,6 +68,36 @@ class AuthControllerWebTestClientTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
+    }
+
+    @Test
+    void signupIsPublicUniformlyEmptyAndAuthMethodsAreNotCached() {
+        Mockito.when(grpcAuthServiceClient.signup(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.empty());
+        webTestClient.post().uri("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"new@example.test\",\"displayName\":\"New User\"}")
+                .exchange().expectStatus().isAccepted().expectBody().isEmpty();
+        Mockito.when(grpcAuthServiceClient.getAuthMethods()).thenReturn(Mono.just(new ru.taska.domain.dto.AuthMethodsResponseDto()
+                .signupEnabled(false).providers(java.util.List.of("GOOGLE"))));
+        webTestClient.get().uri("/api/v1/auth/methods").exchange().expectStatus().isOk()
+                .expectHeader().valueEquals("Cache-Control","no-store")
+                .expectBody().jsonPath("$.signupEnabled").isEqualTo(false).jsonPath("$.providers[0]").isEqualTo("GOOGLE");
+    }
+    @Test
+    void signupDisabledAndRateLimitDetailsReachHttp() {
+        Mockito.when(grpcAuthServiceClient.signup(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.PERMISSION_DENIED,
+                        "Disabled", java.util.Map.of("reason","SIGNUP_DISABLED"))));
+        webTestClient.post().uri("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"new@example.test\",\"displayName\":\"New User\"}")
+                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.details.reason").isEqualTo("SIGNUP_DISABLED");
+        Mockito.when(grpcAuthServiceClient.signup(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+                .thenReturn(Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.RESOURCE_EXHAUSTED,
+                        "Wait", java.util.Map.of("retryAfterSeconds","42"))));
+        webTestClient.post().uri("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"new@example.test\",\"displayName\":\"New User\"}")
+                .exchange().expectStatus().isEqualTo(429).expectHeader().valueEquals("Retry-After","42")
+                .expectBody().jsonPath("$.details.retryAfterSeconds").isEqualTo("42");
     }
 
     @Test

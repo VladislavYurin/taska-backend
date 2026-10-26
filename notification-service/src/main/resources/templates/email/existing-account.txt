@@ -1,0 +1,12 @@
+Taska[# th:if="${!#strings.isEmpty(brand.workspaceName)}"] · [(${brand.workspaceName})][/]
+
+You already have a Taska account
+
+An account with this email already exists. Sign in with your usual credentials.
+Your password and account settings have not changed.
+
+Sign in:
+[(${acceptUrl})]
+
+---
+Someone requested signup with this address. If this was not you, ignore this email.

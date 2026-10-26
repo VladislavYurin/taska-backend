@@ -11,6 +11,8 @@ option java_package = "ru.taska.api.auth.v1";
 option java_outer_classname = "AuthApiProto";
 
 service AuthService {
+  rpc Signup(SignupRequest) returns (google.protobuf.Empty);
+  rpc GetAuthMethods(google.protobuf.Empty) returns (AuthMethodsResponse);
   rpc PreviewInvitation(PreviewInvitationRequest) returns (PreviewInvitationResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc Refresh (RefreshRequest) returns (RefreshResponse);
@@ -84,4 +86,15 @@ message PreviewInvitationResponse {
   string display_name = 2;
   string kind = 3;
   google.protobuf.Timestamp expires_at = 4;
+}
+
+message SignupRequest {
+  ru.taska.common.v1.Header header = 1;
+  string email = 2;
+  string display_name = 3;
+  string client_ip = 4;
+}
+message AuthMethodsResponse {
+  bool signup_enabled = 1;
+  repeated string providers = 2;
 }

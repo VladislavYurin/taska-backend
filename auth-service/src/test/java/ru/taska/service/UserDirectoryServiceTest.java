@@ -23,7 +23,9 @@ class UserDirectoryServiceTest {
         var users = mock(UserRepository.class);
         var access = mock(DirectoryAccess.class);
         var storage = mock(StorageClient.class);
-        var service = new UserDirectoryService(users, access, storage);
+        var membership = mock(DirectoryMembershipAccess.class);
+        when(membership.check(any())).thenReturn(Mono.empty());
+        var service = new UserDirectoryService(users, access, storage, membership);
         UUID actor = UUID.randomUUID();
         var slow = UserDetailsDto.builder().userId(UUID.randomUUID()).displayName("A Person").email("a@example.test")
                 .avatar(AvatarDto.builder().objectKey("slow-avatar").build()).build();

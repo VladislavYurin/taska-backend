@@ -31,6 +31,19 @@ class EmailMessageFactoryTest {
     }
 
     @Test
+    void signupAndExistingAccountMessagesUseEnglishAndKeepSecretsOutOfReminders() throws Exception {
+        var signup=factory().signup("user@example.test","https://taska.ozero.dev/?token=fixture",Instant.now());
+        var reminder=factory().existingAccount("user@example.test");
+        assertThat(signup.getSubject()).isEqualTo("Confirm your email");
+        assertThat(reminder.getSubject()).isEqualTo("You already have a Taska account");
+        var signupParts=parts(signup);var reminderParts=parts(reminder);
+        assertThat(signupParts.get("html")).contains("Confirm your email","token=fixture");
+        assertThat(signupParts.get("text")).contains("Confirm your email");
+        assertThat(reminderParts.get("html")).contains("Sign in","/login").doesNotContain("token=","expires on");
+        assertThat(reminderParts.get("text")).contains("Your password and account settings have not changed.");
+    }
+
+    @Test
     void smtpAccountIsUsedAsFromForNotificationsAndInvitations() throws Exception {
         var factory = factory();
         var notification = Notification.builder().title("Assigned").body("TAS-1 was assigned").build();

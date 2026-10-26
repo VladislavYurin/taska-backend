@@ -21,6 +21,7 @@ public enum EventType {
     ISSUE_ATTACHMENT_ADDED ("AttachmentAdded"),
     ISSUE_ATTACHMENT_DELETED("AttachmentDeleted"),
     USER_INVITED("UserInvited"),
+    USER_SIGNUP_EXISTING_ACCOUNT("UserSignupExistingAccount"),
     PROJECT_CREATED("ProjectCreated"),
     PROJECT_ARCHIVED("ProjectArchived"),
     MEMBER_ADDED("MemberAdded"),

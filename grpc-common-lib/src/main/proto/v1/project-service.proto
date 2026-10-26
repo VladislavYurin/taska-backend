@@ -18,6 +18,8 @@ enum ProjectRole {
 }
 
 service ProjectService {
+  // Auth directory gate; internal only, no project details or HTTP route.
+  rpc HasProjectMembershipInternal(HasProjectMembershipInternalRequest) returns (HasProjectMembershipInternalResponse);
   rpc ArchiveProject(ArchiveProjectRequest) returns (ProjectResponse);
   rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
   rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
@@ -466,3 +468,6 @@ message ArchiveProjectRequest {
   string project_id = 2;
   string actor_user_id = 3;
 }
+
+message HasProjectMembershipInternalRequest { string user_id = 1; }
+message HasProjectMembershipInternalResponse { bool member = 1; }

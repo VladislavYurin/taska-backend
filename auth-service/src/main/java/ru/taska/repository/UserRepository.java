@@ -32,6 +32,7 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
                a.size_bytes AS avatar_size_bytes, a.created_at AS avatar_created_at
           FROM taska.users u LEFT JOIN taska.user_avatars a ON a.user_id = u.id
          WHERE u.status IN ('ACTIVE', 'INVITED', 'LOCKED')
+           AND NOT (u.status='INVITED' AND u.created_via='SIGNUP')
            AND (lower(u.display_name) LIKE :pattern ESCAPE '!' OR lower(u.email) LIKE :pattern ESCAPE '!')
          ORDER BY lower(u.display_name), lower(u.email), u.id
          LIMIT :limit OFFSET :offset
@@ -60,6 +61,7 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
         FROM taska.users u
         LEFT JOIN taska.user_avatars a ON u.id = a.user_id
         WHERE u.id IN (:userIds)
+          AND NOT (u.status='INVITED' AND u.created_via='SIGNUP')
         ORDER BY u.id ASC
     """)
     Flux<UserDetailsDto> findUsersWithAvatars(@Param("userIds") Collection<UUID> userIds);

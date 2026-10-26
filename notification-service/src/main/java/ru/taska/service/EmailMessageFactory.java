@@ -80,6 +80,19 @@ public class EmailMessageFactory {
         return message("invitation", "You're invited to Taska", recipient, context);
     }
 
+    public MimeMessage signup(String recipient, String acceptUrl, Instant expiresAt) {
+        var context = context();
+        context.setVariable("acceptUrl", acceptUrl);
+        context.setVariable("expiresAt", EXPIRY.format(expiresAt));
+        return message("signup", "Confirm your email", recipient, context);
+    }
+
+    public MimeMessage existingAccount(String recipient) {
+        var context = context();
+        context.setVariable("acceptUrl", appUrl + "/login");
+        return message("existing-account", "You already have a Taska account", recipient, context);
+    }
+
     private Context context() {
         var context = new Context(Locale.ENGLISH);
         context.setVariable("brand", brand);

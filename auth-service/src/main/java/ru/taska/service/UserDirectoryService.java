@@ -20,11 +20,12 @@ public class UserDirectoryService {
     private final UserRepository users;
     private final DirectoryAccess access;
     private final StorageClient storage;
+    private final DirectoryMembershipAccess membership;
     @org.springframework.beans.factory.annotation.Value("${directory.avatar-timeout:250ms}")
     private java.time.Duration avatarTimeout = java.time.Duration.ofMillis(250);
 
     public Mono<SearchUsersResponse> search(UUID actor, String query, int page, int pageSize) {
-        return access.requireActor(actor, false).flatMap(ignored -> Mono.defer(() -> {
+        return access.requireActor(actor, false).flatMap(user -> membership.check(user).then(Mono.defer(() -> {
             String normalized = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
             int length = normalized.codePointCount(0, normalized.length());
             if (length < 3 || length > 100 || normalized.codePoints().anyMatch(Character::isISOControl) || page < 0 || page > 1000 || pageSize < 1 || pageSize > 50) {
@@ -37,7 +38,7 @@ public class UserDirectoryService {
                             .flatMapSequential(this::toDirectoryUser, 16).collectList()
                             .map(items -> SearchUsersResponse.newBuilder().addAllItems(items)
                                     .setHasMore(rows.size() > pageSize).build()));
-        }));
+        })));
     }
 
     private Mono<DirectoryUser> toDirectoryUser(UserDetailsDto row) {

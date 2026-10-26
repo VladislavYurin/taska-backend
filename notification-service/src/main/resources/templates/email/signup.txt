@@ -1,0 +1,13 @@
+Taska[# th:if="${!#strings.isEmpty(brand.workspaceName)}"] · [(${brand.workspaceName})][/]
+
+Confirm your email
+
+Confirm this email address and choose a password to finish creating your Taska account.
+
+Confirm email:
+[(${acceptUrl})]
+
+This link works once and expires on [(${expiresAt})]. Use the latest link.
+
+---
+Someone requested a Taska account with this address. If this was not you, ignore this email.

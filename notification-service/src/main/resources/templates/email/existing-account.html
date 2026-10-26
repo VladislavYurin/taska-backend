@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>You already have a Taska account</title>
+<!--
+  Colours are DESIGN.md §2.1 tokens only. The card border is the border token
+  composited over the surface token as solid hex (Outlook has no alpha):
+  light 9% of #161620 over #ffffff = #eaeaeb; dark 8% of #ffffff over
+  #141418 = #27272a. brand.accent and brand.accentFg are opaque and
+  theme-independent, so the dark block below never overrides them.
+-->
+<style>
+:root{color-scheme:light dark;supported-color-schemes:light dark;}
+body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+table{border-collapse:collapse;}
+a[x-apple-data-detectors]{color:inherit !important;text-decoration:none !important;}
+@media (max-width:480px){.t-pad{padding:22px !important;}}
+@media (prefers-color-scheme:dark){
+.t-bg{background-color:#08080b !important;}
+.t-card{background-color:#141418 !important;border-color:#27272a !important;}
+.t-fg{color:#ededf1 !important;}
+.t-fg2{color:#9c9ca6 !important;}
+.t-fg3{color:#62626d !important;}
+}
+</style>
+</head>
+<body class="t-bg" style="margin:0;padding:0;background-color:#f6f6f8;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f6f6f8;">Sign in to your existing Taska account.</div>
+<table role="presentation" class="t-bg" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f6f8" style="width:100%;background-color:#f6f6f8;">
+<tr>
+<td align="center" style="padding:34px 16px;">
+<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;">
+<tr>
+<td>
+<table th:replace="~{fragments.html :: header(${brand})}" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td valign="middle" style="padding:0 0 16px 4px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td width="26" height="26" align="center" valign="middle" bgcolor="#4f46e5" style="width:26px;height:26px;background-color:#4f46e5;border-radius:7px;font-size:0;line-height:0;">
+<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td width="10" height="10" bgcolor="#ffffff" style="width:10px;height:10px;background-color:#ffffff;border-radius:3px;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+</td>
+<td class="t-fg" valign="middle" style="padding-left:9px;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;line-height:26px;color:#17171b;">Taska</td>
+</tr>
+</table>
+</td>
+<td class="t-fg2" align="right" valign="middle" style="padding:0 4px 16px 0;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:550;line-height:26px;color:#56565f;white-space:nowrap;">Ozero</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<table role="presentation" class="t-card" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;background-color:#ffffff;border:1px solid #eaeaeb;border-radius:16px;border-collapse:separate;">
+<tr>
+<td class="t-pad" style="padding:26px;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<h1 class="t-fg" style="margin:0;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;font-weight:650;line-height:1.3;letter-spacing:-0.02em;color:#17171b;" >You already have a Taska account</h1>
+<p class="t-fg" style="margin:11px 0 0;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#17171b;">An account with this email already exists. Sign in with your usual credentials. Your password and account settings have not changed.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td style="padding-top:20px;">
+<table th:replace="~{fragments.html :: button(${acceptUrl}, 'Sign in', ${brand})}" role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td bgcolor="#4f46e5" style="background-color:#4f46e5;border-radius:9px;"><a href="https://taska.example.invalid/" style="display:inline-block;padding:11px 16px;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;line-height:17px;color:#ffffff;text-decoration:none;border-radius:9px;">Sign in</a></td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+<p class="t-fg2" style="margin:13px 0 0;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#56565f;">Button not working? Paste this link into your browser:<br><a class="t-fg2" href="https://taska.example.invalid/" th:href="${acceptUrl}" th:text="${acceptUrl}" style="color:#56565f;text-decoration:underline;word-break:break-all;">https://taska.example.invalid/</a></p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<table th:replace="~{fragments.html :: footer('You\'re getting this because someone requested signup with this address. If you weren\'t expecting it, ignore this email — your account has not changed.')}" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td class="t-fg2" style="padding:16px 4px 0;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#56565f;">You're getting this because someone requested signup with this address. If you weren't expecting it, ignore this email — your account has not changed.</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
+</body>
+</html>
