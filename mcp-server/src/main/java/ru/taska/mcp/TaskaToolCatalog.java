@@ -2,24 +2,16 @@ package ru.taska.mcp;
 
 import io.modelcontextprotocol.server.McpStatelessServerFeatures.AsyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class TaskaToolCatalog {
   @Bean
-  List<AsyncToolSpecification> taskaTools(
-      ObjectProvider<ToolContributor> contributors, ToolExecutor executor) {
-    var tools =
-        contributors
-            .orderedStream()
-            .flatMap(c -> c.tools().stream())
-            .sorted(Comparator.comparing(tool -> tool.definition().name()))
-            .toList();
+  List<AsyncToolSpecification> taskaTools(ToolRegistry registry, ToolExecutor executor) {
+    var tools = registry.tools();
     var names = new HashSet<String>();
     return tools.stream()
         .map(

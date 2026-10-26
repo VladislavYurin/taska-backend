@@ -44,43 +44,94 @@ public class ToolExecutor {
             return Mono.error(
                 ToolArguments.invalid(
                     "Неверные аргументы " + definition.name() + "; проверьте tools/list."));
-          if (!context.user().getScopesList().contains(definition.scope()))
-            return Mono.just(
-                results.error(
-                    context,
-                    new GatewayToolException(
-                        "insufficient_scope",
-                        "Требуется scope " + definition.scope() + ".",
-                        Map.of("required_scope", definition.scope()))));
           var call = new ToolInvocation(definition, context, args, resolver.session(context));
+          long started = System.nanoTime();
+          if (!context.user().getScopesList().contains(definition.scope()))
+            return observed(
+                call,
+                Mono.just(
+                    results.error(
+                        context,
+                        new GatewayToolException(
+                            "insufficient_scope",
+                            "Требуется scope " + definition.scope() + ".",
+                            Map.of("required_scope", definition.scope())))),
+                started);
           Supplier<Mono<ToolData>> pipeline = () -> registration.handler().apply(call);
           for (int i = interceptors.size() - 1; i >= 0; i--) {
             var next = pipeline;
             var interceptor = interceptors.get(i);
             pipeline = () -> interceptor.intercept(call, next);
           }
-          return Mono.defer(pipeline)
-              .timeout(limits.timeout())
-              .switchIfEmpty(
-                  Mono.error(
-                      new GatewayToolException(
-                          "upstream_error", "Taska вернула пустой результат операции.")))
-              .map(data -> results.success(call, data))
-              .onErrorResume(
-                  error -> {
-                    if (error instanceof McpError) return Mono.error(error);
-                    if (error instanceof GatewayToolException toolError)
-                      return Mono.just(results.error(context, toolError));
-                    if (!(error instanceof Exception)) return Mono.error(error);
-                    return Mono.just(
-                        results.error(
-                            context,
-                            new GatewayToolException(
-                                error instanceof java.util.concurrent.TimeoutException
-                                    ? "timeout"
-                                    : "upstream_error",
-                                "Taska временно недоступна. Повторите чтение позже.")));
-                  });
+          return observed(
+              call,
+              Mono.defer(pipeline)
+                  .timeout(limits.timeout())
+                  .switchIfEmpty(
+                      Mono.error(
+                          new GatewayToolException(
+                              "upstream_error", "Taska вернула пустой результат операции.")))
+                  .map(data -> results.success(call, data))
+                  .onErrorResume(
+                      error -> {
+                        if (error instanceof McpError) return Mono.error(error);
+                        if (error instanceof GatewayToolException toolError) {
+                          if (!definition.readOnly()
+                              && ("timeout".equals(toolError.code())
+                                  || "upstream_error".equals(toolError.code())))
+                            toolError =
+                                new GatewayToolException(
+                                    toolError.code(),
+                                    "Ответ записи не получен. Сначала перечитайте объект; не"
+                                        + " повторяйте запись автоматически.",
+                                    toolError.details());
+                          return Mono.just(results.error(context, toolError));
+                        }
+                        if (!(error instanceof Exception)) return Mono.error(error);
+                        return Mono.just(
+                            results.error(
+                                context,
+                                new GatewayToolException(
+                                    error instanceof java.util.concurrent.TimeoutException
+                                        ? "timeout"
+                                        : "upstream_error",
+                                    definition.readOnly()
+                                        ? "Taska временно недоступна. Повторите чтение позже."
+                                        : "Ответ записи не получен. Сначала перечитайте объект; не"
+                                              + " повторяйте запись автоматически.")));
+                      }),
+              started);
         });
+  }
+
+  private Mono<McpSchema.CallToolResult> observed(
+      ToolInvocation call, Mono<McpSchema.CallToolResult> result, long started) {
+    return result
+        .doOnNext(
+            value -> {
+              String outcome = "success";
+              if (Boolean.TRUE.equals(value.isError())
+                  && value.structuredContent() instanceof Map<?, ?> envelope
+                  && envelope.get("error") instanceof Map<?, ?> error
+                  && error.get("code") instanceof String code) outcome = code;
+              observe(call, outcome, started);
+            })
+        .doOnError(
+            error ->
+                observe(
+                    call,
+                    error instanceof McpError ? "invalid_argument" : "upstream_error",
+                    started))
+        .doOnCancel(() -> observe(call, "cancelled", started));
+  }
+
+  private void observe(ToolInvocation call, String outcome, long started) {
+    for (var interceptor : interceptors) {
+      try {
+        interceptor.observe(call, outcome, System.nanoTime() - started);
+      } catch (RuntimeException observerFailure) {
+        org.slf4j.LoggerFactory.getLogger(ToolExecutor.class).warn("MCP outcome observer failed");
+      }
+    }
   }
 }

@@ -147,6 +147,16 @@ MCP request ≤64 KiB; upstream response ≤2 MiB; итоговый сериал
 
 Начальные настраиваемые лимиты на инстанс: token read 120/min/write 20/min, user read 240/min/write 40/min; одновременно ≤4 вызовов на token и ≤8 на user. Ограничитель — bounded in-memory token bucket с idle eviction, без Redis. При нескольких репликах общий допустимый поток умножается на их число: это осознанный предел v1, а не глобальная квота. Таймаут tool 20s, gateway response 5s/connect 2s; отмена reactive subscription освобождает квоту и downstream запрос, не обещая откат уже принятой записи.
 
+TAS-406 уточняет bounded cache: не более 10000 token_id и 10000 user_id на инстанс,
+TTL простоя 5 минут (минимум 1 минута полного refill). Активные вызовы не вытесняются; при
+заполнении cache новым идентификаторам отказываем. Admission атомарно проверяет оба token bucket
+и оба concurrency счётчика; отказ не расходует вторую квоту. Отмена возвращает concurrency permit,
+но не rate cost принятого вызова. Входной размер проверяется также для chunked HTTP до SDK.
+`ToolRegistry` общий для transport scope preflight и SDK registration; невалидная input schema
+остаётся protocol error SDK, handler повторно проверяет scope. Аудит получает финальный outcome
+после result projection/cap, включая timeout/отмену; безопасный target хранится отдельно от DTO.
+Локальный stub smoke не заменяет будущий нагрузочный прогон стенда TAS-408.
+
 Лог каждого write-вызова: user_id, token_id, tool, ключ объекта (если определён), outcome, request_id, duration, ограниченный clientInfo. Никаких Bearer, token name, текстов комментариев/описаний или полного `_meta`. clientInfo/traceparent недоверенные, длина/формат проверяются; traces не принимают произвольные лейблы. Метрики — ограниченный tool/outcome, без user/token/project id в labels.
 
 Решение владельца: участникам проекта показываем **только UI / API_TOKEN / MCP**, без имени и id чужого токена. Internal token_id сохраняется в аудите и доменной истории, но не включается в публичный REST history/comment. Старые channel=null поддерживаются.

@@ -4,7 +4,12 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import ru.taska.api.common.v1.UserContext;
 
 /** Credentials live only in the request context and are never serialized into tool results. */
-public record McpRequestContext(String requestId, String bearerToken, UserContext user) {
+public record McpRequestContext(
+    String requestId, String bearerToken, UserContext user, McpCallMetadata metadata) {
+  public McpRequestContext(String requestId, String bearerToken, UserContext user) {
+    this(requestId, bearerToken, user, McpCallMetadata.NONE);
+  }
+
   public static final String KEY = McpRequestContext.class.getName();
 
   public static McpRequestContext from(McpTransportContext context) {

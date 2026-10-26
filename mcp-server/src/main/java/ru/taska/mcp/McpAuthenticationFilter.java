@@ -38,18 +38,7 @@ public class McpAuthenticationFilter implements WebFilter {
 
   @Override
   public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-    // Match the same decoded path segments as the WebFlux router, including matrix parameters.
-    String path =
-        exchange.getRequest().getPath().pathWithinApplication().elements().stream()
-            .map(
-                element ->
-                    element instanceof PathContainer.PathSegment segment
-                        ? segment.valueToMatch()
-                        : element.value())
-            .collect(java.util.stream.Collectors.joining());
-    if (!"/mcp".equals(path)) {
-      return chain.filter(exchange);
-    }
+    if (!matchesMcp(exchange.getRequest())) return chain.filter(exchange);
     var headers = exchange.getRequest().getHeaders();
     var responseHeaders = exchange.getResponse().getHeaders();
     String requestId = headers.getFirst("X-Request-Id");
@@ -130,6 +119,19 @@ public class McpAuthenticationFilter implements WebFilter {
                   .put(McpRequestContext.KEY, new McpRequestContext(finalRequestId, token, user));
               return chain.filter(exchange);
             });
+  }
+
+  static boolean matchesMcp(org.springframework.http.server.reactive.ServerHttpRequest request) {
+    // Match the same decoded path segments as WebFlux, including matrix parameters.
+    String path =
+        request.getPath().pathWithinApplication().elements().stream()
+            .map(
+                element ->
+                    element instanceof PathContainer.PathSegment segment
+                        ? segment.valueToMatch()
+                        : element.value())
+            .collect(java.util.stream.Collectors.joining());
+    return "/mcp".equals(path);
   }
 
   private static boolean validPat(UserContext user) {
