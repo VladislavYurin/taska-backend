@@ -27,6 +27,7 @@ class EmailSignupIT extends AbstractIT {
     @Autowired EmailSignupService signup;
     @Autowired UserRepository users;
     @Autowired InviteTokenRepository tokens;
+    @Autowired InviteTokenService tokenService;
     @Autowired DatabaseClient database;
     @Autowired AuthService auth;
     @Autowired ProfileService profiles;
@@ -81,6 +82,22 @@ class EmailSignupIT extends AbstractIT {
             rejected(() -> signup.signup(user.getEmail(), "Again", ip(), "again").block(WAIT), DomainStatus.RESOURCE_EXHAUSTED);
         }
     }
+    @Test void recentAdministrativeInvitationIsRetainedThenResentAfterUniformCooldown() {
+        User user=account(UserStatus.INVITED,GlobalRole.USER);
+        var original=tokenService.createInviteToken(user.getId()).block(WAIT);
+        signup.signup(user.getEmail(),"Untrusted Name",ip(),"first-public").block(WAIT);
+        assertThat(tokens.findLatestByUserId(user.getId()).block(WAIT).getUsedAt()).isNull();
+        assertThat(auth.previewInvitation(original.getRawToken()).block(WAIT).kind()).isEqualTo("INVITATION");
+        rejected(() -> signup.signup(user.getEmail(),"Again",ip(),"too-soon").block(WAIT),DomainStatus.RESOURCE_EXHAUSTED);
+        ageEmail(user.getEmail());
+        database.sql("UPDATE taska.invite_tokens SET created_at=now()-interval '61 seconds' WHERE user_id=:id")
+                .bind("id",user.getId()).fetch().rowsUpdated().block(WAIT);
+        signup.signup(user.getEmail(),"Still Untrusted",ip(),"resend-admin").block(WAIT);
+        rejected(() -> auth.previewInvitation(original.getRawToken()).block(WAIT),DomainStatus.UNAUTHENTICATED);
+        assertThat(auth.previewInvitation(raw(user)).block(WAIT).kind()).isEqualTo("INVITATION");
+        assertThat(users.findById(user.getId()).block(WAIT).getDisplayName()).isEqualTo("Existing Name");
+    }
+
     @Test void ipBudgetIsSharedAcrossAddressesAndRejectedEmailAttemptsCount() {
         String client=ip(), email=email();
         signup.signup(email, "Name", client, "first").block(WAIT);
