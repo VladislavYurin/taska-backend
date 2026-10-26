@@ -92,6 +92,7 @@ public class PersonalAccessTokenService {
 
     @Transactional
     public Mono<Void> revoke(UUID owner, UUID id, String requestId) {
+        // JWT validation at the RPC boundary rejects blocked/deleted accounts; LOCKED owners may still revoke.
         // Unknown, foreign and already-revoked ids are all an idempotent no-op.
         return users.findByIdForUpdate(owner).switchIfEmpty(Mono.error(unauthenticated()))
                 .flatMap(user -> tokens.revokeOwned(id, owner, now(), "OWNER_REVOKED")
@@ -99,6 +100,7 @@ public class PersonalAccessTokenService {
                                 "OWNER_REVOKED", requestId))).then();
     }
 
+    // Internal lifecycle hook intentionally accepts BLOCKED/INVITED users to invalidate their existing tokens.
     @Transactional
     public Mono<Void> revokeAll(User user, String reason, String requestId) {
         return tokens.revokeAll(user.getId(), now(), reason)

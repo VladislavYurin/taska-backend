@@ -16,6 +16,6 @@ ALTER TABLE taska.notifications
                                      'PERSONAL_ACCESS_TOKEN_CREATED', 'PERSONAL_ACCESS_TOKEN_REVOKED',
                                      'LABEL_ADDED', 'LABEL_REMOVED',
                                      'USER_BLOCKED', 'USER_UNBLOCKED',
-                                     'ISSUE_COMMENT_CREATED',
+                                     'ISSUE_COMMENT_CREATED', 'ISSUE_COMMENT_UPDATED', 'ISSUE_COMMENT_DELETED',
                                      'ISSUE_ATTACHMENT_ADDED', 'ISSUE_ATTACHMENT_DELETED'
             ));

@@ -61,6 +61,17 @@ class NotificationChannelsIntegrationTest extends AbstractIT {
         assertThat(notifications.findById(saved.getId()).block(WAIT).getNotificationType()).isEqualTo(NotificationType.PROJECT_ARCHIVED);
     }
 
+    @Test
+    void databaseAcceptsAllPublishedNotificationTypes() {
+        reactor.core.publisher.Flux.fromArray(NotificationType.values())
+                .concatMap(type -> notifications.save(Notification.builder().userId(user).notificationType(type)
+                        .title("Migration compatibility").body("Safe test text").sourceEventId(UUID.randomUUID())
+                        .createdAt(Instant.now()).build()))
+                .collectList().as(reactor.test.StepVerifier::create)
+                .assertNext(items -> assertThat(items).hasSize(NotificationType.values().length))
+                .verifyComplete();
+    }
+
     @ParameterizedTest
     @CsvSource({"PersonalAccessTokenCreated,PERSONAL_ACCESS_TOKEN_CREATED", "PersonalAccessTokenRevoked,PERSONAL_ACCESS_TOKEN_REVOKED"})
     void personalTokenSecurityEventsReachOnlyOwnerInboxAndEnabledEmail(String eventType, NotificationType type) throws Exception {
