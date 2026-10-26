@@ -129,6 +129,9 @@ public class IssueMapper {
         restDto.setId(protoDto.getId());
         restDto.setEventType(toRestIssueEventType(protoDto.getEventType()));
         restDto.setActorUserId(protoDto.getActorUserId());
+        if (protoDto.hasActor()) {
+            restDto.setActor(userProfileMapper.toUserSummaryDto(protoDto.getActor()));
+        }
         restDto.setOccurredAt(toOffsetDateTime(protoDto.getOccurredAt()));
         restDto.setPayload(parsePayload(protoDto.getPayload()));
 

@@ -4366,6 +4366,11 @@ components:
           type: string
         actorUserId:
           type: string
+        actor:
+          nullable: true
+          description: Профиль автора события, в том числе бывшего участника проекта. Null, если профиль недоступен; actorUserId сохраняется.
+          allOf:
+            - $ref: '#/components/schemas/UserSummaryDto'
         occurredAt:
           type: string
           format: date-time

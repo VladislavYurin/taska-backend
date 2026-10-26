@@ -1463,6 +1463,9 @@ message IssueHistoryResponse {
    * Полезная нагрузка события в формате JSON.
    */
   string payload = 6;
+
+  // Профиль автора, включая бывших участников; отсутствует, если профиль недоступен.
+  optional ru.taska.common.v1.UserSummaryResponse actor = 7;
 }
 
 /**
