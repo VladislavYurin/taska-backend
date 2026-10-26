@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @WebFluxTest(OAuthController.class)
-@Import({GatewayRequestExecutor.class, GatewayContextFactory.class, RequestIdProvider.class, BearerTokenExtractor.class, GatewayErrorHandler.class, RestErrorMapper.class})
+@Import({GatewayRequestExecutor.class, GatewayContextFactory.class, RequestIdProvider.class, BearerTokenExtractor.class, GatewayErrorHandler.class, RestErrorMapper.class, ru.taska.security.SignupClientAddress.class})
 class OAuthControllerTest {
     @Autowired WebTestClient http;
     @Autowired GatewayContextFactory contexts;
@@ -36,7 +36,7 @@ class OAuthControllerTest {
     @BeforeEach void prepare() { ReflectionTestUtils.setField(contexts, "nodeId", "test-node"); }
 
     @Test void startIsPublicAndBrowserCookieHasAllCrossSiteCsrfAttributes() {
-        when(oauth.start(eq("google"), eq("/projects"), any())).thenReturn(Mono.just(StartOAuthResponse.newBuilder()
+        when(oauth.start(eq("google"), eq("/projects"), eq("unknown"), any())).thenReturn(Mono.just(StartOAuthResponse.newBuilder()
                 .setAuthorizationUrl("https://accounts.example/authorize?state=" + STATE).setState(STATE).setBrowserToken(BROWSER).build()));
         http.get().uri("/api/v1/auth/oauth/google/start").exchange().expectStatus().isFound()
                 .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://accounts.example/authorize?state=" + STATE)
@@ -45,7 +45,7 @@ class OAuthControllerTest {
         verifyNoInteractions(auth);
     }
     @Test void googleCallbackPassesBindingCookieAndOnlyRedirectsToOpaqueCode() {
-        when(oauth.callback(eq("google"), eq(STATE), eq(BROWSER), eq("provider-code"), isNull(), isNull(), any()))
+        when(oauth.callback(eq("google"), eq(STATE), eq(BROWSER), eq("provider-code"), isNull(), isNull(), eq("unknown"), any()))
                 .thenReturn(Mono.just("https://ui.example/auth/callback?code=one-time"));
         http.get().uri("/api/v1/auth/oauth/google/callback?state=" + STATE + "&code=provider-code").cookie(COOKIE, BROWSER)
                 .exchange().expectStatus().isFound().expectHeader().valueEquals(HttpHeaders.LOCATION, "https://ui.example/auth/callback?code=one-time")
@@ -55,30 +55,30 @@ class OAuthControllerTest {
     }
     @Test void appleFormPostCarriesFirstLoginUserAndBrowserCookie() {
         String user = "{\"name\":{\"firstName\":\"Anna\"}}";
-        when(oauth.callback(eq("apple"), eq(STATE), eq(BROWSER), eq("apple-code"), isNull(), eq(user), any()))
+        when(oauth.callback(eq("apple"), eq(STATE), eq(BROWSER), eq("apple-code"), isNull(), eq(user), eq("unknown"), any()))
                 .thenReturn(Mono.just("https://ui.example/auth/callback?code=apple-one-time"));
         http.post().uri("/api/v1/auth/oauth/apple/callback").cookie(COOKIE, BROWSER)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(BodyInserters.fromFormData("state", STATE).with("code", "apple-code").with("user", user))
                 .exchange().expectStatus().isFound().expectHeader().valueEquals(HttpHeaders.LOCATION, "https://ui.example/auth/callback?code=apple-one-time");
-        verify(oauth).callback(eq("apple"), eq(STATE), eq(BROWSER), eq("apple-code"), isNull(), eq(user), any());
+        verify(oauth).callback(eq("apple"), eq(STATE), eq(BROWSER), eq("apple-code"), isNull(), eq(user), eq("unknown"), any());
     }
     @Test void exchangeAndSignupArePublicJsonAndNeverCacheSessions() {
         var signup = new OAuthSignupStateDto().signupToken("signup-one-time").provider(OAuthSignupStateDto.ProviderEnum.GITHUB)
                 .email("person@example.test").suggestedDisplayName(null);
-        when(oauth.exchange(any(), any())).thenReturn(Mono.just(new OAuthExchangeResponseDto().status(OAuthExchangeResponseDto.StatusEnum.SIGNUP_REQUIRED).signup(signup).returnTo("/projects")));
+        when(oauth.exchange(any(), eq("unknown"), any())).thenReturn(Mono.just(new OAuthExchangeResponseDto().status(OAuthExchangeResponseDto.StatusEnum.SIGNUP_REQUIRED).signup(signup).returnTo("/projects")));
         http.post().uri("/api/v1/auth/oauth/exchange").contentType(MediaType.APPLICATION_JSON).bodyValue("{\"code\":\"one-time\"}")
                 .exchange().expectStatus().isOk().expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody()
                 .jsonPath("$.status").isEqualTo("SIGNUP_REQUIRED").jsonPath("$.signup.provider").isEqualTo("GITHUB")
                 .jsonPath("$.returnTo").isEqualTo("/projects").jsonPath("$.session").isEmpty();
-        when(oauth.signup(any(), any())).thenReturn(Mono.just(new LoginResponseDto().accessToken("access").refreshToken("refresh").expiresIn(900L)));
+        when(oauth.signup(any(), eq("unknown"), any())).thenReturn(Mono.just(new LoginResponseDto().accessToken("access").refreshToken("refresh").expiresIn(900L)));
         http.post().uri("/api/v1/auth/oauth/signup").contentType(MediaType.APPLICATION_JSON).bodyValue("{\"signupToken\":\"signup-one-time\",\"displayName\":\"Chosen Name\"}")
                 .exchange().expectStatus().isOk().expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody()
                 .jsonPath("$.accessToken").isEqualTo("access").jsonPath("$.expiresIn").isEqualTo(900);
         verifyNoInteractions(auth);
     }
     @Test void missingBindingAndBackendFailureDoNotExposeProviderDetails() {
-        when(oauth.callback(eq("github"), eq(STATE), eq(""), any(), any(), any(), any()))
+        when(oauth.callback(eq("github"), eq(STATE), eq(""), any(), any(), any(), eq("unknown"), any()))
                 .thenReturn(Mono.error(new IllegalStateException("private provider details")));
         http.get().uri("/api/v1/auth/oauth/github/callback?state=" + STATE + "&code=x").exchange().expectStatus().isFound()
                 .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE").expectBody().isEmpty();

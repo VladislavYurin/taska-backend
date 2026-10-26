@@ -20,6 +20,27 @@ No real provider apps, keys, paid account or stage browser/email delivery were c
 
 Each start creates a 10-minute server-side state with nonce/PKCE verifier and a SHA-256 browser binding. The per-flow `__Host-taska_oauth_<state>` cookie is HttpOnly, Secure, SameSite=None, Path=/ with no Domain. This supports Apple's cross-site POST and parallel browser flows. Missing/foreign cookies do not consume a legitimate state. A valid callback atomically claims it before contacting the provider; retries must restart the OAuth flow.
 
+All four public OAuth operations (start, callback, exchange, signup) share a durable PostgreSQL
+IP budget of 240 attempts/hour, configured by `taska.oauth.ip-attempts-per-hour`
+(`TASKA_OAUTH_IP_ATTEMPTS_PER_HOUR`). The gateway resolves the actual client via the existing
+`SignupClientAddress`: `X-Forwarded-For` is trusted only through `GATEWAY_TRUSTED_PROXY_CIDRS`,
+walked from the nearest proxy towards the first untrusted hop. Configure that allowlist narrowly
+for the deployment proxies; without it, the TCP peer owns the budget. No IP is accepted from a
+public body/query parameter. Internal gRPC client_ip carries only the resolved address.
+
+The shared `taska.signup_rate_limits` table uses a separate `oauth:` + SHA-256(canonical numeric IP)
+bucket, preserving the email signup budget. IPv6 spellings canonicalize to the same bucket;
+missing/invalid internal addresses use one conservative unknown bucket (including old gateways
+while rolling out the new proto). Each accepted reservation commits in a separate transaction
+before provider/state/code/name validation, so failed flows still count and account rollback does
+not restore quota. Atomic upsert prevents concurrent replicas exceeding the limit. The existing
+signup cleanup removes idle buckets after two hours; expired one-hour windows reset on demand.
+The limit is shared by all providers and routes, not multiplied by replicas. Exceeding it returns
+HTTP 429 with `Retry-After` and details.retryAfterSeconds, including callbacks; domain failures
+remain the normal fixed-reason UI redirects. Wrong callback methods count without consuming a
+legitimate state. Requests rejected by HTTP parsing before reaching the OAuth RPC do not reserve
+a flow attempt.
+
 The UI redirect contains only a fresh 60-second exchange code or a fixed error reason. Code hashes are stored, and an atomic DELETE RETURNING claims each exchange/signup grant exactly once. Grants are claimed before account transactions: a backend failure after a claim requires a new OAuth flow; no consumed grant is retried as an account action. Expired rows are periodically deleted. Responses are no-store and redirects set no-referrer. Keep reverse-proxy/access logging from recording callback query strings or OAuth request/response bodies.
 
 Unknown verified identities yield SIGNUP_REQUIRED without creating an account. The 15-minute signup grant persists the first Apple name as a suggestion; the user chooses the final name. Invalid names are checked before consuming the grant. Account create/link uses the same canonical-email advisory transaction lock as invitations, plus a provider/subject lock; email lookup locks the user row. Concurrent email/provider signup therefore converges on one account. New users are ACTIVE, USER, created_via OAUTH, with no password or project membership. Existing names/passwords/origin are preserved. INVITED users activate and unused invitation tokens are revoked transactionally with credential/session/outbox writes. BLOCKED and unexpired LOCKED accounts never receive a session; expired locks resolve through the existing account-lock service.
@@ -28,4 +49,8 @@ Provider, identity-token and account errors expose only PROVIDER_CANCELLED, STAT
 
 ## Local verification
 
-`OAuthIntegrationTest` uses real PostgreSQL16 and a localhost HTTP provider/JWKS server. It verifies all three providers, S256 and Apple ES256, signed id-token issuer/audience/expiry/nonce/email rules, replay/expiry/browser binding, account linking/activation, registration flag, and canonical-email concurrency. `OAuthControllerTest` verifies public routing, cookie attributes and Apple form parsing. These tests do not imply real provider/stage E2E success.
+`OAuthIntegrationTest` uses real PostgreSQL16 and a localhost HTTP provider/JWKS server. It verifies all three providers, S256 and Apple ES256, signed id-token issuer/audience/expiry/nonce/email rules, replay/expiry/browser binding, account linking/activation, registration flag, and canonical-email concurrency. `OAuthControllerTest` verifies public routing, cookie attributes and Apple form parsing.
+`OAuthIpLimiterIntegrationTest` checks real PostgreSQL concurrency across two limiter instances,
+failed attempts on all four RPCs, independently committed reservations, canonical IPs and expiry.
+`OAuthWireIntegrationTest` uses real HTTP and gRPC for all routes, trusted-proxy address forwarding,
+429/Retry-After, and preservation of all seven fixed callback error reasons. These tests do not imply real provider/stage E2E success.

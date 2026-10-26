@@ -706,6 +706,13 @@ paths:
           headers:
             Location: {schema: {type: string}}
             Set-Cookie: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/oauth/{provider}/callback:
@@ -723,6 +730,13 @@ paths:
           description: UI callback with a 60-second one-time code or a stable error code; no session tokens in URLs
           headers:
             Location: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
     post:
       operationId: completeOAuthPost
@@ -746,6 +760,13 @@ paths:
           description: UI callback with a one-time code or a stable error code
           headers:
             Location: {schema: {type: string}}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/oauth/exchange:
@@ -764,6 +785,13 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/OAuthExchangeResponseDto'}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/oauth/signup:
@@ -782,6 +810,13 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/LoginResponseDto'}
+        '429':
+          description: Shared OAuth attempt budget for this IP is exhausted
+          headers:
+            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/invitations/preview:

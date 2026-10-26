@@ -4,6 +4,7 @@ taska:
     ip-attempts-per-hour: ${AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR:10}
 
   oauth:
+    ip-attempts-per-hour: ${TASKA_OAUTH_IP_ATTEMPTS_PER_HOUR:240}
     api-base-url: ${TASKA_OAUTH_API_BASE_URL:https://api.taska.ozero.dev}
     ui-base-url: ${TASKA_OAUTH_UI_BASE_URL:https://taska.ozero.dev}
     google:

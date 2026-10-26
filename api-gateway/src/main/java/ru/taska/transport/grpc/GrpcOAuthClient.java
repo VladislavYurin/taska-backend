@@ -8,7 +8,6 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.*;
 import ru.taska.mapper.AuthMapper;
 import ru.taska.mapper.MappingUtils;
-import ru.taska.util.DisplayNames;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -16,17 +15,17 @@ import java.util.concurrent.TimeUnit;
 public class GrpcOAuthClient {
     private final ReactorOAuthServiceGrpc.ReactorOAuthServiceStub oauth;
     private final AuthMapper mapper;
-    public Mono<StartOAuthResponse> start(String provider, String returnTo, GatewayContext context) {
+    public Mono<StartOAuthResponse> start(String provider, String returnTo, String clientIp, GatewayContext context) {
         return oauth.withDeadlineAfter(5, TimeUnit.SECONDS).startOAuth(StartOAuthRequest.newBuilder()
-                .setHeader(MappingUtils.buildGrpcHeader(context)).setProvider(provider).setReturnTo(returnTo).build());
+                .setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp)).setProvider(provider).setReturnTo(returnTo).build());
     }
-    public Mono<String> callback(String provider, String state, String browser, String code, String error, String user, GatewayContext context) {
-        return oauth.withDeadlineAfter(25, TimeUnit.SECONDS).completeOAuth(CompleteOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context))
+    public Mono<String> callback(String provider, String state, String browser, String code, String error, String user, String clientIp, GatewayContext context) {
+        return oauth.withDeadlineAfter(25, TimeUnit.SECONDS).completeOAuth(CompleteOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp))
                 .setProvider(provider).setState(value(state)).setBrowserToken(value(browser)).setCode(value(code)).setError(value(error)).setAppleUser(value(user)).build())
                 .map(CompleteOAuthResponse::getRedirectUrl);
     }
-    public Mono<OAuthExchangeResponseDto> exchange(OAuthExchangeRequestDto request, GatewayContext context) {
-        return oauth.withDeadlineAfter(10, TimeUnit.SECONDS).exchangeOAuth(ExchangeOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setCode(value(request.getCode())).build())
+    public Mono<OAuthExchangeResponseDto> exchange(OAuthExchangeRequestDto request, String clientIp, GatewayContext context) {
+        return oauth.withDeadlineAfter(10, TimeUnit.SECONDS).exchangeOAuth(ExchangeOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp)).setCode(value(request.getCode())).build())
                 .map(response -> {
                     var result = new OAuthExchangeResponseDto().status(OAuthExchangeResponseDto.StatusEnum.fromValue(response.getStatus())).returnTo(response.getReturnTo());
                     if (response.hasSession()) result.setSession(mapper.toLoginRestResponse(response.getSession()));
@@ -39,9 +38,9 @@ public class GrpcOAuthClient {
                     return result;
                 });
     }
-    public Mono<LoginResponseDto> signup(OAuthSignupRequestDto request, GatewayContext context) {
-        return Mono.defer(() -> oauth.withDeadlineAfter(10, TimeUnit.SECONDS).signupOAuth(SignupOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context))
-                .setSignupToken(value(request.getSignupToken())).setDisplayName(DisplayNames.normalize(request.getDisplayName())).build())).map(mapper::toLoginRestResponse);
+    public Mono<LoginResponseDto> signup(OAuthSignupRequestDto request, String clientIp, GatewayContext context) {
+        return Mono.defer(() -> oauth.withDeadlineAfter(10, TimeUnit.SECONDS).signupOAuth(SignupOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp))
+                .setSignupToken(value(request.getSignupToken())).setDisplayName(value(request.getDisplayName())).build())).map(mapper::toLoginRestResponse);
     }
     private String value(String value) { return value == null ? "" : value; }
 }

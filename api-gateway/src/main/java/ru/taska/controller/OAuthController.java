@@ -22,6 +22,7 @@ import java.time.Duration;
 public class OAuthController {
     private final GatewayRequestExecutor executor;
     private final GrpcOAuthClient client;
+    private final ru.taska.security.SignupClientAddress addresses;
     @Value("${taska.oauth.ui-base-url:${TASKA_OAUTH_UI_BASE_URL:https://taska.ozero.dev}}") private String uiBase;
     @jakarta.annotation.PostConstruct
     void validateUiBase() {
@@ -34,29 +35,31 @@ public class OAuthController {
 
     @GetMapping("/api/v1/auth/oauth/{provider}/start")
     public Mono<ResponseEntity<Void>> start(@PathVariable String provider, @RequestParam(defaultValue = "/projects") String returnTo, ServerWebExchange exchange) {
-        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.start(provider, returnTo, context).map(result -> {
+        String ip = clientIp(exchange);
+        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.start(provider, returnTo, ip, context).map(result -> {
             String cookie = cookie(result.getState(), result.getBrowserToken(), Duration.ofMinutes(10)).toString();
             return redirect(result.getAuthorizationUrl()).header(HttpHeaders.SET_COOKIE, cookie).build();
         }));
     }
     @GetMapping("/api/v1/auth/oauth/{provider}/callback")
     public Mono<ResponseEntity<Void>> callbackGet(@PathVariable String provider, @RequestParam MultiValueMap<String, String> query, ServerWebExchange exchange) {
-        if (provider.equals("apple")) return executor.execute(exchange, EndpointSecurity.PUBLIC,
-                context -> Mono.just(redirect(errorRedirect("STATE_INVALID")).build()));
+        // Wrong callback methods still consume the IP budget, without claiming a legitimate state.
+        if (provider.equals("apple")) return callback(provider, new org.springframework.util.LinkedMultiValueMap<>(), exchange);
         return callback(provider, query, exchange);
     }
     @PostMapping(value = "/api/v1/auth/oauth/{provider}/callback", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public Mono<ResponseEntity<Void>> callbackPost(@PathVariable String provider, ServerWebExchange exchange) {
-        if (!provider.equals("apple")) return executor.execute(exchange, EndpointSecurity.PUBLIC,
-                context -> Mono.just(redirect(errorRedirect("STATE_INVALID")).build()));
+        if (!provider.equals("apple")) return callback(provider, new org.springframework.util.LinkedMultiValueMap<>(), exchange);
         return exchange.getFormData().flatMap(form -> callback(provider, form, exchange));
     }
     private Mono<ResponseEntity<Void>> callback(String provider, MultiValueMap<String, String> values, ServerWebExchange exchange) {
+        String ip = clientIp(exchange);
         String state = values.getFirst("state");
         var binding = validState(state) ? exchange.getRequest().getCookies().getFirst(COOKIE_PREFIX + state) : null;
         String browser = binding == null ? "" : binding.getValue();
-        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.callback(provider, state, browser, values.getFirst("code"), values.getFirst("error"), values.getFirst("user"), context)
-                .onErrorReturn(errorRedirect("PROVIDER_UNAVAILABLE"))
+        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.callback(provider, state, browser, values.getFirst("code"), values.getFirst("error"), values.getFirst("user"), ip, context)
+                .onErrorResume(error -> io.grpc.Status.fromThrowable(error).getCode() == io.grpc.Status.Code.RESOURCE_EXHAUSTED
+                        ? Mono.error(error) : Mono.just(errorRedirect("PROVIDER_UNAVAILABLE")))
                 .map(url -> {
                     var response = redirect(url);
                     if (validState(state)) response.header(HttpHeaders.SET_COOKIE, cookie(state, "", Duration.ZERO).toString());
@@ -65,11 +68,17 @@ public class OAuthController {
     }
     @PostMapping("/api/v1/auth/oauth/exchange")
     public Mono<ResponseEntity<OAuthExchangeResponseDto>> exchange(@RequestBody Mono<OAuthExchangeRequestDto> request, ServerWebExchange exchange) {
-        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> request.flatMap(body -> client.exchange(body, context)).map(body -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body)));
+        String ip = clientIp(exchange);
+        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> request.flatMap(body -> client.exchange(body, ip, context)).map(body -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body)));
     }
     @PostMapping("/api/v1/auth/oauth/signup")
     public Mono<ResponseEntity<LoginResponseDto>> signup(@RequestBody Mono<OAuthSignupRequestDto> request, ServerWebExchange exchange) {
-        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> request.flatMap(body -> client.signup(body, context)).map(body -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body)));
+        String ip = clientIp(exchange);
+        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> request.flatMap(body -> client.signup(body, ip, context)).map(body -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body)));
+    }
+    private String clientIp(ServerWebExchange exchange) {
+        exchange.getResponse().getHeaders().setCacheControl("no-store");
+        return addresses.resolve(exchange);
     }
     private boolean validState(String value) { return value != null && value.matches("[A-Za-z0-9_-]{43}"); }
     private ResponseCookie cookie(String state, String value, Duration age) {
