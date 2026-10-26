@@ -145,6 +145,8 @@ admin:
   # sensitive-columns — колонки в формате table.column → тип маскировки (MASK_FULL, MASK_PARTIAL, HIDE).
   #                     Если тип не указан — используется default-mask-type.
   # Менять без правки кода — только этот файл или env.
+  # TAS-395: email показывается полностью в Data и новых снимках аудита.
+  # Политика применяется к email-колонкам и email внутри JSON; секреты скрываются отдельно.
   metadata:
     default-mask-type: MASK_FULL
     pagination:
@@ -169,7 +171,6 @@ admin:
           sensitive-json-fields:
             outbox_events:
               payload:
-                email: MASK_PARTIAL
                 rawInviteToken: HIDE
       project:
         alias: project
@@ -209,8 +210,6 @@ admin:
             - databasechangeloglock
           sensitive-columns:
             invitation_email_deliveries.token: HIDE
-            invitation_email_deliveries.email: MASK_PARTIAL
-            notification_preferences.email: MASK_PARTIAL
             notification_preferences.telegram_chat_id: HIDE
             notification_preferences.telegram_user_id: HIDE
             notification_preferences.telegram_username: HIDE
@@ -221,7 +220,6 @@ admin:
             telegram_link_requests.candidate_username: HIDE
             telegram_link_requests.candidate_name: HIDE
             notification_deliveries.reply_chat_id: HIDE
-            email_delivery_attempts.to_email: MASK_PARTIAL
       admin:
         alias: admin
         schema: taska
