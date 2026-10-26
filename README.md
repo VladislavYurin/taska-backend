@@ -418,8 +418,7 @@ Taska MCP даёт агенту доступ к проектам, задачам
 3. В Bash введи secret скрыто, без записи значения в history или конфиг:
 
 ```bash
-read -r -s -p 'Taska PAT: ' TASKA_MCP_TOKEN; printf '
-'
+read -r -s -p 'Taska PAT: ' TASKA_MCP_TOKEN; printf '\n'
 export TASKA_MCP_TOKEN
 ```
 
@@ -427,7 +426,7 @@ export TASKA_MCP_TOKEN
 
 ### Claude Code
 
-Команда сохраняет ссылку на переменную, а не значение PAT; одинарные кавычки вокруг header обязательны:
+Команда сохраняет ссылку на переменную, а не значение PAT; одинарные кавычки вокруг header обязательны. При запуске Claude Code раскрывает `${TASKA_MCP_TOKEN}` в поле `headers` сохранённого `.mcp.json`:
 
 ```bash
 claude mcp add --transport http --scope project taska   http://127.0.0.1:8087/mcp   --header 'Authorization: Bearer ${TASKA_MCP_TOKEN}'
@@ -491,13 +490,15 @@ tool_timeout_sec = 25
 
 ### MCP Inspector
 
-Для CLI нужны Node.js и npx. PAT берётся из окружения:
+Для GUI запусти `npx -y @modelcontextprotocol/inspector`, выбери Streamable HTTP, введи URL и Authorization header в форме подключения.
+
+CLI-вариант для отдельной локальной среды требует Node.js и npx. Он передаёт раскрытый header в argv процесса; на общей машине используй GUI. Для CLI выпускай короткоживущий read PAT:
 
 ```bash
 npx -y @modelcontextprotocol/inspector --cli   http://127.0.0.1:8087/mcp --transport http   --method tools/list   --header "Authorization: Bearer $TASKA_MCP_TOKEN"
 ```
 
-Этот CLI передаёт раскрытый header в argv; на общей машине используй короткоживущий read PAT и GUI Inspector. Для GUI запусти `npx -y @modelcontextprotocol/inspector`, выбери Streamable HTTP, введи URL и Authorization header в форме подключения. Origin по умолчанию разрешён только для `http://localhost:6274` и `http://127.0.0.1:6274`; иной origin добавляется точным значением в `MCP_ALLOWED_ORIGINS`. Не отключай защиту самого Inspector. Флаги — в [официальном README Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/main/clients/cli).
+ Origin по умолчанию разрешён только для `http://localhost:6274` и `http://127.0.0.1:6274`; иной origin добавляется точным значением в `MCP_ALLOWED_ORIGINS`. Не отключай защиту самого Inspector. Флаги — в [официальном README Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/main/clients/cli).
 
 ### Инструменты и права
 
