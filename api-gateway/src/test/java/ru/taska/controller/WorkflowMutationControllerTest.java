@@ -105,6 +105,43 @@ class WorkflowMutationControllerTest {
                 .exchange().expectStatus().isEqualTo(409);
     }
 
+
+    @Test
+    void dtoBoundariesAreRejectedAtGatewayWithInvalidArgument() {
+        authenticated();
+        record Invalid(String suffix, String body) {}
+        for (Invalid invalid : List.of(
+                new Invalid("", "{}"), new Invalid("", "{\"name\":\"\"}"),
+                new Invalid("", "{\"name\":\"   \"}"),
+                new Invalid("", "{\"name\":\"" + "x".repeat(101) + "\"}"),
+                new Invalid("", "{\"name\":\"Name\",\"version\":0}"),
+                new Invalid("/statuses/" + status, "{\"name\":\"\"}"),
+                new Invalid("/statuses/" + status, "{\"name\":\"" + "x".repeat(101) + "\"}"),
+                new Invalid("/statuses/" + status, "{\"sortOrder\":-1}"),
+                new Invalid("/statuses/" + status, "{\"version\":0,\"name\":\"Name\"}"),
+                new Invalid("/transitions/" + status, "{\"name\":\"\"}"),
+                new Invalid("/transitions/" + status, "{\"name\":\"" + "x".repeat(101) + "\"}"),
+                new Invalid("/transitions/" + status, "{\"sortOrder\":-1}"),
+                new Invalid("/transitions/" + status, "{\"version\":0,\"name\":\"Name\"}"))) {
+            http.patch().uri(url() + invalid.suffix()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                    .bodyValue(invalid.body()).header(HttpHeaders.CONTENT_TYPE, "application/json")
+                    .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("INVALID_ARGUMENT");
+        }
+        http.method(org.springframework.http.HttpMethod.DELETE).uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json").bodyValue("{\"version\":0}")
+                .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("INVALID_ARGUMENT");
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void dtoBoundaryValuesAreAccepted() {
+        authenticated();
+        reply(Mono.just(response()));
+        http.patch().uri(url() + "/statuses/" + status).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .bodyValue("{\"name\":\"" + "x".repeat(100) + "\",\"sortOrder\":0,\"version\":1}")
+                .header(HttpHeaders.CONTENT_TYPE, "application/json").exchange().expectStatus().isOk();
+    }
+
     private void reply(Mono<ProjectWorkflowDto> response) {
         when(client.mutate(any(), any(), any(), nullable(UUID.class), nullable(UUID.class), any(),
                 nullable(Integer.class), nullable(String.class), any())).thenReturn(response);

@@ -18,8 +18,17 @@ public class WorkflowMutationResponse {
     private final WorkflowBindingRepository bindings;
     private final TransitionRepository transitions;
     private final ru.taska.mapper.WorkflowMapper mapper;
+    private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projects;
 
-    public Mono<WorkflowResponse> enrich(WorkflowResponse response) {
+    // Resolve registry order before performing a write, so a failed lookup cannot hide a committed mutation.
+    public Mono<java.util.List<ru.taska.domain.IssueType>> issueTypes(
+            ru.taska.api.common.v1.Header header, String projectId, String actorId) {
+        return Mono.zip(validator.GrpcRequestValidators.parseUuidOrInvalidArgument(projectId, "projectId"),
+                        validator.GrpcRequestValidators.parseUuidOrInvalidArgument(actorId, "actorUserId"))
+                .flatMap(ids -> projects.listIssueTypes(header.getRequestId(), header.getNodeId(), ids.getT1(), ids.getT2()));
+    }
+
+    public Mono<WorkflowResponse> enrich(WorkflowResponse response, java.util.List<ru.taska.domain.IssueType> orderedTypes) {
         UUID id = UUID.fromString(response.getId());
         return Mono.zip(bindings.findByWorkflowId(id).collectList(),
                         transitions.findByWorkflowIdOrderBySortOrderAsc(id).collectList())
@@ -28,13 +37,17 @@ public class WorkflowMutationResponse {
                             .sorted(Comparator.comparingInt(ru.taska.api.workflow.v1.WorkflowStatus::getSortOrder)).toList())
                             .clearTransitions();
                     data.getT2().forEach(t -> builder.addTransitions(mapper.toWorkflowTransitionProto(t)));
-                    data.getT1().forEach(b -> builder.addIssueTypes(switch (b.getIssueType()) {
+                    var boundKeys = data.getT1().stream().map(b -> b.getIssueType()).collect(java.util.stream.Collectors.toSet());
+                    var orderedKeys = orderedTypes.stream().map(ru.taska.domain.IssueType::name)
+                            .filter(boundKeys::contains).toList();
+                    builder.clearIssueTypes().clearIssueTypeKeys();
+                    orderedKeys.forEach(key -> builder.addIssueTypes(switch (key) {
                         case "TASK" -> IssueType.ISSUE_TYPE_TASK;
                         case "BUG" -> IssueType.ISSUE_TYPE_BUG;
                         case "STORY" -> IssueType.ISSUE_TYPE_STORY;
                         default -> IssueType.ISSUE_TYPE_UNSPECIFIED;
                     }));
-                    builder.addAllIssueTypeKeys(data.getT1().stream().map(b -> b.getIssueType()).toList());
+                    builder.addAllIssueTypeKeys(orderedKeys);
                     return builder.setIsShared(false).build();
                 });
     }

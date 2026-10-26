@@ -2568,6 +2568,9 @@ message MigrateWorkflowIssuesRequest {
   repeated string valid_status_keys = 5;
   map<string, string> status_mappings = 6;
   string workflow_id = 7;
+  // Empty keeps the legacy scan of all statuses incompatible with valid_status_keys.
+  // A non-empty list scopes migration strictly to these source statuses, including the count/limit.
+  repeated string source_status_keys = 8;
 }
 message MigrateWorkflowIssuesResponse {
   int64 moved_count = 1;

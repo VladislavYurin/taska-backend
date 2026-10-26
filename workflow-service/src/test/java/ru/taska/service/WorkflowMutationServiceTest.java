@@ -132,12 +132,15 @@ class WorkflowMutationServiceTest {
 
     @Test
     void usedStatusWithoutMappingKeepsEntireGraph() {
-        when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.error(new DomainException(
-                DomainStatus.FAILED_PRECONDITION, "Status has issues", Map.of("issueCount", "3"))));
+        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+                new DomainException(DomainStatus.FAILED_PRECONDITION, "Status has issues",
+                        Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "3", "statusKeys", "REVIEW")))));
         StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, null, Map.of())))
                 .expectErrorSatisfies(e -> {
                     status(e, DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException) e).getDetails()).containsEntry("issueCount", "3");
+                    assertThat(((DomainException) e).getDetails()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "3", "statusKeys", "REVIEW",
+                            "targetStatusKeys", "TODO,DONE"));
                 }).verify();
         assertThat(statusData.get()).hasSize(3);
         assertThat(transitionData.get()).hasSize(4);
@@ -145,7 +148,7 @@ class WorkflowMutationServiceTest {
 
     @Test
     void movingIssuesPrecedesDeletingStatusAndItsIncidentEdges() {
-        when(issues.migrate(any(), eq(List.of(IssueType.TASK)), eq(List.of("TODO", "DONE")), eq(Map.of("REVIEW", "DONE"))))
+        when(issues.migrate(any(), eq(List.of(IssueType.TASK)), eq(List.of("TODO", "DONE")), eq(Map.of("REVIEW", "DONE")), eq(List.of("REVIEW"))))
                 .thenReturn(Mono.just(3L));
         StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, "DONE", Map.of())))
                 .assertNext(result -> {
@@ -177,6 +180,38 @@ class WorkflowMutationServiceTest {
                 .expectErrorSatisfies(e -> status(e, DomainStatus.INVALID_ARGUMENT)).verify();
         verifyNoInteractions(issues);
         verify(workflows, never()).delete(any(WorkflowEntity.class));
+    }
+
+
+    @Test
+    void workflowDeletionOffersOnlyTargetsPresentInBothGraphs() {
+        UUID fallbackId = UUID.randomUUID();
+        when(workflows.findWorkflowForProject(defaultProject, "TASK")).thenReturn(Mono.just(entity.toBuilder().id(fallbackId).build()));
+        when(statuses.findActiveByWorkflowId(fallbackId)).thenReturn(Flux.just(status(1, "TODO", 10), status(3, "DONE", 20), status(9, "ARCHIVED", 30)));
+        when(transitions.findByWorkflowIdOrderBySortOrderAsc(fallbackId)).thenReturn(Flux.just(edge(90, 1, 3, 10, false)));
+        when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+                new DomainException(DomainStatus.FAILED_PRECONDITION, "Status has issues",
+                        Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "2", "statusKeys", "REVIEW")))));
+        StepVerifier.create(service.mutate(Operation.DELETE_WORKFLOW,
+                        command(4, null, null, null, null, null, null, Map.of())))
+                .expectErrorSatisfies(error -> assertThat(((DomainException) error).getDetails())
+                        .containsEntry("targetStatusKeys", "TODO,DONE")).verify();
+        verify(workflows, never()).delete(any(WorkflowEntity.class));
+        verify(bindings, never()).delete(any(WorkflowBindingEntity.class));
+    }
+
+    @Test
+    void migrationLimitKeepsItsReasonAndDoesNotOfferMappingAsAResolution() {
+        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+                new DomainException(DomainStatus.FAILED_PRECONDITION, "Migration exceeds 5000 issues",
+                        Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000")))));
+        StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, null, Map.of())))
+                .expectErrorSatisfies(error -> {
+                    status(error, DomainStatus.FAILED_PRECONDITION);
+                    assertThat(((DomainException) error).getDetails()).containsExactlyInAnyOrderEntriesOf(
+                            Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000"));
+                }).verify();
+        verify(statuses, never()).delete(any(StatusEntity.class));
     }
 
     private WorkflowMutation command(Integer version, Long status, Long transition, String name, Integer order,

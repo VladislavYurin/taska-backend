@@ -6,12 +6,18 @@ import com.fasterxml.jackson.annotation.Nulls;
 import java.math.BigDecimal;
 import java.util.Map;
 import lombok.Getter;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.PositiveOrZero;
 
 @Getter
 public class PatchWorkflowTransitionRequestDto implements WorkflowPatchBody {
+    @Size(min = 1, max = 100)
     private String name;
     private Boolean hidden;
+    @PositiveOrZero
     private Integer sortOrder;
+    @Min(1)
     private Integer version;
 
     @JsonSetter(nulls = Nulls.FAIL)
