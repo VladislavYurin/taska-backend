@@ -31,7 +31,7 @@ class IssueTypeUsageClientTest {
     }
 
     @Test
-    void asksForExactTypeIncludingDeletedIssues() {
+    void asksForExactTypeExcludingDeletedIssues() {
         when(stub.countProjectIssuesBatchInternal(any(CountProjectIssuesBatchInternalRequest.class)))
                 .thenReturn(Mono.just(CountProjectIssuesBatchInternalResponse.newBuilder().setFiltersApplied(true)
                         .addItems(ProjectIssueCount.newBuilder().setProjectId(project.toString()).setIssueCount(3)).build()));
@@ -39,7 +39,7 @@ class IssueTypeUsageClientTest {
         var captor = ArgumentCaptor.forClass(CountProjectIssuesBatchInternalRequest.class);
         verify(stub).countProjectIssuesBatchInternal(captor.capture());
         assertThat(captor.getValue().getIssueTypeKey()).isEqualTo("REQUEST");
-        assertThat(captor.getValue().getIncludeDeleted()).isTrue();
+        assertThat(captor.getValue().getIncludeDeleted()).isFalse();
         assertThat(captor.getValue().getProjectIdsList()).containsExactly(project.toString());
     }
 

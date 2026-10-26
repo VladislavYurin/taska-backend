@@ -153,6 +153,46 @@ class ProjectIssueTypeIntegrationTest {
         assertThat(repository.list(project).collectList().block().getFirst().code()).isEqualTo("TASK");
     }
 
+    @Test
+    void reorderIsCompletePermutationAndRollsBackWithSettings() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("ORDER"); admin(project); repository.seedDefaults(project).block();
+        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
+        var ordered = service.reorder(project, actor, List.of("STORY", "TASK", "BUG")).as(tx::transactional).block();
+        assertThat(ordered).extracting(t -> t.code()).containsExactly("STORY", "TASK", "BUG");
+        assertThat(ordered).extracting(t -> t.sortOrder()).containsExactly(10, 20, 30);
+        assertThat(defaultType(project)).isEqualTo("STORY");
+        var generation = ordered.getFirst().generation();
+        for (var invalid : List.of(List.of("TASK", "BUG"), List.of("TASK", "BUG", "BUG"), List.of("TASK", "BUG", "UNKNOWN"))) {
+            reactor.test.StepVerifier.create(service.reorder(project, actor, invalid).as(tx::transactional))
+                    .expectErrorSatisfies(error -> assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT)).verify();
+        }
+        reactor.test.StepVerifier.create(service.reorder(project, actor, List.of("BUG", "TASK", "STORY"))
+                        .then(Mono.error(new IllegalStateException("rollback"))).as(tx::transactional))
+                .expectError(IllegalStateException.class).verify();
+        assertThat(repository.list(project).collectList().block()).extracting(t -> t.code()).containsExactly("STORY", "TASK", "BUG");
+        assertThat(defaultType(project)).isEqualTo("STORY");
+        assertThat(repository.find(project, "STORY").block().generation()).isEqualTo(generation);
+    }
+
+    @Test
+    void deletedCodeGetsDifferentGenerationAndRollbackPreservesIdentity() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("GEN"); admin(project); repository.seedDefaults(project).block();
+        var issues = mock(GrpcIssueServiceClient.class);
+        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
+        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
+        var original = repository.find(project, "BUG").block().generation();
+        reactor.test.StepVerifier.create(service.delete(project, actor, "BUG", "r", "n")
+                        .then(Mono.error(new IllegalStateException("rollback"))).as(tx::transactional))
+                .expectError(IllegalStateException.class).verify();
+        assertThat(repository.find(project, "BUG").block().generation()).isEqualTo(original);
+        service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
+        var recreated = service.create(project, actor, "BUG", "New bug", "red", "bug", 20).as(tx::transactional).block();
+        assertThat(recreated.generation()).isNotEqualTo(original);
+        assertThat(repository.listBatch(List.of(project)).collectList().block()).hasSize(3);
+    }
+
     private String defaultType(UUID project) {
         return db.sql("SELECT settings->>'defaultIssueType' AS value FROM taska.project_settings WHERE project_id=:p")
                 .bind("p", project).map((r, m) -> r.get("value", String.class)).one().block();
@@ -175,5 +215,6 @@ class ProjectIssueTypeIntegrationTest {
         for (String statement : sql.replaceAll("(?m)--.*$", "").split(";")) {
             if (!statement.replaceAll("(?m)--.*$", "").isBlank()) db.sql(statement).fetch().rowsUpdated().block();
         }
+        if (file.equals("0001-project-issue-types.sql")) migrate("0002-issue-type-generation.sql");
     }
 }

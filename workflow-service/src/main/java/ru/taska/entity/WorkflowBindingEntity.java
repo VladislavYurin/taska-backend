@@ -50,6 +50,9 @@ public class WorkflowBindingEntity {
     @Column("workflow_id")
     private UUID workflowId;
 
+    @Column("issue_type_generation")
+    private UUID issueTypeGeneration;
+
     /**
      * Временная метка создания записи (аудит).
      */

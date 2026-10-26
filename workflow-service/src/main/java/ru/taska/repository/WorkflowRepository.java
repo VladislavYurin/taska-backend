@@ -28,6 +28,14 @@ public interface WorkflowRepository extends ReactiveCrudRepository<WorkflowEntit
     """)
     Mono<WorkflowEntity> findWorkflowForProject(UUID projectId, String issueType);
 
+    @Query("""
+            SELECT w.* FROM taska.workflow_bindings b JOIN taska.workflows w ON w.id=b.workflow_id
+            WHERE b.project_id=:projectId AND b.issue_type=:issueType AND w.is_active=TRUE
+              AND (b.issue_type_generation=:generation OR (b.issue_type_generation IS NULL AND :legacy))
+            LIMIT 1
+            """)
+    Mono<WorkflowEntity> findWorkflowForProjectGeneration(UUID projectId, String issueType, UUID generation, boolean legacy);
+
     // Атомарно: параллельные изменения одного workflow не теряют увеличение версии.
     @Modifying
     @Query("UPDATE taska.workflows SET version = version + 1, updated_at = now() WHERE id = :workflowId")

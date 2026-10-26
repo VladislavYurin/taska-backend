@@ -47,6 +47,12 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         org.mockito.Mockito.when(projectClient.listIssueTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Mono.just(java.util.List.of(ru.taska.domain.IssueType.values())));
+        org.mockito.Mockito.when(projectClient.listIssueTypeDetails(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> Mono.just(ru.taska.RegistryFixtures.types(inv.getArgument(2), ru.taska.domain.IssueType.values())));
+        org.mockito.Mockito.when(projectClient.getIssueTypesInternal(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> Mono.just(ru.taska.RegistryFixtures.types(inv.getArgument(0), ru.taska.domain.IssueType.values())));
+
 
         project = UUID.randomUUID(); actor = UUID.randomUUID();
         when(roles.checkProjectWriteRole(any(), any(), any(), any(), any())).thenReturn(Mono.empty());
@@ -176,6 +182,10 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     void customTypeUsesDefaultAndCanCreateEditListAndDeleteOwnWorkflow() {
         var request = IssueType.valueOf("REQUEST");
         when(projectClient.listIssueTypes(any(), any(), any(), any())).thenReturn(Mono.just(List.of(IssueType.TASK, request)));
+        when(projectClient.listIssueTypeDetails(any(), any(), any(), any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(project, IssueType.TASK, request)));
+        when(projectClient.getIssueTypesInternal(any()))
+                .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(project, IssueType.TASK, request)));
         var fallback = resolver.resolveWorkflow(project, "REQUEST").block();
         assertThat(fallback).isNotNull();
         var own = creator.validateAndCreateWorkflow("r", "n", actor, WorkflowCreationDto.builder()
@@ -197,6 +207,84 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         assertThat(deleted.shared()).isTrue();
         assertThat(deleted.issueTypes()).containsExactly(request);
         assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isEqualTo(fallback.getId());
+    }
+
+    @Test
+    void deletedOrRecreatedTypeCannotResurrectLegacyBindingAndCleanupRollsBack() {
+        // A pre-migration binding has no generation and is valid only for the initial registry generation.
+        databaseClient.sql("UPDATE taska.workflow_bindings SET issue_type_generation=NULL WHERE workflow_id=:id")
+                .bind("id", workflow).fetch().rowsUpdated().block();
+        assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isEqualTo(workflow);
+        var original = ru.taska.RegistryFixtures.types(project, IssueType.values());
+        var removed = ru.taska.RegistryFixtures.types(project, IssueType.BUG, IssueType.STORY);
+        registryReturns(removed);
+        assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).noneSatisfy(item ->
+                assertThat(item.issueTypes()).contains(IssueType.TASK));
+        reactor.test.StepVerifier.create(edits.addStatus("r", "n", actor, project, workflow, status("NEW", 40)))
+                .expectErrorSatisfies(error -> assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.NOT_FOUND)).verify();
+        // Simulate a rolled-back registry delete: no cross-service mutation has removed the binding.
+        registryReturns(original);
+        assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isEqualTo(workflow);
+        assertThat(bindingCount(workflow)).isEqualTo(1);
+
+        var recreated = original.stream().map(type -> type.getCode().equals("TASK")
+                ? type.toBuilder().setGeneration(UUID.randomUUID().toString()).build() : type).toList();
+        registryReturns(recreated);
+        assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isNotEqualTo(workflow);
+        assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).noneSatisfy(item ->
+                assertThat(item.workflow().workflow().getId()).isEqualTo(workflow));
+        var transaction = org.springframework.transaction.reactive.TransactionalOperator.create(
+                new org.springframework.r2dbc.connection.R2dbcTransactionManager(connectionFactory));
+        reactor.test.StepVerifier.create(creator.validateAndCreateWorkflow("r", "n", actor, replacement("TASK"))
+                        .then(Mono.error(new IllegalStateException("rollback after cleanup"))).as(transaction::transactional))
+                .expectError(IllegalStateException.class).verify();
+        assertThat(bindingCount(workflow)).isEqualTo(1);
+        var fresh = creator.validateAndCreateWorkflow("r", "n", actor, replacement("TASK")).block();
+        assertThat(bindingCount(workflow)).isZero();
+        assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isEqualTo(fresh.workflow().getId());
+    }
+
+    @Test
+    void inFlightCreationFromOldRegistrySnapshotCannotRestoreOldWorkflowAfterRecreation() throws Exception {
+        var old = ru.taska.RegistryFixtures.types(project, IssueType.TASK, IssueType.valueOf("REQUEST"));
+        var fresh = old.stream().map(type -> type.getCode().equals("REQUEST")
+                ? type.toBuilder().setGeneration(UUID.randomUUID().toString()).build() : type).toList();
+        var captured = reactor.core.publisher.Sinks.<Boolean>one();
+        var release = reactor.core.publisher.Sinks.<List<ru.taska.api.project.v1.ProjectIssueTypeResponse>>one();
+        when(projectClient.listIssueTypeDetails(any(), any(), any(), any())).thenAnswer(inv -> {
+            captured.tryEmitValue(true);
+            return release.asMono();
+        });
+        var inFlight = creator.validateAndCreateWorkflow("r", "n", actor, replacement("REQUEST"))
+                .subscribeOn(reactor.core.scheduler.Schedulers.parallel()).toFuture();
+        captured.asMono().block(java.time.Duration.ofSeconds(5));
+        registryReturns(fresh);
+        release.tryEmitValue(old);
+        var staleWorkflow = inFlight.get(5, java.util.concurrent.TimeUnit.SECONDS).workflow().getId();
+        assertThat(bindingCount(staleWorkflow)).isEqualTo(1);
+        assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isNotEqualTo(staleWorkflow);
+        var currentWorkflow = creator.validateAndCreateWorkflow("r", "n", actor, replacement("REQUEST")).block().workflow().getId();
+        assertThat(bindingCount(staleWorkflow)).isZero();
+        assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isEqualTo(currentWorkflow);
+    }
+
+    @Autowired io.r2dbc.spi.ConnectionFactory connectionFactory;
+
+    private void registryReturns(List<ru.taska.api.project.v1.ProjectIssueTypeResponse> types) {
+        when(projectClient.listIssueTypeDetails(any(), any(), any(), any())).thenReturn(Mono.just(types));
+        when(projectClient.getIssueTypesInternal(any())).thenReturn(Mono.just(types));
+    }
+
+    private long bindingCount(UUID workflowId) {
+        return databaseClient.sql("SELECT count(*) AS n FROM taska.workflow_bindings WHERE workflow_id=:id")
+                .bind("id", workflowId).map((row, metadata) -> row.get("n", Long.class)).one().block();
+    }
+
+    private WorkflowCreationDto replacement(String type) {
+        return WorkflowCreationDto.builder().projectId(project).name("Replacement")
+                .issueTypes(List.of(IssueType.valueOf(type)))
+                .statuses(List.of(status("TODO", 10), status("DONE", 20)))
+                .transitions(List.of(edge("TODO", "DONE", 10))).build();
     }
 
     private WorkflowMutation command(String name, UUID status, String target) {

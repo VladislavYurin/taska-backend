@@ -26,7 +26,7 @@ public class GrpcIssueServiceClient {
     public Mono<Long> countIssueTypeUsage(UUID projectId, String code, String requestId, String nodeId) {
         var request = ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest.newBuilder()
                 .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                .addProjectIds(projectId.toString()).setIssueTypeKey(code).setIncludeDeleted(true).build();
+                .addProjectIds(projectId.toString()).setIssueTypeKey(code).setIncludeDeleted(false).build();
         return dynamicStub().countProjectIssuesBatchInternal(request).flatMap(response -> {
             if (!response.getFiltersApplied()) {
                 return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAVAILABLE,

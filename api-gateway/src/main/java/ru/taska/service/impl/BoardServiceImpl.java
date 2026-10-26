@@ -157,8 +157,11 @@ public class BoardServiceImpl implements BoardService {
 
     private Mono<List<WorkflowTypeResolution>> resolveWorkflows(UUID projectId, String issueType, GatewayContext context) {
         if (issueType != null) {
-            return workflowClient.getWorkflowForProject(projectId, issueType, context)
-                    .map(workflow -> List.of(WorkflowTypeResolution.found(issueType, workflow.getStatuses())));
+            return issueTypesClient.list(projectId, context).flatMap(registry -> {
+                if (registry.getItems().stream().noneMatch(type -> type.getCode().equals(issueType))) return Mono.just(List.of());
+                return workflowClient.getWorkflowForProject(projectId, issueType, context)
+                        .map(workflow -> List.of(WorkflowTypeResolution.found(issueType, workflow.getStatuses())));
+            });
         }
         // Preserve the project registry order regardless of RPC completion order.
         return issueTypesClient.list(projectId, context)

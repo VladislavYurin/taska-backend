@@ -17,8 +17,23 @@ public class ProjectIssueTypeRepository {
     private final DatabaseClient db;
 
     public Flux<ProjectIssueType> list(UUID projectId) {
-        return db.sql("SELECT * FROM taska.project_issue_types WHERE project_id=:project ORDER BY sort_order,code")
+        return db.sql("SELECT * FROM taska.project_issue_types WHERE project_id=:project ORDER BY sort_order,code COLLATE \"C\"")
                 .bind("project", projectId).map((r, m) -> read(r)).all();
+    }
+
+    public Flux<ProjectIssueType> listBatch(java.util.Collection<UUID> projectIds) {
+        if (projectIds.isEmpty()) return Flux.empty();
+        return db.sql("SELECT * FROM taska.project_issue_types WHERE project_id IN (:projects) ORDER BY project_id,sort_order,code COLLATE \"C\"")
+                .bind("projects", projectIds).map((r, m) -> read(r)).all();
+    }
+
+    public Mono<Void> reorder(UUID projectId, java.util.List<String> codes) {
+        return db.sql("""
+                UPDATE taska.project_issue_types t SET sort_order=ordered.ordinality * 10,updated_at=now()
+                FROM unnest(CAST(:codes AS text[])) WITH ORDINALITY AS ordered(code,ordinality)
+                WHERE t.project_id=:project AND t.code=ordered.code
+                """).bind("codes", codes.toArray(String[]::new)).bind("project", projectId)
+                .fetch().rowsUpdated().then();
     }
 
     public Mono<ProjectIssueType> find(UUID projectId, String code) {
@@ -69,8 +84,8 @@ public class ProjectIssueTypeRepository {
         return db.sql("""
                 INSERT INTO taska.project_settings(project_id,settings,updated_by)
                 SELECT :project,jsonb_build_object(
-                    'allowedIssueTypes',jsonb_agg(code ORDER BY sort_order,code),
-                    'defaultIssueType',(array_agg(code ORDER BY sort_order,code))[1]),:actor
+                    'allowedIssueTypes',jsonb_agg(code ORDER BY sort_order,code COLLATE "C"),
+                    'defaultIssueType',(array_agg(code ORDER BY sort_order,code COLLATE "C"))[1]),:actor
                 FROM taska.project_issue_types WHERE project_id=:project
                 ON CONFLICT(project_id) DO UPDATE SET settings=taska.project_settings.settings || EXCLUDED.settings,
                     updated_at=now(),updated_by=EXCLUDED.updated_by
@@ -86,6 +101,6 @@ public class ProjectIssueTypeRepository {
         return new ProjectIssueType(row.get("project_id", UUID.class), row.get("code", String.class),
                 row.get("name", String.class), row.get("color", String.class), row.get("icon", String.class),
                 row.get("sort_order", Integer.class), row.get("created_at", OffsetDateTime.class).toInstant(),
-                row.get("updated_at", OffsetDateTime.class).toInstant());
+                row.get("updated_at", OffsetDateTime.class).toInstant(), row.get("generation", UUID.class));
     }
 }

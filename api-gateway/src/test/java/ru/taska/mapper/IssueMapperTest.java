@@ -71,6 +71,18 @@ import java.util.stream.Stream;
 @ExtendWith(MockitoExtension.class)
 class IssueMapperTest {
 
+    @Test
+    void searchTypeMetadataIsMappedWithoutGlobalSeedFallback() {
+        var type = ru.taska.api.issue.v1.IssueShortResponse.newBuilder().setIssueTypeKey("REQUEST")
+                .setPriority(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM).setIssueTypeName("Заявка").setIssueTypeColor("teal").setIssueTypeIcon("headset").build();
+        var mapped = mapper.toIssueShortResponseDto(type);
+        Assertions.assertEquals("Заявка", mapped.getIssueTypeName());
+        Assertions.assertEquals("teal", mapped.getIssueTypeColor());
+        Assertions.assertEquals("headset", mapped.getIssueTypeIcon());
+        Assertions.assertNull(mapper.toIssueShortResponseDto(type.toBuilder().clearIssueTypeName()
+                .clearIssueTypeColor().clearIssueTypeIcon().build()).getIssueTypeName());
+    }
+
     public static final String PAYLOAD = """
             {
               "oldStatus":"TODO",
