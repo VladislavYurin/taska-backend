@@ -73,6 +73,7 @@ flowchart LR
 
 | Модуль | Назначение |
 |---|---|
+| `mcp-server` | Streamable HTTP `/mcp`, PAT, request-scoped auth context и вызовы REST gateway; первый tool `whoami` |
 | `api-gateway` | REST/BFF, OpenAPI, CORS, проверка access-токена и формирование контекста запроса |
 | `auth-service` | пользователи, credentials, JWT, refresh/invite tokens, профиль и аватары |
 | `project-service` | проекты, участники, проектные роли и события проектов |
@@ -382,5 +383,17 @@ node --test .github/codex/scripts/*.test.js
 4. добавьте переменные в `.env.docker.example` без реальных секретов;
 5. добавьте сервис в Prometheus, Grafana/Promtail и CI matrices;
 6. обновите OpenAPI/protobuf-контракты и этот README.
+
+
+MCP: отдельный сервис из профиля `services`, локально `http://127.0.0.1:8087/mcp`.
+Фаза 1 принимает личный PAT со scope `read`, переданный в `Authorization: Bearer …`, и проверяет его
+в auth-service на каждом запросе. Выпуск PAT описан в [ADR TAS-400](docs/tas-400-mcp-server.md).
+Стандартная ревизия — `2025-11-25`; stateless initialize, `tools/list` и `whoami` работают без сессий.
+Для POST нужны `Content-Type: application/json` и `Accept: application/json, text/event-stream`.
+Origin MCP Inspector разрешён только для `localhost:6274` / `127.0.0.1:6274`; дополнительные origin
+добавляются точными значениями `MCP_ALLOWED_ORIGINS`. Actuator доступен только во внутренней сети
+и через dev loopback mapping; readiness включает доступность gateway. Контейнер `taska-mcp-server`
+подхватывается существующим Promtail правилом `taska-*`, метрики собираются Prometheus.
+Совместимость Inspector и внешних агентов подтверждается отдельно на развёрнутом стенде (TAS-408).
 
 Workflow mutation replies use the current project issue-type registry for their order. The registry is resolved before a write: if it is unavailable, the mutation fails without a database change. This avoids returning a lookup failure after a committed change or silently inventing an empty type list.
