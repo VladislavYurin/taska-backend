@@ -30,6 +30,10 @@ import java.util.UUID;
 @Table(name = "issues", schema = "taska")
 public class Issue {
 
+    /** Filtered size of this status before the board limit; populated by the board query only. */
+    @org.springframework.data.annotation.Transient
+    private Long boardStatusTotalCount;
+
     /**
      * Идентификатор задачи.
      */

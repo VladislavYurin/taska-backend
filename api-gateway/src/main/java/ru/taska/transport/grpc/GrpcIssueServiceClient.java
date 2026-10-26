@@ -48,6 +48,7 @@ import ru.taska.domain.dto.UpdateIssueRequestDto;
 import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -490,6 +491,7 @@ public class GrpcIssueServiceClient {
             List<String> doneStatusKeys,
             IssuePriorityDto priority,
             String query,
+            Integer pageSizePerColumn,
             GatewayContext context
     ) {
         log.info(
@@ -506,6 +508,7 @@ public class GrpcIssueServiceClient {
                 .setIncludeDone(Boolean.TRUE.equals(includeDone))
                 .addAllDoneStatusKeys(doneStatusKeys);
 
+        requestBodyBuilder.setPageSizePerColumn(pageSizePerColumn);
         if (issueType != null) requestBodyBuilder.setIssueTypeKey(issueType);
         if (assigneeId != null && !assigneeId.isBlank()) {
             requestBodyBuilder.setAssigneeId(assigneeId);
@@ -526,9 +529,12 @@ public class GrpcIssueServiceClient {
                                 .setBody(requestBodyBuilder.build())
                                 .build()
                 )
-                .map(response -> response.getIssuesList().stream()
-                        .map(issueMapper::toBoardIssueData)
-                        .toList()
-                );
+                .map(response -> {
+                    if (response.getIssuesList().stream().anyMatch(issue -> !issue.hasStatusTotalCount())) {
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Board counts unavailable; issue-service update required");
+                    }
+                    return response.getIssuesList().stream().map(issueMapper::toBoardIssueData).toList();
+                });
     }
 }

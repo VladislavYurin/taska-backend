@@ -75,6 +75,30 @@ class BoardControllerWebTestClientTest {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, -1, 201})
+    void rejectsInvalidPageSize(int size) {
+        mockAuthenticatedUser();
+        webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
+                        .queryParam("pageSizePerColumn",size).build(PROJECT_ID))
+                .header(HttpHeaders.AUTHORIZATION,TOKEN).exchange().expectStatus().isBadRequest()
+                .expectHeader().exists("X-Request-Id");
+        Mockito.verifyNoInteractions(boardService);
+    }
+
+    @Test
+    void enrichmentUnavailableReturns503WithRequestId() {
+        mockAuthenticatedUser();
+        Mockito.when(boardService.getBoard(Mockito.eq(PROJECT_ID), Mockito.isNull(), Mockito.isNull(),
+                        Mockito.isNull(), Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.eq(50),
+                        Mockito.any(GatewayContext.class)))
+                .thenReturn(Mono.error(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Board labels unavailable")));
+        webTestClient.get().uri("/api/v1/projects/{projectId}/board", PROJECT_ID)
+                .header(HttpHeaders.AUTHORIZATION,TOKEN).exchange().expectStatus().isEqualTo(503)
+                .expectHeader().exists("X-Request-Id").expectBody().jsonPath("$.code").isEqualTo("SERVICE_UNAVAILABLE");
+    }
+
     @Test
     @DisplayName("Должен вернуть 200 OK и доску с задачами и пустыми колонками")
     void getBoard_shouldReturn200_andGroupedBoard() {
@@ -106,7 +130,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.eq(false),
                         Mockito.isNull(),
-                        Mockito.isNull(),
+                        Mockito.isNull(), Mockito.eq(50),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -134,7 +158,7 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.eq(false),
                 Mockito.isNull(),
-                Mockito.isNull(),
+                Mockito.isNull(), Mockito.eq(50),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);
@@ -161,7 +185,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.eq(false),
                         Mockito.isNull(),
-                        Mockito.isNull(),
+                        Mockito.isNull(), Mockito.eq(50),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -183,7 +207,7 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.eq(false),
                 Mockito.isNull(),
-                Mockito.isNull(),
+                Mockito.isNull(), Mockito.eq(50),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);
@@ -221,13 +245,13 @@ class BoardControllerWebTestClientTest {
     void validOpenKeyPassesToBoardService(String key) {
         mockAuthenticatedUser();
         Mockito.when(boardService.getBoard(Mockito.eq(PROJECT_ID), Mockito.eq(key), Mockito.isNull(), Mockito.isNull(),
-                        Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.any()))
+                        Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.eq(50), Mockito.any()))
                 .thenReturn(Mono.just(new BoardResponseDto().projectId(PROJECT_ID).columns(List.of()).unplacedIssues(List.of())));
         webTestClient.get().uri(builder -> builder.path("/api/v1/projects/{projectId}/board")
                         .queryParam("issueType", key).build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN).exchange().expectStatus().isOk();
         Mockito.verify(boardService).getBoard(Mockito.eq(PROJECT_ID), Mockito.eq(key), Mockito.isNull(), Mockito.isNull(),
-                Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.any());
+                Mockito.eq(false), Mockito.isNull(), Mockito.isNull(), Mockito.eq(50), Mockito.any());
     }
 
     @Test
@@ -255,7 +279,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.eq(false),
                         Mockito.isNull(),
-                        Mockito.isNull(),
+                        Mockito.isNull(), Mockito.eq(50),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -274,7 +298,7 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.eq(false),
                 Mockito.isNull(),
-                Mockito.isNull(),
+                Mockito.isNull(), Mockito.eq(50),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);
@@ -297,7 +321,7 @@ class BoardControllerWebTestClientTest {
                         Mockito.isNull(),
                         Mockito.eq(false),
                         Mockito.eq(IssuePriorityDto.HIGH),
-                        Mockito.eq("auth bug"),
+                        Mockito.eq("auth bug"), Mockito.eq(2),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
 
@@ -306,6 +330,7 @@ class BoardControllerWebTestClientTest {
                         .queryParam("issueType", ISSUE_TYPE)
                         .queryParam("priority", IssuePriorityDto.HIGH)
                         .queryParam("query", "auth bug")
+                        .queryParam("pageSizePerColumn", 2)
                         .build(PROJECT_ID))
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .exchange()
@@ -318,7 +343,7 @@ class BoardControllerWebTestClientTest {
                 Mockito.isNull(),
                 Mockito.eq(false),
                 Mockito.eq(IssuePriorityDto.HIGH),
-                Mockito.eq("auth bug"),
+                Mockito.eq("auth bug"), Mockito.eq(2),
                 Mockito.any(GatewayContext.class)
         );
         Mockito.verifyNoMoreInteractions(boardService);

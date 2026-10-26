@@ -36,6 +36,7 @@ public class BoardController implements BoardApi {
      * @param includeDone включать ли завершенные задачи
      * @param priority фильтр по приоритету задачи
      * @param query полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
+     * @param pageSizePerColumn размер первой страницы каждой колонки
      * @param exchange текущий HTTP exchange
      * @return сформированная доска проекта
      */
@@ -48,6 +49,7 @@ public class BoardController implements BoardApi {
             Boolean includeDone,
             IssuePriorityDto priority,
             String query,
+            Integer pageSizePerColumn,
             ServerWebExchange exchange
     ) {
         return executor.execute(
@@ -57,7 +59,8 @@ public class BoardController implements BoardApi {
                     if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
                         return issueTypesClient.list(projectId, context)
                                 .thenReturn(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
-                                        .columns(java.util.List.of()).unplacedIssues(java.util.List.of())));
+                                        .columns(java.util.List.of()).unplacedIssues(java.util.List.of())
+                                        .unplacedTotalCount(0L).unplacedHasMore(false)));
                     }
                     return boardService.getBoard(
                         projectId,
@@ -67,6 +70,7 @@ public class BoardController implements BoardApi {
                         includeDone,
                         priority,
                         query,
+                        pageSizePerColumn,
                         context
                 ).map(ResponseEntity::ok);
                 }

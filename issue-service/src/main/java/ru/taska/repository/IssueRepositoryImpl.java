@@ -243,10 +243,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * и подставляется в фильтр; {@code null} или пустой {@code labelIds} означает «фильтр по
      * меткам не применяется», а непустой список, которому не соответствует ни одна задача,
      * даёт пустой результат, а не молчаливо снятый фильтр. При {@code null}
-     * {@code pageSizePerColumn} выборка не ограничивается и собирается через Criteria API;
-     * при заданном значении выполняется сырой SQL с оконной функцией, оставляющей не более
-     * N задач в каждой колонке доски (по {@code status_key}). Оба пути строятся из одного
-     * {@link Filter}, поэтому набор условий в них не расходится.
+     * {@code pageSizePerColumn} выборка не ограничивается. Один SQL на основе {@link Filter}
+     * считает полный размер групп по status_key и при заданном лимите оставляет первые N задач.
      */
     @Override
     public Flux<Issue> findForBoard(
@@ -270,9 +268,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                     if (filter.matchesNothing()) {
                         return Flux.empty();
                     }
-                    return pageSizePerColumn != null
-                            ? findForBoardLimitedPerColumn(filter, pageSizePerColumn)
-                            : r2dbcEntityTemplate.select(buildBoardCriteriaQuery(filter), Issue.class);
+                    return findForBoardLimitedPerColumn(filter, pageSizePerColumn);
                 });
     }
 
@@ -294,38 +290,27 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .map(Optional::of);
     }
 
-    /**
-     * Criteria-запрос для доски (путь без {@code pageSizePerColumn}): условия из
-     * {@code filter} плюс сортировка по колонке ({@code status_key}) и дате создания.
-     */
-    private Query buildBoardCriteriaQuery(Filter filter) {
-        return Query.query(CriteriaRenderer.render(filter))
-                .sort(Sort.by(Sort.Direction.ASC, "status_key", "created_at"));
-    }
-
-    /**
-     * Находит задачи для доски с ограничением количества задач в каждой колонке (status_key),
-     * а не в результате целиком. Criteria API/{@code .limit()} режет весь результат,
-     * поэтому здесь используется оконная функция ROW_NUMBER() с PARTITION BY status_key.
-     */
-    private Flux<Issue> findForBoardLimitedPerColumn(Filter filter, int pageSizePerColumn) {
+    /** Count and page share one PostgreSQL statement/snapshot and exactly the same filters. */
+    private Flux<Issue> findForBoardLimitedPerColumn(Filter filter, Integer pageSizePerColumn) {
         SqlWhere where = SqlRenderer.render(filter);
-
         String sql = """
                 SELECT * FROM (
                     SELECT *,
-                           ROW_NUMBER() OVER (PARTITION BY status_key ORDER BY created_at ASC) AS rn
+                           COUNT(*) OVER (PARTITION BY status_key) AS board_total_count,
+                           ROW_NUMBER() OVER (PARTITION BY status_key ORDER BY created_at ASC, id ASC) AS rn
                     FROM taska.issues
                     WHERE %s
                 ) t
-                WHERE rn <= :pageSizePerColumn
-                ORDER BY status_key ASC, created_at ASC
-                """.formatted(where.sql());
-
-        return where.bindTo(r2dbcEntityTemplate.getDatabaseClient().sql(sql))
-                .bind("pageSizePerColumn", pageSizePerColumn)
-                .map(issueMapper::mapRowToIssue)
-                .all();
+                %s
+                ORDER BY status_key ASC, created_at ASC, id ASC
+                """.formatted(where.sql(), pageSizePerColumn == null ? "" : "WHERE rn <= :pageSizePerColumn");
+        var query = where.bindTo(r2dbcEntityTemplate.getDatabaseClient().sql(sql));
+        if (pageSizePerColumn != null) query = query.bind("pageSizePerColumn", pageSizePerColumn);
+        return query.map((row, metadata) -> {
+            Issue issue = issueMapper.mapRowToIssue(row, metadata);
+            issue.setBoardStatusTotalCount(row.get("board_total_count", Long.class));
+            return issue;
+        }).all();
     }
 
     @Override
@@ -335,7 +320,7 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
         }
 
         return r2dbcEntityTemplate.getDatabaseClient()
-                .sql("SELECT issue_id, label_id FROM taska.issue_labels WHERE issue_id IN (:issueIds)")
+                .sql("SELECT issue_id, label_id FROM taska.issue_labels WHERE issue_id IN (:issueIds) ORDER BY issue_id, created_at, label_id")
                 .bind("issueIds", issueIds)
                 .map((row, meta) -> new AbstractMap.SimpleEntry<>(
                         row.get("issue_id", UUID.class),
