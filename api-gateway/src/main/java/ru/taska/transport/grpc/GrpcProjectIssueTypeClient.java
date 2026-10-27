@@ -61,15 +61,48 @@ public class GrpcProjectIssueTypeClient {
     }
 
     public Mono<Void> delete(UUID project, String code, GatewayContext context) {
-        return dynamicStub().deleteProjectIssueType(base(project, code, context).build()).then();
+        return delete(project, code, null, context);
+    }
+
+    public Mono<Void> delete(UUID project, String code, DeleteProjectIssueTypeRequestDto body,
+                             GatewayContext context) {
+        var request = base(project, code, context);
+        boolean moving = body != null && body.getMoveIssuesTo() != null;
+        if (moving) request.setMoveIssuesTo(body.getMoveIssuesTo());
+        if (body != null && body.getStatusMappings() != null) {
+            if (body.getStatusMappings().entrySet().stream().anyMatch(e -> e.getKey() == null || e.getValue() == null))
+                return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "statusMappings values must be non-null status keys"));
+            request.putAllStatusMappings(body.getStatusMappings());
+        }
+        if (body != null && body.getExpectedGeneration() != null)
+            request.setExpectedGeneration(body.getExpectedGeneration().toString());
+        if (!moving) return dynamicStub().deleteProjectIssueType(request.build()).then();
+        return stub.withDeadlineAfter(120, TimeUnit.SECONDS)
+                .deleteProjectIssueTypeWithMigration(request.build())
+                .flatMap(result -> {
+                    if (result.getCompleted()) return Mono.empty();
+                    ru.taska.exception.DomainStatus status;
+                    try {
+                        status = ru.taska.exception.DomainStatus.valueOf(result.getRejectionStatus());
+                    } catch (IllegalArgumentException malformed) {
+                        return Mono.error(new ru.taska.exception.DomainException(
+                                ru.taska.exception.DomainStatus.UNAVAILABLE, "Invalid issue type deletion response"));
+                    }
+                    return Mono.error(new ru.taska.exception.DomainException(status,
+                            result.getRejectionMessage().isBlank() ? "Issue type deletion was rejected" : result.getRejectionMessage(),
+                            result.getRejectionDetailsMap()));
+                });
     }
 
     public static ProjectIssueTypeDto toRest(ProjectIssueTypeResponse type) {
         String icon = ProjectIssueTypes.icon(type);
-        return new ProjectIssueTypeDto(type.getCode(), type.getName(),
+        var result = new ProjectIssueTypeDto(type.getCode(), type.getName(),
                 ProjectIssueTypeColorDto.fromValue(type.getColor()),
                 ProjectIssueTypeShapeDto.fromValue(ProjectIssueTypes.shape(type)),
                 icon == null ? null : ProjectIssueTypeIconDto.fromValue(icon), type.getSortOrder());
+        if (!type.getGeneration().isBlank()) result.setGeneration(UUID.fromString(type.getGeneration()));
+        return result;
     }
 
     private ChangeProjectIssueTypeRequest.Builder base(UUID project, String code, GatewayContext context) {

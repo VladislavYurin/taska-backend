@@ -1296,6 +1296,16 @@
             },
             "shape" : {
               "$ref" : "#/$defs/ProjectIssueTypeShapeDto"
+            },
+            "generation" : {
+              "anyOf" : [ {
+                "type" : "string",
+                "format" : "uuid",
+                "readOnly" : true,
+                "description" : "Поколение типа; меняется после удаления и повторного создания кода. Передайте его в expectedGeneration при удалении с переносом."
+              }, {
+                "type" : "null"
+              } ]
             }
           },
           "description" : "Тип задачи из реестра проекта. Облик — цвет, форма и необязательный значок."

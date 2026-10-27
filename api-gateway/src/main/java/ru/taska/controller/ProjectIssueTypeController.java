@@ -45,8 +45,11 @@ public class ProjectIssueTypeController implements ProjectIssueTypeApi {
     }
 
     @Override
-    public Mono<ResponseEntity<Void>> deleteProjectIssueType(UUID projectId, String code, ServerWebExchange exchange) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, c -> client.delete(projectId, code, c))
+    public Mono<ResponseEntity<Void>> deleteProjectIssueType(UUID projectId, String code,
+            Mono<DeleteProjectIssueTypeRequestDto> body, ServerWebExchange exchange) {
+        return executor.execute(exchange, EndpointSecurity.PROTECTED, c -> body
+                .defaultIfEmpty(new DeleteProjectIssueTypeRequestDto())
+                .flatMap(command -> client.delete(projectId, code, command, c)))
                 .thenReturn(ResponseEntity.noContent().build());
     }
 }

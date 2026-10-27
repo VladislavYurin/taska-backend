@@ -95,7 +95,7 @@ class IssuePatchIT extends AbstractIT {
         Mockito.when(projectServiceStub.listProjectIssueTypes(Mockito.any(ru.taska.api.project.v1.ProjectIssueTypesRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.project.v1.ListProjectIssueTypesResponse.newBuilder()
                         .addAllItems(java.util.List.of("TASK", "BUG", "STORY").stream().map(key ->
-                                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode(key).build()).toList()).build()));
+                                ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder().setCode(key).setGeneration(UUID.nameUUIDFromBytes(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString()).build()).toList()).build()));
 
         issueRepository.deleteAll().block();
 

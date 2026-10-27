@@ -40,6 +40,8 @@ public class IssuePatchExecutor {
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
     private final IssueAutoWatchService issueAutoWatchService;
+    private final ru.taska.service.IssueTypeWriteGuard issueTypeWriteGuard;
+    private final ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
 
     /**
      * Транзакционное применение PATCH-изменений к задаче.
@@ -56,7 +58,8 @@ public class IssuePatchExecutor {
             int ifMatchVersion,
             IssuePatch patch
     ) {
-        return issueRepository.findActiveByIdForUpdate(issueId)
+        return issueRepository.findProjectIdByActiveIssueId(issueId)
+                .flatMap(project->issueTypeWriteGuard.lock(project).then(issueRepository.findActiveByIdForUpdate(issueId)))
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue with id: {} was not found", requestId, nodeId, issueId);
                     return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
@@ -69,7 +72,13 @@ public class IssuePatchExecutor {
                         return Mono.just(new PatchIssueResult(issue, true));
                     }
 
-                    return applyPatch(requestId, nodeId, issue, patch.applyTo(issue), actorUserId)
+                    Issue patched=patch.applyTo(issue);
+                    Mono<Void> typeCheck=patch.issueType().isPresent()
+                            ? issueTypeWriteGuard.requireTypeChange(requestId,nodeId,issue.getProjectId(),actorUserId,
+                                    issue.getIssueType(),patched.getIssueType())
+                                .then(Mono.defer(()->workflowClient.requireStatusForType(requestId,nodeId,patched,actorUserId)))
+                            : Mono.empty();
+                    return typeCheck.then(Mono.defer(()->applyPatch(requestId,nodeId,issue,patched,actorUserId)))
                             .map(savedIssue -> new PatchIssueResult(savedIssue, false));
                 });
     }

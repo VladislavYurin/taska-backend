@@ -22,6 +22,7 @@ import validator.GrpcRequestValidators;
 public class ProjectIssueTypeGrpcService {
     private final ProjectIssueTypeService service;
     private final ProjectMapper mapper;
+    private final ru.taska.service.IssueTypeDeletionCoordinator deletion;
 
     public Mono<ListProjectIssueTypesResponse> list(Mono<ProjectIssueTypesRequest> request) {
         return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
@@ -62,9 +63,32 @@ public class ProjectIssueTypeGrpcService {
     }
 
     public Mono<Empty> delete(Mono<ChangeProjectIssueTypeRequest> request) {
-        return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
-                service.delete(project, actor, req.getCode(), req.getHeader().getRequestId(),
-                        req.getHeader().getNodeId()).thenReturn(Empty.getDefaultInstance())));
+        return request.flatMap(req -> req.hasMoveIssuesTo()
+                ? Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.INVALID_ARGUMENT,
+                        "Move requests require DeleteProjectIssueTypeWithMigration"))
+                : executeDelete(Mono.just(req)));
+    }
+
+    private Mono<Empty> executeDelete(Mono<ChangeProjectIssueTypeRequest> request) {
+        return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) -> {
+            Mono<java.util.Optional<UUID>> expected=req.hasExpectedGeneration()
+                    ? GrpcRequestValidators.parseUuidOrInvalidArgument(req.getExpectedGeneration(),"expectedGeneration").map(java.util.Optional::of)
+                    : Mono.just(java.util.Optional.empty());
+            return expected.flatMap(generation->deletion.delete(project,actor,req.getCode(),
+                    req.hasMoveIssuesTo()?req.getMoveIssuesTo():null,req.getStatusMappingsMap(),generation.orElse(null),req.getHeader()))
+                    .contextWrite(context->action.GrpcActionContext.install(context,req.getHeader()))
+                    .thenReturn(Empty.getDefaultInstance());
+        }));
+    }
+
+    public Mono<ru.taska.api.project.v1.DeleteProjectIssueTypeResult> deleteWithMigration(Mono<ChangeProjectIssueTypeRequest> request) {
+        return executeDelete(request)
+                .map(ignored -> ru.taska.api.project.v1.DeleteProjectIssueTypeResult.newBuilder().setCompleted(true).build())
+                .onErrorResume(ru.taska.exception.DomainException.class, error -> Mono.just(
+                        ru.taska.api.project.v1.DeleteProjectIssueTypeResult.newBuilder()
+                                .setRejectionStatus(error.getStatus().name())
+                                .setRejectionMessage(error.getMessage())
+                                .putAllRejectionDetails(error.getDetails()).build()));
     }
 
     private <T> Mono<T> ids(String project, String actor, BiFunction<UUID, UUID, Mono<T>> operation) {

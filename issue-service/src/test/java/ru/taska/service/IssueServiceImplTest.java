@@ -31,6 +31,14 @@ import java.util.UUID;
 @ExtendWith(MockitoExtension.class)
 public class IssueServiceImplTest {
 
+    @Mock protected IssueTypeWriteGuard issueTypeWriteGuard;
+
+    @org.junit.jupiter.api.BeforeEach
+    void defaultIssueTypeGuard() {
+        org.mockito.Mockito.lenient().when(issueTypeWriteGuard.lock(org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+        org.mockito.Mockito.lenient().when(issueTypeWriteGuard.requireActive(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+    }
+
     @Mock
     protected GrpcProjectServiceClient grpcProjectServiceClient;
 

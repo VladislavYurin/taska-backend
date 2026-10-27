@@ -230,6 +230,7 @@ public interface ProjectMapper {
     default ru.taska.api.project.v1.ProjectIssueTypeResponse toIssueTypeResponse(ru.taska.domain.ProjectIssueType type) {
         var builder = ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
                 .setCode(type.code()).setName(type.name()).setColor(type.color())
+                .setPendingOperationId(type.pendingOperationId() == null ? "" : type.pendingOperationId().toString())
                 .setSortOrder(type.sortOrder()).setGeneration(type.generation() == null ? "" : type.generation().toString());
         return client.ProjectIssueTypes.writeLook(builder, type.code(), type.shape(), type.icon()).build();
     }

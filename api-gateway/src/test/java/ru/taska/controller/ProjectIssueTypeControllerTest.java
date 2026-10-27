@@ -33,6 +33,7 @@ class ProjectIssueTypeControllerTest {
     @MockitoBean GrpcAuthServiceClient auth;
     @MockitoBean ContextMapper contexts;
     private final UUID project = UUID.randomUUID(), user = UUID.randomUUID();
+    private final UUID generation = UUID.randomUUID();
 
     @Test
     void anonymousCannotReadRegistry() {
@@ -47,7 +48,9 @@ class ProjectIssueTypeControllerTest {
         http.get().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token").exchange()
                 .expectStatus().isOk().expectHeader().exists("X-Request-Id")
                 .expectBody().jsonPath("$.items[0].code").isEqualTo("REQUEST")
-                .jsonPath("$.items[0].icon").isEqualTo("headset");
+                .jsonPath("$.items[0].icon").isEqualTo("headset")
+                .jsonPath("$.items[0].generation").isEqualTo(generation.toString())
+                .jsonPath("$.items[0].pendingOperationId").doesNotExist();
     }
 
     @Test
@@ -138,7 +141,7 @@ class ProjectIssueTypeControllerTest {
     @Test
     void memberCannotModifyType() {
         authenticated();
-        when(client.delete(any(), any(), any())).thenReturn(Mono.error(Status.PERMISSION_DENIED
+        when(client.delete(any(), any(), any(), any())).thenReturn(Mono.error(Status.PERMISSION_DENIED
                 .withDescription("Project ADMIN role is required").asRuntimeException()));
         http.delete().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
                 .exchange().expectStatus().isForbidden();
@@ -175,7 +178,7 @@ class ProjectIssueTypeControllerTest {
         authenticated();
         for (var details : List.of(java.util.Map.of("reason", "LAST_ISSUE_TYPE"),
                 java.util.Map.of("reason", "ISSUE_TYPE_IN_USE", "issueCount", "7"))) {
-            when(client.delete(any(), any(), any())).thenReturn(Mono.error(Status.FAILED_PRECONDITION
+            when(client.delete(any(), any(), any(), any())).thenReturn(Mono.error(Status.FAILED_PRECONDITION
                     .withDescription("Cannot delete issue type").asRuntimeException(mapper.GrpcErrorDetails.encode(details))));
             var body = http.delete().uri(url()+"/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
                     .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.details.reason").isEqualTo(details.get("reason"));
@@ -184,11 +187,96 @@ class ProjectIssueTypeControllerTest {
         }
     }
 
+    @Test
+    void deleteWithoutBodyAndWithEmptyBodyKeepLegacyCommandAndReturn204() {
+        authenticated();
+        when(client.delete(any(), any(), any(), any())).thenAnswer(inv -> {
+            DeleteProjectIssueTypeRequestDto command = inv.getArgument(2);
+            org.assertj.core.api.Assertions.assertThat(command.getMoveIssuesTo()).isNull();
+            org.assertj.core.api.Assertions.assertThat(command.getExpectedGeneration()).isNull();
+            org.assertj.core.api.Assertions.assertThat(command.getStatusMappings()).isNullOrEmpty();
+            return Mono.empty();
+        });
+        http.delete().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .exchange().expectStatus().isNoContent();
+        http.method(org.springframework.http.HttpMethod.DELETE).uri(url() + "/REQUEST")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue("{}")
+                .exchange().expectStatus().isNoContent();
+        verify(client, times(2)).delete(any(), any(), any(), any());
+    }
+
+    @Test
+    void deleteMoveForwardsMappingAndGenerationWithAuthenticatedContext() {
+        authenticated();
+        when(client.delete(any(), any(), any(), any())).thenAnswer(inv -> {
+            org.assertj.core.api.Assertions.assertThat(inv.<UUID>getArgument(0)).isEqualTo(project);
+            org.assertj.core.api.Assertions.assertThat(inv.<String>getArgument(1)).isEqualTo("REQUEST");
+            DeleteProjectIssueTypeRequestDto command = inv.getArgument(2);
+            org.assertj.core.api.Assertions.assertThat(command.getMoveIssuesTo()).isEqualTo("TASK");
+            org.assertj.core.api.Assertions.assertThat(command.getStatusMappings()).containsExactlyEntriesOf(
+                    java.util.Map.of("TRIAGE", "TODO"));
+            org.assertj.core.api.Assertions.assertThat(command.getExpectedGeneration()).isEqualTo(generation);
+            GatewayContext context = inv.getArgument(3);
+            org.assertj.core.api.Assertions.assertThat(context.userContext().userId()).isEqualTo(user.toString());
+            return Mono.empty();
+        });
+        moveDelete("{\"moveIssuesTo\":\"TASK\",\"statusMappings\":{\"TRIAGE\":\"TODO\"},\"expectedGeneration\":\"%s\"}".formatted(generation))
+                .expectStatus().isNoContent();
+        verify(client).delete(any(), any(), any(), any());
+    }
+
+    @Test
+    void moveErrorsPreserveUnmappedStatusesGenerationAndPendingOperationDetails() {
+        authenticated();
+        var errors = java.util.List.of(
+                new Object[]{Status.FAILED_PRECONDITION, 400, java.util.Map.of("reason", "ISSUE_STATUSES_UNMAPPED", "statusKeys", "TRIAGE,REVIEW", "targetStatusKeys", "TODO,DONE")},
+                new Object[]{Status.FAILED_PRECONDITION, 400, java.util.Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000")},
+                new Object[]{Status.ABORTED, 409, java.util.Map.of("reason", "ISSUE_TYPE_GENERATION_REQUIRED")},
+                new Object[]{Status.ABORTED, 409, java.util.Map.of("reason", "ISSUE_TYPE_CHANGED")},
+                new Object[]{Status.UNAVAILABLE, 503, java.util.Map.of("reason", "ISSUE_TYPE_DELETION_PENDING", "operationId", generation.toString())});
+        for (var error : errors) {
+            @SuppressWarnings("unchecked") var details = (java.util.Map<String, String>) error[2];
+            when(client.delete(any(), any(), any(), any())).thenReturn(Mono.error(((Status) error[0])
+                    .withDescription("Issue type deletion could not complete")
+                    .asRuntimeException(mapper.GrpcErrorDetails.encode(details))));
+            var result = moveDelete("{\"moveIssuesTo\":\"TASK\"}").expectStatus().isEqualTo((int) error[1]).expectBody();
+            for (var entry : details.entrySet())
+                result.jsonPath("$.details." + entry.getKey()).isEqualTo(entry.getValue());
+        }
+    }
+
+    @Test
+    void malformedMoveBodyIsRejectedBeforeCallingProjectService() {
+        authenticated();
+        for (String body : java.util.List.of("{\"moveIssuesTo\":\"\"}", "{\"moveIssuesTo\":\"bad-key\"}",
+                "{\"moveIssuesTo\":\"TASK\",\"expectedGeneration\":\"invalid\"}"))
+            moveDelete(body).expectStatus().isBadRequest();
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void readPatCannotStartADeletionEvenWithMoveBody() {
+        authenticated();
+        when(contexts.mapToGatewayUserContext(any())).thenReturn(GatewayUserContext.builder()
+                .userId(user.toString()).email("user@example.com").status(GatewayUserStatus.ACTIVE)
+                .globalRole(GlobalRole.USER).tokenKind(GatewayTokenKind.PAT).tokenId(UUID.randomUUID().toString())
+                .scopes(java.util.List.of("read")).build());
+        moveDelete("{\"moveIssuesTo\":\"TASK\"}").expectStatus().isForbidden();
+        verifyNoInteractions(client);
+    }
+
+    private WebTestClient.ResponseSpec moveDelete(String body) {
+        return http.method(org.springframework.http.HttpMethod.DELETE).uri(url() + "/REQUEST")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue(body).exchange();
+    }
+
     private String url() { return "/api/v1/projects/" + project + "/issue-types"; }
 
     private ProjectIssueTypeDto type() {
         return new ProjectIssueTypeDto("REQUEST", "Заявка", ProjectIssueTypeColorDto.TEAL,
-                ProjectIssueTypeShapeDto.SQUARE, ProjectIssueTypeIconDto.HEADSET, 40);
+                ProjectIssueTypeShapeDto.SQUARE, ProjectIssueTypeIconDto.HEADSET, 40).generation(generation);
     }
 
     private void authenticated() {

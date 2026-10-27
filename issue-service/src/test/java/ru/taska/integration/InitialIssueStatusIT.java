@@ -57,8 +57,8 @@ class InitialIssueStatusIT extends AbstractIT {
         .thenReturn(
             Mono.just(
                 ListProjectIssueTypesResponse.newBuilder()
-                    .addItems(ProjectIssueTypeResponse.newBuilder().setCode("REQUEST"))
-                    .addItems(ProjectIssueTypeResponse.newBuilder().setCode("TASK"))
+                    .addItems(ProjectIssueTypeResponse.newBuilder().setCode("REQUEST").setGeneration(UUID.randomUUID().toString()))
+                    .addItems(ProjectIssueTypeResponse.newBuilder().setCode("TASK").setGeneration(UUID.randomUUID().toString()))
                     .build()));
     when(workflows.withDeadlineAfter(anyLong(), any())).thenReturn(workflows);
     when(workflows.getWorkflowForProject(any(GetWorkflowForProjectRequest.class)))

@@ -71,6 +71,17 @@ class IssuePatchExecutorTest {
     @Mock
     private IssueAutoWatchService issueAutoWatchService;
 
+    @Mock private ru.taska.service.IssueTypeWriteGuard issueTypeWriteGuard;
+    @Mock private ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
+
+    @org.junit.jupiter.api.BeforeEach
+    void defaultIssueTypeGuard() {
+        Mockito.lenient().when(issueRepository.findProjectIdByActiveIssueId(Mockito.any())).thenReturn(Mono.just(PROJECT_ID));
+        Mockito.lenient().when(issueTypeWriteGuard.lock(Mockito.any())).thenReturn(Mono.empty());
+        Mockito.lenient().when(issueTypeWriteGuard.requireTypeChange(Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any())).thenReturn(Mono.empty());
+        Mockito.lenient().when(workflowClient.requireStatusForType(Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any())).thenReturn(Mono.empty());
+    }
+
     @InjectMocks
     private IssuePatchExecutor executor;
 
@@ -126,6 +137,7 @@ class IssuePatchExecutorTest {
                 .verify();
 
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
         Mockito.verifyNoInteractions(issueWatcherRepository, outboxEventService, issueHistoryService,
                 issueAutoWatchService);
@@ -147,6 +159,7 @@ class IssuePatchExecutorTest {
 
         Assertions.assertThat(lockedIssue).isEqualTo(lockedSnapshot);
         Mockito.verify(issueRepository).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
         Mockito.verifyNoInteractions(issueWatcherRepository, payloadSerializer, outboxEventService,
                 issueHistoryService, issueAutoWatchService);

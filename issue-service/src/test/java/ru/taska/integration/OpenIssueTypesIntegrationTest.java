@@ -56,6 +56,9 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
                         .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(false).build()));
         when(projects.listIssueTypes(any(), any(), eq(project), eq(actor)))
                 .thenReturn(Mono.just(List.of(REQUEST, IssueType.BUG)));
+        when(projects.listIssueTypeDetails(any(), any(), eq(project), eq(actor))).thenReturn(Mono.just(
+                List.of("REQUEST","BUG").stream().map(key -> ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
+                        .setCode(key).setGeneration(UUID.nameUUIDFromBytes(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString()).build()).toList()));
         doCallRealMethod().when(projects).requireIssueType(any(), any(), any(), any(), any());
         when(projects.getProjectKeyInternal(any(), any(), eq(project))).thenReturn(Mono.just("REQ" + project.toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT)));
         when(projects.getProjectInfoBatchInternal(any(), any(), any())).thenReturn(Mono.just(
@@ -81,9 +84,9 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
         assertThat(jsonValue("issue_history", "issue_id", created.getId(), "issueType")).isEqualTo("REQUEST");
         assertThat(jsonValue("outbox_events", "aggregate_id", created.getId(), "issueType")).isEqualTo("REQUEST");
         // A retry returns the committed response even if the registry is unavailable later.
-        when(projects.listIssueTypes(any(), any(), any(), any())).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
+        when(projects.listIssueTypeDetails(any(), any(), any(), any())).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
         assertThat(create(REQUEST, key).block().getId()).isEqualTo(created.getId());
-        verify(projects, times(1)).requireIssueType("r", "n", project, actor, REQUEST);
+        verify(projects, times(1)).listIssueTypeDetails("r", "n", project, actor);
     }
 
     @Test

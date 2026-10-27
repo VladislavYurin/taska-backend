@@ -16,7 +16,6 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ProjectIssueTypeRepository;
-import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +25,6 @@ public class ProjectIssueTypeService {
     public static final Set<String> SHAPES = Set.of("square", "circle", "diamond");
     private final ProjectIssueTypeRepository repository;
     private final ProjectService projectService;
-    private final GrpcIssueServiceClient issueClient;
     private final ProjectWriteGuard writeGuard;
 
     public Flux<ProjectIssueType> list(UUID projectId, UUID actor, String requestId, String nodeId) {
@@ -68,23 +66,6 @@ public class ProjectIssueTypeService {
                             old.createdAt(), old.updatedAt(), old.generation())))
                     .flatMap(repository::update)
                     .flatMap(saved -> repository.syncLegacySettings(projectId, actor).thenReturn(saved));
-        });
-    }
-
-    @Transactional
-    public Mono<Void> delete(UUID projectId, UUID actor, String code, String requestId, String nodeId) {
-        return Mono.defer(() -> {
-            validateCode(code);
-            return authorizeWrite(projectId, actor).then(Mono.defer(() -> requireType(projectId, code)))
-                    .then(Mono.defer(() -> repository.list(projectId).count()))
-                    .flatMap(count -> count <= 1
-                            ? Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "Cannot delete the last issue type", Map.of("reason", "LAST_ISSUE_TYPE")))
-                            : issueClient.countIssueTypeUsage(projectId, code, requestId, nodeId))
-                    .flatMap(count -> count > 0
-                            ? Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-                                    "Issue type " + code + " has " + count + " issues", Map.of("reason", "ISSUE_TYPE_IN_USE", "issueCount", count.toString())))
-                            : repository.delete(projectId, code))
-                    .then(Mono.defer(() -> repository.syncLegacySettings(projectId, actor)));
         });
     }
 

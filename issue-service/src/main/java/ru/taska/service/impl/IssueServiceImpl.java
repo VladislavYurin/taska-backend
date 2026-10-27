@@ -90,6 +90,7 @@ public class IssueServiceImpl implements IssueService {
     private final IssueWatcherRepository issueWatcherRepository;
     private final IssueAccessGuard issueAccessGuard;
     private final GrpcWorkflowServiceClient workflowClient;
+    private final ru.taska.service.IssueTypeWriteGuard issueTypeWriteGuard;
 
     @Override
     @Transactional
@@ -140,6 +141,7 @@ public class IssueServiceImpl implements IssueService {
                 remainingEstimateMinutes, initialStatus);
 
         return projectRoleChecker.checkProjectWriteRole(requestId, nodeId, projectId, reporterId, allowedRoles)
+                .then(Mono.defer(() -> issueTypeWriteGuard.lock(projectId)))
                 .then(Mono.fromRunnable(() -> {
                     if (statusKey != null && !statusKey.matches("^[A-Z][A-Z0-9_]{1,63}$"))
                         throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid initial status key");
@@ -170,7 +172,7 @@ public class IssueServiceImpl implements IssueService {
                                     });
 
                         }))
-                .switchIfEmpty(Mono.defer(() -> grpcProjectServiceClient.requireIssueType(requestId, nodeId, projectId, reporterId, issueType)
+                .switchIfEmpty(Mono.defer(() -> issueTypeWriteGuard.requireActive(requestId, nodeId, projectId, reporterId, List.of(issueType))
                         .then(Mono.defer(() -> statusKey == null ? Mono.empty()
                                 : workflowClient.requireInitialStatus(requestId, nodeId, projectId, issueType, reporterId, statusKey)))
                         .then(Mono.defer(() -> grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)))
