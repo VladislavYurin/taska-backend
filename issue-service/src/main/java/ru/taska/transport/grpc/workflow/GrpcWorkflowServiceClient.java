@@ -43,37 +43,22 @@ public class GrpcWorkflowServiceClient {
     public Mono<Void> requireInitialStatus(String requestId, String nodeId, UUID projectId,
             ru.taska.domain.IssueType issueType, UUID actorUserId, String statusKey) {
         return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
-                .getWorkflowForProject(ru.taska.api.workflow.v1.GetWorkflowForProjectRequest.newBuilder()
+                .checkProjectWorkflowScope(ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                        .setBody(ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody.newBuilder()
-                                .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString())
-                                .setIssueType(issueMapper.toWorkflowProtoIssueType(issueType))
-                                .setIssueTypeKey(issueType.name())).build())
-                .flatMap(workflow -> workflow.getStatusesList().stream().anyMatch(s -> s.getStatusKey().equals(statusKey))
-                        ? Mono.empty() : Mono.error(new ru.taska.exception.DomainException(
-                                ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
-                                "Initial status is not available for the issue type",
-                                java.util.Map.of("reason", "STATUS_NOT_IN_WORKFLOW"))));
+                        .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString())
+                        .addIssueTypeKeys(issueType.name()).setStatusKey(statusKey).build())
+                .then();
     }
 
-    public Mono<Void> requireWorkflowVersion(String requestId,String nodeId,UUID project,UUID actor,
-            java.util.List<ru.taska.domain.IssueType> types,UUID expectedWorkflow,int expectedVersion) {
-        return reactorWorkflowServiceStub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
-                .listProjectWorkflows(ru.taska.api.workflow.v1.ListProjectWorkflowsRequest.newBuilder()
+    public Mono<Void> requireWorkflowVersion(String requestId, String nodeId, UUID project, UUID actor,
+            java.util.List<ru.taska.domain.IssueType> types, UUID expectedWorkflow, int expectedVersion) {
+        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+                .checkProjectWorkflowScope(ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                        .setBody(ru.taska.api.workflow.v1.ListProjectWorkflowsRequestBody.newBuilder()
-                                .setProjectId(project.toString()).setActorUserId(actor.toString())).build())
-                .flatMap(result->{
-                    boolean valid=types.stream().allMatch(type->result.getWorkflowsList().stream().anyMatch(bound->{
-                        boolean matches=bound.getIssueTypeKeysList().contains(type.name())
-                                ||bound.getIssueTypeKeysCount()==0&&bound.getIssueTypesList().stream()
-                                .anyMatch(legacy->legacy.name().equals("ISSUE_TYPE_"+type.name()));
-                        return matches&&bound.getWorkflow().getId().equals(expectedWorkflow.toString())
-                                &&bound.getWorkflow().getVersion()==expectedVersion;
-                    }));
-                    return valid?Mono.empty():Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.ABORTED,
-                            "Workflow binding or version changed",java.util.Map.of("reason","WORKFLOW_CHANGED")));
-                });
+                        .setProjectId(project.toString()).setActorUserId(actor.toString())
+                        .addAllIssueTypeKeys(types.stream().map(ru.taska.domain.IssueType::name).toList())
+                        .setExpectedWorkflowId(expectedWorkflow.toString()).setExpectedWorkflowVersion(expectedVersion).build())
+                .then();
     }
 
     /**

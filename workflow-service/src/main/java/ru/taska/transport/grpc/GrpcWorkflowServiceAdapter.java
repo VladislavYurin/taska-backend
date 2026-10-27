@@ -23,6 +23,12 @@ public class GrpcWorkflowServiceAdapter  extends ReactorWorkflowServiceGrpc.Work
     private final WorkflowMutationGrpcService mutations;
     private final ru.taska.service.WorkflowMutationResponse mutationResponse;
     private final WorkflowBindingGrpcService bindingOperations;
+    private final WorkflowScopeCheckGrpcService scopeChecks;
+
+    @Override
+    public Mono<com.google.protobuf.Empty> checkProjectWorkflowScope(Mono<ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest> request) {
+        return scopeChecks.check(request).transform(GrpcExceptionHandler.withErrorHandling("checkProjectWorkflowScope"));
+    }
 
     @Override
     public Mono<ru.taska.api.workflow.v1.WorkflowBindingOperationResult> createProjectWorkflowWithBindings(Mono<CreateWorkflowRequest> request) {

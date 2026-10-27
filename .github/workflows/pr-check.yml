@@ -130,7 +130,7 @@ jobs:
         if: matrix.mod.module == 'workflow-service'
         run: >-
           mvn -B -ntp -pl workflow-service -am test
-          -Dtest=WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT
+          -Dtest=WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT
           -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Upload surefire reports

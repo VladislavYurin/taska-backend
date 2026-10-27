@@ -21,9 +21,9 @@ import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.*;
 import ru.taska.api.project.v1.*;
-import ru.taska.api.workflow.v1.GetWorkflowForProjectRequest;
+import ru.taska.api.workflow.v1.ListProjectWorkflowsRequest;
+import ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
-import ru.taska.api.workflow.v1.WorkflowResponse;
 import ru.taska.repository.*;
 import ru.taska.transport.grpc.GrpcIssueServiceAdapter;
 import ru.taska.transport.kafka.OutboxEventScheduler;
@@ -65,26 +65,37 @@ class InitialIssueStatusIT extends AbstractIT {
                     .addItems(ProjectIssueTypeResponse.newBuilder().setCode("TASK").setGeneration(UUID.randomUUID().toString()))
                     .build()));
     when(workflows.withDeadlineAfter(anyLong(), any())).thenReturn(workflows);
-    when(workflows.getWorkflowForProject(any(GetWorkflowForProjectRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              GetWorkflowForProjectRequest request = invocation.getArgument(0);
-              assertThat(request.getBody().getProjectId()).isEqualTo(PROJECT.toString());
-              assertThat(request.getBody().getActorUserId()).isEqualTo(ACTOR.toString());
-              String status =
-                  "REQUEST".equals(request.getBody().getIssueTypeKey()) ? "IN_REVIEW" : "TODO";
-              return Mono.just(
-                  WorkflowResponse.newBuilder()
-                      .addStatuses(
-                          ru.taska.api.workflow.v1.WorkflowStatus.newBuilder().setStatusKey(status))
-                      .build());
-            });
+    // Unrelated graphs may exceed the aggregate response limit; a single-type check must not fetch them.
+    when(workflows.listProjectWorkflows(any(ListProjectWorkflowsRequest.class)))
+        .thenReturn(Mono.error(Status.RESOURCE_EXHAUSTED.withDescription("Large workflow aggregate").asRuntimeException()));
+    when(workflows.checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class)))
+        .thenAnswer(invocation -> {
+          CheckProjectWorkflowScopeRequest request = invocation.getArgument(0);
+          assertThat(request.getProjectId()).isEqualTo(PROJECT.toString());
+          assertThat(request.getActorUserId()).isEqualTo(ACTOR.toString());
+          assertThat(request.getIssueTypeKeysList()).hasSize(1);
+          assertThat(request.hasExpectedWorkflowId()).isFalse();
+          assertThat(request.hasExpectedWorkflowVersion()).isFalse();
+          assertThat(request.hasStatusKey()).isTrue();
+          String type = request.getIssueTypeKeys(0);
+          assertThat(type).isIn("REQUEST", "TASK");
+          String validStatus = type.equals("REQUEST") ? "IN_REVIEW" : "TODO";
+          if (!validStatus.equals(request.getStatusKey())) return Mono.error(Status.FAILED_PRECONDITION
+              .withDescription("Initial status is not available for the issue type")
+              .asRuntimeException(GrpcErrorDetails.encode(java.util.Map.of("reason", "STATUS_NOT_IN_WORKFLOW"))));
+          return Mono.just(com.google.protobuf.Empty.getDefaultInstance());
+        });
     outbox
         .deleteAll()
         .then(keys.deleteAll())
         .then(issues.deleteAll())
         .then(counters.deleteAll())
         .block();
+  }
+
+  @org.junit.jupiter.api.AfterEach
+  void neverLoadsAnUnrelatedWorkflowAggregate() {
+    verify(workflows, never()).listProjectWorkflows(any(ListProjectWorkflowsRequest.class));
   }
 
   @Test
@@ -118,12 +129,24 @@ class InitialIssueStatusIT extends AbstractIT {
   }
 
   @Test
-  void omittedStatusKeepsTodoAndDoesNotResolveWorkflow() {
-    when(workflows.getWorkflowForProject(any(GetWorkflowForProjectRequest.class)))
+  void omittedStatusValidatesTodoAgainstTheTypesWorkflow() {
+    assertThat(grpc.createIssue(Mono.just(request("TASK", null))).block().getStatusKey()).isEqualTo("TODO");
+    verify(workflows).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
+  }
+
+  @Test
+  void omittedTodoMissingFromCustomWorkflowIsRejectedBeforeWriting() {
+    rejects(request("REQUEST", null), Status.Code.FAILED_PRECONDITION, "STATUS_NOT_IN_WORKFLOW");
+    assertEmpty();
+    verify(workflows).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
+  }
+
+  @Test
+  void omittedStatusDoesNotBypassWorkflowOutage() {
+    when(workflows.checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class)))
         .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
-    assertThat(grpc.createIssue(Mono.just(request("REQUEST", null))).block().getStatusKey())
-        .isEqualTo("TODO");
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    rejects(request("TASK", null), Status.Code.UNAVAILABLE, null);
+    assertEmpty();
   }
 
   @Test
@@ -136,7 +159,7 @@ class InitialIssueStatusIT extends AbstractIT {
   @Test
   void unregisteredTypeIsRejectedBeforeResolvingAWorkflow() {
     rejects(request("NOPE", "IN_REVIEW"), Status.Code.INVALID_ARGUMENT, null);
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, never()).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
     assertEmpty();
   }
 
@@ -144,7 +167,7 @@ class InitialIssueStatusIT extends AbstractIT {
   @ValueSource(strings = {"", " ", "in_review", "BAD-KEY", "A"})
   void invalidStatusFormatIsRejectedBeforeWorkflowOrWrites(String status) {
     rejects(request("REQUEST", status), Status.Code.INVALID_ARGUMENT, null);
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, never()).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
     assertEmpty();
   }
 
@@ -153,13 +176,13 @@ class InitialIssueStatusIT extends AbstractIT {
     when(projects.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
         .thenReturn(Mono.just(role(ProjectRole.PROJECT_ROLE_VIEWER)));
     rejects(request("REQUEST", "invalid-key"), Status.Code.PERMISSION_DENIED, null);
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, never()).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
     assertEmpty();
   }
 
   @Test
   void workflowOutageAndNonWriterCannotCreateOrLearnWorkflow() {
-    when(workflows.getWorkflowForProject(any(GetWorkflowForProjectRequest.class)))
+    when(workflows.checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class)))
         .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
     rejects(request("REQUEST", "IN_REVIEW"), Status.Code.UNAVAILABLE, null);
     assertEmpty();
@@ -167,7 +190,7 @@ class InitialIssueStatusIT extends AbstractIT {
     when(projects.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))
         .thenReturn(Mono.just(role(ProjectRole.PROJECT_ROLE_VIEWER)));
     rejects(request("REQUEST", "IN_REVIEW"), Status.Code.PERMISSION_DENIED, null);
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, never()).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
     assertEmpty();
   }
 
@@ -197,7 +220,7 @@ class InitialIssueStatusIT extends AbstractIT {
     assertThat(keys.count().block()).isEqualTo(1);
     assertThat(history.count().block()).isEqualTo(1);
     assertThat(outbox.count().block()).isEqualTo(2);
-    verify(workflows, times(1)).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, times(1)).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
   }
 
   @ParameterizedTest
@@ -216,6 +239,8 @@ class InitialIssueStatusIT extends AbstractIT {
             .build();
     var original = request("TASK", null).toBuilder().setBody(body).build();
     var first = grpc.createIssue(Mono.just(original)).block();
+    when(workflows.checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class)))
+        .thenReturn(Mono.error(Status.UNAVAILABLE.asRuntimeException()));
     var stored = keys.findByUserIdAndKey(ACTOR, key).block();
     stored.setRequestHash(
         RequestHasher.hashIssueCreateRequest(
@@ -248,7 +273,7 @@ class InitialIssueStatusIT extends AbstractIT {
     assertThat(issues.count().block()).isEqualTo(1);
     assertThat(history.count().block()).isEqualTo(1);
     assertThat(outbox.count().block()).isEqualTo(2);
-    verify(workflows, never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+    verify(workflows, times(1)).checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class));
   }
 
   private CreateIssueRequest request(String type, String status) {

@@ -99,9 +99,19 @@ class WorkflowBindingMigrationIT extends AbstractIT {
         when(projects.getProjectKeyInternal(any(),any(),any())).thenReturn(Mono.just("P"+project.toString().replace("-","").substring(0,8).toUpperCase()));
         when(workflowStub.withDeadlineAfter(anyLong(),any())).thenReturn(workflowStub);
         when(workflowStub.getWorkflowForProject(any(GetWorkflowForProjectRequest.class))).thenAnswer(c->Mono.defer(()->Mono.just(resolved.get())));
-        when(workflowStub.listProjectWorkflows(any(ListProjectWorkflowsRequest.class))).thenAnswer(c->Mono.defer(()->Mono.just(
-                ListProjectWorkflowsResponse.newBuilder().addWorkflows(ProjectWorkflow.newBuilder().setWorkflow(resolved.get())
-                        .addAllIssueTypeKeys(List.of("TASK","BUG","STORY"))).build())));
+        when(workflowStub.listProjectWorkflows(any(ListProjectWorkflowsRequest.class))).thenReturn(Mono.error(
+                io.grpc.Status.RESOURCE_EXHAUSTED.withDescription("Aggregate workflow graphs exceed 4 MiB").asRuntimeException()));
+        when(workflowStub.checkProjectWorkflowScope(any(CheckProjectWorkflowScopeRequest.class))).thenAnswer(c->Mono.defer(()->{
+            CheckProjectWorkflowScopeRequest request=c.getArgument(0);
+            if(request.hasExpectedWorkflowId()&&(!request.getExpectedWorkflowId().equals(resolved.get().getId())
+                    ||request.getExpectedWorkflowVersion()!=resolved.get().getVersion())) {
+                return Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow changed",Map.of("reason","WORKFLOW_CHANGED")));
+            }
+            if(request.hasStatusKey()&&resolved.get().getStatusesList().stream().noneMatch(status->status.getStatusKey().equals(request.getStatusKey()))) {
+                return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,"Initial status invalid",Map.of("reason","STATUS_NOT_IN_WORKFLOW")));
+            }
+            return Mono.just(com.google.protobuf.Empty.getDefaultInstance());
+        }));
         when(workflowStub.validateTransition(any(ValidateTransitionRequest.class))).thenReturn(Mono.just(validTransition("REVIEW")));
         server=NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1",0))
                 .addService(new ReactorWorkflowBindingJournalGrpc.WorkflowBindingJournalImplBase() {
@@ -263,13 +273,32 @@ class WorkflowBindingMigrationIT extends AbstractIT {
     }
 
     @Test
-    void legacyIdentityVersionCheckDoesNotRequireAnyStatusOrVisibleTransition() {
+    void legacyIdentityVersionCheckDoesNotRequireAnyStatusOrVisibleTransitionOrAggregateGraphResponse() {
         journalPending=false;registry.set(types(false));
         resolved.set(WorkflowResponse.newBuilder().setId(sourceWorkflow.toString()).setVersion(1).build());
         var command=ru.taska.api.issue.v1.MigrateWorkflowIssuesRequest.newBuilder().setProjectId(project.toString()).setActorUserId(actor.toString())
                 .setWorkflowId(sourceWorkflow.toString()).setExpectedWorkflowVersion(1).addIssueTypeKeys("TASK").addValidStatusKeys("TODO").build();
         assertThat(new WorkflowIssueMigrationGrpcService(legacy).migrate(Mono.just(command)).block(TIMEOUT).getMovedCount()).isZero();
         verify(workflowStub,never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+        verify(workflowStub,never()).listProjectWorkflows(any(ListProjectWorkflowsRequest.class));
+    }
+
+    @Test
+    void omittedInitialTodoIsValidatedAgainstInheritedWorkflowAndExplicitHiddenEdgeStatusStillWorks() {
+        journalPending=false;registry.set(types(false));
+        resolved.set(WorkflowResponse.newBuilder().setId(targetWorkflow.toString()).setVersion(2)
+                .addStatuses(WorkflowStatus.newBuilder().setStatusKey("START")).build());
+        String key=UUID.randomUUID().toString();
+        rejected(creates.createIssue("r","n",key,project,IssueType.TASK,"New",null,IssuePriority.MEDIUM,actor,null,null,null,null,null),
+                DomainStatus.FAILED_PRECONDITION,"STATUS_NOT_IN_WORKFLOW");
+        assertThat(db.sql("SELECT count(*) FROM taska.issues WHERE project_id=:p").bind("p",project).map(row->row.get(0,Long.class)).one().block(TIMEOUT)).isZero();
+        assertThat(db.sql("SELECT count(*) FROM taska.idempotency_keys WHERE user_id=:actor AND key=:key").bind("actor",actor).bind("key",key)
+                .map(row->row.get(0,Long.class)).one().block(TIMEOUT)).isZero();
+        assertThat(db.sql("SELECT count(*) FROM taska.outbox_events WHERE payload->>'projectId'=:p").bind("p",project.toString())
+                .map(row->row.get(0,Long.class)).one().block(TIMEOUT)).isZero();
+        var created=create("START").block(TIMEOUT);assertThat(created.getStatusKey()).isEqualTo("START");
+        verify(workflowStub,never()).getWorkflowForProject(any(GetWorkflowForProjectRequest.class));
+        verify(workflowStub,never()).listProjectWorkflows(any(ListProjectWorkflowsRequest.class));
     }
 
     @Test

@@ -66,16 +66,18 @@ public class WorkflowBindingCoordinator {
         if (result.getState()==TypeOperationState.TYPE_OPERATION_STATE_CANCELLED)
             return transactions.cancel(item).flatMap(cancelled -> release(cancelled).then(Mono.error(rejection(cancelled))));
         if (result.getState()==TypeOperationState.TYPE_OPERATION_STATE_REJECTED) {
-            DomainException error=new DomainException(DomainStatus.valueOf(result.getRejectionStatus()),
-                    result.getRejectionMessage(),result.getRejectionDetailsMap());
-            if (REJECTED.contains(error.getStatus())) return journal.cancelling(item,error).flatMap(this::drive);
+            DomainStatus status;
+            try { status=DomainStatus.valueOf(result.getRejectionStatus()); }
+            catch (IllegalArgumentException malformed) { return Mono.error(pending(item)); }
+            DomainException error=new DomainException(status,result.getRejectionMessage(),result.getRejectionDetailsMap());
+            if (REJECTED.contains(status)) return journal.cancelling(item,error).flatMap(this::drive);
         }
         return Mono.error(pending(item));
     }
     private Mono<Void> release(WorkflowBindingChange item) {
         if (item.released()) return Mono.empty();
-        return issues.release(item.project(),item.id()).then(projects.release(item.project(),item.id()))
-                .then(journal.released(item)).onErrorMap(error -> pending(item));
+        return issues.release(item.project(),item.id()).then(Mono.defer(() -> projects.release(item.project(),item.id())))
+                .then(Mono.defer(() -> journal.released(item))).onErrorMap(error -> pending(item));
     }
     @Scheduled(fixedDelayString="${app.workflow-binding-changes.recovery-interval:5s}")
     public Mono<Void> recover() {

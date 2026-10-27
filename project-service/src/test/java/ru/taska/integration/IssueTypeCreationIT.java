@@ -66,6 +66,7 @@ class IssueTypeCreationIT extends AbstractIT {
     private Server server;
     private ManagedChannel channel;
     private final AtomicBoolean loseReply=new AtomicBoolean();
+    private final AtomicReference<String> unknownRejection=new AtomicReference<>();
     private final Map<UUID,Header> observed=new ConcurrentHashMap<>();
     private volatile Sinks.One<Void> applyRelease;
     private volatile CountDownLatch applyHeld;
@@ -74,7 +75,7 @@ class IssueTypeCreationIT extends AbstractIT {
     void prepare() throws Exception {
         project=UUID.randomUUID();actor=UUID.randomUUID();token=UUID.randomUUID();mainWorkflow=UUID.randomUUID();explicitWorkflow=UUID.randomUUID();foreignWorkflow=UUID.randomUUID();
         header=Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("gateway").setActionChannel("API_TOKEN").setTokenId(token.toString()).build();
-        loseReply.set(false);observed.clear();applyRelease=null;applyHeld=null;
+        loseReply.set(false);unknownRejection.set(null);observed.clear();applyRelease=null;applyHeld=null;
         db.sql("CREATE TABLE IF NOT EXISTS taska.test_creation_binding_receipts(id uuid PRIMARY KEY,project_id uuid NOT NULL,state text NOT NULL,workflow uuid,code text,generation uuid)").then().block(TIMEOUT);
         db.sql("INSERT INTO taska.projects(id,project_key,name,created_by) VALUES(:p,:key,'Create type',:actor)").bind("p",project)
                 .bind("key","P"+project.toString().replace("-","").substring(0,12).toUpperCase()).bind("actor",actor).then().block(TIMEOUT);
@@ -203,6 +204,16 @@ class IssueTypeCreationIT extends AbstractIT {
         assertThat(bindingCount()).isEqualTo(1);
     }
 
+    @Test
+    void unknownRemoteRejectionRemainsPendingAndCanRecoverWithoutACancellationReceipt() {
+        unknownRejection.set("FUTURE_REMOTE_STATUS");
+        rejected(()->create("EPIC",null),DomainStatus.UNAVAILABLE,"ISSUE_TYPE_CREATION_PENDING");
+        var item=latest();assertThat(item.state()).isEqualTo("PENDING");assertThat(types.find(project,"EPIC").block(TIMEOUT)).isNull();
+        assertThat(bindingCount()).isZero();unknownRejection.set(null);coordinator.recover().block(TIMEOUT);
+        assertThat(creations.find(project,item.id()).block(TIMEOUT).state()).isEqualTo("COMPLETED");
+        assertThat(types.find(project,"EPIC").block(TIMEOUT).generation()).isEqualTo(item.type().generation());assertThat(bindingCount()).isEqualTo(1);
+    }
+
     private IssueTypeCreation begin(String code,UUID workflow){return transactions.begin(project,actor,header.getRequestId(),header.getNodeId(),code," Epic ","purple",null,null,null,workflow,new ActionMetadata(ActionChannel.API_TOKEN,token)).block(TIMEOUT);}
     private IssueTypeCreationTransactions.Created create(String code,UUID workflow){return coordinator.create(project,actor,code," Epic ","purple",null,null,null,workflow,header).contextWrite(context->action.GrpcActionContext.install(context,header)).block(TIMEOUT);}
     private Header newHeader(){return Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("gateway").setActionChannel("API_TOKEN").setTokenId(token.toString()).build();}
@@ -218,6 +229,8 @@ class IssueTypeCreationIT extends AbstractIT {
         @Override public Mono<CreatedTypeBindingOutcome> apply(Mono<TypeOperationKey> request){return request.flatMap(key->{UUID operation=UUID.fromString(key.getOperationId());
             var work=peerLock(operation).then(receipt(operation)).switchIfEmpty(Mono.defer(()->creations.find(project,operation).flatMap(item->{
                 assertThat(item.state()).isEqualTo("PENDING");observed.putIfAbsent(operation,item.toProto().getOriginalHeader());
+                if(unknownRejection.get()!=null)return Mono.just(CreatedTypeBindingOutcome.newBuilder().setOutcome(TypeOperationOutcome.newBuilder()
+                        .setState(TypeOperationState.TYPE_OPERATION_STATE_REJECTED).setRejectionStatus(unknownRejection.get()).setRejectionMessage("Unknown future outcome")).build());
                 if(foreignWorkflow.equals(item.desiredWorkflowId()))return Mono.just(CreatedTypeBindingOutcome.newBuilder().setOutcome(TypeOperationOutcome.newBuilder().setState(TypeOperationState.TYPE_OPERATION_STATE_REJECTED).setRejectionStatus("INVALID_ARGUMENT").setRejectionMessage("Foreign workflow").putRejectionDetails("reason","WORKFLOW_NOT_IN_PROJECT")).build());
                 return db.sql("SELECT EXISTS(SELECT 1 FROM taska.project_members m JOIN taska.projects p ON p.id=m.project_id WHERE p.id=:p AND m.user_id=:actor AND m.role='ADMIN' AND p.archived_at IS NULL)").bind("p",project).bind("actor",actor).map(row->row.get(0,Boolean.class)).one().flatMap(allowed->{
                     if(!allowed)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());

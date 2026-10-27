@@ -40,9 +40,13 @@ public class IssueTypeCreationCoordinator {
             case "CANCELLING"->stub().cancel(client.TypeOperationClients.key(item.projectId(),item.id()))
                     .onErrorMap(error->pending(item)).flatMap(result->finish(item,result));
             case "PENDING"->stub().apply(client.TypeOperationClients.key(item.projectId(),item.id()))
-                    .onErrorMap(IssueTypeCreationCoordinator::domain).flatMap(result->finish(item,result))
-                    .onErrorResume(DomainException.class,error->REJECTED.contains(error.getStatus())
-                            ?transactions.requestCancellation(item,error).flatMap(this::drive):Mono.error(pending(item)));
+                    .onErrorResume(failure->{
+                        var error=domain(failure);
+                        return REJECTED.contains(error.getStatus())?Mono.just(CreatedTypeBindingOutcome.newBuilder()
+                                .setOutcome(TypeOperationOutcome.newBuilder().setState(TypeOperationState.TYPE_OPERATION_STATE_REJECTED)
+                                        .setRejectionStatus(error.getStatus().name()).setRejectionMessage(error.getMessage())
+                                        .putAllRejectionDetails(error.getDetails())).build()):Mono.error(pending(item));
+                    }).flatMap(result->finish(item,result));
             default->Mono.error(new IllegalStateException("Invalid creation state"));
         };
     }
@@ -56,7 +60,10 @@ public class IssueTypeCreationCoordinator {
         if(outcome.getState()==TypeOperationState.TYPE_OPERATION_STATE_CANCELLED)
             return journal.find(item.projectId(),item.id()).flatMap(current->transactions.cancel(current).onErrorMap(error->pending(item)).then(Mono.error(rejection(current))));
         if(outcome.getState()==TypeOperationState.TYPE_OPERATION_STATE_REJECTED) {
-            var error=new DomainException(DomainStatus.valueOf(outcome.getRejectionStatus()),outcome.getRejectionMessage(),outcome.getRejectionDetailsMap());
+            DomainStatus status;
+            try { status=DomainStatus.valueOf(outcome.getRejectionStatus()); }
+            catch(IllegalArgumentException unknown) { return Mono.error(pending(item)); }
+            var error=new DomainException(status,outcome.getRejectionMessage(),outcome.getRejectionDetailsMap());
             if(REJECTED.contains(error.getStatus()))return transactions.requestCancellation(item,error).flatMap(this::drive);
         }
         return Mono.error(pending(item));

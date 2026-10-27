@@ -68,6 +68,7 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
         when(projects.getProjectInfoBatchInternal(any(), any(), any())).thenReturn(Mono.just(
                 Map.of(project.toString(), new ProjectInfo(project.toString(), "REQ", "Requests"))));
         when(workflows.requireStatusForType(any(), any(), any(), any())).thenReturn(Mono.empty());
+        when(workflows.requireInitialStatus(any(), any(), any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test

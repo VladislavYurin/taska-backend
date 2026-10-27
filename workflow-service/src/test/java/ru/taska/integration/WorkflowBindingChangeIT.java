@@ -336,6 +336,61 @@ class WorkflowBindingChangeIT extends AbstractIT {
         verify(issues,never()).cancel(any(),any());assertThat(gate.get().getActive()).isFalse();
     }
 
+    @Test
+    void unknownOrEmptyPeerRejectionStaysPendingUntilCorrectedApplyRecoversTheSameOperation() {
+        int expectedVersion=1;
+        for (String malformed:List.of("","FUTURE_REJECTION_STATUS")) {
+            Header request=header();
+            int versionForRequest=expectedVersion;
+            when(issues.apply(any(),any())).thenReturn(Mono.just(TypeOperationOutcome.newBuilder()
+                    .setState(TypeOperationState.TYPE_OPERATION_STATE_REJECTED).setRejectionStatus(malformed)
+                    .setRejectionMessage("Unknown peer rejection").build()));
+            pending(() -> coordinator.replace(request,project,target,actor,versionForRequest,null,
+                    List.of("BUG","EPIC"),Map.of()).block(TIMEOUT));
+            var prepared=journal.byRequest(project,actor,request.getRequestId()).block(TIMEOUT);
+            assertThat(prepared.state()).isEqualTo("PENDING");assertThat(prepared.released()).isFalse();
+            assertThat(version(target)).isEqualTo(expectedVersion);verify(issues,never()).cancel(any(),any());
+            normalApply();
+            var recovered=coordinator.replace(request,project,target,actor,expectedVersion,null,
+                    List.of("BUG","EPIC"),Map.of()).block(TIMEOUT);
+            assertThat(recovered).isNotNull();assertThat(recovered.getWorkflow().getVersion()).isEqualTo(expectedVersion+1);
+            var completed=journal.byRequest(project,actor,request.getRequestId()).block(TIMEOUT);
+            assertThat(completed.id()).isEqualTo(prepared.id());assertThat(completed.state()).isEqualTo("COMPLETED");
+            assertThat(completed.released()).isTrue();expectedVersion++;
+        }
+        assertThat(appliedCommits.get()).isEqualTo(2);verify(issues,never()).cancel(any(),any());
+    }
+
+    @Test
+    void unacknowledgedIssueFenceReleaseKeepsProjectAndJournalFencedUntilRecovery() {
+        when(issues.release(any(),any())).thenReturn(Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Typed release was rejected")));
+        pending(() -> replace(header,1));
+        var saved=journal.byRequest(project,actor,header.getRequestId()).block(TIMEOUT);
+        assertThat(saved.state()).isEqualTo("COMPLETED");assertThat(saved.released()).isFalse();
+        assertThat(gate.get().getActive()).isTrue();assertThat(version(target)).isEqualTo(2);
+        verify(reservations,never()).release(any(),any());assertThat(appliedCommits.get()).isEqualTo(1);
+        when(issues.release(any(),any())).thenReturn(Mono.empty());
+        var recovered=coordinator.drive(saved).block(TIMEOUT);
+        assertThat(recovered.getWorkflow().getVersion()).isEqualTo(2);assertThat(version(target)).isEqualTo(2);
+        assertThat(journal.get(project,saved.id()).block(TIMEOUT).released()).isTrue();
+        assertThat(gate.get().getActive()).isFalse();assertThat(appliedCommits.get()).isEqualTo(1);
+    }
+
+    @Test
+    void unreturnableSuccessfulGraphIsRejectedBeforeJournalAndIssueChanges() {
+        databaseClient.sql("UPDATE taska.statuses SET name=repeat('N',1100000) WHERE workflow_id=:workflow")
+                .bind("workflow",target).then().block(TIMEOUT);
+        assertThatThrownBy(() -> replace(header,1)).isInstanceOfSatisfying(DomainException.class,error -> {
+            assertThat(error.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
+            assertThat(error.getDetails()).containsEntry("reason","WORKFLOW_BINDING_PLAN_TOO_LARGE");
+        });
+        assertThat(journal.byRequest(project,actor,header.getRequestId()).block(TIMEOUT)).isNull();
+        assertThat(version(target)).isEqualTo(1);assertThat(version(donor)).isEqualTo(1);
+        assertThat(binding("EPIC")).isEqualTo(donor.toString());
+        verify(reservations,never()).reserve(any(),any());verify(issues,never()).apply(any(),any());
+        verify(issues,never()).cancel(any(),any());assertThat(gate.get().getActive()).isFalse();
+    }
+
     private ru.taska.api.workflow.v1.ProjectWorkflow replace(Header request, int version) {
         return coordinator.replace(request,project,target,actor,version,null,List.of("BUG","EPIC"),Map.of()).block(TIMEOUT);
     }

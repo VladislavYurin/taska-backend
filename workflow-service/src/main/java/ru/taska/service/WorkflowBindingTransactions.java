@@ -160,7 +160,15 @@ public class WorkflowBindingTransactions {
                             if (item.intent().getSerializedSize()>3*1024*1024
                                     || json.writeValueAsString(item.plan()).getBytes(java.nio.charset.StandardCharsets.UTF_8).length>3*1024*1024)
                                 return Mono.error(planTooLarge());
-                            return journal.insert(item);
+                            return result(item).flatMap(preview -> {
+                                // Freeze a response which will remain returnable after the issue transaction commits.
+                                // Maximal timestamp nanos bound the small encoding difference at final publication.
+                                var response=preview.toBuilder().setWorkflow(preview.getWorkflow().toBuilder()
+                                        .setVersion(kind.equals("CREATE")?target.getVersion():Math.addExact(target.getVersion(),1))
+                                        .setUpdatedAt(com.google.protobuf.Timestamp.newBuilder().setSeconds(java.time.Instant.now().getEpochSecond()).setNanos(999999999))).build();
+                                if (response.getSerializedSize()>3*1024*1024) return Mono.error(planTooLarge());
+                                return journal.insert(item);
+                            });
                         });
                     });
                 });
@@ -238,7 +246,7 @@ public class WorkflowBindingTransactions {
         void include(UUID workflow,List<String> keys) {
             long statuses=weights.computeIfAbsent(workflow,id -> keys.stream().mapToLong(key -> key.length()+4L).sum());
             used+=300L+statuses;
-            if (used>2*1024*1024) throw planTooLarge();
+            if (used>1024*1024) throw planTooLarge();
         }
     }
     private static DomainException planTooLarge() {
