@@ -23,6 +23,7 @@ service ProjectService {
   rpc ArchiveProject(ArchiveProjectRequest) returns (ProjectResponse);
   rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
   rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
+  rpc CreateProjectIssueTypeWithWorkflow(ChangeProjectIssueTypeRequest) returns (CreateProjectIssueTypeWithWorkflowResult);
   rpc UpdateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
   rpc DeleteProjectIssueType(ChangeProjectIssueTypeRequest) returns (google.protobuf.Empty);
   // Large migration rejection details travel in the message body, never metadata trailers.
@@ -210,6 +211,7 @@ message ChangeProjectIssueTypeRequest {
   optional string move_issues_to = 12;
   map<string,string> status_mappings = 13;
   optional string expected_generation = 14;
+  optional string workflow_id = 15; // Create only; absent selects the first registry type's workflow.
 }
 
 message ReorderProjectIssueTypesRequest {
@@ -495,4 +497,12 @@ message DeleteProjectIssueTypeResult {
   string rejection_status = 2;
   string rejection_message = 3;
   map<string,string> rejection_details = 4;
+}
+
+message CreateProjectIssueTypeWithWorkflowResult {
+  ProjectIssueTypeResponse issue_type = 1;
+  string workflow_id = 2;
+  string rejection_status = 3;
+  string rejection_message = 4;
+  map<string,string> rejection_details = 5;
 }

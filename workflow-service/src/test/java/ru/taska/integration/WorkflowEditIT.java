@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  * Адаптер вызывается напрямую, без сети: так проверяется весь путь до статуса gRPC, включая
  * {@code GrpcExceptionHandler}, и тест не зависит от порта gRPC-сервера в тестовом контексте.
  */
-class WorkflowEditIT extends AbstractIT {
+class WorkflowEditIT extends LegacyWorkflowOperationsFixture {
 
     private static final String REQUEST_ID = "req-edit";
     private static final String NODE_ID = "some-service";
@@ -130,7 +130,7 @@ class WorkflowEditIT extends AbstractIT {
 
     @Test
     void addStatusAndTransition_ProjectWorkflow_ShouldBeVisibleInProjectWorkflows() {
-        String workflowId = workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, projectWorkflow())
+        String workflowId = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, projectWorkflow())
                 .block()
                 .workflow()
                 .getId()
@@ -171,7 +171,7 @@ class WorkflowEditIT extends AbstractIT {
 
     @Test
     void addTransition_ExistingPair_ShouldReturnAlreadyExists() {
-        String workflowId = workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, projectWorkflow())
+        String workflowId = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, projectWorkflow())
                 .block()
                 .workflow()
                 .getId()
@@ -241,14 +241,14 @@ class WorkflowEditIT extends AbstractIT {
 
         var dto = projectWorkflow();
         dto.setIssueTypes(List.of(request));
-        var own = workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, dto).block();
+        var own = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, dto).block();
         Assertions.assertEquals(own.workflow().getId(), workflowService.getWorkflow(PROJECT_ID, "REQUEST").block().workflow().getId());
         var listed = stub.listProjectWorkflows(Mono.just(listRequest())).block();
         Assertions.assertEquals(1, listed.getWorkflowsCount());
         Assertions.assertEquals(List.of("REQUEST"), listed.getWorkflows(0).getIssueTypeKeysList());
         Assertions.assertFalse(listed.getWorkflows(0).getIsShared());
         dto.setIssueTypes(List.of(ru.taska.domain.IssueType.BUG));
-        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, dto))
+        StepVerifier.create(workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, dto))
                 .expectErrorSatisfies(e -> Assertions.assertEquals(ru.taska.exception.DomainStatus.INVALID_ARGUMENT,
                         ((ru.taska.exception.DomainException) e).getStatus())).verify();
     }

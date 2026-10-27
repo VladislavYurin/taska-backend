@@ -18,7 +18,7 @@ class WorkflowMutationRegistryFailureTest {
         var delegate = mock(GrpcWorkflowService.class);
         var mutations = mock(WorkflowMutationGrpcService.class);
         var registry = mock(WorkflowMutationResponse.class);
-        var adapter = new GrpcWorkflowServiceAdapter(delegate, mutations, registry);
+        var adapter = new GrpcWorkflowServiceAdapter(delegate, mutations, registry, mock(WorkflowBindingGrpcService.class), mock(WorkflowScopeCheckGrpcService.class));
         String project = UUID.randomUUID().toString(), actor = UUID.randomUUID().toString();
         var header = Header.newBuilder().setRequestId("registry-outage").setNodeId("gateway").build();
         when(registry.issueTypes(header, project, actor)).thenReturn(Mono.error(Status.UNAVAILABLE

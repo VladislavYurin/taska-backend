@@ -2595,6 +2595,7 @@ message MigrateWorkflowIssuesRequest {
   // Empty keeps the legacy scan of all statuses incompatible with valid_status_keys.
   // A non-empty list scopes migration strictly to these source statuses, including the count/limit.
   repeated string source_status_keys = 8;
+  optional int32 expected_workflow_version = 9; // Locked source workflow version, never the optional user precondition.
 }
 message MigrateWorkflowIssuesResponse {
   int64 moved_count = 1;

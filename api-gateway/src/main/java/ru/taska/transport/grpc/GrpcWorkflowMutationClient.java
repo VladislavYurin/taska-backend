@@ -38,9 +38,16 @@ public class GrpcWorkflowMutationClient {
             if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
             if (body.getHidden() != null) request.setHidden(body.getHidden());
             request.putAllStatusMappings(body.getStatusMappings());
+            if (body.getIssueTypes() != null) request.setReplaceIssueTypes(true).addAllIssueTypeKeys(body.getIssueTypes());
         }
         var rpc = stub.withDeadlineAfter(properties.workflowService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
         var built = request.build();
+        if (op == Operation.UPDATE_WORKFLOW && built.getReplaceIssueTypes()) {
+            return stub.withDeadlineAfter(120, TimeUnit.SECONDS).updateProjectWorkflowWithBindings(built)
+                    .flatMap(result -> result.hasResult() ? Mono.just(mapper.toProjectWorkflowDto(result.getResult()))
+                            : Mono.error(GrpcBindingRejection.from(result.getRejectionStatus(),
+                                    result.getRejectionMessage(), result.getRejectionDetailsMap())));
+        }
         return (switch (op) {
             case UPDATE_WORKFLOW -> rpc.updateWorkflow(built);
             case UPDATE_STATUS -> rpc.updateWorkflowStatus(built);

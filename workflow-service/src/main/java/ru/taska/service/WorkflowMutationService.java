@@ -63,7 +63,8 @@ public class WorkflowMutationService {
         if (c.name() == null) return invalid("name is required");
         var changed = copy(current, current.workflow().toBuilder().name(c.name().strip()).build(),
                 current.statuses(), current.transitions());
-        return validate(changed, c).then(Mono.defer(() -> finish(changed, c)));
+        return edits.checkViolations(edits.toCreationDto(c.project(),changed),c.requestId(),c.nodeId())
+                .then(Mono.defer(() -> finish(changed,c)));
     }
 
     private Mono<ProjectWorkflowAggregate> updateStatus(EditableWorkflow current, WorkflowMutation c) {
@@ -111,7 +112,7 @@ public class WorkflowMutationService {
             Map<String, String> mapping = c.targetStatusKey() == null ? Map.of()
                     : Map.of(old.getStatusKey(), c.targetStatusKey());
             return validate(changed, c)
-                    .then(Mono.defer(() -> issues.migrate(c, current.issueTypes(), validKeys, mapping, List.of(old.getStatusKey()))
+                    .then(Mono.defer(() -> issues.migrate(c, current.issueTypes(), validKeys, mapping, List.of(old.getStatusKey()), current.workflow().getVersion())
                             .onErrorMap(io.grpc.StatusRuntimeException.class, error -> migrationError(error, validKeys))))
                     .thenMany(Flux.fromIterable(current.transitions()).filter(t -> !remainingTransitions.contains(t))
                             .concatMap(transitions::delete))
@@ -142,7 +143,8 @@ public class WorkflowMutationService {
                                 }
                                 var selectedSources = new java.util.LinkedHashSet<>(sourceKeys);
                                 selectedSources.addAll(mapping.keySet());
-                                return issues.migrate(c, current.issueTypes(), validKeys, mapping, List.copyOf(selectedSources))
+                                return (current.issueTypes().isEmpty() ? Mono.just(0L)
+                                        : issues.migrate(c, current.issueTypes(), validKeys, mapping, List.copyOf(selectedSources), current.workflow().getVersion()))
                                         .onErrorMap(io.grpc.StatusRuntimeException.class, error -> migrationError(error,
                                                 validKeys.stream().filter(sourceKeys::contains).toList()))
                                         .thenMany(bindings.findByWorkflowId(c.workflow()).concatMap(bindings::delete))

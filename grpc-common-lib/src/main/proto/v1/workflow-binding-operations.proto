@@ -1,0 +1,92 @@
+syntax = "proto3";
+package ru.taska.registry.v1;
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.registry.v1";
+
+// Internal commands carry only a durable operation identity, never caller-provided migration data.
+message TypeOperationKey {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string operation_id = 3;
+}
+message TypeOperationProjectRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+}
+message ProjectTypeOperationGate {
+  string operation_id = 1;
+  string kind = 2; // DELETE_TYPE | WORKFLOW_BINDINGS | CREATE_TYPE
+  bool active = 3;
+}
+message WorkflowTypeMove {
+  string code = 1;
+  string generation = 2;
+  string source_workflow_id = 3;
+  string target_workflow_id = 4;
+  repeated string target_status_keys = 5;
+}
+message WorkflowBindingIntent {
+  string operation_id = 1;
+  string project_id = 2;
+  string workflow_id = 3;
+  string actor_user_id = 4;
+  string state = 5; // PENDING | CANCELLING | COMPLETED | CANCELLED
+  repeated WorkflowTypeMove moves = 6;
+  map<string,string> status_mappings = 7;
+  ru.taska.common.v1.Header original_header = 8;
+}
+enum TypeOperationState {
+  TYPE_OPERATION_STATE_UNSPECIFIED = 0;
+  TYPE_OPERATION_STATE_APPLIED = 1;
+  TYPE_OPERATION_STATE_CANCELLED = 2;
+  TYPE_OPERATION_STATE_REJECTED = 3;
+}
+message TypeOperationOutcome {
+  TypeOperationState state = 1;
+  int64 changed_count = 2;
+  string rejection_status = 3;
+  string rejection_message = 4;
+  map<string,string> rejection_details = 5;
+}
+message IssueTypeCreationIntent {
+  string operation_id = 1;
+  string project_id = 2;
+  string code = 3;
+  string generation = 4;
+  string actor_user_id = 5;
+  string state = 6;
+  ru.taska.common.v1.Header original_header = 7;
+  optional string workflow_id = 8;
+  string first_type_code = 9;
+  string first_type_generation = 10;
+}
+message CreatedTypeBindingOutcome {
+  TypeOperationOutcome outcome = 1;
+  string workflow_id = 2;
+}
+service WorkflowBindingJournal {
+  rpc Get(TypeOperationKey) returns (WorkflowBindingIntent);
+  // Lock-free: may be called while issue-service holds its project advisory lock.
+  // No pending operation is represented by an empty operation_id.
+  rpc GetPending(TypeOperationProjectRequest) returns (WorkflowBindingIntent);
+}
+service WorkflowBindingIssueMigration {
+  rpc Apply(TypeOperationKey) returns (TypeOperationOutcome);
+  rpc Cancel(TypeOperationKey) returns (TypeOperationOutcome);
+  // Only a terminal workflow journal can release a transient issue fence; receipts remain durable.
+  rpc Release(TypeOperationKey) returns (TypeOperationOutcome);
+}
+service ProjectTypeOperations {
+  rpc GetGate(TypeOperationProjectRequest) returns (ProjectTypeOperationGate);
+  rpc ReserveWorkflowBindings(TypeOperationKey) returns (google.protobuf.Empty);
+  rpc ReleaseWorkflowBindings(TypeOperationKey) returns (google.protobuf.Empty);
+}
+service ProjectIssueTypeCreationJournal {
+  rpc Get(TypeOperationKey) returns (IssueTypeCreationIntent);
+}
+service WorkflowCreatedTypeBinding {
+  rpc Apply(TypeOperationKey) returns (CreatedTypeBindingOutcome);
+  rpc Cancel(TypeOperationKey) returns (CreatedTypeBindingOutcome);
+}

@@ -46,7 +46,6 @@ import ru.taska.repository.IssueTypeDeletionRepository;
 import ru.taska.repository.ProjectIssueTypeRepository;
 import ru.taska.service.IssueTypeDeletionCoordinator;
 import ru.taska.service.IssueTypeDeletionTransactions;
-import ru.taska.service.ProjectIssueTypeService;
 import ru.taska.transport.kafka.OutboxEventScheduler;
 
 /** Real project transactions and journal, with wire RPC peers whose receipts use PostgreSQL. */
@@ -63,7 +62,6 @@ class IssueTypeDeletionIT extends AbstractIT {
     @Autowired IssueTypeDeletionCoordinator coordinator;
     @Autowired IssueTypeDeletionRepository journal;
     @Autowired ProjectIssueTypeRepository types;
-    @Autowired ProjectIssueTypeService typeService;
     private Server server;
     private ManagedChannel channel;
     private UUID project,actor,token;
@@ -106,6 +104,7 @@ class IssueTypeDeletionIT extends AbstractIT {
                 .bind("p",project).then().then(db.sql("DELETE FROM taska.issue_type_deletions WHERE project_id=:p")
                         .bind("p",project).then())
                 .then(db.sql("DELETE FROM taska.test_433_peer_receipts WHERE project_id=:p").bind("p",project).then())
+                .then(db.sql("DELETE FROM taska.project_type_operations WHERE project_id=:p").bind("p",project).then())
                 .then(db.sql("DELETE FROM taska.projects WHERE id=:p").bind("p",project).then()).block(TIMEOUT);
     }
 
@@ -249,6 +248,11 @@ class IssueTypeDeletionIT extends AbstractIT {
         assertThat(releaseCalls.get()).isEqualTo(2);
     }
 
+    private void recreateTaskFixture() {
+        types.insert(new ru.taska.domain.ProjectIssueType(project,"TASK","Task","blue",null,"square",10,null,null))
+                .flatMap(saved -> types.syncLegacySettings(project,actor).thenReturn(saved)).block(TIMEOUT);
+    }
+
     @Test
     void recreatedCodeRequiresCurrentGenerationForMoveButLegacyDeleteRemainsSupported() {
         UUID firstGeneration=types.find(project,"TASK").block(TIMEOUT).generation();
@@ -256,7 +260,7 @@ class IssueTypeDeletionIT extends AbstractIT {
         var first=latest();
         delete("TASK","BUG",Map.of(),firstGeneration);
         assertThat(journalCount()).isEqualTo(1);
-        typeService.create(project,actor,"TASK","Task","blue",null,"square",10).block(TIMEOUT);
+        recreateTaskFixture();
         UUID nextGeneration=types.find(project,"TASK").block(TIMEOUT).generation();
         assertThat(nextGeneration).isNotEqualTo(firstGeneration);
         rejected(() -> begin("TASK","BUG",Map.of(),null),DomainStatus.ABORTED,"ISSUE_TYPE_GENERATION_REQUIRED");
@@ -264,7 +268,7 @@ class IssueTypeDeletionIT extends AbstractIT {
         var next=begin("TASK","BUG",Map.of(),nextGeneration);coordinator.drive(next).block(TIMEOUT);
         assertCompleted(next.id());
         assertThat(next.id()).isNotEqualTo(first.id());
-        typeService.create(project,actor,"TASK","Task","blue",null,"square",10).block(TIMEOUT);
+        recreateTaskFixture();
         int reserves=reserveCalls.get();
         delete("TASK",null,Map.of(),null);
         assertThat(types.find(project,"TASK").block(TIMEOUT)).isNull();

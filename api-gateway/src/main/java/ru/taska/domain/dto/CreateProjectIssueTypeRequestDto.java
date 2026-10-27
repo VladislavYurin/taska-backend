@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,6 +22,14 @@ public class CreateProjectIssueTypeRequestDto {
     private ProjectIssueTypeShapeDto shape;
     @Setter private ProjectIssueTypeIconDto icon;
     @PositiveOrZero private Integer sortOrder = 100;
+    private UUID workflowId;
+
+    @JsonSetter(nulls = Nulls.FAIL)
+    public void setWorkflowId(String value) {
+        if (value == null || !value.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))
+            throw new IllegalArgumentException("workflowId must be a UUID");
+        workflowId = UUID.fromString(value);
+    }
 
     @JsonSetter(nulls = Nulls.FAIL)
     public void setShape(ProjectIssueTypeShapeDto shape) { this.shape = shape; }

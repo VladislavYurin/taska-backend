@@ -30,6 +30,8 @@ import static org.mockito.ArgumentMatchers.*;
 
 /** Real PostgreSQL transactions, row locks and history/outbox writes. */
 class IssueTransitionVersionIT extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
     @Autowired private IssueTransitionService service;
     @Autowired private IssueRepository repository;
     @Autowired private DatabaseClient database;
@@ -43,6 +45,8 @@ class IssueTransitionVersionIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         projectId = UUID.randomUUID();
         issueId = UUID.randomUUID();
         database.sql("""

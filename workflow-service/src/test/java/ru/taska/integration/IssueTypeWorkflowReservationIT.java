@@ -39,7 +39,7 @@ import ru.taska.transport.grpc.project.IssueTypeDeletionJournalClient;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
 /** Real transaction-scoped advisory locks, workflow row locks and durable pin storage. */
-class IssueTypeWorkflowReservationIT extends AbstractIT {
+class IssueTypeWorkflowReservationIT extends LegacyWorkflowOperationsFixture {
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     private static final UUID DEFAULT_WORKFLOW = UUID.fromString("11111111-1111-1111-1111-111111111111");
     @MockitoBean GrpcProjectServiceClient projects;
@@ -96,7 +96,7 @@ class IssueTypeWorkflowReservationIT extends AbstractIT {
 
     @Test
     void pendingRegistryFencesCreationAndEveryGraphMutationBeforeLocalPinExists() {
-        rejected(() -> creates.validateAndCreateWorkflow("r","n",actor,creation(IssueType.STORY)).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
+        rejected(() -> creates.validateAndCreateWorkflow(UUID.randomUUID().toString(),"n",actor,creation(IssueType.STORY)).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         rejected(() -> edits.addStatus("r","n",actor,project,workflow,statusDto("REVIEW")).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         rejected(() -> edits.addTransition("r","n",actor,project,workflow,transitionDto()).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         for (var operation : WorkflowMutationService.Operation.values()) {
@@ -178,21 +178,20 @@ class IssueTypeWorkflowReservationIT extends AbstractIT {
     }
 
     @Test
-    void reserveDrainsBindingCreationThatStartedBeforeTheIntent() throws Exception {
+    void reservationSeesPublishedCreationBeforeTheOuterCallerFinishes() throws Exception {
         databaseClient.sql("DELETE FROM taska.workflow_bindings WHERE project_id=:project").bind("project",project).then().block(TIMEOUT);
         registry.set(types(false));
         var created=new AtomicReference<UUID>(); var release=Sinks.<Void>one(); var held=new CountDownLatch(1);
         var creation=TransactionalOperator.create(transactions).transactional(
-                creates.validateAndCreateWorkflow("r","n",actor,creation(IssueType.BUG))
+                creates.validateAndCreateWorkflow(UUID.randomUUID().toString(),"n",actor,creation(IssueType.BUG))
                         .doOnNext(result -> created.set(result.workflow().getId())).then(Mono.fromRunnable(held::countDown))
                         .then(release.asMono())).toFuture();
         try {
             assertThat(held.await(10,TimeUnit.SECONDS)).isTrue();
             registry.set(types(true));
             var reserve=reservations.reserve(project,operation).toFuture();
-            awaitLock("hashtextextended");
-            release.tryEmitEmpty(); creation.get(10,TimeUnit.SECONDS);
             assertThat(reserve.get(10,TimeUnit.SECONDS).getWorkflowId()).isEqualTo(created.get().toString());
+            release.tryEmitEmpty(); creation.get(10,TimeUnit.SECONDS);
         } finally { release.tryEmitEmpty(); }
     }
 

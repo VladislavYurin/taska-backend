@@ -137,7 +137,7 @@ class WorkflowMutationServiceTest {
 
     @Test
     void usedStatusWithoutMappingKeepsEntireGraph() {
-        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
                 new DomainException(DomainStatus.FAILED_PRECONDITION, "Status has issues",
                         Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "3", "statusKeys", "REVIEW")))));
         StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, null, Map.of())))
@@ -153,7 +153,7 @@ class WorkflowMutationServiceTest {
 
     @Test
     void movingIssuesPrecedesDeletingStatusAndItsIncidentEdges() {
-        when(issues.migrate(any(), eq(List.of(IssueType.TASK)), eq(List.of("TODO", "DONE")), eq(Map.of("REVIEW", "DONE")), eq(List.of("REVIEW"))))
+        when(issues.migrate(any(), eq(List.of(IssueType.TASK)), eq(List.of("TODO", "DONE")), eq(Map.of("REVIEW", "DONE")), eq(List.of("REVIEW")), eq(4)))
                 .thenReturn(Mono.just(3L));
         StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, "DONE", Map.of())))
                 .assertNext(result -> {
@@ -194,7 +194,7 @@ class WorkflowMutationServiceTest {
         when(workflows.findWorkflowForProject(defaultProject, "TASK")).thenReturn(Mono.just(entity.toBuilder().id(fallbackId).build()));
         when(statuses.findActiveByWorkflowId(fallbackId)).thenReturn(Flux.just(status(1, "TODO", 10), status(3, "DONE", 20), status(9, "ARCHIVED", 30)));
         when(transitions.findByWorkflowIdOrderBySortOrderAsc(fallbackId)).thenReturn(Flux.just(edge(90, 1, 3, 10, false)));
-        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
                 new DomainException(DomainStatus.FAILED_PRECONDITION, "Status has issues",
                         Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "2", "statusKeys", "REVIEW")))));
         StepVerifier.create(service.mutate(Operation.DELETE_WORKFLOW,
@@ -207,7 +207,7 @@ class WorkflowMutationServiceTest {
 
     @Test
     void migrationLimitKeepsItsReasonAndDoesNotOfferMappingAsAResolution() {
-        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenReturn(Mono.error(mapper.GrpcExceptionMapper.toStatusRuntimeException(
                 new DomainException(DomainStatus.FAILED_PRECONDITION, "Migration exceeds 5000 issues",
                         Map.of("reason", "WORKFLOW_MIGRATION_LIMIT", "limit", "5000")))));
         StepVerifier.create(service.mutate(Operation.DELETE_STATUS, command(4, 2L, null, null, null, null, null, Map.of())))
@@ -226,14 +226,14 @@ class WorkflowMutationServiceTest {
         when(statuses.findActiveByWorkflowId(fallbackId)).thenReturn(Flux.just(status(1, "TODO", 10), status(3, "DONE", 20)));
         when(transitions.findByWorkflowIdOrderBySortOrderAsc(fallbackId)).thenReturn(Flux.just(edge(90, 1, 3, 10, false)));
         when(issues.migrate(any(), eq(List.of(IssueType.TASK)), eq(List.of("TODO", "DONE")),
-                eq(Map.of("LEGACY", "DONE")), eq(List.of("TODO", "REVIEW", "DONE", "LEGACY")))).thenReturn(Mono.just(2L));
+                eq(Map.of("LEGACY", "DONE")), eq(List.of("TODO", "REVIEW", "DONE", "LEGACY")), eq(4))).thenReturn(Mono.just(2L));
         when(bindings.delete(any(WorkflowBindingEntity.class))).thenReturn(Mono.empty());
         when(workflows.delete(any(WorkflowEntity.class))).thenReturn(Mono.empty());
         StepVerifier.create(service.mutate(Operation.DELETE_WORKFLOW,
                         command(4, null, null, null, null, null, null, Map.of("LEGACY", "DONE"))))
                 .assertNext(result -> assertThat(result.shared()).isTrue()).verifyComplete();
-        verify(issues).migrate(any(), any(), any(), any(), eq(List.of("TODO", "REVIEW", "DONE", "LEGACY")));
-        verify(issues, never()).migrate(any(), any(), any(), any());
+        verify(issues).migrate(any(), any(), any(), any(), eq(List.of("TODO", "REVIEW", "DONE", "LEGACY")), eq(4));
+        verify(issues, never()).migrate(any(), any(), any(), any(), eq(4));
     }
 
     private WorkflowMutation command(Integer version, Long status, Long transition, String name, Integer order,

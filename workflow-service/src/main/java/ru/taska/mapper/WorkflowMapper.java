@@ -40,6 +40,22 @@ public class WorkflowMapper {
                 .build();
     }
 
+    public WorkflowAggregate fromWorkflowProto(WorkflowResponse response, java.util.UUID project) {
+        java.util.UUID id=java.util.UUID.fromString(response.getId());
+        var entity=WorkflowEntity.builder().id(id).ownerProjectId(project).active(true).name(response.getName())
+                .version(response.getVersion()).createdAt(fromTimestamp(response.getCreatedAt())).updatedAt(fromTimestamp(response.getUpdatedAt())).build();
+        var statuses=response.getStatusesList().stream().map(status -> StatusEntity.builder().id(java.util.UUID.fromString(status.getId()))
+                .workflowId(id).statusKey(status.getStatusKey()).name(status.getName()).sortOrder(status.getSortOrder())
+                .category(ru.taska.domain.StatusCategory.valueOf(status.getCategory().name().replace("STATUS_CATEGORY_","")))
+                .createdAt(fromTimestamp(status.getCreatedAt())).updatedAt(fromTimestamp(status.getUpdatedAt())).build()).toList();
+        var transitions=response.getTransitionsList().stream().map(edge -> TransitionEntity.builder().id(java.util.UUID.fromString(edge.getId()))
+                .workflowId(id).fromStatusId(java.util.UUID.fromString(edge.getFromStatusId())).toStatusId(java.util.UUID.fromString(edge.getToStatusId()))
+                .name(edge.getName()).hidden(edge.getIsHidden()).sortOrder(edge.getSortOrder())
+                .createdAt(fromTimestamp(edge.getCreatedAt())).updatedAt(fromTimestamp(edge.getUpdatedAt())).build()).toList();
+        return new WorkflowAggregate(entity,statuses,transitions);
+    }
+    private Instant fromTimestamp(Timestamp value) { return Instant.ofEpochSecond(value.getSeconds(),value.getNanos()); }
+
     public IssueType toDomainIssueType(ru.taska.api.workflow.v1.IssueType proto) {
         return switch (proto) {
             case ISSUE_TYPE_TASK -> IssueType.TASK;

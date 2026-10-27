@@ -17,17 +17,17 @@ import ru.taska.dto.WorkflowMutation;
 public class WorkflowIssueMigrationClient {
     private final ReactorIssueServiceGrpc.ReactorIssueServiceStub stub;
 
-    public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys, Map<String, String> mapping) {
-        return migrate(c, types, validKeys, mapping, List.of());
+    public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys, Map<String, String> mapping, int workflowVersion) {
+        return migrate(c, types, validKeys, mapping, List.of(), workflowVersion);
     }
 
     public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys,
-                              Map<String, String> mapping, List<String> sourceKeys) {
+                              Map<String, String> mapping, List<String> sourceKeys, int workflowVersion) {
         return Mono.deferContextual(context -> stub.withDeadlineAfter(30, TimeUnit.SECONDS).migrateWorkflowIssues(MigrateWorkflowIssuesRequest.newBuilder()
                         .setHeader(action.GrpcActionContext.enrich(Header.newBuilder().setRequestId(c.requestId()).setNodeId(c.nodeId()),
                                 ru.taska.domain.ActionMetadata.current(context)))
                         .setProjectId(c.project().toString()).setActorUserId(c.actor().toString())
-                        .setWorkflowId(c.workflow().toString()).addAllIssueTypeKeys(types.stream().map(IssueType::name).toList())
+                        .setWorkflowId(c.workflow().toString()).setExpectedWorkflowVersion(workflowVersion).addAllIssueTypeKeys(types.stream().map(IssueType::name).toList())
                         .addAllValidStatusKeys(validKeys).putAllStatusMappings(mapping).addAllSourceStatusKeys(sourceKeys).build())
                 .map(response -> response.getMovedCount()));
     }

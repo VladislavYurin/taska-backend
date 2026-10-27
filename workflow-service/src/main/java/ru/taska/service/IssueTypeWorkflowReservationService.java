@@ -35,7 +35,8 @@ public class IssueTypeWorkflowReservationService {
 
     @Transactional
     public Mono<IssueTypeMoveWorkflowSnapshot> reserve(UUID project, UUID operation) {
-        return fence.lockProject(project).then(Mono.defer(() -> journal.get(project, operation)))
+        return fence.lockProject(project).then(Mono.defer(() -> fence.requireNoBindingChange(project)))
+                .then(Mono.defer(() -> journal.get(project, operation)))
                 .flatMap(intent -> {
                     requireIdentity(intent, project, operation);
                     if (!"PENDING".equals(intent.getState()) || !intent.hasTargetCode() || !intent.hasTargetGeneration())

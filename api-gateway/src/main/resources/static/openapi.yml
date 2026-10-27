@@ -1255,7 +1255,13 @@ paths:
     post:
       x-pat-scope: write
       operationId: createProjectIssueType
-      summary: Добавить тип задачи — только ADMIN проекта
+      summary: Добавить тип задачи и назначить workflow — только ADMIN проекта
+      description: >-
+        Создаёт тип и привязку одной восстанавливаемой операцией. workflowId указывает свой workflow
+        этого проекта или общий default. Без workflowId выбирается workflow первого типа реестра
+        (основной workflow проекта). При отказе тип не появляется в реестре.
+        Для безопасного повтора передайте тот же X-Request-Id и ту же команду; другой payload с тем же
+        ключом — 409. При 503 ISSUE_TYPE_CREATION_PENDING повторяйте с исходным X-Request-Id.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -1278,7 +1284,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProjectIssueTypeDto'
+                $ref: '#/components/schemas/CreatedProjectIssueTypeDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -3107,8 +3113,8 @@ paths:
       x-pat-scope: read
       summary: Все workflow проекта со всеми статусами и переходами
       description: |
-        Возвращает каждый workflow, по которому работают задачи проекта, один раз: с типами задач,
-        которые по нему работают, всеми статусами и всеми переходами, включая скрытые (hidden = true).
+        Возвращает свои workflow проекта, включая сохранённые workflow-доноры без типов, один раз:
+        с привязанными типами ([] у пустого донора), всеми статусами и переходами, включая скрытые (hidden = true).
         Тип задачи без своего workflow проекта работает по общему default workflow (shared = true).
         Default workflow не меняется: чтобы завести свои статусы и переходы, создайте workflow проекта.
         Доступно любому участнику проекта.
@@ -3148,11 +3154,17 @@ paths:
       x-pat-scope: write
       summary: Создание своего workflow проекта
       description: |
-        Создаёт workflow проекта со своими статусами и переходами и привязывает к нему указанные типы задач.
-        Тип задачи, у которого в проекте уже есть свой workflow, повторно привязать нельзя (409).
-        Внимание: issue-service пока создаёт новые задачи в статусе с ключом TODO. Если такого статуса
-        в workflow нет, новые задачи этого типа окажутся в статусе, которого в workflow нет.
-        Требуется роль ADMIN в проекте.
+        Создаёт свой workflow и переносит в него указанные типы проекта с общего default или другого
+        своего workflow. Донор, у которого не осталось типов, сохраняется с графом и остаётся доступным
+        для повторного использования или удаления. Требуется роль ADMIN проекта.
+        Если статусы переносимых задач отсутствуют в новом workflow, возвращает 400 FAILED_PRECONDITION
+        с reason WORKFLOW_ISSUES_UNMAPPED и details.issueCount/statusKeys/targetStatusKeys; повторите со
+        statusMappings. Превышение 5000 задач для миграции — WORKFLOW_MIGRATION_LIMIT без изменений.
+        Если внутренний план превышает транспортный предел, возвращается 400 WORKFLOW_BINDING_PLAN_TOO_LARGE;
+        разбейте перенос на несколько операций. Это отдельный предел от ограничения числа задач.
+        Тело ограничено 1 МиБ (превышение — 413). Операция восстанавливается после сбоев: при 503
+        WORKFLOW_BINDING_CHANGE_PENDING повторите ту же команду с исходным X-Request-Id; тот же ключ с другим
+        содержимым — 409. Успешный повтор не создаёт второй workflow или повторные события задач.
       operationId: createProjectWorkflow
       tags:
         - workflow
@@ -4474,8 +4486,19 @@ paths:
     patch:
       x-pat-scope: write
       operationId: updateProjectWorkflow
-      description: Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права.
-      summary: Переименовать собственный workflow проекта
+      description: >-
+        Только ADMIN проекта; GLOBAL_ADMIN не обходит проектные права. name меняет имя. issueTypes — полный
+        набор типов своего workflow: добавленные переносятся сюда с default или другого своего workflow,
+        удалённые возвращаются на общий default. Пустой набор запрещён с reason WORKFLOW_ISSUE_TYPES_EMPTY;
+        неизвестные типы — 400. Донор без типов сохраняется и остаётся доступным в списке workflow.
+        При issueTypes обязателен version; конфликт версии — 409. Без issueTypes прежний name-only PATCH
+        сохраняет необязательный version. Для отсутствующих в целевом workflow статусов задач нужны
+        statusMappings; иначе WORKFLOW_ISSUES_UNMAPPED с issueCount/statusKeys/targetStatusKeys.
+        Предел миграции — 5000 (WORKFLOW_MIGRATION_LIMIT); тело до 1 МиБ, превышение — 413.
+        Если внутренний план превышает транспортный предел — 400 WORKFLOW_BINDING_PLAN_TOO_LARGE;
+        разбейте перенос на несколько операций.
+        При 503 WORKFLOW_BINDING_CHANGE_PENDING повторите команду с исходным X-Request-Id.
+      summary: Изменить имя или полный набор типов собственного workflow проекта
       tags: [workflow-mutation]
       security:
         - bearerAuth: []
@@ -6565,6 +6588,18 @@ components:
           type: integer
           format: int32
           minimum: 0
+    CreatedProjectIssueTypeDto:
+      description: Созданный тип и назначенный ему workflow; формат списка типов проекта не меняется.
+      allOf:
+        - $ref: '#/components/schemas/ProjectIssueTypeDto'
+        - type: object
+          required: [workflowId]
+          properties:
+            workflowId:
+              type: string
+              format: uuid
+              readOnly: true
+              description: Свой workflow проекта или общий default, назначенный при создании.
     ListProjectIssueTypesDto:
       type: object
       required: [items]
@@ -6579,6 +6614,10 @@ components:
       additionalProperties: false
       required: [code, name, color]
       properties:
+        workflowId:
+          type: string
+          format: uuid
+          description: Свой workflow этого проекта или общий default; пропуск выбирает workflow первого типа реестра. Null запрещён.
         code:
           type: string
           pattern: '^[A-Z][A-Z0-9_]{1,31}$'
@@ -6993,14 +7032,18 @@ components:
     CreateWorkflowRequestDto:
       type: object
       required: [ name, issueTypes, statuses, transitions ]
+      additionalProperties: false
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 100
           description: Отображаемое имя workflow, до 100 символов
           example: Development
         issueTypes:
           type: array
-          description: Типы задач проекта, которые будут работать по этому workflow
+          uniqueItems: true
+          description: Типы из реестра проекта; могут быть привязаны к default или другому своему workflow. Пустой набор — WORKFLOW_ISSUE_TYPES_EMPTY.
           items:
             $ref: '#/components/schemas/IssueTypeDto'
         statuses:
@@ -7012,21 +7055,50 @@ components:
           items:
             $ref: '#/components/schemas/CreateWorkflowTransitionRequestDto'
 
+        statusMappings:
+          type: object
+          description: Необязательные сопоставления статусов переносимых задач. Пропуск — пустая карта; null запрещён.
+          additionalProperties:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,63}$'
+
     PatchWorkflowRequestDto:
       type: object
-      required: [name]
       additionalProperties: false
-      description: name обязателен и не может быть пустым/пробельным; version необязателен. Явный null и неизвестные поля запрещены.
+      anyOf:
+        - required: [name]
+        - required: [issueTypes]
+      allOf:
+        - anyOf:
+            - not:
+                required: [issueTypes]
+            - required: [version]
+      description: >-
+        Пропущенный name или issueTypes не меняется. Хотя бы name или issueTypes обязателен;
+        issueTypes требует version. Явный null, неизвестные поля, дубликаты типов и непустые statusMappings
+        без issueTypes запрещены. [] передаётся backend и возвращает WORKFLOW_ISSUE_TYPES_EMPTY.
       properties:
         version:
           type: integer
           format: int32
           minimum: 1
-          description: Ожидаемая версия workflow; конфликт возвращает 409 ABORTED.
+          description: Ожидаемая версия workflow; обязательна при issueTypes, конфликт — 409 ABORTED.
         name:
           type: string
           minLength: 1
           maxLength: 100
+        issueTypes:
+          type: array
+          uniqueItems: true
+          description: Полный непустой набор зарегистрированных типов workflow. Удалённые из набора типы возвращаются на общий default.
+          items:
+            $ref: '#/components/schemas/IssueTypeDto'
+        statusMappings:
+          type: object
+          description: Сопоставления исходных статусов со статусами нового workflow для перемещаемых типов; пропуск — пустая карта, null запрещён.
+          additionalProperties:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,63}$'
 
     PatchWorkflowStatusRequestDto:
       type: object

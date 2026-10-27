@@ -173,8 +173,7 @@ public class IssueServiceImpl implements IssueService {
 
                         }))
                 .switchIfEmpty(Mono.defer(() -> issueTypeWriteGuard.requireActive(requestId, nodeId, projectId, reporterId, List.of(issueType))
-                        .then(Mono.defer(() -> statusKey == null ? Mono.empty()
-                                : workflowClient.requireInitialStatus(requestId, nodeId, projectId, issueType, reporterId, statusKey)))
+                        .then(Mono.defer(() -> workflowClient.requireInitialStatus(requestId, nodeId, projectId, issueType, reporterId, initialStatus)))
                         .then(Mono.defer(() -> grpcProjectServiceClient.getProjectKeyInternal(requestId, nodeId, projectId)))
                         .flatMap(projectKey -> projectCounterRepository.getNextIssueNumberAndIncrement(projectId)
                                 .flatMap(number -> {

@@ -29,7 +29,7 @@ import ru.taska.transport.grpc.project.ProjectRoleChecker;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class WorkflowMutationIntegrationTest extends AbstractIT {
+class WorkflowMutationIntegrationTest extends LegacyWorkflowOperationsFixture {
     @Autowired WorkflowCreateService creator;
     @Autowired WorkflowMutationService service;
     @Autowired ru.taska.service.WorkflowEditService edits;
@@ -56,9 +56,9 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
 
         project = UUID.randomUUID(); actor = UUID.randomUUID();
         when(roles.checkProjectWriteRole(any(), any(), any(), any(), any())).thenReturn(Mono.empty());
-        when(issues.migrate(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        when(issues.migrate(any(), any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var created = creator.validateAndCreateWorkflow("r", "n", actor, WorkflowCreationDto.builder()
+        when(issues.migrate(any(), any(), any(), any(), anyInt())).thenReturn(Mono.just(0L));
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenReturn(Mono.just(0L));
+        var created = creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, WorkflowCreationDto.builder()
                 .projectId(project).name("Test").issueTypes(List.of(IssueType.TASK))
                 .statuses(List.of(status("TODO", 10), status("REVIEW", 20), status("DONE", 30)))
                 .transitions(List.of(edge("TODO", "REVIEW", 10), edge("REVIEW", "DONE", 20), edge("TODO", "DONE", 30)))
@@ -91,7 +91,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     @Test
     void deletingOwnWorkflowFallsBackToDefaultAndDropsOnlyItsGraph() {
         var fallback = service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block();
-        verify(issues).migrate(any(), eq(List.of(IssueType.TASK)), any(), eq(Map.of("REVIEW", "DONE")), eq(List.of("TODO", "REVIEW", "DONE")));
+        verify(issues).migrate(any(), eq(List.of(IssueType.TASK)), any(), eq(Map.of("REVIEW", "DONE")), eq(List.of("TODO", "REVIEW", "DONE")), anyInt());
         assertThat(fallback.shared()).isTrue();
         assertThat(fallback.workflow().workflow().getId()).isNotEqualTo(workflow);
         assertThat(databaseClient.sql("SELECT count(*) AS n FROM taska.workflows WHERE id=:id").bind("id", workflow)
@@ -105,7 +105,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         var fallback = service.mutate(Operation.DELETE_WORKFLOW, command).block();
         assertThat(fallback.shared()).isTrue();
         verify(issues).migrate(any(), eq(List.of(IssueType.TASK)), any(), eq(Map.of("OLD_ORPHAN", "DONE")),
-                eq(List.of("TODO", "REVIEW", "DONE", "OLD_ORPHAN")));
+                eq(List.of("TODO", "REVIEW", "DONE", "OLD_ORPHAN")), anyInt());
         assertThat(databaseClient.sql("SELECT count(*) FROM taska.workflows WHERE id=:id").bind("id", workflow)
                 .map(row -> row.get(0, Long.class)).one().block()).isZero();
     }
@@ -142,7 +142,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     void statusDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
         var migrated = new java.util.concurrent.atomic.AtomicBoolean();
         var movedCount = new java.util.concurrent.atomic.AtomicInteger();
-        when(issues.migrate(any(), any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenAnswer(call -> Mono.fromSupplier(() -> {
             if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
             return 0L;
         }));
@@ -162,14 +162,14 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         assertThat(result.workflow().workflow().getVersion()).isEqualTo(2);
         assertThat(result.workflow().statuses()).noneMatch(status -> status.getId().equals(review));
         assertThat(movedCount.get()).isEqualTo(1);
-        verify(issues, times(2)).migrate(any(), any(), any(), any(), any());
+        verify(issues, times(2)).migrate(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
     void workflowDeletionCanRetrySameVersionAfterExternalMigrationAndLocalFailure() {
         var migrated = new java.util.concurrent.atomic.AtomicBoolean();
         var movedCount = new java.util.concurrent.atomic.AtomicInteger();
-        when(issues.migrate(any(), any(), any(), any(), any())).thenAnswer(call -> Mono.fromSupplier(() -> {
+        when(issues.migrate(any(), any(), any(), any(), any(), anyInt())).thenAnswer(call -> Mono.fromSupplier(() -> {
             if (!migrated.getAndSet(true)) { movedCount.incrementAndGet(); return 1L; }
             return 0L;
         }));
@@ -188,7 +188,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         }
         assertThat(service.mutate(Operation.DELETE_WORKFLOW, command(null, null, null)).block().shared()).isTrue();
         assertThat(movedCount.get()).isEqualTo(1);
-        verify(issues, times(2)).migrate(any(), any(), any(), any(), any());
+        verify(issues, times(2)).migrate(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
@@ -201,7 +201,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
                 .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(project, IssueType.TASK, request)));
         var fallback = resolver.resolveWorkflow(project, "REQUEST").block();
         assertThat(fallback).isNotNull();
-        var own = creator.validateAndCreateWorkflow("r", "n", actor, WorkflowCreationDto.builder()
+        var own = creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, WorkflowCreationDto.builder()
                 .projectId(project).name("Requests").issueTypes(List.of(request))
                 .statuses(List.of(status("TODO", 10), status("DONE", 20)))
                 .transitions(List.of(edge("TODO", "DONE", 10))).build()).block();
@@ -223,7 +223,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
     }
 
     @Test
-    void deletedOrRecreatedTypeCannotResurrectLegacyBindingAndCleanupRollsBack() {
+    void deletedOrRecreatedTypeCannotResurrectBindingAndOwnedGraphRemainsEditable() {
         // A pre-migration binding has no generation and is valid only for the initial registry generation.
         databaseClient.sql("UPDATE taska.workflow_bindings SET issue_type_generation=NULL WHERE workflow_id=:id")
                 .bind("id", workflow).fetch().rowsUpdated().block();
@@ -233,8 +233,8 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         registryReturns(removed);
         assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).noneSatisfy(item ->
                 assertThat(item.issueTypes()).contains(IssueType.TASK));
-        reactor.test.StepVerifier.create(edits.addStatus("r", "n", actor, project, workflow, status("NEW", 40)))
-                .expectErrorSatisfies(error -> assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.NOT_FOUND)).verify();
+        assertThat(edits.addStatus("r", "n", actor, project, workflow, status("NEW", 40)).block().statuses())
+                .extracting(status -> status.getStatusKey()).contains("NEW");
         // Simulate a rolled-back registry delete: no cross-service mutation has removed the binding.
         registryReturns(original);
         assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isEqualTo(workflow);
@@ -244,15 +244,21 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
                 ? type.toBuilder().setGeneration(UUID.randomUUID().toString()).build() : type).toList();
         registryReturns(recreated);
         assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isNotEqualTo(workflow);
-        assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).noneSatisfy(item ->
-                assertThat(item.workflow().workflow().getId()).isEqualTo(workflow));
+        assertThat(listing.listProjectWorkflows("r", "n", project, actor).block()).anySatisfy(item -> {
+            assertThat(item.workflow().workflow().getId()).isEqualTo(workflow);
+            assertThat(item.issueTypes()).isEmpty();
+        });
         var transaction = org.springframework.transaction.reactive.TransactionalOperator.create(
                 new org.springframework.r2dbc.connection.R2dbcTransactionManager(connectionFactory));
-        reactor.test.StepVerifier.create(creator.validateAndCreateWorkflow("r", "n", actor, replacement("TASK"))
-                        .then(Mono.error(new IllegalStateException("rollback after cleanup"))).as(transaction::transactional))
+        // A caller transaction cannot undo a separately published durable operation.
+        var published=new java.util.concurrent.atomic.AtomicReference<UUID>();
+        reactor.test.StepVerifier.create(creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, replacement("TASK"))
+                        .doOnNext(result -> published.set(result.workflow().getId()))
+                        .then(Mono.error(new IllegalStateException("rollback caller only"))).as(transaction::transactional))
                 .expectError(IllegalStateException.class).verify();
-        assertThat(bindingCount(workflow)).isEqualTo(1);
-        var fresh = creator.validateAndCreateWorkflow("r", "n", actor, replacement("TASK")).block();
+        assertThat(bindingCount(workflow)).isZero();
+        assertThat(resolver.resolveWorkflow(project,"TASK").block().getId()).isEqualTo(published.get());
+        var fresh = creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, replacement("TASK")).block();
         assertThat(bindingCount(workflow)).isZero();
         assertThat(resolver.resolveWorkflow(project, "TASK").block().getId()).isEqualTo(fresh.workflow().getId());
     }
@@ -268,7 +274,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
             captured.tryEmitValue(true);
             return release.asMono();
         });
-        var inFlight = creator.validateAndCreateWorkflow("r", "n", actor, replacement("REQUEST"))
+        var inFlight = creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, replacement("REQUEST"))
                 .subscribeOn(reactor.core.scheduler.Schedulers.parallel()).toFuture();
         captured.asMono().block(java.time.Duration.ofSeconds(5));
         registryReturns(fresh);
@@ -276,7 +282,7 @@ class WorkflowMutationIntegrationTest extends AbstractIT {
         var staleWorkflow = inFlight.get(5, java.util.concurrent.TimeUnit.SECONDS).workflow().getId();
         assertThat(bindingCount(staleWorkflow)).isEqualTo(1);
         assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isNotEqualTo(staleWorkflow);
-        var currentWorkflow = creator.validateAndCreateWorkflow("r", "n", actor, replacement("REQUEST")).block().workflow().getId();
+        var currentWorkflow = creator.validateAndCreateWorkflow(UUID.randomUUID().toString(), "n", actor, replacement("REQUEST")).block().workflow().getId();
         assertThat(bindingCount(staleWorkflow)).isZero();
         assertThat(resolver.resolveWorkflow(project, "REQUEST").block().getId()).isEqualTo(currentWorkflow);
     }

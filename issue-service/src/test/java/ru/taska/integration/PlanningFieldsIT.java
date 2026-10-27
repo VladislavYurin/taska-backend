@@ -36,6 +36,10 @@ import ru.taska.service.IssueService;
 import ru.taska.transport.grpc.GrpcIssueService;
 
 class PlanningFieldsIT extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient initialWorkflowClient;
 
     @MockitoBean
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
@@ -70,6 +74,11 @@ class PlanningFieldsIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+        org.mockito.Mockito.when(initialWorkflowClient.requireInitialStatus(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         Mockito.when(projectServiceStub.getProjectInfoBatchInternal(Mockito.any(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.project.v1.GetProjectInfoBatchInternalResponse.getDefaultInstance()));
 

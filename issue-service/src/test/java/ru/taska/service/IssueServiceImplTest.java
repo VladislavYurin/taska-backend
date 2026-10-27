@@ -35,6 +35,9 @@ public class IssueServiceImplTest {
 
     @org.junit.jupiter.api.BeforeEach
     void defaultIssueTypeGuard() {
+        org.mockito.Mockito.lenient().when(workflowClient.requireInitialStatus(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         org.mockito.Mockito.lenient().when(issueTypeWriteGuard.lock(org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         org.mockito.Mockito.lenient().when(issueTypeWriteGuard.requireActive(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
     }

@@ -22,6 +22,7 @@ public class WorkflowCreationMapper {
     public WorkflowCreationDto toDomainDto(UUID projectId, CreateWorkflowRequestBody body) {
         return WorkflowCreationDto.builder()
                 .projectId(projectId)
+                .statusMappings(body.getStatusMappingsMap())
                 .name(body.getName().trim())
                 .issueTypes(body.getIssueTypeKeysCount() > 0
                         ? body.getIssueTypeKeysList().stream().map(key -> validator.IssueTypeKeys.read(true, key, IssueType.ISSUE_TYPE_UNSPECIFIED)).toList()

@@ -32,6 +32,10 @@ import ru.taska.repository.OutboxEventRepository;
 import ru.taska.service.IssueService;
 
 class IdempotencyKeyIT extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient initialWorkflowClient;
 
     @MockitoBean
     private ReactorProjectServiceGrpc.ReactorProjectServiceStub projectServiceStub;
@@ -57,6 +61,11 @@ class IdempotencyKeyIT extends AbstractIT {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
+        org.mockito.Mockito.when(initialWorkflowClient.requireInitialStatus(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         Mockito.when(projectServiceStub.withDeadlineAfter(Mockito.anyLong(), Mockito.any())).thenReturn(projectServiceStub);
         Mockito.when(projectServiceStub.listProjectIssueTypes(Mockito.any(ru.taska.api.project.v1.ProjectIssueTypesRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.project.v1.ListProjectIssueTypesResponse.newBuilder()

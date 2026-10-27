@@ -127,7 +127,7 @@ public class WorkflowEditService {
                         .switchIfEmpty(Mono.error(() -> new DomainException(DomainStatus.NOT_FOUND,
                                 "Workflow not found: id=" + workflowId)))
                         .flatMap(workflow -> bindingRepository.findByWorkflowId(workflowId).collectList()
-                                .flatMap(bindings -> projectIssueTypes(bindings, projectId, workflowId, types, requestId, nodeId))
+                                .flatMap(bindings -> projectIssueTypes(bindings, projectId, workflow, types, requestId, nodeId))
                                 .flatMap(issueTypes -> Mono.zip(
                                         statusRepository.findActiveByWorkflowId(workflowId).collectList(),
                                         transitionRepository.findByWorkflowIdOrderBySortOrderAsc(workflowId).collectList()
@@ -135,23 +135,13 @@ public class WorkflowEditService {
     }
 
     private Mono<List<IssueType>> projectIssueTypes(List<WorkflowBindingEntity> bindings, UUID projectId,
-            UUID workflowId, List<ru.taska.api.project.v1.ProjectIssueTypeResponse> types, String requestId, String nodeId) {
-        if (bindings.stream().anyMatch(b -> b.getProjectId().equals(workflowProperties.defaultProjectId()))) {
-            String message = "Default workflow is shared by all projects and cannot be modified: id=" + workflowId
-                    + ". Create a project workflow first";
-            log.warn("[{}][{}] {}", requestId, nodeId, message);
-            return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, message));
-        }
-        List<IssueType> issueTypes = types.stream()
-                .filter(type -> bindings.stream().anyMatch(binding -> binding.getProjectId().equals(projectId)
-                        && IssueTypeBindingIdentity.matches(binding, type)))
-                .map(type -> IssueType.valueOf(type.getCode())).toList();
-        if (issueTypes.isEmpty()) return Mono.error(new DomainException(DomainStatus.NOT_FOUND,
-                "Workflow not found in project: id=" + workflowId));
-        if (bindings.stream().anyMatch(binding -> !binding.getProjectId().equals(projectId)))
-            return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-                    "Workflow is shared with another project and cannot be modified"));
-        return Mono.just(issueTypes);
+            WorkflowEntity workflow, List<ru.taska.api.project.v1.ProjectIssueTypeResponse> types, String requestId, String nodeId) {
+        return Mono.fromCallable(() -> {
+            WorkflowOwnership.requireOwned(workflow, bindings, projectId, workflowProperties.defaultProjectId());
+            return types.stream().filter(type -> bindings.stream().anyMatch(binding -> binding.getProjectId().equals(projectId)
+                            && IssueTypeBindingIdentity.matches(binding,type)))
+                    .map(type -> IssueType.valueOf(type.getCode())).toList();
+        });
     }
 
     WorkflowCreationDto toCreationDto(UUID projectId, EditableWorkflow current) {
@@ -169,7 +159,8 @@ public class WorkflowEditService {
     }
 
     Mono<Void> checkViolations(WorkflowCreationDto updated, String requestId, String nodeId) {
-        List<WorkflowCreationViolation> violations = validator.validateDto(updated);
+        List<WorkflowCreationViolation> violations = validator.validateDto(updated).stream()
+                .filter(v -> v.type()!=WorkflowCreationViolationType.ISSUE_TYPE_LIST_EMPTY).toList();
         if (violations.isEmpty()) {
             return Mono.empty();
         }

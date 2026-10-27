@@ -4,6 +4,7 @@ package ru.taska.workflow.v1;
 
 import "v1/common.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 option java_multiple_files = true;
 option java_package = "ru.taska.api.workflow.v1";
@@ -27,6 +28,10 @@ enum StatusCategory {
 }
 
 service WorkflowService {
+  // Bounded, lock-free validation for issue writers; no workflow graph is returned.
+  rpc CheckProjectWorkflowScope(CheckProjectWorkflowScopeRequest) returns (google.protobuf.Empty);
+  rpc CreateProjectWorkflowWithBindings(CreateWorkflowRequest) returns (WorkflowBindingOperationResult);
+  rpc UpdateProjectWorkflowWithBindings(WorkflowMutationRequest) returns (WorkflowBindingOperationResult);
   rpc UpdateWorkflow(WorkflowMutationRequest) returns (ProjectWorkflow);
   rpc UpdateWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
   rpc DeleteWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
@@ -71,6 +76,16 @@ service WorkflowService {
    */
   rpc ListProjectWorkflows(ListProjectWorkflowsRequest)
       returns (ListProjectWorkflowsResponse);
+}
+
+message CheckProjectWorkflowScopeRequest {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  repeated string issue_type_keys = 4;
+  optional string expected_workflow_id = 5;
+  optional int32 expected_workflow_version = 6;
+  optional string status_key = 7;
 }
 
 message GetWorkflowForProjectRequest {
@@ -167,6 +182,8 @@ message WorkflowMutationRequest {
   optional bool hidden = 11;
   optional string target_status_key = 12;
   map<string, string> status_mappings = 13;
+  repeated string issue_type_keys = 14;
+  bool replace_issue_types = 15; // Presence flag: false means absent; true with empty keys is invalid.
 }
 
 message WorkflowStatus {
@@ -435,6 +452,7 @@ message CreateWorkflowRequestBody {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   repeated string issue_type_keys = 7;
+  map<string,string> status_mappings = 8;
 }
 
 message CreateWorkflowRequest {
@@ -569,4 +587,11 @@ message ListProjectWorkflowsResponse {
    * Workflow проекта, по одному на каждый различный workflow.
    */
   repeated ProjectWorkflow workflows = 1;
+}
+
+message WorkflowBindingOperationResult {
+  ProjectWorkflow result = 1;
+  string rejection_status = 2;
+  string rejection_message = 3;
+  map<string,string> rejection_details = 4;
 }

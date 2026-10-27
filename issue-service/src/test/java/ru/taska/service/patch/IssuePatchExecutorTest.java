@@ -72,10 +72,12 @@ class IssuePatchExecutorTest {
     private IssueAutoWatchService issueAutoWatchService;
 
     @Mock private ru.taska.service.IssueTypeWriteGuard issueTypeWriteGuard;
+    @Mock private ru.taska.service.WorkflowBindingPendingGuard bindingGuard;
     @Mock private ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
 
     @org.junit.jupiter.api.BeforeEach
     void defaultIssueTypeGuard() {
+        Mockito.lenient().when(bindingGuard.requireWritable(Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
         Mockito.lenient().when(issueRepository.findProjectIdByActiveIssueId(Mockito.any())).thenReturn(Mono.just(PROJECT_ID));
         Mockito.lenient().when(issueTypeWriteGuard.lock(Mockito.any())).thenReturn(Mono.empty());
         Mockito.lenient().when(issueTypeWriteGuard.requireTypeChange(Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any(),Mockito.any())).thenReturn(Mono.empty());
@@ -505,6 +507,7 @@ class IssuePatchExecutorTest {
 
     private static Issue.IssueBuilder lockedIssue() {
         return Issue.builder()
+                .issueType(ru.taska.domain.IssueType.TASK)
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
                 .issueKey("TAS-1")

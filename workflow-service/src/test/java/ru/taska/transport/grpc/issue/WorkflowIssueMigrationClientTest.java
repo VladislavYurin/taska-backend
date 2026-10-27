@@ -30,10 +30,10 @@ class WorkflowIssueMigrationClientTest {
         for (var channel : ru.taska.domain.ActionChannel.values()) {
             var metadata = new ru.taska.domain.ActionMetadata(channel,
                     channel == ru.taska.domain.ActionChannel.UI ? null : token);
-            client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of())
+            client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of(), 7)
                     .contextWrite(context -> context.put(ru.taska.domain.ActionMetadata.class, metadata)).block();
         }
-        client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of()).block();
+        client.migrate(command, List.of(IssueType.TASK), List.of("TODO"), Map.of(), 7).block();
         var request = ArgumentCaptor.forClass(MigrateWorkflowIssuesRequest.class);
         verify(stub, times(4)).migrateWorkflowIssues(request.capture());
         assertThat(request.getAllValues()).extracting(r -> r.getHeader().getActionChannel())
@@ -53,13 +53,14 @@ class WorkflowIssueMigrationClientTest {
         var command = new WorkflowMutation("r", "n", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 1, null, null, null, null, null, null, null, Map.of());
         assertThat(client.migrate(command, List.of(IssueType.TASK), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE"), List.of("REVIEW")).block()).isEqualTo(2);
+                Map.of("REVIEW", "DONE"), List.of("REVIEW"), 7).block()).isEqualTo(2);
         assertThat(client.migrate(command, List.of(IssueType.TASK), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE")).block()).isEqualTo(2);
+                Map.of("REVIEW", "DONE"), 7).block()).isEqualTo(2);
         var request = ArgumentCaptor.forClass(MigrateWorkflowIssuesRequest.class);
         verify(stub, times(2)).migrateWorkflowIssues(request.capture());
         assertThat(request.getAllValues().get(0).getSourceStatusKeysList()).containsExactly("REVIEW");
         assertThat(request.getAllValues().get(1).getSourceStatusKeysList()).isEmpty();
+        assertThat(request.getValue().getExpectedWorkflowVersion()).isEqualTo(7);
         assertThat(request.getValue().getIssueTypeKeysList()).containsExactly("TASK");
         assertThat(request.getValue().getStatusMappingsMap()).containsEntry("REVIEW", "DONE");
     }

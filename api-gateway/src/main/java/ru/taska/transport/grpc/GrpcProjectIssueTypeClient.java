@@ -28,14 +28,25 @@ public class GrpcProjectIssueTypeClient {
                 .map(response -> new ListProjectIssueTypesDto(response.getItemsList().stream().map(GrpcProjectIssueTypeClient::toRest).toList()));
     }
 
-    public Mono<ProjectIssueTypeDto> create(UUID project, CreateProjectIssueTypeRequestDto body, GatewayContext context) {
+    public Mono<CreatedProjectIssueTypeDto> create(UUID project, CreateProjectIssueTypeRequestDto body, GatewayContext context) {
         var request = base(project, body.getCode(), context);
         if (body.getName() != null) request.setName(body.getName());
         if (body.getColor() != null) request.setColor(body.getColor().getValue());
         if (body.getShape() != null) request.setShape(body.getShape().getValue());
         if (body.getIcon() != null) request.setIcon(body.getIcon().getValue());
         if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
-        return dynamicStub().createProjectIssueType(request.build()).map(GrpcProjectIssueTypeClient::toRest);
+        if (body.getWorkflowId() != null) request.setWorkflowId(body.getWorkflowId().toString());
+        return stub.withDeadlineAfter(120, TimeUnit.SECONDS).createProjectIssueTypeWithWorkflow(request.build())
+                .flatMap(result -> {
+                    if (!result.hasIssueType()) return Mono.error(GrpcBindingRejection.from(
+                            result.getRejectionStatus(), result.getRejectionMessage(), result.getRejectionDetailsMap()));
+                    try {
+                        return Mono.just(new CreatedProjectIssueTypeDto(toRest(result.getIssueType()), UUID.fromString(result.getWorkflowId())));
+                    } catch (IllegalArgumentException malformed) {
+                        return Mono.error(new ru.taska.exception.DomainException(
+                                ru.taska.exception.DomainStatus.UNAVAILABLE, "Invalid workflow binding response"));
+                    }
+                });
     }
 
     public Mono<ProjectIssueTypeDto> update(UUID project, String code, PatchProjectIssueTypeRequestDto body,

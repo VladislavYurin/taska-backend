@@ -169,12 +169,14 @@ class WorkflowMapperTest {
                         new CreateWorkflowStatusRequestDto("IN_PROGRESS", "In Progress", WorkflowStatusCategoryDto.IN_PROGRESS, 20)),
                 List.of(transition));
 
+        request.setStatusMappings(java.util.Map.of("BACKLOG", "TODO"));
         var grpc = mapper.toCreateWorkflowGrpcRequest(PROJECT_ID, request, context);
 
         Assertions.assertThat(grpc.getHeader().getRequestId()).isEqualTo("req-1");
         Assertions.assertThat(grpc.getBody().getProjectId()).isEqualTo(PROJECT_ID.toString());
         Assertions.assertThat(grpc.getBody().getActorUserId()).isEqualTo("user-1");
         Assertions.assertThat(grpc.getBody().getName()).isEqualTo("Development");
+        Assertions.assertThat(grpc.getBody().getStatusMappingsMap()).containsEntry("BACKLOG", "TODO");
         Assertions.assertThat(grpc.getBody().getIssueTypesList())
                 .containsExactly(IssueType.ISSUE_TYPE_TASK, IssueType.ISSUE_TYPE_STORY);
         Assertions.assertThat(grpc.getBody().getStatusesList()).extracting(s -> s.getCategory())

@@ -149,6 +149,8 @@
                                 <schemaMapping>NotificationPreferencesPatchDto=ru.taska.domain.dto.NotificationPreferencesPatchDto</schemaMapping>
                                 <schemaMapping>ConfirmTelegramLinkDto=ru.taska.domain.dto.ConfirmTelegramLinkDto</schemaMapping>
                                 <schemaMapping>PatchWorkflowRequestDto=ru.taska.domain.dto.PatchWorkflowRequestDto</schemaMapping>
+                                <schemaMapping>CreateWorkflowRequestDto=ru.taska.domain.dto.CreateWorkflowRequestDto</schemaMapping>
+                                <schemaMapping>CreatedProjectIssueTypeDto=ru.taska.domain.dto.CreatedProjectIssueTypeDto</schemaMapping>
                                 <schemaMapping>PatchWorkflowStatusRequestDto=ru.taska.domain.dto.PatchWorkflowStatusRequestDto</schemaMapping>
                                 <schemaMapping>PatchWorkflowTransitionRequestDto=ru.taska.domain.dto.PatchWorkflowTransitionRequestDto</schemaMapping>
                                 <schemaMapping>DeleteProjectWorkflowRequestDto=ru.taska.domain.dto.DeleteProjectWorkflowRequestDto</schemaMapping>

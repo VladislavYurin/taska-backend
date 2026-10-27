@@ -38,6 +38,8 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
 class OpenIssueTypesIntegrationTest extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
     @MockitoBean OutboxEventScheduler scheduler;
     @MockitoBean GrpcProjectServiceClient projects;
     @MockitoBean GrpcWorkflowServiceClient workflows;
@@ -51,6 +53,8 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
 
     @BeforeEach
     void projectRegistry() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
                 CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
                         .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(false).build()));
@@ -64,6 +68,7 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
         when(projects.getProjectInfoBatchInternal(any(), any(), any())).thenReturn(Mono.just(
                 Map.of(project.toString(), new ProjectInfo(project.toString(), "REQ", "Requests"))));
         when(workflows.requireStatusForType(any(), any(), any(), any())).thenReturn(Mono.empty());
+        when(workflows.requireInitialStatus(any(), any(), any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test

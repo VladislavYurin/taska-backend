@@ -42,6 +42,7 @@ public class GrpcWorkflowService{
     private final WorkflowService workflowService;
     private final WorkflowMapper workflowMapper;
     private final WorkflowCreationMapper workflowCreationMapper;
+    private final ru.taska.transport.grpc.project.ProjectRoleChecker projectRoleChecker;
 
     @TrackMetrics(counter = "workflow-service_get-Workflow-ForProject_grpc_counter",
                     timer = "workflow-service_get-Workflow-ForProject_grpc_timer")
@@ -51,7 +52,8 @@ public class GrpcWorkflowService{
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(req.getHeader().getNodeId(), "header.nodeId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getProjectId(), "body.projectId"),
-                        validator.IssueTypeKeys.required(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType())
+                        validator.IssueTypeKeys.required(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType()),
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(req.getBody().getActorUserId(),"body.actorUserId")
                 ))
                 .flatMap(t -> {
                     String requestId = t.getT1();
@@ -61,7 +63,9 @@ public class GrpcWorkflowService{
 
                     log.info("[{}][{}] getWorkflowForProject: projectId={}, issueType={}", requestId, nodeId, projectId, issueType);
 
-                    return workflowService.getWorkflow(projectId, issueType.name())
+                    return projectRoleChecker.checkProjectRole(requestId,nodeId,projectId,t.getT5(),
+                                    java.util.Set.of(ru.taska.domain.ProjectRole.ADMIN,ru.taska.domain.ProjectRole.MEMBER,ru.taska.domain.ProjectRole.VIEWER))
+                            .then(workflowService.getWorkflow(projectId, issueType.name()))
                             .doOnNext(w -> log.info("[{}][{}] workflow found: workflowId={}", requestId, nodeId, w.workflow().getId()))
                             .map(workflowMapper::toWorkflowProto)
                             .map(response -> response.toBuilder().addIssueTypeKeys(issueType.name()).build());
@@ -107,7 +111,10 @@ public class GrpcWorkflowService{
                                 log.info("[{}][{}] validateTransition: projectId={}, issueType={}, transitionId={}, issueId={}, currentStatusKey={}",
                                         requestId, nodeId, projectId, issueType, transitionId, issueId, currentStatusKey);
 
-                                return workflowService.validateTransition(
+                                return GrpcRequestValidators.parseUuidOrInvalidArgument(actorUserId,"body.actorUserId")
+                                        .flatMap(actor -> projectRoleChecker.checkProjectRole(requestId,nodeId,projectId,actor,
+                                                java.util.Set.of(ru.taska.domain.ProjectRole.ADMIN,ru.taska.domain.ProjectRole.MEMBER,ru.taska.domain.ProjectRole.VIEWER))
+                                                .then(workflowService.validateTransition(
                                                 requestId,
                                                 nodeId,
                                                 projectId,
@@ -115,8 +122,8 @@ public class GrpcWorkflowService{
                                                 UUID.fromString(transitionId),
                                                 currentStatusKey,
                                                 payload,
-                                                UUID.fromString(actorUserId)
-                                        )
+                                                actor
+                                        )))
                                         .map(dto -> Tuples.of(dto, requestId, nodeId));
                             })
                             .map(tuple -> {
@@ -177,7 +184,8 @@ public class GrpcWorkflowService{
                             log.info("[{}][{}] createWorkflow: projectId={}, name={}, actorUserId={}", requestId, nodeId, projectId, req.getBody().getName(), actorUserId);
 
                             WorkflowCreationDto dto = workflowCreationMapper.toDomainDto(projectId, req.getBody());
-                            return workflowService.createWorkflow(requestId, nodeId, actorUserId, dto);
+                            return workflowService.createWorkflow(requestId, nodeId, actorUserId, dto)
+                                    .contextWrite(context -> action.GrpcActionContext.install(context,req.getHeader()));
                         }))
                 .map(workflowMapper::toWorkflowProto);
     }

@@ -56,6 +56,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /** Real PostgreSQL transactions, receipts, events and ingress locks; journal/pin use actual gRPC. */
 class IssueTypeMoveIT extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     @MockitoBean OutboxEventScheduler scheduler;
     @MockitoBean GrpcProjectServiceClient projects;
@@ -86,6 +88,8 @@ class IssueTypeMoveIT extends AbstractIT {
 
     @BeforeEach
     void prepare() throws Exception {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         project=UUID.randomUUID(); operation=UUID.randomUUID(); sourceGeneration=UUID.randomUUID(); targetGeneration=UUID.randomUUID();
         actor=UUID.randomUUID(); token=UUID.randomUUID(); assignee=UUID.randomUUID(); watcher=UUID.randomUUID(); number=0;
         valid.set(List.of("TODO","DONE"));

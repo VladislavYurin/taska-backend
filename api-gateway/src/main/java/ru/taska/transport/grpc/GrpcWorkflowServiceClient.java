@@ -104,9 +104,11 @@ public class GrpcWorkflowServiceClient {
         log.info("[{}] Calling createWorkflow for project: {}", context.requestId(), projectId);
 
         return request
-                .flatMap(dto -> dynamicStub().createWorkflow(
-                        workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context)))
-                .map(workflowMapper::toMutationResponseRestDto);
+                .flatMap(dto -> workflowServiceStub.withDeadlineAfter(120, TimeUnit.SECONDS)
+                        .createProjectWorkflowWithBindings(workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context)))
+                .flatMap(result -> result.hasResult() ? Mono.just(workflowMapper.toProjectWorkflowDto(result.getResult()))
+                        : Mono.error(GrpcBindingRejection.from(result.getRejectionStatus(),
+                                result.getRejectionMessage(), result.getRejectionDetailsMap())));
     }
 
     /**

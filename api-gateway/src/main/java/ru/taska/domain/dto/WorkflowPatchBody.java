@@ -1,8 +1,10 @@
 package ru.taska.domain.dto;
 
 import java.util.Map;
+import java.util.List;
 
 public interface WorkflowPatchBody {
+    default List<String> getIssueTypes() { return null; }
     default String getName() { return null; }
     default WorkflowStatusCategoryDto getCategory() { return null; }
     default Integer getSortOrder() { return null; }

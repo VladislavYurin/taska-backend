@@ -20,6 +20,7 @@ import validator.GrpcRequestValidators;
 public class WorkflowMutationGrpcService {
     private final WorkflowMutationService service;
     private final WorkflowMapper mapper;
+    private final ru.taska.service.WorkflowBindingCoordinator bindings;
 
     public Mono<ProjectWorkflow> mutate(Operation operation, Mono<WorkflowMutationRequest> request) {
         return request.flatMap(req -> Mono.zip(
@@ -33,7 +34,16 @@ public class WorkflowMutationGrpcService {
                         req.hasName() ? req.getName() : null, category(req),
                         req.hasSortOrder() ? req.getSortOrder() : null, req.hasHidden() ? req.getHidden() : null,
                         req.hasTargetStatusKey() ? req.getTargetStatusKey() : null, req.getStatusMappingsMap()))
-                .flatMap(command -> service.mutate(operation, command)).map(mapper::toProjectWorkflowProto)
+                .flatMap(command -> {
+                    if (req.getReplaceIssueTypes()) {
+                        if (operation!=Operation.UPDATE_WORKFLOW) return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,"issueTypes are only valid for updating a workflow"));
+                        return bindings.replace(req.getHeader(),command.project(),command.workflow(),command.actor(),command.version(),
+                                command.name(),req.getIssueTypeKeysList(),req.getStatusMappingsMap());
+                    }
+                    if (req.getIssueTypeKeysCount()>0 || (operation==Operation.UPDATE_WORKFLOW&&!req.getStatusMappingsMap().isEmpty()))
+                        return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,"statusMappings require an issueTypes replacement"));
+                    return service.mutate(operation,command).map(mapper::toProjectWorkflowProto);
+                })
                 .contextWrite(context -> action.GrpcActionContext.install(context, req.getHeader())));
     }
 

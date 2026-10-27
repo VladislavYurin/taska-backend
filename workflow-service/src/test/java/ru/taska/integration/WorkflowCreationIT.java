@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-class WorkflowCreationIT extends AbstractIT {
+class WorkflowCreationIT extends LegacyWorkflowOperationsFixture {
 
     private static final String REQUEST_ID = "req-001";
     private static final String NODE_ID = "some-service";
@@ -157,7 +157,7 @@ class WorkflowCreationIT extends AbstractIT {
 
     @Test
     void createWorkflow_ValidDto_ShouldPersistWorkflowStatusesTransitionsAndBinding() {
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto).block();
+        workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto).block();
 
         WorkflowAggregate aggregate = workflowService.getWorkflow(PROJECT_ID, "TASK").block();
 
@@ -202,7 +202,7 @@ class WorkflowCreationIT extends AbstractIT {
     void createWorkflow_WithTwoIssueTypes_ShouldBindBothTypes() {
         validDto.setIssueTypes(new ArrayList<>(List.of(IssueType.TASK, IssueType.BUG)));
 
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto).block();
+        workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto).block();
 
         StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, "TASK"))
                 .assertNext(aggregate ->
@@ -217,7 +217,7 @@ class WorkflowCreationIT extends AbstractIT {
 
     @Test
     void getWorkflow_ReturnsCustomForBoundTypeAndDefaultForUnboundType() {
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto).block();
+        workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto).block();
 
         StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, "TASK"))
                 .assertNext(aggregate ->
@@ -231,15 +231,14 @@ class WorkflowCreationIT extends AbstractIT {
     }
 
     @Test
-    void createWorkflow_BindingAlreadyExists_ShouldReturnAlreadyExists() {
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto).block();
-
-        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto))
-                .expectErrorSatisfies(error -> {
-                    DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
-                    Assertions.assertEquals(DomainStatus.ALREADY_EXISTS, ex.getStatus());
-                })
-                .verify();
+    void createWorkflow_ExistingBindingMovesToTheNewGraphAndRetainsTheOldGraph() {
+        var previous=workflowService.createWorkflow(UUID.randomUUID().toString(),NODE_ID,ACTOR_USER_ID,validDto).block();
+        var current=workflowService.createWorkflow(UUID.randomUUID().toString(),NODE_ID,ACTOR_USER_ID,validDto).block();
+        Assertions.assertNotEquals(previous.workflow().getId(),current.workflow().getId());
+        var bound=workflowBindingRepository.findByProjectIdAndIssueTypeIn(PROJECT_ID,List.of("TASK")).single().block();
+        Assertions.assertEquals(current.workflow().getId(),bound.getWorkflowId());
+        Assertions.assertEquals(1L,databaseClient.sql("SELECT count(*) AS n FROM taska.workflows WHERE id=:id")
+                .bind("id",previous.workflow().getId()).map((r,m)->r.get("n",Long.class)).one().block());
     }
 
     @Test
@@ -252,8 +251,8 @@ class WorkflowCreationIT extends AbstractIT {
                 .transitions(validDto.getTransitions())
                 .build();
 
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto).block();
-        workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, bugWorkflowDto).block();
+        workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto).block();
+        workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, bugWorkflowDto).block();
 
         StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, "TASK"))
                 .assertNext(aggregate ->
@@ -270,7 +269,7 @@ class WorkflowCreationIT extends AbstractIT {
     void createWorkflow_MissingTodoStatus_ShouldReturnInvalidArgument() {
         validDto.getStatuses().removeIf(s -> s.getStatusKey().equals("TODO"));
 
-        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto))
+        StepVerifier.create(workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto))
                 .expectErrorSatisfies(error -> {
                     DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
                     Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ex.getStatus());
@@ -285,7 +284,7 @@ class WorkflowCreationIT extends AbstractIT {
         Mockito.doReturn(Flux.error(new RuntimeException("Simulated DB failure")))
                 .when(transitionRepository).saveAll(Mockito.<Iterable<TransitionEntity>>any());
 
-        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto))
+        StepVerifier.create(workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto))
                 .expectError(RuntimeException.class)
                 .verify();
 
@@ -467,7 +466,7 @@ class WorkflowCreationIT extends AbstractIT {
 
     private Header buildGrpcHeader() {
         return Header.newBuilder()
-                .setRequestId(REQUEST_ID)
+                .setRequestId(UUID.randomUUID().toString())
                 .setNodeId(NODE_ID)
                 .build();
     }

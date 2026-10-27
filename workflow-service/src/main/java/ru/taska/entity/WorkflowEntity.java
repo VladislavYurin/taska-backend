@@ -48,6 +48,10 @@ public class WorkflowEntity {
     @Column("version")
     private int version;
 
+    /** Explicit ownership survives transferring the last issue type out of this graph. */
+    @Column("owner_project_id")
+    private UUID ownerProjectId;
+
     /**
      * Включение/выключение workflow.
      * Позволяет отключить workflow без удаления записи.

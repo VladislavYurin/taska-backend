@@ -30,6 +30,9 @@ public class WorkflowIssueMigrationService {
     private final PayloadSerializer serializer;
     private final IssueHistoryService history;
     private final OutboxEventService outbox;
+    private final IssueTypeWriteGuard projectLock;
+    private final WorkflowBindingPendingGuard bindingGuard;
+    private final ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflows;
 
     @Transactional
     public Mono<Long> migrate(UUID project, UUID actor, UUID workflow, List<String> types,
@@ -41,6 +44,12 @@ public class WorkflowIssueMigrationService {
     public Mono<Long> migrate(UUID project, UUID actor, UUID workflow, List<String> types,
                               List<String> validStatuses, Map<String, String> mapping, List<String> sourceStatuses,
                               String requestId, String nodeId) {
+        return migrate(project,actor,workflow,types,validStatuses,mapping,sourceStatuses,requestId,nodeId,null);
+    }
+
+    @Transactional
+    public Mono<Long> migrate(UUID project,UUID actor,UUID workflow,List<String> types,List<String> validStatuses,
+            Map<String,String> mapping,List<String> sourceStatuses,String requestId,String nodeId,Integer expectedWorkflowVersion) {
         return Mono.defer(() -> {
             if (types.isEmpty() || validStatuses.isEmpty()
                     || types.stream().anyMatch(t -> !t.matches("^[A-Z][A-Z0-9_]{1,31}$"))
@@ -50,7 +59,11 @@ public class WorkflowIssueMigrationService {
                     || mapping.values().stream().anyMatch(v -> !validStatuses.contains(v))) {
                 return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid workflow migration scope or target status"));
             }
-            return projects.checkProjectRole(requestId, nodeId, project, actor)
+            return projectLock.lock(project)
+                    .then(bindingGuard.requireWritable(project,types.stream().map(ru.taska.domain.IssueType::valueOf).toList()))
+                    .then(expectedWorkflowVersion==null?Mono.empty():workflows.requireWorkflowVersion(requestId,nodeId,project,actor,
+                            types.stream().map(ru.taska.domain.IssueType::valueOf).toList(),workflow,expectedWorkflowVersion))
+                    .then(projects.checkProjectRole(requestId, nodeId, project, actor))
                     .flatMap(role -> {
                         if (!role.getProjectExists()) return Mono.error(new DomainException(DomainStatus.NOT_FOUND, "Project not found"));
                         if (!role.getIsMember() || role.getRole() != ProjectRole.PROJECT_ROLE_ADMIN) {
