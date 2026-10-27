@@ -14,6 +14,13 @@ import java.util.Collection;
 import java.util.UUID;
 
 public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, IssueRepositoryCustom {
+    @Query("SELECT count(*) FROM taska.issues WHERE project_id=:project AND issue_type=:type AND deleted_at IS NULL")
+    Mono<Long> countLiveByProjectAndType(UUID project,String type);
+    @Query("SELECT * FROM taska.issues WHERE project_id=:project AND issue_type=:type AND deleted_at IS NULL ORDER BY id LIMIT 5001 FOR UPDATE")
+    Flux<Issue> findForIssueTypeMove(UUID project,String type);
+    @Query("UPDATE taska.issues SET issue_type=:target,status_key=:status,version=version+1,updated_at=now() WHERE id=:id AND version=:version AND issue_type=:source AND deleted_at IS NULL RETURNING *")
+    Mono<Issue> changeIssueTypeAndStatus(UUID id,int version,String source,String target,String status);
+
     @Query("""
             SELECT * FROM taska.issues WHERE project_id=:projectId AND issue_type IN (:issueTypes)
               AND deleted_at IS NULL AND (status_key NOT IN (:validStatuses) OR status_key IN (:mappedStatuses))

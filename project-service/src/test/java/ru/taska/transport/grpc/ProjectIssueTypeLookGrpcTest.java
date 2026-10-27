@@ -21,7 +21,7 @@ import ru.taska.service.ProjectIssueTypeService;
 class ProjectIssueTypeLookGrpcTest {
     private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
     private final ProjectIssueTypeService service = mock(ProjectIssueTypeService.class);
-    private final ProjectIssueTypeGrpcService grpc = new ProjectIssueTypeGrpcService(service, new ProjectMapperImpl());
+    private final ProjectIssueTypeGrpcService grpc = new ProjectIssueTypeGrpcService(service, new ProjectMapperImpl(), mock(ru.taska.service.IssueTypeDeletionCoordinator.class));
 
     @Test
     void clearIconBecomesExplicitNullAndUnsetIconStaysAbsent() {

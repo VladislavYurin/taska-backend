@@ -44,7 +44,7 @@ public class WorkflowCreateService {
     private final ProjectRoleChecker projectRoleChecker;
     private final WorkflowProperties workflowProperties;
     private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
-    private final org.springframework.r2dbc.core.DatabaseClient databaseClient;
+    private final WorkflowWriteFence writeFence;
 
     @Transactional
     public Mono<WorkflowAggregate> validateAndCreateWorkflow(String requestId, String nodeId, UUID actorUserId, WorkflowCreationDto dto) {
@@ -57,10 +57,9 @@ public class WorkflowCreateService {
                 )
                 .then(Mono.fromCallable(() -> creationValidator.validateDto(dto)))
                 .flatMap(violations -> handleViolations(violations, requestId, nodeId))
-                // Serialize cleanup and creation in this database. No external mutation precedes registry commit.
-                .then(Mono.defer(() -> databaseClient.sql("SELECT pg_advisory_xact_lock(hashtextextended(:project, 418))")
-                        .bind("project", dto.getProjectId().toString()).map((row, metadata) -> 1).one().then()))
+                .then(Mono.defer(() -> writeFence.lockAndCheck(dto.getProjectId())))
                 .then(Mono.defer(() -> projectClient.listIssueTypeDetails(requestId, nodeId, dto.getProjectId(), actorUserId)))
+                .doOnNext(WorkflowWriteFence::requireWritableRegistry)
                 .flatMap(types -> {
                     var allowed = types.stream().map(type -> ru.taska.domain.IssueType.valueOf(type.getCode())).toList();
                     var requested = types.stream().filter(type -> dto.getIssueTypes().contains(ru.taska.domain.IssueType.valueOf(type.getCode())))

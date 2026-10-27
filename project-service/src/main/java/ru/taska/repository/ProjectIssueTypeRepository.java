@@ -104,6 +104,6 @@ public class ProjectIssueTypeRepository {
                 row.get("name", String.class), row.get("color", String.class), row.get("icon", String.class),
                 row.get("shape", String.class), row.get("sort_order", Integer.class),
                 row.get("created_at", OffsetDateTime.class).toInstant(),
-                row.get("updated_at", OffsetDateTime.class).toInstant(), row.get("generation", UUID.class));
+                row.get("updated_at", OffsetDateTime.class).toInstant(), row.get("generation", UUID.class), row.get("pending_operation_id", UUID.class));
     }
 }

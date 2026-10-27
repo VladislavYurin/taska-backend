@@ -23,7 +23,6 @@ import ru.taska.domain.ProjectRole;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.ProjectIssueTypeRepository;
-import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectIssueTypeServiceTest {
@@ -33,7 +32,6 @@ class ProjectIssueTypeServiceTest {
     private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
     @Mock ProjectIssueTypeRepository repository;
     @Mock ProjectService projects;
-    @Mock GrpcIssueServiceClient issues;
     @InjectMocks ProjectIssueTypeService service;
 
     @Test
@@ -187,50 +185,6 @@ class ProjectIssueTypeServiceTest {
         verifyNoInteractions(repository);
     }
 
-    @Test
-    void usedTypeCannotBeDeletedAndIncludesIssueCount() {
-        authorizeDelete(3);
-        when(issues.countIssueTypeUsage(project, "BUG", "r", "n")).thenReturn(Mono.just(7L));
-        StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
-                .expectErrorSatisfies(e -> {
-                    assertStatus(e, DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException) e).getDetails()).containsEntry("issueCount", "7").containsEntry("reason", "ISSUE_TYPE_IN_USE");
-                }).verify();
-        verify(repository, never()).delete(any(), any());
-    }
-
-    @Test
-    void lastTypeCannotBeDeletedEvenWhenUnused() {
-        authorizeDelete(1);
-        StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
-                .expectErrorSatisfies(e -> {
-                    assertStatus(e, DomainStatus.FAILED_PRECONDITION);
-                    assertThat(((DomainException)e).getDetails()).containsEntry("reason", "LAST_ISSUE_TYPE").doesNotContainKey("issueCount");
-                }).verify();
-        verifyNoInteractions(issues);
-        verify(repository, never()).delete(any(), any());
-    }
-
-    @Test
-    void failureToCountIssuesDoesNotDeleteType() {
-        authorizeDelete(2);
-        when(issues.countIssueTypeUsage(project, "BUG", "r", "n")).thenReturn(Mono.error(
-                new DomainException(DomainStatus.UNAVAILABLE, "upstream unavailable")));
-        StepVerifier.create(service.delete(project, actor, "BUG", "r", "n"))
-                .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.UNAVAILABLE)).verify();
-        verify(repository, never()).delete(any(), any());
-    }
-
-    @Test
-    void unusedTypeIsDeletedAndDefaultMirrorIsUpdated() {
-        authorizeDelete(2);
-        when(issues.countIssueTypeUsage(project, "BUG", "r", "n")).thenReturn(Mono.just(0L));
-        when(repository.delete(project, "BUG")).thenReturn(Mono.empty());
-        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.delete(project, actor, "BUG", "r", "n")).verifyComplete();
-        verify(repository).syncLegacySettings(project, actor);
-    }
-
     @ParameterizedTest
     @EnumSource(value = ProjectRole.class, names = {"MEMBER", "VIEWER", "UNSPECIFIED"})
     void reorderRequiresAdminBeforeReadingRegistry(ProjectRole role) {
@@ -276,12 +230,6 @@ class ProjectIssueTypeServiceTest {
     private void authorize(ProjectRole role) {
         when(repository.lockProject(project)).thenReturn(Mono.just(project));
         when(repository.lockActorRole(project, actor)).thenReturn(Mono.just(role));
-    }
-
-    private void authorizeDelete(int count) {
-        authorize(ProjectRole.ADMIN);
-        when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
-        when(repository.list(project)).thenReturn(Flux.range(0, count).map(i -> type("TYPE_" + i)));
     }
 
     private ProjectIssueType type(String code) {

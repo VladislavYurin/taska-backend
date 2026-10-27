@@ -1,0 +1,57 @@
+syntax = "proto3";
+package ru.taska.registry.v1;
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.registry.v1";
+
+// Internal durable operation identity. Callers cannot supply migration contents or attribution.
+message IssueTypeDeletionKey {
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string operation_id = 3;
+}
+message IssueTypeDeletionIntent {
+  string operation_id = 1;
+  string project_id = 2;
+  string source_code = 3;
+  string source_generation = 4;
+  optional string target_code = 5;
+  optional string target_generation = 6;
+  string actor_user_id = 7;
+  map<string,string> status_mappings = 8;
+  string state = 9;
+  ru.taska.common.v1.Header original_header = 10;
+}
+enum IssueTypeMoveState {
+  ISSUE_TYPE_MOVE_STATE_UNSPECIFIED = 0;
+  ISSUE_TYPE_MOVE_STATE_APPLIED = 1;
+  ISSUE_TYPE_MOVE_STATE_CANCELLED = 2;
+  ISSUE_TYPE_MOVE_STATE_REJECTED = 3;
+}
+message IssueTypeMoveOutcome {
+  IssueTypeMoveState state = 1;
+  int64 moved_count = 2;
+  // Business rejection in the body: status-key sets may exceed gRPC metadata limits.
+  string rejection_status = 3;
+  string rejection_message = 4;
+  map<string,string> rejection_details = 5;
+}
+message IssueTypeMoveWorkflowSnapshot {
+  string operation_id = 1;
+  string project_id = 2;
+  string workflow_id = 3;
+  repeated string valid_status_keys = 4;
+}
+service IssueTypeDeletionJournal {
+  rpc GetIntent(IssueTypeDeletionKey) returns (IssueTypeDeletionIntent);
+}
+service IssueTypeIssueMigration {
+  rpc Apply(IssueTypeDeletionKey) returns (IssueTypeMoveOutcome);
+  rpc Cancel(IssueTypeDeletionKey) returns (IssueTypeMoveOutcome);
+}
+service IssueTypeWorkflowReservation {
+  rpc Reserve(IssueTypeDeletionKey) returns (IssueTypeMoveWorkflowSnapshot);
+  rpc Get(IssueTypeDeletionKey) returns (IssueTypeMoveWorkflowSnapshot);
+  rpc Release(IssueTypeDeletionKey) returns (google.protobuf.Empty);
+}

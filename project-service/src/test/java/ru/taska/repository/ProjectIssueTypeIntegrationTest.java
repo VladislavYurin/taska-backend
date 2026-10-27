@@ -2,8 +2,6 @@ package ru.taska.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 import io.r2dbc.spi.ConnectionFactories;
 import java.nio.file.Files;
@@ -20,12 +18,10 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.service.ProjectIssueTypeService;
-import ru.taska.transport.grpc.client.GrpcIssueServiceClient;
 
 @Testcontainers
 class ProjectIssueTypeIntegrationTest {
@@ -70,7 +66,7 @@ class ProjectIssueTypeIntegrationTest {
         UUID project = project("FRESH");
         admin(project);
         repository.seedDefaults(project).as(tx::transactional).block();
-        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         var created = service.create(project, actor, "REQUEST", "Заявка", "teal", "headset", null, 40)
                 .as(tx::transactional).block();
         assertThat(created.name()).isEqualTo("Заявка");
@@ -83,29 +79,6 @@ class ProjectIssueTypeIntegrationTest {
         assertThat(repository.find(project, "ROLLBACK").block()).isNull();
         assertThat(db.sql("SELECT settings::text AS value FROM taska.project_settings WHERE project_id=:p")
                 .bind("p", project).map((r, m) -> r.get("value", String.class)).one().block()).doesNotContain("ROLLBACK");
-    }
-
-    @Test
-    void concurrentDeletesCannotRemoveLastType() throws Exception {
-        migrate("0001-project-issue-types.sql");
-        UUID project = project("RACE");
-        admin(project);
-        repository.seedDefaults(project).block();
-        repository.delete(project, "STORY").block();
-        var issues = mock(GrpcIssueServiceClient.class);
-        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
-        var results = Flux.merge(
-                service.delete(project, actor, "TASK", "r1", "n").as(tx::transactional).materialize(),
-                service.delete(project, actor, "BUG", "r2", "n").as(tx::transactional).materialize())
-                .collectList().block();
-        assertThat(results.stream().filter(signal -> signal.isOnComplete())).hasSize(1);
-        assertThat(results.stream().filter(signal -> signal.isOnError()).map(signal -> signal.getThrowable()).toList())
-                .singleElement().satisfies(error -> {
-                    assertThat(error).isInstanceOf(DomainException.class);
-                    assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
-                });
-        assertThat(repository.list(project).collectList().block()).hasSize(1);
     }
 
     @Test
@@ -139,17 +112,15 @@ class ProjectIssueTypeIntegrationTest {
     }
 
     @Test
-    void deletingDefaultSelectsFirstRemainingTypeBySortOrder() throws Exception {
+    void settingsMirrorSelectsFirstRemainingTypeBySortOrder() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("DEFAULT");
         admin(project);
         repository.seedDefaults(project).block();
-        var issues = mock(GrpcIssueServiceClient.class);
-        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         service.update(project, actor, "BUG", null, null, NullableField.absent(), null, 0).as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("BUG");
-        service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
+        repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor)).as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("TASK");
         assertThat(repository.list(project).collectList().block().getFirst().code()).isEqualTo("TASK");
     }
@@ -158,7 +129,7 @@ class ProjectIssueTypeIntegrationTest {
     void reorderIsCompletePermutationAndRollsBackWithSettings() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("ORDER"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         var ordered = service.reorder(project, actor, List.of("STORY", "TASK", "BUG")).as(tx::transactional).block();
         assertThat(ordered).extracting(t -> t.code()).containsExactly("STORY", "TASK", "BUG");
         assertThat(ordered).extracting(t -> t.sortOrder()).containsExactly(10, 20, 30);
@@ -185,15 +156,13 @@ class ProjectIssueTypeIntegrationTest {
     void deletedCodeGetsDifferentGenerationAndRollbackPreservesIdentity() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("GEN"); admin(project); repository.seedDefaults(project).block();
-        var issues = mock(GrpcIssueServiceClient.class);
-        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         var original = repository.find(project, "BUG").block().generation();
-        reactor.test.StepVerifier.create(service.delete(project, actor, "BUG", "r", "n")
+        reactor.test.StepVerifier.create(repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor))
                         .then(Mono.error(new IllegalStateException("rollback"))).as(tx::transactional))
                 .expectError(IllegalStateException.class).verify();
         assertThat(repository.find(project, "BUG").block().generation()).isEqualTo(original);
-        service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
+        repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor)).as(tx::transactional).block();
         var recreated = service.create(project, actor, "BUG", "New bug", "red", null, "circle", 20).as(tx::transactional).block();
         assertThat(recreated.generation()).isNotEqualTo(original);
         assertThat(repository.listBatch(List.of(project)).collectList().block()).hasSize(3);
@@ -203,9 +172,7 @@ class ProjectIssueTypeIntegrationTest {
     void staleOrderAfterRegistryAdditionOrDeletionReturnsConflictWithoutChangingSettings() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("STALE"); admin(project); repository.seedDefaults(project).block();
-        var issues = mock(GrpcIssueServiceClient.class);
-        when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
-        var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         List<String> old = repository.list(project).map(type -> type.code()).collectList().block();
         service.create(project, actor, "REQUEST", "Request", "blue", "headset", null, 40).as(tx::transactional).block();
         var afterAddition = repository.list(project).collectList().block();
@@ -217,7 +184,7 @@ class ProjectIssueTypeIntegrationTest {
         assertThat(repository.list(project).collectList().block()).isEqualTo(afterAddition);
         assertThat(defaultType(project)).isEqualTo(old.getFirst());
         List<String> stale = afterAddition.stream().map(type -> type.code()).toList();
-        service.delete(project, actor, "REQUEST", "r", "n").as(tx::transactional).block();
+        repository.delete(project, "REQUEST").then(repository.syncLegacySettings(project, actor)).as(tx::transactional).block();
         reactor.test.StepVerifier.create(service.reorder(project, actor, stale).as(tx::transactional))
                 .expectErrorSatisfies(error -> {
                     assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.ABORTED);
@@ -244,6 +211,7 @@ class ProjectIssueTypeIntegrationTest {
                 .bind("p", configured).fetch().rowsUpdated().block();
         var updatedBefore = updatedAt();
         execute("0003-issue-type-shape.sql");
+        execute("0004-issue-type-deletion-intents.sql");
 
         assertThat(repository.list(plain).collectList().block())
                 .extracting(t -> t.code() + ":" + t.icon() + ":" + t.shape())
@@ -282,7 +250,7 @@ class ProjectIssueTypeIntegrationTest {
     void shapeAndOptionalIconRoundTripThroughCreateAndPatch() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("LOOK"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
         var plain = service.create(project, actor, "REQUEST", "Request", "teal", null, null, 40).as(tx::transactional).block();
         assertThat(plain.icon()).isNull();
         assertThat(plain.shape()).isEqualTo("square");
@@ -310,13 +278,18 @@ class ProjectIssueTypeIntegrationTest {
         try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
              var liquibase = new liquibase.Liquibase("db/changelog/db.changelog-master.yaml",
                      new liquibase.resource.ClassLoaderResourceAccessor(), new liquibase.database.jvm.JdbcConnection(connection))) {
-            liquibase.update(new liquibase.Contexts(), new liquibase.LabelExpression());
+            // Stop at the shape changeset: later independent migrations have their own rollback policy.
+            liquibase.update(4, new liquibase.Contexts(), new liquibase.LabelExpression());
             UUID project = project("ROLLBACK");
             repository.seedDefaults(project).block();
             db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,shape,sort_order) VALUES "
                             + "(:p,'MILESTONE','Milestone','amber',NULL,'diamond',40),(:p,'REQUEST','Request','teal','headset','square',50)")
                     .bind("p", project).fetch().rowsUpdated().block();
-            var before = repository.list(project).collectList().block();
+            var before = db.sql("SELECT code,shape,icon FROM taska.project_issue_types WHERE project_id=:p ORDER BY sort_order")
+                    .bind("p", project).map((r, m) -> r.get("code", String.class) + ":" + client.ProjectIssueTypes
+                            .writeLook(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder(), r.get("code", String.class),
+                                    r.get("shape", String.class), r.get("icon", String.class)).getLegacyIcon())
+                    .all().collectList().block();
 
             liquibase.rollback(1, new liquibase.Contexts(), new liquibase.LabelExpression());
 
@@ -326,9 +299,7 @@ class ProjectIssueTypeIntegrationTest {
             assertThat(icons).containsExactly("TASK:check-square", "BUG:bug", "STORY:book-open",
                     "MILESTONE:check-square", "REQUEST:headset");
             // The rollback must hand back exactly what pre-TAS-432 readers already see in legacy_icon.
-            assertThat(icons).containsExactlyElementsOf(before.stream().map(t -> t.code() + ":" + client.ProjectIssueTypes
-                    .writeLook(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder(), t.code(), t.shape(), t.icon())
-                    .getLegacyIcon()).toList());
+            assertThat(icons).containsExactlyElementsOf(before);
             assertThat(db.sql("SELECT count(*) AS n FROM information_schema.columns WHERE table_schema='taska' "
                     + "AND table_name='project_issue_types' AND column_name='shape'").map((r, m) -> r.get("n", Long.class))
                     .one().block()).isZero();
@@ -369,6 +340,7 @@ class ProjectIssueTypeIntegrationTest {
         execute(file);
         if (file.equals("0001-project-issue-types.sql")) migrate("0002-issue-type-generation.sql");
         if (file.equals("0002-issue-type-generation.sql")) migrate("0003-issue-type-shape.sql");
+        if (file.equals("0003-issue-type-shape.sql")) migrate("0004-issue-type-deletion-intents.sql");
     }
 
     private void execute(String file) throws Exception {

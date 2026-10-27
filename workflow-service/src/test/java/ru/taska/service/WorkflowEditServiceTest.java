@@ -74,6 +74,9 @@ class WorkflowEditServiceTest {
     @Mock
     private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
 
+    @Mock
+    private WorkflowWriteFence writeFence;
+
     private WorkflowEditService service;
 
     @BeforeEach
@@ -88,8 +91,9 @@ class WorkflowEditServiceTest {
                 transitionRepository,
                 bindingRepository,
                 projectRoleChecker,
-                properties, projectClient);
+                properties, projectClient, writeFence);
 
+        lenient().when(writeFence.lockAndCheck(any())).thenReturn(Mono.empty());
         lenient().when(projectClient.listIssueTypeDetails(any(), any(), any(), any()))
                 .thenReturn(Mono.just(ru.taska.RegistryFixtures.types(PROJECT_ID, ru.taska.domain.IssueType.values())));
         WorkflowEntity workflow = WorkflowEntity.builder()

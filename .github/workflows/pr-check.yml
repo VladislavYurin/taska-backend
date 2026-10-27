@@ -87,6 +87,27 @@ jobs:
           -Dtest=ListIssuesForBoardIT
           -Dsurefire.failIfNoSpecifiedTests=false
 
+      - name: Issue type move PostgreSQL contract
+        if: matrix.mod.module == 'issue-service'
+        run: >-
+          mvn -B -ntp -pl issue-service -am test
+          -Dtest=IssueTypeMoveIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Issue type deletion recovery PostgreSQL contract
+        if: matrix.mod.module == 'project-service'
+        run: >-
+          mvn -B -ntp -pl project-service -am test
+          -Dtest=IssueTypeDeletionIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Issue type workflow reservation PostgreSQL contract
+        if: matrix.mod.module == 'workflow-service'
+        run: >-
+          mvn -B -ntp -pl workflow-service -am test
+          -Dtest=IssueTypeWorkflowReservationIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
       - name: Auth invitation block/unblock integration
         if: matrix.mod.module == 'auth-service'
         run: mvn -B -ntp -pl auth-service -am test -Dtest=InvitedUnblockIT -Dsurefire.failIfNoSpecifiedTests=false

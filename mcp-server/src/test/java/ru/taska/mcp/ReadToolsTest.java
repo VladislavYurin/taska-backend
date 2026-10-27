@@ -395,6 +395,23 @@ class ReadToolsTest {
   }
 
   @Test
+  void projectTypeGenerationSurvivesProjectionWithoutInternalDeletionState() {
+    ((ObjectNode) responses.get(PROJECT_PATH + "/context"))
+        .set("issueTypes", mapper.valueToTree(List.of(Map.of(
+            "code", "REQUEST", "name", "Request", "color", "teal", "shape", "square",
+            "icon", "headset", "sortOrder", 40, "generation", ITEM, "pendingOperationId", ISSUE))));
+
+    var result = call("get_project", Map.of("project_key", "TAS"));
+
+    assertThat(result.isError()).isFalse();
+    var type = content(result).path("data").path("issueTypes").get(0);
+    assertThat(type.path("generation").asText()).isEqualTo(ITEM);
+    assertThat(type.path("shape").asText()).isEqualTo("square");
+    assertThat(type.has("pendingOperationId")).isFalse();
+    assertThat(type.has("pending_operation_id")).isFalse();
+  }
+
+  @Test
   void loggedTimeAndHistoryParticipantProfilesSurviveReviewedProjection() {
     ((ObjectNode) responses.get("/api/v1/issues/" + ISSUE).get("issue"))
         .put("timeSpentMinutes", 95);

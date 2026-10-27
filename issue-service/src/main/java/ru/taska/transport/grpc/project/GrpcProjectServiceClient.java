@@ -43,6 +43,15 @@ public class GrpcProjectServiceClient {
         return client.ProjectIssueTypes.list(projectServiceStub, requestId, nodeId, projectId, actorUserId);
     }
 
+    public Mono<List<ru.taska.api.project.v1.ProjectIssueTypeResponse>> listIssueTypeDetails(
+            String requestId,String nodeId,UUID projectId,UUID actor) {
+        return projectServiceStub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
+                .listProjectIssueTypes(ru.taska.api.project.v1.ProjectIssueTypesRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                        .setProjectId(projectId.toString()).setActorUserId(actor.toString()).build())
+                .map(ru.taska.api.project.v1.ListProjectIssueTypesResponse::getItemsList);
+    }
+
     public Mono<Void> requireIssueType(String requestId, String nodeId, UUID projectId, UUID actor,
                                       ru.taska.domain.IssueType type) {
         return listIssueTypes(requestId, nodeId, projectId, actor)

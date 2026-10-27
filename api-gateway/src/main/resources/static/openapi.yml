@@ -1363,8 +1363,23 @@ paths:
     delete:
       x-pat-scope: write
       operationId: deleteProjectIssueType
-      summary: Удалить неиспользуемый тип — только ADMIN; последний тип удалить нельзя
-      description: Считаются только живые задачи. 400 FAILED_PRECONDITION содержит details.reason LAST_ISSUE_TYPE либо ISSUE_TYPE_IN_USE. Строковое details.issueCount передаётся только при ISSUE_TYPE_IN_USE; у LAST_ISSUE_TYPE его нет. Удалённые задачи не запрещают удаление типа.
+      summary: Удалить тип задачи с необязательным переносом задач — только ADMIN проекта
+      description: >-
+        Без moveIssuesTo сохраняется прежняя проверка: последний тип удалить нельзя
+        (400 FAILED_PRECONDITION, details.reason LAST_ISSUE_TYPE), тип с живыми задачами
+        получает ISSUE_TYPE_IN_USE и строковый details.issueCount. Удалённые задачи не учитываются.
+        moveIssuesTo переносит все живые задачи в другой тип того же проекта, затем удаляет исходный тип.
+        Если статус задачи отсутствует в workflow целевого типа, передайте statusMappings;
+        иначе 400 FAILED_PRECONDITION с reason ISSUE_STATUSES_UNMAPPED, statusKeys и targetStatusKeys
+        (списки ключей через запятую). Предел переноса — 5000 задач; превышение даёт 400
+        FAILED_PRECONDITION с reason WORKFLOW_MIGRATION_LIMIT. Каждая задача получает одно событие UPDATED.
+        expectedGeneration берётся из generation исходного типа. Для повторно созданного кода
+        перенос без него даёт 409 ABORTED с reason ISSUE_TYPE_GENERATION_REQUIRED;
+        устаревшее поколение — 409 ABORTED с reason ISSUE_TYPE_CHANGED.
+        При незавершённом переносе возвращается 503 UNAVAILABLE с reason ISSUE_TYPE_DELETION_PENDING
+        и operationId. Повторите ту же команду с тем же expectedGeneration; подтверждённые изменения
+        и уведомления повторно не создаются. Доступ к проекту проверяется перед выдачей деталей операции.
+        Тело команды ограничено 1 МиБ; превышение возвращает 413 CONTENT_TOO_LARGE.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -1381,9 +1396,27 @@ paths:
           schema:
             type: string
             pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteProjectIssueTypeRequestDto'
       responses:
         '204':
-          description: Success
+          description: Тип удалён; перенос, если запрошен, завершён.
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -6505,6 +6538,12 @@ components:
       description: Тип задачи из реестра проекта. Облик — цвет, форма и необязательный значок.
       required: [code, name, color, shape, icon, sortOrder]
       properties:
+        generation:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+          description: Поколение типа; меняется после удаления и повторного создания кода. Передайте его в expectedGeneration при удалении с переносом.
         code:
           type: string
           pattern: '^[A-Z][A-Z0-9_]{1,31}$'
@@ -6563,6 +6602,25 @@ components:
           format: int32
           minimum: 0
           default: 100
+    DeleteProjectIssueTypeRequestDto:
+      type: object
+      additionalProperties: false
+      description: Необязательная команда переноса при удалении типа. Без moveIssuesTo действует прежняя проверка использования типа.
+      properties:
+        moveIssuesTo:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+          description: Другой существующий тип того же проекта. Исходный тип и отсутствующий в реестре тип запрещены (400 с details.reason).
+        statusMappings:
+          type: object
+          description: Сопоставление исходных статусов со статусами workflow целевого типа. Неуказанные статусы сохраняются, если допустимы в целевом workflow.
+          additionalProperties:
+            type: string
+            pattern: '^[A-Z][A-Z0-9_]{1,63}$'
+        expectedGeneration:
+          type: string
+          format: uuid
+          description: Поколение исходного типа из ProjectIssueTypeDto.generation; применяется только при moveIssuesTo и защищает от повторного удаления нового поколения кода.
     PatchProjectIssueTypeRequestDto:
       type: object
       additionalProperties: false
