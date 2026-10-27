@@ -144,6 +144,16 @@ class Tas442AuditJsonTest {
                         exception -> assertThat(exception.getStatus()).isEqualTo(DomainStatus.INTERNAL)));
     }
 
+    @Test
+    void malformedJsonReportsErrorTypeWithoutEchoingPrivateInput() throws IOException {
+        String privateInput = "not-json-private-fixture-secret";
+        withPolicy((properties, service) -> assertThatThrownBy(() -> service.maskSensitiveDataForAudit(
+                Map.of("payload", privateInput), "auth", "outbox_events", "tas-442", "audit-test"))
+                .isInstanceOf(DomainException.class)
+                .hasMessageContaining("failed to parse JSON (")
+                .hasMessageNotContaining(privateInput));
+    }
+
     private static void assertMaskedPayload(JsonNode payload) {
         assertThat(payload.isObject()).isTrue();
         assertThat(payload.get("email").asString()).isEqualTo(EMAIL);

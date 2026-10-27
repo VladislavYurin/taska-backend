@@ -121,6 +121,16 @@ public class SensitiveDataMaskService {
      * @throws DomainException если значение колонки имеет неподдерживаемый тип
      */
     private Object getMaskedJson(String columnName, Object columnValue, Map<String, MaskType> fieldNameMaskTypeMap){
+        if (columnValue instanceof Map<?, ?>) {
+            JsonNode tree = OBJECT_MAPPER.valueToTree(columnValue);
+            maskJsonTree(tree, fieldNameMaskTypeMap);
+            return OBJECT_MAPPER.convertValue(tree, new TypeReference<Map<String, Object>>() { });
+        }
+        if (columnValue instanceof JsonNode jsonNode) {
+            JsonNode tree = jsonNode.deepCopy();
+            maskJsonTree(tree, fieldNameMaskTypeMap);
+            return tree;
+        }
         String jsonString;
         boolean isR2dbcJson = columnValue instanceof Json;
 
@@ -128,8 +138,6 @@ public class SensitiveDataMaskService {
             jsonString = ((Json) columnValue).asString();
         } else if (columnValue instanceof String str) {
             jsonString = str;
-        } else if (columnValue instanceof Map<?, ?> || columnValue instanceof JsonNode) {
-            jsonString = OBJECT_MAPPER.writeValueAsString(columnValue);
         } else {
             String message = "Cannot mask JSON fields in column '" + columnName
                     + "': expected Json, String, Map or JsonNode type, but got "
@@ -139,12 +147,6 @@ public class SensitiveDataMaskService {
         }
 
         String maskedJson = maskJsonFields(jsonString, fieldNameMaskTypeMap);
-        if (columnValue instanceof Map<?, ?>) {
-            return OBJECT_MAPPER.readValue(maskedJson, new TypeReference<Map<String, Object>>() { });
-        }
-        if (columnValue instanceof JsonNode) {
-            return OBJECT_MAPPER.readTree(maskedJson);
-        }
         return isR2dbcJson ? Json.of(maskedJson) : maskedJson;
     }
 
@@ -163,20 +165,27 @@ public class SensitiveDataMaskService {
         try {
             rootNode = OBJECT_MAPPER.readTree(jsonString);
         } catch (Exception e) {
-            String message = "Cannot mask JSON fields: failed to parse JSON";
+            String message = "Cannot mask JSON fields: failed to parse JSON ("
+                    + e.getClass().getSimpleName() + ")";
             log.warn(message);
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
 
+        maskJsonTree(rootNode, fieldsToMask);
+        return OBJECT_MAPPER.writeValueAsString(rootNode);
+    }
+
+    private void maskJsonTree(JsonNode rootNode, Map<String, MaskType> fieldsToMask) {
+        if (fieldsToMask.isEmpty()) {
+            return;
+        }
         if (!rootNode.isObject()) {
             String message = "Cannot mask JSON fields: expected JSON object, but got " + rootNode.getNodeType();
             log.warn(message);
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
 
-        ObjectNode objectNode = (ObjectNode) rootNode;
-        maskJsonFieldsRecursive(objectNode, fieldsToMask);
-        return OBJECT_MAPPER.writeValueAsString(objectNode);
+        maskJsonFieldsRecursive(rootNode, fieldsToMask);
     }
 
     /**
