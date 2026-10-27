@@ -1306,7 +1306,7 @@ paths:
               $ref: '#/components/schemas/ReorderProjectIssueTypesRequestDto'
       responses:
         '200':
-          description: Новый порядок сохранён
+          description: Новый порядок сохранён; реестр целиком в новом порядке, с shape и icon каждого типа.
           content:
             application/json:
               schema:
@@ -1327,7 +1327,8 @@ paths:
     patch:
       x-pat-scope: write
       operationId: updateProjectIssueType
-      summary: Изменить подпись, цвет, значок или порядок типа — только ADMIN проекта
+      summary: Изменить подпись, цвет, форму, значок или порядок типа — только ADMIN проекта
+      description: Пропущенное поле не меняется. "icon":null убирает значок; для остальных полей явный null — 400. Пустое тело — 400 INVALID_ARGUMENT. Недопустимые name, color, icon, shape или sortOrder — 400 INVALID_ARGUMENT.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -5575,6 +5576,12 @@ components:
         issueTypeIcon:
           type: string
           nullable: true
+          description: Значок из реестра проекта; null, если у типа нет значка или тип удалён.
+        issueTypeShape:
+          nullable: true
+          description: Форма из реестра проекта; null только вместе с issueTypeName (тип удалён).
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeShapeDto'
         priority:
           $ref: '#/components/schemas/IssuePriorityDto'
         assigneeId:
@@ -6477,6 +6484,10 @@ components:
     ProjectIssueTypeIconDto:
       type: string
       enum: [check-square, bug, book-open, headset, megaphone, file-text, flag, layers]
+    ProjectIssueTypeShapeDto:
+      type: string
+      description: Форма метки типа. Встроенные типы новых проектов — TASK и STORY square, BUG circle, без значка.
+      enum: [square, circle, diamond]
     ReorderProjectIssueTypesRequestDto:
       type: object
       required: [codes]
@@ -6491,7 +6502,8 @@ components:
 
     ProjectIssueTypeDto:
       type: object
-      required: [code, name, color, icon, sortOrder]
+      description: Тип задачи из реестра проекта. Облик — цвет, форма и необязательный значок.
+      required: [code, name, color, shape, icon, sortOrder]
       properties:
         code:
           type: string
@@ -6503,8 +6515,13 @@ components:
           maxLength: 50
         color:
           $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        shape:
+          $ref: '#/components/schemas/ProjectIssueTypeShapeDto'
         icon:
-          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+          nullable: true
+          description: Значок типа; null — без значка.
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeIconDto'
         sortOrder:
           type: integer
           format: int32
@@ -6515,12 +6532,13 @@ components:
       properties:
         items:
           type: array
+          description: Реестр типов по sortOrder и code; у каждого типа есть shape, icon может быть null.
           items:
             $ref: '#/components/schemas/ProjectIssueTypeDto'
     CreateProjectIssueTypeRequestDto:
       type: object
       additionalProperties: false
-      required: [code, name, color, icon]
+      required: [code, name, color]
       properties:
         code:
           type: string
@@ -6531,8 +6549,15 @@ components:
           maxLength: 50
         color:
           $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        shape:
+          description: По умолчанию square; явный null запрещён.
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeShapeDto'
         icon:
-          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+          nullable: true
+          description: Пропуск или null — тип без значка.
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeIconDto'
         sortOrder:
           type: integer
           format: int32
@@ -6542,7 +6567,7 @@ components:
       type: object
       additionalProperties: false
       minProperties: 1
-      description: Пропущенное поле не меняется; явный null запрещён. code неизменяем.
+      description: Пропущенное поле не меняется. Явный null допустим только для icon и убирает значок; для остальных полей он запрещён. code неизменяем.
       properties:
         name:
           type: string
@@ -6550,8 +6575,13 @@ components:
           maxLength: 50
         color:
           $ref: '#/components/schemas/ProjectIssueTypeColorDto'
+        shape:
+          $ref: '#/components/schemas/ProjectIssueTypeShapeDto'
         icon:
-          $ref: '#/components/schemas/ProjectIssueTypeIconDto'
+          nullable: true
+          description: Новый значок; null убирает значок.
+          allOf:
+            - $ref: '#/components/schemas/ProjectIssueTypeIconDto'
         sortOrder:
           type: integer
           format: int32
@@ -6574,7 +6604,7 @@ components:
             $ref: '#/components/schemas/ProjectLabelResponseDto'
         issueTypes:
           type: array
-          description: Реестр типов проекта по sortOrder и code; первый тип — по умолчанию.
+          description: Реестр типов проекта по sortOrder и code; первый тип — по умолчанию. Облик каждого типа — color, shape и icon (null — без значка).
           items:
             $ref: '#/components/schemas/ProjectIssueTypeDto'
         workflows:
@@ -7493,7 +7523,7 @@ components:
       required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
       properties:
         issueTypes:
-          description: Имена начального посева TASK/BUG/STORY; актуальные названия, цвет и значок берутся из реестра конкретного проекта.
+          description: Имена начального посева TASK/BUG/STORY; актуальные названия, цвет, форма и значок берутся из реестра конкретного проекта.
           type: array
           items:
             $ref: '#/components/schemas/IssueTypeMetaPairDto'

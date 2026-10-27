@@ -4,12 +4,15 @@ import com.google.protobuf.Empty;
 import java.util.function.BiFunction;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import nullable.NullableField;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.project.v1.ChangeProjectIssueTypeRequest;
 import ru.taska.api.project.v1.ListProjectIssueTypesResponse;
 import ru.taska.api.project.v1.ProjectIssueTypeResponse;
 import ru.taska.api.project.v1.ProjectIssueTypesRequest;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.service.ProjectIssueTypeService;
 import validator.GrpcRequestValidators;
@@ -31,14 +34,25 @@ public class ProjectIssueTypeGrpcService {
         return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
                 service.create(project, actor, req.getCode(), req.hasName() ? req.getName() : null,
                         req.hasColor() ? req.getColor() : null, req.hasIcon() ? req.getIcon() : null,
+                        req.hasShape() ? req.getShape() : null,
                         req.hasSortOrder() ? req.getSortOrder() : null).map(mapper::toIssueTypeResponse)));
     }
 
     public Mono<ProjectIssueTypeResponse> update(Mono<ChangeProjectIssueTypeRequest> request) {
         return request.flatMap(req -> ids(req.getProjectId(), req.getActorUserId(), (project, actor) ->
-                service.update(project, actor, req.getCode(), req.hasName() ? req.getName() : null,
-                        req.hasColor() ? req.getColor() : null, req.hasIcon() ? req.getIcon() : null,
-                        req.hasSortOrder() ? req.getSortOrder() : null).map(mapper::toIssueTypeResponse)));
+                iconChange(req).flatMap(icon -> service.update(project, actor, req.getCode(),
+                        req.hasName() ? req.getName() : null, req.hasColor() ? req.getColor() : null, icon,
+                        req.hasShape() ? req.getShape() : null,
+                        req.hasSortOrder() ? req.getSortOrder() : null)).map(mapper::toIssueTypeResponse)));
+    }
+
+    /** clear_icon carries an explicit REST null across gRPC, where an unset optional string means "absent". */
+    private static Mono<NullableField<String>> iconChange(ChangeProjectIssueTypeRequest req) {
+        if (req.getClearIcon() && req.hasIcon()) {
+            return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "icon and clear_icon are mutually exclusive"));
+        }
+        if (req.getClearIcon()) return Mono.just(NullableField.of(null));
+        return Mono.just(req.hasIcon() ? NullableField.of(req.getIcon()) : NullableField.absent());
     }
 
     public Mono<ListProjectIssueTypesResponse> reorder(Mono<ru.taska.api.project.v1.ReorderProjectIssueTypesRequest> request) {

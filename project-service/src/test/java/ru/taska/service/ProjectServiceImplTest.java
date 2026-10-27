@@ -527,8 +527,8 @@ class ProjectServiceImplTest {
             // Registry drives workflow selection and type metadata.
             mockWorkflowLoad();
             Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
-                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", "check-square", 10, null, null),
-                    new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "Request", "teal", "headset", 20, null, null)));
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", null, "square", 10, null, null),
+                    new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "Request", "teal", "headset", "square", 20, null, null)));
             Mockito.when(workflowServiceClient.getWorkflowForProject(projectId, "REQUEST", actorUserId, requestId, nodeId))
                     .thenReturn(Mono.just(new ProjectWorkflowDto("REQUEST", workflow.workflow())));
 
@@ -653,7 +653,7 @@ class ProjectServiceImplTest {
 
         private void mockWorkflowLoad() {
             Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
-                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", "check-square", 10, null, null)));
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", null, "square", 10, null, null)));
 
             Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
                             ArgumentMatchers.eq(projectId),

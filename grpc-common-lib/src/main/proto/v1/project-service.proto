@@ -201,6 +201,10 @@ message ChangeProjectIssueTypeRequest {
   optional string color = 6;
   optional string icon = 7;
   optional int32 sort_order = 8;
+  // TAS-432: square | circle | diamond. Absent: square on create, unchanged on update.
+  optional string shape = 9;
+  // TAS-432: update only; true removes the icon (REST PATCH "icon": null). Must not be sent together with icon.
+  bool clear_icon = 10;
 }
 
 message ReorderProjectIssueTypesRequest {
@@ -214,9 +218,17 @@ message ProjectIssueTypeResponse {
   string code = 1;
   string name = 2;
   string color = 3;
-  string icon = 4;
+  // Expand-contract (TAS-432): readers built before TAS-432 require one of the eight icons in field 4.
+  // It carries `icon` when the type has one, otherwise the pre-TAS-432 icon of the code
+  // (TASK check-square, BUG bug, STORY book-open, anything else check-square).
+  // New readers use `shape` and `icon` (client.ProjectIssueTypes); stop writing and reserve 4 once no old reader remains.
+  string legacy_icon = 4;
   int32 sort_order = 5;
   string generation = 6; // internal lifecycle identity; changes when a deleted code is recreated
+  // TAS-432: square | circle | diamond. Presence marks a TAS-432 writer, whose `icon` is authoritative.
+  optional string shape = 7;
+  // TAS-432: absent when the type has no icon.
+  optional string icon = 8;
 }
 
 message ListProjectIssueTypesResponse {

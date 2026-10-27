@@ -158,10 +158,12 @@ class SearchIssuesIT extends AbstractIT {
     void searchUsesOneBatchForProjectSpecificTypeMetadata() {
         mockGrpcProjectInfoResponse(projectInfo(PROJECT_ID_1, PROJECT_KEY_1, "Project 1").toBuilder()
                         .addIssueTypes(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
-                                .setCode("TASK").setName("Заявка").setColor("teal").setIcon("headset")).build(),
+                                .setCode("TASK").setName("Заявка").setColor("teal").setShape("diamond")
+                                .setIcon("headset").setLegacyIcon("headset")).build(),
                 projectInfo(PROJECT_ID_2, PROJECT_KEY_2, "Project 2").toBuilder()
                         .addIssueTypes(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder()
-                                .setCode("TASK").setName("Внутренняя задача").setColor("purple").setIcon("flag")).build());
+                                .setCode("TASK").setName("Внутренняя задача").setColor("purple").setShape("circle")
+                                .setLegacyIcon("check-square")).build());
         var result = issueService.searchIssues(REQUEST_ID, NODE_ID, ACTOR_USER_ID,
                 null, null, null, null, null, null, null, 0, 50).block();
         Assertions.assertThat(result.items()).hasSize(8);
@@ -170,7 +172,11 @@ class SearchIssuesIT extends AbstractIT {
             Assertions.assertThat(proto.getIssueTypeName()).isEqualTo(item.issue().getProjectId().equals(PROJECT_ID_1)
                     ? "Заявка" : "Внутренняя задача");
             Assertions.assertThat(proto.getIssueTypeColor()).isNotBlank();
-            Assertions.assertThat(proto.getIssueTypeIcon()).isNotBlank();
+            // TAS-432: the hit carries the registry shape; a type without an icon has no issue_type_icon.
+            boolean first = item.issue().getProjectId().equals(PROJECT_ID_1);
+            Assertions.assertThat(proto.getIssueTypeShape()).isEqualTo(first ? "diamond" : "circle");
+            Assertions.assertThat(proto.hasIssueTypeIcon()).isEqualTo(first);
+            if (first) Assertions.assertThat(proto.getIssueTypeIcon()).isEqualTo("headset");
         }
         var request = org.mockito.ArgumentCaptor.forClass(GetProjectInfoBatchInternalRequest.class);
         Mockito.verify(projectServiceStub).getProjectInfoBatchInternal(request.capture());

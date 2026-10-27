@@ -2556,7 +2556,7 @@
             },
             "issueTypes" : {
               "type" : "array",
-              "description" : "Реестр типов проекта по sortOrder и code; первый тип — по умолчанию.",
+              "description" : "Реестр типов проекта по sortOrder и code; первый тип — по умолчанию. Облик каждого типа — color, shape и icon (null — без значка).",
               "items" : {
                 "$ref" : "#/$defs/ProjectIssueTypeDto"
               }
@@ -2576,7 +2576,7 @@
         },
         "ProjectIssueTypeDto" : {
           "type" : "object",
-          "required" : [ "code", "name", "color", "icon", "sortOrder" ],
+          "required" : [ "code", "name", "color", "shape", "icon", "sortOrder" ],
           "properties" : {
             "code" : {
               "type" : "string",
@@ -2592,13 +2592,24 @@
               "$ref" : "#/$defs/ProjectIssueTypeColorDto"
             },
             "icon" : {
-              "$ref" : "#/$defs/ProjectIssueTypeIconDto"
+              "anyOf" : [ {
+                "description" : "Значок типа; null — без значка.",
+                "allOf" : [ {
+                  "$ref" : "#/$defs/ProjectIssueTypeIconDto"
+                } ]
+              }, {
+                "type" : "null"
+              } ]
             },
             "sortOrder" : {
               "type" : "integer",
               "minimum" : 0
+            },
+            "shape" : {
+              "$ref" : "#/$defs/ProjectIssueTypeShapeDto"
             }
-          }
+          },
+          "description" : "Тип задачи из реестра проекта. Облик — цвет, форма и необязательный значок."
         },
         "ProjectIssueTypeIconDto" : {
           "type" : "string",
@@ -2868,6 +2879,11 @@
               } ]
             }
           }
+        },
+        "ProjectIssueTypeShapeDto" : {
+          "type" : "string",
+          "description" : "Форма метки типа. Встроенные типы новых проектов — TASK и STORY square, BUG circle, без значка.",
+          "enum" : [ "square", "circle", "diamond" ]
         }
       }
     },
@@ -5461,7 +5477,18 @@
             },
             "issueTypeIcon" : {
               "anyOf" : [ {
-                "type" : "string"
+                "type" : "string",
+                "description" : "Значок из реестра проекта; null, если у типа нет значка или тип удалён."
+              }, {
+                "type" : "null"
+              } ]
+            },
+            "issueTypeShape" : {
+              "anyOf" : [ {
+                "description" : "Форма из реестра проекта; null только вместе с issueTypeName (тип удалён).",
+                "allOf" : [ {
+                  "$ref" : "#/$defs/ProjectIssueTypeShapeDto"
+                } ]
               }, {
                 "type" : "null"
               } ]
@@ -5489,6 +5516,11 @@
               "description" : "Общее количество задач, соответствующих поисковому запросу"
             }
           }
+        },
+        "ProjectIssueTypeShapeDto" : {
+          "type" : "string",
+          "description" : "Форма метки типа. Встроенные типы новых проектов — TASK и STORY square, BUG circle, без значка.",
+          "enum" : [ "square", "circle", "diamond" ]
         }
       }
     },

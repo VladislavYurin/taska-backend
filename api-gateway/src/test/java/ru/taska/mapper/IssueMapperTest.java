@@ -83,6 +83,17 @@ class IssueMapperTest {
                 .clearIssueTypeColor().clearIssueTypeIcon().build()).getIssueTypeName());
     }
 
+    @Test
+    void searchHitCarriesShapeAndNoIconWhenTheTypeHasNone() {
+        var hit = ru.taska.api.issue.v1.IssueShortResponse.newBuilder().setIssueTypeKey("BUG")
+                .setPriority(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM)
+                .setIssueTypeName("Bug").setIssueTypeColor("red").setIssueTypeShape("circle").build();
+        var mapped = mapper.toIssueShortResponseDto(hit);
+        Assertions.assertEquals(ru.taska.domain.dto.ProjectIssueTypeShapeDto.CIRCLE, mapped.getIssueTypeShape());
+        Assertions.assertNull(mapped.getIssueTypeIcon());
+        Assertions.assertNull(mapper.toIssueShortResponseDto(hit.toBuilder().clearIssueTypeShape().build()).getIssueTypeShape());
+    }
+
     public static final String PAYLOAD = """
             {
               "oldStatus":"TODO",

@@ -984,7 +984,10 @@ message IssueShortResponse {
   optional string issue_type_key = 11;
   optional string issue_type_name = 12;
   optional string issue_type_color = 13;
+  // Absent when the registry entry has no icon (TAS-432).
   optional string issue_type_icon = 14;
+  // TAS-432: square | circle | diamond; present whenever issue_type_name is.
+  optional string issue_type_shape = 15;
 }
 
 message IssueResponse {

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import java.sql.DriverManager;
 import org.junit.jupiter.api.BeforeEach;
+import nullable.NullableField;
 import org.junit.jupiter.api.Test;
 import org.springframework.r2dbc.connection.R2dbcTransactionManager;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -70,13 +71,13 @@ class ProjectIssueTypeIntegrationTest {
         admin(project);
         repository.seedDefaults(project).as(tx::transactional).block();
         var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
-        var created = service.create(project, actor, "REQUEST", "Заявка", "teal", "headset", 40)
+        var created = service.create(project, actor, "REQUEST", "Заявка", "teal", "headset", null, 40)
                 .as(tx::transactional).block();
         assertThat(created.name()).isEqualTo("Заявка");
         assertThat(created.createdAt()).isNotNull();
-        service.update(project, actor, "BUG", "Инцидент", null, null, 5).as(tx::transactional).block();
+        service.update(project, actor, "BUG", "Инцидент", null, NullableField.absent(), null, 5).as(tx::transactional).block();
         assertThat(repository.list(project).collectList().block().getFirst().code()).isEqualTo("BUG");
-        var failure = service.create(project, actor, "ROLLBACK", "Rollback", "blue", "flag", 1)
+        var failure = service.create(project, actor, "ROLLBACK", "Rollback", "blue", "flag", null, 1)
                 .then(Mono.error(new IllegalStateException("force rollback"))).as(tx::transactional);
         reactor.test.StepVerifier.create(failure).expectError(IllegalStateException.class).verify();
         assertThat(repository.find(project, "ROLLBACK").block()).isNull();
@@ -146,7 +147,7 @@ class ProjectIssueTypeIntegrationTest {
         var issues = mock(GrpcIssueServiceClient.class);
         when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
         var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
-        service.update(project, actor, "BUG", null, null, null, 0).as(tx::transactional).block();
+        service.update(project, actor, "BUG", null, null, NullableField.absent(), null, 0).as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("BUG");
         service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("TASK");
@@ -193,7 +194,7 @@ class ProjectIssueTypeIntegrationTest {
                 .expectError(IllegalStateException.class).verify();
         assertThat(repository.find(project, "BUG").block().generation()).isEqualTo(original);
         service.delete(project, actor, "BUG", "r", "n").as(tx::transactional).block();
-        var recreated = service.create(project, actor, "BUG", "New bug", "red", "bug", 20).as(tx::transactional).block();
+        var recreated = service.create(project, actor, "BUG", "New bug", "red", null, "circle", 20).as(tx::transactional).block();
         assertThat(recreated.generation()).isNotEqualTo(original);
         assertThat(repository.listBatch(List.of(project)).collectList().block()).hasSize(3);
     }
@@ -206,7 +207,7 @@ class ProjectIssueTypeIntegrationTest {
         when(issues.countIssueTypeUsage(any(), any(), any(), any())).thenReturn(Mono.just(0L));
         var service = new ProjectIssueTypeService(repository, null, issues, new ru.taska.service.ProjectWriteGuard(db));
         List<String> old = repository.list(project).map(type -> type.code()).collectList().block();
-        service.create(project, actor, "REQUEST", "Request", "blue", "headset", 40).as(tx::transactional).block();
+        service.create(project, actor, "REQUEST", "Request", "blue", "headset", null, 40).as(tx::transactional).block();
         var afterAddition = repository.list(project).collectList().block();
         reactor.test.StepVerifier.create(service.reorder(project, actor, old).as(tx::transactional))
                 .expectErrorSatisfies(error -> {
@@ -226,6 +227,126 @@ class ProjectIssueTypeIntegrationTest {
         assertThat(defaultType(project)).isEqualTo(old.getFirst());
     }
 
+    @Test
+    void shapeMigrationGivesUntouchedBuiltInsThePlainLookAndKeepsEveryOtherIcon() throws Exception {
+        UUID plain = project("PLAIN"), configured = project("CONFIG");
+        db.sql("INSERT INTO taska.project_settings(project_id,settings,updated_by) VALUES (:p,CAST(:settings AS jsonb),:actor)")
+                .bind("p", configured).bind("actor", actor)
+                .bind("settings", "{\"allowedIssueTypes\":[\"TASK\",\"BUG\",\"REQUEST\"]}").fetch().rowsUpdated().block();
+        execute("0001-project-issue-types.sql");
+        execute("0002-issue-type-generation.sql");
+        // An admin edited a built-in icon before TAS-432, and a custom type borrowed a seed icon.
+        db.sql("UPDATE taska.project_issue_types SET icon='headset' WHERE project_id=:p AND code='TASK'")
+                .bind("p", plain).fetch().rowsUpdated().block();
+        db.sql("UPDATE taska.project_issue_types SET icon='flag' WHERE project_id=:p AND code='BUG'")
+                .bind("p", configured).fetch().rowsUpdated().block();
+        db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,sort_order) VALUES (:p,'INCIDENT','Incident','red','bug',40)")
+                .bind("p", configured).fetch().rowsUpdated().block();
+        var updatedBefore = updatedAt();
+        execute("0003-issue-type-shape.sql");
+
+        assertThat(repository.list(plain).collectList().block())
+                .extracting(t -> t.code() + ":" + t.icon() + ":" + t.shape())
+                .containsExactly("TASK:headset:square", "BUG:null:circle", "STORY:null:square");
+        assertThat(repository.list(configured).collectList().block())
+                .extracting(t -> t.code() + ":" + t.icon() + ":" + t.shape())
+                .containsExactly("TASK:null:square", "BUG:flag:circle", "REQUEST:file-text:square", "INCIDENT:bug:square");
+        // The backfill restyles rows; it is not an edit, so updated_at stays where it was.
+        assertThat(updatedAt()).isEqualTo(updatedBefore);
+        assertThat(db.sql("SELECT count(*) AS n FROM taska.project_issue_types WHERE shape IS NULL")
+                .map((r, m) -> r.get("n", Long.class)).one().block()).isZero();
+        reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET shape='hexagon' WHERE project_id=:p")
+                        .bind("p", plain).fetch().rowsUpdated())
+                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET icon='rocket' WHERE project_id=:p")
+                        .bind("p", plain).fetch().rowsUpdated())
+                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET shape=NULL WHERE project_id=:p")
+                        .bind("p", plain).fetch().rowsUpdated())
+                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+    }
+
+    @Test
+    void newProjectSeedHasPlainBuiltIns() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("SEED");
+        repository.seedDefaults(project).block();
+        assertThat(repository.list(project).collectList().block())
+                .extracting(t -> String.join(":", t.code(), t.name(), t.color(), String.valueOf(t.icon()), t.shape(),
+                        String.valueOf(t.sortOrder())))
+                .containsExactly("TASK:Task:blue:null:square:10", "BUG:Bug:red:null:circle:20",
+                        "STORY:Story:green:null:square:30");
+    }
+
+    @Test
+    void shapeAndOptionalIconRoundTripThroughCreateAndPatch() throws Exception {
+        migrate("0001-project-issue-types.sql");
+        UUID project = project("LOOK"); admin(project); repository.seedDefaults(project).block();
+        var service = new ProjectIssueTypeService(repository, null, null, new ru.taska.service.ProjectWriteGuard(db));
+        var plain = service.create(project, actor, "REQUEST", "Request", "teal", null, null, 40).as(tx::transactional).block();
+        assertThat(plain.icon()).isNull();
+        assertThat(plain.shape()).isEqualTo("square");
+        var milestone = service.create(project, actor, "MILESTONE", "Milestone", "amber", "flag", "diamond", 50)
+                .as(tx::transactional).block();
+        assertThat(repository.find(project, "MILESTONE").block()).isEqualTo(milestone);
+        assertThat(milestone.icon()).isEqualTo("flag");
+        assertThat(milestone.shape()).isEqualTo("diamond");
+
+        service.update(project, actor, "MILESTONE", "Release", null, NullableField.absent(), null, null).as(tx::transactional).block();
+        assertThat(repository.find(project, "MILESTONE").block().icon()).isEqualTo("flag");
+        service.update(project, actor, "MILESTONE", null, null, NullableField.of(null), "circle", null).as(tx::transactional).block();
+        var cleared = repository.find(project, "MILESTONE").block();
+        assertThat(cleared.icon()).isNull();
+        assertThat(cleared.shape()).isEqualTo("circle");
+        assertThat(cleared.name()).isEqualTo("Release");
+        service.update(project, actor, "BUG", null, null, NullableField.of("bug"), null, null).as(tx::transactional).block();
+        assertThat(repository.find(project, "BUG").block().icon()).isEqualTo("bug");
+        assertThat(repository.find(project, "BUG").block().shape()).isEqualTo("circle");
+    }
+
+    @Test
+    void shapeChangesetRollsBackToTheIconsLegacyReadersSee() throws Exception {
+        db.sql("DROP SCHEMA IF EXISTS taska CASCADE").fetch().rowsUpdated().block();
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var liquibase = new liquibase.Liquibase("db/changelog/db.changelog-master.yaml",
+                     new liquibase.resource.ClassLoaderResourceAccessor(), new liquibase.database.jvm.JdbcConnection(connection))) {
+            liquibase.update(new liquibase.Contexts(), new liquibase.LabelExpression());
+            UUID project = project("ROLLBACK");
+            repository.seedDefaults(project).block();
+            db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,shape,sort_order) VALUES "
+                            + "(:p,'MILESTONE','Milestone','amber',NULL,'diamond',40),(:p,'REQUEST','Request','teal','headset','square',50)")
+                    .bind("p", project).fetch().rowsUpdated().block();
+            var before = repository.list(project).collectList().block();
+
+            liquibase.rollback(1, new liquibase.Contexts(), new liquibase.LabelExpression());
+
+            var icons = db.sql("SELECT code, icon FROM taska.project_issue_types WHERE project_id=:p ORDER BY sort_order")
+                    .bind("p", project).map((r, m) -> r.get("code", String.class) + ":" + r.get("icon", String.class)).all()
+                    .collectList().block();
+            assertThat(icons).containsExactly("TASK:check-square", "BUG:bug", "STORY:book-open",
+                    "MILESTONE:check-square", "REQUEST:headset");
+            // The rollback must hand back exactly what pre-TAS-432 readers already see in legacy_icon.
+            assertThat(icons).containsExactlyElementsOf(before.stream().map(t -> t.code() + ":" + client.ProjectIssueTypes
+                    .writeLook(ru.taska.api.project.v1.ProjectIssueTypeResponse.newBuilder(), t.code(), t.shape(), t.icon())
+                    .getLegacyIcon()).toList());
+            assertThat(db.sql("SELECT count(*) AS n FROM information_schema.columns WHERE table_schema='taska' "
+                    + "AND table_name='project_issue_types' AND column_name='shape'").map((r, m) -> r.get("n", Long.class))
+                    .one().block()).isZero();
+            reactor.test.StepVerifier.create(db.sql("UPDATE taska.project_issue_types SET icon=NULL WHERE project_id=:p")
+                            .bind("p", project).fetch().rowsUpdated())
+                    .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        } finally {
+            db.sql("DROP TABLE IF EXISTS public.databasechangelog, public.databasechangeloglock").fetch().rowsUpdated().block();
+        }
+    }
+
+    private java.util.Map<String, java.time.OffsetDateTime> updatedAt() {
+        return db.sql("SELECT project_id, code, updated_at FROM taska.project_issue_types")
+                .map((r, m) -> java.util.Map.entry(r.get("project_id", UUID.class) + ":" + r.get("code", String.class),
+                        r.get("updated_at", java.time.OffsetDateTime.class))).all()
+                .collectMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue).block();
+    }
+
     private String defaultType(UUID project) {
         return db.sql("SELECT settings->>'defaultIssueType' AS value FROM taska.project_settings WHERE project_id=:p")
                 .bind("p", project).map((r, m) -> r.get("value", String.class)).one().block();
@@ -243,11 +364,17 @@ class ProjectIssueTypeIntegrationTest {
                 .bind("p", project).bind("actor", actor).fetch().rowsUpdated().block();
     }
 
+    /** Applies a registry changeset and every later one, so tests run against the current schema. */
     private void migrate(String file) throws Exception {
+        execute(file);
+        if (file.equals("0001-project-issue-types.sql")) migrate("0002-issue-type-generation.sql");
+        if (file.equals("0002-issue-type-generation.sql")) migrate("0003-issue-type-shape.sql");
+    }
+
+    private void execute(String file) throws Exception {
         String sql = Files.readString(Path.of("src/main/resources/db/changelog/changes", file));
         for (String statement : sql.replaceAll("(?m)--.*$", "").split(";")) {
             if (!statement.replaceAll("(?m)--.*$", "").isBlank()) db.sql(statement).fetch().rowsUpdated().block();
         }
-        if (file.equals("0001-project-issue-types.sql")) migrate("0002-issue-type-generation.sql");
     }
 }

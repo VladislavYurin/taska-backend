@@ -98,7 +98,7 @@ class ArchiveProjectIntegrationTest {
         archive.archive(p.getId(),actor,"r","n").block();
         StepVerifier.create(guard.check(p.getId(),actor)).expectErrorSatisfies(this::archived).verify();
         StepVerifier.create(membership.rmProjectMember("r","n",actor,actor,p.getId())).expectErrorSatisfies(this::archived).verify();
-        StepVerifier.create(types.create(p.getId(),actor,"REQUEST","Request","blue","flag",1)).expectErrorSatisfies(this::archived).verify();
+        StepVerifier.create(types.create(p.getId(),actor,"REQUEST","Request","blue","flag",null,1)).expectErrorSatisfies(this::archived).verify();
         // A project without seeded registry has a valid empty read; archive itself does not forbid it.
         StepVerifier.create(types.list(p.getId(),actor,"r","n")).verifyComplete();
     }
