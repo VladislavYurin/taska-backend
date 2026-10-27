@@ -80,6 +80,13 @@ jobs:
         if: matrix.mod.module == 'mcp-server'
         run: mvn -B -ntp -pl mcp-server -am test -Dtest=McpClientSecurityIT -Dsurefire.failIfNoSpecifiedTests=false
 
+      - name: Admin outbox retry PostgreSQL contract
+        if: matrix.mod.module == 'admin-service'
+        run: >-
+          mvn -B -ntp -pl admin-service -am test
+          -Dtest=OutboxRetryServiceIT,OutboxRetryRepositoryIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
       - name: Board column cursor PostgreSQL contract
         if: matrix.mod.module == 'issue-service'
         run: >-

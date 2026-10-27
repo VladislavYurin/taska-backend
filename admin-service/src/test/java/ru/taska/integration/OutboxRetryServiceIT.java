@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -13,6 +15,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import reactor.test.StepVerifier;
 import ru.taska.domain.OutboxEventSnapshot;
 import ru.taska.domain.OutboxStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.service.OutboxRetryService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -32,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Integration-тест полного сценария ручного retry outbox-события.
@@ -158,6 +163,25 @@ class OutboxRetryServiceIT {
     void cleanDatabase() throws Exception {
         executeSql("DELETE FROM taska.outbox_events");
         executeSql("DELETE FROM taska.admin_audit_log");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"auth", "project", "issue"})
+    void missingEventReturnsNotFoundWithoutAudit(String service) throws Exception {
+        UUID eventId = UUID.randomUUID();
+
+        StepVerifier.create(outboxRetryService.retryOutboxEvent(
+                        REQUEST_ID, NODE_ID, service, eventId, REASON,
+                        ACTOR_USER_ID, ACTOR_NAME, "admin@example.com",
+                        objectMapper.valueToTree(List.of("GLOBAL_ADMIN"))))
+                .expectErrorSatisfies(error -> {
+                    assertEquals(DomainException.class, error.getClass());
+                    assertEquals(DomainStatus.NOT_FOUND, ((DomainException) error).getStatus());
+                })
+                .verify();
+
+        assertThrows(IllegalStateException.class, () -> readOutboxState(eventId));
+        assertNull(readAudit(REQUEST_ID));
     }
 
     /**
@@ -368,8 +392,9 @@ class OutboxRetryServiceIT {
 
         assertFalse(auditedOldPayload.has("rawInviteToken"));
         assertFalse(auditedNewPayload.has("rawInviteToken"));
-        assertEquals("u**************m", auditedOldPayload.get("email").asString());
-        assertEquals("u**************m", auditedNewPayload.get("email").asString());
+        // TAS-395 keeps email visible in Data/audit while invitation secrets stay hidden.
+        assertEquals("user@example.com", auditedOldPayload.get("email").asString());
+        assertEquals("user@example.com", auditedNewPayload.get("email").asString());
         assertEquals("Ivan", auditedOldPayload.get("displayName").asString());
         assertEquals("Ivan", auditedNewPayload.get("displayName").asString());
     }
@@ -601,7 +626,9 @@ class OutboxRetryServiceIT {
     ) {
         String prefix = "admin.outbox-write." + service;
 
-        registry.add(prefix + ".url", OutboxRetryServiceIT::r2dbcUrl);
+        // Exercise the shipped write-URL fallback, as on deployments with only RO endpoints.
+        registry.add("ADMIN_RO_" + service.toUpperCase(java.util.Locale.ROOT) + "_R2DBC_URL",
+                OutboxRetryServiceIT::r2dbcUrl);
         registry.add(prefix + ".username", postgres::getUsername);
         registry.add(prefix + ".password", postgres::getPassword);
         registry.add(prefix + ".pool.initial-size", () -> "1");
