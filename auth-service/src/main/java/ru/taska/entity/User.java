@@ -70,6 +70,10 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.INVITED;
 
+    /** Lifecycle state to restore after an administrative block; never exposed in public DTOs. */
+    @Column("blocked_from_status")
+    private UserStatus blockedFromStatus;
+
     /**
      * Временная метка создания записи (аудит).
      */

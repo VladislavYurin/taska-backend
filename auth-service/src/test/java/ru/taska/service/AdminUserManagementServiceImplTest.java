@@ -99,7 +99,7 @@ class AdminUserManagementServiceImplTest {
             User user = user(UserStatus.ACTIVE, GlobalRole.USER);
 
             JsonNode mockPayload = new ObjectMapper().createObjectNode();
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.just(user));
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
             Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                     .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
             Mockito.when(outboxEventMapper.buildUserBlockedPayload(
@@ -130,6 +130,7 @@ class AdminUserManagementServiceImplTest {
             ArgumentCaptor<User> savedUserCaptor = ArgumentCaptor.forClass(User.class);
             Mockito.verify(userRepository).save(savedUserCaptor.capture());
             Assertions.assertThat(savedUserCaptor.getValue().getStatus()).isEqualTo(UserStatus.BLOCKED);
+            Assertions.assertThat(savedUserCaptor.getValue().getBlockedFromStatus()).isEqualTo(UserStatus.ACTIVE);
 
             Mockito.verify(outboxEventService).saveOutboxEvent(
                     ArgumentMatchers.eq(REQUEST_ID),
@@ -144,7 +145,7 @@ class AdminUserManagementServiceImplTest {
         @Test
         @DisplayName("Должен вернуть NOT_FOUND, если пользователь не найден")
         void shouldReturnNotFoundWhenUserMissing() {
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.empty());
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.empty());
 
             StepVerifier.create(service.blockUser(REQUEST_ID, NODE_ID, requestDto))
                     .expectErrorMatches(error -> error instanceof DomainException domainException
@@ -158,7 +159,7 @@ class AdminUserManagementServiceImplTest {
         @DisplayName("Должен вернуть ABORTED, если пользователь уже BLOCKED")
         void shouldReturnAbortedWhenUserAlreadyBlocked() {
             User user = user(UserStatus.BLOCKED, GlobalRole.USER);
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.just(user));
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
 
             StepVerifier.create(service.blockUser(REQUEST_ID, NODE_ID, requestDto))
                     .expectErrorMatches(error -> error instanceof DomainException domainException
@@ -172,7 +173,7 @@ class AdminUserManagementServiceImplTest {
         @DisplayName("Должен вернуть FAILED_PRECONDITION для последнего active GLOBAL_ADMIN")
         void shouldRejectBlockingLastActiveGlobalAdmin() {
             User admin = user(UserStatus.ACTIVE, GlobalRole.GLOBAL_ADMIN);
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.just(admin));
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(admin));
             Mockito.when(userRepository.countByGlobalRoleAndStatus(GlobalRole.GLOBAL_ADMIN, UserStatus.ACTIVE))
                     .thenReturn(Mono.just(1L));
 
@@ -194,9 +195,10 @@ class AdminUserManagementServiceImplTest {
         @DisplayName("Должен разблокировать BLOCKED пользователя, сохранить outbox и вернуть DTO")
         void shouldUnblockBlockedUser() {
             User user = user(UserStatus.BLOCKED, GlobalRole.USER);
+            user.setBlockedFromStatus(UserStatus.ACTIVE);
             JsonNode mockPayload = new ObjectMapper().createObjectNode();
 
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.just(user));
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
             Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
                     .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
             Mockito.when(outboxEventMapper.buildUserUnblockedPayload(
@@ -227,6 +229,7 @@ class AdminUserManagementServiceImplTest {
             ArgumentCaptor<User> savedUserCaptor = ArgumentCaptor.forClass(User.class);
             Mockito.verify(userRepository).save(savedUserCaptor.capture());
             Assertions.assertThat(savedUserCaptor.getValue().getStatus()).isEqualTo(UserStatus.ACTIVE);
+            Assertions.assertThat(savedUserCaptor.getValue().getBlockedFromStatus()).isNull();
 
             Mockito.verify(outboxEventService).saveOutboxEvent(
                     ArgumentMatchers.eq(REQUEST_ID),
@@ -242,7 +245,7 @@ class AdminUserManagementServiceImplTest {
         @DisplayName("Должен вернуть ABORTED, если пользователь не BLOCKED")
         void shouldReturnAbortedWhenUserIsNotBlocked() {
             User user = user(UserStatus.ACTIVE, GlobalRole.USER);
-            Mockito.when(userRepository.findById(targetUserId)).thenReturn(Mono.just(user));
+            Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
 
             StepVerifier.create(service.unblockUser(REQUEST_ID, NODE_ID, requestDto))
                     .expectErrorMatches(error -> error instanceof DomainException domainException
@@ -251,6 +254,48 @@ class AdminUserManagementServiceImplTest {
 
             verifyNoPersistence();
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = UserStatus.class, names = {"INVITED", "ACTIVE"})
+    void blockUnblockRestoresDurableLifecycleStateWithoutInspectingPassword(UserStatus status) {
+        User user = user(status, GlobalRole.USER);
+        user.setCreatedVia(ru.taska.entity.UserCreatedVia.OAUTH);
+        Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
+                .thenAnswer(call -> Mono.just(call.getArgument(0)));
+        var payload = new ObjectMapper().createObjectNode();
+        Mockito.when(outboxEventMapper.buildUserBlockedPayload(ArgumentMatchers.any(), ArgumentMatchers.eq(status), ArgumentMatchers.eq(requestDto)))
+                .thenReturn(payload);
+        Mockito.when(outboxEventMapper.buildUserUnblockedPayload(ArgumentMatchers.any(), ArgumentMatchers.eq(UserStatus.BLOCKED), ArgumentMatchers.eq(requestDto)))
+                .thenReturn(payload);
+        Mockito.when(outboxEventService.saveOutboxEvent(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.eq(payload)))
+                .thenReturn(Mono.just(OutboxEvent.builder().build()));
+        StepVerifier.create(service.blockUser(REQUEST_ID, NODE_ID, requestDto))
+                .assertNext(result -> Assertions.assertThat(result.newStatus()).isEqualTo(UserStatus.BLOCKED)).verifyComplete();
+        Assertions.assertThat(user.getBlockedFromStatus()).isEqualTo(status);
+        StepVerifier.create(service.unblockUser(REQUEST_ID, NODE_ID, requestDto))
+                .assertNext(result -> Assertions.assertThat(result.newStatus()).isEqualTo(status)).verifyComplete();
+        Assertions.assertThat(user.getBlockedFromStatus()).isNull();
+        Mockito.verifyNoInteractions(credentialRepository);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void legacyBlocksUseInteractiveCredentialsRatherThanPasswordAlone(boolean activated) {
+        User user = user(UserStatus.BLOCKED, GlobalRole.USER);
+        Mockito.when(userRepository.findByIdForUpdate(targetUserId)).thenReturn(Mono.just(user));
+        Mockito.when(credentialRepository.hasInteractiveLogin(targetUserId)).thenReturn(Mono.just(activated));
+        Mockito.when(userRepository.save(ArgumentMatchers.any(User.class)))
+                .thenAnswer(call -> Mono.just(call.getArgument(0)));
+        var payload = new ObjectMapper().createObjectNode();
+        Mockito.when(outboxEventMapper.buildUserUnblockedPayload(ArgumentMatchers.any(), ArgumentMatchers.eq(UserStatus.BLOCKED), ArgumentMatchers.eq(requestDto)))
+                .thenReturn(payload);
+        Mockito.when(outboxEventService.saveOutboxEvent(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.eq(payload)))
+                .thenReturn(Mono.just(OutboxEvent.builder().build()));
+        StepVerifier.create(service.unblockUser(REQUEST_ID, NODE_ID, requestDto))
+                .assertNext(result -> Assertions.assertThat(result.newStatus()).isEqualTo(activated ? UserStatus.ACTIVE : UserStatus.INVITED))
+                .verifyComplete();
     }
 
     private void verifyNoPersistence() {

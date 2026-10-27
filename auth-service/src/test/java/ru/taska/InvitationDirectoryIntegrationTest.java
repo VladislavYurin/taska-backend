@@ -139,6 +139,31 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
     }
 
     @Test
+    void invitedAccountSurvivesAdminBlockUnblockAndAcceptsTheOriginalLink() {
+        var invited = invite("unblock-" + UUID.randomUUID() + "@example.test", "Invitee", false);
+        String token = rawToken(invited.getUserId());
+        var management = ru.taska.api.auth.admin.management.v1.ReactorAdminUserManagementServiceGrpc.newReactorStub(channel);
+        var blocked = management.blockUser(Mono.just(ru.taska.api.auth.admin.management.v1.BlockUserRequest.newBuilder()
+                .setHeader(header()).setBody(ru.taska.api.auth.admin.management.v1.BlockUserRequestBody.newBuilder()
+                        .setTargetUserId(invited.getUserId()).setActorUserId(admin.getId().toString()).setReason("review"))
+                .build())).block(TIMEOUT);
+        assertThat(blocked.getCurrentStatus()).isEqualTo(ru.taska.api.common.v1.UserStatus.USER_STATUS_BLOCKED);
+        assertCode(() -> activate(token, PASSWORD), Status.Code.UNAUTHENTICATED);
+        var unblocked = management.unblockUser(Mono.just(ru.taska.api.auth.admin.management.v1.UnblockUserRequest.newBuilder()
+                .setHeader(header()).setBody(ru.taska.api.auth.admin.management.v1.UnblockUserRequestBody.newBuilder()
+                        .setTargetUserId(invited.getUserId()).setActorUserId(admin.getId().toString()).setReason("approved"))
+                .build())).block(TIMEOUT);
+        assertThat(unblocked.getCurrentStatus()).isEqualTo(ru.taska.api.common.v1.UserStatus.USER_STATUS_INVITED);
+        assertThat(scalar("SELECT count(*) FROM taska.credentials WHERE user_id=:id", invited.getUserId())).isZero();
+        activate(token, PASSWORD);
+        var login = auth.login(Mono.just(LoginRequest.newBuilder().setHeader(header())
+                .setBody(LoginRequestBody.newBuilder().setEmail(users.findById(UUID.fromString(invited.getUserId()))
+                        .block(TIMEOUT).getEmail()).setPassword(PASSWORD)).build())).block(TIMEOUT);
+        assertThat(login.getAccessToken()).isNotBlank();
+        assertThat(users.findById(UUID.fromString(invited.getUserId())).block(TIMEOUT).getBlockedFromStatus()).isNull();
+    }
+
+    @Test
     void expiredInvitationCanBeReissuedWithoutRecreatingTheAccount() {
         String email = "expired-" + UUID.randomUUID() + "@example.test";
         var initial = invite(email, "Person", false);
