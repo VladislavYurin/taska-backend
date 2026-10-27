@@ -29,6 +29,17 @@ Invitations are serialized by a database transaction-scoped advisory lock on can
 
 Invalid, expired, revoked, already used or no-longer-INVITED activation attempts share the existing generic invalid-token response. Weak passwords do not consume the link. Passwords are also limited to 72 UTF-8 bytes for BCrypt; long multibyte inputs return a validation error rather than an encoder failure. Password hashing runs off the reactive event loop.
 
+Administrative block/unblock (TAS-435) preserves the lifecycle state in the internal
+`users.blocked_from_status` column: an unaccepted invitation returns to INVITED, while an
+activated password or OAuth account returns to ACTIVE. Blocking and activation serialize on
+the user row. Blocking does not consume an invitation link; after unblocking it can still
+be accepted if unexpired. The state change, restore marker and outbox event commit together.
+Deploy auth migration `0011-blocked-from-status.sql` before the updated auth-service.
+Legacy blocks are backfilled from interactive credentials or OAuth creation origin; accounts
+without activation evidence return to INVITED. API tokens alone do not prove activation.
+The backfill applies only to currently BLOCKED rows; it does not automatically repair
+accounts already changed to ACTIVE by an older unblock implementation.
+
 ## Directory
 
 `GET /api/v1/users?query=...&page=0&pageSize=20` returns `items` with only `id`, `displayName`, `email`, nullable `avatarUrl`, and `hasMore` for the page. It includes ACTIVE, INVITED and temporarily LOCKED accounts and omits BLOCKED accounts. This enables both member selection and assignment; the operation applying that choice must still enforce its own role and eligibility rules.

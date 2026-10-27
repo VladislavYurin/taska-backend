@@ -22,6 +22,14 @@ public interface CredentialRepository extends ReactiveCrudRepository<Credential,
     @Query("SELECT * FROM taska.credentials WHERE user_id = :userId AND credential_type = :credentialType")
     Mono<Credential> findPasswordCredential(UUID userId, String credentialType);
 
+    /** Compatibility for accounts blocked before blocked_from_status was introduced. */
+    @Query("""
+        SELECT EXISTS (SELECT 1 FROM taska.credentials WHERE user_id=:userId AND
+            ((credential_type='PASSWORD' AND secret_hash IS NOT NULL)
+             OR credential_type IN ('OAUTH','OIDC','SAML','WEBAUTHN')))
+        """)
+    Mono<Boolean> hasInteractiveLogin(UUID userId);
+
     @Query("UPDATE taska.credentials SET failed_attempts = :attempts, last_failed_at = :lastFailedAt, locked_until = :lockedUntil WHERE id = :credentialId")
     Mono<Integer> updateFailedAttempts(Integer attempts, Instant lastFailedAt, Instant lockedUntil, UUID credentialId);
 }

@@ -50,12 +50,13 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
             String nodeId,
             UserStatusRequestDto requestDto
     ) {
-        return userRepository.findById(requestDto.targetUserId())
+        return userRepository.findByIdForUpdate(requestDto.targetUserId())
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found")))
                 .flatMap(this::validateBlockStatusTransition)
                 .flatMap(this::verifyLastGlobalAdmin)
                 .flatMap(user -> {
                     UserStatus oldStatus = user.getStatus();
+                    user.setBlockedFromStatus(oldStatus);
                     user.setStatus(UserStatus.BLOCKED);
 
                     return userRepository.save(user)
@@ -91,12 +92,13 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
             String nodeId,
             UserStatusRequestDto requestDto
     ) {
-        return userRepository.findById(requestDto.targetUserId())
+        return userRepository.findByIdForUpdate(requestDto.targetUserId())
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found")))
                 .flatMap(this::validateUnblockStatusTransition)
-                .flatMap(user -> {
+                .flatMap(user -> statusAfterUnblock(user).flatMap(restoredStatus -> {
                     UserStatus oldStatus = user.getStatus();
-                    user.setStatus(UserStatus.ACTIVE);
+                    user.setStatus(restoredStatus);
+                    user.setBlockedFromStatus(null);
 
                     return userRepository.save(user)
                             .flatMap(savedUser -> {
@@ -117,7 +119,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                                             .changedAt(savedUser.getUpdatedAt())
                                             .build()
                             );
-                });
+                }));
     }
 
     /**
@@ -178,6 +180,14 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
     }
 
     ///=================== Utils ======================
+
+    private Mono<UserStatus> statusAfterUnblock(User user) {
+        if (user.getBlockedFromStatus() != null) return Mono.just(user.getBlockedFromStatus());
+        // A legacy/old-writer block has no snapshot. OAuth activation does not require a password.
+        if (user.getCreatedVia() == ru.taska.entity.UserCreatedVia.OAUTH) return Mono.just(UserStatus.ACTIVE);
+        return credentialRepository.hasInteractiveLogin(user.getId())
+                .map(activated -> activated ? UserStatus.ACTIVE : UserStatus.INVITED);
+    }
 
     private Mono<User> verifyLastGlobalAdmin(User user) {
         if (user.getGlobalRole() == GlobalRole.GLOBAL_ADMIN && user.getStatus() == UserStatus.ACTIVE) {
