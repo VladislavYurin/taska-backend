@@ -11,6 +11,7 @@ import ru.taska.exception.DomainStatus;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.core.type.TypeReference;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -114,9 +115,10 @@ public class SensitiveDataMaskService {
     }
 
     /**
-     * Приводит значение колонки к типу {@link Json} и применяет маскировку к его полям.
+     * Маскирует JSON, сохраняя представление колонки: Json, String, Map или JsonNode.
+     * Нормализация через JSON создаёт отдельное дерево и не меняет исходный audit snapshot.
      *
-     * @throws DomainException если значение колонки не является типом {@link Json}
+     * @throws DomainException если значение колонки имеет неподдерживаемый тип
      */
     private Object getMaskedJson(String columnName, Object columnValue, Map<String, MaskType> fieldNameMaskTypeMap){
         String jsonString;
@@ -126,15 +128,23 @@ public class SensitiveDataMaskService {
             jsonString = ((Json) columnValue).asString();
         } else if (columnValue instanceof String str) {
             jsonString = str;
+        } else if (columnValue instanceof Map<?, ?> || columnValue instanceof JsonNode) {
+            jsonString = OBJECT_MAPPER.writeValueAsString(columnValue);
         } else {
             String message = "Cannot mask JSON fields in column '" + columnName
-                    + "': expected Json or String type, but got "
+                    + "': expected Json, String, Map or JsonNode type, but got "
                     + (columnValue == null ? "null" : columnValue.getClass().getSimpleName());
             log.warn(message);
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
 
         String maskedJson = maskJsonFields(jsonString, fieldNameMaskTypeMap);
+        if (columnValue instanceof Map<?, ?>) {
+            return OBJECT_MAPPER.readValue(maskedJson, new TypeReference<Map<String, Object>>() { });
+        }
+        if (columnValue instanceof JsonNode) {
+            return OBJECT_MAPPER.readTree(maskedJson);
+        }
         return isR2dbcJson ? Json.of(maskedJson) : maskedJson;
     }
 
@@ -153,7 +163,7 @@ public class SensitiveDataMaskService {
         try {
             rootNode = OBJECT_MAPPER.readTree(jsonString);
         } catch (Exception e) {
-            String message = "Cannot mask JSON fields: failed to parse JSON — " + e.getMessage();
+            String message = "Cannot mask JSON fields: failed to parse JSON";
             log.warn(message);
             throw new DomainException(DomainStatus.INTERNAL, message);
         }
@@ -171,9 +181,19 @@ public class SensitiveDataMaskService {
 
     /**
      * Рекурсивно обходит JSON-объект и маскирует поля, имена которых совпадают с ключами {@code fieldsToMask}.
-     * Вложенные объекты обрабатываются рекурсивно — маскировка применяется на всех уровнях вложенности.
+     * Вложенные объекты и массивы обрабатываются рекурсивно на всех уровнях вложенности.
      */
-    private void maskJsonFieldsRecursive(ObjectNode node, Map<String, MaskType> fieldsToMask) {
+    private void maskJsonFieldsRecursive(JsonNode value, Map<String, MaskType> fieldsToMask) {
+        if (value.isArray()) {
+            for (JsonNode child : value) {
+                maskJsonFieldsRecursive(child, fieldsToMask);
+            }
+            return;
+        }
+        if (!value.isObject()) {
+            return;
+        }
+        ObjectNode node = (ObjectNode) value;
         List<String> propertyNames = new ArrayList<>(node.propertyNames());
 
         for (String fieldName : propertyNames) {
@@ -194,8 +214,8 @@ public class SensitiveDataMaskService {
             } else {
                 // Рекурсивный обход вложенных объектов, которые не были замаскированы
                 JsonNode child = node.get(fieldName);
-                if (child != null && child.isObject()) {
-                    maskJsonFieldsRecursive((ObjectNode) child, fieldsToMask);
+                if (child != null) {
+                    maskJsonFieldsRecursive(child, fieldsToMask);
                 }
             }
         }

@@ -18,6 +18,8 @@ import ru.taska.domain.OutboxStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.service.OutboxRetryService;
+import ru.taska.service.AdminReadonlyService;
+import ru.taska.dto.FilterAuditDTO;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -80,6 +82,9 @@ class OutboxRetryServiceIT {
 
     @Autowired
     private OutboxRetryService outboxRetryService;
+
+    @Autowired
+    private AdminReadonlyService adminReadonlyService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -397,6 +402,28 @@ class OutboxRetryServiceIT {
         assertEquals("user@example.com", auditedNewPayload.get("email").asString());
         assertEquals("Ivan", auditedOldPayload.get("displayName").asString());
         assertEquals("Ivan", auditedNewPayload.get("displayName").asString());
+
+        // TAS-442: DB JSON becomes nested Maps during audit reads; keep payload an object.
+        for (int read = 0; read < 2; read++) {
+            StepVerifier.create(adminReadonlyService.listAuditEntries(
+                            FilterAuditDTO.builder().requestId(REQUEST_ID).build(), 0, 20))
+                    .assertNext(page -> {
+                        assertEquals(1, page.totalCount());
+                        assertEquals(1, page.items().size());
+                        var entry = page.items().getFirst();
+                        for (JsonNode snapshot : List.of(entry.oldValue(), entry.newValue())) {
+                            JsonNode payload = snapshot.get("payload");
+                            assertEquals(true, payload.isObject());
+                            assertEquals("user@example.com", payload.get("email").asString());
+                            assertFalse(payload.has("rawInviteToken"));
+                            assertFalse(snapshot.toString().contains("SECRET-TOKEN-123"));
+                        }
+                    })
+                    .verifyComplete();
+        }
+        AuditRow afterRead = readAudit(REQUEST_ID);
+        assertEquals(audit.oldValue(), afterRead.oldValue());
+        assertEquals(audit.newValue(), afterRead.newValue());
     }
 
     /**

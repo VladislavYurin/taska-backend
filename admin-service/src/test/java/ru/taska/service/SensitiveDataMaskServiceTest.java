@@ -493,7 +493,7 @@ class SensitiveDataMaskServiceTest {
         Assertions.assertThatThrownBy(() ->
                         maskService.maskSensitiveData(rows, TEST_SERVICE, TEST_TABLE, "test-request-id", "test-node-id"))
                 .isInstanceOf(DomainException.class)
-                .hasMessageContaining("expected Json or String type");
+                .hasMessageContaining("expected Json, String, Map or JsonNode type");
     }
 
     @Test
