@@ -39,15 +39,18 @@ public class ProjectWorkflowListService {
     private final TransitionRepository transitionRepository;
     private final WorkflowProperties workflowProperties;
     private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+    private final WorkflowWriteFence fence;
 
     @Transactional(readOnly = true)
     public Mono<List<ProjectWorkflowAggregate>> listProjectWorkflows(String requestId, String nodeId, UUID projectId, UUID actorUserId) {
         UUID defaultProjectId = workflowProperties.defaultProjectId();
-        return projectClient.listIssueTypeDetails(requestId, nodeId, projectId, actorUserId).flatMap(allowedTypes -> bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId))
+        return projectClient.listIssueTypeDetails(requestId, nodeId, projectId, actorUserId).flatMap(allowedTypes -> fence.requireReadable(projectId).thenMany(bindingRepository.findByProjectIdIn(List.of(projectId, defaultProjectId)))
                 .filter(binding -> binding.getProjectId().equals(defaultProjectId) || allowedTypes.stream().anyMatch(type -> IssueTypeBindingIdentity.matches(binding, type)))
                 .collectList()
-                .flatMap(bindings -> workflowRepository
-                        .findAllById(bindings.stream().map(WorkflowBindingEntity::getWorkflowId).distinct().toList())
+                .flatMap(bindings -> Flux.concat(workflowRepository
+                        .findAllById(bindings.stream().map(WorkflowBindingEntity::getWorkflowId).distinct().toList()),
+                                workflowRepository.findOwnedByProject(projectId))
+                        .distinct(WorkflowEntity::getId)
                         .filter(WorkflowEntity::isActive)
                         .collectMap(WorkflowEntity::getId)
                         .flatMap(activeWorkflows -> {
@@ -60,6 +63,9 @@ public class ProjectWorkflowListService {
                                                 .computeIfAbsent(workflowId, id -> new ArrayList<>())
                                                 .add(issueType));
                             }
+                            activeWorkflows.values().stream().filter(w -> projectId.equals(w.getOwnerProjectId()))
+                                    .sorted(java.util.Comparator.comparing(w -> w.getId().toString()))
+                                    .forEach(w -> issueTypesByWorkflow.putIfAbsent(w.getId(),new ArrayList<>()));
                             return Flux.fromIterable(issueTypesByWorkflow.entrySet())
                                     .concatMap(entry -> loadWithAllTransitions(activeWorkflows.get(entry.getKey()))
                                             .map(aggregate -> new ProjectWorkflowAggregate(

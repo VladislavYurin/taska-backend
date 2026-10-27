@@ -41,7 +41,9 @@ class GrpcProjectIssueTypeClientTest {
         var answer = ProjectIssueTypeResponse.newBuilder().setCode("REQUEST").setName("Request").setColor("teal")
                 .setShape("square").setLegacyIcon("check-square").setSortOrder(10).build();
         when(stub.updateProjectIssueType(any(ChangeProjectIssueTypeRequest.class))).thenReturn(Mono.just(answer));
-        when(stub.createProjectIssueType(any(ChangeProjectIssueTypeRequest.class))).thenReturn(Mono.just(answer));
+        when(stub.createProjectIssueTypeWithWorkflow(any(ChangeProjectIssueTypeRequest.class))).thenReturn(Mono.just(
+                ru.taska.api.project.v1.CreateProjectIssueTypeWithWorkflowResult.newBuilder()
+                        .setIssueType(answer).setWorkflowId(project.toString()).build()));
     }
 
     @Test
@@ -75,9 +77,13 @@ class GrpcProjectIssueTypeClientTest {
         client.create(project, plain, context).block();
         var full = json.readValue("{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"shape\":\"circle\",\"icon\":\"flag\"}",
                 CreateProjectIssueTypeRequestDto.class);
-        client.create(project, full, context).block();
+        full.setWorkflowId(project.toString());
+        var created = client.create(project, full, context).block();
+        assertThat(created.getWorkflowId()).isEqualTo(project);
         var captor = ArgumentCaptor.forClass(ChangeProjectIssueTypeRequest.class);
-        verify(stub, times(2)).createProjectIssueType(captor.capture());
+        verify(stub, times(2)).createProjectIssueTypeWithWorkflow(captor.capture());
+        assertThat(captor.getAllValues().get(0).hasWorkflowId()).isFalse();
+        assertThat(captor.getAllValues().get(1).getWorkflowId()).isEqualTo(project.toString());
         assertThat(captor.getAllValues().get(0).hasShape()).isFalse();
         assertThat(captor.getAllValues().get(0).hasIcon()).isFalse();
         assertThat(captor.getAllValues().get(1).getShape()).isEqualTo("circle");

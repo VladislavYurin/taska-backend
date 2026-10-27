@@ -56,6 +56,26 @@ public class GrpcWorkflowServiceClient {
                                 java.util.Map.of("reason", "STATUS_NOT_IN_WORKFLOW"))));
     }
 
+    public Mono<Void> requireWorkflowVersion(String requestId,String nodeId,UUID project,UUID actor,
+            java.util.List<ru.taska.domain.IssueType> types,UUID expectedWorkflow,int expectedVersion) {
+        return reactorWorkflowServiceStub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
+                .listProjectWorkflows(ru.taska.api.workflow.v1.ListProjectWorkflowsRequest.newBuilder()
+                        .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
+                        .setBody(ru.taska.api.workflow.v1.ListProjectWorkflowsRequestBody.newBuilder()
+                                .setProjectId(project.toString()).setActorUserId(actor.toString())).build())
+                .flatMap(result->{
+                    boolean valid=types.stream().allMatch(type->result.getWorkflowsList().stream().anyMatch(bound->{
+                        boolean matches=bound.getIssueTypeKeysList().contains(type.name())
+                                ||bound.getIssueTypeKeysCount()==0&&bound.getIssueTypesList().stream()
+                                .anyMatch(legacy->legacy.name().equals("ISSUE_TYPE_"+type.name()));
+                        return matches&&bound.getWorkflow().getId().equals(expectedWorkflow.toString())
+                                &&bound.getWorkflow().getVersion()==expectedVersion;
+                    }));
+                    return valid?Mono.empty():Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.ABORTED,
+                            "Workflow binding or version changed",java.util.Map.of("reason","WORKFLOW_CHANGED")));
+                });
+    }
+
     /**
      * Отправляет запрос {@link ValidateTransitionRequest} в workflow-service для валидации перехода по workflow.
      */
@@ -83,7 +103,7 @@ public class GrpcWorkflowServiceClient {
                                 .setIssueSnapshot(issueMapper.toIssueValidateSnapshotProto(issue))
                                 .setTransitionId(transitionId.toString())
                                 .setActorUserId(actorUserId.toString())
-                                .setPayload(payload)
+                                .setPayload(payload == null ? "" : payload)
                                 .build()
                 )
                 .build();

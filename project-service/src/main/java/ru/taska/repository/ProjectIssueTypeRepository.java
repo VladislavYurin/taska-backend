@@ -69,6 +69,13 @@ public class ProjectIssueTypeRepository {
                 """), type).map((r, m) -> read(r)).one();
     }
 
+    public Mono<ProjectIssueType> insertWithGeneration(ProjectIssueType type) {
+        return bind(db.sql("""
+                INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,shape,sort_order,generation)
+                VALUES(:project,:code,:name,:color,:icon,:shape,:order,:generation) RETURNING *
+                """),type).bind("generation",type.generation()).map((row,metadata)->read(row)).one();
+    }
+
     public Mono<ProjectIssueType> update(ProjectIssueType type) {
         return bind(db.sql("""
                 UPDATE taska.project_issue_types SET name=:name,color=:color,icon=:icon,shape=:shape,

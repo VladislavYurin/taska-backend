@@ -112,6 +112,27 @@ jobs:
         if: matrix.mod.module == 'auth-service'
         run: mvn -B -ntp -pl auth-service -am test -Dtest=InvitedUnblockIT -Dsurefire.failIfNoSpecifiedTests=false
 
+      - name: Workflow binding issue PostgreSQL contract
+        if: matrix.mod.module == 'issue-service'
+        run: >-
+          mvn -B -ntp -pl issue-service -am test
+          -Dtest=WorkflowBindingMigrationIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Atomic issue type creation PostgreSQL contract
+        if: matrix.mod.module == 'project-service'
+        run: >-
+          mvn -B -ntp -pl project-service -am test
+          -Dtest=IssueTypeCreationIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
+      - name: Workflow binding assignment PostgreSQL contract
+        if: matrix.mod.module == 'workflow-service'
+        run: >-
+          mvn -B -ntp -pl workflow-service -am test
+          -Dtest=WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT
+          -Dsurefire.failIfNoSpecifiedTests=false
+
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4

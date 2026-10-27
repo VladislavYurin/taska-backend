@@ -22,6 +22,16 @@ public class GrpcWorkflowServiceAdapter  extends ReactorWorkflowServiceGrpc.Work
     private final GrpcWorkflowService grpcWorkflowService;
     private final WorkflowMutationGrpcService mutations;
     private final ru.taska.service.WorkflowMutationResponse mutationResponse;
+    private final WorkflowBindingGrpcService bindingOperations;
+
+    @Override
+    public Mono<ru.taska.api.workflow.v1.WorkflowBindingOperationResult> createProjectWorkflowWithBindings(Mono<CreateWorkflowRequest> request) {
+        return bindingOperations.create(request).transform(GrpcExceptionHandler.withErrorHandling("createProjectWorkflowWithBindings"));
+    }
+    @Override
+    public Mono<ru.taska.api.workflow.v1.WorkflowBindingOperationResult> updateProjectWorkflowWithBindings(Mono<ru.taska.api.workflow.v1.WorkflowMutationRequest> request) {
+        return bindingOperations.update(request).transform(GrpcExceptionHandler.withErrorHandling("updateProjectWorkflowWithBindings"));
+    }
 
     @Override
     public Mono<WorkflowResponse> getWorkflowForProject(Mono<GetWorkflowForProjectRequest> request) {

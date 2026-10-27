@@ -16,6 +16,15 @@ import java.util.UUID;
 public interface IssueRepository extends ReactiveCrudRepository<Issue, UUID>, IssueRepositoryCustom {
     @Query("SELECT count(*) FROM taska.issues WHERE project_id=:project AND issue_type=:type AND deleted_at IS NULL")
     Mono<Long> countLiveByProjectAndType(UUID project,String type);
+    @Query("""
+            SELECT i.* FROM taska.issues i
+            JOIN jsonb_to_recordset(CAST(:destinations AS jsonb)) AS d(code text,statuses jsonb) ON d.code=i.issue_type
+            WHERE i.project_id=:project AND i.deleted_at IS NULL
+              AND (NOT jsonb_exists(d.statuses,i.status_key)
+                   OR COALESCE(CAST(:mapping AS jsonb)->>i.status_key,i.status_key)<>i.status_key)
+            ORDER BY i.id LIMIT 5001 FOR UPDATE OF i
+            """)
+    Flux<Issue> findForWorkflowBindingMove(UUID project,String destinations,String mapping);
     @Query("SELECT * FROM taska.issues WHERE project_id=:project AND issue_type=:type AND deleted_at IS NULL ORDER BY id LIMIT 5001 FOR UPDATE")
     Flux<Issue> findForIssueTypeMove(UUID project,String type);
     @Query("UPDATE taska.issues SET issue_type=:target,status_key=:status,version=version+1,updated_at=now() WHERE id=:id AND version=:version AND issue_type=:source AND deleted_at IS NULL RETURNING *")

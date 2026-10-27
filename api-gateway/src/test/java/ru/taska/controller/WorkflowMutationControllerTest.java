@@ -142,6 +142,51 @@ class WorkflowMutationControllerTest {
                 .header(HttpHeaders.CONTENT_TYPE, "application/json").exchange().expectStatus().isOk();
     }
 
+    @Test
+    void bindingPatchNeedsNoNameAndPreservesItsCompleteSetAndMappings() {
+        authenticated(); reply(Mono.just(response()));
+        http.patch().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"version\":4,\"issueTypes\":[\"TASK\",\"EPIC\"],\"statusMappings\":{\"BACKLOG\":\"TODO\"}}")
+                .exchange().expectStatus().isOk();
+        verify(client).mutate(any(), any(), any(), nullable(UUID.class), nullable(UUID.class),
+                argThat(command -> command.getName() == null && command.getVersion() == 4
+                        && command.getIssueTypes().equals(List.of("TASK", "EPIC"))
+                        && command.getStatusMappings().equals(java.util.Map.of("BACKLOG", "TODO"))),
+                nullable(Integer.class), nullable(String.class), any());
+    }
+
+    @Test
+    void emptyBindingSetReachesBackendAndRetainsStableReason() {
+        authenticated(); reply(Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.INVALID_ARGUMENT,
+                "Workflow must have issue types", java.util.Map.of("reason", "WORKFLOW_ISSUE_TYPES_EMPTY"))));
+        http.patch().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"version\":4,\"issueTypes\":[]}")
+                .exchange().expectStatus().isBadRequest().expectBody()
+                .jsonPath("$.details.reason").isEqualTo("WORKFLOW_ISSUE_TYPES_EMPTY");
+        verify(client).mutate(any(), any(), any(), nullable(UUID.class), nullable(UUID.class),
+                argThat(command -> command.getIssueTypes() != null && command.getIssueTypes().isEmpty()),
+                nullable(Integer.class), nullable(String.class), any());
+    }
+
+    @Test
+    void bindingPatchRejectsNullDuplicateMalformedAndMissingVersionBeforeRpc() {
+        authenticated();
+        for (String body : List.of("{\"issueTypes\":[\"TASK\"]}", "{\"version\":1}",
+                "{\"version\":1,\"issueTypes\":null}", "{\"version\":1,\"issueTypes\":[\"TASK\",\"TASK\"]}",
+                "{\"version\":1,\"issueTypes\":[\"bad-key\"]}", "{\"version\":1,\"issueTypes\":[null]}",
+                "{\"version\":1,\"issueTypes\":[\"TASK\"],\"statusMappings\":null}",
+                "{\"version\":1,\"issueTypes\":[\"TASK\"],\"statusMappings\":{\"BACKLOG\":null}}",
+                "{\"version\":1,\"issueTypes\":[\"TASK\"],\"statusMappings\":{\"bad-key\":\"TODO\"}}",
+                "{\"name\":\"Rename\",\"statusMappings\":{\"BACKLOG\":\"TODO\"}}")) {
+            http.patch().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON).bodyValue(body)
+                    .exchange().expectStatus().isBadRequest();
+        }
+        verifyNoInteractions(client);
+    }
+
     private void reply(Mono<ProjectWorkflowDto> response) {
         when(client.mutate(any(), any(), any(), nullable(UUID.class), nullable(UUID.class), any(),
                 nullable(Integer.class), nullable(String.class), any())).thenReturn(response);

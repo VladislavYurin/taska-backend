@@ -14,7 +14,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -28,31 +27,50 @@ import ru.taska.repository.ProjectIssueTypeRepository;
 class ProjectIssueTypeServiceTest {
     @Mock private ProjectWriteGuard writeGuard;
     @org.junit.jupiter.api.BeforeEach
-    void writable() { lenient().when(writeGuard.check(any(), any())).thenReturn(reactor.core.publisher.Mono.empty()); }
+    void writable() {
+        lenient().when(writeGuard.check(any(), any())).thenReturn(Mono.empty());
+        lenient().when(operations.requireFree(any())).thenReturn(Mono.empty());
+        lenient().when(operations.reserve(any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(creationJournal.request(any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(creationJournal.insert(any())).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+        lenient().when(repository.find(any(), any())).thenReturn(Mono.empty());
+        lenient().when(repository.list(project)).thenReturn(Flux.just(type("TASK")));
+        creation = new IssueTypeCreationTransactions(repository, operations, creationJournal, writeGuard,
+                tools.jackson.databind.json.JsonMapper.builder().build());
+    }
     private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
     @Mock ProjectIssueTypeRepository repository;
     @Mock ProjectService projects;
+    @Mock ru.taska.repository.ProjectTypeOperationRepository operations;
+    @Mock ru.taska.repository.IssueTypeCreationRepository creationJournal;
+    private IssueTypeCreationTransactions creation;
     @InjectMocks ProjectIssueTypeService service;
 
     @Test
-    void createsCustomTypeAndMirrorsLegacySettings() {
+    void creationDraftKeepsCustomMetadataHiddenUntilWorkflowBindingIsConfirmed() {
         authorize(ProjectRole.ADMIN);
-        when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.create(project, actor, "REQUEST", " Заявка ", "teal", "headset", null, 40))
+        StepVerifier.create(create("REQUEST", " Заявка ", "teal", "headset", null, 40))
                 .assertNext(type -> {
                     assertThat(type.code()).isEqualTo("REQUEST");
                     assertThat(type.name()).isEqualTo("Заявка");
                     assertThat(type.sortOrder()).isEqualTo(40);
                 }).verifyComplete();
-        verify(repository).syncLegacySettings(project, actor);
+        var captured = org.mockito.ArgumentCaptor.forClass(ru.taska.domain.IssueTypeCreation.class);
+        verify(creationJournal).insert(captured.capture());
+        assertThat(captured.getValue().state()).isEqualTo("PENDING");
+        assertThat(captured.getValue().firstTypeCode()).isEqualTo("TASK");
+        assertThat(captured.getValue().firstTypeGeneration()).isEqualTo(type("TASK").generation());
+        assertThat(captured.getValue().desiredWorkflowId()).isNull();
+        verify(repository, never()).insert(any());
+        verify(repository, never()).insertWithGeneration(any());
+        verify(repository, never()).syncLegacySettings(any(), any());
     }
 
     @ParameterizedTest
     @EnumSource(value = ProjectRole.class, names = {"MEMBER", "VIEWER", "UNSPECIFIED"})
     void onlyProjectAdminMayWrite(ProjectRole role) {
         authorize(role);
-        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", "headset", null, null))
+        StepVerifier.create(create("REQUEST", "Request", "blue", "headset", null, null))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.PERMISSION_DENIED)).verify();
         verify(repository, never()).insert(any());
     }
@@ -70,8 +88,8 @@ class ProjectIssueTypeServiceTest {
     @Test
     void duplicateCodeIs409() {
         authorize(ProjectRole.ADMIN);
-        when(repository.insert(any())).thenReturn(Mono.error(new DuplicateKeyException("duplicate")));
-        StepVerifier.create(service.create(project, actor, "TASK", "Task", "blue", null, "square", 10))
+        when(repository.find(project, "TASK")).thenReturn(Mono.just(type("TASK")));
+        StepVerifier.create(create("TASK", "Task", "blue", null, "square", 10))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.ALREADY_EXISTS)).verify();
         verify(repository, never()).syncLegacySettings(any(), any());
     }
@@ -79,7 +97,7 @@ class ProjectIssueTypeServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "a", "request", "A-B", " TASK", "TASK ", "TOO_LONG_12345678901234567890123456789"})
     void invalidCodesAreRejectedBeforeWriting(String code) {
-        StepVerifier.create(service.create(project, actor, code, "Request", "blue", "headset", null, 1))
+        StepVerifier.create(create(code, "Request", "blue", "headset", null, 1))
                 .expectErrorSatisfies(e -> assertStatus(e, DomainStatus.INVALID_ARGUMENT)).verify();
         verifyNoInteractions(repository);
     }
@@ -102,9 +120,7 @@ class ProjectIssueTypeServiceTest {
     @Test
     void createWithoutShapeOrIconIsPlainSquare() {
         authorize(ProjectRole.ADMIN);
-        when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "teal", null, null, null))
+        StepVerifier.create(create("REQUEST", "Request", "teal", null, null, null))
                 .assertNext(type -> {
                     assertThat(type.shape()).isEqualTo("square");
                     assertThat(type.icon()).isNull();
@@ -115,9 +131,7 @@ class ProjectIssueTypeServiceTest {
     @Test
     void createKeepsChosenShapeAndIcon() {
         authorize(ProjectRole.ADMIN);
-        when(repository.insert(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
-        when(repository.syncLegacySettings(project, actor)).thenReturn(Mono.empty());
-        StepVerifier.create(service.create(project, actor, "MILESTONE", "Milestone", "amber", "flag", "diamond", 40))
+        StepVerifier.create(create("MILESTONE", "Milestone", "amber", "flag", "diamond", 40))
                 .assertNext(type -> {
                     assertThat(type.shape()).isEqualTo("diamond");
                     assertThat(type.icon()).isEqualTo("flag");
@@ -127,7 +141,7 @@ class ProjectIssueTypeServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "hexagon", "Square", "SQUARE"})
     void invalidShapeIsRefusedOnCreateAndPatchWithoutWriting(String shape) {
-        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", null, shape, 1))
+        StepVerifier.create(create("REQUEST", "Request", "blue", null, shape, 1))
                 .expectErrorSatisfies(e -> assertInvalidLook(e)).verify();
         authorize(ProjectRole.ADMIN);
         when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
@@ -139,7 +153,7 @@ class ProjectIssueTypeServiceTest {
 
     @Test
     void invalidIconIsStillRefused() {
-        StepVerifier.create(service.create(project, actor, "REQUEST", "Request", "blue", "rocket", null, 1))
+        StepVerifier.create(create("REQUEST", "Request", "blue", "rocket", null, 1))
                 .expectErrorSatisfies(e -> assertInvalidLook(e)).verify();
         verifyNoInteractions(repository);
     }
@@ -215,6 +229,11 @@ class ProjectIssueTypeServiceTest {
         verify(repository, never()).syncLegacySettings(any(), any());
     }
 
+    private Mono<ProjectIssueType> create(String code, String name, String color, String icon, String shape, Integer sortOrder) {
+        return creation.begin(project, actor, "metadata-unit", "project-service", code, name, color, icon, shape,
+                sortOrder, null, ru.taska.domain.ActionMetadata.NONE).map(ru.taska.domain.IssueTypeCreation::type);
+    }
+
     private void patchable() {
         authorize(ProjectRole.ADMIN);
         when(repository.find(project, "BUG")).thenReturn(Mono.just(type("BUG")));
@@ -233,7 +252,8 @@ class ProjectIssueTypeServiceTest {
     }
 
     private ProjectIssueType type(String code) {
-        return new ProjectIssueType(project, code, "Name", "blue", "bug", "square", 10, null, null);
+        return new ProjectIssueType(project, code, "Name", "blue", "bug", "square", 10, null, null,
+                UUID.nameUUIDFromBytes(code.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private void assertStatus(Throwable e, DomainStatus status) {

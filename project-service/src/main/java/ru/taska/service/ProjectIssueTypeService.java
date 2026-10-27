@@ -6,7 +6,6 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import nullable.NullableField;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -26,24 +25,11 @@ public class ProjectIssueTypeService {
     private final ProjectIssueTypeRepository repository;
     private final ProjectService projectService;
     private final ProjectWriteGuard writeGuard;
+    private final ru.taska.repository.ProjectTypeOperationRepository operations;
 
     public Flux<ProjectIssueType> list(UUID projectId, UUID actor, String requestId, String nodeId) {
         return projectService.getProject(requestId, nodeId, projectId, actor)
                 .thenMany(Flux.defer(() -> repository.list(projectId)));
-    }
-
-    /** {@code icon} null means no icon; {@code shape} null means square. */
-    @Transactional
-    public Mono<ProjectIssueType> create(UUID projectId, UUID actor, String code, String name,
-                                         String color, String icon, String shape, Integer sortOrder) {
-        return Mono.defer(() -> {
-            validateCode(code);
-            ProjectIssueType type = validate(new ProjectIssueType(projectId, code, name, color, icon,
-                    shape == null ? ProjectIssueTypes.DEFAULT_SHAPE : shape, sortOrder == null ? 100 : sortOrder, null, null));
-            return authorizeWrite(projectId, actor).then(Mono.defer(() -> repository.insert(type)))
-                    .flatMap(saved -> repository.syncLegacySettings(projectId, actor).thenReturn(saved));
-        }).onErrorMap(DuplicateKeyException.class, e -> new DomainException(DomainStatus.ALREADY_EXISTS,
-                "Issue type " + code + " already exists in this project"));
     }
 
     /**
@@ -94,7 +80,8 @@ public class ProjectIssueTypeService {
                 .then(Mono.defer(() -> repository.lockActorRole(projectId, actor)))
                 .filter(role -> role == ProjectRole.ADMIN)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Project ADMIN role is required")))
-                .then(Mono.defer(() -> writeGuard.check(projectId, actor)));
+                .then(Mono.defer(() -> writeGuard.check(projectId, actor)))
+                .then(Mono.defer(()->operations.requireFree(projectId)));
     }
 
     private Mono<ProjectIssueType> requireType(UUID projectId, String code) {
@@ -102,13 +89,13 @@ public class ProjectIssueTypeService {
                 new DomainException(DomainStatus.NOT_FOUND, "Issue type not found in this project")));
     }
 
-    private static void validateCode(String code) {
+    static void validateCode(String code) {
         if (code == null || !code.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
             throw new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid issue type code");
         }
     }
 
-    private ProjectIssueType validate(ProjectIssueType type) {
+    static ProjectIssueType validate(ProjectIssueType type) {
         if (type.name() == null || type.name().isBlank() || type.name().length() > 50
                 || !COLORS.contains(type.color() == null ? "" : type.color())
                 || type.icon() != null && !ICONS.contains(type.icon())

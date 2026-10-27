@@ -22,6 +22,7 @@ public class IssueTypeDeletionTransactions {
   private final ProjectIssueTypeRepository types;
   private final IssueTypeDeletionRepository journal;
   private final ProjectWriteGuard writeGuard;
+  private final ru.taska.repository.ProjectTypeOperationRepository operations;
 
   @Transactional
   public Mono<IssueTypeDeletion> begin(UUID project,UUID actor,String source,String target,
@@ -57,7 +58,7 @@ public class IssueTypeDeletionTransactions {
           Map.of("reason","LAST_ISSUE_TYPE")));
       var item=new IssueTypeDeletion(UUID.randomUUID(),project,current.code(),current.generation(),target,
           target==null?null:generation,actor,Map.copyOf(mapping),"PENDING",request,node,attribution,null,null,Map.of(),false);
-      return journal.insert(item).flatMap(saved->journal.fence(saved).flatMap(fenced->
+      return operations.reserve(project,item.id(),"DELETE_TYPE").then(journal.insert(item)).flatMap(saved->journal.fence(saved).flatMap(fenced->
           fenced==(target==null?1:2)?Mono.just(saved):Mono.error(changed(current))));
     }));
   }
@@ -77,7 +78,7 @@ public class IssueTypeDeletionTransactions {
           .then(journal.deleteSource(current)).flatMap(deleted->deleted==1?Mono.empty():Mono.error(
               new DomainException(DomainStatus.ABORTED,"Issue type deletion did not match its generation")))
           .then(journal.clearFence(current)).then(types.syncLegacySettings(current.projectId(),current.actor()))
-          .then(journal.terminal(current,"COMPLETED"));
+          .then(journal.terminal(current,"COMPLETED")).then(operations.close(current.projectId(),current.id(),"DELETE_TYPE"));
     });
   }
 
@@ -91,7 +92,7 @@ public class IssueTypeDeletionTransactions {
   public Mono<Void> cancel(IssueTypeDeletion item) {
     return lock(item.projectId()).then(require(item)).flatMap(current->{
       if(current.state().equals("COMPLETED"))return Mono.error(new DomainException(DomainStatus.ABORTED,"Deletion already completed"));
-      return journal.clearFence(current).then(journal.terminal(current,"CANCELLED"));
+      return journal.clearFence(current).then(journal.terminal(current,"CANCELLED")).then(operations.close(current.projectId(),current.id(),"DELETE_TYPE"));
     });
   }
 

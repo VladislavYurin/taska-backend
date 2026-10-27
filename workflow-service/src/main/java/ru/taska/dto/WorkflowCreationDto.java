@@ -15,4 +15,6 @@ public class WorkflowCreationDto {
     private List<IssueType> issueTypes;
     private List<CreateWorkflowStatusDto> statuses;
     private List<CreateWorkflowTransitionDto> transitions;
+    @Builder.Default
+    private java.util.Map<String,String> statusMappings = java.util.Map.of();
 }

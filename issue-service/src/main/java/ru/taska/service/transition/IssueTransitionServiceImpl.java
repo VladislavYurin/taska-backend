@@ -73,7 +73,7 @@ public class IssueTransitionServiceImpl implements IssueTransitionService {
                         .validateTransition(requestId, nodeId, issue, transitionId, actorUserId, payload)
                         .flatMap(targetStatus -> issueTransitionExecutor.executeTransition(
                                 requestId, nodeId, issueId, targetStatus, transitionId, actorUserId,
-                                expectedVersion != null ? expectedVersion : issue.getVersion())));
+                                expectedVersion != null ? expectedVersion : issue.getVersion(),payload)));
     }
 
 }

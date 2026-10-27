@@ -20,6 +20,7 @@ import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
 public class IssueTypeWriteGuard {
   private final DatabaseClient db;
   private final GrpcProjectServiceClient projects;
+  private final WorkflowBindingPendingGuard bindingGuard;
   public Mono<Void> lock(UUID project) {
     return db.sql("SELECT pg_advisory_xact_lock(hashtextextended(:project,433))")
         .bind("project",project.toString()).map((r,m)->1).one().then();
@@ -32,7 +33,8 @@ public class IssueTypeWriteGuard {
     return requireActive(request,node,project,actor,List.of(target),List.of(source));
   }
   private Mono<Void> requireActive(String request,String node,UUID project,UUID actor,Collection<IssueType> required,Collection<IssueType> optional) {
-    return projects.listIssueTypeDetails(request,node,project,actor).flatMap(types-> {
+    var scope=new java.util.ArrayList<>(required); scope.addAll(optional);
+    return bindingGuard.requireWritable(project,scope).then(Mono.defer(()->projects.listIssueTypeDetails(request,node,project,actor))).flatMap(types-> {
       var requested=new java.util.ArrayList<>(required);
       optional.stream().filter(type->types.stream().anyMatch(t->t.getCode().equals(type.name()))).forEach(requested::add);
       return

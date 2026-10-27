@@ -30,6 +30,8 @@ import ru.taska.transport.kafka.OutboxEventScheduler;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
 class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
     @MockitoBean OutboxEventScheduler scheduler;
     @MockitoBean GrpcProjectServiceClient projects;
     @Autowired IssueRepository repository;
@@ -39,6 +41,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
 
     @BeforeEach
     void admin() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
         when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
                 CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
                         .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(false).build()));

@@ -103,6 +103,7 @@ public class WorkflowMapper {
                         .setName(request.getName())
                         .addAllIssueTypes(request.getIssueTypes().stream().map(this::toGrpcIssueType).toList())
                         .addAllIssueTypeKeys(request.getIssueTypes())
+                        .putAllStatusMappings(request.getStatusMappings())
                         .addAllStatuses(request.getStatuses().stream().map(this::toGrpcStatusCreateRequest).toList())
                         .addAllTransitions(request.getTransitions().stream().map(this::toGrpcTransitionCreateRequest).toList())
                         .setActorUserId(context.userContext().userId()))

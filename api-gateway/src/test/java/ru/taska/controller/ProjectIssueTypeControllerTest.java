@@ -56,7 +56,7 @@ class ProjectIssueTypeControllerTest {
     @Test
     void createReturns201AndPatchUpdatesMetadata() {
         authenticated();
-        when(client.create(any(), any(), any())).thenReturn(Mono.just(type()));
+        when(client.create(any(), any(), any())).thenReturn(Mono.just(createdType()));
         http.post().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
                 .bodyValue("{\"code\":\"REQUEST\",\"name\":\"Заявка\",\"color\":\"teal\",\"icon\":\"headset\"}")
                 .header(HttpHeaders.CONTENT_TYPE, "application/json").exchange().expectStatus().isCreated();
@@ -64,6 +64,30 @@ class ProjectIssueTypeControllerTest {
         http.patch().uri(url() + "/REQUEST").header(HttpHeaders.AUTHORIZATION, "Bearer token")
                 .bodyValue("{\"name\":\"Заявка\"}").header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .exchange().expectStatus().isOk().expectBody().jsonPath("$.code").isEqualTo("REQUEST");
+    }
+
+    @Test
+    void creationWorkflowIsForwardedAndReturnedOnlyByCreationResponse() {
+        authenticated();
+        when(client.create(any(), any(), any())).thenReturn(Mono.just(createdType()));
+        http.post().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue("{\"code\":\"EPIC\",\"name\":\"Epic\",\"color\":\"purple\",\"workflowId\":\"" + generation + "\"}")
+                .exchange().expectStatus().isCreated().expectBody()
+                .jsonPath("$.code").isEqualTo("REQUEST")
+                .jsonPath("$.workflowId").isEqualTo(generation.toString())
+                .jsonPath("$.generation").isEqualTo(generation.toString());
+        var captured = org.mockito.ArgumentCaptor.forClass(CreateProjectIssueTypeRequestDto.class);
+        verify(client).create(any(), captured.capture(), any());
+        org.assertj.core.api.Assertions.assertThat(captured.getValue().getWorkflowId()).isEqualTo(generation);
+        clearInvocations(client);
+        for (String extra : List.of("\"workflowId\":null", "\"workflowId\":\"bad\"", "\"workflowId\":\"\"", "\"workflowId\":\"1-1-1-1-1\"", "\"unknown\":1")) {
+            http.post().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"code\":\"EPIC\",\"name\":\"Epic\",\"color\":\"purple\"," + extra + "}")
+                    .exchange().expectStatus().isBadRequest();
+        }
+        verifyNoInteractions(client);
     }
 
     @Test
@@ -93,7 +117,7 @@ class ProjectIssueTypeControllerTest {
     @Test
     void createWithoutShapeOrIconReachesRegistryAndInvalidShapeDoesNot() {
         authenticated();
-        when(client.create(any(), any(), any())).thenReturn(Mono.just(type()));
+        when(client.create(any(), any(), any())).thenReturn(Mono.just(createdType()));
         for (String body : List.of("{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\"}",
                 "{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"icon\":null}",
                 "{\"code\":\"REQUEST\",\"name\":\"Request\",\"color\":\"teal\",\"shape\":\"diamond\",\"icon\":\"flag\"}")) {
@@ -273,6 +297,10 @@ class ProjectIssueTypeControllerTest {
     }
 
     private String url() { return "/api/v1/projects/" + project + "/issue-types"; }
+
+    private CreatedProjectIssueTypeDto createdType() {
+        return new CreatedProjectIssueTypeDto(type(), generation);
+    }
 
     private ProjectIssueTypeDto type() {
         return new ProjectIssueTypeDto("REQUEST", "Заявка", ProjectIssueTypeColorDto.TEAL,

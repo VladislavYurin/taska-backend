@@ -10,6 +10,9 @@ import ru.taska.entity.WorkflowEntity;
 import java.util.UUID;
 
 public interface WorkflowRepository extends ReactiveCrudRepository<WorkflowEntity, UUID> {
+    @Query("SELECT * FROM taska.workflows WHERE owner_project_id=:project AND is_active=TRUE ORDER BY created_at,id")
+    reactor.core.publisher.Flux<WorkflowEntity> findOwnedByProject(UUID project);
+
     @Query("SELECT * FROM taska.workflows WHERE id=:workflowId FOR UPDATE")
     Mono<WorkflowEntity> findByIdForUpdate(UUID workflowId);
 

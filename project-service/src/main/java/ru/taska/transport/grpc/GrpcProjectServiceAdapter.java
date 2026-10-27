@@ -146,6 +146,11 @@ public class GrpcProjectServiceAdapter extends ReactorProjectServiceGrpc.Project
     }
 
     @Override
+    public Mono<ru.taska.api.project.v1.CreateProjectIssueTypeWithWorkflowResult> createProjectIssueTypeWithWorkflow(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
+        return issueTypeService.createWithWorkflow(request).transform(GrpcExceptionHandler.withErrorHandling("createProjectIssueTypeWithWorkflow"));
+    }
+
+    @Override
     public Mono<ru.taska.api.project.v1.ProjectIssueTypeResponse> updateProjectIssueType(Mono<ru.taska.api.project.v1.ChangeProjectIssueTypeRequest> request) {
         return issueTypeService.update(request)
                 .transform(GrpcExceptionHandler.withErrorHandling("updateProjectIssueType"));

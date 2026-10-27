@@ -66,14 +66,14 @@ class ProjectIssueTypeIntegrationTest {
         UUID project = project("FRESH");
         admin(project);
         repository.seedDefaults(project).as(tx::transactional).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
-        var created = service.create(project, actor, "REQUEST", "Заявка", "teal", "headset", null, 40)
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
+        var created = insertFixtureType(project, "REQUEST", "Заявка", "teal", "headset", null, 40)
                 .as(tx::transactional).block();
         assertThat(created.name()).isEqualTo("Заявка");
         assertThat(created.createdAt()).isNotNull();
         service.update(project, actor, "BUG", "Инцидент", null, NullableField.absent(), null, 5).as(tx::transactional).block();
         assertThat(repository.list(project).collectList().block().getFirst().code()).isEqualTo("BUG");
-        var failure = service.create(project, actor, "ROLLBACK", "Rollback", "blue", "flag", null, 1)
+        var failure = insertFixtureType(project, "ROLLBACK", "Rollback", "blue", "flag", null, 1)
                 .then(Mono.error(new IllegalStateException("force rollback"))).as(tx::transactional);
         reactor.test.StepVerifier.create(failure).expectError(IllegalStateException.class).verify();
         assertThat(repository.find(project, "ROLLBACK").block()).isNull();
@@ -117,7 +117,7 @@ class ProjectIssueTypeIntegrationTest {
         UUID project = project("DEFAULT");
         admin(project);
         repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
         service.update(project, actor, "BUG", null, null, NullableField.absent(), null, 0).as(tx::transactional).block();
         assertThat(defaultType(project)).isEqualTo("BUG");
         repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor)).as(tx::transactional).block();
@@ -129,7 +129,7 @@ class ProjectIssueTypeIntegrationTest {
     void reorderIsCompletePermutationAndRollsBackWithSettings() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("ORDER"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
         var ordered = service.reorder(project, actor, List.of("STORY", "TASK", "BUG")).as(tx::transactional).block();
         assertThat(ordered).extracting(t -> t.code()).containsExactly("STORY", "TASK", "BUG");
         assertThat(ordered).extracting(t -> t.sortOrder()).containsExactly(10, 20, 30);
@@ -156,14 +156,14 @@ class ProjectIssueTypeIntegrationTest {
     void deletedCodeGetsDifferentGenerationAndRollbackPreservesIdentity() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("GEN"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
         var original = repository.find(project, "BUG").block().generation();
         reactor.test.StepVerifier.create(repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor))
                         .then(Mono.error(new IllegalStateException("rollback"))).as(tx::transactional))
                 .expectError(IllegalStateException.class).verify();
         assertThat(repository.find(project, "BUG").block().generation()).isEqualTo(original);
         repository.delete(project, "BUG").then(repository.syncLegacySettings(project, actor)).as(tx::transactional).block();
-        var recreated = service.create(project, actor, "BUG", "New bug", "red", null, "circle", 20).as(tx::transactional).block();
+        var recreated = insertFixtureType(project, "BUG", "New bug", "red", null, "circle", 20).as(tx::transactional).block();
         assertThat(recreated.generation()).isNotEqualTo(original);
         assertThat(repository.listBatch(List.of(project)).collectList().block()).hasSize(3);
     }
@@ -172,9 +172,9 @@ class ProjectIssueTypeIntegrationTest {
     void staleOrderAfterRegistryAdditionOrDeletionReturnsConflictWithoutChangingSettings() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("STALE"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
         List<String> old = repository.list(project).map(type -> type.code()).collectList().block();
-        service.create(project, actor, "REQUEST", "Request", "blue", "headset", null, 40).as(tx::transactional).block();
+        insertFixtureType(project, "REQUEST", "Request", "blue", "headset", null, 40).as(tx::transactional).block();
         var afterAddition = repository.list(project).collectList().block();
         reactor.test.StepVerifier.create(service.reorder(project, actor, old).as(tx::transactional))
                 .expectErrorSatisfies(error -> {
@@ -250,11 +250,11 @@ class ProjectIssueTypeIntegrationTest {
     void shapeAndOptionalIconRoundTripThroughCreateAndPatch() throws Exception {
         migrate("0001-project-issue-types.sql");
         UUID project = project("LOOK"); admin(project); repository.seedDefaults(project).block();
-        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db));
-        var plain = service.create(project, actor, "REQUEST", "Request", "teal", null, null, 40).as(tx::transactional).block();
+        var service = new ProjectIssueTypeService(repository, null, new ru.taska.service.ProjectWriteGuard(db), new ProjectTypeOperationRepository(db));
+        var plain = insertFixtureType(project, "REQUEST", "Request", "teal", null, null, 40).as(tx::transactional).block();
         assertThat(plain.icon()).isNull();
         assertThat(plain.shape()).isEqualTo("square");
-        var milestone = service.create(project, actor, "MILESTONE", "Milestone", "amber", "flag", "diamond", 50)
+        var milestone = insertFixtureType(project, "MILESTONE", "Milestone", "amber", "flag", "diamond", 50)
                 .as(tx::transactional).block();
         assertThat(repository.find(project, "MILESTONE").block()).isEqualTo(milestone);
         assertThat(milestone.icon()).isEqualTo("flag");
@@ -311,6 +311,14 @@ class ProjectIssueTypeIntegrationTest {
         }
     }
 
+    /** Fixture setup only: public creation is exercised by the durable creation coordinator tests. */
+    private Mono<ru.taska.domain.ProjectIssueType> insertFixtureType(UUID project, String code, String name, String color,
+            String icon, String shape, Integer sortOrder) {
+        return repository.insert(new ru.taska.domain.ProjectIssueType(project, code, name, color, icon,
+                        shape == null ? "square" : shape, sortOrder == null ? 100 : sortOrder, null, null))
+                .flatMap(saved -> repository.syncLegacySettings(project, actor).thenReturn(saved));
+    }
+
     private java.util.Map<String, java.time.OffsetDateTime> updatedAt() {
         return db.sql("SELECT project_id, code, updated_at FROM taska.project_issue_types")
                 .map((r, m) -> java.util.Map.entry(r.get("project_id", UUID.class) + ":" + r.get("code", String.class),
@@ -341,6 +349,7 @@ class ProjectIssueTypeIntegrationTest {
         if (file.equals("0001-project-issue-types.sql")) migrate("0002-issue-type-generation.sql");
         if (file.equals("0002-issue-type-generation.sql")) migrate("0003-issue-type-shape.sql");
         if (file.equals("0003-issue-type-shape.sql")) migrate("0004-issue-type-deletion-intents.sql");
+        if (file.equals("0004-issue-type-deletion-intents.sql")) migrate("0005-project-type-operations.sql");
     }
 
     private void execute(String file) throws Exception {

@@ -42,6 +42,7 @@ public class IssuePatchExecutor {
     private final IssueAutoWatchService issueAutoWatchService;
     private final ru.taska.service.IssueTypeWriteGuard issueTypeWriteGuard;
     private final ru.taska.transport.grpc.workflow.GrpcWorkflowServiceClient workflowClient;
+    private final ru.taska.service.WorkflowBindingPendingGuard bindingGuard;
 
     /**
      * Транзакционное применение PATCH-изменений к задаче.
@@ -78,7 +79,8 @@ public class IssuePatchExecutor {
                                     issue.getIssueType(),patched.getIssueType())
                                 .then(Mono.defer(()->workflowClient.requireStatusForType(requestId,nodeId,patched,actorUserId)))
                             : Mono.empty();
-                    return typeCheck.then(Mono.defer(()->applyPatch(requestId,nodeId,issue,patched,actorUserId)))
+                    return bindingGuard.requireWritable(issue.getProjectId(),List.of(issue.getIssueType()))
+                            .then(typeCheck).then(Mono.defer(()->applyPatch(requestId,nodeId,issue,patched,actorUserId)))
                             .map(savedIssue -> new PatchIssueResult(savedIssue, false));
                 });
     }

@@ -27,6 +27,8 @@ enum StatusCategory {
 }
 
 service WorkflowService {
+  rpc CreateProjectWorkflowWithBindings(CreateWorkflowRequest) returns (WorkflowBindingOperationResult);
+  rpc UpdateProjectWorkflowWithBindings(WorkflowMutationRequest) returns (WorkflowBindingOperationResult);
   rpc UpdateWorkflow(WorkflowMutationRequest) returns (ProjectWorkflow);
   rpc UpdateWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
   rpc DeleteWorkflowStatus(WorkflowMutationRequest) returns (ProjectWorkflow);
@@ -167,6 +169,8 @@ message WorkflowMutationRequest {
   optional bool hidden = 11;
   optional string target_status_key = 12;
   map<string, string> status_mappings = 13;
+  repeated string issue_type_keys = 14;
+  bool replace_issue_types = 15; // Presence flag: false means absent; true with empty keys is invalid.
 }
 
 message WorkflowStatus {
@@ -435,6 +439,7 @@ message CreateWorkflowRequestBody {
 
   // Expand-contract: key takes precedence; legacy enum remains for old clients.
   repeated string issue_type_keys = 7;
+  map<string,string> status_mappings = 8;
 }
 
 message CreateWorkflowRequest {
@@ -569,4 +574,11 @@ message ListProjectWorkflowsResponse {
    * Workflow проекта, по одному на каждый различный workflow.
    */
   repeated ProjectWorkflow workflows = 1;
+}
+
+message WorkflowBindingOperationResult {
+  ProjectWorkflow result = 1;
+  string rejection_status = 2;
+  string rejection_message = 3;
+  map<string,string> rejection_details = 4;
 }

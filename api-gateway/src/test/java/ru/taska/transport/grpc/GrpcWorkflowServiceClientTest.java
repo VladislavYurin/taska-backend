@@ -72,10 +72,10 @@ class GrpcWorkflowServiceClientTest {
                         .build()
         );
 
-        Mockito.when(properties.workflowService())
+        Mockito.lenient().when(properties.workflowService())
                 .thenReturn(workflowProperties);
 
-        Mockito.when(workflowProperties.deadlineDuration())
+        Mockito.lenient().when(workflowProperties.deadlineDuration())
                 .thenReturn(Duration.ofMillis(100));
 
         Mockito.when(stub.withDeadlineAfter(Mockito.anyLong(), Mockito.any(TimeUnit.class)))
@@ -159,12 +159,13 @@ class GrpcWorkflowServiceClientTest {
     void createWorkflow_shouldCallStubWithMappedRequest() {
         var body = new CreateWorkflowRequestDto();
         var grpcRequest = CreateWorkflowRequest.getDefaultInstance();
-        var grpcResponse = WorkflowResponse.getDefaultInstance();
+        var grpcResponse = ru.taska.api.workflow.v1.ProjectWorkflow.getDefaultInstance();
+        var result = ru.taska.api.workflow.v1.WorkflowBindingOperationResult.newBuilder().setResult(grpcResponse).build();
         var restResponse = new ProjectWorkflowDto();
 
         Mockito.when(workflowMapper.toCreateWorkflowGrpcRequest(PROJECT_ID, body, context)).thenReturn(grpcRequest);
-        Mockito.when(stub.createWorkflow(grpcRequest)).thenReturn(Mono.just(grpcResponse));
-        Mockito.when(workflowMapper.toMutationResponseRestDto(grpcResponse)).thenReturn(restResponse);
+        Mockito.when(stub.createProjectWorkflowWithBindings(grpcRequest)).thenReturn(Mono.just(result));
+        Mockito.when(workflowMapper.toProjectWorkflowDto(grpcResponse)).thenReturn(restResponse);
 
         StepVerifier.create(client.createWorkflow(PROJECT_ID, Mono.just(body), context))
                 .expectNext(restResponse)

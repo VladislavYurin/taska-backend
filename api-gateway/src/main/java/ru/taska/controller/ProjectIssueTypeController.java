@@ -24,7 +24,7 @@ public class ProjectIssueTypeController implements ProjectIssueTypeApi {
     }
 
     @Override
-    public Mono<ResponseEntity<ProjectIssueTypeDto>> createProjectIssueType(UUID projectId,
+    public Mono<ResponseEntity<CreatedProjectIssueTypeDto>> createProjectIssueType(UUID projectId,
             Mono<CreateProjectIssueTypeRequestDto> body, ServerWebExchange exchange) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, c -> body.flatMap(b -> client.create(projectId, b, c)))
                 .map(result -> ResponseEntity.status(201).body(result));

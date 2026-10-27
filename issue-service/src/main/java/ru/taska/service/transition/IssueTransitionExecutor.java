@@ -41,6 +41,9 @@ public class IssueTransitionExecutor {
     private final PayloadSerializer  payloadSerializer;
     private final IssueHistoryService issueHistoryService;
     private final OutboxEventService outboxEventService;
+    private final ru.taska.service.IssueTypeWriteGuard projectLock;
+    private final ru.taska.service.WorkflowBindingPendingGuard bindingGuard;
+    private final ru.taska.transport.grpc.workflow.IssueTransitionValidator transitionValidator;
 
     /**
      * Транзакционное выполнение изменения статуса задачи.
@@ -55,10 +58,16 @@ public class IssueTransitionExecutor {
             UUID actorUserId,
             Integer expectedVersion
     ) {
+        return executeTransition(requestId,nodeId,issueId,targetStatusKey,transitionId,actorUserId,expectedVersion,null);
+    }
+
+    @Transactional
+    public Mono<IssueWithHistory> executeTransition(String requestId,String nodeId,UUID issueId,
+            String targetStatusKey,UUID transitionId,UUID actorUserId,Integer expectedVersion,String transitionPayload) {
         // Lock before comparing the explicit precondition, including a same-status no-op.
         // The lock and history/outbox writes share this transaction.
-        return (expectedVersion == null ? issueRepository.findActiveById(issueId)
-                : issueRepository.findActiveByIdForUpdate(issueId))
+        return issueRepository.findProjectIdByActiveIssueId(issueId)
+                .flatMap(project->projectLock.lock(project).then(issueRepository.findActiveByIdForUpdate(issueId)))
                 .switchIfEmpty(Mono.defer(() -> {
                     log.warn("[{}][{}] Issue with ID {} was not found", requestId, nodeId, issueId);
 
@@ -68,6 +77,10 @@ public class IssueTransitionExecutor {
                     if (expectedVersion != null && !expectedVersion.equals(issue.getVersion())) {
                         return Mono.error(versionConflict(issue));
                     }
+                    return bindingGuard.requireWritable(issue.getProjectId(),java.util.List.of(issue.getIssueType()))
+                            .then(transitionValidator.validateTransition(requestId,nodeId,issue,transitionId,actorUserId,transitionPayload))
+                            .flatMap(freshTarget->{
+                    if(!freshTarget.equals(targetStatusKey))return Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow transition changed concurrently"));
                     String sourceStatusKey = issue.getStatusKey();
 
                     if (Objects.equals(sourceStatusKey, targetStatusKey)) {
@@ -102,6 +115,7 @@ public class IssueTransitionExecutor {
                                             })
                             )
                             .flatMap(this::loadIssueWithHistory);
+                            });
                 })
                 .doOnSuccess(result -> {
                     if (result != null) {

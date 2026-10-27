@@ -2,7 +2,6 @@ package ru.taska.transport.grpc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.UUID;
@@ -21,7 +20,9 @@ import ru.taska.service.ProjectIssueTypeService;
 class ProjectIssueTypeLookGrpcTest {
     private final UUID project = UUID.randomUUID(), actor = UUID.randomUUID();
     private final ProjectIssueTypeService service = mock(ProjectIssueTypeService.class);
-    private final ProjectIssueTypeGrpcService grpc = new ProjectIssueTypeGrpcService(service, new ProjectMapperImpl(), mock(ru.taska.service.IssueTypeDeletionCoordinator.class));
+    private final ru.taska.service.IssueTypeCreationCoordinator creation = mock(ru.taska.service.IssueTypeCreationCoordinator.class);
+    private final ProjectIssueTypeGrpcService grpc = new ProjectIssueTypeGrpcService(service, new ProjectMapperImpl(),
+            mock(ru.taska.service.IssueTypeDeletionCoordinator.class), creation);
 
     @Test
     void clearIconBecomesExplicitNullAndUnsetIconStaysAbsent() {
@@ -45,12 +46,16 @@ class ProjectIssueTypeLookGrpcTest {
 
     @Test
     void createPassesOptionalShapeAndIcon() {
-        when(service.create(any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(Mono.just(type("REQUEST", null, "square")));
+        when(creation.create(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ru.taska.service.IssueTypeCreationTransactions.Created(
+                        type("REQUEST", null, "square"), UUID.randomUUID())));
         grpc.create(Mono.just(request().setName("Request").setColor("teal").build())).block();
-        verify(service).create(project, actor, "REQUEST", "Request", "teal", null, null, null);
+        verify(creation).create(project, actor, "REQUEST", "Request", "teal", null, null, null, null,
+                ru.taska.api.common.v1.Header.getDefaultInstance());
         grpc.create(Mono.just(request().setName("Request").setColor("teal").setIcon("flag").setShape("circle").build())).block();
-        verify(service).create(eq(project), eq(actor), eq("REQUEST"), eq("Request"), eq("teal"), eq("flag"), eq("circle"), any());
+        verify(creation).create(project, actor, "REQUEST", "Request", "teal", "flag", "circle", null, null,
+                ru.taska.api.common.v1.Header.getDefaultInstance());
+        verifyNoInteractions(service);
     }
 
     @Test

@@ -30,6 +30,8 @@ REST-контракт является источником истины для 
 
 Удаление типа задачи с переносом: [контракт, блокировки и восстановление TAS-433](docs/tas-433-issue-type-deletion.md).
 
+[Типы задач и workflow — TAS-436](docs/tas-436-workflow-type-bindings.md).
+
 ## Архитектура
 
 ```mermaid

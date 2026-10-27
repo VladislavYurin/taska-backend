@@ -57,6 +57,10 @@ class IssueTransitionExecutorTest {
     @Mock
     private IssueWatcherRepository issueWatcherRepository;
 
+    @Mock private ru.taska.service.IssueTypeWriteGuard projectLock;
+    @Mock private ru.taska.service.WorkflowBindingPendingGuard bindingGuard;
+    @Mock private ru.taska.transport.grpc.workflow.IssueTransitionValidator transitionValidator;
+
     @InjectMocks
     private IssueTransitionExecutor executor;
 
@@ -74,6 +78,11 @@ class IssueTransitionExecutorTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.lenient().when(issueRepository.findProjectIdByActiveIssueId(Mockito.any())).thenReturn(Mono.just(PROJECT_ID));
+        Mockito.lenient().when(projectLock.lock(Mockito.any())).thenReturn(Mono.empty());
+        Mockito.lenient().when(bindingGuard.requireWritable(Mockito.any(), Mockito.any())).thenReturn(Mono.empty());
+        Mockito.lenient().when(transitionValidator.validateTransition(Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(), Mockito.any(), Mockito.any(), Mockito.nullable(String.class))).thenReturn(Mono.just(TARGET_STATUS_KEY));
         Mockito.lenient().when(issueWatcherRepository.findUserIdsByIssueId(Mockito.any(UUID.class)))
                 .thenReturn(Flux.empty());
     }
@@ -82,6 +91,7 @@ class IssueTransitionExecutorTest {
     @DisplayName("Должен успешно изменить статус и сохранить в БД историю и outbox")
     void executeTransition_shouldChangeStatusSuccessfully() {
         var sourceIssue = Issue.builder()
+                .issueType(ru.taska.domain.IssueType.TASK)
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
                 .statusKey(SOURCE_STATUS_KEY)
@@ -90,6 +100,7 @@ class IssueTransitionExecutorTest {
                 .build();
 
         var updatedIssue = Issue.builder()
+                .issueType(ru.taska.domain.IssueType.TASK)
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
                 .statusKey(TARGET_STATUS_KEY)
@@ -105,7 +116,7 @@ class IssueTransitionExecutorTest {
         JsonNode payload = JsonNodeFactory.instance.objectNode()
                 .put("newStatus", TARGET_STATUS_KEY);
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID))
                 .thenReturn(Mono.just(sourceIssue));
 
         Mockito.when(issueRepository.changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION))
@@ -151,7 +162,8 @@ class IssueTransitionExecutorTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
+        Mockito.verify(issueRepository, Mockito.times(1)).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.times(1)).changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
         Mockito.verify(payloadSerializer)
                 .createTransitionedPayload(
@@ -172,6 +184,7 @@ class IssueTransitionExecutorTest {
     @DisplayName("Если текущий и целевой статусы одинаковы, то должен вернуть задачу без изменения статуса и без операций записи в БД")
     void executeTransition_shouldReturnCorrectResponse_whenCurrentAndTargetStatusesAreEquals() {
         var issue = Issue.builder()
+                .issueType(ru.taska.domain.IssueType.TASK)
                 .id(ISSUE_ID)
                 .projectId(PROJECT_ID)
                 .statusKey(TARGET_STATUS_KEY)
@@ -182,7 +195,7 @@ class IssueTransitionExecutorTest {
                 .eventType(IssueEventType.TRANSITIONED)
                 .build();
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID))
                 .thenReturn(Mono.just(issue));
 
         Mockito.when(issueProperties.card().maxHistorySize())
@@ -207,7 +220,8 @@ class IssueTransitionExecutorTest {
                 })
                 .verifyComplete();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
+        Mockito.verify(issueRepository, Mockito.times(1)).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verify(historyRepository, Mockito.times(1)).findByIssueIdOrderByOccurredAtDesc(Mockito.eq(ISSUE_ID), Mockito.eq(Limit.of(10)));
         Mockito.verifyNoMoreInteractions(payloadSerializer, issueHistoryService, outboxEventService);
     }
@@ -215,7 +229,7 @@ class IssueTransitionExecutorTest {
     @Test
     @DisplayName("Должен выбросить исключение со статусом NOT_FOUND, если задача не найдена")
     void executeTransition_shouldThrowException_whenIssueNotFound() {
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID))
                 .thenReturn(Mono.empty());
 
         StepVerifier.create(executor.executeTransition(
@@ -234,7 +248,8 @@ class IssueTransitionExecutorTest {
                 })
                 .verify();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
+        Mockito.verify(issueRepository, Mockito.times(1)).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verifyNoMoreInteractions(issueRepository);
         Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService, historyRepository);
     }
@@ -243,12 +258,14 @@ class IssueTransitionExecutorTest {
     @DisplayName("Должен выбросить исключение со статусом ABORTED при конфликте optimistic lock")
     void executeTransition_shouldThrowException_whenOptimisticLockConflict() {
         var issue = Issue.builder()
+                .projectId(PROJECT_ID)
+                .issueType(ru.taska.domain.IssueType.TASK)
                 .id(ISSUE_ID)
                 .statusKey(SOURCE_STATUS_KEY)
                 .version(CURRENT_VERSION)
                 .build();
 
-        Mockito.when(issueRepository.findActiveById(ISSUE_ID))
+        Mockito.when(issueRepository.findActiveByIdForUpdate(ISSUE_ID))
                 .thenReturn(Mono.just(issue));
 
         Mockito.when(issueRepository.changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION))
@@ -270,7 +287,8 @@ class IssueTransitionExecutorTest {
                 })
                 .verify();
 
-        Mockito.verify(issueRepository, Mockito.times(1)).findActiveById(ISSUE_ID);
+        Mockito.verify(issueRepository, Mockito.times(1)).findActiveByIdForUpdate(ISSUE_ID);
+        Mockito.verify(issueRepository).findProjectIdByActiveIssueId(ISSUE_ID);
         Mockito.verify(issueRepository, Mockito.times(1)).changeStatus(ISSUE_ID, TARGET_STATUS_KEY, CURRENT_VERSION);
         Mockito.verifyNoMoreInteractions(issueRepository);
         Mockito.verifyNoInteractions(payloadSerializer, issueHistoryService, outboxEventService, historyRepository);

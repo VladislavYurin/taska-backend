@@ -31,6 +31,8 @@ import ru.taska.util.RequestHasher;
 
 /** Real issue PostgreSQL, production gRPC validation, workflow client, transactions and events. */
 class InitialIssueStatusIT extends AbstractIT {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private ru.taska.service.WorkflowBindingPendingGuard workflowBindingGuard;
   @MockitoBean ReactorProjectServiceGrpc.ReactorProjectServiceStub projects;
   @MockitoBean ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflows;
   @MockitoBean OutboxEventScheduler scheduler;
@@ -47,6 +49,8 @@ class InitialIssueStatusIT extends AbstractIT {
 
   @BeforeEach
   void prepare() {
+        org.mockito.Mockito.when(workflowBindingGuard.requireWritable(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(reactor.core.publisher.Mono.empty());
     key = UUID.randomUUID().toString();
     when(projects.withDeadlineAfter(anyLong(), any())).thenReturn(projects);
     when(projects.checkProjectMemberRole(any(CheckProjectMemberRoleRequest.class)))

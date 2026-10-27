@@ -20,12 +20,13 @@ public class WorkflowResolver {
     private final WorkflowRepository workflowRepository;
     private final WorkflowProperties workflowProperties;
     private final ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+    private final WorkflowWriteFence fence;
 
     public Mono<WorkflowEntity> resolveWorkflow(UUID projectId, String issueType) {
         if (projectId.equals(workflowProperties.defaultProjectId())) {
             return workflowRepository.findWorkflowForProject(projectId, issueType);
         }
-        return projectClient.getIssueTypesInternal(projectId)
+        return fence.requireReadable(projectId).then(Mono.defer(() -> projectClient.getIssueTypesInternal(projectId)))
                 .flatMap(types -> reactor.core.publisher.Flux.fromIterable(types)
                         .filter(type -> type.getCode().equals(issueType)).next()
                         .flatMap(type -> {
