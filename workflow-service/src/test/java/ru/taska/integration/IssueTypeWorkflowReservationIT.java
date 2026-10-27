@@ -57,6 +57,7 @@ class IssueTypeWorkflowReservationIT extends AbstractIT {
 
     @org.springframework.test.context.DynamicPropertySource
     static void randomGrpcPort(org.springframework.test.context.DynamicPropertyRegistry properties) {
+        properties.add("spring.grpc.server.address", () -> "127.0.0.1:0");
         properties.add("spring.grpc.server.port", () -> "0");
     }
 

@@ -7,7 +7,8 @@ import com.google.protobuf.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
-import io.grpc.ServerBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import java.net.InetSocketAddress;
 import io.grpc.Status;
 import java.time.Duration;
 import java.util.Map;
@@ -90,7 +91,7 @@ class IssueTypeDeletionIT extends AbstractIT {
         member(actor,"ADMIN");
         types.seedDefaults(project).block(TIMEOUT);
         types.syncLegacySettings(project,actor).block(TIMEOUT);
-        server=ServerBuilder.forPort(0).directExecutor().addService(new IssuePeer()).addService(new WorkflowPeer()).build().start();
+        server=NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1",0)).directExecutor().addService(new IssuePeer()).addService(new WorkflowPeer()).build().start();
         channel=ManagedChannelBuilder.forAddress("127.0.0.1",server.getPort()).usePlaintext().build();
         when(issueStub.getChannel()).thenReturn(channel);
         when(workflowStub.getChannel()).thenReturn(channel);

@@ -276,10 +276,10 @@ class ProjectIssueTypeIntegrationTest {
     void shapeChangesetRollsBackToTheIconsLegacyReadersSee() throws Exception {
         db.sql("DROP SCHEMA IF EXISTS taska CASCADE").fetch().rowsUpdated().block();
         try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
-             var liquibase = new liquibase.Liquibase("db/changelog/db.changelog-master.yaml",
+             var liquibase = new liquibase.Liquibase("db/changelog/issue-type-shape-rollback.yaml",
                      new liquibase.resource.ClassLoaderResourceAccessor(), new liquibase.database.jvm.JdbcConnection(connection))) {
-            // Stop at the shape changeset: later independent migrations have their own rollback policy.
-            liquibase.update(4, new liquibase.Contexts(), new liquibase.LabelExpression());
+            // A dedicated changelog fixes the boundary by identity, not the master's changing count.
+            liquibase.update(new liquibase.Contexts(), new liquibase.LabelExpression());
             UUID project = project("ROLLBACK");
             repository.seedDefaults(project).block();
             db.sql("INSERT INTO taska.project_issue_types(project_id,code,name,color,icon,shape,sort_order) VALUES "

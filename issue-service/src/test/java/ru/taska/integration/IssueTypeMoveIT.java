@@ -7,7 +7,8 @@ import static org.mockito.Mockito.*;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
-import io.grpc.ServerBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -99,7 +100,7 @@ class IssueTypeMoveIT extends AbstractIT {
         when(projects.getProjectKeyInternal(any(),any(),any())).thenReturn(Mono.just("MV"+project.toString().substring(0,8).toUpperCase(java.util.Locale.ROOT)));
         when(workflows.requireStatusForType(any(),any(),any(),any())).thenReturn(Mono.empty());
         when(workflows.requireInitialStatus(any(),any(),any(),any(),any(),any())).thenReturn(Mono.empty());
-        server=ServerBuilder.forPort(0)
+        server=NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1",0))
                 .addService(new ReactorIssueTypeDeletionJournalGrpc.IssueTypeDeletionJournalImplBase() {
                     @Override public Mono<IssueTypeDeletionIntent> getIntent(Mono<IssueTypeDeletionKey> request) {
                         return request.map(key -> intent.get());
