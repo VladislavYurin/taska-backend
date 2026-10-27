@@ -4,7 +4,7 @@
 
 ## Подготовка и обозначения
 
-- `BASE` — согласованный тестовый gateway, например `https://api.taska.ozero.dev`. Не выполнять эти сценарии на рабочей системе с чужими данными.
+- `BASE` — origin согласованного тестового gateway без завершающего `/` и без `/api/v1`, например `https://api.taska.ozero.dev`. Не выполнять сценарии на рабочей системе с чужими данными. Все маршруты запросов ниже полные относительно origin: итоговый URL — `${BASE}` + маршрут, например `${BASE}/api/v1/projects`. Плейсхолдеры `{P}`, `{id}`, `{W}` и другие перед отправкой заменить реальными UUID/ключами из текущего сценария; параметры query кодировать как URL. Для PUT/GET presigned URL использовать целиком URL из ответа storage, без добавления BASE или API-префикса.
 - Для каждого запуска выбрать уникальный `RUN`; ключи проектов `E2E<RUN>A`, `E2E<RUN>B`, префикс имён и текстов `E2E <RUN>`. Сохранять UUID только в отдельном журнале прогона вне Git.
 - `A` — активный пользователь, создатель проекта P и его ADMIN. `M` — активный MEMBER P. `V` — активный VIEWER P. `O` — активный пользователь без членства в P, создатель Q. `G` — GLOBAL_ADMIN; его глобальная роль сама по себе не даёт доступа к P. `I` — отдельный приглашённый тестовый пользователь. Для проверок изменения имени, аватара, настроек, блокировки и lockout нужны выделенные тестовые учётные записи.
 - Для позитивной активации и регистрации нужны контролируемый почтовый ящик/SMTP-приёмник и доступ к письму. `deliveryQueued=true` означает постановку в очередь, а не доставку. При отсутствии почты полный цикл активации не считается выполненным.
@@ -32,7 +32,7 @@
 
 1. `POST /api/v1/auth/login` с `{"email":"${EMAIL}","password":"${PASSWORD}"}`: 200, непустые access/refresh, положительный `expiresIn`.
 2. С access выполнить `GET /api/v1/users/me`: 200, UUID и email правильного пользователя, displayName и global role; пароля и refresh нет. Без Bearer/с повреждённым Bearer: 401.
-3. `POST /api/v1/auth/refresh` с текущим refresh: 200, новая пара. Старый refresh повторно не создаёт сессию (401); новый access читает `/users/me`. Пустой refresh — ошибка валидации/аутентификации по контракту, без 500.
+3. `POST /api/v1/auth/refresh` с текущим refresh: 200, новая пара. Старый refresh повторно не создаёт сессию (401); новый access читает `/api/v1/users/me`. Пустой refresh — ошибка валидации/аутентификации по контракту, без 500.
 4. На выделенной учётной записи проверить неверный пароль и неизвестный email: одинаковая ошибка аутентификации без раскрытия существования. Проверку порога lockout выполнять только в E2E-26, не блокировать общие аккаунты.
 5. `PATCH /api/v1/users/me` с `{"displayName":"  E2E Имя 🧪  "}`: 200 с нормализованным именем; последующий me, каталог и новые записи автора используют это имя, UUID не меняется.
 6. Пустое имя, null, перевод строки/управляющий символ и более 128 Unicode code points: 400, `DISPLAY_NAME_INVALID`; прежнее имя сохраняется. Проверить граничные 1 и 128 code points.
@@ -71,7 +71,7 @@
 **Условия:** настроенные Google/GitHub/Apple, контролируемые аккаунты и браузер с cookie. Если провайдер выключен, проверить фиксированный отказ и не считать позитивный путь выполненным.
 
 1. `GET /api/v1/auth/oauth/{provider}/start`: 302 на разрешённый провайдер, свежий state, PKCE S256 для Google/GitHub; Secure HttpOnly SameSite=None cookie `__Host-taska_oauth_<state>`, Path=/, без Domain. Не следовать на случайные адреса из входных параметров.
-2. Пройти согласие провайдера; Google/GitHub возвращаются GET `/api/v1/auth/oauth/{provider}/callback`, Apple — POST form-urlencoded на тот же callback. 302 ведёт только на настроенный UI с одноразовым exchange code либо фиксированным reason; no-store/no-referrer, без provider tokens.
+2. Пройти согласие провайдера; Google/GitHub возвращаются через `GET /api/v1/auth/oauth/{provider}/callback`, Apple — через `POST /api/v1/auth/oauth/{provider}/callback` с form-urlencoded body. 302 ведёт только на настроенный UI с одноразовым exchange code либо фиксированным reason; no-store/no-referrer, без provider tokens.
 3. `POST /api/v1/auth/oauth/exchange` с code: 200, сессия существующего пользователя либо SIGNUP_REQUIRED и ограниченный signup grant. Повтор/expiry code не создаёт вторую сессию.
 4. Для нового пользователя `POST /api/v1/auth/oauth/signup` с signupToken/displayName: 200, ACTIVE USER без пароля/чужого членства. Ошибка имени — 400 DISPLAY_NAME_INVALID до потребления grant; исправленное имя ещё можно отправить. Повтор уже использованного grant отклоняется.
 5. Existing email сохраняет UUID, имя и существующий пароль; INVITED активируется с отзывом старых invitation tokens. BLOCKED/неистекший LOCKED сессию не получают. При выключенном signup новый пользователь не создаётся.
@@ -84,7 +84,7 @@
 
 **Условия:** JWT A; P создан в E2E-08. Уложиться в policy выпуска, не исчерпать budget общих пользователей.
 
-1. `GET /api/v1/users/me/access-tokens`: 200 со списком и policy. `POST` туда с `{"name":"E2E read","scopes":["read"],"expiresInDays":1}`: 201; secret показывается ровно в ответе выпуска. Выпустить второй PAT read/write. `GET` не возвращает secret/hash, только безопасные метаданные.
+1. `GET /api/v1/users/me/access-tokens`: 200 со списком и policy. `POST /api/v1/users/me/access-tokens` с `{"name":"E2E read","scopes":["read"],"expiresInDays":1}`: 201; secret показывается ровно в ответе выпуска. Выпустить второй PAT read/write. `GET` не возвращает secret/hash, только безопасные метаданные.
 2. Read PAT читает свой me, проекты, задачу, board и комментарии, но создание/изменение получает 403 `INSUFFICIENT_SCOPE`, requiredScope=write. Write без read, пустой список, неизвестный/повторный scope, недопустимый срок/имя — 400 без выпуска.
 3. Read/write PAT создаёт отдельную задачу и комментарий в P. История/комментарий содержат канал API_TOKEN, без имени/UUID PAT; CRUD ограничен теми же project ACL. Произвольные клиентские MCP marker headers не превращают прямой PAT в доверенный MCP.
 4. Любой PAT получает 403 SESSION_REQUIRED на управлении PAT, admin/readonly и иных session-only операциях; GLOBAL_ADMIN PAT также не обходит этот запрет.
@@ -110,10 +110,10 @@
 **Условия:** A, M, V, O; уникальные ключи P/Q.
 
 1. Под A `POST /api/v1/projects` с `{"projectKey":"${P_KEY}","name":"E2E ${RUN}","description":"Scenario fixture","color":"#0052CC"}`: 201 с UUID P, A становится ADMIN. Повтор ключа — конфликт без второго проекта; недопустимый ключ/пустое имя/не-HEX цвет — 400.
-2. `GET /projects`, `/projects/{P}`, `/projects/{P}/members`, `/projects/{P}/context`, `/project-stats`: 200 с согласованными P, ролью, реестром типов, workflow, участниками, метками и начальными счётчиками. Списки содержат только доступные проекты, чужие не утекают в stats/context.
-3. `PATCH /projects/{P}` с одним name: имя обновлено, остальные поля сохранены. Явные null description/color очищают, blank description нормализуется в null; null name — 400. projectKey не меняется.
-4. `POST /projects/{P}/members` для M MEMBER и V VIEWER: 201; `GET members` включает правильные UUID/профили/роли. Добавление неизвестного/BLOCKED/неактивированного SIGNUP пользователя не создаёт пригодного членства.
-5. `PATCH /projects/{P}/members/{M}` меняет MEMBER→VIEWER→MEMBER: 200, следующий запрос сразу использует новые права. `DELETE` выделенного участника: 204, следующие обращения к P запрещены.
+2. `GET /api/v1/projects`, `GET /api/v1/projects/{P}`, `GET /api/v1/projects/{P}/members`, `GET /api/v1/projects/{P}/context`, `GET /api/v1/project-stats`: 200 с согласованными P, ролью, реестром типов, workflow, участниками, метками и начальными счётчиками. Списки содержат только доступные проекты, чужие не утекают в stats/context.
+3. `PATCH /api/v1/projects/{P}` с одним name: имя обновлено, остальные поля сохранены. Явные null description/color очищают, blank description нормализуется в null; null name — 400. projectKey не меняется.
+4. `POST /api/v1/projects/{P}/members` для M MEMBER и V VIEWER: 201; `GET /api/v1/projects/{P}/members` включает правильные UUID/профили/роли. Добавление неизвестного/BLOCKED/неактивированного SIGNUP пользователя не создаёт пригодного членства.
+5. `PATCH /api/v1/projects/{P}/members/{M}` меняет MEMBER→VIEWER→MEMBER: 200, следующий запрос сразу использует новые права. `DELETE /api/v1/projects/{P}/members/{M}` выделенного участника: 204, следующие обращения к P запрещены.
 6. Попытка удалить/понизить последнего ADMIN отклоняется; A остаётся ADMIN. MEMBER не меняет имя проекта, реестр/workflow и состав участников. GLOBAL_ADMIN без членства не читает P только за счёт глобальной роли.
 7. O создаёт Q; P и Q не смешиваются в context, issue labels, links, stats и поиске. Неверный projectId — 400, несуществующий доступный объект — 404; чужой P не выдаёт данные при отрицательном ACL.
 
@@ -123,12 +123,12 @@
 
 **Условия:** ADMIN P; начальный реестр прочитан.
 
-1. `GET /projects/{P}/issue-types`: 200, для нового P TASK/STORY square, BUG circle, без icon. Все коды уникальны, порядок sortOrder/code; display name/code различаются.
-2. `POST` туда с `{"code":"E2E_CUSTOM","name":"E2E Custom","color":"teal","shape":"diamond","icon":"flag","sortOrder":5}`: 201, плоский DTO с generation/workflowId. GET/context/board возвращают актуальный реестр.
-3. `PATCH /issue-types/E2E_CUSTOM` с name/color/shape и `icon:null`: 200, имя/оформление меняются, icon очищен; пропущенные поля сохраняются, code не меняется.
-4. `PUT /issue-types/order` с `{"codes":[...все текущие коды в новом порядке...]}`: 200, порядок сохраняется на последующих чтениях; одновременно применённое несовместимое изменение — 409 без частичного порядка.
+1. `GET /api/v1/projects/{P}/issue-types`: 200, для нового P TASK/STORY square, BUG circle, без icon. Все коды уникальны, порядок sortOrder/code; display name/code различаются.
+2. `POST /api/v1/projects/{P}/issue-types` с `{"code":"E2E_CUSTOM","name":"E2E Custom","color":"teal","shape":"diamond","icon":"flag","sortOrder":5}`: 201, плоский DTO с generation/workflowId. GET/context/board возвращают актуальный реестр.
+3. `PATCH /api/v1/projects/{P}/issue-types/E2E_CUSTOM` с name/color/shape и `icon:null`: 200, имя/оформление меняются, icon очищен; пропущенные поля сохраняются, code не меняется.
+4. `PUT /api/v1/projects/{P}/issue-types/order` с `{"codes":[...все текущие коды в новом порядке...]}`: 200, порядок сохраняется на последующих чтениях; одновременно применённое несовместимое изменение — 409 без частичного порядка.
 5. Повторный code, неверный формат code, неизвестный color/shape/icon, null обязательного поля, лишнее поле, повтор/пропуск code в order: отказ валидации/конфликта без повреждения реестра. MEMBER/VIEWER не меняют реестр (403).
-6. Удалить пустой отдельный тип через `DELETE /issue-types/{code}`: 204; последний оставшийся тип удалить нельзя. Полный перенос непустого типа — E2E-13.
+6. Удалить пустой отдельный тип через `DELETE /api/v1/projects/{P}/issue-types/{code}`: 204; последний оставшийся тип удалить нельзя. Полный перенос непустого типа — E2E-13.
 
 **Очистка:** убрать только созданные RUN типы после удаления/переноса их задач.
 
@@ -136,8 +136,8 @@
 
 **Условия:** ADMIN P; тип E2E_CUSTOM, без задач.
 
-1. `GET /projects/{P}/workflows`: 200, текущие binding/версии. `GET /projects/{P}/workflow?issueType=E2E_CUSTOM`: 200, эффективный граф типа.
-2. `POST /projects/{P}/workflows` с уникальным X-Request-Id и телом ниже: 201, свой UUID W, version=1, E2E_CUSTOM привязан к W. Default не изменён.
+1. `GET /api/v1/projects/{P}/workflows`: 200, текущие binding/версии. `GET /api/v1/projects/{P}/workflow?issueType=E2E_CUSTOM`: 200, эффективный граф типа.
+2. `POST /api/v1/projects/{P}/workflows` с уникальным X-Request-Id и телом ниже: 201, свой UUID W, version=1, E2E_CUSTOM привязан к W. Default не изменён.
 
 ```json
 {
@@ -155,9 +155,9 @@
 }
 ```
 
-3. `POST /workflows/{W}/statuses` добавить QA category IN_PROGRESS, sortOrder=40: 201. `PATCH /statuses/{QA_ID}` с текущей version, name/category/sortOrder: 200; immutable statusKey не меняется. Устаревшая version — 409, текущее состояние сохранено.
-4. `POST /workflows/{W}/transitions` добавить REVIEW→QA: 201. `PATCH /transitions/{T}` изменить name/order/hidden: 200; endpoints immutable. В `/workflows` скрытый переход виден, в эффективном `/workflow?issueType=` скрыт. Его программное применение проверяется отдельно.
-5. Удалить неиспользуемый переход `DELETE /transitions/{T}?version=${CURRENT}`: 200, сохранив минимально допустимый граф (минимум один видимый переход); затем QA `DELETE /statuses/{QA_ID}?version=...`: 200. Связанные переходы удалённого статуса также отсутствуют.
+3. `POST /api/v1/projects/{P}/workflows/{W}/statuses` добавить QA category IN_PROGRESS, sortOrder=40: 201. `PATCH /api/v1/projects/{P}/workflows/{W}/statuses/{QA_ID}` с текущей version, name/category/sortOrder: 200; immutable statusKey не меняется. Устаревшая version — 409, текущее состояние сохранено.
+4. `POST /api/v1/projects/{P}/workflows/{W}/transitions` добавить REVIEW→QA: 201. `PATCH /api/v1/projects/{P}/workflows/{W}/transitions/{T}` изменить name/order/hidden: 200; endpoints immutable. В `/api/v1/projects/{P}/workflows` скрытый переход виден, в эффективном `/workflow?issueType=` скрыт. Его программное применение проверяется отдельно.
+5. Удалить неиспользуемый переход `DELETE /api/v1/projects/{P}/workflows/{W}/transitions/{T}?version=${CURRENT}`: 200, сохранив минимально допустимый граф (минимум один видимый переход); затем QA `DELETE /api/v1/projects/{P}/workflows/{W}/statuses/{QA_ID}?version=...`: 200. Связанные переходы удалённого статуса также отсутствуют.
 6. Пустой issueTypes, пропущенные обязательные коллекции графа, неизвестные типы/endpoints, duplicate keys/orders, отрицательный order, null/unknown поля — 400 без частичного графа; конфликт конкурирующей версии — 409. Не путать пропущенную коллекцию с допустимым в legacy create пустым набором transitions; минимумы последующих мутаций проверяются отдельно. Default и workflow другого проекта не мутируются, VIEWER/MEMBER получают 403.
 
 **Очистка:** W оставить для следующих сценариев; в конце удалить с текущей version/нужными mappings.
@@ -169,7 +169,7 @@
 1. Создать W2 с issueTypes=[E2E_CUSTOM] и графом TODO/IN_PROGRESS/DONE, без mappings: если REVIEW отсутствует, 400 WORKFLOW_ISSUES_UNMAPPED. issueCount/statusKeys/targetStatusKeys описывают реальные проблемные задачи, ни binding, ни версии/статусы не меняются.
 2. Повторить исправленную команду **с новым** X-Request-Id и `statusMappings:{"REVIEW":"IN_PROGRESS"}`: 201. Только несовместимые/явно сопоставленные статусы мигрируют, остальные поля и тип задачи сохраняются. На изменение статуса одна история TRANSITIONED; нет UUID операции/токена в публичных DTO.
 3. W, потерявший последний тип, остаётся собственным workflow с пустым issueTypes и прежним графом, виден в списке, пригоден для повторного использования/удаления. Это не эквивалент разрешения целевого PATCH с `issueTypes:[]`.
-4. `PATCH /workflows/{W}` с текущей version и непустым полным набором типов возвращает их W. Удалённые из набора типы уходят в общий default, даже если основной workflow проекта иной. Mappings проверяются для фактического назначения каждого типа; дополнительные details по типам согласованы.
+4. `PATCH /api/v1/projects/{P}/workflows/{W}` с текущей version и непустым полным набором типов возвращает их W. Удалённые из набора типы уходят в общий default, даже если основной workflow проекта иной. Mappings проверяются для фактического назначения каждого типа; дополнительные details по типам согласованы.
 5. В PATCH с issueTypes отсутствие version/дубликаты/null/[]/неизвестный тип — 400; stale version — 409. Name-only PATCH без issueTypes сохраняет bindings; пропуск version допустим для name-only. Default остаётся immutable.
 6. Изменить порядок реестра: без workflowId новый тип наследует workflow **первого** типа по sortOrder/code. Явный workflowId позволяет выбрать W, пустой W или общий default. Чужой/несуществующий workflowId — отказ без опубликованного типа; null — 400.
 7. Повтор POST/PATCH с тем же X-Request-Id и тем же телом не создаёт второй объект/миграцию. Другой command с тем же ключом — 409; повтор после отзыва ADMIN заново проверяет ACL.
@@ -181,9 +181,9 @@
 **Условия:** собственный граф, задачи TODO/REVIEW; отдельный граф без TODO и без transitions. Если используется W из E2E-10, заранее добавить видимый переход TODO→DONE с уникальным sortOrder: он должен сохраниться после удаления REVIEW, чтобы оставался хотя бы один видимый переход.
 
 1. Создание задачи без statusKey использует TODO и обязано проверить его принадлежность текущему workflow; в графе без TODO — 400 STATUS_NOT_IN_WORKFLOW без задачи. Явный допустимый statusKey работает и в графе без transitions. Пустой/плохой ключ — 400 INVALID_ARGUMENT; синтаксически правильный чужой — 400 STATUS_NOT_IN_WORKFLOW.
-2. `DELETE /workflows/{W}/statuses/{REVIEW_ID}` без target при наличии задач отклоняется, задачи/граф неизменны. С текущей version и `targetStatusKey=TODO`: 200, задачи **удаляемого** статуса перенесены, связанные переходы удалены, board/history согласованы.
+2. `DELETE /api/v1/projects/{P}/workflows/{W}/statuses/{REVIEW_ID}` без target при наличии задач отклоняется, задачи/граф неизменны. С текущей version и `targetStatusKey=TODO`: 200, задачи **удаляемого** статуса перенесены, связанные переходы удалены, board/history согласованы.
 3. Если в выделенной legacy фикстуре есть задачи со старыми ключами вне графа, они остаются unplaced; удаление другого статуса их не мигрирует. Не создавать legacy повреждения прямой правкой общего стенда.
-4. `DELETE /workflows/{W}` с текущей version: 200, типы возвращаются на default. При несовместимых статусах без mappings — отказ; с допустимыми mappings переносится необходимый набор, identity не меняет версии задач. Неправильная version — 409.
+4. `DELETE /api/v1/projects/{P}/workflows/{W}` с текущей version: 200, типы возвращаются на default. При несовместимых статусах без mappings — отказ; с допустимыми mappings переносится необходимый набор, identity не меняет версии задач. Неправильная version — 409.
 5. Default нельзя удалить/редактировать; чужой граф не становится собственным. Пустой свой W после переноса последнего типа можно удалить с сохранением остальных bindings.
 
 **Очистка:** удалить только собственные оставшиеся workflow/задачи; не менять default.
@@ -192,8 +192,8 @@
 
 **Условия:** типы SRC/DST в P, свои workflow с несовместимыми статусами; две активные SRC-задачи и одна soft-deleted, сохранены UUID/generation/снимки.
 
-1. `DELETE /projects/{P}/issue-types/SRC` без тела: 400 ISSUE_TYPE_IN_USE с точным числом живых задач, ни одна не изменена. Последний тип защищён LAST_ISSUE_TYPE.
-2. `DELETE` с `{"moveIssuesTo":"DST","expectedGeneration":"${SRC_GENERATION}"}` без полного mappings: 400 ISSUE_STATUSES_UNMAPPED со всеми statusKeys/targetStatusKeys, состояние атомарно сохранено.
+1. `DELETE /api/v1/projects/{P}/issue-types/SRC` без тела: 400 ISSUE_TYPE_IN_USE с точным числом живых задач, ни одна не изменена. Последний тип защищён LAST_ISSUE_TYPE.
+2. `DELETE /api/v1/projects/{P}/issue-types/SRC` с `{"moveIssuesTo":"DST","expectedGeneration":"${SRC_GENERATION}"}` без полного mappings: 400 ISSUE_STATUSES_UNMAPPED со всеми statusKeys/targetStatusKeys, состояние атомарно сохранено.
 3. Исправленный запрос с `statusMappings` и актуальным generation: 204; SRC отсутствует в реестре/context, все живые задачи стали DST, их id/key/контент/оценки/исполнитель/метки/наблюдатели сохранены, статус валиден для DST. Soft-deleted задачи не мигрировали.
 4. На каждой перенесённой задаче одна история UPDATED со старым/новым типом и статусом, а не отдельный лишний TRANSITIONED. После повтора той же завершённой команды дополнительных переносов/истории/уведомлений нет.
 5. SRC=target, неизвестный target, неправильное mapping, stale generation — отказ без изменений. После повторного создания SRC нужен expectedGeneration; старое поколение не удаляет новое (ISSUE_TYPE_CHANGED/ISSUE_TYPE_GENERATION_REQUIRED).
@@ -205,7 +205,7 @@
 
 **Условия:** MEMBER M, P с допустимым TASK/TODO.
 
-1. `POST /projects/{P}/issues` с новым UUID Idempotency-Key и телом ниже: 201, новый UUID, issueKey с P prefix, reporter M, status TODO, version>0 и заданные поля. Порядок issueNumber монотонен, не требовать отсутствия пропусков.
+1. `POST /api/v1/projects/{P}/issues` с новым UUID Idempotency-Key и телом ниже: 201, новый UUID, issueKey с P prefix, reporter M, status TODO, version>0 и заданные поля. Порядок issueNumber монотонен, не требовать отсутствия пропусков.
 
 ```json
 {
@@ -216,7 +216,7 @@
 }
 ```
 
-2. `GET /issues/{id}` и `GET /issues/by-key/{key}`: 200, одна и та же issue/history; `GET /projects/{P}/issues` содержит задачу. Проверить профили reporter/assignee, labels/watchers/links/attachments/commentCount, planning fields и timeSpentMinutes.
+2. `GET /api/v1/issues/{id}` и `GET /api/v1/issues/by-key/{key}`: 200, одна и та же issue/history; `GET /api/v1/projects/{P}/issues` содержит задачу. Проверить профили reporter/assignee, labels/watchers/links/attachments/commentCount, planning fields и timeSpentMinutes.
 3. Повтор create с тем же key/телом, в том числе одновременный: тот же id, одна задача/создание/номер. Изменение statusKey, storyPoints, дат или оценок при том же key — конфликт, не молчаливое сохранение старого тела. Отсутствующий/невалидный key — отказ.
 4. Невалидные type/priority, отрицательные оценки, недопустимые даты/summary — 400 без задачи/истории. VIEWER не создаёт (403). Replay после удаления членства/архива проверяет актуальные права и не раскрывает сохранённый ответ.
 
@@ -226,9 +226,9 @@
 
 **Условия:** две сессии M с одинаковой прочитанной version N.
 
-1. `PATCH /issues/{id}` с `If-Match:"N"` и `{"summary":"E2E changed","description":null,"storyPoints":null}`: 200, три поля изменены/очищены, пропущенные значения сохранены; version увеличена, история описывает фактические изменения.
+1. `PATCH /api/v1/issues/{id}` с `If-Match:"N"` и `{"summary":"E2E changed","description":null,"storyPoints":null}`: 200, три поля изменены/очищены, пропущенные значения сохранены; version увеличена, история описывает фактические изменения.
 2. Вторая сессия с N — 409, без потери данных победителя и лишней истории. Два параллельных PATCH N имеют одного победителя. Missing/malformed/nonpositive If-Match — 400; summary/priority null и отрицательные числовые поля — 400.
-3. `PUT /issues/{id}` с полным допустимым summary/description/priority и planning: 200, последующие GET/list/by-key/search/board согласованы. Отличать семантику PUT и PATCH; отсутствующие PATCH поля нельзя очищать.
+3. `PUT /api/v1/issues/{id}` с полным допустимым summary/description/priority и planning: 200, последующие GET/list/by-key/search/board согласованы. Отличать семантику PUT и PATCH; отсутствующие PATCH поля нельзя очищать.
 4. PATCH issueType на зарегистрированный тип с подходящим статусом: 200, тип/история обновлены. Несовместимый статус — 400 STATUS_NOT_IN_TARGET_WORKFLOW и исходный тип сохранён. Удалённый/неизвестный тип не принимается.
 5. Под V/O те же записи запрещены, включая точный id/key. Во вложенных маршрутах проверять ACL фактического проекта issueId. Если маршрут разрешает навигационный projectId без проверки иерархии, одно несовпадение path не считать нарушением; пользователь без прав на фактическую задачу не получает доступ.
 
@@ -238,9 +238,9 @@
 
 **Условия:** M и A в P, фактический граф прочитан через `/workflow`.
 
-1. `PUT /issues/{id}/assignee` с `{"assigneeId":"${M_ID}"}`: 200; карточка/list/search/board показывают M и профиль, история и уведомления согласованы. При включённом auto-watch M подписан ровно один раз.
+1. `PUT /api/v1/issues/{id}/assignee` с `{"assigneeId":"${M_ID}"}`: 200; карточка/list/search/board показывают M и профиль, история и уведомления согласованы. При включённом auto-watch M подписан ровно один раз.
 2. PATCH assigneeId:null с актуальным If-Match снимает назначение; пропуск не снимает. Неучастник/VIEWER/BLOCKED не становится исполнителем в обход правил записи; отказ не меняет прежнего исполнителя.
-3. `PUT /issues/{id}/transition/{T_ID}` с `{"payload":{}}` и актуальным If-Match: 200, целевой статус, новая version и одна TRANSITIONED. UUID перехода брать из реального графа; не подставлять захардкоженные UUID.
+3. `PUT /api/v1/issues/{id}/transition/{T_ID}` с `{"payload":{}}` и актуальным If-Match: 200, целевой статус, новая version и одна TRANSITIONED. UUID перехода брать из реального графа; не подставлять захардкоженные UUID.
 4. Переход из другого исходного статуса/другого workflow, устаревший If-Match (409), VIEWER/O (403), несуществующий transition не изменяют задачу. Разрешённый hidden переход доступен программно, хотя отсутствует в UI-списке.
 5. Проверить публичную историю после создания, изменения, назначения, перехода: actorUserId, участники действия и канал корректны; возвращаемые UserSummary содержат только предусмотренные id/displayName/avatarUrl. Email и неизменяемый снимок имени в публичной истории не обещаются; административные снимки автора проверяются в audit по E2E-27. Поля публичной истории не содержат имя/UUID PAT, raw комментарии, secret или внутренний operationId. Старые nullable channel не выдумываются.
 
@@ -250,11 +250,11 @@
 
 **Условия:** несколько задач P с разными статусами, приоритетами, исполнителями, типами/метками; чужой Q.
 
-1. `GET /projects/{P}/issues?page=0&pageSize=1`, затем следующие страницы: каждая запись принадлежит P; фильтры status, assigneeId, labelId дают ожидаемое пересечение. Пустая страница не означает исчезновение totalCount.
-2. `GET /issues/search?query=${UNIQUE_TEXT}&projectId=${P}`: 200 items/totalCount; найти по части summary/description/key. Добавить statusKey, assigneeId, reporterId, priority, issueType; результат соответствует каждому фильтру и ACL.
+1. `GET /api/v1/projects/{P}/issues?page=0&pageSize=1`, затем следующие страницы: каждая запись принадлежит P; фильтры status, assigneeId, labelId дают ожидаемое пересечение. Пустая страница не означает исчезновение totalCount.
+2. `GET /api/v1/issues/search?query=${UNIQUE_TEXT}&projectId=${P}`: 200 items/totalCount; найти по части summary/description/key. Добавить statusKey, assigneeId, reporterId, priority, issueType; результат соответствует каждому фильтру и ACL.
 3. Без projectId поиск не раскрывает Q/O; после удаления участника его результаты P исчезают сразу. Soft-deleted/архивированные по контракту объекты не возвращаются как активные.
 4. Query менее 3 символов, page/pageSize вне границ и неверные UUID/enum — 400, не 500. Проверить пустой результат с 200 и totalCount=0.
-5. `GET /project-stats`: счётчики доступных проектов согласованы с задачами до/после перехода/удаления; нет статистики чужого P у O.
+5. `GET /api/v1/project-stats`: счётчики доступных проектов согласованы с задачами до/после перехода/удаления; нет статистики чужого P у O.
 
 **Очистка:** не требуется сверх удаления фикстур.
 
@@ -262,8 +262,8 @@
 
 **Условия:** не менее трёх задач в одной колонке, задачи типа со своим графом и DONE category под нестандартным ключом.
 
-1. `GET /projects/{P}/board?pageSizePerColumn=1`: 200, колонки по эффективным workflow реестра, первая карточка/totalCount/hasMore каждой колонки согласованы. Метки и профиль исполнителя согласованы с карточкой; planning и timeSpentMinutes не требовать от BoardIssueDto, если эти поля не предусмотрены его схемой.
-2. `GET /board/columns/{statusKey}/issues?pageSize=1`: 200, порядок createdAt asc,id asc. Продолжать с afterCreatedAt/afterId **одной последней карточки** и теми же фильтрами до пустой страницы: без повторов/пропусков стабильной выборки, totalCount полный независимо от cursor.
+1. `GET /api/v1/projects/{P}/board?pageSizePerColumn=1`: 200, колонки по эффективным workflow реестра, первая карточка/totalCount/hasMore каждой колонки согласованы. Метки и профиль исполнителя согласованы с карточкой; planning и timeSpentMinutes не требовать от BoardIssueDto, если эти поля не предусмотрены его схемой.
+2. `GET /api/v1/projects/{P}/board/columns/{statusKey}/issues?pageSize=1`: 200, порядок createdAt asc,id asc. Продолжать с afterCreatedAt/afterId **одной последней карточки** и теми же фильтрами до пустой страницы: без повторов/пропусков стабильной выборки, totalCount полный независимо от cursor.
 3. Повторить при issueType, assigneeId, labelId, includeDone, priority, query. includeDone=false исключает все ключи категории DONE, а не только литерал DONE; true возвращает их.
 4. Неизвестный/невалидный issueType даёт пустую доску; неизвестный statusKey колонки — пустую страницу после проверки ACL. Одна половина cursor, неверная дата/UUID или pageSize вне 1..200 — 400.
 5. Удалить карточку, на которую указывает cursor, и продолжить: cursor остаётся пригодным. Вставка после cursor видна в продолжении; вставка до него — после обновления доски. Это чтение текущих данных, не snapshot между запросами.
@@ -275,11 +275,11 @@
 
 **Условия:** M/A/V в P, задача M.
 
-1. `POST /projects/{P}/issues/{id}/comments` с `{"body":"E2E ${RUN} comment"}`: **200**, UUID автора/комментария. `GET` с page/pageSize: 200, нужный текст/профиль/channel; commentCount карточки увеличен на один.
-2. `PUT /comments/{commentId}` с новым body: 200; GET показывает новое содержимое, количество не увеличилось. Проверить автора, updatedAt и канал последней записи.
+1. `POST /api/v1/projects/{P}/issues/{id}/comments` с `{"body":"E2E ${RUN} comment"}`: **200**, UUID автора/комментария. `GET /api/v1/projects/{P}/issues/{id}/comments` с page/pageSize: 200, нужный текст/профиль/channel; commentCount карточки увеличен на один.
+2. `PUT /api/v1/projects/{P}/issues/{id}/comments/{commentId}` с новым body: 200; GET показывает новое содержимое, количество не увеличилось. Проверить автора, updatedAt и канал последней записи.
 3. Пустой/body>10000/неверная пагинация — 400, количество/текст не меняются. VIEWER и O не пишут; подстановка навигационного projectId не обходит ACL фактической задачи. Редактировать/удалять комментарий может только его автор с правом записи в проекте: другой MEMBER и ADMIN-неавтор получают 403, текст/счётчик сохраняются.
 4. История/outbox/inbox не копируют raw текст комментария и не раскрывают приватный UUID PAT. Собственная успешная запись ровно одна, без дубликатов при чтении страниц.
-5. `DELETE /comments/{commentId}`: 204; GET больше не показывает комментарий, commentCount уменьшается. Повтор не удаляет другие комментарии.
+5. `DELETE /api/v1/projects/{P}/issues/{id}/comments/{commentId}`: 204; GET больше не показывает комментарий, commentCount уменьшается. Повтор не удаляет другие комментарии.
 
 **Очистка:** удалить комментарии RUN.
 
@@ -287,11 +287,11 @@
 
 **Условия:** M/A в P, задача без worklogs.
 
-1. `POST /projects/{P}/issues/{id}/worklogs` с `{"spentMinutes":30,"workDate":"${TODAY}","comment":"E2E work"}`: 201, authorUserId M. Добавить второй worklog на 45 минут; list 200 и timeSpentMinutes задачи=75, независимо от pageSize=1.
-2. `PUT /worklogs/{worklogId}` с `{"spentMinutes":40}`: 200, дата/комментарий сохранены; сумма=85. Изменить дату/комментарий допустимыми значениями; detail, by-key и список задач проекта продолжают показывать правильную сумму. Search и board не обязаны возвращать timeSpentMinutes: это поле отсутствует в их DTO.
+1. `POST /api/v1/projects/{P}/issues/{id}/worklogs` с `{"spentMinutes":30,"workDate":"${TODAY}","comment":"E2E work"}`: 201, authorUserId M. Добавить второй worklog на 45 минут; list 200 и timeSpentMinutes задачи=75, независимо от pageSize=1.
+2. `PUT /api/v1/projects/{P}/issues/{id}/worklogs/{worklogId}` с `{"spentMinutes":40}`: 200, дата/комментарий сохранены; сумма=85. Изменить дату/комментарий допустимыми значениями; detail, by-key и список задач проекта продолжают показывать правильную сумму. Search и board не обязаны возвращать timeSpentMinutes: это поле отсутствует в их DTO.
 3. Проверить list пагинацию и profile автора, в том числе после удаления автора из P: authorUserId сохраняется, исторический профиль или null не ломают список.
 4. spentMinutes 0/negative, дата за допустимым будущим пределом, >2000 comment, неверная пагинация — 400 без изменения суммы. MEMBER меняет свой, чужой — только ADMIN; VIEWER читает, но не пишет. Чужой worklogId не позволяет менять другой объект; доступ проверяется по фактической задаче/проекту, а не только по навигационному projectId.
-5. `DELETE /worklogs/{worklogId}`: 204, сумма уменьшается ровно на удалённые минуты, запись не возвращается. После удаления обоих сумма=0; original/remaining estimate не выдумываются из суммы, если контракт этого не требует.
+5. `DELETE /api/v1/projects/{P}/issues/{id}/worklogs/{worklogId}`: 204, сумма уменьшается ровно на удалённые минуты, запись не возвращается. После удаления обоих сумма=0; original/remaining estimate не выдумываются из суммы, если контракт этого не требует.
 
 **Очистка:** удалить worklogs RUN.
 
@@ -299,13 +299,13 @@
 
 **Условия:** две задачи P, задача Q и участники M/A/V.
 
-1. `POST /issues/{I1}/links` с `{"targetIssueId":"${I2}","linkType":"BLOCKS"}`: 201; `GET links` обеих сторон 200, противоположные направления/viewLinkType и targetIssue согласованы. Самоссылка, дубликат, неизвестный linkType и связь в чужой проект отклоняются по правилам доступа.
-2. `DELETE /issues/{I1}/links/{linkId}`: 204; связь отсутствует с обеих сторон.
-3. A `POST /projects/{P}/labels` с `{"name":"E2E ${RUN}","color":"#0052CC"}`: 201; `GET labels`: 200. `PATCH /labels/{labelId}` с name/color: 200; повторное имя/неправильный HEX/слишком длинное имя — отказ без порчи прежней метки. MEMBER не создаёт/редактирует/удаляет проектную метку.
-4. M `POST /projects/{P}/issues/{id}/labels` с labelId: 201; list labels и карточка/list/search/board содержат одну метку с актуальными name/color. Чужая project label не привязывается. `DELETE /labels/{labelId}` у задачи — 204, проектная метка остаётся.
-5. `PUT /issues/{id}/watchers/me`: 200; повтор не дублирует подписку, GET watchers и isWatching согласованы. `DELETE /watchers/me`: 200, повтор не затрагивает других. Проверить auto-watch reporter/assignee при включённых настройках.
-6. A `POST /watchers` с `{"userId":"${M_ID}"}`: 200; `DELETE /watchers/{M}`: 200. M может подписывать себя, но не управлять чужими подписками (403); VIEWER не создаёт подписку при стандартной политике. Чужой/nonmember/BLOCKED target не должен обходить проверки допуска.
-7. A удалить проектную метку через `DELETE /projects/{P}/labels/{labelId}`: 204; она исчезает из всех привязок/карточек, остальные метки остаются.
+1. `POST /api/v1/issues/{I1}/links` с `{"targetIssueId":"${I2}","linkType":"BLOCKS"}`: 201; `GET /api/v1/issues/{I1}/links` и `GET /api/v1/issues/{I2}/links` 200, противоположные направления/viewLinkType и targetIssue согласованы. Самоссылка, дубликат, неизвестный linkType и связь в чужой проект отклоняются по правилам доступа.
+2. `DELETE /api/v1/issues/{I1}/links/{linkId}`: 204; связь отсутствует с обеих сторон.
+3. A `POST /api/v1/projects/{P}/labels` с `{"name":"E2E ${RUN}","color":"#0052CC"}`: 201; `GET /api/v1/projects/{P}/labels`: 200. `PATCH /api/v1/projects/{P}/labels/{labelId}` с name/color: 200; повторное имя/неправильный HEX/слишком длинное имя — отказ без порчи прежней метки. MEMBER не создаёт/редактирует/удаляет проектную метку.
+4. M `POST /api/v1/projects/{P}/issues/{id}/labels` с labelId: 201; list labels и карточка/list/search/board содержат одну метку с актуальными name/color. Чужая project label не привязывается. `DELETE /api/v1/projects/{P}/issues/{id}/labels/{labelId}` у задачи — 204, проектная метка остаётся.
+5. `PUT /api/v1/projects/{P}/issues/{id}/watchers/me`: 200; повтор не дублирует подписку, GET watchers и isWatching согласованы. `DELETE /api/v1/projects/{P}/issues/{id}/watchers/me`: 200, повтор не затрагивает других. Проверить auto-watch reporter/assignee при включённых настройках.
+6. A `POST /api/v1/projects/{P}/issues/{id}/watchers` с `{"userId":"${M_ID}"}`: 200; `DELETE /api/v1/projects/{P}/issues/{id}/watchers/{M}`: 200. M может подписывать себя, но не управлять чужими подписками (403); VIEWER не создаёт подписку при стандартной политике. Чужой/nonmember/BLOCKED target не должен обходить проверки допуска.
+7. A удалить проектную метку через `DELETE /api/v1/projects/{P}/labels/{labelId}`: 204; она исчезает из всех привязок/карточек, остальные метки остаются.
 
 **Очистка:** убрать связи, тестовые метки и лишние подписки.
 
@@ -313,13 +313,13 @@
 
 **Условия:** выделенная активная учётная запись без чужого аватара, задача P, небольшой валидный PNG и доступный клиенту S3.
 
-1. `POST /projects/{P}/issues/{id}/attachments/upload-url` с `{"fileName":"e2e.png","contentType":"image/png","sizeBytes":${SIZE}}`: 200, objectKey/presigned upload URL. До PUT вложение не считается подтверждённым.
-2. Загрузить **точные байты** отдельным PUT на выданный URL с указанным contentType, без JWT Taska. 2xx от storage. `POST /attachments/confirm` с objectKey/fileName/contentType: 201, attachmentId.
-3. `GET attachments`: 200; `GET /attachments/{attachmentId}/download-url`: 200. Скачать и сравнить хеш/размер/тип с исходным файлом. VIEWER может читать; посторонний не получает URL.
+1. `POST /api/v1/projects/{P}/issues/{id}/attachments/upload-url` с `{"fileName":"e2e.png","contentType":"image/png","sizeBytes":${SIZE}}`: 200, objectKey/presigned upload URL. До PUT вложение не считается подтверждённым.
+2. Загрузить **точные байты** отдельным PUT на выданный URL с указанным contentType, без JWT Taska. 2xx от storage. `POST /api/v1/projects/{P}/issues/{id}/attachments/confirm` с objectKey/fileName/contentType: 201, attachmentId.
+3. `GET /api/v1/projects/{P}/issues/{id}/attachments`: 200; `GET /api/v1/projects/{P}/issues/{id}/attachments/{attachmentId}/download-url`: 200. Скачать и сравнить хеш/размер/тип с исходным файлом. VIEWER может читать; посторонний не получает URL.
 4. Размер 0/>2097152, запрещённый MIME, чужой objectKey, подтверждение отсутствующего объекта, UUID вложения другой задачи — контролируемый отказ без чужой привязки. MEMBER удаляет своё вложение; чужое удаляет только ADMIN по стандартной политике.
-5. `DELETE /attachments/{attachmentId}`: 204; list/карточка больше не содержат его, новый download URL не выдаётся. Не требовать немедленной недействительности уже выданного presigned URL, если storage-политика этого не обещает.
-6. Аналогично `POST /users/me/avatar/upload-url`: 200; PUT байтов; `POST /users/me/avatar/confirm`: 200; me/каталог и `GET /users/{userId}/avatar` возвращают аватар. Скачать и сравнить байты.
-7. Неверный размер/MIME, чужой avatar objectKey и confirm до PUT отклоняются. `DELETE /users/me/avatar`: 204; последующий get avatar — предусмотренный 404, профиль/каталог корректно работают без него.
+5. `DELETE /api/v1/projects/{P}/issues/{id}/attachments/{attachmentId}`: 204; list/карточка больше не содержат его, новый download URL не выдаётся. Не требовать немедленной недействительности уже выданного presigned URL, если storage-политика этого не обещает.
+6. Аналогично `POST /api/v1/users/me/avatar/upload-url`: 200; PUT байтов; `POST /api/v1/users/me/avatar/confirm`: 200; me/каталог и `GET /api/v1/users/{userId}/avatar` возвращают аватар. Скачать и сравнить байты.
+7. Неверный размер/MIME, чужой avatar objectKey и confirm до PUT отклоняются. `DELETE /api/v1/users/me/avatar`: 204; последующий get avatar — предусмотренный 404, профиль/каталог корректно работают без него.
 
 **Очистка:** удалить только загруженные RUN файлы/аватар через публичный API. Не заменять/удалять существующий чужой аватар; при недоступном внешнем S3 позитивный upload/download остаётся непроверенным.
 
@@ -327,9 +327,9 @@
 
 **Условия:** зависимые проверки завершены, идентификаторы собственных объектов сохранены.
 
-1. `DELETE /issues/{id}` под MEMBER/ADMIN: 204; get/by-key не возвращают активную задачу, lists/search/board/stats исключают её. Связанные read/write вложенных ресурсов не обходят удаление.
+1. `DELETE /api/v1/issues/{id}` под MEMBER/ADMIN: 204; get/by-key не возвращают активную задачу, lists/search/board/stats исключают её. Связанные read/write вложенных ресурсов не обходят удаление.
 2. VIEWER/O не удаляют. Удаление одной задачи не удаляет другие задачи, реестр типов или чужие worklogs/вложения.
-3. `DELETE /projects/{P}` под A: 200, проект архивирован. My projects/stats/context и записи по архивному проекту соответствуют контракту архива; создать/изменить задачу/тип/workflow/member нельзя. Отрицательный ACL продолжает действовать.
+3. `DELETE /api/v1/projects/{P}` под A: 200, проект архивирован. My projects/stats/context и записи по архивному проекту соответствуют контракту архива; создать/изменить задачу/тип/workflow/member нельзя. Отрицательный ACL продолжает действовать.
 4. MEMBER/VIEWER не архивируют; повторный запрос не затрагивает другой проект. Повтор сохранённого idempotent create ответа заново проверяет архив/ACL.
 
 **Очистка:** Q и оставшиеся RUN проекты архивировать; не выполнять массовое удаление или SQL cleanup общего стенда.
@@ -338,10 +338,10 @@
 
 **Условия:** отдельные отправитель A и получатель M, M участник/наблюдатель задачи; исходные настройки M сохранены.
 
-1. `GET /users/me/notification-preferences`: 200, правильный email, независимые emailEnabled/telegramEnabled, честная доступность/статус Telegram.
-2. `PATCH` с `{"emailEnabled":false,"telegramEnabled":false}`: 200; не переданное поле не меняется, null/unknown field/пустой command — 400. Включение неподтверждённого/недоступного Telegram — 409 без ложного connected.
-3. A назначает M задачу, меняет её/добавляет комментарий. Дождаться `GET /notifications` под M: 200, событие нужной задачи/проекта, правильный тип/автор/ссылка. При обоих каналах false inbox всё равно работает; собственные действия могут отфильтровываться, поэтому использовать двух авторов.
-4. Проверить unread/read фильтры и пагинацию. `PATCH /notifications/{N}/read`: 200, N прочитано; повтор не создаёт уведомление. Чужой N нельзя прочитать/изменить. `POST /notifications/read-all` на **выделенном** M: 200 с корректным количеством, все его непрочитанные прочитаны, inbox других не меняется.
+1. `GET /api/v1/users/me/notification-preferences`: 200, правильный email, независимые emailEnabled/telegramEnabled, честная доступность/статус Telegram.
+2. `PATCH /api/v1/users/me/notification-preferences` с `{"emailEnabled":false,"telegramEnabled":false}`: 200; не переданное поле не меняется, null/unknown field/пустой command — 400. Включение неподтверждённого/недоступного Telegram — 409 без ложного connected.
+3. A назначает M задачу, меняет её/добавляет комментарий. Дождаться `GET /api/v1/notifications` под M: 200, событие нужной задачи/проекта, правильный тип/автор/ссылка. При обоих каналах false inbox всё равно работает; собственные действия могут отфильтровываться, поэтому использовать двух авторов.
+4. Проверить unread/read фильтры и пагинацию. `PATCH /api/v1/notifications/{N}/read`: 200, N прочитано; повтор не создаёт уведомление. Чужой N нельзя прочитать/изменить. `POST /api/v1/notifications/read-all` на **выделенном** M: 200 с корректным количеством, все его непрочитанные прочитаны, inbox других не меняется.
 5. Включить email и повторить отдельное действие A: inbox и письмо в тестовом приёмнике согласованы, текст/ссылка безопасны, raw comment body/секреты не копируются в производные данные. Отсутствие письма нельзя считать успешной доставкой только по записи inbox.
 6. Выключить email/Telegram и повторить: новых отправок отключённого канала нет. Включение Telegram не досылает уведомления, созданные при выключенном канале; старый backlog не уходит новому подключению.
 
@@ -351,12 +351,12 @@
 
 **Условия:** отдельный тестовый bot/chat; при выключенной интеграции проверять UNAVAILABLE/предусмотренные 409/503 и не выдавать это за позитивный цикл.
 
-1. `POST /users/me/telegram/link`: 200 с linkId/url/expiresAt/preferences; PENDING, TTL 10 минут. Второй link отменяет первый; GET settings согласован с возвращённым snapshot.
-2. В личном тестовом чате пройти `/start` по ссылке. Настоящий webhook `POST /integrations/telegram/webhook` с секретным header обрабатывается 200; статус становится AWAITING_CONFIRMATION, **не** автоматически CONNECTED.
-3. `POST /users/me/telegram/confirm` с текущим linkId: 200, CONNECTED, telegramEnabled=true, emailEnabled сохранён. Повтор/expired/старый linkId — 409. Подменённый linkId не подключает чужой chat.
+1. `POST /api/v1/users/me/telegram/link`: 200 с linkId/url/expiresAt/preferences; PENDING, TTL 10 минут. Второй link отменяет первый; GET settings согласован с возвращённым snapshot.
+2. В личном тестовом чате пройти `/start` по ссылке. Настоящий webhook `POST /api/v1/integrations/telegram/webhook` с секретным header обрабатывается 200; статус становится AWAITING_CONFIRMATION, **не** автоматически CONNECTED.
+3. `POST /api/v1/users/me/telegram/confirm` с текущим linkId: 200, CONNECTED, telegramEnabled=true, emailEnabled сохранён. Повтор/expired/старый linkId — 409. Подменённый linkId не подключает чужой chat.
 4. Действием A сформировать уведомление M: inbox и Telegram-получатель/ссылка верны. Повтор update_id не дублирует доставку/привязку. Команды из группы и чужого аккаунта не захватывают чужую заявку.
 5. Webhook без/с неверным `X-Telegram-Bot-Api-Secret-Token`: 403; malformed payload — 400, тело >32 KiB — 413, rate-limit — 429. Позитивный webhook не синтезировать чужими chat_id на общем боте.
-6. `DELETE /users/me/telegram`: 200, NOT_CONNECTED и канал выключен; pending delivery отменена. `/stop` эквивалентно разрывает привязку. Выключение только toggle сохраняет связь, но не очередь; переподключение на новый chat не отправляет старые задания.
+6. `DELETE /api/v1/users/me/telegram`: 200, NOT_CONNECTED и канал выключен; pending delivery отменена. `/stop` эквивалентно разрывает привязку. Выключение только toggle сохраняет связь, но не очередь; переподключение на новый chat не отправляет старые задания.
 
 **Очистка:** disconnect только собственного тестового пользователя/чата, восстановить исходные настройки; не перенастраивать/не удалять общий webhook.
 
@@ -364,10 +364,10 @@
 
 **Условия:** G, выделенные INVITED I и ACTIVE U; никаких блокировок A/M/G общего назначения.
 
-1. `PATCH /admin/users/{I}` с displayName: 200, корректное нормализованное имя; directory/profile отражают изменение, UUID неизменен. Неверное имя — 400; обычный project ADMIN получает 403.
-2. `POST /admin/users/{I}/block` с `{"reason":"E2E ${RUN}"}`: 200 BLOCKED; I не логинится/не виден в каталоге. `POST /unblock` с reason: 200 **INVITED**, не ACTIVE; старую неистекшую ссылку можно принять после разблокировки.
+1. `PATCH /api/v1/admin/users/{I}` с displayName: 200, корректное нормализованное имя; directory/profile отражают изменение, UUID неизменен. Неверное имя — 400; обычный project ADMIN получает 403.
+2. `POST /api/v1/admin/users/{I}/block` с `{"reason":"E2E ${RUN}"}`: 200 BLOCKED; I не логинится/не виден в каталоге. `POST /api/v1/admin/users/{I}/unblock` с reason: 200 **INVITED**, не ACTIVE; старую неистекшую ссылку можно принять после разблокировки.
 3. Для отдельного ACTIVE U блокировка запрещает и login, и следующий запрос с ранее выданным access/PAT; unblock возвращает ACTIVE и не меняет пароль/членство. Проверить audit actor/target/reason/requestId, без секретов.
-4. Только на U выполнить контролируемые неправильные login до LOCKED. Уже активный access при временном LOCKED работает по политике; новый login/refresh запрещены. `POST /admin/users/{U}/reset-lockout` с reason: 200, корректный пароль снова работает; BLOCKED не превращается этим в ACTIVE.
+4. Только на U выполнить контролируемые неправильные login до LOCKED. Уже активный access при временном LOCKED работает по политике; новый login/refresh запрещены. `POST /api/v1/admin/users/{U}/reset-lockout` с reason: 200, корректный пароль снова работает; BLOCKED не превращается этим в ACTIVE.
 5. Пустой reason, неизвестный userId, невалидный UUID, неразрешённая self/last-admin операция — предусмотренный 400/404/409; MEMBER/VIEWER/PAT — 403. Проверять отсутствие незапланированных изменений.
 
 **Очистка:** восстановить исходные имена/status выделенных фикстур; не менять credentials других пользователей.
@@ -376,12 +376,12 @@
 
 **Условия:** JWT G, собственные объекты с RUN; негативная проверка под обычным пользователем и PAT G.
 
-1. `GET /readonly/catalog`: 200, актуальные service/table/column metadata/capabilities. Под обычным пользователем/PAT — 403, без каталога.
-2. Для каждой доступной каталожной service/table сделать `GET /readonly/{service}/{table}?page=0&pageSize=1` и допустимые sort/order/filters. 200, колонки/типы/пагинация согласованы с metadata; full email отображается везде, а пароли/hash/JWT/PAT/invitation/OAuth/Telegram secrets замаскированы, включая вложенный JSON.
-3. Для таблицы со single-row capability взять UUID своей строки: `GET /readonly/{service}/{table}/{id}` — 200 той же строки. Неизвестная таблица/service/id — 404; запрещённая колонка/operator, невалидная пагинация/sort/инъекция — 400 без выполнения SQL или раскрытия схемы/секретов.
-4. `GET /readonly/audit-entries` с actorUserId/action/targetService/targetTable/targetId/requestId/date range: 200, записи выполненных административных операций найдены, снимки автора/reason корректны. Страницы и hasMore/total по контракту; обратный диапазон/неверная дата — 400.
-5. `GET /readonly/outbox/problematic-summary`: 200, counters по сервисам и события согласованы; serviceKey filter ограничивает результат.
-6. На **специально подготовленном собственном** проблемном событии `POST /admin/outbox/{service}/{eventId}/retry` с reason: 200, событие переведено в разрешённое повторяемое состояние, audit записан. Не повторять рабочие/чужие события ради теста. Неизвестный UUID — 404; обычный user/PAT — 403; отсутствие reason — 400.
+1. `GET /api/v1/readonly/catalog`: 200, актуальные service/table/column metadata/capabilities. Под обычным пользователем/PAT — 403, без каталога.
+2. Для каждой доступной каталожной service/table сделать `GET /api/v1/readonly/{service}/{table}?page=0&pageSize=1` и допустимые sort/order/filters. 200, колонки/типы/пагинация согласованы с metadata; full email отображается везде, а пароли/hash/JWT/PAT/invitation/OAuth/Telegram secrets замаскированы, включая вложенный JSON.
+3. Для таблицы со single-row capability взять UUID своей строки: `GET /api/v1/readonly/{service}/{table}/{id}` — 200 той же строки. Неизвестная таблица/service/id — 404; запрещённая колонка/operator, невалидная пагинация/sort/инъекция — 400 без выполнения SQL или раскрытия схемы/секретов.
+4. `GET /api/v1/readonly/audit-entries` с actorUserId/action/targetService/targetTable/targetId/requestId/date range: 200, записи выполненных административных операций найдены, снимки автора/reason корректны. Страницы и hasMore/total по контракту; обратный диапазон/неверная дата — 400.
+5. `GET /api/v1/readonly/outbox/problematic-summary`: 200, counters по сервисам и события согласованы; serviceKey filter ограничивает результат.
+6. На **специально подготовленном собственном** проблемном событии `POST /api/v1/admin/outbox/{service}/{eventId}/retry` с reason: 200, событие переведено в разрешённое повторяемое состояние, audit записан. Не повторять рабочие/чужие события ради теста. Неизвестный UUID — 404; обычный user/PAT — 403; отсутствие reason — 400.
 7. Retry с потерянным ответом сначала сверить по audit/state; не создавать неконтролируемые повторные внешние эффекты. Fault injection Kafka недоступности выполнять только в изолированной среде.
 
 **Очистка:** не удалять audit и не очищать shared outbox; собственную фикстуру довести до терминального состояния по штатным средствам.
