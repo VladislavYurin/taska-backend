@@ -125,7 +125,7 @@ class ConfigureTests(unittest.TestCase):
 
     def test_sync_command_absent_false_true_and_no_secret_generation(self):
         for marker, old, expected in [('', 'custom', 'custom'),
-                                      (c.MARKER + '=false\n', c.COMMAND, ''),
+                                      (c.MARKER + '=false\n', c.COMMAND, c.ROLLBACK_COMMAND),
                                       (c.MARKER + '=true\n', '', c.COMMAND)]:
             api = FakeAPI(marker)
             api.compose['command'] = old
@@ -154,6 +154,28 @@ class ConfigureTests(unittest.TestCase):
         api = FakeAPI('OAUTH_DB_PASSWORD=' + 'sensitive' * 8 + '\n')
         self.assertNotIn('sensitive', json.dumps(c.configure(api, 'plan')))
 
+    def test_emergency_disable_allows_unsafe_domains_but_enable_rejects(self):
+        unsafe = c.domain_spec('/')
+        api = FakeAPI(c.MARKER + '=false\n', domains=[unsafe])
+        api.compose['command'] = c.COMMAND
+        c.configure(api, 'sync-command')
+        self.assertEqual(c.ROLLBACK_COMMAND, api.compose['command'])
+        self.assertEqual([unsafe], api.domains)
+        for mode in ['plan', 'apply', 'sync-command']:
+            api = FakeAPI(c.MARKER + '=true\n', domains=[unsafe])
+            with self.assertRaises(c.ConfigurationError):
+                c.configure(api, mode)
+            self.assertEqual([], api.writes())
+
+    def test_rollback_command_stops_only_owned_optional_services(self):
+        first, second = c.ROLLBACK_COMMAND.split(' && ')
+        self.assertEqual('compose -p ' + c.APP_NAME + ' --env-file .env -f ./docker-compose.yml --profile oauth stop oauth-server oauth-db', first)
+        self.assertEqual('docker compose -p ' + c.APP_NAME + ' --env-file .env -f ./docker-compose.yml up -d --build --remove-orphans', second)
+        api = FakeAPI(c.MARKER + '=true\n')
+        api.compose['command'] = c.ROLLBACK_COMMAND
+        c.configure(api, 'sync-command')
+        self.assertEqual(c.COMMAND, api.compose['command'])
+
     def test_custom_command_cannot_be_overwritten(self):
         for mode in ['apply', 'sync-command']:
             api = FakeAPI(c.MARKER + '=true\n')
@@ -169,6 +191,27 @@ class ConfigureTests(unittest.TestCase):
         c.configure(api, 'apply')
         self.assertTrue(api.compose['env'].startswith(text))
         self.assertTrue(all(d['internalPath'] == '/' and not d['stripPath'] for d in api.domains))
+
+    def test_secret_validation_names_keys_without_values(self):
+        for text, names in [
+            ('OAUTH_DB_PASSWORD=weak-do-not-print\n', ['OAUTH_DB_PASSWORD']),
+            ('OAUTH_DB_PASSWORD=' + 'private-value-' * 4 + '\nOAUTH_INTROSPECTION_SECRET=' + 'private-value-' * 4 + '\n',
+             ['OAUTH_DB_PASSWORD', 'OAUTH_INTROSPECTION_SECRET']),
+        ]:
+            with self.assertRaises(c.ConfigurationError) as caught:
+                c.desired_env(text)
+            for name in names:
+                self.assertIn(name, str(caught.exception))
+            self.assertNotIn('weak-do-not-print', str(caught.exception))
+            self.assertNotIn('private-value-', str(caught.exception))
+
+    def test_generated_secret_collision_retried(self):
+        api = FakeAPI('OAUTH_DB_PASSWORD=' + 'a' * 40 + '\n')
+        generated = ['a' * 40, 'b' * 40, 'b' * 40, 'c' * 40, 'd' * 40, 'e' * 40, 'f' * 40]
+        with patch.object(c.secrets, 'token_urlsafe', side_effect=generated) as random:
+            c.configure(api, 'apply')
+        self.assertEqual(7, random.call_count)
+        self.assertEqual(6, len(set(c.env_entries(api.compose['env'])[k] for k in c.SECRET_KEYS)))
 
     def test_duplicate_environment_key_refused(self):
         with self.assertRaises(c.ConfigurationError):

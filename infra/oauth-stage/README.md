@@ -3,7 +3,10 @@
 The default deployment keeps OAuth disabled. `docker-compose.oauth.yml` supplies
 OAuth services and bridge credentials; `docker-compose.oauth.stage.yml` connects
 the AS and auth-service to the existing Dokploy proxy network. Base service stubs
-let Dokploy attach domain labels before Compose merges the overlays.
+let Dokploy attach domain labels before Compose merges the overlays. **The base
+file with `--profile oauth` alone is unsupported:** it lacks the OAuth database
+credentials, volume and AS configuration. Always supply both overlays for startup;
+the bare profile is used only to identify services during rollback stop.
 
 ## Provisioning and deployment
 
@@ -25,8 +28,10 @@ commands with `docker`, so the stored command starts with `compose`.
 `TASKA_STAGE_OAUTH_ENABLED=true` selects the base file, OAuth overlay and stage
 overlay with `--profile oauth`. An absent marker leaves an existing command alone.
 Set the marker to `false` for rollback and run `sync-command` followed by the normal
-deployment. This removes the OAuth overlay flags; database volumes and domain
-records remain available for recovery. Existing grants become usable again on a
+deployment. The stored rollback command first stops only `oauth-server` and
+`oauth-db`, then starts the base deployment without OAuth overlays. Merely
+disabling a Compose profile does not stop existing containers. Database volumes
+and domain records remain available for recovery. Existing grants become usable again on a
 subsequent enablement until revoked or expired. Do not delete the OAuth volume as
 part of a configuration rollback.
 

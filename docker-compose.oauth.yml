@@ -28,6 +28,7 @@ services:
       OAUTH_DB_PASSWORD: ${OAUTH_DB_PASSWORD:?Set OAUTH_DB_PASSWORD}
       OAUTH_ISSUER: ${OAUTH_ISSUER:?Set canonical HTTPS OAUTH_ISSUER}
       MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE:?Set canonical HTTPS MCP_OAUTH_RESOURCE}
+      # Empty is a closed CIMD allowlist; stage Inspector uses restricted DCR.
       OAUTH_CIMD_HOSTS: ${OAUTH_CIMD_HOSTS:-}
       OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:?Set approved exact redirect URIs}
       OAUTH_DCR_ENABLED: ${OAUTH_DCR_ENABLED:-false}

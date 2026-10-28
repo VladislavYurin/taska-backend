@@ -22,6 +22,13 @@ HOST = 'oauth.taska.ozero.dev'
 COMMAND = ('compose -p taska-backend-ocrjz9 --env-file .env '
            '-f ./docker-compose.yml -f ./docker-compose.oauth.yml '
            '-f ./docker-compose.oauth.stage.yml --profile oauth up -d --build --remove-orphans')
+# Dokploy prepends docker to the first command and permits && only when each
+# subsequent command starts with docker compose. Stop optional profile services
+# explicitly: up --remove-orphans alone leaves disabled-profile containers alive.
+ROLLBACK_COMMAND = ('compose -p taska-backend-ocrjz9 --env-file .env '
+                    '-f ./docker-compose.yml --profile oauth stop oauth-server oauth-db '
+                    '&& docker compose -p taska-backend-ocrjz9 --env-file .env '
+                    '-f ./docker-compose.yml up -d --build --remove-orphans')
 MARKER = 'TASKA_STAGE_OAUTH_ENABLED'
 SECRET_KEYS = ('OAUTH_DB_PASSWORD', 'OAUTH_INTROSPECTION_SECRET',
                'OAUTH_IDENTITY_SERVICE_CREDENTIAL', 'MCP_OAUTH_EXCHANGE_CREDENTIAL',
@@ -84,8 +91,16 @@ def desired_env(text, generate=False):
     current = env_entries(text)
     updates = dict(VALUES)
     existing = [current[k] for k in SECRET_KEYS if current.get(k)]
-    if any(len(v) < 32 or '\n' in v or '\r' in v for v in existing) or len(existing) != len(set(existing)):
-        raise ConfigurationError('Existing service secrets must be distinct and at least 32 characters; rotation requires operator action')
+    weak = [k for k in SECRET_KEYS if current.get(k) and
+            (len(current[k]) < 32 or '\n' in current[k] or '\r' in current[k])]
+    duplicate = [k for k in SECRET_KEYS if current.get(k) and existing.count(current[k]) > 1]
+    if weak or duplicate:
+        details = []
+        if weak:
+            details.append('weak secret keys: ' + ', '.join(weak))
+        if duplicate:
+            details.append('duplicate secret keys: ' + ', '.join(duplicate))
+        raise ConfigurationError('; '.join(details) + '; rotation requires operator action')
     missing = [key for key in SECRET_KEYS if not current.get(key)]
     if generate:
         used = set(existing)
@@ -110,7 +125,7 @@ def command_for(text):
     if marker == 'true':
         return COMMAND
     if marker == 'false':
-        return ''
+        return ROLLBACK_COMMAND
     raise ConfigurationError('Stage OAuth marker must be true or false')
 
 
@@ -172,13 +187,14 @@ class Dokploy:
             raise ConfigurationError('Dokploy API request failed: ' + endpoint) from None
 
 
-def snapshot(api):
+def snapshot(api, validate_public=True):
     compose = api.call('compose.one')
     validate_compose(compose)
     domains = api.call('domain.byComposeId')
     if not isinstance(domains, list):
         raise ConfigurationError('Invalid domain list response')
-    validate_domains(domains)
+    if validate_public:
+        validate_domains(domains)
     return compose, domains
 
 
@@ -197,11 +213,14 @@ def backup_snapshot(path, compose, domains):
 
 
 def configure(api, mode, backup=None):
-    compose, domains = snapshot(api)
+    compose, domains = snapshot(api, validate_public=False)
     before = compose.get('env') or ''
+    validate_public = not (mode == 'sync-command' and env_entries(before).get(MARKER) == 'false')
+    if validate_public:
+        validate_domains(domains)
     desired, missing = desired_env(before, generate=mode == 'apply') if mode != 'sync-command' else (before, [])
     command = command_for(desired)
-    if command is not None and (compose.get('command') or '') not in ('', COMMAND):
+    if command is not None and (compose.get('command') or '') not in ('', COMMAND, ROLLBACK_COMMAND):
         raise ConfigurationError('Refusing to overwrite unrelated custom compose command')
     additions = validate_domains(domains) if mode != 'sync-command' else []
     report = {'mode': mode, 'composeId': COMPOSE_ID, 'missingSecretKeys': missing,
@@ -213,7 +232,7 @@ def configure(api, mode, backup=None):
     if backup:
         backup_snapshot(backup, compose, domains)
     # Dokploy has no CAS. Abort rather than overwrite any observed concurrent edit.
-    latest, latest_domains = snapshot(api)
+    latest, latest_domains = snapshot(api, validate_public=validate_public)
     if latest.get('env') != compose.get('env') or latest.get('command') != compose.get('command') or latest_domains != domains:
         raise ConfigurationError('Concurrent Dokploy configuration change; rerun plan')
     for domain in additions:
@@ -249,9 +268,13 @@ def main():
             key = outside_git(os.environ['DOKPLOY_API_KEY_FILE']).read_text()
         api = Dokploy(os.environ.get('DOKPLOY_URL', ''), key or '')
         print(json.dumps(configure(api, args.mode, args.backup), indent=2))
-    except (ConfigurationError, OSError):
-        # Do not print remote payloads, environment values, URL errors, or secrets.
-        print('Configuration refused or API/file access failed; no deployment was requested.', file=sys.stderr)
+    except ConfigurationError as error:
+        # These messages are controlled and never include environment values.
+        print('Configuration refused: ' + str(error), file=sys.stderr)
+        return 1
+    except OSError:
+        # OS errors can include secret file contents/paths.
+        print('API/file access failed; no deployment was requested.', file=sys.stderr)
         return 1
     return 0
 

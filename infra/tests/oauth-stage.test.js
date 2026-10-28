@@ -65,6 +65,10 @@ test('OAuth stage merges private TLS routing without replacing public domain lab
   assert.equal(rendered.services['api-gateway'].environment.OAUTH_ISSUER, env.OAUTH_ISSUER);
   assert.equal(oauth.ports[0].host_ip, '127.0.0.1');
   assert.equal(rendered.services['oauth-db'].volumes[0].source, 'oauth-db-data');
+  assert.equal(rendered.services['oauth-db'].environment.POSTGRES_PASSWORD, env.OAUTH_DB_PASSWORD);
+  assert.equal(rendered.services['oauth-db'].restart, 'unless-stopped');
+  assert.ok(rendered.services['oauth-db'].healthcheck.test.includes('pg_isready -U taska_oauth -d taska_oauth'));
+  assert.equal(oauth.depends_on['oauth-db'].condition, 'service_healthy');
 });
 test('public ingress paths cannot route introspection, private RPC or actuator', () => {
   const prefixes = JSON.parse(readFileSync(path.join(root, 'infra/oauth-stage/public-paths.json')));
