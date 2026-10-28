@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.*;
@@ -20,6 +22,8 @@ class ConnectedAppsServiceTest {
   static final String OWNER = UUID.randomUUID().toString(), APP = UUID.randomUUID().toString();
   HttpServer server;
   final AtomicInteger calls = new AtomicInteger();
+  final AtomicInteger deleteStatus = new AtomicInteger(204);
+  final AtomicInteger followed = new AtomicInteger();
   AuthService auth;
   ConnectedAppsGrpcService service;
 
@@ -38,7 +42,9 @@ class ConnectedAppsServiceTest {
           assertThat(exchange.getRequestHeaders().getFirst("Authorization")).isEqualTo(expected);
           if (exchange.getRequestMethod().equals("DELETE")) {
             assertThat(exchange.getRequestURI().getPath()).endsWith("/" + APP);
-            exchange.sendResponseHeaders(204, -1);
+            if (deleteStatus.get() != 204)
+              exchange.getResponseHeaders().set("Location", "/followed");
+            exchange.sendResponseHeaders(deleteStatus.get(), -1);
           } else {
             byte[] data =
                 ("[{\"appId\":\""
@@ -49,6 +55,13 @@ class ConnectedAppsServiceTest {
             exchange.sendResponseHeaders(200, data.length);
             exchange.getResponseBody().write(data);
           }
+          exchange.close();
+        });
+    server.createContext(
+        "/followed",
+        exchange -> {
+          followed.incrementAndGet();
+          exchange.sendResponseHeaders(204, -1);
           exchange.close();
         });
     server.start();
@@ -85,6 +98,26 @@ class ConnectedAppsServiceTest {
                     .build()))
         .block();
     assertThat(calls.get()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {200, 202, 302, 307})
+  void revokeRejectsUnexpectedStatusWithoutFollowingRedirect(int status) {
+    deleteStatus.set(status);
+    var request =
+        RevokeConnectedAppRequest.newBuilder()
+            .setHeader(header())
+            .setUserId(OWNER)
+            .setSessionAccessToken("session")
+            .setAppId(APP)
+            .build();
+    StepVerifier.create(service.revokeConnectedApp(Mono.just(request)))
+        .expectErrorMatches(
+            error ->
+                io.grpc.Status.fromThrowable(error).getCode() == io.grpc.Status.Code.UNAVAILABLE)
+        .verify();
+    assertThat(calls.get()).isEqualTo(1);
+    assertThat(followed.get()).isZero();
   }
 
   @Test

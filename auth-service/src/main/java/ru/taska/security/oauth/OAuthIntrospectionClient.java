@@ -89,6 +89,7 @@ public class OAuthIntrospectionClient {
                 headers.setBasicAuth(
                     properties.introspectionClientId(), properties.introspectionSecret()))
         .retrieve()
+        .onStatus(status -> status.value() != 200, response -> Mono.just(unavailable()))
         .bodyToMono(JsonNode.class)
         .timeout(Duration.ofSeconds(2))
         .switchIfEmpty(Mono.error(unavailable()))
@@ -104,6 +105,7 @@ public class OAuthIntrospectionClient {
                 headers.setBasicAuth(
                     properties.introspectionClientId(), properties.introspectionSecret()))
         .retrieve()
+        .onStatus(status -> status.value() != 204, response -> Mono.just(unavailable()))
         .toBodilessEntity()
         .timeout(Duration.ofSeconds(2))
         .then()
