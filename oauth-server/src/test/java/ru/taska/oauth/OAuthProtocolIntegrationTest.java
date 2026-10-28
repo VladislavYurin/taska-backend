@@ -202,15 +202,21 @@ class OAuthProtocolIntegrationTest {
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var ready = new CountDownLatch(4);
       var start = new CountDownLatch(1);
-      Callable<org.springframework.mock.web.MockHttpServletResponse> call = () -> {
-        ready.countDown();
-        start.await();
-        return mvc.perform(post("/oauth2/token")
-            .param("grant_type", "authorization_code").param("client_id", CLIENT)
-            .param("code", code).param("redirect_uri", REDIRECT)
-            .param("code_verifier", VERIFIER).param("resource", RESOURCE))
-            .andReturn().getResponse();
-      };
+      Callable<org.springframework.mock.web.MockHttpServletResponse> call =
+          () -> {
+            ready.countDown();
+            start.await();
+            return mvc.perform(
+                    post("/oauth2/token")
+                        .param("grant_type", "authorization_code")
+                        .param("client_id", CLIENT)
+                        .param("code", code)
+                        .param("redirect_uri", REDIRECT)
+                        .param("code_verifier", VERIFIER)
+                        .param("resource", RESOURCE))
+                .andReturn()
+                .getResponse();
+          };
       var futures = new ArrayList<Future<org.springframework.mock.web.MockHttpServletResponse>>();
       for (int i = 0; i < 4; i++) futures.add(executor.submit(call));
       assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
@@ -219,8 +225,13 @@ class OAuthProtocolIntegrationTest {
       for (var future : futures) responses.add(future.get(15, TimeUnit.SECONDS));
       assertThat(responses.stream().map(r -> r.getStatus()).toList())
           .containsExactlyInAnyOrder(200, 400, 400, 400);
-      var issued = mapper.readTree(responses.stream().filter(r -> r.getStatus() == 200)
-          .findFirst().orElseThrow().getContentAsString());
+      var issued =
+          mapper.readTree(
+              responses.stream()
+                  .filter(r -> r.getStatus() == 200)
+                  .findFirst()
+                  .orElseThrow()
+                  .getContentAsString());
       assertThat(introspect(issued.path("access_token").asText()).path("active").asBoolean())
           .isFalse();
       refresh(issued.path("refresh_token").asText(), 400);
@@ -460,8 +471,8 @@ class OAuthProtocolIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].grant_id").value(id));
     jdbc.update(
-        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes', access_token_expires_at=now()-interval '1 second' WHERE"
-            + " id=?",
+        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes',"
+            + " access_token_expires_at=now()-interval '1 second' WHERE id=?",
         id);
     mvc.perform(get("/oauth/grants").with(authentication(actor())))
         .andExpect(status().isOk())
@@ -477,15 +488,15 @@ class OAuthProtocolIntegrationTest {
             .findByToken(issued.path("access_token").asText(), OAuth2TokenType.ACCESS_TOKEN)
             .getId();
     jdbc.update(
-        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes', access_token_expires_at=now()-interval '1 second' WHERE"
-            + " id=?",
+        "UPDATE oauth2_authorization SET access_token_issued_at=now()-interval '20 minutes',"
+            + " access_token_expires_at=now()-interval '1 second' WHERE id=?",
         id);
     mvc.perform(get("/oauth/grants").with(authentication(actor())))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].grant_id").value(id));
     jdbc.update(
-        "UPDATE oauth2_authorization SET refresh_token_issued_at=now()-interval '2 hours', refresh_token_expires_at=now()-interval '1 second' WHERE"
-            + " id=?",
+        "UPDATE oauth2_authorization SET refresh_token_issued_at=now()-interval '2 hours',"
+            + " refresh_token_expires_at=now()-interval '1 second' WHERE id=?",
         id);
     mvc.perform(get("/oauth/grants").with(authentication(actor())))
         .andExpect(status().isOk())
@@ -505,6 +516,111 @@ class OAuthProtocolIntegrationTest {
     mvc.perform(get("/oauth/grants").with(authentication(actor())))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isEmpty());
+  }
+
+  @Test
+  void connectedAppsAggregateStepUpAndRevokeAllOwnedGrants() throws Exception {
+    var first = token(authorize(CLIENT, "read"), VERIFIER, RESOURCE, 200);
+    var second = token(authorize(), VERIFIER, RESOURCE, 200);
+    String appId = clients.findByClientId(CLIENT).getId();
+    String foreign = UUID.randomUUID().toString();
+    jdbc.update(
+        "INSERT INTO oauth2_authorization(id,"
+            + " registered_client_id,principal_name,authorization_grant_type,access_token_value,access_token_expires_at,access_token_issued_at,authorization_code_issued_at,authorized_scopes)"
+            + " VALUES (?,?,?,'authorization_code','foreign',now()+interval '1"
+            + " hour',now(),now(),'read')",
+        foreign,
+        appId,
+        UUID.randomUUID().toString());
+    mvc.perform(get("/internal/users/" + ACTOR + "/apps")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/internal/users/" + ACTOR + "/apps").with(httpBasic("auth-service", "wrong")))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(get("/internal/users/" + ACTOR + "/apps").with(httpBasic("auth-service", SECRET)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].appId").value(appId))
+        .andExpect(jsonPath("$[0].host").value("client.example.test"))
+        .andExpect(jsonPath("$[0].metadataUrl").value(CLIENT))
+        .andExpect(jsonPath("$[0].scopes[0]").value("offline_access"))
+        .andExpect(jsonPath("$[0].scopes[1]").value("read"))
+        .andExpect(jsonPath("$[0].scopes[2]").value("write"))
+        .andExpect(jsonPath("$[0].connectedAt").isNotEmpty())
+        .andExpect(jsonPath("$[0].lastUsedAt").isNotEmpty())
+        .andExpect(jsonPath("$[0].expiresAt").isNotEmpty());
+    assertThat(introspect(first.path("access_token").asText()).path("active").asBoolean()).isTrue();
+    for (int i = 0; i < 2; i++)
+      mvc.perform(
+              delete("/internal/users/" + ACTOR + "/apps/" + appId)
+                  .with(httpBasic("auth-service", SECRET)))
+          .andExpect(status().isNoContent());
+    assertThat(introspect(first.path("access_token").asText()).path("active").asBoolean())
+        .isFalse();
+    assertThat(introspect(second.path("access_token").asText()).path("active").asBoolean())
+        .isFalse();
+    refresh(second.path("refresh_token").asText(), 400);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM oauth2_authorization WHERE id=?", Integer.class, foreign))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM oauth2_authorization_consent WHERE principal_name=? AND"
+                    + " registered_client_id=?",
+                Integer.class,
+                ACTOR,
+                appId))
+        .isZero();
+    mvc.perform(get("/internal/users/" + ACTOR + "/apps").with(httpBasic("auth-service", SECRET)))
+        .andExpect(status().isOk())
+        .andExpect(content().json("[]"));
+  }
+
+  @Test
+  void connectedAppsOrderingTimesAndDcrMetadataAreStable() throws Exception {
+    var metadata =
+        mapper.readTree(
+            "{\"client_name\":\"DCR fixture\",\"redirect_uris\":[\""
+                + REDIRECT
+                + "\"],\"grant_types\":[\"authorization_code\",\"refresh_token\"]}");
+    var dcr = clients.registerDcr(metadata);
+    String appId = dcr.getId();
+    String[] ids = {clients.findByClientId(CLIENT).getId(), appId};
+    for (String id : ids)
+      jdbc.update(
+          "INSERT INTO"
+              + " oauth2_authorization(id,registered_client_id,principal_name,authorization_grant_type,authorized_scopes,access_token_value,authorization_code_issued_at,access_token_issued_at,access_token_expires_at)"
+              + " VALUES (?,?,?,'authorization_code','read,future_scope',?,"
+              + " '2026-01-01T00:00:00Z','2026-01-01T01:00:00Z',now()+interval '1 hour')",
+          UUID.randomUUID().toString(),
+          id,
+          ACTOR,
+          UUID.randomUUID().toString());
+    var body =
+        mapper.readTree(
+            mvc.perform(
+                    get("/internal/users/" + ACTOR + "/apps")
+                        .with(httpBasic("auth-service", SECRET)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(body.size()).isEqualTo(2);
+    assertThat(body.get(0).path("appId").asText())
+        .isEqualTo(Arrays.stream(ids).max(String::compareTo).orElseThrow());
+    for (var app : body) {
+      assertThat(app.path("connectedAt").asText()).isEqualTo("2026-01-01T00:00:00Z");
+      assertThat(app.path("lastUsedAt").asText()).isEqualTo("2026-01-01T01:00:00Z");
+      assertThat(app.path("scopes").get(0).asText()).isEqualTo("future_scope");
+      if (app.path("appId").asText().equals(appId))
+        assertThat(app.path("metadataUrl").isNull()).isTrue();
+    }
+    jdbc.update(
+        "UPDATE oauth2_authorization SET access_token_expires_at=now()-interval '1 second' WHERE"
+            + " principal_name=?",
+        ACTOR);
+    mvc.perform(get("/internal/users/" + ACTOR + "/apps").with(httpBasic("auth-service", SECRET)))
+        .andExpect(status().isOk())
+        .andExpect(content().json("[]"));
   }
 
   private String authorize() throws Exception {
