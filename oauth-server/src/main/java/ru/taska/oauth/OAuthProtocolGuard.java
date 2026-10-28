@@ -65,14 +65,23 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
           && !"anonymousUser".equals(authentication.getPrincipal())) {
         try {
           identity.validate(authentication.getName());
+        } catch (org.springframework.security.authentication.AuthenticationServiceException failure) {
+          browserError(request, response, 503, "temporarily_unavailable");
+          return;
         } catch (org.springframework.security.core.AuthenticationException failure) {
           if (request.getSession(false) != null) request.getSession(false).invalidate();
           SecurityContextHolder.clearContext();
-          error(response, 401, "login_required");
+          browserError(request, response, 401, "login_required");
           return;
         }
       }
       if ("POST".equals(request.getMethod()) && "/oauth2/authorize".equals(path)) {
+        String[] scopes = request.getParameterValues("scope");
+        if (scopes != null && scopes.length > 0 && (!java.util.Arrays.asList(scopes).contains("read")
+            || java.util.Arrays.stream(scopes).anyMatch(scope -> !java.util.Set.of("read", "write", "offline_access").contains(scope)))) {
+          browserError(request, response, 400, "invalid_scope");
+          return;
+        }
         CsrfToken expected = csrf.loadToken(request);
         String actual = expected == null ? null : request.getHeader(expected.getHeaderName());
         if (actual == null && expected != null)
@@ -82,12 +91,18 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
             || !MessageDigest.isEqual(
                 expected.getToken().getBytes(StandardCharsets.UTF_8),
                 actual.getBytes(StandardCharsets.UTF_8))) {
-          error(response, 403, "invalid_csrf_token");
+          browserError(request, response, 403, "invalid_csrf_token");
           return;
         }
       }
     }
     chain.doFilter(request, response);
+  }
+
+  static void browserError(HttpServletRequest request, HttpServletResponse response, int status, String code) throws IOException {
+    if (java.util.Collections.list(request.getHeaders("Accept")).stream().anyMatch(value -> value.contains("text/html")))
+      response.sendError(status);
+    else error(response, status, code);
   }
 
   static void error(HttpServletResponse response, int status, String code) throws IOException {

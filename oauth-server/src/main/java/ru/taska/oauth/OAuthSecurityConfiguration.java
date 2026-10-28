@@ -1,6 +1,11 @@
 package ru.taska.oauth;
 
 import java.util.*;
+import jakarta.servlet.DispatcherType;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.context.annotation.*;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
@@ -98,7 +103,7 @@ public class OAuthSecurityConfiguration {
                     org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
         .csrf(csrf -> csrf.disable())
         .httpBasic(Customizer.withDefaults());
-    headers(http);
+    headers(http, policy);
     return http.build();
   }
 
@@ -115,7 +120,8 @@ public class OAuthSecurityConfiguration {
       TaskaIdentityClient identity,
       HttpSessionCsrfTokenRepository csrf,
       JdbcTemplate jdbc,
-      TransactionTemplate transactions)
+      TransactionTemplate transactions,
+      RequestCache cache)
       throws Exception {
     var configurer = new OAuth2AuthorizationServerConfigurer();
     http.cors(Customizer.withDefaults())
@@ -174,7 +180,7 @@ public class OAuthSecurityConfiguration {
                     .authorizationEndpoint(
                         endpoint ->
                             endpoint
-                                .consentPage(policy.issuer() + "/oauth/consent")
+                                .consentPage(policy.issuer() + "/consent")
                                 .authenticationProviders(
                                     providers ->
                                         providers.forEach(
@@ -233,6 +239,12 @@ public class OAuthSecurityConfiguration {
                                                                         "invalid_request"),
                                                                     request);
                                                             }));
+                                              } else if (provider instanceof OAuth2AuthorizationConsentAuthenticationProvider consent) {
+                                                consent.setAuthorizationConsentCustomizer(context -> {
+                                                  OAuth2AuthorizationConsentAuthenticationToken posted = context.getAuthentication();
+                                                  if (!"allow".equals(posted.getAdditionalParameters().get("decision")) || posted.getScopes().isEmpty())
+                                                    context.getAuthorizationConsent().authorities(Set::clear);
+                                                });
                                               }
                                             }))
                                 .authorizationResponseHandler(
@@ -283,7 +295,7 @@ public class OAuthSecurityConfiguration {
                                           return;
                                         }
                                       }
-                                      OAuthProtocolGuard.error(response, 400, "invalid_request");
+                                      OAuthProtocolGuard.browserError(request, response, 400, "invalid_request");
                                     }))
                     .tokenEndpoint(
                         endpoint ->
@@ -335,16 +347,18 @@ public class OAuthSecurityConfiguration {
                                         "registration_endpoint",
                                         policy.issuer() + "/oauth/register");
                                 })))
-        .authorizeHttpRequests(access -> access.anyRequest().authenticated())
+        .authorizeHttpRequests(access -> access.dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll().anyRequest().authenticated())
+        .requestCache(config -> config.requestCache(cache))
         .exceptionHandling(
             errors ->
                 errors.defaultAuthenticationEntryPointFor(
                     new LoginUrlAuthenticationEntryPoint(policy.issuer() + "/login"),
-                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
+                    new MediaTypeRequestMatcher(MediaType.TEXT_HTML))
+                    .defaultAuthenticationEntryPointFor((request, response, failure) -> OAuthProtocolGuard.error(response, 401, "login_required"), jsonMatcher()))
         .addFilterBefore(
             new OAuthProtocolGuard(policy, identity, csrf),
             org.springframework.security.web.authentication.logout.LogoutFilter.class);
-    headers(http);
+    headers(http, policy);
     return http.build();
   }
 
@@ -354,7 +368,10 @@ public class OAuthSecurityConfiguration {
       HttpSecurity http,
       TaskaIdentityClient identity,
       OAuthServerProperties policy,
-      HttpSessionCsrfTokenRepository csrf)
+      HttpSessionCsrfTokenRepository csrf,
+      OAuthBrowserSupport browser,
+      RequestCache cache,
+      AuthenticationSuccessHandler success)
       throws Exception {
     http.cors(Customizer.withDefaults())
         .authenticationProvider(
@@ -376,20 +393,41 @@ public class OAuthSecurityConfiguration {
         .authorizeHttpRequests(
             access ->
                 access
-                    .requestMatchers("/login", "/error", "/actuator/health", "/oauth/register")
+                    .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                    .requestMatchers("/login", "/login/**", "/assets/**", "/favicon.ico", "/error", "/actuator/health", "/oauth/register")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        .formLogin(Customizer.withDefaults())
+        .requestCache(config -> config.requestCache(cache))
+        .formLogin(form -> form.loginPage("/login").successHandler(success).failureHandler(browser::loginFailure).permitAll())
+        .logout(logout -> logout.addLogoutHandler(browser::rememberLogoutTarget).logoutSuccessHandler(browser::logoutSuccess)
+            .deleteCookies("TASKA_OAUTH_SESSION"))
+        .exceptionHandling(errors -> errors
+            .defaultAuthenticationEntryPointFor((request, response, failure) -> OAuthProtocolGuard.error(response, 401, "login_required"), jsonMatcher())
+            .accessDeniedHandler((request, response, failure) -> {
+              if ("/login".equals(request.getRequestURI()) && failure instanceof CsrfException)
+                response.sendRedirect(policy.issuer() + "/login?error=SESSION_EXPIRED&request_id=" + OAuthRequestCorrelation.current());
+              else OAuthProtocolGuard.browserError(request, response, 403, "access_denied");
+            }))
         .csrf(
             csrfConfig ->
-                csrfConfig.csrfTokenRepository(csrf).ignoringRequestMatchers("/oauth/register"))
+                csrfConfig.csrfTokenRepository(csrf).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                    .ignoringRequestMatchers("/oauth/register"))
         .addFilterBefore(new OAuthProtocolGuard(policy, identity, csrf), AuthorizationFilter.class);
-    headers(http);
+    headers(http, policy);
     return http.build();
   }
 
-  private void headers(HttpSecurity http) throws Exception {
+  private static MediaTypeRequestMatcher jsonMatcher() {
+    var matcher = new MediaTypeRequestMatcher(MediaType.APPLICATION_JSON);
+    matcher.setIgnoredMediaTypes(Set.of(MediaType.ALL));
+    return matcher;
+  }
+
+  private void headers(HttpSecurity http, OAuthServerProperties policy) throws Exception {
+    String origins = policy.redirectUris().stream().map(java.net.URI::create)
+        .map(uri -> uri.getScheme() + "://" + uri.getHost().toLowerCase(Locale.ROOT) + (uri.getPort() == -1 ? "" : ":" + uri.getPort()))
+        .distinct().sorted().collect(java.util.stream.Collectors.joining(" "));
     http.headers(
         headers ->
             headers
@@ -397,8 +435,7 @@ public class OAuthSecurityConfiguration {
                 .contentSecurityPolicy(
                     csp ->
                         csp.policyDirectives(
-                            "default-src 'self'; frame-ancestors 'none'; form-action 'self';"
-                                + " base-uri 'none'"))
+                            "default-src 'self'; frame-ancestors 'none'; form-action 'self' " + origins + "; base-uri 'none'"))
                 .cacheControl(Customizer.withDefaults()));
   }
 }

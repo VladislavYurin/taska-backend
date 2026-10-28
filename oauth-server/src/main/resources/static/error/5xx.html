@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>Connection failed · Taska</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="preload" href="/assets/fonts/hanken-grotesk-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/assets/oauth.css" />
+  </head>
+  <body>
+    <!--
+      Taska's authorization server, any 5xx (Jira TAS-414): card T3.
+      A Spring Boot static error page: served at the failing request's own
+      address, which is why every URL here is root-relative. No script, no
+      buttons, no links, no autofocus.
+    -->
+    <main class="auth-screen">
+      <div class="auth-glow" aria-hidden="true"></div>
+      <div class="auth-card-wrap">
+        <div class="logo">
+          <span class="logo-mark"><span></span></span>
+          <span class="logo-text">Taska</span>
+        </div>
+        <section class="auth-card">
+          <h1 class="auth-title">Taska could not finish connecting the app</h1>
+          <p class="auth-body">Something went wrong on Taska’s side. Go back to the app and try again. The app did not get access.</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

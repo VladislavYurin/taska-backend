@@ -141,7 +141,10 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(user -> credentialRepository.findByUserIdAndCredentialType(user.getId(), CredentialType.PASSWORD)
                         .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
                         .flatMap(credential -> accountLockService.resolveLockState(user)
-                                .filter(current -> current.getStatus() == UserStatus.ACTIVE)
+                                .flatMap(current -> {
+                                    if (current.getStatus() == UserStatus.LOCKED) return Mono.error(accountLockedError(current.getLockedUntil()));
+                                    return current.getStatus() == UserStatus.ACTIVE ? Mono.just(current) : Mono.empty();
+                                })
                                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.UNAUTHENTICATED, "Invalid credentials")))
                                 .flatMap(current -> verifyPassword(credential, password, current)
                                         .flatMap(valid -> resetFailedAttempts(current, valid).thenReturn(buildUserContext(current))))));

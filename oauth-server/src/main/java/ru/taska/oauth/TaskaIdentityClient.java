@@ -4,7 +4,9 @@ import io.grpc.*;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.springframework.context.annotation.*;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.*;
+import mapper.GrpcErrorDetails;
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 import ru.taska.api.auth.oauth.v1.*;
 import ru.taska.api.auth.v1.*;
@@ -39,11 +41,19 @@ public class TaskaIdentityClient {
         throw new BadCredentialsException("Authentication failed");
       return user;
     } catch (StatusRuntimeException failure) {
+      var details = GrpcErrorDetails.decode(failure.getTrailers());
+      if (failure.getStatus().getCode() == Status.Code.PERMISSION_DENIED && (details.containsKey("lockedUntil") || "ACCOUNT_LOCKED".equals(details.get("reason")))) {
+        Instant until = null;
+        try { until = Instant.parse(details.get("lockedUntil")); } catch (RuntimeException ignored) { }
+        throw new OAuthAccountLockedException(until);
+      }
+      if (java.util.Set.of(Status.Code.UNAVAILABLE, Status.Code.DEADLINE_EXCEEDED, Status.Code.INTERNAL)
+          .contains(failure.getStatus().getCode())) throw new AuthenticationServiceException("Identity service is unavailable");
       throw new BadCredentialsException("Authentication failed");
     }
   }
 
-  public void validate(String subject) {
+  public UserContext validate(String subject) {
     try {
       var user =
           stub.withDeadlineAfter(properties.auth().timeout().toMillis(), TimeUnit.MILLISECONDS)
@@ -55,7 +65,10 @@ public class TaskaIdentityClient {
               .getUserContext();
       if (!subject.equals(user.getUserId()) || user.getStatus() != UserStatus.USER_STATUS_ACTIVE)
         throw new BadCredentialsException("Authentication failed");
+      return user;
     } catch (StatusRuntimeException failure) {
+      if (java.util.Set.of(Status.Code.UNAVAILABLE, Status.Code.DEADLINE_EXCEEDED, Status.Code.INTERNAL)
+          .contains(failure.getStatus().getCode())) throw new AuthenticationServiceException("Identity service is unavailable");
       throw new BadCredentialsException("Authentication failed");
     }
   }
@@ -63,7 +76,7 @@ public class TaskaIdentityClient {
   private Header header() {
     return Header.newBuilder()
         .setNodeId("oauth-server")
-        .setRequestId(UUID.randomUUID().toString())
+        .setRequestId(OAuthRequestCorrelation.current())
         .build();
   }
 
