@@ -99,7 +99,11 @@ def desired_env(text, generate=False):
     signing = current.get('MCP_GATEWAY_SIGNING_SECRET')
     if signing:
         try:
-            decoded = base64.b64decode(signing, validate=True)
+            # Java's basic decoder also accepts standard Base64 without padding.
+            # Infer padding only for unpadded input; reject misplaced/extra '='.
+            if not re.fullmatch(r'[A-Za-z0-9+/]+={0,2}', signing) or ('=' in signing and len(signing) % 4):
+                raise ValueError('Invalid signing key encoding')
+            decoded = base64.b64decode(signing + '=' * (-len(signing) % 4), validate=True)
             if len(decoded) < 32:
                 weak.append('MCP_GATEWAY_SIGNING_SECRET')
         except (binascii.Error, ValueError):

@@ -240,9 +240,20 @@ class ConfigureTests(unittest.TestCase):
             result = subprocess.run(['java', '-cp', folder, 'SigningKeyContract'], input=encoded,
                                     text=True, check=True, capture_output=True)
             self.assertEqual('48', result.stdout)
+            unpadded = base64.b64encode(b'x' * 32).decode().rstrip('=')
+            result = subprocess.run(['java', '-cp', folder, 'SigningKeyContract'], input=unpadded,
+                                    text=True, check=True, capture_output=True)
+            self.assertEqual('32', result.stdout)
+
+    def test_existing_java_valid_unpadded_signing_key_is_preserved(self):
+        key = base64.b64encode(b'x' * 32).decode().rstrip('=')
+        api = FakeAPI('MCP_GATEWAY_SIGNING_SECRET=' + key + '\n')
+        c.configure(api, 'apply')
+        self.assertEqual(key, c.env_entries(api.compose['env'])['MCP_GATEWAY_SIGNING_SECRET'])
 
     def test_invalid_existing_mcp_key_rejected_before_platform_writes(self):
-        for key in ['_' * 64, '-' * 64, base64.b64encode(b'x' * 24).decode()]:
+        for key in ['_' * 64, '-' * 64, base64.b64encode(b'x' * 24).decode(),
+                    base64.b64encode(b'x' * 32).decode() + '=', 'A' * 65]:
             for mode in ['plan', 'apply']:
                 api = FakeAPI('MCP_GATEWAY_SIGNING_SECRET=' + key + '\n')
                 with self.subTest(mode=mode), self.assertRaises(c.ConfigurationError) as caught:
