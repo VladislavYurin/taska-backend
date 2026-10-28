@@ -31,7 +31,7 @@ public class OAuthBrowserSupport {
     if (actor == null || session == null || values == null || values.length != 1
         || !values[0].equals(session.getAttribute(CONSENT_STATE))) return;
     var grant = grants.findByToken(values[0], new OAuth2TokenType("state"));
-    if (grant == null || !grant.getPrincipalName().equals(actor.getName()) || grant.getAccessToken() != null) return;
+    if (!OAuthGrantStore.pending(grant) || !grant.getPrincipalName().equals(actor.getName())) return;
     OAuth2AuthorizationRequest original = grant.getAttribute(OAuth2AuthorizationRequest.class.getName());
     var client = clients.findById(grant.getRegisteredClientId());
     if (original == null || client == null || !client.getRedirectUris().contains(original.getRedirectUri())

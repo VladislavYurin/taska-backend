@@ -137,3 +137,5 @@ service credentials, MCP no-passthrough/discovery, and PAT/JWT compatibility.
 JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp \
   -pl auth-service,api-gateway,mcp-server,oauth-server -am verify
 ```
+
+Consent POST requires exactly one `decision=allow` to grant scopes. Missing, duplicated or other decisions fail closed as a refusal; direct integrations must post this field. Pending browser consent expires after ten minutes and cannot be resumed once a code or token has been issued.

@@ -16,14 +16,16 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
   private final OAuthServerProperties policy;
   private final TaskaIdentityClient identity;
   private final HttpSessionCsrfTokenRepository csrf;
+  private final OAuthGrantStore grants;
 
   OAuthProtocolGuard(
       OAuthServerProperties policy,
       TaskaIdentityClient identity,
-      HttpSessionCsrfTokenRepository csrf) {
+      HttpSessionCsrfTokenRepository csrf, OAuthGrantStore grants) {
     this.policy = policy;
     this.identity = identity;
     this.csrf = csrf;
+    this.grants = grants;
   }
 
   @Override
@@ -76,12 +78,6 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
         }
       }
       if ("POST".equals(request.getMethod()) && "/oauth2/authorize".equals(path)) {
-        String[] scopes = request.getParameterValues("scope");
-        if (scopes != null && scopes.length > 0 && (!java.util.Arrays.asList(scopes).contains("read")
-            || java.util.Arrays.stream(scopes).anyMatch(scope -> !java.util.Set.of("read", "write", "offline_access").contains(scope)))) {
-          browserError(request, response, 400, "invalid_scope");
-          return;
-        }
         CsrfToken expected = csrf.loadToken(request);
         String actual = expected == null ? null : request.getHeader(expected.getHeaderName());
         if (actual == null && expected != null)
@@ -92,6 +88,20 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
                 expected.getToken().getBytes(StandardCharsets.UTF_8),
                 actual.getBytes(StandardCharsets.UTF_8))) {
           browserError(request, response, 403, "invalid_csrf_token");
+          return;
+        }
+        String[] states = request.getParameterValues("state");
+        var pending = states != null && states.length == 1
+            ? grants.findByToken(states[0], new org.springframework.security.oauth2.server.authorization.OAuth2TokenType("state")) : null;
+        if (authentication == null || !authentication.isAuthenticated()
+            || !OAuthGrantStore.pending(pending) || !pending.getPrincipalName().equals(authentication.getName())) {
+          browserError(request, response, 400, "invalid_request");
+          return;
+        }
+        String[] scopes = request.getParameterValues("scope");
+        if (scopes != null && scopes.length > 0 && (!java.util.Arrays.asList(scopes).contains("read")
+            || java.util.Arrays.stream(scopes).anyMatch(scope -> !java.util.Set.of("read", "write", "offline_access").contains(scope)))) {
+          browserError(request, response, 400, "invalid_scope");
           return;
         }
       }

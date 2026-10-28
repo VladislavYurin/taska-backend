@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OAuthGrantStore implements OAuth2AuthorizationService {
+  static final String CONSENT_EXPIRES = "taska.consent_expires";
   static final String FAMILY_EXPIRES = "taska.family_expires";
   private final JdbcOAuth2AuthorizationService delegate;
   private final JdbcTemplate jdbc;
@@ -31,6 +32,9 @@ public class OAuthGrantStore implements OAuth2AuthorizationService {
           OAuth2Authorization.from(authorization)
               .attribute(FAMILY_EXPIRES, Long.toString(familyExpires))
               .build();
+    if (authorization.getAttribute(CONSENT_EXPIRES) == null)
+      authorization = OAuth2Authorization.from(authorization)
+          .attribute(CONSENT_EXPIRES, Long.toString(Instant.now().plusSeconds(600).getEpochSecond())).build();
     delegate.save(authorization);
     if (authorization.getRefreshToken() != null)
       jdbc.update(
@@ -54,6 +58,14 @@ public class OAuthGrantStore implements OAuth2AuthorizationService {
   @Override
   public OAuth2Authorization findByToken(String token, OAuth2TokenType type) {
     return delegate.findByToken(token, type);
+  }
+
+  static boolean pending(OAuth2Authorization authorization) {
+    if (authorization == null || authorization.getAccessToken() != null
+        || authorization.getRefreshToken() != null
+        || authorization.getToken(OAuth2AuthorizationCode.class) != null) return false;
+    String expires = authorization.getAttribute(CONSENT_EXPIRES);
+    return expires != null && Long.parseLong(expires) > Instant.now().getEpochSecond();
   }
 
   void revoke(String id) {

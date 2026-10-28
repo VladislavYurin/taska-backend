@@ -734,6 +734,42 @@ class OAuthProtocolIntegrationTest {
   }
 
   @Test
+  void expiredOrCompletedConsentCannotResumeOnLogout() throws Exception {
+    for (String kind : List.of("expired", "code")) {
+      var pending = pendingConsent("read");
+      var grant = grants.findByToken(pending.state, new OAuth2TokenType("state"));
+      var builder = org.springframework.security.oauth2.server.authorization.OAuth2Authorization.from(grant);
+      if (kind.equals("expired")) builder.attribute(OAuthGrantStore.CONSENT_EXPIRES, "1");
+      else builder.token(new org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationCode("issued-code", java.time.Instant.now(), java.time.Instant.now().plusSeconds(300)));
+      grants.save(builder.build());
+      mvc.perform(get("/oauth/consent").session(pending.session).with(authentication(actor())).param("state", pending.state))
+          .andExpect(status().isNotFound());
+      mvc.perform(post("/logout").session(pending.session).with(authentication(actor())).param("consent_state", pending.state)
+          .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+          .andExpect(redirectedUrl(ISSUER + "/login?logout"));
+    }
+  }
+
+  @Test
+  void csrfAndPendingStateAreValidatedBeforeConsentScopes() throws Exception {
+    var pending = pendingConsent("read write");
+    mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("state", pending.state).param("scope", "unknown"))
+        .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("invalid_csrf_token"));
+    mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("state", "unknown").param("scope", "unknown")
+        .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("invalid_request"));
+    for (String accept : List.of("text/html", "*/*", "")) {
+      var request = get("/oauth2/authorize").queryParam("response_type", "code").queryParam("client_id", CLIENT)
+          .queryParam("redirect_uri", REDIRECT).queryParam("scope", "read").queryParam("resource", RESOURCE)
+          .queryParam("code_challenge", challenge()).queryParam("code_challenge_method", "S256");
+      if (!accept.isEmpty()) request.header("Accept", accept);
+      mvc.perform(request).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(ISSUER + "/login"));
+    }
+  }
+
+  @Test
   void consentScopeWithoutReadIsRejectedAndDcrMetadataHostIsNull() throws Exception {
     var pending = pendingConsent("read write");
     mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))

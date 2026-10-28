@@ -242,6 +242,9 @@ public class OAuthSecurityConfiguration {
                                               } else if (provider instanceof OAuth2AuthorizationConsentAuthenticationProvider consent) {
                                                 consent.setAuthorizationConsentCustomizer(context -> {
                                                   OAuth2AuthorizationConsentAuthenticationToken posted = context.getAuthentication();
+                                                  if ("allow".equals(posted.getAdditionalParameters().get("decision"))
+                                                      && !posted.getScopes().isEmpty() && !posted.getScopes().contains("read"))
+                                                    throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);
                                                   if (!"allow".equals(posted.getAdditionalParameters().get("decision")) || posted.getScopes().isEmpty())
                                                     context.getAuthorizationConsent().authorities(Set::clear);
                                                 });
@@ -356,7 +359,7 @@ public class OAuthSecurityConfiguration {
                     new MediaTypeRequestMatcher(MediaType.TEXT_HTML))
                     .defaultAuthenticationEntryPointFor((request, response, failure) -> OAuthProtocolGuard.error(response, 401, "login_required"), jsonMatcher()))
         .addFilterBefore(
-            new OAuthProtocolGuard(policy, identity, csrf),
+            new OAuthProtocolGuard(policy, identity, csrf, grants),
             org.springframework.security.web.authentication.logout.LogoutFilter.class);
     headers(http, policy);
     return http.build();
@@ -366,6 +369,7 @@ public class OAuthSecurityConfiguration {
   @Order(2)
   SecurityFilterChain browser(
       HttpSecurity http,
+      OAuthGrantStore grants,
       TaskaIdentityClient identity,
       OAuthServerProperties policy,
       HttpSessionCsrfTokenRepository csrf,
@@ -413,7 +417,7 @@ public class OAuthSecurityConfiguration {
             csrfConfig ->
                 csrfConfig.csrfTokenRepository(csrf).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                     .ignoringRequestMatchers("/oauth/register"))
-        .addFilterBefore(new OAuthProtocolGuard(policy, identity, csrf), AuthorizationFilter.class);
+        .addFilterBefore(new OAuthProtocolGuard(policy, identity, csrf, grants), AuthorizationFilter.class);
     headers(http, policy);
     return http.build();
   }
