@@ -146,6 +146,21 @@ class IssueTypeDeletionIT extends AbstractIT {
         rejected(() -> transactions.begin(project,other,"TASK",null,Map.of(),null,original.getRequestId(),"n",ActionMetadata.NONE).block(TIMEOUT),DomainStatus.NOT_FOUND,null);
     }
 
+    @Test
+    void bodylessOldRequestCannotDeleteARecreatedGeneration() {
+        delete("TASK",null,Map.of(),null);
+        var completed=latest();recreateTaskFixture();
+        var generation=types.find(project,"TASK").block(TIMEOUT).generation();
+        long effects=appliedEffects();
+        delete("TASK",null,Map.of(),null);
+        assertThat(types.find(project,"TASK").block(TIMEOUT).generation()).isEqualTo(generation);
+        assertThat(appliedEffects()).isEqualTo(effects);assertThat(journalCount()).isEqualTo(1);
+        assertThat(latest().id()).isEqualTo(completed.id());
+        var fresh=original.toBuilder().setRequestId(UUID.randomUUID().toString()).build();
+        coordinator.delete(project,actor,"TASK",null,Map.of(),null,fresh).block(TIMEOUT);
+        assertThat(types.find(project,"TASK").block(TIMEOUT)).isNull();assertThat(journalCount()).isEqualTo(2);
+    }
+
     @ParameterizedTest
     @ValueSource(strings={"TASK","MISSING"})
     void targetMustBeAnotherRegisteredTypeAndValidationDoesNotLeaveAnIntent(String target) {
