@@ -31,6 +31,8 @@ class MetaServiceImplTest {
     void meta_listsEveryContractEnumValue() {
         MetaResponseDto meta = service.getMeta();
 
+        assertThat(meta.getActionChannels()).extracting(ru.taska.domain.dto.ActionChannelMetaPairDto::getCode)
+                .containsExactly(java.util.Arrays.stream(ru.taska.domain.ActionChannel.values()).map(Enum::name).toArray(String[]::new));
         assertThat(meta.getIssueTypes()).extracting(IssueTypeMetaPairDto::getCode)
                 .containsExactly(new String[]{"TASK", "BUG", "STORY"});
         assertThat(meta.getPriorities()).extracting(IssuePriorityMetaPairDto::getCode)
@@ -50,6 +52,7 @@ class MetaServiceImplTest {
     void meta_everyValueHasName() {
         MetaResponseDto meta = service.getMeta();
 
+        assertThat(meta.getActionChannels()).extracting(ru.taska.domain.dto.ActionChannelMetaPairDto::getName).containsExactly("UI", "API", "MCP");
         assertThat(meta.getIssueTypes()).extracting(IssueTypeMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getPriorities()).extracting(IssuePriorityMetaPairDto::getName).allMatch(this::isFilled);
         assertThat(meta.getLinkTypes()).extracting(IssueLinkTypeMetaPairDto::getName).allMatch(this::isFilled);

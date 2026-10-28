@@ -64,9 +64,9 @@ class OAuthControllerTest {
         verify(oauth).callback(eq("apple"), eq(STATE), eq(BROWSER), eq("apple-code"), isNull(), eq(user), eq("unknown"), any());
     }
     @Test void exchangeAndSignupArePublicJsonAndNeverCacheSessions() {
-        var signup = new OAuthSignupStateDto().signupToken("signup-one-time").provider(OAuthSignupStateDto.ProviderEnum.GITHUB)
+        var signup = new OAuthSignupStateDto().signupToken("signup-one-time").provider("GITHUB")
                 .email("person@example.test").suggestedDisplayName(null);
-        when(oauth.exchange(any(), eq("unknown"), any())).thenReturn(Mono.just(new OAuthExchangeResponseDto().status(OAuthExchangeResponseDto.StatusEnum.SIGNUP_REQUIRED).signup(signup).returnTo("/projects")));
+        when(oauth.exchange(any(), eq("unknown"), any())).thenReturn(Mono.just(new OAuthExchangeResponseDto().status("SIGNUP_REQUIRED").signup(signup).returnTo("/projects")));
         http.post().uri("/api/v1/auth/oauth/exchange").contentType(MediaType.APPLICATION_JSON).bodyValue("{\"code\":\"one-time\"}")
                 .exchange().expectStatus().isOk().expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody()
                 .jsonPath("$.status").isEqualTo("SIGNUP_REQUIRED").jsonPath("$.signup.provider").isEqualTo("GITHUB")

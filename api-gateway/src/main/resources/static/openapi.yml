@@ -5172,7 +5172,7 @@ components:
       type: object
       required: [status, returnTo]
       properties:
-        status: {type: string, enum: [SIGNED_IN, SIGNUP_REQUIRED]}
+        status: {type: string, x-extensible-enum: [SIGNED_IN, SIGNUP_REQUIRED]}
         session:
           nullable: true
           allOf:
@@ -5187,7 +5187,7 @@ components:
       required: [signupToken, provider, email]
       properties:
         signupToken: {type: string}
-        provider: {type: string, enum: [GOOGLE, GITHUB, APPLE]}
+        provider: {type: string, x-extensible-enum: [GOOGLE, GITHUB, APPLE]}
         email: {type: string}
         suggestedDisplayName: {type: string, nullable: true}
     OAuthSignupRequestDto:
@@ -5197,7 +5197,7 @@ components:
         signupToken: {type: string}
         displayName:
           type: string
-          description: Trimmed name of 1..128 Unicode code points without controls or line breaks; invalid names return DISPLAY_NAME_INVALID before consuming the signup token.
+          description: Trimmed name of 1..128 Unicode code points with at least one visible character, without controls or line breaks; invalid names return DISPLAY_NAME_INVALID before consuming the signup token.
 
     UpdateDisplayNameRequestDto:
       type: object
@@ -5205,7 +5205,7 @@ components:
       properties:
         displayName:
           type: string
-          description: Trimmed Unicode name, 1 to 128 code points, no control characters or line breaks. Invalid values return details.reason DISPLAY_NAME_INVALID.
+          description: Trimmed Unicode name, 1 to 128 code points, at least one visible character, no control characters or line breaks. Invalid values return details.reason DISPLAY_NAME_INVALID.
     UserDisplayNameResponseDto:
       type: object
       required: [userId, displayName]
@@ -5233,7 +5233,8 @@ components:
           type: string
         kind:
           type: string
-          enum: [INVITATION, SIGNUP]
+          x-extensible-enum: [INVITATION, SIGNUP]
+          description: Account origin (createdVia), not the link type. An invited account retains INVITATION when it activates through email signup. Unknown origins pass through unchanged.
         expiresAt:
           type: string
           format: date-time
@@ -5246,7 +5247,7 @@ components:
           type: string
         displayName:
           type: string
-          description: Optional normalized name, 1 to 128 Unicode code points, no controls or line breaks. Omission keeps the invited name; invalid values do not consume the token (400 DISPLAY_NAME_INVALID).
+          description: Optional normalized name, 1 to 128 Unicode code points, at least one visible character, no controls or line breaks. Omission keeps the invited name; invalid values do not consume the token (400 DISPLAY_NAME_INVALID).
         newPassword:
           type: string
 
@@ -7650,7 +7651,7 @@ components:
     MetaResponseDto:
       type: object
       description: Словари значений API с английскими названиями. Значения с selectable=false служат только для отображения ответов и не предлагаются для выбора.
-      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
+      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses, actionChannels ]
       properties:
         issueTypes:
           description: Имена начального посева TASK/BUG/STORY; актуальные названия, цвет, форма и значок берутся из реестра конкретного проекта.
@@ -7674,10 +7675,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/NotificationTypeMetaPairDto'
+        actionChannels:
+          type: array
+          description: Каналы действий из ActionChannel, с английскими названиями для истории и комментариев.
+          items:
+            $ref: '#/components/schemas/ActionChannelMetaPairDto'
         userStatuses:
           type: array
           items:
             $ref: '#/components/schemas/UserStatusMetaPairDto'
+
+    ActionChannelMetaPairDto:
+      type: object
+      description: Канал действия; code открыт для новых значений.
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          x-extensible-enum: [UI, API_TOKEN, MCP]
+        name:
+          type: string
 
     IssueTypeMetaPairDto:
       type: object
