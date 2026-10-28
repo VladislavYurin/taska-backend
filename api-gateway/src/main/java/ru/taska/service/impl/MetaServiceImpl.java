@@ -40,10 +40,11 @@ public class MetaServiceImpl implements MetaService {
                 toPairList(IssueLinkTypeDto.values(), code -> new IssueLinkTypeMetaPairDto(code, linkTypeName(code))),
                 toPairList(NotificationTypeDto.values(), code -> new NotificationTypeMetaPairDto(code, notificationTypeName(code))
                         .selectable(code != NotificationTypeDto.UNKNOWN)),
-                toPairList(ActionChannel.values(), code -> new ActionChannelMetaPairDto(code.name(), actionChannelName(code))),
                 toPairList(UserStatusDto.values(), code -> new UserStatusMetaPairDto(code, userStatusName(code))
                         .selectable(code != UserStatusDto.UNSPECIFIED))
         );
+        this.meta.setActionChannels(toPairList(ActionChannel.values(),
+                code -> new ActionChannelMetaPairDto(code.name(), actionChannelName(code))));
         this.meta.setLinkViewTypes(toPairList(IssueLinkViewTypeDto.values(),
                 code -> new IssueLinkViewTypeMetaPairDto(code, linkViewTypeName(code))
                         .selectable(code != IssueLinkViewTypeDto.ISSUE_LINK_VIEW_TYPE_UNSPECIFIED

@@ -116,6 +116,17 @@ class MetaServiceImplTest {
         assertThat(meta.getLinkTypes()).allSatisfy(item -> assertThat(item.getSelectable()).isTrue());
     }
 
+    @Test
+    void olderMetaResponseWithoutActionChannelsRemainsReadable() {
+        var mapper = new ObjectMapper();
+        var legacy = mapper.readValue("""
+                {"issueTypes":[],"priorities":[],"linkTypes":[],"notificationTypes":[],"userStatuses":[]}
+                """, MetaResponseDto.class);
+        assertThat(legacy.getIssueTypes()).isEmpty();
+        assertThat(legacy.getUserStatuses()).isEmpty();
+        assertThat(service.getMeta().getActionChannels()).hasSize(3);
+    }
+
     private boolean isFilled(String name) {
         return name != null && !name.isBlank() && name.codePoints().noneMatch(
                 c -> Character.UnicodeScript.of(c) == Character.UnicodeScript.CYRILLIC);

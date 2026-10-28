@@ -7651,7 +7651,7 @@ components:
     MetaResponseDto:
       type: object
       description: Словари значений API с английскими названиями. Значения с selectable=false служат только для отображения ответов и не предлагаются для выбора.
-      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses, actionChannels ]
+      required: [ issueTypes, priorities, linkTypes, notificationTypes, userStatuses ]
       properties:
         issueTypes:
           description: Имена начального посева TASK/BUG/STORY; актуальные названия, цвет, форма и значок берутся из реестра конкретного проекта.
@@ -7677,7 +7677,10 @@ components:
             $ref: '#/components/schemas/NotificationTypeMetaPairDto'
         actionChannels:
           type: array
-          description: Каналы действий из ActionChannel, с английскими названиями для истории и комментариев.
+          description: >-
+            Каналы действий из ActionChannel, с английскими названиями для истории и комментариев.
+            API_TOKEN отображается как API: имя личного токена не раскрывается.
+            Поле добавлено опционально для совместимости клиентов.
           items:
             $ref: '#/components/schemas/ActionChannelMetaPairDto'
         userStatuses:
