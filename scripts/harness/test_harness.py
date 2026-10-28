@@ -308,6 +308,30 @@ class HarnessTest(unittest.TestCase):
         for name in m['modules']:
             self.assertEqual((self.root / name / 'target/checked').read_text(), 'done')
 
+    def test_missing_report_directory_only_passes_explicit_no_test_exemption(self):
+        reports = {'directory': 'service/target/surefire-reports', 'selectors': ['DemoIT']}
+        self.assertFalse((self.root / reports['directory']).exists())
+        self.assertEqual(h.snapshots(self.root, reports), {})
+        self.assertEqual(h.test_reports(self.root, reports, {})['status'], 'FAIL')
+        reports.update(selectors=[], noTestsReason='Fixture module has no test sources')
+        result = h.test_reports(self.root, reports, {})
+        self.assertEqual(result['status'], 'PASS')
+        self.assertEqual(result['testScope'], reports['noTestsReason'])
+
+    def test_check_all_executes_the_same_docs_check_as_docs_check_command(self):
+        m = {'checks': [{'id': 'docs', 'group': 'docs', 'kind': 'docs', 'requires': []}]}
+        for command in [['check', '--all'], ['docs-check']]:
+            with (patch.object(h, 'load_manifest', return_value=m),
+                  patch.object(h, 'docs_errors', return_value=['Broken fixture link']) as check,
+                  contextlib.redirect_stdout(io.StringIO()) as output,
+                  contextlib.redirect_stderr(io.StringIO())):
+                self.assertEqual(h.main(command), 1)
+                self.assertEqual(check.call_count, 1)
+                result = json.loads(output.getvalue())['results'][0]
+                self.assertEqual(result['checkId'], 'docs')
+                self.assertEqual(result['status'], 'FAIL')
+                self.assertIn('Broken fixture link', result['reason'])
+
     def test_exit_precedence(self):
         for statuses, code in [(['PASS'], 0), (['PARTIAL'], 4), (['BLOCKED', 'PARTIAL'], 3), (['FAIL', 'BLOCKED'], 1)]:
             self.assertEqual(h.combined([{'status': s} for s in statuses]), code)
