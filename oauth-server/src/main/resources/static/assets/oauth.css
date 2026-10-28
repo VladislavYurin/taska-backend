@@ -660,3 +660,8 @@ legend.consent-access-label {
     inset: -14px -6px;
   }
 }
+
+/* Social links appear only after the pending authorization context is confirmed. */
+.social-signin { margin-top: 20px; }
+.social-signin-links { display: grid; gap: 8px; margin-top: 12px; }
+.social-signin-links > a { text-decoration: none; text-align: center; }

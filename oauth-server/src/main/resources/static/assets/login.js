@@ -47,6 +47,8 @@
   const submit = document.getElementById("signin-submit");
   const refusalBox = document.getElementById("signin-refusal-box");
   const refusal = document.getElementById("signin-refusal");
+  const providerSection = document.getElementById("signin-providers");
+  const providerLinks = document.getElementById("signin-provider-links");
 
   let ready = false; // the CSRF field is filled
   let pending = false; // the form has been sent
@@ -167,6 +169,32 @@
       refusal.append(lockLines(lockDeadline(until)));
       localizeTimes(refusal);
       focus = email;
+    } else if (code === "SIGNUP_REQUIRED") {
+      refusal.append("Create an account in ");
+      const taska = document.createElement("a");
+      taska.className = "auth-link";
+      taska.href = "https://taska.ozero.dev";
+      taska.textContent = "Taska";
+      refusal.append(taska, ", then return to the app and start connecting again.");
+      focus = email;
+    } else if (code === "PROVIDER_CANCELLED") {
+      refusal.textContent = "Provider sign-in was cancelled. Choose a provider or use your email and password.";
+      focus = email;
+    } else if (code === "STATE_INVALID") {
+      refusal.textContent = "This sign-in attempt expired or belongs to another browser. Choose a provider to start again.";
+      focus = email;
+    } else if (code === "EMAIL_NOT_VERIFIED") {
+      refusal.textContent = "Verify your email address with the provider, then try again.";
+      focus = email;
+    } else if (code === "ACCOUNT_BLOCKED") {
+      refusal.textContent = "This Taska account is blocked. Contact your administrator.";
+      focus = email;
+    } else if (code === "RATE_LIMITED") {
+      refusal.textContent = "Too many sign-in attempts. Try again later.";
+      focus = email;
+    } else if (code === "PROVIDER_UNAVAILABLE" || code === "PROVIDER_DISABLED") {
+      refusal.textContent = "This provider is unavailable. Try again later or use your email and password.";
+      focus = email;
     } else {
       // SERVICE_UNAVAILABLE and any code this page does not know. No request
       // id arrives on a redirect, so there is no detail line.
@@ -188,6 +216,8 @@
 
   async function readContext() {
     ready = false;
+    providerSection.hidden = true;
+    providerLinks.replaceChildren();
     submit.setAttribute("aria-disabled", "true");
     let response;
     try {
@@ -227,6 +257,16 @@
     }
     csrf.name = name;
     csrf.value = token;
+    const names = { GOOGLE: "Google", GITHUB: "GitHub", APPLE: "Apple" };
+    for (const provider of new Set(Array.isArray(context.providers) ? context.providers : [])) {
+      if (!Object.hasOwn(names, provider)) continue;
+      const link = document.createElement("a");
+      link.className = "secondary-button";
+      link.href = `/login/provider/${provider.toLowerCase()}`;
+      link.textContent = `Continue with ${names[provider]}`;
+      providerLinks.append(link);
+    }
+    providerSection.hidden = providerLinks.childElementCount === 0;
     ready = true;
     if (!pending) submit.removeAttribute("aria-disabled");
   }
