@@ -17,13 +17,14 @@ public final class DisplayNames {
         while (end > start && space(raw.codePointBefore(end))) end -= Character.charCount(raw.codePointBefore(end));
         String value = raw.substring(start, end);
         int count = value.codePointCount(0, value.length());
-        if (count < 1 || count > 128) throw invalid();
+        if (count < 1 || count > 128 || value.codePoints().noneMatch(cp -> !space(cp)
+                && Character.getType(cp) != Character.FORMAT)) throw invalid();
         return value;
     }
     private static boolean space(int cp) { return Character.isWhitespace(cp) || Character.isSpaceChar(cp); }
     private static DomainException invalid() {
         return new DomainException(DomainStatus.INVALID_ARGUMENT,
-                "Display name must contain 1 to 128 characters and no control characters or line breaks",
+                "Display name must contain 1 to 128 characters, a visible character, and no control characters or line breaks",
                 Map.of("reason", "DISPLAY_NAME_INVALID"));
     }
 }
