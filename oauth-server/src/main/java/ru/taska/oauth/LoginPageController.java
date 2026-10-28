@@ -1,6 +1,8 @@
 package ru.taska.oauth;
 
 import jakarta.servlet.http.*;
+import java.net.URI;
+import org.springframework.beans.factory.annotation.Value;
 import java.util.*;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
@@ -12,15 +14,20 @@ import org.springframework.web.servlet.config.annotation.*;
 public class LoginPageController {
   private final HttpSessionCsrfTokenRepository csrf;
   private final RequestCache requests;
-  LoginPageController(HttpSessionCsrfTokenRepository csrf, RequestCache requests) {
-    this.csrf = csrf; this.requests = requests;
+  private final SocialIdentityClient social;
+  private final URI taskaUrl;
+  LoginPageController(HttpSessionCsrfTokenRepository csrf, RequestCache requests, SocialIdentityClient social,
+      @Value("${taska.oauth.ui-base-url:https://taska.ozero.dev}") URI taskaUrl) {
+    OAuthServerProperties.requireHttps(taskaUrl);
+    this.taskaUrl = taskaUrl;
+    this.csrf = csrf; this.requests = requests; this.social = social;
   }
 
   @GetMapping("/login/context")
   public Map<String, Object> context(HttpServletRequest request, HttpServletResponse response) {
     var token = csrf.loadDeferredToken(request, response).get();
     return Map.of("csrf_parameter", token.getParameterName(), "csrf_token", token.getToken(),
-        "pending_request", requests.getRequest(request, response) != null);
+        "pending_request", requests.getRequest(request, response) != null, "providers", social.providers(), "taska_url", taskaUrl.toString());
   }
 
   @Configuration(proxyBeanMethods = false)

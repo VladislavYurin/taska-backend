@@ -2,12 +2,15 @@ syntax = "proto3";
 package ru.taska.auth.oauth.v1;
 import "v1/common.proto";
 import "v1/auth-service.proto";
+import "google/protobuf/empty.proto";
 option java_multiple_files = true;
 option java_package = "ru.taska.api.auth.oauth.v1";
 
 // Private service-to-service API, authenticated independently of the user's credential.
 service OAuthIdentityService {
   rpc AuthenticateCredentials(ru.taska.auth.v1.LoginRequest) returns (ru.taska.auth.v1.ValidateAccessTokenResponse);
+  rpc ClaimSignIn(ClaimOAuthSignInRequest) returns (ru.taska.auth.v1.ValidateAccessTokenResponse);
+  rpc ListSignInProviders(google.protobuf.Empty) returns (ListOAuthSignInProvidersResponse);
   rpc ValidateSubject(ValidateOAuthSubjectRequest) returns (ru.taska.auth.v1.ValidateAccessTokenResponse);
   rpc ExchangeToken(ExchangeOAuthTokenRequest) returns (ExchangeOAuthTokenResponse);
 }
@@ -24,3 +27,12 @@ message ExchangeOAuthTokenResponse {
   string delegation_token = 1;
   ru.taska.common.v1.UserContext user_context = 2;
 }
+
+message ClaimOAuthSignInRequest {
+  ru.taska.common.v1.Header header = 1;
+  string code = 2;
+  // Private nonce from the originating authorization-server browser session.
+  string nonce = 3;
+}
+
+message ListOAuthSignInProvidersResponse { repeated string providers = 1; }

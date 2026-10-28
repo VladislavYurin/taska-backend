@@ -16,7 +16,7 @@ public class OAuthGrpcService extends ReactorOAuthServiceGrpc.OAuthServiceImplBa
     private final OAuthFlowService flow;
     private final OAuthIpLimiter ipLimiter;
     @Override public Mono<StartOAuthResponse> startOAuth(Mono<StartOAuthRequest> request) {
-        return request.flatMap(req -> header(req.getHeader()).then(ipLimiter.reserve(req.getClientIp())).then(Mono.defer(() -> flow.start(req.getProvider(), req.getReturnTo()))))
+        return request.flatMap(req -> header(req.getHeader()).then(ipLimiter.reserve(req.getClientIp())).then(Mono.defer(() -> flow.start(req.getProvider(), req.getReturnTo(), req.getTarget(), req.getBinding()))))
                 .map(value -> StartOAuthResponse.newBuilder().setAuthorizationUrl(value.authorizationUrl()).setState(value.state()).setBrowserToken(value.browserToken()).build())
                 .transform(GrpcExceptionHandler.withErrorHandling("startOAuth"));
     }

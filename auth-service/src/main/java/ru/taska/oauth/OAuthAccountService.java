@@ -32,14 +32,26 @@ public class OAuthAccountService {
     private final ru.taska.config.props.SignupProperties signup;
 
     /** Read-only callback check; account state and flag are checked again under locks at exchange/signup. */
-    public Mono<Void> check(OAuthIdentity identity) {
+    public Mono<Void> check(OAuthIdentity identity) { return check(identity, true); }
+    public Mono<Void> checkSignIn(OAuthIdentity identity) { return check(identity, false); }
+    private Mono<Void> check(OAuthIdentity identity, boolean signupPolicy) {
         return binding(identity).flatMap(credential -> users.findById(credential.getUserId()))
                 .switchIfEmpty(Mono.defer(() -> users.findByEmail(identity.email())))
                 .doOnNext(this::checkStatus).map(ignored -> true)
-                .switchIfEmpty(Mono.defer(() -> signup.isEnabled() ? Mono.just(true) : Mono.error(OAuthErrors.failure("SIGNUP_DISABLED")))).then();
+                .switchIfEmpty(Mono.defer(() -> !signupPolicy || signup.isEnabled() ? Mono.just(true) : Mono.error(OAuthErrors.failure("SIGNUP_DISABLED")))).then();
     }
     @Transactional
     public Mono<Optional<AuthResponseDto>> signIn(OAuthIdentity identity, String displayName, String requestId) {
+        return resolve(identity, displayName, requestId, true).flatMap(user -> user.isPresent()
+                ? session(user.get()).map(Optional::of) : Mono.just(Optional.empty()));
+    }
+    /** Browser sign-in for the authorization server: link/activate existing accounts, never issue JWT/refresh. */
+    @Transactional
+    public Mono<User> signInSubject(OAuthIdentity identity, String requestId) {
+        return resolve(identity, null, requestId, false).flatMap(user -> user.map(Mono::just)
+                .orElseGet(() -> Mono.error(OAuthErrors.failure("SIGNUP_REQUIRED"))));
+    }
+    private Mono<Optional<User>> resolve(OAuthIdentity identity, String displayName, String requestId, boolean allowCreate) {
         return Mono.defer(() -> {
             String name = displayName == null ? null : DisplayNames.normalize(displayName);
             return mutex("oauth:" + identity.provider() + ":" + identity.subject()).then(mutex(identity.email()))
@@ -49,15 +61,16 @@ public class OAuthAccountService {
                             .switchIfEmpty(Mono.defer(() -> users.findByCanonicalEmailForUpdate(identity.email())
                                     .flatMap(user -> existing(user, identity, true, requestId))
                                     .switchIfEmpty(Mono.defer(() -> {
+                                        if (!allowCreate) return Mono.just(Optional.empty());
                                         if (!signup.isEnabled()) return Mono.error(OAuthErrors.failure("SIGNUP_DISABLED"));
                                         if (name == null) return Mono.just(Optional.empty());
                                         return users.save(User.builder().email(identity.email()).displayName(name).createdVia(UserCreatedVia.OAUTH)
                                                         .status(UserStatus.ACTIVE).globalRole(ru.taska.domain.GlobalRole.USER).build())
-                                                .flatMap(user -> link(user, identity).then(activated(user, requestId)).then(session(user))).map(Optional::of);
+                                                .flatMap(user -> link(user, identity).then(activated(user, requestId)).thenReturn(user)).map(Optional::of);
                                     }))))));
         });
     }
-    private Mono<Optional<AuthResponseDto>> existing(User user, OAuthIdentity identity, boolean link, String requestId) {
+    private Mono<Optional<User>> existing(User user, OAuthIdentity identity, boolean link, String requestId) {
         return locks.resolveLockState(user).flatMap(current -> {
             checkStatus(current);
             Mono<User> active;
@@ -66,7 +79,7 @@ public class OAuthAccountService {
                 active = users.save(current).flatMap(saved -> invitations.revokeUnusedForUser(saved.getId())
                         .then(activated(saved, requestId)).thenReturn(saved));
             } else active = Mono.just(current);
-            return active.flatMap(saved -> (link ? link(saved, identity) : Mono.<Void>empty()).then(session(saved))).map(Optional::of);
+            return active.flatMap(saved -> (link ? link(saved, identity) : Mono.<Void>empty()).thenReturn(saved)).map(Optional::of);
         });
     }
     private void checkStatus(User user) {

@@ -26,22 +26,33 @@ public class OAuthController {
     private final GrpcOAuthClient client;
     private final ru.taska.security.SignupClientAddress addresses;
     @Value("${taska.oauth.ui-base-url:${TASKA_OAUTH_UI_BASE_URL:https://taska.ozero.dev}}") private String uiBase;
+    @Value("${taska.oauth.issuer:${OAUTH_ISSUER:https://oauth.taska.ozero.dev}}") private String oauthIssuer;
     @jakarta.annotation.PostConstruct
     void validateUiBase() {
+        if (oauthIssuer == null || oauthIssuer.isBlank()) oauthIssuer = "https://oauth.taska.ozero.dev";
+        URI issuer = URI.create(oauthIssuer);
+        if (!"https".equals(issuer.getScheme()) || issuer.getHost() == null || issuer.getUserInfo() != null
+                || issuer.getQuery() != null || issuer.getFragment() != null || !(issuer.getPath().isEmpty() || issuer.getPath().equals("/")))
+            throw new IllegalArgumentException("OAuth issuer must be a canonical HTTPS origin");
         URI uri = URI.create(uiBase);
         boolean local = "localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost()) || "[::1]".equals(uri.getHost());
         if (uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
                 || !("https".equals(uri.getScheme()) || local && "http".equals(uri.getScheme()))) throw new IllegalArgumentException("OAuth UI base URL must use HTTPS");
     }
+    private static final String OAUTH_TARGET_SUFFIX = ".oauth";
     private static final String COOKIE_PREFIX = "__Host-taska_oauth_";
 
     @GetMapping("/api/v1/auth/oauth/{provider}/start")
-    public Mono<ResponseEntity<Void>> start(@PathVariable String provider, @RequestParam(defaultValue = "/projects") String returnTo, ServerWebExchange exchange) {
+    public Mono<ResponseEntity<Void>> start(@PathVariable String provider, @RequestParam(defaultValue = "/projects") String returnTo,
+            @RequestParam(defaultValue = "ui") String target, @RequestParam(defaultValue = "") String binding, ServerWebExchange exchange) {
         String ip = clientIp(exchange);
-        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.start(provider, returnTo, ip, context).map(result -> {
-            String cookie = cookie(result.getState(), result.getBrowserToken(), Duration.ofMinutes(10)).toString();
+        boolean oauthTarget = "oauth".equals(target);
+        return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> ("ui".equals(target) && binding.isEmpty()
+                ? client.start(provider, returnTo, ip, context) : client.start(provider, returnTo, ip, context, target, binding)).map(result -> {
+            // The suffix only selects a fixed error page. Database target+binding remain authoritative.
+            String cookie = cookie(result.getState(), result.getBrowserToken() + (oauthTarget ? OAUTH_TARGET_SUFFIX : ""), Duration.ofMinutes(10)).toString();
             return redirect(result.getAuthorizationUrl()).header(HttpHeaders.SET_COOKIE, cookie).<Void>build();
-        })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, null)));
+        })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, null, oauthTarget)));
     }
     @GetMapping("/api/v1/auth/oauth/{provider}/callback")
     public Mono<ResponseEntity<Void>> callbackGet(@PathVariable String provider, @RequestParam MultiValueMap<String, String> query, ServerWebExchange exchange) {
@@ -58,13 +69,15 @@ public class OAuthController {
         String ip = clientIp(exchange);
         String state = values.getFirst("state");
         var binding = validState(state) ? exchange.getRequest().getCookies().getFirst(COOKIE_PREFIX + state) : null;
-        String browser = binding == null ? "" : binding.getValue();
+        String cookieValue = binding == null ? "" : binding.getValue();
+        boolean oauthTarget = cookieValue.endsWith(OAUTH_TARGET_SUFFIX) && validState(cookieValue.substring(0, cookieValue.length() - OAUTH_TARGET_SUFFIX.length()));
+        String browser = oauthTarget ? cookieValue.substring(0, cookieValue.length() - OAUTH_TARGET_SUFFIX.length()) : cookieValue;
         return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.callback(provider, state, browser, values.getFirst("code"), values.getFirst("error"), values.getFirst("user"), ip, context)
                 .map(url -> {
-                    var response = redirect(url);
+                    var response = redirect(callbackLocation(url, oauthTarget));
                     if (validState(state)) response.header(HttpHeaders.SET_COOKIE, cookie(state, "", Duration.ZERO).toString());
                     return response.<Void>build();
-                })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, state)));
+                })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, state, oauthTarget)));
     }
     @PostMapping("/api/v1/auth/oauth/exchange")
     public Mono<ResponseEntity<OAuthExchangeResponseDto>> exchange(@RequestBody Mono<OAuthExchangeRequestDto> request, ServerWebExchange exchange) {
@@ -87,7 +100,15 @@ public class OAuthController {
     private ResponseEntity.BodyBuilder redirect(String url) {
         return ResponseEntity.status(302).location(URI.create(url)).header(HttpHeaders.CACHE_CONTROL, "no-store").header("Referrer-Policy", "no-referrer");
     }
-    private ResponseEntity<Void> errorResponse(Throwable error, ServerWebExchange exchange, String state) {
+    private String callbackLocation(String url, boolean oauthTarget) {
+        // A missing/expired database state has no authoritative target. The cookie hint may
+        // reroute only an error to a fixed origin; it never changes a successful code's target.
+        String uiError = URI.create(uiBase).resolve("/auth/callback").toString() + "?error=";
+        if (oauthTarget && url.startsWith(uiError))
+            return URI.create(oauthIssuer).resolve("/login/provider/callback") + "?" + URI.create(url).getRawQuery();
+        return url;
+    }
+    private ResponseEntity<Void> errorResponse(Throwable error, ServerWebExchange exchange, String state, boolean oauthTarget) {
         var trailers = io.grpc.Status.trailersFromThrowable(error);
         var details = trailers == null ? java.util.Map.<String, String>of() : mapper.GrpcErrorDetails.decode(trailers);
         boolean limited = io.grpc.Status.fromThrowable(error).getCode() == io.grpc.Status.Code.RESOURCE_EXHAUSTED;
@@ -98,7 +119,7 @@ public class OAuthController {
         exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
         // Navigation failures, including unavailable infrastructure, must return the browser to the UI.
         log.warn("[{}] OAuth navigation failed: {}", requestId, reason);
-        var uri = org.springframework.web.util.UriComponentsBuilder.fromUri(URI.create(uiBase).resolve("/auth/callback"))
+        var uri = org.springframework.web.util.UriComponentsBuilder.fromUri(URI.create(oauthTarget ? oauthIssuer : uiBase).resolve(oauthTarget ? "/login/provider/callback" : "/auth/callback"))
                 .queryParam("error", reason).queryParam("requestId", requestId);
         String retry = details.get("retryAfterSeconds");
         if (limited && retry != null && retry.matches("[1-9][0-9]{0,9}")) uri.queryParam("retryAfter", retry);

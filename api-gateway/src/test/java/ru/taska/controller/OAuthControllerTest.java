@@ -114,4 +114,46 @@ class OAuthControllerTest {
         http.get().uri("/api/v1/auth/oauth/github/callback?state=" + STATE + "&code=x").header("X-Request-Id", "failure-test").exchange().expectStatus().isFound()
                 .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE&requestId=failure-test").expectBody().isEmpty();
     }
+
+    @Test void authorizationServerStartPassesTargetBindingAndMarksOnlyErrorRoutingCookie() {
+        String hash="h".repeat(43);
+        when(oauth.start(eq("github"),eq("/projects"),eq("unknown"),any(),eq("oauth"),eq(hash)))
+                .thenReturn(Mono.just(StartOAuthResponse.newBuilder().setAuthorizationUrl("https://provider.example/authorize")
+                        .setState(STATE).setBrowserToken(BROWSER).build()));
+        http.get().uri("/api/v1/auth/oauth/github/start?target=oauth&binding="+hash).exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION,"https://provider.example/authorize")
+                .expectHeader().value(HttpHeaders.SET_COOKIE,cookie->assertThat(cookie).contains(COOKIE+"="+BROWSER+".oauth","HttpOnly","Secure","SameSite=None"));
+    }
+    @Test void authorizationServerCookieMarkerIsStrippedBeforeTheAuthoritativeStateClaim() {
+        when(oauth.callback(eq("github"),eq(STATE),eq(BROWSER),eq("provider-code"),isNull(),isNull(),eq("unknown"),any()))
+                .thenReturn(Mono.just("https://oauth.taska.ozero.dev/login/provider/callback?code=opaque"));
+        http.get().uri("/api/v1/auth/oauth/github/callback?state="+STATE+"&code=provider-code").cookie(COOKIE,BROWSER+".oauth")
+                .exchange().expectStatus().isFound().expectHeader().valueEquals(HttpHeaders.LOCATION,"https://oauth.taska.ozero.dev/login/provider/callback?code=opaque");
+        verify(oauth).callback(eq("github"),eq(STATE),eq(BROWSER),eq("provider-code"),isNull(),isNull(),eq("unknown"),any());
+    }
+    @Test void invalidStateAndQuotaErrorsReturnToFixedAuthorizationServerErrorPage() {
+        when(oauth.callback(eq("github"),eq(STATE),eq(BROWSER),any(),any(),any(),eq("unknown"),any()))
+                .thenReturn(Mono.just("https://taska.ozero.dev/auth/callback?error=STATE_INVALID&requestId=trace447"));
+        http.get().uri("/api/v1/auth/oauth/github/callback?state="+STATE).cookie(COOKIE,BROWSER+".oauth").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION,"https://oauth.taska.ozero.dev/login/provider/callback?error=STATE_INVALID&requestId=trace447");
+        when(oauth.callback(eq("github"),eq(STATE),eq(BROWSER),any(),any(),any(),eq("unknown"),any()))
+                .thenReturn(Mono.error(io.grpc.Status.RESOURCE_EXHAUSTED.asRuntimeException(GrpcErrorDetails.encode(java.util.Map.of("retryAfterSeconds","30")))));
+        http.get().uri("/api/v1/auth/oauth/github/callback?state="+STATE).cookie(COOKIE,BROWSER+".oauth").header("X-Request-Id","quota447")
+                .exchange().expectStatus().isFound().expectHeader().valueEquals(HttpHeaders.LOCATION,
+                        "https://oauth.taska.ozero.dev/login/provider/callback?error=RATE_LIMITED&requestId=quota447&retryAfter=30")
+                .expectHeader().doesNotExist(HttpHeaders.SET_COOKIE);
+    }
+    @Test void markerCannotChangeSuccessfulPublicUiCodeTarget() {
+        when(oauth.callback(eq("github"),eq(STATE),eq(BROWSER),any(),any(),any(),eq("unknown"),any()))
+                .thenReturn(Mono.just("https://taska.ozero.dev/auth/callback?code=ui-only"));
+        http.get().uri("/api/v1/auth/oauth/github/callback?state="+STATE).cookie(COOKIE,BROWSER+".oauth").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION,"https://taska.ozero.dev/auth/callback?code=ui-only");
+    }
+    @Test void authorizationServerStartFailureNeverUsesRequestHostAsDestination() {
+        when(oauth.start(eq("github"),any(),any(),any(),eq("oauth"),any()))
+                .thenReturn(Mono.error(io.grpc.Status.UNAVAILABLE.asRuntimeException()));
+        http.get().uri("/api/v1/auth/oauth/github/start?target=oauth&binding="+BROWSER).header("Host","attacker.invalid")
+                .header("X-Request-Id","failure447").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION,"https://oauth.taska.ozero.dev/login/provider/callback?error=PROVIDER_UNAVAILABLE&requestId=failure447");
+    }
 }

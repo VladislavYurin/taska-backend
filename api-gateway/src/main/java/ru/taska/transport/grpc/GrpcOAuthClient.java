@@ -16,8 +16,11 @@ public class GrpcOAuthClient {
     private final ReactorOAuthServiceGrpc.ReactorOAuthServiceStub oauth;
     private final AuthMapper mapper;
     public Mono<StartOAuthResponse> start(String provider, String returnTo, String clientIp, GatewayContext context) {
+        return start(provider, returnTo, clientIp, context, "ui", "");
+    }
+    public Mono<StartOAuthResponse> start(String provider, String returnTo, String clientIp, GatewayContext context, String target, String binding) {
         return oauth.withDeadlineAfter(5, TimeUnit.SECONDS).startOAuth(StartOAuthRequest.newBuilder()
-                .setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp)).setProvider(provider).setReturnTo(returnTo).build());
+                .setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp)).setProvider(provider).setReturnTo(returnTo).setTarget(value(target)).setBinding(value(binding)).build());
     }
     public Mono<String> callback(String provider, String state, String browser, String code, String error, String user, String clientIp, GatewayContext context) {
         return oauth.withDeadlineAfter(25, TimeUnit.SECONDS).completeOAuth(CompleteOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp))
