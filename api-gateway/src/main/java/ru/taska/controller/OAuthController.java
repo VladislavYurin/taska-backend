@@ -18,6 +18,7 @@ import java.net.URI;
 import java.time.Duration;
 
 @RestController
+@lombok.extern.slf4j.Slf4j
 @RequiredArgsConstructor
 public class OAuthController {
     private final GatewayRequestExecutor executor;
@@ -38,8 +39,8 @@ public class OAuthController {
         String ip = clientIp(exchange);
         return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.start(provider, returnTo, ip, context).map(result -> {
             String cookie = cookie(result.getState(), result.getBrowserToken(), Duration.ofMinutes(10)).toString();
-            return redirect(result.getAuthorizationUrl()).header(HttpHeaders.SET_COOKIE, cookie).build();
-        }));
+            return redirect(result.getAuthorizationUrl()).header(HttpHeaders.SET_COOKIE, cookie).<Void>build();
+        })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, null)));
     }
     @GetMapping("/api/v1/auth/oauth/{provider}/callback")
     public Mono<ResponseEntity<Void>> callbackGet(@PathVariable String provider, @RequestParam MultiValueMap<String, String> query, ServerWebExchange exchange) {
@@ -58,13 +59,11 @@ public class OAuthController {
         var binding = validState(state) ? exchange.getRequest().getCookies().getFirst(COOKIE_PREFIX + state) : null;
         String browser = binding == null ? "" : binding.getValue();
         return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.callback(provider, state, browser, values.getFirst("code"), values.getFirst("error"), values.getFirst("user"), ip, context)
-                .onErrorResume(error -> io.grpc.Status.fromThrowable(error).getCode() == io.grpc.Status.Code.RESOURCE_EXHAUSTED
-                        ? Mono.error(error) : Mono.just(errorRedirect("PROVIDER_UNAVAILABLE")))
                 .map(url -> {
                     var response = redirect(url);
                     if (validState(state)) response.header(HttpHeaders.SET_COOKIE, cookie(state, "", Duration.ZERO).toString());
-                    return response.build();
-                }));
+                    return response.<Void>build();
+                })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, state)));
     }
     @PostMapping("/api/v1/auth/oauth/exchange")
     public Mono<ResponseEntity<OAuthExchangeResponseDto>> exchange(@RequestBody Mono<OAuthExchangeRequestDto> request, ServerWebExchange exchange) {
@@ -87,5 +86,20 @@ public class OAuthController {
     private ResponseEntity.BodyBuilder redirect(String url) {
         return ResponseEntity.status(302).location(URI.create(url)).header(HttpHeaders.CACHE_CONTROL, "no-store").header("Referrer-Policy", "no-referrer");
     }
-    private String errorRedirect(String reason) { return URI.create(uiBase).resolve("/auth/callback?error=" + reason).toString(); }
+    private ResponseEntity<Void> errorResponse(Throwable error, ServerWebExchange exchange, String state) {
+        var trailers = io.grpc.Status.trailersFromThrowable(error);
+        var details = trailers == null ? java.util.Map.<String, String>of() : mapper.GrpcErrorDetails.decode(trailers);
+        boolean limited = io.grpc.Status.fromThrowable(error).getCode() == io.grpc.Status.Code.RESOURCE_EXHAUSTED;
+        String reason = limited ? "RATE_LIMITED" : details.getOrDefault("reason", "PROVIDER_UNAVAILABLE");
+        if (!java.util.Set.of("PROVIDER_CANCELLED", "STATE_INVALID", "EMAIL_NOT_VERIFIED", "ACCOUNT_BLOCKED",
+                "ACCOUNT_LOCKED", "SIGNUP_DISABLED", "PROVIDER_UNAVAILABLE", "RATE_LIMITED").contains(reason)) reason = "PROVIDER_UNAVAILABLE";
+        log.warn("[{}] OAuth navigation failed: {}", exchange.getResponse().getHeaders().getFirst("X-Request-Id"), reason);
+        var uri = org.springframework.web.util.UriComponentsBuilder.fromUri(URI.create(uiBase).resolve("/auth/callback"))
+                .queryParam("error", reason).queryParam("requestId", exchange.getResponse().getHeaders().getFirst("X-Request-Id"));
+        String retry = details.get("retryAfterSeconds");
+        if (limited && retry != null && retry.matches("[1-9][0-9]{0,9}")) uri.queryParam("retryAfter", retry);
+        var response = redirect(uri.build().encode().toUriString());
+        if (!limited && validState(state)) response.header(HttpHeaders.SET_COOKIE, cookie(state, "", Duration.ZERO).toString());
+        return response.build();
+    }
 }

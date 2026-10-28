@@ -72,7 +72,7 @@ public class OAuthAccountService {
     private void checkStatus(User user) {
         if (user.getStatus() == UserStatus.BLOCKED) throw OAuthErrors.failure("ACCOUNT_BLOCKED");
         if (user.getStatus() == UserStatus.LOCKED && user.getLockedUntil() != null && user.getLockedUntil().isAfter(clock.instant()))
-            throw OAuthErrors.failure("ACCOUNT_LOCKED");
+            throw OAuthErrors.locked(user.getLockedUntil());
     }
     private Mono<Void> activated(User user, String requestId) { return outbox.save(mapper.buildUserActivatedOutboxEvent(user, requestId)).then(); }
     private Mono<Void> link(User user, OAuthIdentity identity) {

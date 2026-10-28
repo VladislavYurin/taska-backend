@@ -78,7 +78,7 @@ class AuthControllerWebTestClientTest {
                 .bodyValue("{\"email\":\"new@example.test\",\"displayName\":\"New User\"}")
                 .exchange().expectStatus().isAccepted().expectBody().isEmpty();
         Mockito.when(grpcAuthServiceClient.getAuthMethods()).thenReturn(Mono.just(new ru.taska.domain.dto.AuthMethodsResponseDto()
-                .signupEnabled(false).providers(java.util.List.of("GOOGLE"))));
+                .signupEnabled(false).providers(java.util.List.of(ru.taska.domain.dto.AuthMethodsResponseDto.ProvidersEnum.GOOGLE))));
         webTestClient.get().uri("/api/v1/auth/methods").exchange().expectStatus().isOk()
                 .expectHeader().valueEquals("Cache-Control","no-store")
                 .expectBody().jsonPath("$.signupEnabled").isEqualTo(false).jsonPath("$.providers[0]").isEqualTo("GOOGLE");

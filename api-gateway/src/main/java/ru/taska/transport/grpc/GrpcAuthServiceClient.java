@@ -43,7 +43,7 @@ public class GrpcAuthServiceClient {
     public Mono<ru.taska.domain.dto.AuthMethodsResponseDto> getAuthMethods() {
         return dynamicStub().getAuthMethods(com.google.protobuf.Empty.getDefaultInstance())
                 .map(response -> new ru.taska.domain.dto.AuthMethodsResponseDto().signupEnabled(response.getSignupEnabled())
-                        .providers(response.getProvidersList()));
+                        .providers(response.getProvidersList().stream().map(ru.taska.domain.dto.AuthMethodsResponseDto.ProvidersEnum::fromValue).toList()));
     }
 
 

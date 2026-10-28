@@ -28,6 +28,9 @@ public class OAuthFlowService {
         });
     }
     public Mono<String> callback(String provider, String state, String browserToken, String code, String error, String appleUser) {
+        return callback(provider, state, browserToken, code, error, appleUser, "");
+    }
+    public Mono<String> callback(String provider, String state, String browserToken, String code, String error, String appleUser, String requestId) {
         return Mono.defer(() -> {
             provider(provider);
             return store.claimState(provider, state, browserToken).flatMap(value -> {
@@ -36,7 +39,7 @@ public class OAuthFlowService {
                         .flatMap(identity -> accounts.check(identity).then(store.grant("EXCHANGE", identity, value.returnTo())))
                         .map(grant -> redirect("code", grant));
             });
-        }).onErrorResume(failure -> Mono.just(redirect("error", OAuthErrors.reason(failure))));
+        }).onErrorResume(failure -> Mono.just(redirect("error", OAuthErrors.reason(failure)) + (requestId == null || requestId.isBlank() ? "" : "&requestId=" + OAuthUrls.encode(requestId))));
     }
     public Mono<Exchange> exchange(String code, String requestId) {
         return store.claimGrant("EXCHANGE", code).flatMap(grant -> {
