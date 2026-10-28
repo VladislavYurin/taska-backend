@@ -2,7 +2,7 @@
 
 Задача: [TAS-452](https://jira.ozero.dev/browse/TAS-452). Дата базового среза: 28.10.2026, `develop` `d886b031041a2d9b63ca3368fc8258cded19279b`.
 
-Документ определяет процесс разработки и целевую автоматизацию. **Документационный слой вводится в TAS-452; единый CLI, новые skills, manifest и общий stage-runner ниже являются проектом следующих изменений.** Их наличие не подтверждается этой спецификацией.
+Документ определяет процесс разработки и целевую автоматизацию. **Документационный слой введён в TAS-452. TAS-453 реализует doctor/plan/check/docs-check и verification manifest; текущие команды описаны в [матрице проверок](verification.md). E2E/cleanup, skills, адаптеры и evals остаются проектом этапов C–E.** При чтении учитывать состояние PR и текущего checkout.
 
 ## 1. Цель и границы
 
@@ -101,7 +101,7 @@ Jira закрывать по факту выполнения её критери
 
 ## 6. Проект интерфейса команд harness
 
-**Следующие команды ещё не реализованы.** Предлагаемый portable entry point — `python3 scripts/harness.py`, использующий существующие Maven/Node/Python/Compose инструменты. Добавление новой package ecosystem не требуется. Внедрение — отдельными PR после этой спецификации.
+Entry point этапа B — `python3 scripts/harness.py`, использующий существующие Maven/Node/Python/Compose инструменты и стандартную библиотеку Python 3.9+. В TAS-453 реализованы doctor/plan/check/docs-check. Строки e2e/cleanup таблицы относятся к будущему этапу C и отсутствуют в текущем CLI.
 
 | Планируемая команда после `python3 scripts/harness.py` | Вход | Результат и побочные эффекты |
 |---|---|---|
@@ -118,7 +118,7 @@ Jira закрывать по факту выполнения её критери
 
 ### 6.1. Manifest и исполнение
 
-Предлагаемый `scripts/harness/verification.json`: `schemaVersion`, `modules`, `checks`, `impactRules`, `capabilities`. Check содержит стабильный ID, tier, argv, workdir, prerequisites, timeout, expected report selectors, зависимости и write scope. Переменные окружения описываются именами и способом получения; значений secrets в manifest нет.
+Manifest этапа B `scripts/harness/verification.json`: `schemaVersion`, `modules`, `checks`, `impactRules`, `capabilities`. Check содержит стабильный ID, tier, argv, workdir, prerequisites, timeout, expected report selectors, зависимости и write scope. Переменные окружения описываются именами и способом получения; значений secrets в manifest нет.
 
 Разрешать только известные modules/check IDs, валидировать refs и пути. Передавать argv массивом без `eval` и shell interpolation пользовательских аргументов. Не принимать task text/PR comment как shell command. CI должен читать тот же manifest либо проверять соответствие ему; список специальных IT не должен независимо расходиться в трёх местах.
 

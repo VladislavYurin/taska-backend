@@ -1,0 +1,1039 @@
+{
+  "schemaVersion": 1,
+  "modules": [
+    "common-lib",
+    "grpc-common-lib",
+    "kafka-lib",
+    "storage-lib",
+    "api-gateway",
+    "auth-service",
+    "project-service",
+    "workflow-service",
+    "issue-service",
+    "notification-service",
+    "metrics-starter",
+    "admin-service",
+    "mcp-server",
+    "oauth-server"
+  ],
+  "capabilities": {
+    "git": {
+      "argv": [
+        "git",
+        "--version"
+      ]
+    },
+    "java": {
+      "argv": [
+        "java",
+        "-version"
+      ]
+    },
+    "python": {
+      "argv": [
+        "{python}",
+        "--version"
+      ]
+    },
+    "node": {
+      "argv": [
+        "node",
+        "--version"
+      ]
+    },
+    "docker": {
+      "argv": [
+        "docker",
+        "info",
+        "--format",
+        "{{.ServerVersion}}"
+      ]
+    },
+    "compose": {
+      "argv": [
+        "docker",
+        "compose",
+        "version"
+      ]
+    }
+  },
+  "checks": [
+    {
+      "id": "common-lib.verify",
+      "module": "common-lib",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "common-lib",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "common-lib/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "grpc-common-lib.verify",
+      "module": "grpc-common-lib",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "grpc-common-lib",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "grpc-common-lib/target/surefire-reports",
+        "selectors": [],
+        "noTestsReason": "No default Surefire test sources in this module; verify compilation and upstream tests."
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "kafka-lib.verify",
+      "module": "kafka-lib",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "kafka-lib",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "kafka-lib/target/surefire-reports",
+        "selectors": [],
+        "noTestsReason": "No default Surefire test sources in this module; verify compilation and upstream tests."
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "storage-lib.verify",
+      "module": "storage-lib",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "storage-lib",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "storage-lib/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "api-gateway.verify",
+      "module": "api-gateway",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "api-gateway",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "api-gateway/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "auth-service.verify",
+      "module": "auth-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "auth-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "auth-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "project-service.verify",
+      "module": "project-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "project-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "project-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "workflow-service.verify",
+      "module": "workflow-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "workflow-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "workflow-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "issue-service.verify",
+      "module": "issue-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "issue-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "issue-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "notification-service.verify",
+      "module": "notification-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "notification-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "notification-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "metrics-starter.verify",
+      "module": "metrics-starter",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "metrics-starter",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "metrics-starter/target/surefire-reports",
+        "selectors": [],
+        "noTestsReason": "No default Surefire test sources in this module; verify compilation and upstream tests."
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "admin-service.verify",
+      "module": "admin-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "admin-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "admin-service/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "mcp-server.verify",
+      "module": "mcp-server",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "mcp-server",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "mcp-server/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "oauth-server.verify",
+      "module": "oauth-server",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "oauth-server",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "oauth-server/target/surefire-reports",
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "mcp-server.it",
+      "module": "mcp-server",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "mcp-server",
+        "-am",
+        "test",
+        "-Dtest=McpClientSecurityIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "mcp-server/target/surefire-reports",
+        "selectors": [
+          "McpClientSecurityIT"
+        ]
+      },
+      "requires": [
+        "mcp-server.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "admin-service.it",
+      "module": "admin-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "admin-service",
+        "-am",
+        "test",
+        "-Dtest=OutboxRetryServiceIT,OutboxRetryRepositoryIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "admin-service/target/surefire-reports",
+        "selectors": [
+          "OutboxRetryServiceIT",
+          "OutboxRetryRepositoryIT"
+        ]
+      },
+      "requires": [
+        "admin-service.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "issue-service.it",
+      "module": "issue-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "issue-service",
+        "-am",
+        "test",
+        "-Dtest=ListIssuesForBoardIT,IssueTypeMoveIT,WorkflowBindingMigrationIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "issue-service/target/surefire-reports",
+        "selectors": [
+          "ListIssuesForBoardIT",
+          "IssueTypeMoveIT",
+          "WorkflowBindingMigrationIT"
+        ]
+      },
+      "requires": [
+        "issue-service.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "project-service.it",
+      "module": "project-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "project-service",
+        "-am",
+        "test",
+        "-Dtest=IssueTypeDeletionIT,IssueTypeCreationIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "project-service/target/surefire-reports",
+        "selectors": [
+          "IssueTypeDeletionIT",
+          "IssueTypeCreationIT"
+        ]
+      },
+      "requires": [
+        "project-service.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "workflow-service.it",
+      "module": "workflow-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "workflow-service",
+        "-am",
+        "test",
+        "-Dtest=IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "workflow-service/target/surefire-reports",
+        "selectors": [
+          "IssueTypeWorkflowReservationIT",
+          "WorkflowBindingChangeIT",
+          "WorkflowCreatedTypeBindingIT",
+          "WorkflowScopeCheckIT"
+        ]
+      },
+      "requires": [
+        "workflow-service.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "auth-service.it",
+      "module": "auth-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "auth-service",
+        "-am",
+        "test",
+        "-Dtest=InvitedUnblockIT",
+        "-Dsurefire.failIfNoSpecifiedTests=false"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "auth-service/target/surefire-reports",
+        "selectors": [
+          "InvitedUnblockIT"
+        ]
+      },
+      "requires": [
+        "auth-service.verify"
+      ],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "harness.tests",
+      "group": "harness",
+      "tier": "static",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/harness",
+        "-p",
+        "test_*.py"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "python",
+        "git"
+      ],
+      "timeout": 180,
+      "requires": [],
+      "writeScope": []
+    },
+    {
+      "id": "review.tests",
+      "group": "harness",
+      "tier": "static",
+      "argv": [
+        "node",
+        "--test",
+        ".github/codex/scripts/*.test.js"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "node",
+        "git"
+      ],
+      "timeout": 180,
+      "requires": [],
+      "writeScope": [],
+      "globs": [
+        ".github/codex/scripts/*.test.js"
+      ]
+    },
+    {
+      "id": "infra.node",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "node",
+        "--test",
+        "infra/tests/*.test.js"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "node",
+        "compose"
+      ],
+      "timeout": 180,
+      "requires": [],
+      "writeScope": [],
+      "globs": [
+        "infra/tests/*.test.js"
+      ]
+    },
+    {
+      "id": "pgadmin.tests",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "infra/pgadmin",
+        "-p",
+        "test_*.py"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "python"
+      ],
+      "timeout": 180,
+      "requires": [],
+      "writeScope": []
+    },
+    {
+      "id": "oauth-stage.tests",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "infra/oauth-stage",
+        "-p",
+        "test_*.py"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "python"
+      ],
+      "timeout": 180,
+      "requires": [],
+      "writeScope": []
+    },
+    {
+      "id": "pgadmin.container",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "infra/pgadmin",
+        "-p",
+        "test_container_startup.py"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "python",
+        "docker"
+      ],
+      "timeout": 600,
+      "requires": [],
+      "writeScope": [],
+      "env": {
+        "PGADMIN_CONTAINER_TEST": "1"
+      }
+    },
+    {
+      "id": "promtail.local",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        "DEPLOY_ENVIRONMENT=local",
+        "-v",
+        "{root}/infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro",
+        "grafana/promtail:3.6.11",
+        "-config.file=/etc/promtail/config.yml",
+        "-config.expand-env=true",
+        "-check-syntax"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "docker"
+      ],
+      "timeout": 300,
+      "requires": [],
+      "writeScope": []
+    },
+    {
+      "id": "promtail.stage",
+      "group": "config",
+      "tier": "static",
+      "argv": [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        "DEPLOY_ENVIRONMENT=stage",
+        "-v",
+        "{root}/infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro",
+        "grafana/promtail:3.6.11",
+        "-config.file=/etc/promtail/config.yml",
+        "-config.expand-env=true",
+        "-check-syntax"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "docker"
+      ],
+      "timeout": 300,
+      "requires": [],
+      "writeScope": []
+    },
+    {
+      "id": "docs",
+      "group": "docs",
+      "tier": "static",
+      "kind": "docs",
+      "workdir": ".",
+      "prerequisites": [],
+      "timeout": 30,
+      "requires": [],
+      "writeScope": []
+    }
+  ],
+  "impactRules": [
+    {
+      "prefixes": [
+        "auth-service/",
+        "project-service/",
+        "issue-service/",
+        "kafka-lib/"
+      ],
+      "modules": [
+        "notification-service"
+      ],
+      "reason": "Domain event producer/outbox changes can affect notification consumers."
+    },
+    {
+      "prefixes": [
+        "workflow-service/",
+        "project-service/",
+        "issue-service/"
+      ],
+      "modules": [
+        "workflow-service",
+        "project-service",
+        "issue-service",
+        "api-gateway",
+        "mcp-server"
+      ],
+      "reason": "Workflow/type bindings cross service boundaries."
+    },
+    {
+      "prefixes": [
+        "oauth-server/",
+        "auth-service/",
+        "api-gateway/",
+        "mcp-server/"
+      ],
+      "modules": [
+        "oauth-server",
+        "auth-service",
+        "api-gateway",
+        "mcp-server"
+      ],
+      "reason": "Identity, REST and MCP share trust and token contracts."
+    },
+    {
+      "prefixes": [
+        "infra/",
+        "docker-compose",
+        ".env.docker.example",
+        ".env.oauth.example"
+      ],
+      "groups": [
+        "config"
+      ],
+      "reason": "Compose/infrastructure configuration checks."
+    },
+    {
+      "prefixes": [
+        "scripts/harness",
+        ".github/workflows/pr-check.yml",
+        ".github/codex/"
+      ],
+      "groups": [
+        "harness",
+        "docs"
+      ],
+      "reason": "Harness/CI/review changes require self-tests and documentation checks."
+    }
+  ]
+}

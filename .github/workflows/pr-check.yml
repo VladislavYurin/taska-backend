@@ -29,41 +29,39 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare local environment file
         run: cp .env.docker.example .env
-      - name: Test Compose and Grafana configuration
+      - name: Configuration checks from harness manifest
+        run: python3 scripts/harness.py check --group config
+
+  harness:
+    name: Harness contracts and tests
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Documentation and manifest consistency
+        run: python3 scripts/harness.py docs-check
+      - name: Harness and review regression tests
+        run: python3 scripts/harness.py check --group harness
+      - name: Read Java matrix from manifest
+        id: matrix
         run: |
-          node --test infra/tests/*.test.js
-          python3 -m unittest discover -s infra/pgadmin -p 'test_*.py'
-          python3 -m unittest discover -s infra/oauth-stage -p 'test_*.py'
-      - name: Test pgAdmin startup with an existing volume
-        run: PGADMIN_CONTAINER_TEST=1 python3 -m unittest discover -s infra/pgadmin -p 'test_container_startup.py'
-      - name: Validate Promtail config for local and stage
-        run: |
-          for environment in local stage; do
-            docker run --rm -e DEPLOY_ENVIRONMENT="$environment" \
-              -v "$PWD/infra/promtail/promtail-config.yml:/etc/promtail/config.yml:ro" \
-              grafana/promtail:3.6.11 -config.file=/etc/promtail/config.yml -config.expand-env=true -check-syntax
-          done
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          manifest = json.loads(Path('scripts/harness/verification.json').read_text())
+          matrix = {'mod': [{'name': name, 'module': name} for name in manifest['modules']]}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('matrix=' + json.dumps(matrix) + '\n')
+          PYTHON
 
   java-build:
     name: Build & Test — ${{ matrix.mod.name }}
+    needs: harness
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        # Должны совпадать с <modules> в корневом pom.xml
-        mod:
-          - { name: common-lib,          module: common-lib }
-          - { name: grpc-common-lib,     module: grpc-common-lib }
-          - { name: kafka-lib,           module: kafka-lib }
-          - { name: api-gateway,         module: api-gateway }
-          - { name: auth-service,        module: auth-service }
-          - { name: project-service,     module: project-service }
-          - { name: workflow-service,    module: workflow-service }
-          - { name: issue-service,       module: issue-service }
-          - { name: notification-service,module: notification-service }
-          - { name: admin-service,       module: admin-service }
-          - { name: mcp-server,          module: mcp-server }
-          - { name: oauth-server,        module: oauth-server }
+      matrix: ${{ fromJSON(needs.harness.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -74,72 +72,8 @@ jobs:
           java-version: "25"
           cache: maven
 
-      - name: Maven verify
-        run: mvn -B -ntp -pl ${{ matrix.mod.module }} -am clean verify
-
-      - name: MCP client security integration
-        if: matrix.mod.module == 'mcp-server'
-        run: mvn -B -ntp -pl mcp-server -am test -Dtest=McpClientSecurityIT -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Admin outbox retry PostgreSQL contract
-        if: matrix.mod.module == 'admin-service'
-        run: >-
-          mvn -B -ntp -pl admin-service -am test
-          -Dtest=OutboxRetryServiceIT,OutboxRetryRepositoryIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Board column cursor PostgreSQL contract
-        if: matrix.mod.module == 'issue-service'
-        run: >-
-          mvn -B -ntp -pl issue-service -am test
-          -Dtest=ListIssuesForBoardIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Issue type move PostgreSQL contract
-        if: matrix.mod.module == 'issue-service'
-        run: >-
-          mvn -B -ntp -pl issue-service -am test
-          -Dtest=IssueTypeMoveIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Issue type deletion recovery PostgreSQL contract
-        if: matrix.mod.module == 'project-service'
-        run: >-
-          mvn -B -ntp -pl project-service -am test
-          -Dtest=IssueTypeDeletionIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Issue type workflow reservation PostgreSQL contract
-        if: matrix.mod.module == 'workflow-service'
-        run: >-
-          mvn -B -ntp -pl workflow-service -am test
-          -Dtest=IssueTypeWorkflowReservationIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Auth invitation block/unblock integration
-        if: matrix.mod.module == 'auth-service'
-        run: mvn -B -ntp -pl auth-service -am test -Dtest=InvitedUnblockIT -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Workflow binding issue PostgreSQL contract
-        if: matrix.mod.module == 'issue-service'
-        run: >-
-          mvn -B -ntp -pl issue-service -am test
-          -Dtest=WorkflowBindingMigrationIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Atomic issue type creation PostgreSQL contract
-        if: matrix.mod.module == 'project-service'
-        run: >-
-          mvn -B -ntp -pl project-service -am test
-          -Dtest=IssueTypeCreationIT
-          -Dsurefire.failIfNoSpecifiedTests=false
-
-      - name: Workflow binding assignment PostgreSQL contract
-        if: matrix.mod.module == 'workflow-service'
-        run: >-
-          mvn -B -ntp -pl workflow-service -am test
-          -Dtest=WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT
-          -Dsurefire.failIfNoSpecifiedTests=false
+      - name: Maven verify and required integration tests
+        run: python3 scripts/harness.py check --module ${{ matrix.mod.module }}
 
       - name: Upload surefire reports
         if: always()
