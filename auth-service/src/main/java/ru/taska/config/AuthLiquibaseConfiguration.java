@@ -33,8 +33,10 @@ public class AuthLiquibaseConfiguration {
                 var taskaHistory = history(connection, database, "taska");
                 // A failed old restart can leave a partial shadow ledger. Reuse the complete
                 // compatible history, without copying, deleting or marking any changeset.
+                // Different checksums or EXECUTED/MARK_RAN records are not interchangeable.
                 String schema;
-                if (publicHistory.containsAll(taskaHistory)) schema = "public";
+                if (publicHistory.isEmpty() && taskaHistory.isEmpty()) schema = "public";
+                else if (publicHistory.containsAll(taskaHistory)) schema = "public";
                 else if (taskaHistory.containsAll(publicHistory)) schema = "taska";
                 else throw new IllegalStateException("Conflicting Liquibase histories in public and taska; "
                             + "inspect the histories and explicitly configure spring.liquibase.liquibase-schema");
@@ -46,6 +48,7 @@ public class AuthLiquibaseConfiguration {
     }
 
     private static Set<ExecutedChange> history(Connection connection, Database database, String schema) throws SQLException {
+        if (!Set.of("public", "taska").contains(schema)) throw new IllegalArgumentException("Unsupported auth history schema");
         String table = database.escapeTableName(null, schema, database.getDatabaseChangeLogTableName());
         try (var exists = connection.prepareStatement("SELECT to_regclass(?)")) {
             exists.setString(1, table);
