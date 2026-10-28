@@ -39,6 +39,7 @@ public class OAuthController {
         if (uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
                 || !("https".equals(uri.getScheme()) || local && "http".equals(uri.getScheme()))) throw new IllegalArgumentException("OAuth UI base URL must use HTTPS");
     }
+    private static final String OAUTH_TARGET_SUFFIX = ".oauth";
     private static final String COOKIE_PREFIX = "__Host-taska_oauth_";
 
     @GetMapping("/api/v1/auth/oauth/{provider}/start")
@@ -49,7 +50,7 @@ public class OAuthController {
         return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> ("ui".equals(target) && binding.isEmpty()
                 ? client.start(provider, returnTo, ip, context) : client.start(provider, returnTo, ip, context, target, binding)).map(result -> {
             // The suffix only selects a fixed error page. Database target+binding remain authoritative.
-            String cookie = cookie(result.getState(), result.getBrowserToken() + (oauthTarget ? ".oauth" : ""), Duration.ofMinutes(10)).toString();
+            String cookie = cookie(result.getState(), result.getBrowserToken() + (oauthTarget ? OAUTH_TARGET_SUFFIX : ""), Duration.ofMinutes(10)).toString();
             return redirect(result.getAuthorizationUrl()).header(HttpHeaders.SET_COOKIE, cookie).<Void>build();
         })).onErrorResume(error -> Mono.just(errorResponse(error, exchange, null, oauthTarget)));
     }
@@ -69,8 +70,8 @@ public class OAuthController {
         String state = values.getFirst("state");
         var binding = validState(state) ? exchange.getRequest().getCookies().getFirst(COOKIE_PREFIX + state) : null;
         String cookieValue = binding == null ? "" : binding.getValue();
-        boolean oauthTarget = cookieValue.length() == 49 && cookieValue.endsWith(".oauth");
-        String browser = oauthTarget ? cookieValue.substring(0,43) : cookieValue;
+        boolean oauthTarget = cookieValue.endsWith(OAUTH_TARGET_SUFFIX) && validState(cookieValue.substring(0, cookieValue.length() - OAUTH_TARGET_SUFFIX.length()));
+        String browser = oauthTarget ? cookieValue.substring(0, cookieValue.length() - OAUTH_TARGET_SUFFIX.length()) : cookieValue;
         return executor.execute(exchange, EndpointSecurity.PUBLIC, context -> client.callback(provider, state, browser, values.getFirst("code"), values.getFirst("error"), values.getFirst("user"), ip, context)
                 .map(url -> {
                     var response = redirect(callbackLocation(url, oauthTarget));

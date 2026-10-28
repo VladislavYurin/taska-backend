@@ -192,7 +192,7 @@
     } else if (code === "RATE_LIMITED") {
       refusal.textContent = "Too many sign-in attempts. Try again later.";
       focus = email;
-    } else if (code === "PROVIDER_UNAVAILABLE" || code === "PROVIDER_DISABLED") {
+    } else if (code === "PROVIDER_UNAVAILABLE") {
       refusal.textContent = "This provider is unavailable. Try again later or use your email and password.";
       focus = email;
     } else {

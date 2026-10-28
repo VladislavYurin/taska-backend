@@ -17,7 +17,7 @@ import security.OAuthServiceCredentials;
 @Component
 public class SocialIdentityClient {
   private static final Set<String> REASONS = Set.of("STATE_INVALID", "SIGNUP_REQUIRED", "ACCOUNT_BLOCKED",
-      "ACCOUNT_LOCKED", "EMAIL_NOT_VERIFIED", "PROVIDER_DISABLED", "PROVIDER_UNAVAILABLE", "PROVIDER_CANCELLED");
+      "ACCOUNT_LOCKED", "EMAIL_NOT_VERIFIED", "PROVIDER_UNAVAILABLE", "PROVIDER_CANCELLED");
   private final OAuthIdentityServiceGrpc.OAuthIdentityServiceBlockingStub stub;
   private final OAuthServerProperties policy;
 

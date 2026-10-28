@@ -68,6 +68,20 @@ class SocialLoginControllerTest {
     verify(success).onAuthenticationSuccess(request, response, context.getAuthentication());
   }
 
+  @Test void parallelStartsReuseBrowserBindingAndOnlyOneCallbackCanClaim() throws Exception {
+    controller.start("google", request, new MockHttpServletResponse());
+    String nonce = (String)request.getSession().getAttribute(SocialLoginController.NONCE);
+    controller.start("github", request, new MockHttpServletResponse());
+    assertThat(request.getSession().getAttribute(SocialLoginController.NONCE)).isEqualTo(nonce);
+    when(identity.claim("C".repeat(43), nonce)).thenReturn(UserContext.newBuilder()
+        .setUserId("d05c5390-7ad0-4acb-b614-307d849f974c").setStatus(UserStatus.USER_STATUS_ACTIVE).build());
+    controller.callback("C".repeat(43), null, request, response);
+    controller.callback("D".repeat(43), null, request, new MockHttpServletResponse());
+    verify(identity).claim("C".repeat(43), nonce);
+    verify(identity, never()).claim(eq("D".repeat(43)), any());
+    verify(success, times(1)).onAuthenticationSuccess(any(), any(), any());
+  }
+
   @Test void foreignBrowserCannotClaimCodeOrEstablishSession() throws Exception {
     controller.callback("C".repeat(43), null, request, response);
     assertThat(response.getRedirectedUrl()).startsWith("https://oauth.example.test/login?error=STATE_INVALID");
@@ -96,7 +110,7 @@ class SocialLoginControllerTest {
 
   @Test void directStartAndUnknownProvidersFailWithoutLeavingNonce() throws Exception {
     controller.start("https://attacker.example", request, response);
-    assertThat(response.getRedirectedUrl()).contains("error=PROVIDER_DISABLED");
+    assertThat(response.getRedirectedUrl()).contains("error=PROVIDER_UNAVAILABLE");
     response = new MockHttpServletResponse();
     when(requests.getRequest(any(),any())).thenReturn(null);
     controller.start("google", request, response);

@@ -32,6 +32,9 @@ its authorized test account is available. Record execution results outside Git.
 4. Deliver the same code to A. It succeeds: the wrong binding did not consume it.
 5. Replay the code in another pending browser flow. It fails without establishing
    a session. Concurrent legitimate claims have exactly one winner.
+6. Start two providers in the same AS session before either callback. Both starts
+   retain the original private browser nonce. The first callback can complete;
+   the second cannot establish another session or consume a different grant.
 
 ## UI and authorization-server grant separation
 
