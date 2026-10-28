@@ -77,10 +77,11 @@ class OAuthWireIntegrationTest {
   }
 
   @Test
-  void eachRouteIncludingAppleCallbackPreservesGrpc429RetryAfterAndNoStore() {
+  void navigationQuotaRedirectsWhileJsonQuotaPreserves429RetryAfterAndNoStore() {
     LIMITED.set(true);
-    for (String route : List.of("start", "callback", "exchange", "signup")) quota(request(route));
-    quota(applePost());
+    for (String route : List.of("start", "callback")) redirectQuota(request(route));
+    for (String route : List.of("exchange", "signup")) quota(request(route));
+    redirectQuota(applePost());
     assertThat(CALLS).hasSize(5).allSatisfy(call -> assertThat(call.ip()).isEqualTo(IP));
   }
 
@@ -135,7 +136,7 @@ class OAuthWireIntegrationTest {
               assertThat(call.state()).isEmpty();
             });
     LIMITED.set(true);
-    quota(
+    redirectQuota(
         http()
             .get()
             .uri("/api/v1/auth/oauth/apple/callback?state=" + STATE)
@@ -194,6 +195,18 @@ class OAuthWireIntegrationTest {
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body(BodyInserters.fromFormData("state", STATE).with("code", "apple-code"))
         .exchange();
+  }
+
+  void redirectQuota(WebTestClient.ResponseSpec response) {
+    var result = response.expectStatus().isFound()
+        .expectHeader().doesNotExist(HttpHeaders.SET_COOKIE)
+        .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+        .expectHeader().valueEquals("Referrer-Policy", "no-referrer")
+        .expectBody().isEmpty();
+    String requestId = result.getResponseHeaders().getFirst("X-Request-Id");
+    assertThat(requestId).isNotBlank();
+    assertThat(result.getResponseHeaders().getLocation().toString())
+        .isEqualTo("https://taska.ozero.dev/auth/callback?error=RATE_LIMITED&requestId=" + requestId + "&retryAfter=120");
   }
 
   void quota(WebTestClient.ResponseSpec response) {
