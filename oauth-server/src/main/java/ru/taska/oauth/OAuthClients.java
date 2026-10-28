@@ -99,6 +99,12 @@ public class OAuthClients implements RegisteredClientRepository {
     return register(UUID.randomUUID().toString(), metadata, null, null);
   }
 
+  private static String normalizeName(String raw) {
+    String name = raw.replaceAll("[\\u202A-\\u202E\\u2066-\\u2069]", "").replaceAll("\\s+", " ").trim();
+    int count = name.codePointCount(0, name.length());
+    return count > 60 ? name.substring(0, name.offsetByCodePoints(0, 60)).stripTrailing() + "…" : name;
+  }
+
   private RegisteredClient register(
       String id, JsonNode metadata, Duration cacheFor, RegisteredClient previous) {
     if (!metadata.isObject()
@@ -107,7 +113,7 @@ public class OAuthClients implements RegisteredClientRepository {
         || metadata.has("jwks_uri")
         || !"none".equals(metadata.path("token_endpoint_auth_method").asText("none")))
       throw invalidMetadata();
-    String name = metadata.path("client_name").asText("");
+    String name = normalizeName(metadata.path("client_name").asText(""));
     if (name.isBlank() || name.length() > 100 || name.chars().anyMatch(Character::isISOControl))
       throw invalidMetadata();
     JsonNode redirects = metadata.path("redirect_uris");

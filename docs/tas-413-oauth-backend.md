@@ -58,10 +58,15 @@ registration-management secret. It does not implement the default OIDC DCR flow.
 
 The following AS-origin contracts support TAS-414:
 
+* `GET /login` and authenticated `GET /consent` serve the supplied static Taska pages.
+  `GET /login/context` is public and returns raw session CSRF plus `pending_request`;
+  direct/expired login navigation shows a terminal card instead of a password form.
 * `GET /oauth/consent?state=...`: authenticated owner only; returns client display
-  metadata, requested scopes, server state, submit URI and session CSRF token.
+  metadata, exact redirect host/kind, requested/granted scopes, current account,
+  server state, submit URI and the same raw session CSRF token. DCR metadata_host is null.
 * `POST /oauth2/authorize`: standard consent submission (`client_id`, `state`,
-  selected repeated `scope`, `_csrf`). The AS validates persisted state, principal,
+  selected repeated `scope`, `_csrf`, `decision=allow|deny`). Missing/duplicate decisions deny;
+  denying saved consent removes that consent without revoking live grants. The AS validates persisted state, principal,
   registered scopes and CSRF; client claims cannot approve another user's grant.
 * `GET /oauth/grants`: connected grants belonging to the current session user with an
   active access or refresh token. Expired online grants are omitted; an offline grant
@@ -78,10 +83,16 @@ cookies. Login, consent, connected grants and private validation do not grant
 cross-origin access. Sessions use Secure/HttpOnly/SameSite=Lax cookies, fifteen minute expiry, CSRF,
 `frame-ancestors 'none'` and X-Frame-Options DENY. User status is checked through
 private auth-service RPCs before browser authorization, consent and grant actions.
-Login is the framework's AS-origin form; **TAS-414 consent/connected-app UI is not
-implemented here**. Returning the consent contract is not a completed human consent
-screen. Live claude.ai/ChatGPT/Inspector authorization remains pending that UI,
-canonical HTTPS ingress and approved real client metadata/redirect registration.
+TAS-445 serves AS-origin login/consent/error pages with same-origin assets and fonts.
+Login distinguishes invalid credentials, account lock/deadline, service outage and
+expired CSRF. Logout with session-owned consent_state resumes the original validated
+connection for a different account. JSON authentication failures return401; HTML
+errors use the static error pages. Form-action additionally permits only origins
+from approved redirect URIs, so browser redirects can reach the client.
+Native forwarded headers trust only `OAUTH_INTERNAL_PROXIES` (loopback by default);
+set the exact ingress network for deployment, never arbitrary forwarded Host values.
+Live claude.ai/ChatGPT/Inspector authorization still requires canonical HTTPS ingress
+and approved real client metadata/redirect registration.
 No live hosted-client compatibility is claimed by the local protocol tests.
 
 ## Opt-in deployment
@@ -126,3 +137,5 @@ service credentials, MCP no-passthrough/discovery, and PAT/JWT compatibility.
 JAVA_TOOL_OPTIONS='-Xms128m -Xmx768m' ./mvnw -B -ntp \
   -pl auth-service,api-gateway,mcp-server,oauth-server -am verify
 ```
+
+Consent POST requires exactly one `decision=allow` to grant scopes. Missing, duplicated or other decisions fail closed as a refusal; direct integrations must post this field. Pending browser consent expires after ten minutes and cannot be resumed once a code or token has been issued.

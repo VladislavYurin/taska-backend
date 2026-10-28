@@ -1,8 +1,10 @@
 server:
   port: ${OAUTH_SERVER_PORT:8080}
-  forward-headers-strategy: none
+  forward-headers-strategy: native
   tomcat:
     max-http-form-post-size: 64KB
+    remoteip:
+      internal-proxies: ${OAUTH_INTERNAL_PROXIES:127\.0\.0\.1|::1|0:0:0:0:0:0:0:1}
   servlet:
     session:
       timeout: 15m

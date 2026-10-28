@@ -20,6 +20,7 @@ public record OAuthServerProperties(
     Auth auth) {
   public OAuthServerProperties {
     requireHttps(issuer);
+    if (!issuer.getRawPath().isEmpty()) throw new IllegalArgumentException("OAuth issuer must be an origin without a path or trailing slash");
     requireHttps(resource);
     metadataHosts = metadataHosts == null ? List.of() : List.copyOf(metadataHosts);
     redirectUris = redirectUris == null ? List.of() : List.copyOf(redirectUris);

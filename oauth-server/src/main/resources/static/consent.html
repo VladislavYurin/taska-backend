@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>Connect an app · Taska</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="preload" href="/assets/fonts/hanken-grotesk-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/assets/oauth.css" />
+    <script src="/assets/consent.js" defer></script>
+  </head>
+  <body>
+    <!--
+      Taska consent for an app that wants to connect (Jira TAS-414, TAS-445).
+      Served by oauth-server at GET /consent?…&state=S. /assets/consent.js reads
+      S from this page's address, asks GET /oauth/consent?state=S what is being
+      requested and draws one of the cards below; until it answers only the
+      glow shows (the read is same-origin and short, and a card drawn before
+      it would jump when the answer lands).
+
+      This page needs JavaScript: who is asking, where access goes and the CSRF
+      token all come from that read, so without it there is nothing honest to
+      draw and nothing that could be posted. A browser with scripts off gets
+      the <noscript> card below, which says so and that the app got nothing.
+    -->
+    <main class="auth-screen">
+      <div class="auth-glow" aria-hidden="true"></div>
+      <noscript>
+        <div class="auth-card-wrap">
+          <div class="logo">
+            <span class="logo-mark"><span></span></span>
+            <span class="logo-text">Taska</span>
+          </div>
+          <section class="auth-card">
+            <h1 class="auth-title">Turn on JavaScript to connect an app</h1>
+            <p class="auth-body">This page needs JavaScript to show what the app is asking for. Turn it on for this site, then go back to the app and start again. The app did not get access.</p>
+          </section>
+        </div>
+      </noscript>
+      <div class="auth-card-wrap" id="wrap" hidden>
+        <div class="logo">
+          <span class="logo-mark"><span></span></span>
+          <span class="logo-text">Taska</span>
+        </div>
+        <section class="auth-card" id="card"></section>
+      </div>
+    </main>
+
+    <!-- The request. Order: who → where → caveat → what → decision → as whom. -->
+    <template id="card-consent">
+      <section class="auth-card">
+        <!-- Filled by the script: the app's name sits in <bdi translate="no">. -->
+        <h1 class="auth-title" data-slot="title"></h1>
+        <p class="consent-destination" id="consent-destination" data-slot="destination"></p>
+        <!-- Unverified (DCR) clients only. -->
+        <p class="consent-unverified" id="consent-unverified" data-slot="unverified"></p>
+
+        <!-- (a) Read, or (b) Read and write that cannot be narrowed. -->
+        <div class="consent-access" data-slot="access-fixed">
+          <h2 class="consent-access-label">Access</h2>
+          <p class="consent-option-title" data-slot="access-title"></p>
+          <p class="consent-option-description" data-slot="access-description"></p>
+        </div>
+
+        <!-- (c) Read and write, narrowing offered. Outside the consent form on
+             purpose: the radios are not posted (only `scope` is), and Enter
+             on a radio cannot submit the form through its first button. -->
+        <fieldset class="consent-access" data-slot="access-choice">
+          <legend class="consent-access-label">Access</legend>
+          <div class="consent-options">
+            <label class="consent-option">
+              <input type="radio" name="access" value="read" aria-labelledby="access-read-title" aria-describedby="access-read-description" />
+              <span>
+                <span class="consent-option-title" id="access-read-title">Read</span>
+                <span class="consent-option-description" id="access-read-description">See projects, issues, comments and work logs.</span>
+              </span>
+            </label>
+            <label class="consent-option">
+              <input type="radio" name="access" value="read-write" checked aria-labelledby="access-write-title" aria-describedby="access-write-description" />
+              <span>
+                <span class="consent-option-title" id="access-write-title">Read and write</span>
+                <span class="consent-option-description" id="access-write-description">Also create and change issues, comment, move issues through the workflow and log time.</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <p class="consent-limit">It never gets more access than you have in Taska.</p>
+        <p class="consent-offline" data-slot="offline">It can stay connected for up to 30 days without asking you again.</p>
+
+        <!--
+          POST to the response's submit_uri (/oauth2/authorize): client_id,
+          state, the CSRF field, and on Allow only scope=read [scope=write]
+          [scope=offline_access]. The scope inputs are `disabled` here, so a
+          Deny posts none; the script enables the ones Allow sends at the
+          moment Allow submits. The pressed button's decision=allow|deny is
+          posted with them (it lands in Spring's additional parameters; the
+          backend is asked in TAS-445 to read it, so that a Deny is a deny
+          even when a consent is already stored).
+        -->
+        <form id="consent-form" method="post" action="/oauth2/authorize">
+          <input type="hidden" name="client_id" value="" data-slot="client-id" />
+          <input type="hidden" name="state" value="" data-slot="state" />
+          <input type="hidden" name="_csrf" value="" data-slot="csrf" />
+          <input type="hidden" name="scope" value="read" disabled data-slot="scope-read" />
+          <input type="hidden" name="scope" value="write" disabled data-slot="scope-write" />
+          <input type="hidden" name="scope" value="offline_access" disabled data-slot="scope-offline" />
+          <div class="consent-actions">
+            <button class="secondary-button" type="submit" name="decision" value="deny">Deny</button>
+            <button class="primary-button" type="submit" name="decision" value="allow" aria-describedby="consent-destination consent-unverified" data-slot="allow">Allow</button>
+          </div>
+        </form>
+
+        <!-- Signs out of Taska here and returns to sign-in with the same
+             authorization request (consent_state). -->
+        <form id="switch-account" method="post" action="/logout">
+          <input type="hidden" name="_csrf" value="" data-slot="switch-csrf" />
+          <input type="hidden" name="consent_state" value="" data-slot="switch-state" />
+        </form>
+        <p class="consent-account">
+          <span data-slot="account">Signed in as <span data-slot="account-email"></span>.</span>
+          <button class="auth-link" type="submit" form="switch-account">Use a different account</button>
+        </p>
+      </section>
+    </template>
+
+    <!-- T1: expired, already used, another browser, or the session lost. -->
+    <template id="card-expired">
+      <section class="auth-card">
+        <h1 class="auth-title">This connection request is no longer valid</h1>
+        <p class="auth-body">It expired, was already used, or was started in another browser. Go back to the app you were connecting and start again. The app did not get access.</p>
+      </section>
+    </template>
+
+    <!-- T3: the read failed on Taska's side or never arrived. -->
+    <template id="card-unavailable">
+      <section class="auth-card">
+        <h1 class="auth-title">Taska could not finish connecting the app</h1>
+        <p class="auth-body">Something went wrong on Taska’s side. Go back to the app and try again. The app did not get access.</p>
+      </section>
+    </template>
+  </body>
+</html>
