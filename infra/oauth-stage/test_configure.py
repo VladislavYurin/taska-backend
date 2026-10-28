@@ -1,4 +1,7 @@
 import contextlib
+import base64
+import shutil
+import subprocess
 import copy
 import importlib.util
 import io
@@ -210,8 +213,42 @@ class ConfigureTests(unittest.TestCase):
         generated = ['a' * 40, 'b' * 40, 'b' * 40, 'c' * 40, 'd' * 40, 'e' * 40, 'f' * 40]
         with patch.object(c.secrets, 'token_urlsafe', side_effect=generated) as random:
             c.configure(api, 'apply')
-        self.assertEqual(7, random.call_count)
+        self.assertEqual(6, random.call_count)
         self.assertEqual(6, len(set(c.env_entries(api.compose['env'])[k] for k in c.SECRET_KEYS)))
+
+    def test_mcp_signing_key_uses_standard_base64_and_real_java_decoder(self):
+        existing = ''.join(k + '=' + chr(65 + i) * 64 + '\n'
+                           for i, k in enumerate(c.SECRET_KEYS) if k != 'MCP_GATEWAY_SIGNING_SECRET')
+        api = FakeAPI(existing)
+        with patch.object(c.secrets, 'token_bytes', return_value=b'\xff' * 48):
+            c.configure(api, 'apply')
+        encoded = c.env_entries(api.compose['env'])['MCP_GATEWAY_SIGNING_SECRET']
+        self.assertEqual('/' * 64, encoded)
+        self.assertEqual(b'\xff' * 48, base64.b64decode(encoded, validate=True))
+        # Exercise the production Java parser shared by gateway and MCP, rather
+        # than assuming Python's decoder has exactly the same acceptance policy.
+        if not shutil.which('javac') or not shutil.which('java'):
+            self.skipTest('JDK unavailable for cross-language contract')
+        source = Path(__file__).resolve().parents[2] / 'common-lib/src/main/java/ru/taska/security/McpGatewaySignature.java'
+        with tempfile.TemporaryDirectory() as folder:
+            harness = Path(folder) / 'SigningKeyContract.java'
+            harness.write_text('import ru.taska.security.McpGatewaySignature; public class SigningKeyContract { '
+                               'public static void main(String[] args) throws Exception { '
+                               'String key = new java.io.BufferedReader(new java.io.InputStreamReader(System.in)).readLine(); '
+                               'System.out.print(McpGatewaySignature.secret(key).length); }}')
+            subprocess.run(['javac', '-d', folder, str(source), str(harness)], check=True, capture_output=True)
+            result = subprocess.run(['java', '-cp', folder, 'SigningKeyContract'], input=encoded,
+                                    text=True, check=True, capture_output=True)
+            self.assertEqual('48', result.stdout)
+
+    def test_invalid_existing_mcp_key_rejected_before_platform_writes(self):
+        for key in ['_' * 64, '-' * 64, base64.b64encode(b'x' * 24).decode()]:
+            for mode in ['plan', 'apply']:
+                api = FakeAPI('MCP_GATEWAY_SIGNING_SECRET=' + key + '\n')
+                with self.subTest(mode=mode), self.assertRaises(c.ConfigurationError) as caught:
+                    c.configure(api, mode)
+                self.assertIn('MCP_GATEWAY_SIGNING_SECRET', str(caught.exception))
+                self.assertEqual([], api.writes())
 
     def test_duplicate_environment_key_refused(self):
         with self.assertRaises(c.ConfigurationError):
