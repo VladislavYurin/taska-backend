@@ -138,5 +138,5 @@ public class WorkflowCreatedTypeBindingService {
             throw new DomainException(DomainStatus.INVALID_ARGUMENT,"Invalid operation UUID");
         }
     }
-    private static DomainException failed(String reason,String message) { return new DomainException(DomainStatus.INVALID_ARGUMENT,message,Map.of("reason",reason)); }
+    private static DomainException failed(String reason,String message) { return new DomainException(reason.equals("ISSUE_TYPES_CHANGED") ? DomainStatus.ABORTED : DomainStatus.INVALID_ARGUMENT,message,Map.of("reason",reason)); }
 }

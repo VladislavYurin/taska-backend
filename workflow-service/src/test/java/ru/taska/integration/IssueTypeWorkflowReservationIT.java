@@ -143,10 +143,10 @@ class IssueTypeWorkflowReservationIT extends LegacyWorkflowOperationsFixture {
         var changed=new ArrayList<>(registry.get());
         changed.set(1,changed.get(1).toBuilder().setGeneration(UUID.randomUUID().toString()).build());
         registry.set(changed);
-        rejected(() -> reservations.reserve(project,operation).block(TIMEOUT),DomainStatus.FAILED_PRECONDITION,"ISSUE_TYPES_CHANGED");
+        rejected(() -> reservations.reserve(project,operation).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPES_CHANGED");
         changed.set(1,types(true).get(1).toBuilder().setPendingOperationId(UUID.randomUUID().toString()).build());
         registry.set(changed);
-        rejected(() -> reservations.reserve(project,operation).block(TIMEOUT),DomainStatus.FAILED_PRECONDITION,"ISSUE_TYPES_CHANGED");
+        rejected(() -> reservations.reserve(project,operation).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPES_CHANGED");
         assertThat(countPins()).isEqualTo(afterReservation ? 1 : 0);
     }
 

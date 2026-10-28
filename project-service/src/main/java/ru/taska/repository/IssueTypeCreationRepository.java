@@ -36,8 +36,9 @@ public class IssueTypeCreationRepository {
                   :first,:firstGeneration,:channel,:token,'PENDING')
                 """).bind("id",item.id()).bind("p",item.projectId()).bind("actor",item.actor()).bind("request",item.requestId())
                 .bind("node",item.nodeId()).bind("hash",item.commandHash()).bind("code",t.code()).bind("generation",t.generation())
-                .bind("name",t.name()).bind("color",t.color()).bind("shape",t.shape()).bind("sort",t.sortOrder())
-                .bind("first",item.firstTypeCode()).bind("firstGeneration",item.firstTypeGeneration());
+                .bind("name",t.name()).bind("color",t.color()).bind("shape",t.shape()).bind("sort",t.sortOrder());
+        sql=item.firstTypeCode()==null?sql.bindNull("first",String.class).bindNull("firstGeneration",UUID.class)
+                :sql.bind("first",item.firstTypeCode()).bind("firstGeneration",item.firstTypeGeneration());
         sql=t.icon()==null?sql.bindNull("icon",String.class):sql.bind("icon",t.icon());
         sql=item.desiredWorkflowId()==null?sql.bindNull("workflow",UUID.class):sql.bind("workflow",item.desiredWorkflowId());
         sql=item.attribution().channel()==null?sql.bindNull("channel",String.class):sql.bind("channel",item.attribution().channel().name());

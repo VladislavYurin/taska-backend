@@ -78,8 +78,8 @@ class GrpcProjectIssueTypeDeletionClientTest {
   }
 
   @Test
-  void bodylessAndEmptyBodyDeletionRetainLegacyRpcAndConfiguredDeadline() {
-    legacyDeadline();
+  void bodylessAndEmptyBodyDeletionUseSameLongDeadlineAsMigration() {
+    when(stub.withDeadlineAfter(120, TimeUnit.SECONDS)).thenReturn(stub);
     when(stub.deleteProjectIssueType(any(ChangeProjectIssueTypeRequest.class)))
         .thenReturn(Mono.just(Empty.getDefaultInstance()));
 
@@ -94,7 +94,8 @@ class GrpcProjectIssueTypeDeletionClientTest {
       assertThat(sent.getStatusMappingsMap()).isEmpty();
       assertThat(sent.getCode()).isEqualTo("REQUEST");
     }
-    verify(stub, times(2)).withDeadlineAfter(3000, TimeUnit.MILLISECONDS);
+    verify(stub, times(2)).withDeadlineAfter(120, TimeUnit.SECONDS);
+    verifyNoInteractions(properties, projectProperties);
   }
 
   @Test
@@ -146,10 +147,12 @@ class GrpcProjectIssueTypeDeletionClientTest {
   }
 
   @Test
-  void publicGenerationIsOptionalAndPendingOperationIdentityIsNeverMapped() {
+  void publicGenerationIsRequiredAndPendingOperationIdentityIsNeverMapped() {
     var old = ProjectIssueTypeResponse.newBuilder().setCode("REQUEST").setName("Request")
         .setColor("teal").setIcon("headset").setSortOrder(40).build();
-    assertThat(GrpcProjectIssueTypeClient.toRest(old).getGeneration()).isNull();
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> GrpcProjectIssueTypeClient.toRest(old))
+        .isInstanceOfSatisfying(ru.taska.exception.DomainException.class,
+            error -> assertThat(error.getStatus()).isEqualTo(ru.taska.exception.DomainStatus.UNAVAILABLE));
     var modern = old.toBuilder().setGeneration(generation.toString())
         .setPendingOperationId(UUID.randomUUID().toString()).build();
     var mapped = GrpcProjectIssueTypeClient.toRest(modern);

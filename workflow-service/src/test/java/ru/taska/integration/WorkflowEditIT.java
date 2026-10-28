@@ -244,7 +244,11 @@ class WorkflowEditIT extends LegacyWorkflowOperationsFixture {
         var own = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, dto).block();
         Assertions.assertEquals(own.workflow().getId(), workflowService.getWorkflow(PROJECT_ID, "REQUEST").block().workflow().getId());
         var listed = stub.listProjectWorkflows(Mono.just(listRequest())).block();
-        Assertions.assertEquals(1, listed.getWorkflowsCount());
+        Assertions.assertEquals(2, listed.getWorkflowsCount());
+        Assertions.assertEquals(own.workflow().getId().toString(), listed.getMainWorkflowId());
+        var fallback=findWorkflow(listed,DEFAULT_WORKFLOW_ID.toString());
+        Assertions.assertTrue(fallback.getIsShared());
+        Assertions.assertTrue(fallback.getIssueTypeKeysList().isEmpty());
         Assertions.assertEquals(List.of("REQUEST"), listed.getWorkflows(0).getIssueTypeKeysList());
         Assertions.assertFalse(listed.getWorkflows(0).getIsShared());
         dto.setIssueTypes(List.of(ru.taska.domain.IssueType.BUG));

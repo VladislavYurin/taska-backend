@@ -47,6 +47,6 @@ public class ProjectTypeOperationRepository {
     }
     public static DomainException busy(ProjectTypeOperationGate gate) {
         return new DomainException(DomainStatus.ABORTED,"Another project type operation is pending",
-                Map.of("reason","PROJECT_TYPE_OPERATION_PENDING","operationId",gate.getOperationId()));
+                Map.of("reason","ISSUE_TYPE_OPERATION_PENDING","operationId",gate.getOperationId()));
     }
 }

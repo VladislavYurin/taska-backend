@@ -88,7 +88,7 @@ public class GrpcProjectIssueTypeClient {
         }
         if (body != null && body.getExpectedGeneration() != null)
             request.setExpectedGeneration(body.getExpectedGeneration().toString());
-        if (!moving) return dynamicStub().deleteProjectIssueType(request.build()).then();
+        if (!moving) return stub.withDeadlineAfter(120, TimeUnit.SECONDS).deleteProjectIssueType(request.build()).then();
         return stub.withDeadlineAfter(120, TimeUnit.SECONDS)
                 .deleteProjectIssueTypeWithMigration(request.build())
                 .flatMap(result -> {
@@ -108,12 +108,16 @@ public class GrpcProjectIssueTypeClient {
 
     public static ProjectIssueTypeDto toRest(ProjectIssueTypeResponse type) {
         String icon = ProjectIssueTypes.icon(type);
-        var result = new ProjectIssueTypeDto(type.getCode(), type.getName(),
+        UUID generation;
+        try { generation=UUID.fromString(type.getGeneration()); }
+        catch (IllegalArgumentException invalid) {
+            throw new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAVAILABLE,
+                    "Project service returned an invalid issue type generation");
+        }
+        return new ProjectIssueTypeDto(generation, type.getCode(), type.getName(),
                 ProjectIssueTypeColorDto.fromValue(type.getColor()),
                 ProjectIssueTypeShapeDto.fromValue(ProjectIssueTypes.shape(type)),
                 icon == null ? null : ProjectIssueTypeIconDto.fromValue(icon), type.getSortOrder());
-        if (!type.getGeneration().isBlank()) result.setGeneration(UUID.fromString(type.getGeneration()));
-        return result;
     }
 
     private ChangeProjectIssueTypeRequest.Builder base(UUID project, String code, GatewayContext context) {

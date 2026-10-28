@@ -12,6 +12,10 @@ import java.util.List;
 public record ProjectWorkflowAggregate(
         WorkflowAggregate workflow,
         List<IssueType> issueTypes,
-        boolean shared
+        boolean shared,
+        boolean main
 ) {
+    public ProjectWorkflowAggregate(WorkflowAggregate workflow,List<IssueType> issueTypes,boolean shared) {
+        this(workflow,issueTypes,shared,false);
+    }
 }
