@@ -1,5 +1,6 @@
 package ru.taska.controller;
 
+import mapper.GrpcErrorDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,10 +78,40 @@ class OAuthControllerTest {
                 .jsonPath("$.accessToken").isEqualTo("access").jsonPath("$.expiresIn").isEqualTo(900);
         verifyNoInteractions(auth);
     }
+    @Test void startFailuresRedirectToConfiguredUiOriginWithEncodedCorrelationAndStableReason() {
+        when(oauth.start(eq("google"), any(), any(), any())).thenReturn(Mono.error(io.grpc.Status.UNAVAILABLE
+                .withDescription("private provider secret").asRuntimeException()));
+        http.get().uri("/api/v1/auth/oauth/google/start").header("X-Request-Id", "trace&private=x")
+                .exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE&requestId=trace%26private%3Dx")
+                .expectHeader().valueEquals("X-Request-Id", "trace&private=x")
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody().isEmpty();
+    }
+    @Test void unavailableBackendWithoutIncomingRequestIdGetsGeneratedCorrelation() {
+        when(oauth.start(eq("google"), any(), any(), any())).thenReturn(Mono.error(io.grpc.Status.UNAVAILABLE.asRuntimeException()));
+        var result = http.get().uri("/api/v1/auth/oauth/google/start").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody().isEmpty();
+        String id = result.getResponseHeaders().getFirst("X-Request-Id");
+        assertThat(id).isNotBlank();
+        assertThat(java.util.UUID.fromString(id)).isNotNull();
+        assertThat(result.getResponseHeaders().getLocation().toString())
+                .isEqualTo("https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE&requestId=" + id);
+    }
+
+    @Test void grpcDomainFailureKeepsKnownReasonWithoutLeakingUnexpectedReason() {
+        for (String reason : java.util.List.of("SIGNUP_DISABLED", "private-secret")) {
+            when(oauth.start(eq("google"), any(), any(), any())).thenReturn(Mono.error(io.grpc.Status.PERMISSION_DENIED
+                    .asRuntimeException(GrpcErrorDetails.encode(java.util.Map.of("reason", reason)))));
+            http.get().uri("/api/v1/auth/oauth/google/start").header("X-Request-Id", "known-reason")
+                    .exchange().expectStatus().isFound().expectHeader().valueEquals(HttpHeaders.LOCATION,
+                            "https://taska.ozero.dev/auth/callback?error=" + (reason.equals("SIGNUP_DISABLED") ? reason : "PROVIDER_UNAVAILABLE") + "&requestId=known-reason");
+        }
+    }
+
     @Test void missingBindingAndBackendFailureDoNotExposeProviderDetails() {
         when(oauth.callback(eq("github"), eq(STATE), eq(""), any(), any(), any(), eq("unknown"), any()))
                 .thenReturn(Mono.error(new IllegalStateException("private provider details")));
-        http.get().uri("/api/v1/auth/oauth/github/callback?state=" + STATE + "&code=x").exchange().expectStatus().isFound()
-                .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE").expectBody().isEmpty();
+        http.get().uri("/api/v1/auth/oauth/github/callback?state=" + STATE + "&code=x").header("X-Request-Id", "failure-test").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.LOCATION, "https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE&requestId=failure-test").expectBody().isEmpty();
     }
 }

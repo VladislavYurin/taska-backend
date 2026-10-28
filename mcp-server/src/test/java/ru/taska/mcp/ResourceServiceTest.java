@@ -158,7 +158,9 @@ class ResourceServiceTest {
                     "icon",
                     "check-square",
                     "sortOrder",
-                    0))));
+                    0,
+                    "generation",
+                    "11111111-1111-4111-8111-111111111111"))));
     data.set(
         "workflows",
         mapper.valueToTree(
