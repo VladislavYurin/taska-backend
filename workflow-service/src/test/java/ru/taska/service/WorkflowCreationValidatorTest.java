@@ -32,7 +32,7 @@ class WorkflowCreationValidatorTest {
                 .issueTypes(new ArrayList<>(List.of(IssueType.TASK, IssueType.BUG)))
                 .statuses(new ArrayList<>(List.of(
                         CreateWorkflowStatusDto.builder()
-                                .statusKey("BACKLOG")
+                                .statusKey("TODO")
                                 .name("Backlog")
                                 .category(StatusCategory.TODO)
                                 .sortOrder(0)
@@ -64,7 +64,7 @@ class WorkflowCreationValidatorTest {
                 )))
                 .transitions(new ArrayList<>(List.of(
                         CreateWorkflowTransitionDto.builder()
-                                .fromStatusKey("BACKLOG")
+                                .fromStatusKey("TODO")
                                 .toStatusKey("DEV")
                                 .name("Start Development")
                                 .sortOrder(0)
@@ -150,7 +150,7 @@ class WorkflowCreationValidatorTest {
     @Test
     void validateDto_DuplicateStatusKey_ShouldReturnViolation() {
         validDto.getStatuses().add(CreateWorkflowStatusDto.builder()
-                .statusKey("BACKLOG")
+                .statusKey("TODO")
                 .name("Backlog Copy")
                 .category(StatusCategory.TODO)
                 .sortOrder(10)
@@ -193,7 +193,7 @@ class WorkflowCreationValidatorTest {
     @Test
     void validateDto_TransitionToUnknownStatus_ShouldReturnViolation() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
-                .fromStatusKey("BACKLOG")
+                .fromStatusKey("TODO")
                 .toStatusKey("UNKNOWN")
                 .name("Name")
                 .sortOrder(10)
@@ -206,7 +206,7 @@ class WorkflowCreationValidatorTest {
     void validateDto_MultipleTransitionsFromSameUnknownStatus_ShouldReturnOneViolation() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
                 .fromStatusKey("UNKNOWN")
-                .toStatusKey("BACKLOG")
+                .toStatusKey("TODO")
                 .name("Name")
                 .sortOrder(10)
                 .build());
@@ -223,8 +223,8 @@ class WorkflowCreationValidatorTest {
     @Test
     void validateDto_SelfTransition_ShouldReturnViolation() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
-                .fromStatusKey("BACKLOG")
-                .toStatusKey("BACKLOG")
+                .fromStatusKey("TODO")
+                .toStatusKey("TODO")
                 .name("Stay")
                 .sortOrder(10)
                 .build());
@@ -235,7 +235,7 @@ class WorkflowCreationValidatorTest {
     @Test
     void validateDto_DuplicateTransition_ShouldReturnViolation() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
-                .fromStatusKey("BACKLOG")
+                .fromStatusKey("TODO")
                 .toStatusKey("DEV")
                 .name("Start Development")
                 .sortOrder(10)
@@ -248,7 +248,7 @@ class WorkflowCreationValidatorTest {
     void validateDto_DuplicateTransitionSortOrder_ShouldReturnViolation() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
                 .fromStatusKey("RELEASED")
-                .toStatusKey("BACKLOG")
+                .toStatusKey("TODO")
                 .name("Reopen")
                 .sortOrder(0)
                 .build());
@@ -295,7 +295,7 @@ class WorkflowCreationValidatorTest {
     @Test
     void validateDto_TransitionWithNullToStatusKey_ShouldReturnViolations() {
         validDto.getTransitions().add(CreateWorkflowTransitionDto.builder()
-                .fromStatusKey("BACKLOG")
+                .fromStatusKey("TODO")
                 .toStatusKey(null)
                 .name("Name")
                 .sortOrder(10)

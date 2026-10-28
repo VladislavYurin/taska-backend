@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.common.v1.Header;
@@ -28,6 +29,7 @@ import ru.taska.dto.CreateWorkflowStatusDto;
 import ru.taska.dto.CreateWorkflowTransitionDto;
 import ru.taska.dto.ValidateTransitionResponseDto;
 import ru.taska.dto.WorkflowCreationDto;
+import ru.taska.repository.WorkflowRepository;
 import ru.taska.service.WorkflowService;
 import ru.taska.transport.grpc.GrpcWorkflowServiceAdapter;
 import ru.taska.transport.grpc.project.ProjectRoleChecker;
@@ -64,6 +66,9 @@ class WorkflowEditIT extends LegacyWorkflowOperationsFixture {
 
     @MockitoBean
     private ru.taska.transport.grpc.project.GrpcProjectServiceClient projectClient;
+
+    @MockitoSpyBean
+    private WorkflowRepository workflowRepository;
 
     @BeforeEach
     void setUp() {
@@ -197,6 +202,45 @@ class WorkflowEditIT extends LegacyWorkflowOperationsFixture {
     }
 
     @Test
+    void addStatus_VersionConflict_ShouldReturnAbortedAndRollBackInsert() {
+        UUID workflowId = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, projectWorkflow())
+                .block()
+                .workflow()
+                .getId();
+
+        Mockito.doReturn(Mono.just(0)).when(workflowRepository).incrementVersion(workflowId, 1);
+
+        StepVerifier.create(workflowService.addStatus(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, workflowId,
+                        CreateWorkflowStatusDto.builder()
+                                .statusKey("CODE_REVIEW")
+                                .name("Code Review")
+                                .category(ru.taska.domain.StatusCategory.IN_PROGRESS)
+                                .sortOrder(25)
+                                .build()))
+                .expectErrorSatisfies(error -> Assertions.assertEquals(
+                        ru.taska.exception.DomainStatus.ABORTED,
+                        ((ru.taska.exception.DomainException) error).getStatus()))
+                .verify();
+
+        Long inserted = databaseClient.sql("""
+                        SELECT count(*) FROM taska.statuses
+                        WHERE workflow_id = :workflowId AND status_key = 'CODE_REVIEW'
+                        """)
+                .bind("workflowId", workflowId)
+                .map((row, metadata) -> row.get(0, Long.class))
+                .one()
+                .block();
+        Assertions.assertEquals(0L, inserted);
+
+        Integer version = databaseClient.sql("SELECT version FROM taska.workflows WHERE id = :workflowId")
+                .bind("workflowId", workflowId)
+                .map((row, metadata) -> row.get(0, Integer.class))
+                .one()
+                .block();
+        Assertions.assertEquals(1, version);
+    }
+
+    @Test
     void transitions_DuplicatePairInDatabase_ShouldBeRejectedByUniqueIndex() {
         Mono<Long> duplicate = databaseClient.sql("""
                         INSERT INTO taska.transitions (workflow_id, from_status_id, to_status_id, name, sort_order)
@@ -208,6 +252,52 @@ class WorkflowEditIT extends LegacyWorkflowOperationsFixture {
                 .rowsUpdated();
 
         StepVerifier.create(duplicate)
+                .expectError()
+                .verify();
+    }
+
+    @Test
+    void statuses_duplicateSortOrderInDatabase_shouldBeRejectedByUniqueIndex() {
+        UUID workflowId = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, projectWorkflow())
+                .block()
+                .workflow()
+                .getId();
+
+        Mono<Long> duplicateSortOrder = databaseClient.sql("""
+                    INSERT INTO taska.statuses (workflow_id, status_key, name, category, sort_order)
+                    VALUES (:workflowId, 'DUPLICATE_ORDER', 'Duplicate sort order', 'IN_PROGRESS', 10)
+                    """)
+                .bind("workflowId", workflowId)
+                .fetch()
+                .rowsUpdated();
+
+        StepVerifier.create(duplicateSortOrder)
+                .expectError()
+                .verify();
+    }
+
+    @Test
+    void transitions_duplicateSortOrderInDatabase_shouldBeRejectedByUniqueIndex() {
+        UUID workflowId = workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, projectWorkflow())
+                .block()
+                .workflow()
+                .getId();
+
+        Mono<Long> duplicateSortOrder = databaseClient.sql("""
+                    INSERT INTO taska.transitions (workflow_id, from_status_id, to_status_id, name, sort_order)
+                    SELECT todo.workflow_id, todo.id, done.id, 'Duplicate sort order', 10
+                    FROM taska.statuses todo
+                    JOIN taska.statuses done
+                      ON done.workflow_id = todo.workflow_id
+                     AND done.status_key = 'DONE'
+                    WHERE todo.workflow_id = :workflowId
+                      AND todo.status_key = 'TODO'
+                    """)
+                .bind("workflowId", workflowId)
+                .fetch()
+                .rowsUpdated();
+
+        StepVerifier.create(duplicateSortOrder)
                 .expectError()
                 .verify();
     }

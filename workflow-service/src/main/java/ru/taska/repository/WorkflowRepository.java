@@ -41,6 +41,6 @@ public interface WorkflowRepository extends ReactiveCrudRepository<WorkflowEntit
 
     // Атомарно: параллельные изменения одного workflow не теряют увеличение версии.
     @Modifying
-    @Query("UPDATE taska.workflows SET version = version + 1, updated_at = now() WHERE id = :workflowId")
-    Mono<Integer> incrementVersion(UUID workflowId);
+    @Query("UPDATE taska.workflows SET version = version + 1, updated_at = now() WHERE id = :workflowId AND version = :version")
+    Mono<Integer> incrementVersion(UUID workflowId, int version);
 }
