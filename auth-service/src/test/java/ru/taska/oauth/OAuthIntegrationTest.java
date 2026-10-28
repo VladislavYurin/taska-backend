@@ -192,6 +192,31 @@ class OAuthIntegrationTest extends AbstractIT {
         assertThat(users.findById(first.getId()).block(TIMEOUT).getEmail()).isEqualTo(first.getEmail());
         assertThat(count("SELECT count(*) FROM taska.credentials WHERE user_id=:id", second.getId())).isZero();
     }
+    @Test void lockedAccountAtExchangeAndSignupIncludesUnlockTimeAndConsumesGrant() {
+        Instant until = Instant.now().plusSeconds(600).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        var user = users.save(User.builder().email(UUID.randomUUID() + "@example.test").displayName("Locked")
+                .status(UserStatus.LOCKED).lockedUntil(until).build()).block(TIMEOUT);
+        var identity = new OAuthIdentity("google", UUID.randomUUID().toString(), user.getEmail(), "Provider");
+        for (String kind : List.of("EXCHANGE", "SIGNUP")) {
+            String grant = store.grant(kind, identity, "/projects").block(TIMEOUT);
+            assertThatThrownBy(() -> (kind.equals("EXCHANGE") ? flow.exchange(grant, "locked-exchange")
+                    : flow.signup(grant, "Valid Name", "locked-signup")).block(TIMEOUT))
+                    .isInstanceOfSatisfying(DomainException.class, error -> {
+                        assertThat(error.getStatus()).isEqualTo(ru.taska.exception.DomainStatus.PERMISSION_DENIED);
+                        assertThat(error.getDetails()).containsEntry("reason", "ACCOUNT_LOCKED")
+                                .containsEntry("lockedUntil", until.toString());
+                    });
+            reason(() -> (kind.equals("EXCHANGE") ? flow.exchange(grant, "replay")
+                    : flow.signup(grant, "Valid Name", "replay")).block(TIMEOUT), "STATE_INVALID");
+        }
+        assertThat(count("SELECT count(*) FROM taska.refresh_tokens WHERE user_id=:id", user.getId())).isZero();
+    }
+    @Test void callbackFailureUsesTheIncomingRequestIdAndRootUiOrigin() {
+        String requestId = "callback-trace-444";
+        String result = flow.callback("google", "invalid", "", "", "", "", requestId).block(TIMEOUT);
+        assertThat(result).isEqualTo("https://ui.example.test/auth/callback?error=STATE_INVALID&requestId=" + requestId);
+    }
+
     @Test void exchangeRechecksAccountBlockAfterCallbackAndDoesNotLinkOrIssueSession() {
         var user = users.save(User.builder().email(UUID.randomUUID() + "@example.test").displayName("Existing").status(UserStatus.ACTIVE).build()).block(TIMEOUT);
         var start = start("google", "/projects"); String raw = issue("google", UUID.randomUUID().toString(), user.getEmail(), start);

@@ -691,7 +691,7 @@ paths:
             Retry-After:
               description: Число секунд до следующей разрешённой отправки
               schema:
-                type: integer
+                type: string
           content:
             application/json:
               schema:
@@ -705,6 +705,8 @@ paths:
       summary: Поиск пользователей рабочего пространства по имени и email
       description: |
         Доступен авторизованным пользователям единого рабочего пространства Taska.
+        При включённой самостоятельной регистрации требуется членство хотя бы в одном проекте;
+        GLOBAL_ADMIN освобождён от этого требования. При выключенной регистрации проверка членства не применяется.
         Поиск не предоставляет доступа к проектам, ролям, токенам и credentials.
         Возвращает ACTIVE, INVITED и временно LOCKED; BLOCKED не выдаются.
         query обрезается по краям и сравнивается без учёта регистра; %, _ и ! ищутся буквально.
@@ -743,6 +745,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserDirectoryResponseDto'
+        '403':
+          description: PERMISSION_DENIED with details.reason PROJECT_MEMBERSHIP_REQUIRED when signup is enabled and the user has no project membership
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -756,17 +763,14 @@ paths:
         - {name: returnTo, in: query, schema: {type: string, default: /projects}}
       responses:
         '302':
-          description: Provider redirect plus a 10-minute HttpOnly Secure SameSite=None browser cookie
+          description: >-
+            Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
+            Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
+            RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
             Set-Cookie: {schema: {type: string}}
-        '429':
-          description: Shared OAuth attempt budget for this IP is exhausted
-          headers:
-            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/oauth/{provider}/callback:
@@ -781,16 +785,13 @@ paths:
         - {name: error, in: query, schema: {type: string}}
       responses:
         '302':
-          description: UI callback with a 60-second one-time code or a stable error code; no session tokens in URLs
+          description: >-
+            Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
+            Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
+            RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
-        '429':
-          description: Shared OAuth attempt budget for this IP is exhausted
-          headers:
-            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
     post:
       operationId: completeOAuthPost
@@ -811,16 +812,13 @@ paths:
                 user: {type: string, description: First-authorization name JSON; identity comes only from the verified id_token}
       responses:
         '302':
-          description: UI callback with a one-time code or a stable error code
+          description: >-
+            Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
+            Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
+            RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
-        '429':
-          description: Shared OAuth attempt budget for this IP is exhausted
-          headers:
-            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
   /api/v1/auth/oauth/exchange:
@@ -828,6 +826,10 @@ paths:
       operationId: exchangeOAuth
       tags: [oauth]
       summary: Exchange a one-time code for a session or a name-confirmation step
+      description: >-
+        A syntactically valid, live code is atomically consumed before provider availability and account checks.
+        Therefore 403 and 503 after claim consume the code. Invalid, expired or already consumed codes give 401.
+        A rejected IP quota (429) does not claim it.
       requestBody:
         required: true
         content:
@@ -839,10 +841,25 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/OAuthExchangeResponseDto'}
+        '401':
+          description: UNAUTHENTICATED with details.reason STATE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '403':
+          description: PERMISSION_DENIED with details.reason ACCOUNT_BLOCKED, ACCOUNT_LOCKED (also details.lockedUntil as UTC date-time), or SIGNUP_DISABLED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '503':
+          description: UNAVAILABLE with details.reason PROVIDER_UNAVAILABLE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         '429':
-          description: Shared OAuth attempt budget for this IP is exhausted
+          description: RESOURCE_EXHAUSTED with details.retryAfterSeconds (string); the one-time code/signupToken is not consumed
           headers:
-            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+            Retry-After: {schema: {type: string, pattern: '^[1-9][0-9]*$'}, description: Seconds until the next attempt}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/RestErrorResponse'}
@@ -853,6 +870,10 @@ paths:
       operationId: signupOAuth
       tags: [oauth]
       summary: Complete OAuth registration after entering a display name
+      description: >-
+        DISPLAY_NAME_INVALID (400) is checked before claiming signupToken, so the token remains usable.
+        IP quota rejection (429) also does not claim it. A live token is atomically consumed before provider
+        availability and account checks, including 403 and 503; invalid/expired/used tokens give 401.
       requestBody:
         required: true
         content:
@@ -864,10 +885,30 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/LoginResponseDto'}
+        '400':
+          description: INVALID_ARGUMENT with details.reason DISPLAY_NAME_INVALID; signupToken is not consumed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '401':
+          description: UNAUTHENTICATED with details.reason STATE_INVALID
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '403':
+          description: PERMISSION_DENIED with details.reason ACCOUNT_BLOCKED, ACCOUNT_LOCKED (also details.lockedUntil as UTC date-time), or SIGNUP_DISABLED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '503':
+          description: UNAVAILABLE with details.reason PROVIDER_UNAVAILABLE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         '429':
-          description: Shared OAuth attempt budget for this IP is exhausted
+          description: RESOURCE_EXHAUSTED with details.retryAfterSeconds (string); the one-time code/signupToken is not consumed
           headers:
-            Retry-After: {schema: {type: integer, minimum: 1}, description: Seconds until the next attempt}
+            Retry-After: {schema: {type: string, pattern: '^[1-9][0-9]*$'}, description: Seconds until the next attempt}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/RestErrorResponse'}
@@ -5144,6 +5185,7 @@ components:
           type: array
           items:
             type: string
+            enum: [GOOGLE, GITHUB, APPLE]
     LoginRequestDto:
       type: object
       required: [email, password]
@@ -5240,6 +5282,11 @@ components:
             $ref: '#/components/schemas/DirectoryUserDto'
         hasMore:
           type: boolean
+
+    OAuthErrorReason:
+      type: string
+      description: Stable error query value on the UI origin /auth/callback; requestId correlates the failed request and RATE_LIMITED includes retryAfter seconds.
+      enum: [PROVIDER_CANCELLED, STATE_INVALID, EMAIL_NOT_VERIFIED, ACCOUNT_BLOCKED, ACCOUNT_LOCKED, SIGNUP_DISABLED, PROVIDER_UNAVAILABLE, RATE_LIMITED]
 
     OAuthExchangeRequestDto:
       type: object
