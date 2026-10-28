@@ -1,0 +1,15 @@
+[
+  "/.well-known/",
+  "/login",
+  "/logout",
+  "/consent",
+  "/assets/",
+  "/error",
+  "/favicon.ico",
+  "/oauth/consent",
+  "/oauth/grants",
+  "/oauth/register",
+  "/oauth2/authorize",
+  "/oauth2/token",
+  "/oauth2/revoke"
+]
