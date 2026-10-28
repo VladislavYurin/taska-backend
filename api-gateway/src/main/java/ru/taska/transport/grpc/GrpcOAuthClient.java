@@ -27,12 +27,12 @@ public class GrpcOAuthClient {
     public Mono<OAuthExchangeResponseDto> exchange(OAuthExchangeRequestDto request, String clientIp, GatewayContext context) {
         return oauth.withDeadlineAfter(10, TimeUnit.SECONDS).exchangeOAuth(ExchangeOAuthRequest.newBuilder().setHeader(MappingUtils.buildGrpcHeader(context)).setClientIp(value(clientIp)).setCode(value(request.getCode())).build())
                 .map(response -> {
-                    var result = new OAuthExchangeResponseDto().status(OAuthExchangeResponseDto.StatusEnum.fromValue(response.getStatus())).returnTo(response.getReturnTo());
+                    var result = new OAuthExchangeResponseDto().status(response.getStatus()).returnTo(response.getReturnTo());
                     if (response.hasSession()) result.setSession(mapper.toLoginRestResponse(response.getSession()));
                     if (response.hasSignup()) {
                         var signup = response.getSignup();
                         result.setSignup(new OAuthSignupStateDto().signupToken(signup.getSignupToken()).email(signup.getEmail())
-                                .provider(OAuthSignupStateDto.ProviderEnum.fromValue(signup.getProvider()))
+                                .provider(signup.getProvider())
                                 .suggestedDisplayName(signup.hasSuggestedDisplayName() ? signup.getSuggestedDisplayName() : null));
                     }
                     return result;

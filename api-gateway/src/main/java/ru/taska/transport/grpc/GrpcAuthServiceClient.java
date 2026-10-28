@@ -128,7 +128,7 @@ public class GrpcAuthServiceClient {
                         .setHeader(ru.taska.api.common.v1.Header.newBuilder().setRequestId(context.requestId()).setNodeId(context.nodeId()))
                         .setToken(body.getToken()).build()))
                 .map(preview -> new ru.taska.domain.dto.InvitationPreviewResponseDto().email(preview.getEmail())
-                        .displayName(preview.getDisplayName()).kind(ru.taska.domain.dto.InvitationPreviewResponseDto.KindEnum.fromValue(preview.getKind()))
+                        .displayName(preview.getDisplayName()).kind(preview.getKind())
                         .expiresAt(ru.taska.mapper.MappingUtils.toOffsetDateTime(preview.getExpiresAt())));
     }
 

@@ -103,7 +103,7 @@ class AuthControllerWebTestClientTest {
     @Test
     void invitationPreviewIsPublicAndReceivesTokenInBody() {
         var response = new ru.taska.domain.dto.InvitationPreviewResponseDto().email("person@example.test")
-                .displayName("Person").kind(ru.taska.domain.dto.InvitationPreviewResponseDto.KindEnum.SIGNUP)
+                .displayName("Person").kind("SIGNUP")
                 .expiresAt(java.time.OffsetDateTime.parse("2027-01-01T00:00:00Z"));
         Mockito.when(grpcAuthServiceClient.previewInvitation(Mockito.any(), Mockito.any())).thenAnswer(call -> {
             Mono<ru.taska.domain.dto.InvitationPreviewRequestDto> body = call.getArgument(0);
