@@ -35,6 +35,11 @@ and domain records remain available for recovery. Existing grants become usable 
 subsequent enablement until revoked or expired. Do not delete the OAuth volume as
 part of a configuration rollback.
 
+The MCP gateway signing key uses standard Base64 encoding of at least 32 random
+bytes, as required by the shared Java signature parser. Base64URL is used for
+signatures on the wire, not for this configured key. Invalid existing keys require
+explicit operator repair; provisioning never rotates them automatically.
+
 The canonical issuer is `https://oauth.taska.ozero.dev`, with MCP resource
 `https://mcp.taska.ozero.dev/mcp`. Inspector's observed callback is exactly
 `http://127.0.0.1:6276/oauth/callback`. Restricted DCR is enabled for this public

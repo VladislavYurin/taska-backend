@@ -6,6 +6,8 @@ Dokploy has no conditional update API: rereads detect intervening changes, but
 operators must serialize configuration writers while applying this plan.
 """
 import argparse
+import base64
+import binascii
 import json
 import os
 from pathlib import Path
@@ -94,6 +96,18 @@ def desired_env(text, generate=False):
     weak = [k for k in SECRET_KEYS if current.get(k) and
             (len(current[k]) < 32 or '\n' in current[k] or '\r' in current[k])]
     duplicate = [k for k in SECRET_KEYS if current.get(k) and existing.count(current[k]) > 1]
+    signing = current.get('MCP_GATEWAY_SIGNING_SECRET')
+    if signing:
+        try:
+            # Java's basic decoder also accepts standard Base64 without padding.
+            # Infer padding only for unpadded input; reject misplaced/extra '='.
+            if not re.fullmatch(r'[A-Za-z0-9+/]+={0,2}', signing) or ('=' in signing and len(signing) % 4):
+                raise ValueError('Invalid signing key encoding')
+            decoded = base64.b64decode(signing + '=' * (-len(signing) % 4), validate=True)
+            if len(decoded) < 32:
+                weak.append('MCP_GATEWAY_SIGNING_SECRET')
+        except (binascii.Error, ValueError):
+            weak.append('MCP_GATEWAY_SIGNING_SECRET')
     if weak or duplicate:
         details = []
         if weak:
@@ -105,9 +119,13 @@ def desired_env(text, generate=False):
     if generate:
         used = set(existing)
         for key in missing:
-            value = secrets.token_urlsafe(48)
+            def generate():
+                if key == 'MCP_GATEWAY_SIGNING_SECRET':
+                    return base64.b64encode(secrets.token_bytes(48)).decode('ascii')
+                return secrets.token_urlsafe(48)
+            value = generate()
             while value in used:
-                value = secrets.token_urlsafe(48)
+                value = generate()
             updates[key] = value
             used.add(value)
     return patch_env(text, updates), missing
