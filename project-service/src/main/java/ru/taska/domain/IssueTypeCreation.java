@@ -12,8 +12,8 @@ public record IssueTypeCreation(UUID id,UUID projectId,UUID actor,String request
     public IssueTypeCreationIntent toProto() {
         var out=IssueTypeCreationIntent.newBuilder().setOperationId(id.toString()).setProjectId(projectId.toString())
                 .setActorUserId(actor.toString()).setCode(type.code()).setGeneration(type.generation().toString()).setState(state)
-                .setFirstTypeCode(firstTypeCode).setFirstTypeGeneration(firstTypeGeneration.toString())
                 .setOriginalHeader(action.GrpcActionContext.enrich(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId),attribution));
+        if(firstTypeCode!=null)out.setFirstTypeCode(firstTypeCode).setFirstTypeGeneration(firstTypeGeneration.toString());
         if(desiredWorkflowId!=null)out.setWorkflowId(desiredWorkflowId.toString());
         return out.build();
     }

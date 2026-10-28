@@ -185,6 +185,7 @@ public class WorkflowMapper {
     public ProjectWorkflowsResponseDto toProjectWorkflowsResponseRestDto(ListProjectWorkflowsResponse response) {
         ProjectWorkflowsResponseDto dto = new ProjectWorkflowsResponseDto();
         dto.setItems(response.getWorkflowsList().stream().map(this::toProjectWorkflowDto).toList());
+        if (response.hasMainWorkflowId()) dto.setMainWorkflowId(UUID.fromString(response.getMainWorkflowId()));
         return dto;
     }
 

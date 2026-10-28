@@ -13,8 +13,7 @@ public class CreatedProjectIssueTypeDto extends ProjectIssueTypeDto {
     private final UUID workflowId;
 
     public CreatedProjectIssueTypeDto(ProjectIssueTypeDto type, UUID workflowId) {
-        super(type.getCode(), type.getName(), type.getColor(), type.getShape(), type.getIcon(), type.getSortOrder());
-        setGeneration(type.getGeneration());
+        super(type.getGeneration(), type.getCode(), type.getName(), type.getColor(), type.getShape(), type.getIcon(), type.getSortOrder());
         this.workflowId = workflowId;
     }
 }

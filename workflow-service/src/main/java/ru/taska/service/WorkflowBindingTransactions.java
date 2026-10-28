@@ -49,6 +49,8 @@ public class WorkflowBindingTransactions {
     public Mono<WorkflowBindingChange> create(Header header, UUID actor, WorkflowCreationDto dto) {
         return Mono.deferContextual(context -> {
             validateHeader(header);
+            if (dto.getIssueTypes()==null || dto.getIssueTypes().isEmpty()) return Mono.error(error(DomainStatus.INVALID_ARGUMENT,
+                    "WORKFLOW_ISSUE_TYPES_EMPTY","Workflow must use at least one issue type"));
             var violations=validator.validateDto(dto);
             if (!violations.isEmpty()) return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,
                     validator.buildViolationMessage(violations)));
@@ -108,7 +110,7 @@ public class WorkflowBindingTransactions {
                 .then(Mono.defer(() -> fence.lockProject(project)))
                 .then(Mono.defer(() -> journal.byRequest(project,actor,header.getRequestId())))
                 .flatMap(item -> journal.matchesCommand(item,command).flatMap(matches -> matches?Mono.just(item)
-                        :Mono.error(error(DomainStatus.ALREADY_EXISTS,"WORKFLOW_OPERATION_REQUEST_REUSED","X-Request-Id already identifies another workflow command"))))
+                        :Mono.error(error(DomainStatus.ALREADY_EXISTS,"REQUEST_ID_REUSED","X-Request-Id already identifies another workflow command"))))
                 .switchIfEmpty(Mono.defer(() -> fence.checkAvailable(project).then(Mono.empty())));
     }
 

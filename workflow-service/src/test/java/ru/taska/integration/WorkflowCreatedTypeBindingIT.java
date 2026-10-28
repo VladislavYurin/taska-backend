@@ -104,7 +104,8 @@ class WorkflowCreatedTypeBindingIT extends AbstractIT {
         intent.set(intent.get().toBuilder().setWorkflowId(foreign.toString()).build());
         rejected("WORKFLOW_NOT_IN_PROJECT");assertThat(binding()).isNull();assertThat(receiptCount()).isZero();
         intent.set(intent.get().toBuilder().clearWorkflowId().setFirstTypeGeneration(UUID.randomUUID().toString()).build());
-        rejected("ISSUE_TYPES_CHANGED");assertThat(binding()).isNull();assertThat(version(target)).isEqualTo(1);
+        assertThatThrownBy(() -> service.apply(project,operation).block(TIMEOUT)).isInstanceOfSatisfying(DomainException.class,
+                error -> {assertThat(error.getStatus()).isEqualTo(DomainStatus.ABORTED);assertThat(error.getDetails()).containsEntry("reason","ISSUE_TYPES_CHANGED");});assertThat(binding()).isNull();assertThat(version(target)).isEqualTo(1);
     }
 
     @Test

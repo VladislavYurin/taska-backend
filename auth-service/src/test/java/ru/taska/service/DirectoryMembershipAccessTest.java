@@ -30,7 +30,7 @@ class DirectoryMembershipAccessTest {
         try {
             access.check(user).block();
             assertThatThrownBy(() -> access.check(user.toBuilder().id(UUID.randomUUID()).build()).block())
-                    .isInstanceOfSatisfying(DomainException.class,e -> assertThat(e.getStatus()).isEqualTo(DomainStatus.PERMISSION_DENIED));
+                    .isInstanceOfSatisfying(DomainException.class,e -> { assertThat(e.getStatus()).isEqualTo(DomainStatus.PERMISSION_DENIED); assertThat(e.getDetails()).containsEntry("reason", "PROJECT_MEMBERSHIP_REQUIRED"); });
             access.check(user.toBuilder().globalRole(GlobalRole.GLOBAL_ADMIN).build()).block();
             props.setEnabled(false);access.check(user).block();
             assertThat(calls).hasValue(2);

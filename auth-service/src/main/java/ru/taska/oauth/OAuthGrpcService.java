@@ -21,7 +21,7 @@ public class OAuthGrpcService extends ReactorOAuthServiceGrpc.OAuthServiceImplBa
                 .transform(GrpcExceptionHandler.withErrorHandling("startOAuth"));
     }
     @Override public Mono<CompleteOAuthResponse> completeOAuth(Mono<CompleteOAuthRequest> request) {
-        return request.flatMap(req -> header(req.getHeader()).then(ipLimiter.reserve(req.getClientIp())).then(Mono.defer(() -> flow.callback(req.getProvider(), req.getState(), req.getBrowserToken(), req.getCode(), req.getError(), req.getAppleUser()))))
+        return request.flatMap(req -> header(req.getHeader()).then(ipLimiter.reserve(req.getClientIp())).then(Mono.defer(() -> flow.callback(req.getProvider(), req.getState(), req.getBrowserToken(), req.getCode(), req.getError(), req.getAppleUser(), req.getHeader().getRequestId()))))
                 .map(value -> CompleteOAuthResponse.newBuilder().setRedirectUrl(value).build()).transform(GrpcExceptionHandler.withErrorHandling("completeOAuth"));
     }
     @Override public Mono<ExchangeOAuthResponse> exchangeOAuth(Mono<ExchangeOAuthRequest> request) {

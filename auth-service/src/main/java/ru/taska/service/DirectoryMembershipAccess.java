@@ -32,7 +32,7 @@ public class DirectoryMembershipAccess {
                         HasProjectMembershipInternalRequest.newBuilder().setUserId(user.getId().toString()).build())
                 .onErrorMap(io.grpc.StatusRuntimeException.class, error -> new DomainException(DomainStatus.UNAVAILABLE, "Project membership service is unavailable"))
                 .filter(HasProjectMembershipInternalResponse::getMember)
-                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Project membership is required")))
+                .switchIfEmpty(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Project membership is required", java.util.Map.of("reason", "PROJECT_MEMBERSHIP_REQUIRED"))))
                 .then();
     }
     @PreDestroy public void close() { channel.shutdown(); }

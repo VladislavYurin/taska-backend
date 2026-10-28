@@ -38,7 +38,7 @@ class GrpcProjectIssueTypeClientTest {
         var service = new GrpcClientProperties.Service(null, 0, Duration.ofSeconds(1));
         client = new GrpcProjectIssueTypeClient(stub, new GrpcClientProperties(null, null, service, null, null, null));
         when(stub.withDeadlineAfter(anyLong(), any(TimeUnit.class))).thenReturn(stub);
-        var answer = ProjectIssueTypeResponse.newBuilder().setCode("REQUEST").setName("Request").setColor("teal")
+        var answer = ProjectIssueTypeResponse.newBuilder().setGeneration(UUID.randomUUID().toString()).setCode("REQUEST").setName("Request").setColor("teal")
                 .setShape("square").setLegacyIcon("check-square").setSortOrder(10).build();
         when(stub.updateProjectIssueType(any(ChangeProjectIssueTypeRequest.class))).thenReturn(Mono.just(answer));
         when(stub.createProjectIssueTypeWithWorkflow(any(ChangeProjectIssueTypeRequest.class))).thenReturn(Mono.just(
@@ -92,11 +92,11 @@ class GrpcProjectIssueTypeClientTest {
 
     @Test
     void registryEntryWithoutIconMapsToNullIconAndItsShape() {
-        var dto = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setCode("BUG").setName("Bug")
+        var dto = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setGeneration(UUID.randomUUID().toString()).setCode("BUG").setName("Bug")
                 .setColor("red").setShape("circle").setLegacyIcon("bug").setSortOrder(20).build());
         assertThat(dto.getIcon()).isNull();
         assertThat(dto.getShape()).isEqualTo(ProjectIssueTypeShapeDto.CIRCLE);
-        var withIcon = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setCode("REQUEST")
+        var withIcon = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setGeneration(UUID.randomUUID().toString()).setCode("REQUEST")
                 .setName("Request").setColor("teal").setShape("diamond").setIcon("headset").setLegacyIcon("headset").build());
         assertThat(withIcon.getIcon()).isEqualTo(ProjectIssueTypeIconDto.HEADSET);
         assertThat(withIcon.getShape()).isEqualTo(ProjectIssueTypeShapeDto.DIAMOND);
@@ -105,7 +105,7 @@ class GrpcProjectIssueTypeClientTest {
     @Test
     void preTas432RegistryAnswerReadsAsSquareWithItsIcon() {
         // An old project-service only fills field 4 (now legacy_icon) and knows nothing about shape.
-        var dto = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setCode("BUG").setName("Bug")
+        var dto = GrpcProjectIssueTypeClient.toRest(ProjectIssueTypeResponse.newBuilder().setGeneration(UUID.randomUUID().toString()).setCode("BUG").setName("Bug")
                 .setColor("red").setLegacyIcon("bug").setSortOrder(20).build());
         assertThat(dto.getIcon()).isEqualTo(ProjectIssueTypeIconDto.BUG);
         assertThat(dto.getShape()).isEqualTo(ProjectIssueTypeShapeDto.SQUARE);

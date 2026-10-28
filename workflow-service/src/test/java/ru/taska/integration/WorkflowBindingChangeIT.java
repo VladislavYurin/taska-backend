@@ -109,6 +109,34 @@ class WorkflowBindingChangeIT extends AbstractIT {
     }
 
     @Test
+    void emptyCreationHasStableReasonAndDoesNotCreateJournalOrGraph() {
+        assertThatThrownBy(() -> coordinator.create(header,actor,creation(List.of(),false)).block(TIMEOUT))
+                .isInstanceOfSatisfying(DomainException.class,error -> {
+                    assertThat(error.getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT);
+                    assertThat(error.getDetails()).containsEntry("reason","WORKFLOW_ISSUE_TYPES_EMPTY");
+                });
+        assertThat(journal.byRequest(project,actor,header.getRequestId()).block(TIMEOUT)).isNull();
+        verify(issues,never()).apply(any(),any());verify(reservations,never()).reserve(any(),any());
+    }
+
+    @Test
+    void defaultRemainsListedWhenEveryTypeIsBoundAndMainFollowsRegistryOrder() {
+        coordinator.replace(header,project,target,actor,1,null,List.of("TASK","BUG","STORY","EPIC"),Map.of()).block(TIMEOUT);
+        var all=listing.listProjectWorkflows("list","test",project,actor).block(TIMEOUT);
+        assertThat(all).filteredOn(item -> item.workflow().workflow().getId().equals(fallback)).singleElement().satisfies(item -> {
+            assertThat(item.shared()).isTrue();assertThat(item.issueTypes()).isEmpty();assertThat(item.main()).isFalse();
+        });
+        assertThat(all).filteredOn(ru.taska.domain.ProjectWorkflowAggregate::main).singleElement()
+                .satisfies(item -> assertThat(item.workflow().workflow().getId()).isEqualTo(target));
+        var mapper=new ru.taska.mapper.WorkflowMapper();
+        assertThat(mapper.toListProjectWorkflowsProto(all).getMainWorkflowId()).isEqualTo(target.toString());
+        when(projects.listIssueTypeDetails(any(),any(),any(),any())).thenReturn(Mono.just(List.of()));
+        var empty=listing.listProjectWorkflows("list","test",project,actor).block(TIMEOUT);
+        assertThat(empty).anySatisfy(item -> {assertThat(item.shared()).isTrue();assertThat(item.issueTypes()).isEmpty();});
+        assertThat(mapper.toListProjectWorkflowsProto(empty).hasMainWorkflowId()).isFalse();
+    }
+
+    @Test
     void mixedReplacementHasPerTypeDestinationsAndBumpsEachCustomGraphOnce() {
         var result=coordinator.replace(header,project,target,actor,1,null,List.of("TASK","EPIC"),Map.of()).block(TIMEOUT);
         var saved=journal.byRequest(project,actor,header.getRequestId()).block(TIMEOUT);

@@ -78,7 +78,7 @@ class AuthControllerWebTestClientTest {
                 .bodyValue("{\"email\":\"new@example.test\",\"displayName\":\"New User\"}")
                 .exchange().expectStatus().isAccepted().expectBody().isEmpty();
         Mockito.when(grpcAuthServiceClient.getAuthMethods()).thenReturn(Mono.just(new ru.taska.domain.dto.AuthMethodsResponseDto()
-                .signupEnabled(false).providers(java.util.List.of("GOOGLE"))));
+                .signupEnabled(false).providers(java.util.List.of(ru.taska.domain.dto.AuthMethodsResponseDto.ProvidersEnum.GOOGLE))));
         webTestClient.get().uri("/api/v1/auth/methods").exchange().expectStatus().isOk()
                 .expectHeader().valueEquals("Cache-Control","no-store")
                 .expectBody().jsonPath("$.signupEnabled").isEqualTo(false).jsonPath("$.providers[0]").isEqualTo("GOOGLE");
@@ -103,7 +103,7 @@ class AuthControllerWebTestClientTest {
     @Test
     void invitationPreviewIsPublicAndReceivesTokenInBody() {
         var response = new ru.taska.domain.dto.InvitationPreviewResponseDto().email("person@example.test")
-                .displayName("Person").kind(ru.taska.domain.dto.InvitationPreviewResponseDto.KindEnum.SIGNUP)
+                .displayName("Person").kind("SIGNUP")
                 .expiresAt(java.time.OffsetDateTime.parse("2027-01-01T00:00:00Z"));
         Mockito.when(grpcAuthServiceClient.previewInvitation(Mockito.any(), Mockito.any())).thenAnswer(call -> {
             Mono<ru.taska.domain.dto.InvitationPreviewRequestDto> body = call.getArgument(0);

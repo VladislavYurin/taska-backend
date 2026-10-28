@@ -120,6 +120,18 @@ class IssueTypeCreationIT extends AbstractIT {
     }
 
     @Test
+    void emptyRegistryRequiresWorkflowButExplicitChoiceCanCreateItsFirstType() {
+        db.sql("DELETE FROM taska.project_issue_types WHERE project_id=:p").bind("p",project).then().block(TIMEOUT);
+        rejected(() -> begin("EPIC",null),DomainStatus.FAILED_PRECONDITION,"ISSUE_TYPE_WORKFLOW_REQUIRED");
+        assertThat(operations.active(project).block(TIMEOUT)).isNull();
+        var intent=begin("EPIC",explicitWorkflow);
+        assertThat(intent.firstTypeCode()).isNull();assertThat(intent.firstTypeGeneration()).isNull();
+        assertThat(intent.toProto().getFirstTypeCode()).isEmpty();
+        assertThat(coordinator.drive(intent).block(TIMEOUT).workflowId()).isEqualTo(explicitWorkflow);
+        assertThat(types.list(project).collectList().block(TIMEOUT)).extracting(ru.taska.domain.ProjectIssueType::code).containsExactly("EPIC");
+    }
+
+    @Test
     void confirmedBindingFailureLeavesNoTypeAndLateApplyCannotResurrectAfterRetry() {
         rejected(()->create("EPIC",foreignWorkflow),DomainStatus.INVALID_ARGUMENT,"WORKFLOW_NOT_IN_PROJECT");
         var old=latest();assertThat(old.state()).isEqualTo("CANCELLED");assertThat(types.find(project,"EPIC").block(TIMEOUT)).isNull();
@@ -168,8 +180,8 @@ class IssueTypeCreationIT extends AbstractIT {
     @Test
     void activeCreationAndDeletionShareOneProjectFenceAndReorderCannotChangeTheDefaultSnapshot() {
         var intent=begin("EPIC",null);
-        rejected(()->deletions.begin(project,actor,"TASK",null,Map.of(),null,"delete","n",ActionMetadata.NONE).block(TIMEOUT),DomainStatus.ABORTED,"PROJECT_TYPE_OPERATION_PENDING");
-        rejected(()->metadata.reorder(project,actor,java.util.List.of("BUG","TASK","STORY")).block(TIMEOUT),DomainStatus.ABORTED,"PROJECT_TYPE_OPERATION_PENDING");
+        rejected(()->deletions.begin(project,actor,"TASK",null,Map.of(),null,"delete","n",ActionMetadata.NONE).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
+        rejected(()->metadata.reorder(project,actor,java.util.List.of("BUG","TASK","STORY")).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         var existing=operations.active(project).block(TIMEOUT);assertThat(existing.getOperationId()).isEqualTo(intent.id().toString());
         assertThat(types.find(project,"TASK").block(TIMEOUT).pendingOperationId()).isNull();
     }
@@ -188,7 +200,7 @@ class IssueTypeCreationIT extends AbstractIT {
     void pendingRequestWithSameKeyHasImmutableCommandAndNewKeyCannotStartAnotherCreation() {
         var first=begin("EPIC",null);assertThat(begin("EPIC",null).id()).isEqualTo(first.id());
         rejected(()->begin("EPIC",explicitWorkflow),DomainStatus.ALREADY_EXISTS,"REQUEST_ID_REUSED");
-        Header other=newHeader();rejected(()->transactions.begin(project,actor,other.getRequestId(),other.getNodeId(),"OTHER","Other","blue",null,null,null,null,ActionMetadata.NONE).block(TIMEOUT),DomainStatus.ABORTED,"PROJECT_TYPE_OPERATION_PENDING");
+        Header other=newHeader();rejected(()->transactions.begin(project,actor,other.getRequestId(),other.getNodeId(),"OTHER","Other","blue",null,null,null,null,ActionMetadata.NONE).block(TIMEOUT),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         assertThat(types.find(project,"EPIC").block(TIMEOUT)).isNull();
     }
 

@@ -20,9 +20,11 @@
 **Условия:** контракт доступен по BASE; для защищённого `/api/v1/meta` есть JWT либо read PAT активного пользователя. Swagger и auth methods проверять без авторизации.
 
 1. Открыть Swagger; получить `/openapi.yml` и `/v3/api-docs`. Сравнить методы, paths, обязательные параметры, схемы и ответы; JSON является представлением того же авторитетного YAML. `/v3/api-docs/generated` не использовать как замену контракту.
-2. Выполнить `GET /api/v1/meta` с JWT/read PAT: 200; без авторизации — 401. В успешном ответе непустые словари приоритетов, типов, связей, статусов пользователей и уведомлений; стабильные коды и английские имена. Набор типов в meta — начальный посев, а не текущий реестр P.
+2. Выполнить `GET /api/v1/meta` с JWT/read PAT: 200; без авторизации — 401. В успешном ответе непустые словари приоритетов, типов, связей, статусов пользователей и уведомлений; стабильные коды и английские имена. Набор типов в meta — начальный посев, а не текущий реестр P. `actionChannels` содержит пары code/name UI→UI, API_TOKEN→API, MCP→MCP, по одной на канал; название/UUID личного токена не раскрывается.
 3. Повторить с `If-None-Match` из ETag: 304 без тела. Неверный ETag возвращает актуальный 200.
 4. `GET /api/v1/auth/methods`: 200 с фактическим signup flag и настроенными провайдерами, без ключей/секретов, `Cache-Control: no-store`.
+
+5. На изолированной совместимой фикстуре будущих ответов подставить неизвестные строковые значения downstream: `kind` в `POST /api/v1/auth/invitations/preview`, `status` и `signup.provider` в `POST /api/v1/auth/oauth/exchange`. Gateway сохраняет каждое значение как строку, без 500 и подмены на UI/известный provider. Проверка относится к открытым полям ответов, не разрешает произвольный provider во входном path или каталоге методов. На общем стенде не подменять внутренние сервисы.
 
 **Очистка:** не требуется.
 
@@ -35,7 +37,7 @@
 3. `POST /api/v1/auth/refresh` с текущим refresh: 200, новая пара. Старый refresh повторно не создаёт сессию (401); новый access читает `/api/v1/users/me`. Пустой refresh — ошибка валидации/аутентификации по контракту, без 500.
 4. На выделенной учётной записи проверить неверный пароль и неизвестный email: одинаковая ошибка аутентификации без раскрытия существования. Проверку порога lockout выполнять только в E2E-26, не блокировать общие аккаунты.
 5. `PATCH /api/v1/users/me` с `{"displayName":"  E2E Имя 🧪  "}`: 200 с нормализованным именем; последующий me, каталог и новые записи автора используют это имя, UUID не меняется.
-6. Пустое имя, null, перевод строки/управляющий символ и более 128 Unicode code points: 400, `DISPLAY_NAME_INVALID`; прежнее имя сохраняется. Проверить граничные 1 и 128 code points.
+6. Пустое имя, null, перевод строки/управляющий символ, более 128 Unicode code points и строки только из невидимых форматных символов U+200B, U+FEFF, U+2060 либо их смеси с пробелами: 400 INVALID_ARGUMENT, `details.reason=DISPLAY_NAME_INVALID`; прежнее имя сохраняется. В JSON передавать `\u200b`, `\ufeff`, `\u2060`, чтобы намерение проверки было видно. Проверить граничные 1 и 128 code points и допустимое видимое имя с emoji; правило требует хотя бы один видимый символ, не запрещает все форматные символы внутри видимого имени.
 
 **Очистка:** вернуть исходное имя; секреты сессии удалить из внешнего журнала/памяти клиента после прогона.
 
@@ -45,14 +47,16 @@
 
 1. Под G `POST /api/v1/auth/invitations` с `{"email":"${INVITEE_EMAIL}","displayName":"E2E Invited"}`: 201, UUID I, INVITED, `deliveryQueued=true`; нет raw token. Под обычным пользователем тот же вызов — 403 без создания аккаунта.
 2. Повторить с пробелами/другим регистром того же email без resend: 200, тот же UUID/expiry, `deliveryQueued=false`; нового письма нет. Повторная доставка/поиск не меняют пароль и членство.
-3. Получить ссылку из тестового письма. `POST /api/v1/auth/invitations/preview` с `{"token":"${INVITE}"}`: 200, нужный email/displayName; повторный preview не потребляет ссылку. Неверный токен — 401 без чужих данных.
+3. Получить ссылку из тестового письма. `POST /api/v1/auth/invitations/preview` с `{"token":"${INVITE}"}`: 200, нужный email/displayName; повторный preview не потребляет ссылку. `kind` обозначает происхождение аккаунта createdVia, а не вид ссылки: приглашённый администратором пользователь сохраняет INVITATION и после запроса email-регистрации. Неверный токен — 401 без чужих данных.
 4. Попытаться принять с недопустимым именем либо слабым/превышающим 72 UTF-8 байта паролем: 400; валидный токен остаётся пригодным. Пароль передавать только по HTTPS и не логировать.
 5. `POST /api/v1/auth/invitations/accept` с token, допустимым newPassword и displayName: 204 без access/refresh. Затем login: 200; I стал ACTIVE USER, имя нормализовано, не получил чужие проекты.
 6. Повтор accept/preview использованного, просроченного или отозванного токена: одинаковый отказ невалидного токена; нет второй активации. Две одновременные активации имеют ровно одного победителя.
 7. На другом выделенном INVITED проверить `resend:true`: в cooldown — 429 с Retry-After и `details.retryAfterSeconds`, действующий token сохранён; после cooldown — 200 с новым письмом, прежняя ссылка не работает.
 8. Приглашение ACTIVE/LOCKED/BLOCKED email: 409, профиль/status/password/membership не меняются. Невалидный email/имя — 400 без аккаунта.
 
-**Очистка:** аккаунт I — выделенная фикстура, учитывать отсутствие публичного удаления пользователей; ненужную приглашённую фикстуру блокировать по согласованной политике тестового стенда. Не удалять её напрямую из БД.
+9. Для отдельного выделенного INVITED I2 получить новую действующую ссылку и последовательно отправить в `POST /api/v1/auth/invitations/accept` имена только из U+200B/U+FEFF/U+2060 и пробелов: каждый ответ 400 INVALID_ARGUMENT / DISPLAY_NAME_INVALID, аккаунт остаётся INVITED, пароль не установлен, token не потреблён. Затем принять **эту же** ссылку с допустимым именем и паролем: 204 и успешный login. Для невалидного имени в `POST /api/v1/auth/invitations` аккаунт и письмо не создаются.
+
+**Очистка:** аккаунты I/I2 — выделенные фикстуры, учитывать отсутствие публичного удаления пользователей; ненужную приглашённую фикстуру блокировать по согласованной политике тестового стенда. Не удалять её напрямую из БД.
 
 ## E2E-04. Самостоятельная email-регистрация
 
@@ -63,6 +67,8 @@
 3. Для свободного адреса получить письмо и принять через invitation accept, затем войти; до активации пользователь отсутствует в каталоге и не может стать участником проекта.
 4. Существующий INVITED сохраняет своё прежнее имя и правила resend; свежий административный инвайт не раскрывается и не заменяется немедленно.
 5. Невалидные email/имя — 400. Повтор в пределах email/IP лимита — 429 с Retry-After; аккаунт/ссылка не дублируются. Полный IP-limit проверять на изолированном окружении, не исчерпывая общий budget стенда.
+
+6. При включённой регистрации имена только из невидимых форматных символов дают 400 DISPLAY_NAME_INVALID до создания аккаунта/письма. Проверку INVITED из шага 4 дополнить preview текущей ссылки: `kind=INVITATION` остаётся происхождением аккаунта, даже если запрос пришёл через email signup.
 
 **Очистка:** как для I; незавершённая регистрация истекает по настройкам сервера, активную фикстуру учитывать отдельно.
 
@@ -76,7 +82,11 @@
 4. Для нового пользователя `POST /api/v1/auth/oauth/signup` с signupToken/displayName: 200, ACTIVE USER без пароля/чужого членства. Ошибка имени — 400 DISPLAY_NAME_INVALID до потребления grant; исправленное имя ещё можно отправить. Повтор уже использованного grant отклоняется.
 5. Existing email сохраняет UUID, имя и существующий пароль; INVITED активируется с отзывом старых invitation tokens. BLOCKED/неистекший LOCKED сессию не получают. При выключенном signup новый пользователь не создаётся.
 6. Callback без/с чужой cookie, повторный state, подмена provider, неверный method, отказ пользователя, неподтверждённый email: контролируемый фиксированный reason, без stacktrace/provider response и без потребления чужого легитимного state.
-7. IP budget общий для start/callback/exchange/signup и провайдеров: изолированно проверить 429/Retry-After и отсутствие обхода произвольным X-Forwarded-For.
+7. IP budget общий для start/callback/exchange/signup и провайдеров; исчерпывать его только изолированно. На `GET /api/v1/auth/oauth/{provider}/start`, `GET /api/v1/auth/oauth/{provider}/callback` и Apple `POST /api/v1/auth/oauth/{provider}/callback` отказ лимита — **302**, Location на UI origin `/auth/callback?error=RATE_LIMITED&requestId=...&retryAfter=...`, retryAfter — положительные секунды. На JSON `POST /api/v1/auth/oauth/exchange` и `POST /api/v1/auth/oauth/signup` — **429 RESOURCE_EXHAUSTED**, `Retry-After` и строковый `details.retryAfterSeconds` согласованы. Квота не потребляет state/code/signupToken; callback не удаляет browser-binding cookie. После освобождения тестового budget та же легитимная привязка/код пригодна. Произвольный X-Forwarded-For не обходит лимит.
+
+8. Отключённый/недоступный provider и недоступный auth-service на навигационных start/callback возвращают 302 `PROVIDER_UNAVAILABLE`, а не сырой JSON на API origin. Остальные фиксированные причины — PROVIDER_CANCELLED, STATE_INVALID, EMAIL_NOT_VERIFIED, ACCOUNT_BLOCKED, ACCOUNT_LOCKED, SIGNUP_DISABLED. Во **всех ошибочных** Location есть requestId; он совпадает с `X-Request-Id` ответа и находится в gateway log. Повторить без входящего `X-Request-Id`: генерируется один UUID для ответа/Location/лога. При UI base с путём callback всё равно лежит в корне UI origin. Ответы no-store/no-referrer, внутренние подробности не отражаются в URL.
+9. Для контроля расхода grants на отдельном аккаунте получить действующий code, затем временно заблокировать аккаунт LOCKED до известного `${UNTIL}` перед `POST /api/v1/auth/oauth/exchange`: 403 PERMISSION_DENIED, reason ACCOUNT_LOCKED и `details.lockedUntil` как UTC date-time. Повтор этого code — 401 STATE_INVALID. Аналогично получить signupToken нового аккаунта, подготовить совпадающий LOCKED аккаунт в контролируемой фикстуре и вызвать `POST /api/v1/auth/oauth/signup`: тот же 403/lockedUntil, повтор token — 401. Сессии/связи не создаются. BLOCKED и SIGNUP_DISABLED — 403 с собственной причиной; PROVIDER_UNAVAILABLE после успешного claim — 503. Не блокировать общего пользователя.
+10. На отдельном действующем signupToken имена U+200B/U+FEFF/U+2060 и их смесь с пробелами дают 400 DISPLAY_NAME_INVALID **до** claim; корректное видимое имя с тем же token завершается успешно. Отличать это от отказов аккаунта/provider после claim из шага 9 и квоты до claim из шага 7. Во всех 429 публичного API Retry-After описан строкой; для OAuth JSON проверить совпадение с details.retryAfterSeconds.
 
 **Очистка:** завершить/закрыть только собственные OAuth flows; не менять настройки приложений провайдеров.
 
@@ -100,7 +110,7 @@
 1. `GET /api/v1/users?query=${PARTIAL_NAME}&page=0&pageSize=1`: 200 с items/hasMore; поля только id/displayName/email/nullable avatarUrl. Поиск по email и имени нечувствителен к регистру, пробелы по краям обрезаны.
 2. На тестовых пользователях проверить порядок lower(displayName), lower(email), id; продолжить page до пустой страницы. Пустой результат — 200, items=[]; `%`, `_`, `!` ищутся буквально, не превращаются в wildcard.
 3. ACTIVE/INVITED/временно LOCKED видны, BLOCKED и неподтверждённый SIGNUP скрыты. Само появление в каталоге не даёт права на P или назначение.
-4. Query <3/>100 code points, page вне 0..1000, pageSize вне 1..50: 400. Ответы no-store. При включённом signup пользователь без глобальных прав и членства не получает общий каталог.
+4. Query <3/>100 code points, page вне 0..1000, pageSize вне 1..50: 400. Ответы no-store. При включённом signup обычный пользователь без членства хотя бы в одном проекте получает 403 PERMISSION_DENIED с `details.reason=PROJECT_MEMBERSHIP_REQUIRED`; GLOBAL_ADMIN получает 200. После добавления пользователя в свой проект запрос становится доступен; при выключенном signup дополнительное требование членства не применяется.
 5. Для avatar недоступного storage отсутствие URL конкретной строки не срывает весь каталог; такую fault-injection проверку делать на изолированной среде.
 
 **Очистка:** не требуется.
@@ -130,13 +140,15 @@
 5. Повторный code, неверный формат code, неизвестный color/shape/icon, null обязательного поля, лишнее поле, повтор/пропуск code в order: отказ валидации/конфликта без повреждения реестра. MEMBER/VIEWER не меняют реестр (403).
 6. Удалить пустой отдельный тип через `DELETE /api/v1/projects/{P}/issue-types/{code}`: 204; последний оставшийся тип удалить нельзя. Полный перенос непустого типа — E2E-13.
 
+7. Поле `generation` в каждом DTO реестра обязательно, UUID и не null; успешный POST дополнительно возвращает workflowId. В изолированной legacy фикстуре с пустым реестром `POST /api/v1/projects/{P}/issue-types` без workflowId — 400 FAILED_PRECONDITION / ISSUE_TYPE_WORKFLOW_REQUIRED, без intent/binding/типа. Та же команда с **новым** X-Request-Id и явным UUID собственного либо общего default workflow — 201; появляется первый тип с generation/workflowId, последующее создание задачи выбирает этот workflow. Пустой реестр готовить только на своей копии стека, не удалением последнего типа через обход защиты общего стенда.
+
 **Очистка:** убрать только созданные RUN типы после удаления/переноса их задач.
 
 ## E2E-10. Собственный workflow и граф
 
 **Условия:** ADMIN P; тип E2E_CUSTOM, без задач.
 
-1. `GET /api/v1/projects/{P}/workflows`: 200, текущие binding/версии. `GET /api/v1/projects/{P}/workflow?issueType=E2E_CUSTOM`: 200, эффективный граф типа.
+1. `GET /api/v1/projects/{P}/workflows`: 200, текущие binding/версии; общий default присутствует с shared=true даже без привязанных типов. mainWorkflowId указывает workflow первого типа реестра по sortOrder/code; при пустом реестре null, default остаётся в списке. `GET /api/v1/projects/{P}/workflow?issueType=E2E_CUSTOM`: 200, эффективный граф типа.
 2. `POST /api/v1/projects/{P}/workflows` с уникальным X-Request-Id и телом ниже: 201, свой UUID W, version=1, E2E_CUSTOM привязан к W. Default не изменён.
 
 ```json
@@ -158,7 +170,7 @@
 3. `POST /api/v1/projects/{P}/workflows/{W}/statuses` добавить QA category IN_PROGRESS, sortOrder=40: 201. `PATCH /api/v1/projects/{P}/workflows/{W}/statuses/{QA_ID}` с текущей version, name/category/sortOrder: 200; immutable statusKey не меняется. Устаревшая version — 409, текущее состояние сохранено.
 4. `POST /api/v1/projects/{P}/workflows/{W}/transitions` добавить REVIEW→QA: 201. `PATCH /api/v1/projects/{P}/workflows/{W}/transitions/{T}` изменить name/order/hidden: 200; endpoints immutable. В `/api/v1/projects/{P}/workflows` скрытый переход виден, в эффективном `/workflow?issueType=` скрыт. Его программное применение проверяется отдельно.
 5. Удалить неиспользуемый переход `DELETE /api/v1/projects/{P}/workflows/{W}/transitions/{T}?version=${CURRENT}`: 200, сохранив минимально допустимый граф (минимум один видимый переход); затем QA `DELETE /api/v1/projects/{P}/workflows/{W}/statuses/{QA_ID}?version=...`: 200. Связанные переходы удалённого статуса также отсутствуют.
-6. Пустой issueTypes, пропущенные обязательные коллекции графа, неизвестные типы/endpoints, duplicate keys/orders, отрицательный order, null/unknown поля — 400 без частичного графа; конфликт конкурирующей версии — 409. Не путать пропущенную коллекцию с допустимым в legacy create пустым набором transitions; минимумы последующих мутаций проверяются отдельно. Default и workflow другого проекта не мутируются, VIEWER/MEMBER получают 403.
+6. Пустой issueTypes — 400 INVALID_ARGUMENT с details.reason WORKFLOW_ISSUE_TYPES_EMPTY до записи графа; пропущенные обязательные коллекции графа, неизвестные типы/endpoints, duplicate keys/orders, отрицательный order, null/unknown поля — 400 без частичного графа; конфликт конкурирующей версии — 409. Не путать пропущенную коллекцию с допустимым в legacy create пустым набором transitions; минимумы последующих мутаций проверяются отдельно. Default и workflow другого проекта не мутируются, VIEWER/MEMBER получают 403.
 
 **Очистка:** W оставить для следующих сценариев; в конце удалить с текущей version/нужными mappings.
 
@@ -173,6 +185,9 @@
 5. В PATCH с issueTypes отсутствие version/дубликаты/null/[]/неизвестный тип — 400; stale version — 409. Name-only PATCH без issueTypes сохраняет bindings; пропуск version допустим для name-only. Default остаётся immutable.
 6. Изменить порядок реестра: без workflowId новый тип наследует workflow **первого** типа по sortOrder/code. Явный workflowId позволяет выбрать W, пустой W или общий default. Чужой/несуществующий workflowId — отказ без опубликованного типа; null — 400.
 7. Повтор POST/PATCH с тем же X-Request-Id и тем же телом не создаёт второй объект/миграцию. Другой command с тем же ключом — 409; повтор после отзыва ADMIN заново проверяет ACL.
+
+8. Перенести все типы с общего default на собственные workflow: `GET /api/v1/projects/{P}/workflows` всё ещё содержит общий default shared=true с issueTypes=[]; его UUID можно выбрать при добавлении нового типа. Переставить первый тип реестра: mainWorkflowId меняется согласно **эффективному** workflow нового первого типа и совпадает с `GET /api/v1/projects/{P}/workflow?issueType=${FIRST_CODE}`. Пустой собственный workflow сохраняет граф и доступен для reuse/delete.
+9. В изолированном стеке создать гонку изменения реестра между чтением и созданием типа без workflowId, сменой набора workflow либо удалением типа с переносом: если сервер обнаружил смену поколения/набора, это 409 ABORTED / ISSUE_TYPES_CHANGED, без частичного применения. Пока другая команда с типами удерживает gate, конфликтующая новая команда получает 409 ABORTED / ISSUE_TYPE_OPERATION_PENDING. Другой payload с уже использованным X-Request-Id — 409 REQUEST_ID_REUSED; повтор исходной команды не создаёт второй эффект.
 
 **Очистка:** задачи удалить/нормализовать, собственные типы и workflow удалить после зависимых сценариев.
 
@@ -198,6 +213,9 @@
 4. На каждой перенесённой задаче одна история UPDATED со старым/новым типом и статусом, а не отдельный лишний TRANSITIONED. После повтора той же завершённой команды дополнительных переносов/истории/уведомлений нет.
 5. SRC=target, неизвестный target, неправильное mapping, stale generation — отказ без изменений. После повторного создания SRC нужен expectedGeneration; старое поколение не удаляет новое (ISSUE_TYPE_CHANGED/ISSUE_TYPE_GENERATION_REQUIRED).
 6. 5001 живая SRC-задача: WORKFLOW_MIGRATION_LIMIT до изменений. Проверять только в изолированной нагрузочной фикстуре; для удаления типа предел считает **все** живые SRC, для workflow binding — только требующие изменения статуса задачи.
+
+7. Для **пустого отдельного** кода E2E_RECREATE сохранить generation g1; `DELETE /api/v1/projects/{P}/issue-types/E2E_RECREATE` без тела с ключом `${DELETE_REQUEST}`: 204. Повтор тем же ADMIN/ключом — 204 без новой операции; другой requestId либо другой ADMIN при отсутствующем коде — 404. Создать E2E_RECREATE снова с новым ключом: generation g2 отличается от g1. Запоздалый повтор исходного DELETE с тем же `${DELETE_REQUEST}` — 204, но g2, его workflow binding и задачи остаются неизменны. Свежий requestId уже может удалить пустой g2. Проверить, что в журнале не возникла вторая deletion от старого ключа.
+8. В изолированной фикстуре растянуть удаление без тела дольше короткого обычного gRPC deadline: оно использует такой же длительный срок команды, как удаление с переносом, и не падает в ранний 504. При потере ответа повторять тот же requestId; завершённая операция не повторяет побочные эффекты. Конкурентная **иная** команда удаления во время pending получает 409 ISSUE_TYPE_OPERATION_PENDING, а не 503 с чужим id; 503 ISSUE_TYPE_DELETION_PENDING оставлен для действительно принятой исходной команды.
 
 **Очистка:** удалить/перенести тестовые задачи и типы, восстановить компактный граф. Не снимать внутренние fences вручную.
 
@@ -370,6 +388,8 @@
 4. Только на U выполнить контролируемые неправильные login до LOCKED. Уже активный access при временном LOCKED работает по политике; новый login/refresh запрещены. `POST /api/v1/admin/users/{U}/reset-lockout` с reason: 200, корректный пароль снова работает; BLOCKED не превращается этим в ACTIVE.
 5. Пустой reason, неизвестный userId, невалидный UUID, неразрешённая self/last-admin операция — предусмотренный 400/404/409; MEMBER/VIEWER/PAT — 403. Проверять отсутствие незапланированных изменений.
 
+6. В `PATCH /api/v1/admin/users/{I}` имя из одних U+200B/U+FEFF/U+2060 либо их смеси с пробелами — 400 INVALID_ARGUMENT / DISPLAY_NAME_INVALID; UUID/status/исходное имя и credentials неизменны. Допустимое видимое имя обновляется штатно; после проверки вернуть исходное.
+
 **Очистка:** восстановить исходные имена/status выделенных фикстур; не менять credentials других пользователей.
 
 ## E2E-27. Data, аудит и outbox
@@ -412,6 +432,21 @@
 | Изменить чужой worklog/удалить чужое вложение | Да | Нет | Нет | Нет | По x-pat-scope + ACL |
 | Admin/Data/invite | Только с GLOBAL_ADMIN | Нет | Нет | G имеет глобальные права только здесь | Нет, session required |
 
+## E2E-29. Подключённые OAuth-приложения
+
+**Условия:** собственные активные JWT-сессии A и O, личные PAT и делегированный MCP token; настроенная изолированная связка gateway→auth-service→oauth-server с собственным PostgreSQL и зарегистрированными разрешёнными клиентами C1/C2. Для полноценного внешнего подключения нужны реальные клиент и аккаунт; локальный OAuth-клиент/stub подтверждает внутренний протокол, не приёмку Google/GitHub/Apple/Claude/ChatGPT. Настройки OAuth и отказные HTTP-ответы менять только в своей копии стека.
+
+1. Под JWT A `GET /api/v1/users/me/connected-apps`: 200, available=true, items=[] при отсутствии активных grants. Создать у A два активных grant одного C1 (сначала read, затем read/write/offline_access), у O — собственный grant C1; grant C2 создать только у O. Повтор GET A возвращает **одну строку C1**, без C2/данных O. appId — UUID зарегистрированного клиента, name/host/metadataUrl соответствуют C1; для CIMD metadataUrl равен client_id, для DCR null.
+2. Scopes — объединение scopes активных grants C1 без повторов, отсортировано; незнакомый scope на контролируемой fixture передаётся как есть. connectedAt — минимум authorization_code_issued_at, lastUsedAt — максимум access_token_issued_at, expiresAt — максимум сроков access/refresh среди активных grants. Проверить refresh с обновлением lastUsedAt и точность времени UTC; сортировка строк connectedAt desc, appId desc при равенстве. Просроченные/отозванные grants не дают строки и не добавляют scopes; оставшийся активный refresh сохраняет строку при истёкшем access.
+3. Без Bearer/с отозванным токеном GET/DELETE получают 401. Под read/write PAT (включая GLOBAL_ADMIN PAT) и делегированным MCP на `GET /api/v1/users/me/connected-apps` и `DELETE /api/v1/users/me/connected-apps/{appId}` — 403 PERMISSION_DENIED / SESSION_REQUIRED, без обращения к управлению grants. В изолированной прямой gRPC-проверке подмена user_id при настоящем JWT A также запрещена, никакой чужой owner не достигает oauth-server.
+4. Под JWT A `DELETE /api/v1/users/me/connected-apps/{C1_APP_ID}`: 204 без тела, отозваны **все** grants C1 у A и удалено согласие. Следующий MCP-запрос каждого ранее выпущенного token A/C1 — 401; refresh прежних семейств не выпускает новые токены; ранее выданная delegation также не проходит онлайн-проверку родителя. GET A больше не содержит C1. Grants C1/C2 пользователя O продолжают работать, его список не изменён.
+5. Повтор DELETE C1, случайный неизвестный UUID и C2, подключённый только O: 204, без изменений O и без различий, раскрывающих чужое подключение. При последующей новой авторизации C1 пользователю A снова требуется согласие; это новое подключение независимо от отозванных token families.
+6. При отключённом OAuth `GET /api/v1/users/me/connected-apps` — 200 с available=false и items=[]; DELETE — 204 без вызова выключенного сервера. Это проверка режима выключенной интеграции, не успешного отзыва активного подключения.
+7. При включённом OAuth и недоступном oauth-server, timeout либо upstream 4xx/5xx GET/DELETE — 503 UNAVAILABLE с X-Request-Id, не пустой успешный список/ложный 204. В отдельной HTTP fixture вернуть upstream 302/307 на DELETE: gateway также отвечает 503, redirect не выполняется, Authorization не передаётся на Location, исходные grants остаются пригодными. Восстановить маршрут и подтвердить настоящий DELETE 204 с фактическим отзывом из шага 4.
+8. GET и DELETE не кэшируются; ответы и логи не содержат access/refresh/delegation token, Basic credential или metadata с секретом. Публичный контракт содержит обе операции, session-only policy и ошибки 403/503.
+
+**Очистка:** отозвать только созданные RUN подключения A/O, PAT и клиентские сессии, убрать собственную изолированную fixture. Не менять общие registered clients, секреты, чужие grants или deployment.
+
 ## Как фиксировать расхождение
 
 Результаты прогонов и доказательства хранить вне репозитория. В Jira для подтверждённого бага указывать: BASE/версию deployment и время, ID сценария, предусловия/роли, минимальные запросы с безопасными placeholders, фактический HTTP/domain code и поля, ожидаемое поведение со ссылкой на контракт/требование, requestId и влияние. Секреты и чужие данные удалить из доказательств. Проверять отсутствие дубля и связывать баг с TAS-439. Недоступная почта/бот/провайдер или неготовая фикстура — ограничение проверки, а не автоматически баг продукта.
@@ -424,6 +459,8 @@
 | --- | --- | --- | --- |
 | `POST /api/v1/auth/signup` | `signup` | E2E-04 | 202 |
 | `GET /api/v1/auth/methods` | `getAuthMethods` | E2E-01 | 200 |
+| `GET /api/v1/users/me/connected-apps` | `listConnectedApps` | E2E-29 | 200 |
+| `DELETE /api/v1/users/me/connected-apps/{appId}` | `revokeConnectedApp` | E2E-29 | 204 |
 | `POST /api/v1/users/me/access-tokens` | `createPersonalAccessToken` | E2E-06 | 201 |
 | `GET /api/v1/users/me/access-tokens` | `listPersonalAccessTokens` | E2E-06 | 200 |
 | `DELETE /api/v1/users/me/access-tokens/{tokenId}` | `revokePersonalAccessToken` | E2E-06 | 204 |

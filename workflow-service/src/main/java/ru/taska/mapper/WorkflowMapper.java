@@ -35,9 +35,11 @@ public class WorkflowMapper {
     }
 
     public ListProjectWorkflowsResponse toListProjectWorkflowsProto(List<ProjectWorkflowAggregate> workflows) {
-        return ListProjectWorkflowsResponse.newBuilder()
-                .addAllWorkflows(workflows.stream().map(this::toProjectWorkflowProto).toList())
-                .build();
+        var response=ListProjectWorkflowsResponse.newBuilder()
+                .addAllWorkflows(workflows.stream().map(this::toProjectWorkflowProto).toList());
+        workflows.stream().filter(ProjectWorkflowAggregate::main).findFirst()
+                .ifPresent(main -> response.setMainWorkflowId(main.workflow().workflow().getId().toString()));
+        return response.build();
     }
 
     public WorkflowAggregate fromWorkflowProto(WorkflowResponse response, java.util.UUID project) {

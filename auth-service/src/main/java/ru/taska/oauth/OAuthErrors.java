@@ -25,6 +25,10 @@ public final class OAuthErrors {
             default -> "The authentication provider is unavailable";
         }, Map.of("reason", reason));
     }
+    public static DomainException locked(java.time.Instant until) {
+        return new DomainException(DomainStatus.PERMISSION_DENIED, "Account is temporarily locked",
+                Map.of("reason", "ACCOUNT_LOCKED", "lockedUntil", until.toString()));
+    }
     public static String reason(Throwable error) {
         if (error instanceof DomainException domain && domain.getDetails().get("reason") != null && REASONS.contains(domain.getDetails().get("reason"))) return domain.getDetails().get("reason");
         return "PROVIDER_UNAVAILABLE";

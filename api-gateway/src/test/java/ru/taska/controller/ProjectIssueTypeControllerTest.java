@@ -105,7 +105,7 @@ class ProjectIssueTypeControllerTest {
     @Test
     void typeWithoutIconIsServedWithExplicitNullIconAndItsShape() {
         authenticated();
-        when(client.list(any(), any())).thenReturn(Mono.just(new ListProjectIssueTypesDto(List.of(new ProjectIssueTypeDto(
+        when(client.list(any(), any())).thenReturn(Mono.just(new ListProjectIssueTypesDto(List.of(new ProjectIssueTypeDto(UUID.randomUUID(),
                 "BUG", "Bug", ProjectIssueTypeColorDto.RED, ProjectIssueTypeShapeDto.CIRCLE, null, 20)))));
         http.get().uri(url()).header(HttpHeaders.AUTHORIZATION, "Bearer token").exchange()
                 .expectStatus().isOk().expectBody()
@@ -303,7 +303,7 @@ class ProjectIssueTypeControllerTest {
     }
 
     private ProjectIssueTypeDto type() {
-        return new ProjectIssueTypeDto("REQUEST", "Заявка", ProjectIssueTypeColorDto.TEAL,
+        return new ProjectIssueTypeDto(UUID.randomUUID(), "REQUEST", "Заявка", ProjectIssueTypeColorDto.TEAL,
                 ProjectIssueTypeShapeDto.SQUARE, ProjectIssueTypeIconDto.HEADSET, 40).generation(generation);
     }
 

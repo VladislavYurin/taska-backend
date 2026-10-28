@@ -218,7 +218,7 @@ class WorkflowBindingMigrationIT extends AbstractIT {
         rejected(migration.release(project,operation),DomainStatus.FAILED_PRECONDITION,null);
         when(projects.checkProjectRole(any(),any(),any(),any())).thenReturn(Mono.just(CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true).setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(false).build()));
         journal.set(journal.get().toBuilder().setState("COMPLETED").build());journalPending=false;registry.set(types(false));resolved.set(workflow(targetWorkflow,2));
-        rejected(create("TODO"),DomainStatus.FAILED_PRECONDITION,"WORKFLOW_BINDINGS_PENDING");
+        rejected(create("TODO"),DomainStatus.ABORTED,"WORKFLOW_BINDINGS_PENDING");
         migration.release(project,operation).block(TIMEOUT);
         assertThat(create("TODO").block(TIMEOUT).getIssueType()).isEqualTo(IssueType.TASK);
         assertThat(count("issue_history","issue_id",row.getId())).isEqualTo(1);

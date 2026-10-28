@@ -67,7 +67,7 @@ class OAuthIpLimiterIntegrationTest extends AbstractIT {
             .setClientIp(ip)
             .build();
     assertThat(grpc.completeOAuth(Mono.just(callback)).block(WAIT).getRedirectUrl())
-        .endsWith("error=PROVIDER_UNAVAILABLE");
+        .endsWith("error=PROVIDER_UNAVAILABLE&requestId=" + header.getRequestId());
     var exchange =
         ExchangeOAuthRequest.newBuilder()
             .setHeader(header)
