@@ -120,7 +120,7 @@ class IssueTypeDeletionIT extends AbstractIT {
         assertThat(retry.id()).isEqualTo(item.id());
         assertThat(retry.requestId()).isEqualTo(original.getRequestId());
         assertThat(retry.attribution()).isEqualTo(new ActionMetadata(ActionChannel.MCP,token));
-        rejected(() -> begin("TASK","STORY",Map.of(),generation),DomainStatus.UNAVAILABLE,"ISSUE_TYPE_DELETION_PENDING");
+        rejected(() -> begin("TASK","STORY",Map.of(),generation),DomainStatus.ABORTED,"ISSUE_TYPE_OPERATION_PENDING");
         UUID member=UUID.randomUUID();member(member,"MEMBER");
         assertThatThrownBy(() -> transactions.begin(project,member,"TASK","BUG",mapping,null,"member","n",ActionMetadata.NONE).block(TIMEOUT))
                 .isInstanceOfSatisfying(DomainException.class,error->{
@@ -132,6 +132,18 @@ class IssueTypeDeletionIT extends AbstractIT {
         assertThat(observedHeaders.get(item.id())).isEqualTo(original);
         assertThat(appliedEffects()).isEqualTo(1);
         assertThat(journalCount()).isEqualTo(1);
+    }
+
+    @Test
+    void bodylessCompletedRetryIsScopedToTheOriginalActorAndRequest() {
+        delete("TASK",null,Map.of(),null);
+        long effects=appliedEffects();
+        delete("TASK",null,Map.of(),null);
+        assertThat(appliedEffects()).isEqualTo(effects);
+        assertThat(journalCount()).isEqualTo(1);
+        rejected(() -> transactions.begin(project,actor,"TASK",null,Map.of(),null,"fresh-request","n",ActionMetadata.NONE).block(TIMEOUT),DomainStatus.NOT_FOUND,null);
+        UUID other=UUID.randomUUID();member(other,"ADMIN");
+        rejected(() -> transactions.begin(project,other,"TASK",null,Map.of(),null,original.getRequestId(),"n",ActionMetadata.NONE).block(TIMEOUT),DomainStatus.NOT_FOUND,null);
     }
 
     @ParameterizedTest
@@ -305,8 +317,8 @@ class IssueTypeDeletionIT extends AbstractIT {
         assertThat(outcomes.values().stream().filter(result -> result.isOnError()).count()).isEqualTo(1);
         var failure=outcomes.entrySet().stream().filter(entry -> entry.getValue().isOnError()).findFirst().orElseThrow();
         assertThat(failure.getValue().getThrowable()).isInstanceOfSatisfying(DomainException.class,error -> {
-            if(error.getStatus()==DomainStatus.UNAVAILABLE)
-                assertThat(error.getDetails()).containsEntry("reason","ISSUE_TYPE_DELETION_PENDING");
+            if(error.getStatus()==DomainStatus.ABORTED)
+                assertThat(error.getDetails()).containsEntry("reason","ISSUE_TYPE_OPERATION_PENDING");
             else {
                 assertThat(error.getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
                 assertThat(error.getDetails()).containsEntry("reason","LAST_ISSUE_TYPE");

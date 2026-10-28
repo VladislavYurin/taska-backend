@@ -78,8 +78,8 @@ class GrpcProjectIssueTypeDeletionClientTest {
   }
 
   @Test
-  void bodylessAndEmptyBodyDeletionRetainLegacyRpcAndConfiguredDeadline() {
-    legacyDeadline();
+  void bodylessAndEmptyBodyDeletionUseSameLongDeadlineAsMigration() {
+    when(stub.withDeadlineAfter(120, TimeUnit.SECONDS)).thenReturn(stub);
     when(stub.deleteProjectIssueType(any(ChangeProjectIssueTypeRequest.class)))
         .thenReturn(Mono.just(Empty.getDefaultInstance()));
 
@@ -94,7 +94,8 @@ class GrpcProjectIssueTypeDeletionClientTest {
       assertThat(sent.getStatusMappingsMap()).isEmpty();
       assertThat(sent.getCode()).isEqualTo("REQUEST");
     }
-    verify(stub, times(2)).withDeadlineAfter(3000, TimeUnit.MILLISECONDS);
+    verify(stub, times(2)).withDeadlineAfter(120, TimeUnit.SECONDS);
+    verifyNoInteractions(properties, projectProperties);
   }
 
   @Test

@@ -39,7 +39,7 @@ public class WorkflowBindingPendingGuard {
                 });
     }
     public static DomainException pending() {
-        return new DomainException(DomainStatus.FAILED_PRECONDITION,"Workflow bindings are being changed",
+        return new DomainException(DomainStatus.ABORTED,"Workflow bindings are being changed",
                 Map.of("reason","WORKFLOW_BINDINGS_PENDING"));
     }
 }

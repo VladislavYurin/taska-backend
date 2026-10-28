@@ -38,9 +38,11 @@ public class IssueTypeCreationTransactions {
                     new DomainException(DomainStatus.ALREADY_EXISTS,"X-Request-Id was used with another command",Map.of("reason","REQUEST_ID_REUSED"))))
                     .switchIfEmpty(Mono.defer(()->operations.requireFree(project)
                             .then(types.find(project,code)).flatMap(existing->Mono.<IssueTypeCreation>error(new DomainException(DomainStatus.ALREADY_EXISTS,"Issue type already exists")))
-                            .switchIfEmpty(types.list(project).next().switchIfEmpty(Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,"Project has no default issue type")))
+                            .switchIfEmpty(types.list(project).next().map(java.util.Optional::of).defaultIfEmpty(java.util.Optional.empty())
                                     .flatMap(first->{
-                                        var item=new IssueTypeCreation(UUID.randomUUID(),project,actor,request,node,hash,type,workflow,first.code(),first.generation(),null,"PENDING",attribution,null,null,Map.of());
+                                        if (workflow==null && first.isEmpty()) return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
+                                                "Choose a workflow for the first project issue type",Map.of("reason","ISSUE_TYPE_WORKFLOW_REQUIRED")));
+                                        var item=new IssueTypeCreation(UUID.randomUUID(),project,actor,request,node,hash,type,workflow,first.map(ProjectIssueType::code).orElse(null),first.map(ProjectIssueType::generation).orElse(null),null,"PENDING",attribution,null,null,Map.of());
                                         return operations.reserve(project,item.id(),"CREATE_TYPE").then(journal.insert(item));
                                     }))));
         });

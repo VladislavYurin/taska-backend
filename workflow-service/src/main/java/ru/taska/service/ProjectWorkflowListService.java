@@ -63,6 +63,10 @@ public class ProjectWorkflowListService {
                                                 .computeIfAbsent(workflowId, id -> new ArrayList<>())
                                                 .add(issueType));
                             }
+                            findBoundWorkflow(bindings, activeWorkflows, defaultProjectId, IssueType.TASK)
+                                    .ifPresent(id -> issueTypesByWorkflow.putIfAbsent(id,new ArrayList<>()));
+                            UUID mainWorkflow=allowedTypes.isEmpty()?null:findBoundWorkflow(bindings,activeWorkflows,projectId,IssueType.valueOf(allowedTypes.getFirst().getCode()))
+                                    .or(() -> findBoundWorkflow(bindings,activeWorkflows,defaultProjectId,IssueType.TASK)).orElse(null);
                             activeWorkflows.values().stream().filter(w -> projectId.equals(w.getOwnerProjectId()))
                                     .sorted(java.util.Comparator.comparing(w -> w.getId().toString()))
                                     .forEach(w -> issueTypesByWorkflow.putIfAbsent(w.getId(),new ArrayList<>()));
@@ -71,7 +75,8 @@ public class ProjectWorkflowListService {
                                             .map(aggregate -> new ProjectWorkflowAggregate(
                                                     aggregate,
                                                     entry.getValue(),
-                                                    isBoundTo(bindings, entry.getKey(), defaultProjectId))))
+                                                    isBoundTo(bindings, entry.getKey(), defaultProjectId),
+                                                    entry.getKey().equals(mainWorkflow))))
                                     .collectList();
                         })));
     }

@@ -88,7 +88,7 @@ public class GrpcProjectIssueTypeClient {
         }
         if (body != null && body.getExpectedGeneration() != null)
             request.setExpectedGeneration(body.getExpectedGeneration().toString());
-        if (!moving) return dynamicStub().deleteProjectIssueType(request.build()).then();
+        if (!moving) return stub.withDeadlineAfter(120, TimeUnit.SECONDS).deleteProjectIssueType(request.build()).then();
         return stub.withDeadlineAfter(120, TimeUnit.SECONDS)
                 .deleteProjectIssueTypeWithMigration(request.build())
                 .flatMap(result -> {
@@ -108,7 +108,7 @@ public class GrpcProjectIssueTypeClient {
 
     public static ProjectIssueTypeDto toRest(ProjectIssueTypeResponse type) {
         String icon = ProjectIssueTypes.icon(type);
-        var result = new ProjectIssueTypeDto(type.getCode(), type.getName(),
+        var result = new ProjectIssueTypeDto(type.getGeneration().isBlank() ? null : UUID.fromString(type.getGeneration()), type.getCode(), type.getName(),
                 ProjectIssueTypeColorDto.fromValue(type.getColor()),
                 ProjectIssueTypeShapeDto.fromValue(ProjectIssueTypes.shape(type)),
                 icon == null ? null : ProjectIssueTypeIconDto.fromValue(icon), type.getSortOrder());

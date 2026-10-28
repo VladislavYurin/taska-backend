@@ -44,7 +44,7 @@ public class IssueTypeWriteGuard {
               "Issue type "+type+" is not defined in this project"));
           var current=found.get();
           if(!current.getPendingOperationId().isBlank())return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION,
-              "Issue type deletion is pending",Map.of("reason","ISSUE_TYPE_DELETION_PENDING")));
+              "Issue type operation is pending",Map.of("reason","ISSUE_TYPE_DELETION_PENDING")));
           UUID generation;
           try {generation=UUID.fromString(current.getGeneration());}
           catch(IllegalArgumentException unsupported){return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,

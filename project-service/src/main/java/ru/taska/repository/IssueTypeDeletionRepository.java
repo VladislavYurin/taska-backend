@@ -38,6 +38,10 @@ public class IssueTypeDeletionRepository {
     if(expected!=null)spec=spec.bind("expected",expected);
     return spec.map((row,metadata)->read(row)).one();
   }
+  public Mono<IssueTypeDeletion> completedRequest(UUID project,UUID actor,String source,String request) {
+    return db.sql(SELECT+"WHERE project_id=:project AND actor_user_id=:actor AND source_code=:source AND request_id=:request AND target_code IS NULL AND state='COMPLETED' ORDER BY created_at DESC,id DESC LIMIT 1")
+        .bind("project",project).bind("actor",actor).bind("source",source).bind("request",request).map((row,metadata)->read(row)).one();
+  }
   public Mono<Boolean> hasOlderLifecycle(UUID project,String source,UUID generation) {
     return db.sql("SELECT EXISTS(SELECT 1 FROM taska.issue_type_deletions WHERE project_id=:project AND source_code=:source AND source_generation<>:generation AND state='COMPLETED') AS reused")
         .bind("project",project).bind("source",source).bind("generation",generation)

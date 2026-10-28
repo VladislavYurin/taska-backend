@@ -1198,6 +1198,7 @@ paths:
     get:
       x-pat-scope: read
       summary: Контекст проекта — проект, участники, метки, все workflows
+      description: При публикации нового набора типов или workflow возвращает 409 ABORTED с details.reason ISSUE_TYPE_OPERATION_PENDING; повторите чтение после завершения операции.
       operationId: getProjectContext
       tags:
         - project
@@ -1259,9 +1260,13 @@ paths:
       description: >-
         Создаёт тип и привязку одной восстанавливаемой операцией. workflowId указывает свой workflow
         этого проекта или общий default. Без workflowId выбирается workflow первого типа реестра
-        (основной workflow проекта). При отказе тип не появляется в реестре.
+        (основной workflow проекта). Для пустого реестра обязателен workflowId; иначе 400 FAILED_PRECONDITION
+        с reason ISSUE_TYPE_WORKFLOW_REQUIRED. Чужой workflow — 400 WORKFLOW_NOT_IN_PROJECT.
+        Изменившееся поколение реестра — 409 ABORTED с reason ISSUE_TYPES_CHANGED; перечитайте реестр.
+        При отказе тип не появляется в реестре.
         Для безопасного повтора передайте тот же X-Request-Id и ту же команду; другой payload с тем же
-        ключом — 409. При 503 ISSUE_TYPE_CREATION_PENDING повторяйте с исходным X-Request-Id.
+        ключом — 409 с reason REQUEST_ID_REUSED. Другая операция с типами — 409 ABORTED
+        с reason ISSUE_TYPE_OPERATION_PENDING. При 503 ISSUE_TYPE_CREATION_PENDING повторяйте с исходным X-Request-Id.
       tags: [project-issue-type]
       security:
         - bearerAuth: []
@@ -1377,11 +1382,16 @@ paths:
         moveIssuesTo переносит все живые задачи в другой тип того же проекта, затем удаляет исходный тип.
         Если статус задачи отсутствует в workflow целевого типа, передайте statusMappings;
         иначе 400 FAILED_PRECONDITION с reason ISSUE_STATUSES_UNMAPPED, statusKeys и targetStatusKeys
-        (списки ключей через запятую). Предел переноса — 5000 задач; превышение даёт 400
+        (списки ключей через запятую; targetStatusKeys — порядок колонок целевого workflow).
+        Некорректное сопоставление — 400 ISSUE_TYPE_STATUS_MAPPING_INVALID; изменившийся реестр —
+        409 ABORTED с reason ISSUE_TYPES_CHANGED. Предел переноса — 5000 задач; превышение даёт 400
         FAILED_PRECONDITION с reason WORKFLOW_MIGRATION_LIMIT. Каждая задача получает одно событие UPDATED.
         expectedGeneration берётся из generation исходного типа. Для повторно созданного кода
         перенос без него даёт 409 ABORTED с reason ISSUE_TYPE_GENERATION_REQUIRED;
         устаревшее поколение — 409 ABORTED с reason ISSUE_TYPE_CHANGED.
+        Конфликт с другой незавершённой командой — 409 ABORTED с reason ISSUE_TYPE_OPERATION_PENDING;
+        чужой operationId не возвращается. Завершённый DELETE без тела повторяется с тем же X-Request-Id
+        и тем же пользователем как 204; неизвестный код с другим ключом — 404.
         При незавершённом переносе возвращается 503 UNAVAILABLE с reason ISSUE_TYPE_DELETION_PENDING
         и operationId. Повторите ту же команду с тем же expectedGeneration; подтверждённые изменения
         и уведомления повторно не создаются. Доступ к проекту проверяется перед выдачей деталей операции.
@@ -3116,7 +3126,10 @@ paths:
         Возвращает свои workflow проекта, включая сохранённые workflow-доноры без типов, один раз:
         с привязанными типами ([] у пустого донора), всеми статусами и переходами, включая скрытые (hidden = true).
         Тип задачи без своего workflow проекта работает по общему default workflow (shared = true).
+        Общий default всегда включён, даже если issueTypes пуст. mainWorkflowId указывает workflow
+        первого типа текущего реестра и равен null при пустом реестре.
         Default workflow не меняется: чтобы завести свои статусы и переходы, создайте workflow проекта.
+        Пока операция с типами не опубликована — 409 ABORTED с details.reason ISSUE_TYPE_OPERATION_PENDING.
         Доступно любому участнику проекта.
       operationId: listProjectWorkflows
       tags:
@@ -3159,12 +3172,16 @@ paths:
         для повторного использования или удаления. Требуется роль ADMIN проекта.
         Если статусы переносимых задач отсутствуют в новом workflow, возвращает 400 FAILED_PRECONDITION
         с reason WORKFLOW_ISSUES_UNMAPPED и details.issueCount/statusKeys/targetStatusKeys; повторите со
-        statusMappings. Превышение 5000 задач для миграции — WORKFLOW_MIGRATION_LIMIT без изменений.
+        statusMappings. targetStatusKeys — алфавитно упорядоченное пересечение допустимых статусов
+        всех целевых workflow; ключи разделены запятыми. Некорректное сопоставление — 400
+        WORKFLOW_STATUS_MAPPING_INVALID. Пустой issueTypes — 400 WORKFLOW_ISSUE_TYPES_EMPTY.
+        Изменившийся реестр — 409 ABORTED с reason ISSUE_TYPES_CHANGED; другая операция с типами —
+        409 ABORTED с reason ISSUE_TYPE_OPERATION_PENDING. Превышение 5000 задач для миграции — WORKFLOW_MIGRATION_LIMIT без изменений.
         Если внутренний план превышает транспортный предел, возвращается 400 WORKFLOW_BINDING_PLAN_TOO_LARGE;
         разбейте перенос на несколько операций. Это отдельный предел от ограничения числа задач.
         Тело ограничено 1 МиБ (превышение — 413). Операция восстанавливается после сбоев: при 503
         WORKFLOW_BINDING_CHANGE_PENDING повторите ту же команду с исходным X-Request-Id; тот же ключ с другим
-        содержимым — 409. Успешный повтор не создаёт второй workflow или повторные события задач.
+        содержимым — 409 с reason REQUEST_ID_REUSED. Успешный повтор не создаёт второй workflow или повторные события задач.
       operationId: createProjectWorkflow
       tags:
         - workflow
@@ -4494,6 +4511,10 @@ paths:
         При issueTypes обязателен version; конфликт версии — 409. Без issueTypes прежний name-only PATCH
         сохраняет необязательный version. Для отсутствующих в целевом workflow статусов задач нужны
         statusMappings; иначе WORKFLOW_ISSUES_UNMAPPED с issueCount/statusKeys/targetStatusKeys.
+        targetStatusKeys — алфавитно упорядоченное пересечение статусов целевых workflow.
+        Некорректное сопоставление — 400 WORKFLOW_STATUS_MAPPING_INVALID. Реестр изменился —
+        409 ABORTED с reason ISSUE_TYPES_CHANGED. Другая операция — 409 ISSUE_TYPE_OPERATION_PENDING.
+        X-Request-Id с другой командой — 409 REQUEST_ID_REUSED.
         Предел миграции — 5000 (WORKFLOW_MIGRATION_LIMIT); тело до 1 МиБ, превышение — 413.
         Если внутренний план превышает транспортный предел — 400 WORKFLOW_BINDING_PLAN_TOO_LARGE;
         разбейте перенос на несколько операций.
@@ -6559,12 +6580,11 @@ components:
     ProjectIssueTypeDto:
       type: object
       description: Тип задачи из реестра проекта. Облик — цвет, форма и необязательный значок.
-      required: [code, name, color, shape, icon, sortOrder]
+      required: [code, name, color, shape, icon, sortOrder, generation]
       properties:
         generation:
           type: string
           format: uuid
-          nullable: true
           readOnly: true
           description: Поколение типа; меняется после удаления и повторного создания кода. Передайте его в expectedGeneration при удалении с переносом.
         code:
@@ -6739,6 +6759,16 @@ components:
             участников, задач, меток и workflow. reason=LAST_ADMIN означает отказ удалить или
             понизить последнего ADMIN через DELETE/PATCH /projects/{projectId}/members/{userId}.
             Обе причины возвращаются с FAILED_PRECONDITION (HTTP 400).
+            ISSUE_TYPES_CHANGED — ABORTED (409), перечитайте реестр; ISSUE_TYPE_OPERATION_PENDING —
+            ABORTED (409), дождитесь завершения другой операции типов; применяется также к чтениям
+            GET /projects/{projectId}/workflows и /context. REQUEST_ID_REUSED — ALREADY_EXISTS (409),
+            исходный X-Request-Id уже принадлежит другой команде создания типа или изменения workflow.
+            WORKFLOW_BINDINGS_PENDING — ABORTED (409), запись задачи ждёт публикации workflow.
+            ISSUE_TYPE_DELETION_PENDING на создании/изменении задачи — FAILED_PRECONDITION (400),
+            тип ограждён операцией; ISSUE_TYPE_CHANGED — ABORTED (409), поколение типа изменилось.
+            WORKFLOW_STATUS_MAPPING_INVALID и ISSUE_TYPE_STATUS_MAPPING_INVALID — INVALID_ARGUMENT (400),
+            неверное сопоставление статусов; WORKFLOW_NOT_IN_PROJECT — INVALID_ARGUMENT (400),
+            выбранный workflow не принадлежит проекту и не является общим default.
           example:
             lockedUntil: '2026-09-22T11:55:50.398486Z'
 
@@ -7177,6 +7207,11 @@ components:
       type: object
       required: [ items ]
       properties:
+        mainWorkflowId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Workflow первого типа реестра проекта; null, если реестр пуст. Общий default включён в items всегда.
         items:
           type: array
           items:

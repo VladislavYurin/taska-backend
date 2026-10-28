@@ -31,10 +31,11 @@ public class IssueTypeDeletionTransactions {
       validate(source,target,mapping,expected);
       return authorize(project,actor).then(journal.pending(project))
           .flatMap(pending->pending.source().equals(source)&&pending.matches(target,mapping,expected)
-              ? Mono.just(pending):Mono.error(pendingError(pending.id())))
+              ? Mono.just(pending):Mono.error(new DomainException(DomainStatus.ABORTED,"Another project issue-type operation is pending",
+                  Map.of("reason","ISSUE_TYPE_OPERATION_PENDING"))))
           .switchIfEmpty(Mono.defer(()->types.find(project,source)
               .flatMap(current->beginNew(project,actor,current,target,mapping,expected,request,node,attribution))
-              .switchIfEmpty(Mono.defer(()->target==null?missing():journal.completed(project,source,target,mapping,expected)
+              .switchIfEmpty(Mono.defer(()->target==null?journal.completedRequest(project,actor,source,request).switchIfEmpty(missing()):journal.completed(project,source,target,mapping,expected)
                   .switchIfEmpty(missing())))));
     });
   }
