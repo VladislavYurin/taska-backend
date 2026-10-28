@@ -108,6 +108,23 @@ class SocialLoginControllerTest {
     verify(identity, never()).claim(any(), any());
   }
 
+  @Test void authenticatedStartClearsStalePendingRequestWithoutReplacingPrincipal() throws Exception {
+    var actor = org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated("existing-owner", null, List.of());
+    request.setUserPrincipal(actor); request.getSession().setAttribute(SocialLoginController.NONCE, "N".repeat(43));
+    controller.start("google", request, response);
+    verify(requests).removeRequest(request, response);
+    verifyNoInteractions(identity);
+    assertThat(request.getUserPrincipal()).isSameAs(actor);
+    assertThat(request.getSession().getAttribute(SocialLoginController.NONCE)).isNull();
+  }
+
+  @Test void unknownProviderErrorIsNotReflectedAndDoesNotClaimGrant() throws Exception {
+    controller.start("google", request, new MockHttpServletResponse());
+    controller.callback(null, "untrusted-secret-shaped-value", request, response);
+    assertThat(response.getRedirectedUrl()).contains("error=PROVIDER_UNAVAILABLE").doesNotContain("untrusted-secret-shaped-value");
+    verify(identity, never()).claim(any(), any());
+  }
+
   @Test void directStartAndUnknownProvidersFailWithoutLeavingNonce() throws Exception {
     controller.start("https://attacker.example", request, response);
     assertThat(response.getRedirectedUrl()).contains("error=PROVIDER_UNAVAILABLE");

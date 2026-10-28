@@ -22,6 +22,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Controller
 public class SocialLoginController {
   static final String NONCE = SocialLoginController.class.getName() + ".nonce";
+  private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(SocialLoginController.class);
   private static final SecureRandom RANDOM = new SecureRandom();
   private static final Set<String> ERRORS = Set.of("STATE_INVALID", "SIGNUP_REQUIRED", "ACCOUNT_BLOCKED", "ACCOUNT_LOCKED",
       "EMAIL_NOT_VERIFIED", "PROVIDER_UNAVAILABLE", "PROVIDER_CANCELLED", "RATE_LIMITED");
@@ -43,7 +44,8 @@ public class SocialLoginController {
 
   @GetMapping("/login/provider/{provider}")
   void start(@PathVariable String provider, HttpServletRequest request, HttpServletResponse response) throws IOException {
-    if (requests.getRequest(request, response) == null || authenticated(request)) {
+    if (rejectAuthenticated(request, response)) return;
+    if (requests.getRequest(request, response) == null) {
       failure(response, "STATE_INVALID"); return;
     }
     String selected = provider.toUpperCase(Locale.ROOT);
@@ -67,14 +69,19 @@ public class SocialLoginController {
   void callback(@RequestParam(required = false) String code, @RequestParam(required = false) String error,
       HttpServletRequest request, HttpServletResponse response) throws Exception {
     var session = request.getSession(false);
-    if (authenticated(request)) { failure(response, "STATE_INVALID"); return; }
+    if (rejectAuthenticated(request, response)) return;
     String nonce = null;
     if (session != null) synchronized (session) {
       nonce = session.getAttribute(NONCE) instanceof String value ? value : null;
       session.removeAttribute(NONCE);
     }
     if (nonce == null || requests.getRequest(request, response) == null) { failure(response, "STATE_INVALID"); return; }
-    if (error != null) { failure(response, ERRORS.contains(error) ? error : "PROVIDER_UNAVAILABLE"); return; }
+    if (error != null) {
+      String reason = "SIGNUP_DISABLED".equals(error) ? "SIGNUP_REQUIRED" : ERRORS.contains(error) ? error : "PROVIDER_UNAVAILABLE";
+      // Callback query text is untrusted and may contain credentials; log only the bounded category.
+      LOG.info("Social callback refused: reason={}, request_id={}", ERRORS.contains(error) ? error : "UNRECOGNIZED_PROVIDER_ERROR", OAuthRequestCorrelation.current());
+      failure(response, reason); return;
+    }
     if (code == null || !code.matches("[A-Za-z0-9_-]{43}")) { failure(response, "STATE_INVALID"); return; }
     try {
       var user = identity.claim(code, nonce);
@@ -89,7 +96,12 @@ public class SocialLoginController {
     } catch (SocialIdentityClient.Failure failure) { failure(response, failure.reason); }
   }
 
-  private boolean authenticated(HttpServletRequest request) { return request.getUserPrincipal() != null; }
+  private boolean rejectAuthenticated(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    if (request.getUserPrincipal() == null) return false;
+    requests.removeRequest(request, response);
+    if (request.getSession(false) != null) request.getSession(false).removeAttribute(NONCE);
+    failure(response, "STATE_INVALID"); return true;
+  }
 
   private void failure(HttpServletResponse response, String reason) throws IOException {
     response.sendRedirect(UriComponentsBuilder.fromUriString(policy.issuer() + "/login")

@@ -173,7 +173,7 @@
       refusal.append("Create an account in ");
       const taska = document.createElement("a");
       taska.className = "auth-link";
-      taska.href = "https://taska.ozero.dev";
+      taska.id = "signup-taska-link";
       taska.textContent = "Taska";
       refusal.append(taska, ", then return to the app and start connecting again.");
       focus = email;
@@ -257,6 +257,14 @@
     }
     csrf.name = name;
     csrf.value = token;
+    const signupLink = document.getElementById("signup-taska-link");
+    if (signupLink && typeof context.taska_url === "string") {
+      try {
+        const destination = new URL(context.taska_url);
+        if (destination.protocol === "https:" && !destination.username && !destination.password && !destination.search && !destination.hash)
+          signupLink.href = destination.href;
+      } catch { /* Invalid public configuration leaves the account-creation text unlinked. */ }
+    }
     const names = { GOOGLE: "Google", GITHUB: "GitHub", APPLE: "Apple" };
     for (const provider of new Set(Array.isArray(context.providers) ? context.providers : [])) {
       if (!Object.hasOwn(names, provider)) continue;

@@ -50,6 +50,7 @@ public class SocialIdentityClient {
       return subject;
     } catch (StatusRuntimeException failure) {
       String reason = GrpcErrorDetails.decode(failure.getTrailers()).get("reason");
+      if ("SIGNUP_DISABLED".equals(reason)) reason = "SIGNUP_REQUIRED";
       throw new Failure(REASONS.contains(reason == null ? "" : reason) ? reason : "SERVICE_UNAVAILABLE");
     }
   }
