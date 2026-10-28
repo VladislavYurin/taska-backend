@@ -87,6 +87,17 @@ class OAuthControllerTest {
                 .expectHeader().valueEquals("X-Request-Id", "trace&private=x")
                 .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody().isEmpty();
     }
+    @Test void unavailableBackendWithoutIncomingRequestIdGetsGeneratedCorrelation() {
+        when(oauth.start(eq("google"), any(), any(), any())).thenReturn(Mono.error(io.grpc.Status.UNAVAILABLE.asRuntimeException()));
+        var result = http.get().uri("/api/v1/auth/oauth/google/start").exchange().expectStatus().isFound()
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store").expectBody().isEmpty();
+        String id = result.getResponseHeaders().getFirst("X-Request-Id");
+        assertThat(id).isNotBlank();
+        assertThat(java.util.UUID.fromString(id)).isNotNull();
+        assertThat(result.getResponseHeaders().getLocation().toString())
+                .isEqualTo("https://taska.ozero.dev/auth/callback?error=PROVIDER_UNAVAILABLE&requestId=" + id);
+    }
+
     @Test void grpcDomainFailureKeepsKnownReasonWithoutLeakingUnexpectedReason() {
         for (String reason : java.util.List.of("SIGNUP_DISABLED", "private-secret")) {
             when(oauth.start(eq("google"), any(), any(), any())).thenReturn(Mono.error(io.grpc.Status.PERMISSION_DENIED

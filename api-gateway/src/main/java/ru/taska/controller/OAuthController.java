@@ -22,6 +22,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class OAuthController {
     private final GatewayRequestExecutor executor;
+    private final ru.taska.filter.RequestIdProvider requestIds;
     private final GrpcOAuthClient client;
     private final ru.taska.security.SignupClientAddress addresses;
     @Value("${taska.oauth.ui-base-url:${TASKA_OAUTH_UI_BASE_URL:https://taska.ozero.dev}}") private String uiBase;
@@ -93,12 +94,16 @@ public class OAuthController {
         String reason = limited ? "RATE_LIMITED" : details.getOrDefault("reason", "PROVIDER_UNAVAILABLE");
         if (!java.util.Set.of("PROVIDER_CANCELLED", "STATE_INVALID", "EMAIL_NOT_VERIFIED", "ACCOUNT_BLOCKED",
                 "ACCOUNT_LOCKED", "SIGNUP_DISABLED", "PROVIDER_UNAVAILABLE", "RATE_LIMITED").contains(reason)) reason = "PROVIDER_UNAVAILABLE";
-        log.warn("[{}] OAuth navigation failed: {}", exchange.getResponse().getHeaders().getFirst("X-Request-Id"), reason);
+        String requestId = requestIds.resolve(exchange);
+        exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
+        // Navigation failures, including unavailable infrastructure, must return the browser to the UI.
+        log.warn("[{}] OAuth navigation failed: {}", requestId, reason);
         var uri = org.springframework.web.util.UriComponentsBuilder.fromUri(URI.create(uiBase).resolve("/auth/callback"))
-                .queryParam("error", reason).queryParam("requestId", exchange.getResponse().getHeaders().getFirst("X-Request-Id"));
+                .queryParam("error", reason).queryParam("requestId", requestId);
         String retry = details.get("retryAfterSeconds");
         if (limited && retry != null && retry.matches("[1-9][0-9]{0,9}")) uri.queryParam("retryAfter", retry);
         var response = redirect(uri.build().encode().toUriString());
+        // OAuthGrpcService commits the quota reservation before claimState; retain the binding on quota rejection.
         if (!limited && validState(state)) response.header(HttpHeaders.SET_COOKIE, cookie(state, "", Duration.ZERO).toString());
         return response.build();
     }
