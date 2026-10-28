@@ -58,6 +58,60 @@ paths:
                 $ref: '#/components/schemas/AuthMethodsResponseDto'
         default:
           $ref: '#/components/responses/ErrorResponse'
+  /api/v1/users/me/connected-apps:
+    get:
+      x-pat-scope: session
+      operationId: listConnectedApps
+      summary: Подключённые OAuth-приложения
+      description: Только JWT-сессия. Одна строка на приложение по активным grants; scopes объединены и отсортированы. Порядок connectedAt desc, appId desc. OAuth выключен — available false и пустой items. lastUsedAt — последняя выдача access token (код или refresh), точность 10 минут. Ответ не кэшируется.
+      tags: [connected-apps]
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Собственные приложения, либо пустой список.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConnectedAppsResponseDto'}
+        '403':
+          description: PAT и делегированный MCP запрещены; PERMISSION_DENIED с details.reason SESSION_REQUIRED.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '503':
+          description: UNAVAILABLE, OAuth-сервер недоступен; ответ содержит requestId.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/users/me/connected-apps/{appId}:
+    delete:
+      x-pat-scope: session
+      operationId: revokeConnectedApp
+      summary: Отключить OAuth-приложение
+      description: Только JWT-сессия. Отзывает все grants приложения пользователя и удаляет согласие. Следующий MCP-запрос с его токеном получает 401. Неизвестный и чужой appId — 204. Ответ не кэшируется.
+      tags: [connected-apps]
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: appId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204':
+          description: Все подключения приложения отозваны либо отсутствуют.
+        '403':
+          description: PAT и делегированный MCP запрещены; PERMISSION_DENIED с details.reason SESSION_REQUIRED.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '503':
+          description: UNAVAILABLE, OAuth-сервер недоступен; ответ содержит requestId.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/users/me/access-tokens:
     post:
       x-pat-scope: session
@@ -4989,6 +5043,30 @@ components:
             $ref: '#/components/schemas/RestErrorResponse'
 
   schemas:
+    ConnectedAppsResponseDto:
+      type: object
+      required: [available, items]
+      properties:
+        available: {type: boolean}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ConnectedAppDto'}
+    ConnectedAppDto:
+      type: object
+      required: [appId, name, host, scopes, connectedAt, lastUsedAt, expiresAt]
+      properties:
+        appId: {type: string, format: uuid}
+        name: {type: string}
+        host: {type: string, description: 'Host адреса возврата клиента; при нескольких — лексикографически первого URI.'}
+        metadataUrl: {type: string, format: uri, nullable: true, description: 'client_id для CIMD, null для DCR.'}
+        scopes:
+          type: array
+          items:
+            type: string
+            x-extensible-enum: [read, write, offline_access]
+        connectedAt: {type: string, format: date-time, description: 'Минимум времени выдачи authorization code активных grants.'}
+        lastUsedAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
     PersonalAccessTokenScopeDto:
       type: string
       enum: [read, write]

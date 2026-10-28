@@ -76,6 +76,50 @@ public class OAuthIntrospectionClient {
         .onErrorMap(error -> error instanceof DomainException ? error : unavailable());
   }
 
+  public boolean enabled() {
+    return properties.enabled();
+  }
+
+  public Mono<JsonNode> listConnectedApps(UUID owner) {
+    return client
+        .get()
+        .uri(appsUri(owner, null))
+        .headers(
+            headers ->
+                headers.setBasicAuth(
+                    properties.introspectionClientId(), properties.introspectionSecret()))
+        .retrieve()
+        .onStatus(status -> status.value() != 200, response -> Mono.just(unavailable()))
+        .bodyToMono(JsonNode.class)
+        .timeout(Duration.ofSeconds(2))
+        .switchIfEmpty(Mono.error(unavailable()))
+        .onErrorMap(error -> error instanceof DomainException ? error : unavailable());
+  }
+
+  public Mono<Void> revokeConnectedApp(UUID owner, String appId) {
+    return client
+        .delete()
+        .uri(appsUri(owner, appId))
+        .headers(
+            headers ->
+                headers.setBasicAuth(
+                    properties.introspectionClientId(), properties.introspectionSecret()))
+        .retrieve()
+        .onStatus(status -> status.value() != 204, response -> Mono.just(unavailable()))
+        .toBodilessEntity()
+        .timeout(Duration.ofSeconds(2))
+        .then()
+        .onErrorMap(error -> error instanceof DomainException ? error : unavailable());
+  }
+
+  private java.net.URI appsUri(UUID owner, String appId) {
+    var builder =
+        org.springframework.web.util.UriComponentsBuilder.fromUri(
+            properties.grantValidationUri().resolve("/internal/users/" + owner + "/apps"));
+    if (appId != null) builder.pathSegment(appId);
+    return builder.build().encode().toUri();
+  }
+
   private OAuthGrantIdentity identity(JsonNode node) {
     try {
       if (!node.path("active").asBoolean(false)
