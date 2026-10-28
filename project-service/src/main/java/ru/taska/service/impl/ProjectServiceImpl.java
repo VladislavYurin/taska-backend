@@ -129,8 +129,6 @@ public class ProjectServiceImpl implements ProjectService {
      * получает PERMISSION_DENIED независимо от глобальной роли. Полноценное чтение контекста
      * для GLOBAL_ADMIN вне проекта (роль в gRPC-заголовке) — отдельная задача.
      * Отказ members/labels пробрасывается наружу, а не маскируется пустым списком.
-     * Ошибка чтения workflow одного типа не роняет контекст: тип просто не попадает в workflows,
-     * ошибка пишется в лог.
      */
     @Override
     public Mono<ProjectContextDto> getProjectContext(
@@ -282,11 +280,11 @@ public class ProjectServiceImpl implements ProjectService {
                                     if (Status.fromThrowable(error).getCode() == Status.Code.NOT_FOUND) {
                                         log.debug("[{}][{}] Workflow not found for project {} and issue type {}",
                                                 requestId, nodeId, projectId, issueType);
-                                    } else {
-                                        log.warn("[{}][{}] Failed to load workflow for project {} and issue type {}",
-                                                requestId, nodeId, projectId, issueType, error);
+                                        return Mono.empty();
                                     }
-                                    return Mono.empty();
+                                    log.warn("[{}][{}] Failed to load workflow for project {} and issue type {}",
+                                            requestId, nodeId, projectId, issueType, error);
+                                    return Mono.<ProjectWorkflowDto>error(error);
                                 })
                 )
                 .collectList();

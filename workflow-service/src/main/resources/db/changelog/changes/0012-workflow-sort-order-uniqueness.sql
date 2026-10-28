@@ -1,11 +1,19 @@
 --liquibase formatted sql
 
 -- changeset taska:0012-transitions-sort-order-dedupe
--- comment: Перед уникальным индексом убрать дубли переходов с одинаковым sort_order
+-- preconditions onFail:HALT onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM (SELECT 1 FROM taska.transitions t WHERE EXISTS (SELECT 1 FROM taska.validator_rules r WHERE r.transition_id = t.id) GROUP BY t.workflow_id, t.sort_order HAVING COUNT(*) > 1) duplicates
+-- precondition-sql-check expectedResult:0 SELECT COUNT(*) FROM (SELECT 1 FROM taska.statuses s WHERE s.status_key = 'TODO' OR EXISTS (SELECT 1 FROM taska.transitions t WHERE t.from_status_id = s.id OR t.to_status_id = s.id) GROUP BY s.workflow_id, s.sort_order HAVING COUNT(*) > 1) duplicates
+-- comment: Проверить неразрешимые дубли до любых удалений, затем убрать дубли переходов
 
+-- Оба precondition'а выполняются до DELETE в этом changeset: если на один sort_order
+-- остались два перехода с правилами или два защищённых статуса (TODO/с переходами),
+-- миграция падает, не удалив ни одной строки. Status-precondition консервативен: он
+-- смотрит текущие переходы, хотя последующий dedupe переходов мог бы снять часть защит;
+-- такой случай разбирается вручную.
+--
 -- Переход с validator_rules не удаляется никогда; из дублей остаётся переход с правилами,
--- иначе самый ранний. Если правила есть у двух дублей одного sort_order, они остаются,
--- индекс ниже не создастся, и такой случай разбирается вручную.
+-- иначе самый ранний.
 WITH ranked AS (SELECT t.id,
                        EXISTS (SELECT 1 FROM taska.validator_rules r WHERE r.transition_id = t.id) AS has_rules,
                        row_number() OVER (
@@ -35,7 +43,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS transitions_workflow_sort_order_uniq
     ON taska.transitions (workflow_id, sort_order);
 
 -- changeset taska:0012-statuses-sort-order-dedupe
--- comment: Перед уникальным индексом убрать дубли статусов с одинаковым sort_order
+-- comment: Убрать безопасные дубли статусов; неразрешимые уже проверены precondition'ами до удалений
 
 -- Статус TODO не удаляется: issue-service создаёт в нём задачи. Статус, на который ссылаются
 -- переходы, тоже не удаляется (ON DELETE CASCADE унёс бы переходы). Из дублей остаётся TODO,

@@ -629,12 +629,9 @@ class ProjectServiceImplTest {
                     .verify();
         }
 
-        @ParameterizedTest
-        @EnumSource(value = Status.Code.class, names = {
-                "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "NOT_FOUND", "INTERNAL"
-        })
-        @DisplayName("ошибка workflow одного типа -> успешный контекст без этого типа")
-        void asMember_oneWorkflowFails_otherTypeStillReturned(Status.Code code) {
+        @Test
+        @DisplayName("NOT_FOUND workflow одного типа -> успешный контекст без этого типа")
+        void asMember_oneWorkflowFails_otherTypeStillReturned() {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
 
@@ -644,6 +641,51 @@ class ProjectServiceImplTest {
             Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
                     .thenReturn(Mono.just(List.of(label)));
 
+            Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
+                    new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", null, "square", 10, null, null),
+                    new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "request", "blue", null, "square", 10, null, null)
+            ));
+            Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
+                            ArgumentMatchers.eq(projectId),
+                            ArgumentMatchers.eq("REQUEST"),
+                            ArgumentMatchers.eq(actorUserId),
+                            ArgumentMatchers.eq(requestId),
+                            ArgumentMatchers.eq(nodeId)))
+                    .thenReturn(Mono.just(new ProjectWorkflowDto("REQUEST", workflow.workflow())));
+
+            var failure = Status.NOT_FOUND
+                    .withDescription("workflow not found")
+                    .asRuntimeException();
+            Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
+                            ArgumentMatchers.eq(projectId),
+                            ArgumentMatchers.eq("TASK"),
+                            ArgumentMatchers.eq(actorUserId),
+                            ArgumentMatchers.eq(requestId),
+                            ArgumentMatchers.eq(nodeId)))
+                    .thenReturn(Mono.error(failure));
+
+            StepVerifier.create(projectService.getProjectContext(
+                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(1, ctx.workflows().size());
+                        Assertions.assertEquals("REQUEST", ctx.workflows().getFirst().issueType());
+                        Assertions.assertEquals(2, ctx.issueTypes().size());
+                    })
+                    .verifyComplete();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = Status.Code.class, names = {
+                "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "FAILED_PRECONDITION"
+        })
+        @DisplayName("ошибки этих типов пробрасываются")
+        void asMember_workflowGrpcFailurePropagates(Status.Code code) {
+            Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
+                    .thenReturn(Mono.just(memberProjectDto));
+            Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
+                    .thenReturn(Flux.just(memberDetails));
+            Mockito.when(issueServiceClient.listProjectLabels(projectId, actorUserId, requestId, nodeId))
+                    .thenReturn(Mono.just(List.of(label)));
             Mockito.when(issueTypeRepository.list(projectId)).thenReturn(Flux.just(
                     new ru.taska.domain.ProjectIssueType(projectId, "TASK", "Task", "blue", null, "square", 10, null, null),
                     new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "request", "blue", null, "square", 10, null, null)
@@ -669,16 +711,12 @@ class ProjectServiceImplTest {
 
             StepVerifier.create(projectService.getProjectContext(
                             requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
-                    .assertNext(ctx -> {
-                        Assertions.assertEquals(1, ctx.workflows().size());
-                        Assertions.assertEquals("REQUEST", ctx.workflows().getFirst().issueType());
-                        Assertions.assertEquals(2, ctx.issueTypes().size());
-                    })
-                    .verifyComplete();
+                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
+                    .verify();
         }
 
         @Test
-        @DisplayName("все workflow упали -> контекст 200 с пустым workflows")
+        @DisplayName("все workflow NOT_FOUND -> контекст 200 с пустым workflows")
         void asMember_allWorkflowsFail_contextStillReturned() {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
@@ -691,8 +729,8 @@ class ProjectServiceImplTest {
                     new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "request", "blue", null, "square", 10, null, null)
             ));
 
-            var failure = Status.UNAVAILABLE
-                    .withDescription("workflow service unavailable")
+            var failure = Status.NOT_FOUND
+                    .withDescription("workflow not found")
                     .asRuntimeException();
             Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(
                             ArgumentMatchers.eq(projectId),
