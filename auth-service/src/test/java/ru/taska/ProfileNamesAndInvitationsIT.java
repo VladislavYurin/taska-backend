@@ -60,6 +60,13 @@ class ProfileNamesAndInvitationsIT extends AbstractIT {
         assertThatThrownBy(() -> auth.setPasswordByToken("invalid", raw, PASSWORD, "bad\nname").block(TIMEOUT))
                 .isInstanceOfSatisfying(DomainException.class,
                         error -> assertThat(error.getDetails()).containsEntry("reason", "DISPLAY_NAME_INVALID"));
+        for (String invisible : List.of("\u200b", "\ufeff", "\u2060", " \u200b\u00a0\u2060 ")) {
+            assertThatThrownBy(() -> auth.setPasswordByToken("invisible", raw, PASSWORD, invisible).block(TIMEOUT))
+                    .isInstanceOfSatisfying(DomainException.class,
+                            error -> assertThat(error.getDetails()).containsEntry("reason", "DISPLAY_NAME_INVALID"));
+            assertThat(tokens.findByUserId(user.getId()).block(TIMEOUT).getUsedAt()).isNull();
+            assertThat(users.findById(user.getId()).block(TIMEOUT).getDisplayName()).isEqualTo("Original");
+        }
         rejected(() -> auth.setPasswordByToken("weak", raw, "weak", "New").block(TIMEOUT), DomainStatus.INVALID_ARGUMENT);
         assertThat(tokens.findByUserId(user.getId()).block(TIMEOUT).getUsedAt()).isNull();
         User unchanged = users.findById(user.getId()).block(TIMEOUT);

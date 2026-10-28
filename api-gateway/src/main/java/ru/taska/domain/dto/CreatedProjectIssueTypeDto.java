@@ -14,7 +14,6 @@ public class CreatedProjectIssueTypeDto extends ProjectIssueTypeDto {
 
     public CreatedProjectIssueTypeDto(ProjectIssueTypeDto type, UUID workflowId) {
         super(type.getGeneration(), type.getCode(), type.getName(), type.getColor(), type.getShape(), type.getIcon(), type.getSortOrder());
-        setGeneration(type.getGeneration());
         this.workflowId = workflowId;
     }
 }

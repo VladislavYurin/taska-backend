@@ -147,10 +147,12 @@ class GrpcProjectIssueTypeDeletionClientTest {
   }
 
   @Test
-  void publicGenerationIsOptionalAndPendingOperationIdentityIsNeverMapped() {
+  void publicGenerationIsRequiredAndPendingOperationIdentityIsNeverMapped() {
     var old = ProjectIssueTypeResponse.newBuilder().setCode("REQUEST").setName("Request")
         .setColor("teal").setIcon("headset").setSortOrder(40).build();
-    assertThat(GrpcProjectIssueTypeClient.toRest(old).getGeneration()).isNull();
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> GrpcProjectIssueTypeClient.toRest(old))
+        .isInstanceOfSatisfying(ru.taska.exception.DomainException.class,
+            error -> assertThat(error.getStatus()).isEqualTo(ru.taska.exception.DomainStatus.UNAVAILABLE));
     var modern = old.toBuilder().setGeneration(generation.toString())
         .setPendingOperationId(UUID.randomUUID().toString()).build();
     var mapped = GrpcProjectIssueTypeClient.toRest(modern);
