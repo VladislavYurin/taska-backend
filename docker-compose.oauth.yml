@@ -2,6 +2,7 @@
 services:
   oauth-db:
     image: postgres:16.3
+    restart: unless-stopped
     profiles: [oauth]
     networks: [taskanetwork]
     environment:
@@ -27,7 +28,8 @@ services:
       OAUTH_DB_PASSWORD: ${OAUTH_DB_PASSWORD:?Set OAUTH_DB_PASSWORD}
       OAUTH_ISSUER: ${OAUTH_ISSUER:?Set canonical HTTPS OAUTH_ISSUER}
       MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE:?Set canonical HTTPS MCP_OAUTH_RESOURCE}
-      OAUTH_CIMD_HOSTS: ${OAUTH_CIMD_HOSTS:?Set approved exact CIMD hosts}
+      # Empty is a closed CIMD allowlist; stage Inspector uses restricted DCR.
+      OAUTH_CIMD_HOSTS: ${OAUTH_CIMD_HOSTS:-}
       OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:?Set approved exact redirect URIs}
       OAUTH_DCR_ENABLED: ${OAUTH_DCR_ENABLED:-false}
       OAUTH_INTROSPECTION_CLIENT_ID: ${OAUTH_INTROSPECTION_CLIENT_ID:-auth-service}
@@ -50,6 +52,9 @@ services:
       OAUTH_IDENTITY_SERVICE_CREDENTIAL: ${OAUTH_IDENTITY_SERVICE_CREDENTIAL}
       MCP_OAUTH_EXCHANGE_CREDENTIAL: ${MCP_OAUTH_EXCHANGE_CREDENTIAL:?Set separate MCP exchange secret}
       OAUTH_DELEGATION_SIGNING_SECRET: ${OAUTH_DELEGATION_SIGNING_SECRET:?Set separate delegation signing secret}
+  api-gateway:
+    environment:
+      OAUTH_ISSUER: ${OAUTH_ISSUER}
   mcp-server:
     environment:
       MCP_OAUTH_ENABLED: 'true'

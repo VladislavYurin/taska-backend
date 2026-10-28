@@ -176,6 +176,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 Команда `docker compose down -v` дополнительно удаляет PostgreSQL, Kafka, Grafana, Prometheus и RustFS volumes. Используйте её только для осознанного полного сброса локальных данных.
 
+Опциональный OAuth на стенде: [развёртывание и сценарии TAS-448](infra/oauth-stage/README.md).
+
 ## Локальные адреса
 
 ### Приложение
