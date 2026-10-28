@@ -519,6 +519,18 @@ class OAuthProtocolIntegrationTest {
   }
 
   @Test
+  void connectedClientsRejectEmptyAndHostlessRedirects() {
+    for (String redirects : List.of("[]", "[\"com.example.app:/cb\"]", "[\"/relative\"]")) {
+      var metadata =
+          mapper.readTree(
+              "{\"client_name\":\"Invalid fixture\",\"redirect_uris\":" + redirects + "}");
+      assertThatThrownBy(() -> clients.registerDcr(metadata))
+          .isInstanceOf(
+              org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+    }
+  }
+
+  @Test
   void connectedAppsAggregateStepUpAndRevokeAllOwnedGrants() throws Exception {
     var first = token(authorize(CLIENT, "read"), VERIFIER, RESOURCE, 200);
     var second = token(authorize(), VERIFIER, RESOURCE, 200);

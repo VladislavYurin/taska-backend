@@ -17,6 +17,9 @@ class ConnectedAppStore {
   }
 
   List<ConnectedAppController.App> list(String userId) {
+    // SAS 7.0.8 JdbcOAuth2AuthorizationService persists authorized_scopes comma-delimited
+    // (the OAuth protocol's space-delimited scope string is a different representation).
+
     return jdbc.query(
         """
 WITH active AS (

@@ -3,6 +3,7 @@ package ru.taska.service.impl;
 import lombok.Getter;
 import org.springframework.stereotype.Service;
 import ru.taska.domain.dto.*;
+import ru.taska.domain.ActionChannel;
 import ru.taska.service.MetaService;
 
 import java.nio.charset.StandardCharsets;
@@ -42,11 +43,21 @@ public class MetaServiceImpl implements MetaService {
                 toPairList(UserStatusDto.values(), code -> new UserStatusMetaPairDto(code, userStatusName(code))
                         .selectable(code != UserStatusDto.UNSPECIFIED))
         );
+        this.meta.setActionChannels(toPairList(ActionChannel.values(),
+                code -> new ActionChannelMetaPairDto(code.name(), actionChannelName(code))));
         this.meta.setLinkViewTypes(toPairList(IssueLinkViewTypeDto.values(),
                 code -> new IssueLinkViewTypeMetaPairDto(code, linkViewTypeName(code))
                         .selectable(code != IssueLinkViewTypeDto.ISSUE_LINK_VIEW_TYPE_UNSPECIFIED
                                 && code != IssueLinkViewTypeDto.UNRECOGNIZED)));
         this.etag = computeEtag(meta);
+    }
+
+    private static String actionChannelName(ActionChannel code) {
+        return switch (code) {
+            case UI -> "UI";
+            case API_TOKEN -> "API";
+            case MCP -> "MCP";
+        };
     }
 
     private static String issueTypeName(String code) {
