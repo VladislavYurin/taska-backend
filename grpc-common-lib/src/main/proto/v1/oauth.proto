@@ -12,7 +12,7 @@ service OAuthService {
  rpc ExchangeOAuth(ExchangeOAuthRequest) returns (ExchangeOAuthResponse);
  rpc SignupOAuth(SignupOAuthRequest) returns (ru.taska.auth.v1.LoginResponse);
 }
-message StartOAuthRequest { ru.taska.common.v1.Header header = 1; string provider = 2; string return_to = 3; string client_ip = 4; }
+message StartOAuthRequest { ru.taska.common.v1.Header header = 1; string provider = 2; string return_to = 3; string client_ip = 4; string target = 5; string binding = 6; }
 message StartOAuthResponse { string authorization_url = 1; string state = 2; string browser_token = 3; }
 message CompleteOAuthRequest {
  ru.taska.common.v1.Header header = 1;

@@ -28,6 +28,8 @@ jobs:
     # Репозиторий публичный, логи Actions видны всем:
     # не выводить ответ compose.one и не включать set -x — в env лежат секреты стенда
     steps:
+      - uses: actions/checkout@v4
+
       - name: Set GIT_COMMIT in Dokploy
         shell: bash
         run: |
@@ -64,6 +66,9 @@ jobs:
                 --data @-
 
           echo "GIT_COMMIT updated to ${GITHUB_SHA}"
+
+      - name: Select optional OAuth Compose overlay
+        run: python3 infra/oauth-stage/configure.py sync-command
 
       - name: Deploy and wait for result
         shell: bash

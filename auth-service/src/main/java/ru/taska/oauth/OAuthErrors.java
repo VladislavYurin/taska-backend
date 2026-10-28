@@ -7,7 +7,7 @@ import java.util.Set;
 
 public final class OAuthErrors {
     private OAuthErrors() { }
-    public static final Set<String> REASONS = Set.of("PROVIDER_CANCELLED", "STATE_INVALID", "EMAIL_NOT_VERIFIED", "ACCOUNT_BLOCKED", "ACCOUNT_LOCKED", "SIGNUP_DISABLED", "PROVIDER_UNAVAILABLE");
+    public static final Set<String> REASONS = Set.of("PROVIDER_CANCELLED", "STATE_INVALID", "EMAIL_NOT_VERIFIED", "ACCOUNT_BLOCKED", "ACCOUNT_LOCKED", "SIGNUP_DISABLED", "PROVIDER_UNAVAILABLE", "SIGNUP_REQUIRED");
     public static DomainException failure(String reason) {
         DomainStatus status = switch (reason) {
             case "STATE_INVALID" -> DomainStatus.UNAUTHENTICATED;
@@ -21,6 +21,7 @@ public final class OAuthErrors {
             case "ACCOUNT_BLOCKED" -> "This account is blocked";
             case "ACCOUNT_LOCKED" -> "This account is temporarily locked";
             case "SIGNUP_DISABLED" -> "Registration is disabled";
+            case "SIGNUP_REQUIRED" -> "Create a Taska account before connecting this application";
             case "PROVIDER_CANCELLED" -> "Authentication was cancelled";
             default -> "The authentication provider is unavailable";
         }, Map.of("reason", reason));

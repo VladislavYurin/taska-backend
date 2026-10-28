@@ -1,0 +1,23 @@
+# Taska stage ingress: public paths are explicit Dokploy domains, never a host-only route.
+# Internal HTTPS stays on the shared proxy network with the canonical certificate/SNI.
+networks:
+  dokploy-network:
+    external: true
+    name: dokploy-network
+services:
+  oauth-server:
+    networks: [taskanetwork, dokploy-network]
+    environment:
+      OAUTH_INTERNAL_PROXIES: ${OAUTH_INTERNAL_PROXIES:?Set exact trusted Traefik peer regex}
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: dokploy-network
+      traefik.http.routers.taska-oauth-private.rule: 'Host(`${OAUTH_INTERNAL_HOST:?Set canonical OAuth hostname}`) && (PathPrefix(`/internal/`) || Path(`/oauth2/introspect`)) && ClientIP(`${OAUTH_PRIVATE_CLIENT_CIDR:?Set internal proxy network CIDR}`)'
+      traefik.http.routers.taska-oauth-private.entrypoints: websecure
+      traefik.http.routers.taska-oauth-private.tls.certresolver: letsencrypt
+      traefik.http.routers.taska-oauth-private.service: taska-oauth-private
+      traefik.http.services.taska-oauth-private.loadbalancer.server.port: '8080'
+  auth-service:
+    networks: [taskanetwork, dokploy-network]
+    extra_hosts:
+      - '${OAUTH_INTERNAL_HOST:?Set canonical OAuth hostname}:${OAUTH_TRAEFIK_IP:?Set verified static proxy IP}'

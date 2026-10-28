@@ -22,6 +22,7 @@ public class OAuthBackendController {
   private final OAuthServerProperties policy;
   private final JdbcTemplate jdbc;
   private final HttpSessionCsrfTokenRepository csrf;
+  private final TaskaIdentityClient identity;
   private long registrationWindow;
   private int registrations;
 
@@ -31,13 +32,14 @@ public class OAuthBackendController {
       OAuth2AuthorizationConsentService consents,
       OAuthServerProperties policy,
       JdbcTemplate jdbc,
-      HttpSessionCsrfTokenRepository csrf) {
+      HttpSessionCsrfTokenRepository csrf, TaskaIdentityClient identity) {
     this.clients = clients;
     this.grants = grants;
     this.consents = consents;
     this.policy = policy;
     this.jdbc = jdbc;
     this.csrf = csrf;
+    this.identity = identity;
   }
 
   @GetMapping("/oauth/consent")
@@ -48,28 +50,39 @@ public class OAuthBackendController {
       jakarta.servlet.http.HttpServletResponse response) {
     if (state.length() > 256) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
     var authorization = grants.findByToken(state, new OAuth2TokenType("state"));
-    if (authorization == null || !authorization.getPrincipalName().equals(actor.getName()))
+    if (!OAuthGrantStore.pending(authorization) || !authorization.getPrincipalName().equals(actor.getName()))
       throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     OAuth2AuthorizationRequest original =
         authorization.getAttribute(OAuth2AuthorizationRequest.class.getName());
     if (original == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     var client = clients.findById(authorization.getRegisteredClientId());
+    if (client == null || !client.getRedirectUris().contains(original.getRedirectUri())
+        || !policy.redirectUris().contains(original.getRedirectUri()))
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     CsrfToken token = csrf.loadDeferredToken(request, response).get();
-    return Map.of(
-        "client_id",
-        client.getClientId(),
-        "client_name",
-        client.getClientName(),
-        "scopes",
-        original.getScopes(),
-        "state",
-        state,
-        "submit_uri",
-        "/oauth2/authorize",
-        "csrf_parameter",
-        token.getParameterName(),
-        "csrf_token",
-        token.getToken());
+    var user = identity.validate(actor.getName());
+    var consent = consents.findById(client.getId(), actor.getName());
+    var redirect = java.net.URI.create(original.getRedirectUri());
+    if (redirect.getHost() == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+    String host = redirect.getHost().toLowerCase(Locale.ROOT);
+    if (redirect.getPort() != -1) host += ":" + redirect.getPort();
+    var values = new LinkedHashMap<String, Object>();
+    values.put("client_id", client.getClientId());
+    values.put("client_name", client.getClientName());
+    values.put("client_host", host);
+    String metadataHost = client.getClientId().startsWith("https://")
+        ? java.net.URI.create(client.getClientId()).getHost() : null;
+    values.put("metadata_host", metadataHost == null ? null : metadataHost.toLowerCase(Locale.ROOT));
+    values.put("redirect_kind", "http".equals(redirect.getScheme()) ? "loopback" : "web");
+    values.put("scopes", new TreeSet<>(original.getScopes()));
+    values.put("granted_scopes", consent == null ? Set.of() : new TreeSet<>(consent.getScopes()));
+    values.put("account", Map.of("email", user.getEmail(), "display_name", user.getDisplayName()));
+    values.put("state", state);
+    values.put("submit_uri", "/oauth2/authorize");
+    values.put("csrf_parameter", token.getParameterName());
+    values.put("csrf_token", token.getToken());
+    request.getSession().setAttribute(OAuthBrowserSupport.CONSENT_STATE, state);
+    return values;
   }
 
   @GetMapping("/oauth/grants")

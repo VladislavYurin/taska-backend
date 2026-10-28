@@ -463,6 +463,10 @@ services:
 
   mcp-server:
     <<: *app-defaults
+    environment:
+      MCP_GATEWAY_URL: ${MCP_GATEWAY_URL:-http://api-gateway:8080}
+      AUTH_GRPC_HOST: ${AUTH_GRPC_HOST:-auth-service}
+      AUTH_GRPC_PORT: ${AUTH_GRPC_PORT:-9090}
     networks:
       - taskanetwork
     build:
@@ -476,3 +480,21 @@ services:
         condition: service_healthy
       api-gateway:
         condition: service_healthy
+
+  # Declared here so Dokploy can attach domain labels before optional overlays merge.
+  # Start only with docker-compose.oauth.yml and the explicitly enabled oauth profile.
+  oauth-server:
+    <<: *app-defaults
+    profiles: [oauth]
+    networks: [taskanetwork]
+    build:
+      context: .
+      dockerfile: oauth-server/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    container_name: taska-oauth-server
+
+  oauth-db:
+    image: postgres:16.3
+    profiles: [oauth]
+    networks: [taskanetwork]

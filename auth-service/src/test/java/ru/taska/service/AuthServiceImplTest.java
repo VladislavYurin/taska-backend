@@ -189,6 +189,23 @@ class AuthServiceImplTest {
         Mockito.verifyNoInteractions(jwtServiceImpl,refreshTokenServiceImpl,personalTokens,outboxEventRepository);
     }
 
+    @Test void oauthCredentialValidationReturnsLockDeadlineWithoutPasswordOrSessionIssuance() {
+        Instant deadline = Instant.now().plusSeconds(300);
+        testUser.setStatus(UserStatus.LOCKED);
+        testUser.setLockedUntil(deadline);
+        Mockito.when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(testUser));
+        Mockito.when(credentialRepository.findByUserIdAndCredentialType(testUserId, CredentialType.PASSWORD)).thenReturn(Mono.just(testCredential));
+        Mockito.when(accountLockService.resolveLockState(testUser)).thenReturn(Mono.just(testUser));
+        StepVerifier.create(authServiceImpl.authenticateOAuthCredentials("test@example.com","password"))
+            .expectErrorSatisfies(error -> {
+                Assertions.assertThat(error).isInstanceOf(DomainException.class);
+                DomainException domain = (DomainException) error;
+                Assertions.assertThat(domain.getStatus()).isEqualTo(DomainStatus.PERMISSION_DENIED);
+                Assertions.assertThat(domain.getDetails()).containsEntry("lockedUntil", deadline.toString());
+            }).verify();
+        Mockito.verifyNoInteractions(passwordHashService, jwtServiceImpl, refreshTokenServiceImpl);
+    }
+
     @Test void oauthCredentialValidationRejectsBlockedUsersBeforePasswordOrSessionIssuance() {
         testUser.setStatus(UserStatus.BLOCKED);
         Mockito.when(userRepository.findByEmail("test@example.com")).thenReturn(Mono.just(testUser));

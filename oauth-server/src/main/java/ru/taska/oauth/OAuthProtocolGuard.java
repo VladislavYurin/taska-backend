@@ -16,14 +16,16 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
   private final OAuthServerProperties policy;
   private final TaskaIdentityClient identity;
   private final HttpSessionCsrfTokenRepository csrf;
+  private final OAuthGrantStore grants;
 
   OAuthProtocolGuard(
       OAuthServerProperties policy,
       TaskaIdentityClient identity,
-      HttpSessionCsrfTokenRepository csrf) {
+      HttpSessionCsrfTokenRepository csrf, OAuthGrantStore grants) {
     this.policy = policy;
     this.identity = identity;
     this.csrf = csrf;
+    this.grants = grants;
   }
 
   @Override
@@ -65,10 +67,13 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
           && !"anonymousUser".equals(authentication.getPrincipal())) {
         try {
           identity.validate(authentication.getName());
+        } catch (org.springframework.security.authentication.AuthenticationServiceException failure) {
+          browserError(request, response, 503, "temporarily_unavailable");
+          return;
         } catch (org.springframework.security.core.AuthenticationException failure) {
           if (request.getSession(false) != null) request.getSession(false).invalidate();
           SecurityContextHolder.clearContext();
-          error(response, 401, "login_required");
+          browserError(request, response, 401, "login_required");
           return;
         }
       }
@@ -82,12 +87,32 @@ final class OAuthProtocolGuard extends OncePerRequestFilter {
             || !MessageDigest.isEqual(
                 expected.getToken().getBytes(StandardCharsets.UTF_8),
                 actual.getBytes(StandardCharsets.UTF_8))) {
-          error(response, 403, "invalid_csrf_token");
+          browserError(request, response, 403, "invalid_csrf_token");
+          return;
+        }
+        String[] states = request.getParameterValues("state");
+        var pending = states != null && states.length == 1
+            ? grants.findByToken(states[0], new org.springframework.security.oauth2.server.authorization.OAuth2TokenType("state")) : null;
+        if (authentication == null || !authentication.isAuthenticated()
+            || !OAuthGrantStore.pending(pending) || !pending.getPrincipalName().equals(authentication.getName())) {
+          browserError(request, response, 400, "invalid_request");
+          return;
+        }
+        String[] scopes = request.getParameterValues("scope");
+        if (scopes != null && scopes.length > 0 && (!java.util.Arrays.asList(scopes).contains("read")
+            || java.util.Arrays.stream(scopes).anyMatch(scope -> !java.util.Set.of("read", "write", "offline_access").contains(scope)))) {
+          browserError(request, response, 400, "invalid_scope");
           return;
         }
       }
     }
     chain.doFilter(request, response);
+  }
+
+  static void browserError(HttpServletRequest request, HttpServletResponse response, int status, String code) throws IOException {
+    if (java.util.Collections.list(request.getHeaders("Accept")).stream().anyMatch(value -> value.contains("text/html")))
+      response.sendError(status);
+    else error(response, status, code);
   }
 
   static void error(HttpServletResponse response, int status, String code) throws IOException {

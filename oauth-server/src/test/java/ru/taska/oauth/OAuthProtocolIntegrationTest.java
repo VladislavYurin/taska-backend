@@ -87,6 +87,8 @@ class OAuthProtocolIntegrationTest {
                     .getBytes(StandardCharsets.UTF_8),
                 Duration.ofMinutes(5)));
     assertThat(clients.findByClientId(CLIENT)).isNotNull();
+    when(identity.validate(any())).thenReturn(ru.taska.api.common.v1.UserContext.newBuilder()
+        .setUserId(ACTOR).setEmail("actor@example.invalid").setDisplayName("Actor").setStatus(ru.taska.api.common.v1.UserStatus.USER_STATUS_ACTIVE).build());
   }
 
   @Test
@@ -635,6 +637,173 @@ class OAuthProtocolIntegrationTest {
         .andExpect(content().json("[]"));
   }
 
+  @Test
+  void loginContextRawCsrfAndCanonicalSavedRequest() throws Exception {
+    var user = ru.taska.api.common.v1.UserContext.newBuilder().setUserId(ACTOR).setEmail("actor@example.invalid")
+        .setDisplayName("Actor").setStatus(ru.taska.api.common.v1.UserStatus.USER_STATUS_ACTIVE).build();
+    when(identity.authenticate(any(), any())).thenReturn(user);
+    mvc.perform(get("/login")).andExpect(status().isOk()).andExpect(forwardedUrl("/login.html"))
+        .andExpect(header().string("X-Frame-Options", "DENY"));
+    mvc.perform(get("/assets/oauth.css")).andExpect(status().isOk())
+        .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.containsString("form-action 'self' https://client.example.test")));
+    var direct = mvc.perform(get("/login/context").accept("application/json")).andExpect(status().isOk())
+        .andExpect(jsonPath("$.pending_request").value(false)).andReturn();
+    var directSession = (MockHttpSession) direct.getRequest().getSession(false);
+    var directJson = mapper.readTree(direct.getResponse().getContentAsString());
+    mvc.perform(post("/login").session(directSession).param("username", "actor@example.invalid").param("password", "secret")
+        .param(directJson.path("csrf_parameter").asText(), directJson.path("csrf_token").asText()))
+        .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(ISSUER + "/login?done"));
+    var session = new MockHttpSession();
+    mvc.perform(get("/oauth2/authorize").session(session).header("Host", "attacker.example")
+        .queryParam("response_type", "code").queryParam("client_id", CLIENT).queryParam("redirect_uri", REDIRECT)
+        .queryParam("scope", "read").queryParam("state", "client-state").queryParam("resource", RESOURCE)
+        .queryParam("code_challenge", challenge()).queryParam("code_challenge_method", "S256").accept("text/html"))
+        .andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(ISSUER + "/login"));
+    var context = mvc.perform(get("/login/context").session(session)).andExpect(status().isOk())
+        .andExpect(jsonPath("$.pending_request").value(true)).andReturn();
+    var json = mapper.readTree(context.getResponse().getContentAsString());
+    String previousSession = session.getId();
+    var success = mvc.perform(post("/login").session(session).param("username", "actor@example.invalid").param("password", "secret")
+        .param(json.path("csrf_parameter").asText(), json.path("csrf_token").asText()))
+        .andExpect(status().is3xxRedirection()).andReturn().getResponse().getRedirectedUrl();
+    assertThat(success).startsWith(ISSUER + "/oauth2/authorize?").doesNotContain("attacker.example");
+    assertThat(session.getId()).isNotEqualTo(previousSession);
+    mvc.perform(get("/login/context").session(session)).andExpect(jsonPath("$.pending_request").value(false));
+  }
+
+  @Test
+  void loginFailuresAreDistinctAndMissingCsrfExpires() throws Exception {
+    for (String kind : List.of("INVALID_CREDENTIALS", "ACCOUNT_LOCKED", "SERVICE_UNAVAILABLE")) {
+      var failure = switch (kind) {
+        case "ACCOUNT_LOCKED" -> new OAuthAccountLockedException(java.time.Instant.parse("2099-01-01T00:00:00Z"));
+        case "SERVICE_UNAVAILABLE" -> new org.springframework.security.authentication.AuthenticationServiceException("Down");
+        default -> new org.springframework.security.authentication.BadCredentialsException("Wrong");
+      };
+      doThrow(failure).when(identity).authenticate(any(), any());
+      var contract = mvc.perform(get("/login/context")).andReturn();
+      var json = mapper.readTree(contract.getResponse().getContentAsString());
+      var target = mvc.perform(post("/login").session((MockHttpSession) contract.getRequest().getSession(false))
+          .param("username", "actor@example.invalid").param("password", "secret")
+          .param(json.path("csrf_parameter").asText(), json.path("csrf_token").asText()))
+          .andExpect(status().is3xxRedirection()).andReturn().getResponse().getRedirectedUrl();
+      assertThat(target).startsWith(ISSUER + "/login?error=" + kind).contains("request_id=");
+      if (kind.equals("ACCOUNT_LOCKED")) assertThat(target).contains("until=2099-01-01T00:00:00Z");
+    }
+    mvc.perform(post("/login").param("username", "actor@example.invalid").param("password", "secret"))
+        .andExpect(status().is3xxRedirection())
+        .andExpect(redirectedUrlPattern(ISSUER + "/login?error=SESSION_EXPIRED&request_id=*"));
+    mvc.perform(get("/oauth/consent").param("state", "unknown").accept("application/json"))
+        .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error").value("login_required"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"deny", "missing", "duplicate"})
+  void denyAfterSavedConsentNeverIssuesCodeOrRevokesLiveGrants(String decision) throws Exception {
+    var issued = token(authorize(CLIENT, "read"), VERIFIER, RESOURCE, 200);
+    var pending = pendingConsent("read write offline_access");
+    assertThat(pending.json.path("granted_scopes").get(0).asText()).isEqualTo("read");
+    assertThat(pending.json.path("client_host").asText()).isEqualTo("client.example.test");
+    assertThat(pending.json.path("redirect_kind").asText()).isEqualTo("web");
+    assertThat(pending.json.path("metadata_host").asText()).isEqualTo("clients.example.test");
+    assertThat(pending.json.path("account").path("email").asText()).isEqualTo("actor@example.invalid");
+    var post = post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("client_id", CLIENT).param("state", pending.state)
+        .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText());
+    if (!decision.equals("deny")) post.param("scope", "read", "write");
+    if (!decision.equals("missing")) post.param("decision", decision.equals("duplicate") ? new String[]{"allow", "deny"} : new String[]{"deny"});
+    var location = mvc.perform(post).andExpect(status().is3xxRedirection()).andReturn().getResponse().getRedirectedUrl();
+    assertThat(location).startsWith(REDIRECT).contains("error=access_denied", "state=client-state", "iss=").doesNotContain("code=");
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM oauth2_authorization_consent WHERE principal_name=?", Integer.class, ACTOR)).isZero();
+    assertThat(introspect(issued.path("access_token").asText()).path("active").asBoolean()).isTrue();
+  }
+
+  @Test
+  void logoutDifferentAccountPreservesOnlySessionOwnedPendingRequest() throws Exception {
+    var pending = pendingConsent("read");
+    var response = mvc.perform(post("/logout").session(pending.session).with(authentication(actor()))
+        .param("consent_state", pending.state)
+        .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+        .andExpect(status().is3xxRedirection()).andReturn().getResponse();
+    assertThat(response.getRedirectedUrl()).startsWith(ISSUER + "/oauth2/authorize?")
+        .contains("client_id=", "scope=read", "code_challenge=", "code_challenge_method=S256", "resource=", "state=client-state");
+    assertThat(pending.session.isInvalid()).isTrue();
+    var other = pendingConsent("read");
+    mvc.perform(post("/logout").session(other.session).with(authentication(actor())).param("consent_state", "someone-elses-state")
+        .param(other.json.path("csrf_parameter").asText(), other.json.path("csrf_token").asText()))
+        .andExpect(redirectedUrl(ISSUER + "/login?logout"));
+  }
+
+  @Test
+  void expiredOrCompletedConsentCannotResumeOnLogout() throws Exception {
+    for (String kind : List.of("expired", "code")) {
+      var pending = pendingConsent("read");
+      var grant = grants.findByToken(pending.state, new OAuth2TokenType("state"));
+      var builder = org.springframework.security.oauth2.server.authorization.OAuth2Authorization.from(grant);
+      if (kind.equals("expired")) builder.attribute(OAuthGrantStore.CONSENT_EXPIRES, "1");
+      else builder.token(new org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationCode("issued-code", java.time.Instant.now(), java.time.Instant.now().plusSeconds(300)));
+      grants.save(builder.build());
+      mvc.perform(get("/oauth/consent").session(pending.session).with(authentication(actor())).param("state", pending.state))
+          .andExpect(status().isNotFound());
+      mvc.perform(post("/logout").session(pending.session).with(authentication(actor())).param("consent_state", pending.state)
+          .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+          .andExpect(redirectedUrl(ISSUER + "/login?logout"));
+    }
+  }
+
+  @Test
+  void csrfAndPendingStateAreValidatedBeforeConsentScopes() throws Exception {
+    var pending = pendingConsent("read write");
+    mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("state", pending.state).param("scope", "unknown"))
+        .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("invalid_csrf_token"));
+    mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("state", "unknown").param("scope", "unknown")
+        .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("invalid_request"));
+    for (String accept : List.of("text/html", "*/*", "")) {
+      var request = get("/oauth2/authorize").queryParam("response_type", "code").queryParam("client_id", CLIENT)
+          .queryParam("redirect_uri", REDIRECT).queryParam("scope", "read").queryParam("resource", RESOURCE)
+          .queryParam("code_challenge", challenge()).queryParam("code_challenge_method", "S256");
+      if (!accept.isEmpty()) request.header("Accept", accept);
+      mvc.perform(request).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl(ISSUER + "/login"));
+    }
+  }
+
+  @Test
+  void consentScopeWithoutReadIsRejectedAndDcrMetadataHostIsNull() throws Exception {
+    var pending = pendingConsent("read write");
+    mvc.perform(post("/oauth2/authorize").session(pending.session).with(authentication(actor()))
+        .param("client_id", CLIENT).param("state", pending.state).param("decision", "allow").param("scope", "write")
+        .param(pending.json.path("csrf_parameter").asText(), pending.json.path("csrf_token").asText()))
+        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("invalid_scope"));
+    var metadata = mapper.readTree("{\"client_name\":\"DCR client\",\"redirect_uris\":[\"" + REDIRECT + "\"],\"grant_types\":[\"authorization_code\"]}");
+    var dcr = clients.registerDcr(metadata);
+    var session = new MockHttpSession();
+    var first = mvc.perform(get("/oauth2/authorize").session(session).with(authentication(actor()))
+        .queryParam("response_type", "code").queryParam("client_id", dcr.getClientId()).queryParam("redirect_uri", REDIRECT)
+        .queryParam("scope", "read").queryParam("state", "dcr-state").queryParam("resource", RESOURCE)
+        .queryParam("code_challenge", challenge()).queryParam("code_challenge_method", "S256"))
+        .andReturn().getResponse().getRedirectedUrl();
+    String state = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(first).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+    mvc.perform(get("/oauth/consent").session(session).with(authentication(actor())).param("state", state))
+        .andExpect(status().isOk()).andExpect(jsonPath("$.metadata_host").doesNotExist())
+        .andExpect(jsonPath("$.client_host").value("client.example.test"));
+  }
+
+  private record Pending(MockHttpSession session, String state, JsonNode json) { }
+  private Pending pendingConsent(String scopes) throws Exception {
+    var session = new MockHttpSession();
+    var location = mvc.perform(get("/oauth2/authorize").session(session).with(authentication(actor()))
+        .queryParam("response_type", "code").queryParam("client_id", CLIENT).queryParam("redirect_uri", REDIRECT)
+        .queryParam("scope", scopes).queryParam("state", "client-state").queryParam("resource", RESOURCE)
+        .queryParam("code_challenge", challenge()).queryParam("code_challenge_method", "S256"))
+        .andExpect(status().is3xxRedirection()).andReturn().getResponse().getRedirectedUrl();
+    String state = java.net.URLDecoder.decode(UriComponentsBuilder.fromUriString(location).build().getQueryParams().getFirst("state"), StandardCharsets.UTF_8);
+    var json = mapper.readTree(mvc.perform(get("/oauth/consent").session(session).with(authentication(actor())).param("state", state))
+        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    return new Pending(session, state, json);
+  }
+
   private String authorize() throws Exception {
     return authorize(CLIENT, "read write offline_access");
   }
@@ -690,6 +859,7 @@ class OAuthProtocolIntegrationTest {
                     .param("client_id", clientId)
                     .param("state", state)
                     .param("scope", scopes.split(" "))
+                    .param("decision", "allow")
                     .param(
                         contract.path("csrf_parameter").asText(),
                         contract.path("csrf_token").asText()))

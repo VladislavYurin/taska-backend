@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>Sign in · Taska</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+    <link rel="preload" href="/assets/fonts/hanken-grotesk-latin-wght.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/assets/oauth.css" />
+    <script src="/assets/login.js" defer></script>
+  </head>
+  <body>
+    <!--
+      Taska sign-in for an app that wants to connect (Jira TAS-414, TAS-445).
+      Shown by oauth-server at GET /login while an authorization request is
+      pending; the refusals arrive as ?error=… on the backend's redirect and
+      /assets/login.js draws them.
+
+      Without JavaScript this form cannot sign anyone in: the CSRF token comes
+      from GET /login/context, which only the script reads, so a bare POST is
+      refused. Under `(scripting: none)` oauth.css hides the fields, the submit
+      and the hint, and the <noscript> note says why — it is all the card
+      shows below its lead. Everything else on the page (show password, the
+      refusal, the terminal cards, and where focus starts) is the script's too.
+      Focus is placed by the script, not by an `autofocus` attribute: WebKit
+      applies `autofocus` even after a script has focused another field, so a
+      refusal that belongs on Password landed on Email. The script places it
+      only once GET /login/context has confirmed a pending request, so a card
+      that has nothing to press opens with nothing focused.
+    -->
+    <main class="auth-screen">
+      <div class="auth-glow" aria-hidden="true"></div>
+      <div class="auth-card-wrap">
+        <div class="logo">
+          <span class="logo-mark"><span></span></span>
+          <span class="logo-text">Taska</span>
+        </div>
+        <section class="auth-card" id="card">
+          <h1 class="auth-title" id="signin-title">Sign in to Taska</h1>
+          <p class="auth-lead">An app wants to connect to your Taska account. After you sign in, you’ll see what it’s asking for.</p>
+          <form class="form-stack" id="signin-form" method="post" action="/login">
+            <input type="hidden" id="signin-csrf" name="_csrf" value="" />
+            <label class="field">
+              <span>Email</span>
+              <input
+                id="signin-email"
+                type="email"
+                name="username"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="you@company.com"
+              />
+            </label>
+            <div class="field">
+              <label for="signin-password">Password</label>
+              <div class="password-field">
+                <input id="signin-password" type="password" name="password" autocomplete="current-password" placeholder="••••••••••" />
+                <button class="icon-button password-toggle" id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" hidden>
+                  <svg class="icon-eye" aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  <svg class="icon-eye-off" aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+                    <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+                    <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+                    <path d="m2 2 20 20" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <!-- `aria-disabled` until GET /login/context has given the CSRF
+                 token, and again while the sign-in is in flight; never
+                 `disabled`, which would drop keyboard focus to <body>. -->
+            <button class="primary-button auth-submit" id="signin-submit" type="submit" aria-disabled="true">Sign in</button>
+            <!-- A refusal from the redirect's ?error=. No live region and no
+                 role: it is the state the page opens in, and the focused
+                 field's description reads it. -->
+            <div class="error-note" id="signin-refusal-box" hidden>
+              <p class="error-note-sentence" id="signin-refusal"></p>
+            </div>
+            <noscript>
+              <div class="error-note">
+                <p class="error-note-sentence">Signing in here needs JavaScript. Turn it on for this site, then reload this page.</p>
+              </div>
+            </noscript>
+            <p class="auth-hint">Forgot your password? Taska has no password reset yet.</p>
+          </form>
+          <nav class="social-signin" id="signin-providers" aria-label="Sign in with a provider" hidden>
+            <p class="auth-hint">Or continue with</p>
+            <div class="social-signin-links" id="signin-provider-links"></div>
+          </nav>
+        </section>
+      </div>
+    </main>
+
+    <!-- T1: no pending authorization request, ?done, or the session lost. -->
+    <template id="card-expired">
+      <section class="auth-card">
+        <h1 class="auth-title" id="expired-title">This connection request is no longer valid</h1>
+        <p class="auth-body">It expired, was already used, or was started in another browser. Go back to the app you were connecting and start again. The app did not get access.</p>
+      </section>
+    </template>
+
+    <!-- ?logout: «Use a different account» posted without a consent_state
+         to return to, so there is no request left to sign in for. -->
+    <template id="card-signed-out">
+      <section class="auth-card">
+        <h1 class="auth-title" id="signed-out-title">You’re signed out of Taska</h1>
+        <p class="auth-body">To connect the app with a different account, go back to the app and start again. The app did not get access.</p>
+      </section>
+    </template>
+
+    <!-- T3: GET /login/context failed. -->
+    <template id="card-unavailable">
+      <section class="auth-card">
+        <h1 class="auth-title" id="unavailable-title">Taska could not finish connecting the app</h1>
+        <p class="auth-body">Something went wrong on Taska’s side. Go back to the app and try again. The app did not get access.</p>
+      </section>
+    </template>
+  </body>
+</html>

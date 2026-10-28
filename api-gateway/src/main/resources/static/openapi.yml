@@ -761,12 +761,23 @@ paths:
       parameters:
         - $ref: '#/components/parameters/OAuthProviderPath'
         - {name: returnTo, in: query, schema: {type: string, default: /projects}}
+        - name: target
+          in: query
+          description: ui by default. oauth returns only to the configured OAUTH_ISSUER /login/provider/callback; arbitrary destinations are rejected. The target is persisted with the flow.
+          schema: {type: string, enum: [ui, oauth], default: ui}
+        - name: binding
+          in: query
+          description: Required only for target=oauth; base64url(SHA-256(N)) for a fresh 32-byte nonce kept in the oauth-server browser session. Never send N here. ui must omit this value.
+          schema: {type: string, pattern: '^[A-Za-z0-9_-]{43}$', minLength: 43, maxLength: 43}
       responses:
         '302':
           description: >-
             Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
             Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
             RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            For target=oauth, code/error returns to configured OAUTH_ISSUER /login/provider/callback.
+            That code is browser-bound and claimable only by the private ClaimSignIn RPC with N;
+            public exchange rejects it without consuming it. No JWT/refresh is issued for this sign-in.
             No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
@@ -789,6 +800,9 @@ paths:
             Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
             Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
             RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            For target=oauth, code/error returns to configured OAUTH_ISSUER /login/provider/callback.
+            That code is browser-bound and claimable only by the private ClaimSignIn RPC with N;
+            public exchange rejects it without consuming it. No JWT/refresh is issued for this sign-in.
             No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
@@ -816,6 +830,9 @@ paths:
             Provider redirect on start, or UI origin /auth/callback?code=... with a 60-second one-time code.
             Failures redirect to UI origin /auth/callback?error=OAuthErrorReason&requestId=...;
             RATE_LIMITED also has retryAfter (positive seconds). The configured UI base path is discarded.
+            For target=oauth, code/error returns to configured OAUTH_ISSUER /login/provider/callback.
+            That code is browser-bound and claimable only by the private ClaimSignIn RPC with N;
+            public exchange rejects it without consuming it. No JWT/refresh is issued for this sign-in.
             No session tokens appear in URLs. Responses use no-store and Referrer-Policy no-referrer.
           headers:
             Location: {schema: {type: string}}
@@ -829,7 +846,7 @@ paths:
       description: >-
         A syntactically valid, live code is atomically consumed before provider availability and account checks.
         Therefore 403 and 503 after claim consume the code. Invalid, expired or already consumed codes give 401.
-        A rejected IP quota (429) does not claim it.
+        A rejected IP quota (429) does not claim it. Codes issued for target=oauth are rejected with401 STATE_INVALID without consumption; only the private browser-bound ClaimSignIn RPC can redeem them.
       requestBody:
         required: true
         content:
