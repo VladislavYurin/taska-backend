@@ -118,6 +118,6 @@ public class IssueTypeWorkflowReservationService {
     }
     private record Pin(IssueTypeMoveWorkflowSnapshot snapshot, boolean released) { }
     private static DomainException failed(String reason, String message) {
-        return new DomainException(DomainStatus.FAILED_PRECONDITION, message, Map.of("reason", reason));
+        return new DomainException(reason.equals("ISSUE_TYPES_CHANGED") ? DomainStatus.ABORTED : DomainStatus.FAILED_PRECONDITION, message, Map.of("reason", reason));
     }
 }

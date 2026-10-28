@@ -587,6 +587,8 @@ message ListProjectWorkflowsResponse {
    * Workflow проекта, по одному на каждый различный workflow.
    */
   repeated ProjectWorkflow workflows = 1;
+  // Workflow of the first registry type; absent for an empty registry.
+  optional string main_workflow_id = 2;
 }
 
 message WorkflowBindingOperationResult {
