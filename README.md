@@ -2,6 +2,8 @@
 
 Backend системы управления проектами и задачами (аналог Jira). Проект построен как реактивный Java-монорепозиторий: внешний REST API принимает `api-gateway`, синхронное взаимодействие сервисов идёт по gRPC, доменные события доставляются через Kafka по шаблону transactional outbox, а каждый бизнес-сервис владеет отдельной PostgreSQL-базой.
 
+Для агентной разработки: [AGENTS.md](AGENTS.md), [карта репозитория](docs/agents/README.md), [команды проверок](docs/agents/verification.md) и [спецификация harness](docs/agents/harness-spec.md). Существующие команды и проектируемые компоненты описаны отдельно.
+
 ## Текущее состояние
 
 Реализованы:
@@ -94,6 +96,7 @@ flowchart LR
 ### Основной стек
 
 - Java 21;
+- PR CI использует JDK 25; целевой Java release остаётся 21 из `pom.xml`;
 - Spring Boot 4.0.3 и Spring WebFlux;
 - Spring Data R2DBC и PostgreSQL 16;
 - Spring gRPC, Protocol Buffers и Reactor gRPC;
