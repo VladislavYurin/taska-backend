@@ -1,5 +1,6 @@
 package ru.taska.service.impl;
 
+import io.grpc.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -127,8 +128,7 @@ public class ProjectServiceImpl implements ProjectService {
      * Доступ к контексту — то же правило, что и у {@link #getProject}: не участник проекта
      * получает PERMISSION_DENIED независимо от глобальной роли. Полноценное чтение контекста
      * для GLOBAL_ADMIN вне проекта (роль в gRPC-заголовке) — отдельная задача.
-     * Отказ любого из источников (members/labels/workflows) пробрасывается наружу,
-     * а не маскируется пустым списком.
+     * Отказ members/labels пробрасывается наружу, а не маскируется пустым списком.
      */
     @Override
     public Mono<ProjectContextDto> getProjectContext(
@@ -274,8 +274,18 @@ public class ProjectServiceImpl implements ProjectService {
                 .map(ru.taska.domain.ProjectIssueType::code)
                 .flatMap(issueType ->
                         workflowServiceClient.getWorkflowForProject(
-                                projectId, issueType, actorUserId, requestId, nodeId
-                        )
+                                        projectId, issueType, actorUserId, requestId, nodeId
+                                )
+                                .onErrorResume(error -> {
+                                    if (Status.fromThrowable(error).getCode() == Status.Code.NOT_FOUND) {
+                                        log.debug("[{}][{}] Workflow not found for project {} and issue type {}",
+                                                requestId, nodeId, projectId, issueType);
+                                        return Mono.empty();
+                                    }
+                                    log.warn("[{}][{}] Failed to load workflow for project {} and issue type {}",
+                                            requestId, nodeId, projectId, issueType, error);
+                                    return Mono.<ProjectWorkflowDto>error(error);
+                                })
                 )
                 .collectList();
     }

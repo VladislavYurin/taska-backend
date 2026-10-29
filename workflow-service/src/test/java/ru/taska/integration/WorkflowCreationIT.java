@@ -3,9 +3,9 @@ package ru.taska.integration;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -266,8 +266,37 @@ class WorkflowCreationIT extends LegacyWorkflowOperationsFixture {
     }
 
     @Test
+    @DisplayName("Отсутствие статуса TODO приводит к INVALID_ARGUMENT")
     void createWorkflow_MissingTodoStatus_ShouldReturnInvalidArgument() {
         validDto.getStatuses().removeIf(s -> s.getStatusKey().equals("TODO"));
+        validDto.getTransitions().removeIf(t -> t.getFromStatusKey().equals("TODO"));
+
+        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto))
+                .expectErrorSatisfies(error -> {
+                    DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
+                    Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ex.getStatus());
+                })
+                .verify();
+    }
+
+    @Test
+    @DisplayName("Без статусов и без переходов приводит к INVALID_ARGUMENT")
+    void createWorkflow_MissingStatusesAndTransitions_ShouldReturnInvalidArgument() {
+        validDto.getStatuses().clear();
+        validDto.getTransitions().clear();
+
+        StepVerifier.create(workflowService.createWorkflow(REQUEST_ID, NODE_ID, ACTOR_USER_ID, validDto))
+                .expectErrorSatisfies(error -> {
+                    DomainException ex = Assertions.assertInstanceOf(DomainException.class, error);
+                    Assertions.assertEquals(DomainStatus.INVALID_ARGUMENT, ex.getStatus());
+                })
+                .verify();
+    }
+
+    @Test
+    @DisplayName("Все переходы hidden приводит к INVALID_ARGUMENT")
+    void createWorkflow_AllTransitionsHidden_ShouldReturnInvalidArgument() {
+        validDto.getTransitions().forEach(t -> t.setHidden(true));
 
         StepVerifier.create(workflowService.createWorkflow(UUID.randomUUID().toString(), NODE_ID, ACTOR_USER_ID, validDto))
                 .expectErrorSatisfies(error -> {

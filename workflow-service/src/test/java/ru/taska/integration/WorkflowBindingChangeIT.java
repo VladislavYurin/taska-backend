@@ -318,38 +318,58 @@ class WorkflowBindingChangeIT extends AbstractIT {
 
     @Test
     void emptyGraphCreationPreservesLegacyIncrementalConfigurationWhenThereAreNoIssues() {
-        var created=coordinator.create(header,actor,creation(List.of("STORY"),true)).block(TIMEOUT);
-        assertThat(created.getWorkflow().getStatusesCount()).isZero();
-        assertThat(binding("STORY")).isEqualTo(created.getWorkflow().getId());
+        // Validation requires a usable graph, so create a valid one first.
+        var created=coordinator.create(header,actor,creation(List.of("STORY"),false)).block(TIMEOUT);
+        UUID createdId=UUID.fromString(created.getWorkflow().getId());
+        assertThat(created.getWorkflow().getStatusesCount()).isEqualTo(2);
+
+        // A legacy incremental graph may have its statuses removed after creation;
+        // the workflow row and its binding must remain visible.
+        databaseClient.sql("DELETE FROM taska.statuses WHERE workflow_id=:id")
+                .bind("id", createdId).then().block(TIMEOUT);
+
+        var listed=listing.listProjectWorkflows("list","test",project,actor).block(TIMEOUT).stream()
+                .filter(item -> item.workflow().workflow().getId().equals(createdId)).findFirst().orElseThrow();
+        assertThat(listed.workflow().statuses()).isEmpty();
+        assertThat(listed.workflow().transitions()).isEmpty();
+        assertThat(listed.issueTypes()).contains(IssueType.STORY);
+        assertThat(binding("STORY")).isEqualTo(createdId.toString());
     }
 
     @Test
     void ownedEmptyIncrementalGraphCanRenameWithoutIssueRpcOrGraphUsabilityRequirements() {
-        UUID empty=UUID.randomUUID();graph(empty,"Empty graph",List.of());
+        // "Incremental" means the owned graph has no issue types yet; the graph itself must be valid.
+        UUID unbound=UUID.randomUUID();graph(unbound,"Graph without types",List.of("TODO","DONE"));
         var changed=mutations.mutate(ru.taska.service.WorkflowMutationService.Operation.UPDATE_WORKFLOW,
-                new ru.taska.dto.WorkflowMutation("rename-empty","workflow-pg",actor,project,empty,1,
+                new ru.taska.dto.WorkflowMutation("rename-empty","workflow-pg",actor,project,unbound,1,
                         null,null,"Reusable empty graph",null,null,null,null,Map.of())).block(TIMEOUT);
         assertThat(changed.workflow().workflow().getName()).isEqualTo("Reusable empty graph");
         assertThat(changed.workflow().workflow().getVersion()).isEqualTo(2);
-        assertThat(changed.issueTypes()).isEmpty();assertThat(changed.workflow().statuses()).isEmpty();
-        assertThat(changed.workflow().transitions()).isEmpty();assertThat(bindingCount(empty)).isZero();
+        assertThat(changed.issueTypes()).isEmpty();
+        assertThat(changed.workflow().statuses()).extracting(status -> status.getStatusKey())
+                .containsExactly("TODO","DONE");
+        assertThat(changed.workflow().transitions()).hasSize(1);
+        assertThat(bindingCount(unbound)).isZero();
         verify(issues,never()).apply(any(),any());verify(issues,never()).cancel(any(),any());
         assertThat(version(fallback)).isEqualTo(fallbackVersion);
     }
 
     @Test
     void expandedPlanTransportLimitRejectsBeforeAnyJournalGraphOrRemoteReservationIsCommitted() {
-        var codes=IntStream.range(0,400).mapToObj(i -> "TYPE_"+i).toList();
+        var codes= new java.util.ArrayList<>(IntStream.range(0, 400).mapToObj(i -> "TYPE_" + i).toList());
+        codes.add("TODO");
         var registry=codes.stream().map(code -> ProjectIssueTypeResponse.newBuilder().setCode(code).setName(code)
                 .setGeneration(UUID.randomUUID().toString()).build()).toList();
         when(projects.listIssueTypeDetails(any(),any(),any(),any())).thenReturn(Mono.just(registry));
         when(projects.getIssueTypesInternal(any())).thenReturn(Mono.just(registry));
-        var manyStatuses=IntStream.range(0,100).mapToObj(i -> CreateWorkflowStatusDto.builder()
+        var manyStatuses= new java.util.ArrayList<>(IntStream.range(0,100).mapToObj(i -> CreateWorkflowStatusDto.builder()
                 .statusKey("S"+"X".repeat(57)+String.format("%06d",i)).name("Status "+i)
-                .category(StatusCategory.TODO).sortOrder(i).build()).toList();
+                .category(StatusCategory.TODO).sortOrder(i).build()).toList());
+        manyStatuses.add(CreateWorkflowStatusDto.builder().statusKey("TODO").name("name").sortOrder(105).category(StatusCategory.TODO).build());
         var dto=WorkflowCreationDto.builder().projectId(project).name("Small command, large expansion")
                 .issueTypes(codes.stream().map(IssueType::valueOf).toList()).statuses(manyStatuses)
-                .transitions(List.of()).statusMappings(Map.of()).build();
+                .transitions(List.of(CreateWorkflowTransitionDto.builder().name("trans").fromStatusKey("TODO")
+                        .toStatusKey("SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX000000").build())).statusMappings(Map.of()).build();
         long before=databaseClient.sql("SELECT count(*) AS n FROM taska.workflows WHERE owner_project_id=:project")
                 .bind("project",project).map(row -> row.get("n",Long.class)).one().block(TIMEOUT);
         assertThatThrownBy(() -> coordinator.create(header,actor,dto).block(TIMEOUT))

@@ -24,6 +24,7 @@ public class WorkflowCreationValidator {
 
     private final int nameMaxLength;
     private final Pattern statusKeyPattern;
+    private final String TODO_STATUS = "TODO";
 
     public WorkflowCreationValidator(
             @Value("${workflow.validation.name-max-length}") int nameMaxLength,
@@ -38,6 +39,9 @@ public class WorkflowCreationValidator {
                 validateNameLengths(dto),
                 validateIssueTypes(dto),
                 validateStatusKeys(dto),
+                validateStatusesNotEmpty(dto),
+                validateTodoStatusPresent(dto),
+                validateVisibleTransitionPresent(dto),
                 validateStatusAndSortOrderUniqueness(dto),
                 validateStatusCategories(dto),
                 validateTransitionStatusReferences(dto),
@@ -124,6 +128,34 @@ public class WorkflowCreationValidator {
                 violations.add(violation(WorkflowCreationViolationType.INVALID_STATUS_KEY_FORMAT,
                         "Status key has invalid format: " + key));
             }
+        }
+        return violations;
+    }
+
+    private List<WorkflowCreationViolation> validateVisibleTransitionPresent(WorkflowCreationDto dto) {
+        List<WorkflowCreationViolation> violations = new ArrayList<>();
+        long visibleTransitionsCount = dto.getTransitions().stream().filter(transition -> !transition.isHidden()).count();
+        if (visibleTransitionsCount == 0) {
+            violations.add(violation(WorkflowCreationViolationType.NO_VISIBLE_TRANSITION, "No visible transition present"));
+        }
+        return violations;
+    }
+
+    private List<WorkflowCreationViolation> validateTodoStatusPresent(WorkflowCreationDto dto) {
+        List<WorkflowCreationViolation> violations = new ArrayList<>();
+        long todoCount = dto.getStatuses().stream()
+                .filter(status -> TODO_STATUS.equals(status.getStatusKey()))
+                .count();
+        if (todoCount == 0) {
+            violations.add(violation(WorkflowCreationViolationType.TODO_STATUS_MISSING, "Must at least one TODO status"));
+        }
+        return violations;
+    }
+
+    private List<WorkflowCreationViolation> validateStatusesNotEmpty(WorkflowCreationDto dto) {
+        List<WorkflowCreationViolation> violations = new ArrayList<>();
+        if (dto.getStatuses() == null || dto.getStatuses().isEmpty()) {
+            violations.add(violation(WorkflowCreationViolationType.STATUS_LIST_EMPTY, "Status must not be blank"));
         }
         return violations;
     }
