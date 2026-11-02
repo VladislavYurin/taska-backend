@@ -559,7 +559,7 @@
     },
     {
       "key": "TAS-303",
-      "summary": "01. Реестр: таблицы и владельцев tenant-данных",
+      "summary": "01. Реестр таблиц и владельцев tenant-данных",
       "kind": "ANALYSIS_DONE",
       "parent": "TAS-268",
       "dependsOn": [],
@@ -610,7 +610,7 @@
     },
     {
       "key": "TAS-304",
-      "summary": "02. Реестр: матрицу доступа и угрозы tenant-изоляции",
+      "summary": "02. Матрица доступа и угрозы tenant-изоляции",
       "kind": "ANALYSIS_DONE",
       "parent": "TAS-268",
       "dependsOn": [
@@ -638,7 +638,7 @@
     },
     {
       "key": "TAS-305",
-      "summary": "03. Контракт: контракт TenantContext и tenant-сессий",
+      "summary": "03. Контракт TenantContext и tenant-сессий",
       "kind": "ANALYSIS_DONE",
       "parent": "TAS-268",
       "dependsOn": [
@@ -3199,7 +3199,7 @@
     },
     {
       "key": "TAS-468",
-      "summary": "Реестр: REST/RPC и пути доступа к данным",
+      "summary": "Реестр REST/RPC/MCP и путей доступа к данным",
       "kind": "ANALYSIS_DONE",
       "parent": "TAS-268",
       "dependsOn": [],
@@ -3221,7 +3221,7 @@
     },
     {
       "key": "TAS-469",
-      "summary": "Реестр: события, jobs, кэши и файловые ключи",
+      "summary": "Реестр событий, jobs, кэшей и файловых ключей",
       "kind": "ANALYSIS_DONE",
       "parent": "TAS-268",
       "dependsOn": [],
