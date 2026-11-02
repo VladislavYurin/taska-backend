@@ -1,0 +1,1681 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// Blueprint only. Existing Header fields 1..4 and UserContext reserved 2/login remain untouched.
+// UUID/date-time/count/Money use exact OpenAPI lexical representations. Interceptors validate them.
+enum CredentialKind { CREDENTIAL_KIND_UNSPECIFIED = 0; CREDENTIAL_KIND_WEB_GLOBAL = 1; CREDENTIAL_KIND_WEB_TENANT = 2; CREDENTIAL_KIND_USER_PAT = 3; CREDENTIAL_KIND_USER_OAUTH = 4; CREDENTIAL_KIND_ADMIN_PAT = 5; CREDENTIAL_KIND_ADMIN_OAUTH = 6; CREDENTIAL_KIND_SERVICE = 7; }
+message TrustedTenantContext {
+  optional string actor_user_id = 1;
+  optional string tenant_id = 2;
+  CredentialKind credential_kind = 3;
+  optional string session_id = 4;
+  optional string credential_id = 5;
+  optional string grant_id = 6;
+  repeated string scopes = 7;
+  string action = 8;
+  string actor_generation = 9;
+  optional string membership_generation = 10;
+  optional string grant_generation = 11;
+  string issuer_service = 12;
+  string audience_service = 13;
+  string issued_at = 14;
+  string expires_at = 15;
+  string assertion_id = 16;
+  optional AdminScope administrative_scope = 17;
+  optional AdminGrant.LevelValue administrative_level = 18;
+  bool manage_global_accounts = 19;
+  uint32 context_version = 20;
+}
+message RequestContext {
+  ru.taska.common.v1.Header header = 1;
+  TrustedTenantContext context = 2;
+  // JWS in x-taska-context metadata signs exact context digest + request digest + RPC full name.
+  // Context is UNTRUSTED until recipient interceptor verifies mTLS peer, signature/audience and online state.
+}
+message PageRequest { optional string cursor = 1; uint32 limit = 2; }
+message MutationOptions { string idempotency_key = 1; optional string expected_version = 2; }
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_AUTHENTICATION_REQUIRED = 1;
+  ERROR_CODE_MFA_REQUIRED = 2;
+  ERROR_CODE_TOKEN_REVOKED = 3;
+  ERROR_CODE_TENANT_REQUIRED = 4;
+  ERROR_CODE_TENANT_MISMATCH = 5;
+  ERROR_CODE_TENANT_NOT_FOUND = 6;
+  ERROR_CODE_MEMBERSHIP_INACTIVE = 7;
+  ERROR_CODE_SCOPE_DENIED = 8;
+  ERROR_CODE_SESSION_REQUIRED = 9;
+  ERROR_CODE_ADMIN_GRANT_REQUIRED = 10;
+  ERROR_CODE_ADMIN_SCOPE_DENIED = 11;
+  ERROR_CODE_RESOURCE_NOT_FOUND = 12;
+  ERROR_CODE_VERSION_CONFLICT = 13;
+  ERROR_CODE_IDEMPOTENCY_CONFLICT = 14;
+  ERROR_CODE_QUOTA_EXCEEDED = 15;
+  ERROR_CODE_CAPABILITY_DISABLED = 16;
+  ERROR_CODE_READ_ONLY = 17;
+  ERROR_CODE_OWNER_REQUIRED = 18;
+  ERROR_CODE_LAST_ADMIN = 19;
+  ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED = 20;
+  ERROR_CODE_INVITATION_EXPIRED = 21;
+  ERROR_CODE_INVITATION_EMAIL_MISMATCH = 22;
+  ERROR_CODE_FREE_ELIGIBILITY_USED = 23;
+  ERROR_CODE_PAYMENT_PENDING = 24;
+  ERROR_CODE_INVALID_STATE = 25;
+  ERROR_CODE_CONFIRMATION_REQUIRED = 26;
+  ERROR_CODE_CONFIRMATION_EXPIRED = 27;
+  ERROR_CODE_RATE_LIMITED = 28;
+  ERROR_CODE_DEPENDENCY_UNAVAILABLE = 29;
+  ERROR_CODE_POLICY_NOT_CONFIGURED = 30;
+  ERROR_CODE_VALIDATION_FAILED = 31;
+}
+
+enum RestrictionCode {
+  RESTRICTION_CODE_UNSPECIFIED = 0;
+  RESTRICTION_CODE_PAYMENT_EXPIRED = 1;
+  RESTRICTION_CODE_OVER_QUOTA = 2;
+  RESTRICTION_CODE_OWNER_PAUSE = 3;
+  RESTRICTION_CODE_PLATFORM_BLOCK = 4;
+  RESTRICTION_CODE_PAYMENT_DISPUTE = 5;
+  RESTRICTION_CODE_PENDING_FIRST_PAYMENT = 6;
+}
+
+message FieldViolation {
+  string field = 1;
+  string code = 2;
+  string message = 3;
+}
+
+message Problem {
+  string type = 1;
+  string title = 2;
+  int64 status = 3;
+  ErrorCode code = 4;
+  string request_id = 5;
+  repeated RestrictionCode reasons = 6;
+  repeated FieldViolation violations = 7;
+}
+
+message ConfirmedAction {
+  bool confirmed = 1;
+}
+
+message Operation {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_PENDING = 1; STATE_RUNNING = 2; STATE_SUCCEEDED = 3; STATE_FAILED = 4; STATE_MANUAL_REVIEW = 5; }
+  string id = 1;
+  string type = 2;
+  StateValue state = 3;
+  string created_at = 4;
+  string updated_at = 5;
+  optional string tenant_id = 6;
+  optional string resource_id = 7;
+  optional ErrorCode failure_code = 8;
+}
+
+message Money {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  string amount_minor = 1;
+  CurrencyValue currency = 2;
+  int64 exponent = 3;
+}
+
+message FxQuote {
+  enum BaseCurrencyValue { BASE_CURRENCY_UNSPECIFIED = 0; BASE_CURRENCY_EUR = 1; }
+  enum QuoteCurrencyValue { QUOTE_CURRENCY_UNSPECIFIED = 0; QUOTE_CURRENCY_USD = 1; }
+  BaseCurrencyValue base_currency = 1;
+  QuoteCurrencyValue quote_currency = 2;
+  string rate = 3;
+  string source = 4;
+  string observed_at = 5;
+  string expires_at = 6;
+}
+
+message QuotaLimit {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; KIND_TASK_LIFETIME = 4; }
+  KindValue kind = 1;
+  optional string limit = 2;
+  bool unlimited = 3;
+}
+
+message QuotaUsage {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; KIND_TASK_LIFETIME = 4; }
+  KindValue kind = 1;
+  string used = 2;
+  string reserved = 3;
+  optional string limit = 4;
+  bool unlimited = 5;
+  optional string project_id = 6;
+  string version = 7;
+}
+
+message Tenant {
+  enum LifecycleValue { LIFECYCLE_UNSPECIFIED = 0; LIFECYCLE_PROVISIONING = 1; LIFECYCLE_AWAITING_PAYMENT = 2; LIFECYCLE_ACTIVE = 3; LIFECYCLE_AUTO_CLOSED = 4; LIFECYCLE_OWNER_CANCELLED = 5; LIFECYCLE_DELETING = 6; LIFECYCLE_DELETED = 7; }
+  string id = 1;
+  string name = 2;
+  string owner_id = 3;
+  LifecycleValue lifecycle = 4;
+  repeated RestrictionCode restrictions = 5;
+  string created_at = 6;
+  optional string creation_deadline = 7;
+  string version = 8;
+  string owner_version = 9;
+}
+
+message TenantPage {
+  repeated Tenant items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateTenantRequest {
+  string name = 1;
+  string plan_version_id = 2;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+  Operation operation = 2;
+}
+
+message RenameTenantRequest {
+  string name = 1;
+}
+
+message TenantSelectionRequest {
+  string tenant_id = 1;
+}
+
+message Membership {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_SUSPENDED = 2; STATE_REMOVED = 3; }
+  string id = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  RoleValue role = 4;
+  StateValue state = 5;
+  bool is_owner = 6;
+  string display_name = 7;
+  string email = 8;
+  optional string avatar_path = 9;
+  string version = 10;
+}
+
+message MembershipPage {
+  repeated Membership items = 1;
+  optional string next_cursor = 2;
+}
+
+message ChangeMemberRoleRequest {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  RoleValue role = 1;
+}
+
+message ChangeMemberStateRequest {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_SUSPENDED = 2; }
+  StateValue state = 1;
+}
+
+message TransferOwnershipRequest {
+  string new_owner_user_id = 1;
+  bool confirmed = 2;
+}
+
+message ProjectGrant {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_ADMIN = 1; ROLE_MEMBER = 2; ROLE_VIEWER = 3; }
+  string project_id = 1;
+  RoleValue role = 2;
+}
+
+message CreateInvitationRequest {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  string email = 1;
+  RoleValue role = 2;
+  repeated ProjectGrant project_grants = 3;
+}
+
+message Invitation {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_PENDING = 1; STATE_ACCEPTED = 2; STATE_REVOKED = 3; STATE_EXPIRED = 4; }
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  RoleValue role = 4;
+  StateValue state = 5;
+  string expires_at = 6;
+  string created_by = 7;
+  repeated ProjectGrant project_grants = 8;
+  string version = 9;
+}
+
+message InvitationPage {
+  repeated Invitation items = 1;
+  optional string next_cursor = 2;
+}
+
+message InvitationTokenRequest {
+  string token = 1;
+}
+
+message InvitationPreview {
+  string tenant_name = 1;
+  string invited_email_masked = 2;
+  string expires_at = 3;
+  bool requires_account = 4;
+}
+
+message AcceptInvitationRequest {
+  string token = 1;
+  optional string display_name = 2;
+  optional string password = 3;
+  optional bool terms_accepted = 4;
+}
+
+message SkippedProjectGrant {
+  enum ReasonValue { REASON_UNSPECIFIED = 0; REASON_PROJECT_REMOVED = 1; REASON_PROJECT_UNAVAILABLE = 2; REASON_SENDER_PERMISSION_LOST = 3; }
+  string project_id = 1;
+  ReasonValue reason = 2;
+}
+
+message InvitationAcceptance {
+  Membership membership = 1;
+  repeated ProjectGrant granted_projects = 2;
+  repeated SkippedProjectGrant skipped_projects = 3;
+}
+
+message QuotaSnapshot {
+  string tenant_id = 1;
+  string version = 2;
+  repeated QuotaUsage quotas = 3;
+  string as_of = 4;
+}
+
+message QuotaReservation {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_COMMITTED = 2; STATE_RELEASED = 3; STATE_EXPIRED = 4; }
+  string id = 1;
+  string operation_id = 2;
+  string tenant_id = 3;
+  KindValue kind = 4;
+  optional string project_id = 5;
+  string quantity = 6;
+  StateValue state = 7;
+  string expires_at = 8;
+  string version = 9;
+}
+
+message ReserveQuotaRequest {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; }
+  string operation_id = 1;
+  KindValue kind = 2;
+  optional string project_id = 3;
+  string quantity = 4;
+  string resource_id = 5;
+}
+
+message FinalizeQuotaRequest {
+  string operation_id = 1;
+  string resource_id = 2;
+  optional string actual_quantity = 3;
+}
+
+message AccessSession {
+  enum TokenTypeValue { TOKEN_TYPE_UNSPECIFIED = 0; TOKEN_TYPE_Bearer = 1; }
+  string session_id = 1;
+  string user_id = 2;
+  optional string tenant_id = 3;
+  string access_token = 4;
+  string refresh_token = 5;
+  TokenTypeValue token_type = 6;
+  int64 expires_in = 7;
+  bool mfa_verified = 8;
+}
+
+message PasswordLoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message MfaChallenge {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_ADMIN_LOGIN = 1; }
+  enum DeliveryValue { DELIVERY_UNSPECIFIED = 0; DELIVERY_EMAIL = 1; }
+  string challenge_id = 1;
+  PurposeValue purpose = 2;
+  string expires_at = 3;
+  DeliveryValue delivery = 4;
+  string masked_destination = 5;
+  int64 retry_after_seconds = 6;
+}
+
+message LoginResult { oneof result {
+  AccessSession access_session = 1;
+  MfaChallenge mfa_challenge = 2;
+} }
+
+message MfaVerifyRequest {
+  string code = 1;
+}
+
+message RefreshSessionRequest {
+  string refresh_token = 1;
+}
+
+message PasswordResetStartRequest {
+  string email = 1;
+}
+
+message DeliveryAcknowledgement {
+  bool accepted = 1;
+  int64 retry_after_seconds = 2;
+}
+
+message PasswordResetCompleteRequest {
+  string token = 1;
+  string new_password = 2;
+}
+
+message PasswordChangeRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message EmailChangeStartRequest {
+  string new_email = 1;
+  optional string current_password = 2;
+}
+
+message EmailChangeCompleteRequest {
+  string challenge_id = 1;
+  string code = 2;
+}
+
+message ConfirmationChallenge {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_DELETE_TENANT = 1; PURPOSE_DELETE_ACCOUNT = 2; PURPOSE_CHANGE_EMAIL = 3; }
+  enum DeliveryValue { DELIVERY_UNSPECIFIED = 0; DELIVERY_EMAIL = 1; DELIVERY_TELEGRAM = 2; }
+  string challenge_id = 1;
+  PurposeValue purpose = 2;
+  string expires_at = 3;
+  DeliveryValue delivery = 4;
+  string masked_destination = 5;
+}
+
+message DeletionPrerequisites {
+  bool allowed = 1;
+  repeated string owned_tenant_ids = 2;
+  repeated string last_admin_tenant_ids = 3;
+  bool policy_ready = 4;
+  string owned_tenant_count = 5;
+  string last_admin_tenant_count = 6;
+  bool has_more = 7;
+}
+
+message DeletionChallengeRequest {
+  enum ChannelValue { CHANNEL_UNSPECIFIED = 0; CHANNEL_EMAIL = 1; CHANNEL_TELEGRAM = 2; }
+  ChannelValue channel = 1;
+}
+
+message DeleteTenantRequest {
+  string challenge_id = 1;
+  string code = 2;
+  bool confirmed = 3;
+  string confirmed_name = 4;
+}
+
+message DeleteAccountRequest {
+  string challenge_id = 1;
+  string code = 2;
+  bool confirmed = 3;
+}
+
+message ExportRequest {
+  enum FormatValue { FORMAT_UNSPECIFIED = 0; FORMAT_JSON_ZIP = 1; }
+  bool include_attachments = 1;
+  FormatValue format = 2;
+}
+
+message Export {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_QUEUED = 1; STATE_RUNNING = 2; STATE_READY = 3; STATE_FAILED = 4; STATE_EXPIRED = 5; }
+  string id = 1;
+  string tenant_id = 2;
+  StateValue state = 3;
+  string created_at = 4;
+  optional string expires_at = 5;
+  optional string size_bytes = 6;
+  optional string download_path = 7;
+}
+
+message PersonalTokenRequest {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string tenant_id = 1;
+  string name = 2;
+  repeated ScopesValue scopes = 3;
+  int64 expires_in_days = 4;
+}
+
+message PersonalToken {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  repeated ScopesValue scopes = 4;
+  string created_at = 5;
+  string expires_at = 6;
+  bool revoked = 7;
+}
+
+message PersonalTokenCreated {
+  PersonalToken metadata = 1;
+  string secret = 2;
+}
+
+message AdminScope {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_TENANT_SET = 1; KIND_PLATFORM = 2; }
+  KindValue kind = 1;
+  repeated string tenant_ids = 2;
+}
+
+message AdminGrantRequest {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_PAT = 1; KIND_OAUTH = 2; }
+  enum LevelValue { LEVEL_UNSPECIFIED = 0; LEVEL_READ = 1; LEVEL_MODIFY = 2; }
+  KindValue kind = 1;
+  string name = 2;
+  AdminScope scope = 3;
+  LevelValue level = 4;
+  bool manage_global_accounts = 5;
+  int64 expires_in_days = 6;
+  optional string oauth_client_id = 7;
+}
+
+message AdminGrant {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_PAT = 1; KIND_OAUTH = 2; }
+  enum LevelValue { LEVEL_UNSPECIFIED = 0; LEVEL_READ = 1; LEVEL_MODIFY = 2; }
+  string id = 1;
+  KindValue kind = 2;
+  string actor_user_id = 3;
+  string name = 4;
+  AdminScope scope = 5;
+  LevelValue level = 6;
+  bool manage_global_accounts = 7;
+  string version = 8;
+  string expires_at = 9;
+  bool revoked = 10;
+}
+
+message AdminGrantPage {
+  repeated AdminGrant items = 1;
+  optional string next_cursor = 2;
+}
+
+message AdminGrantCreated {
+  AdminGrant grant = 1;
+  optional string secret = 2;
+}
+
+message OAuthConsentRequest {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string client_id = 1;
+  string tenant_id = 2;
+  repeated ScopesValue scopes = 3;
+  string authorization_request_id = 4;
+  bool approved = 5;
+}
+
+message OAuthConsentResult {
+  string grant_id = 1;
+  string redirect_path = 2;
+  string tenant_id = 3;
+}
+
+message PlanVersion {
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_PUBLISHED = 2; STATE_RETIRED = 3; }
+  string id = 1;
+  string code = 2;
+  string version = 3;
+  string name = 4;
+  Money price = 5;
+  PeriodValue period = 6;
+  repeated QuotaLimit limits = 7;
+  repeated string capabilities = 8;
+  StateValue state = 9;
+  optional string published_at = 10;
+}
+
+message PlanVersionPage {
+  repeated PlanVersion items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreatePlanVersionRequest {
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  string code = 1;
+  string name = 2;
+  Money price = 3;
+  PeriodValue period = 4;
+  repeated QuotaLimit limits = 5;
+  repeated string capabilities = 6;
+}
+
+message PublishPlanVersionRequest {
+  bool confirmed = 1;
+}
+
+message Subscription {
+  enum AutopayStateValue { AUTOPAY_STATE_UNSPECIFIED = 0; AUTOPAY_STATE_DISABLED = 1; AUTOPAY_STATE_CONSENTED = 2; AUTOPAY_STATE_SUSPENDED = 3; }
+  string tenant_id = 1;
+  string plan_version_id = 2;
+  string version = 3;
+  optional string current_period_id = 4;
+  optional string paid_through = 5;
+  optional int64 anchor_day = 6;
+  bool renewal_cancelled = 7;
+  optional string scheduled_plan_version_id = 8;
+  optional string scheduled_effective_at = 9;
+  AutopayStateValue autopay_state = 10;
+}
+
+message SubscriptionPeriod {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_GRANTED = 1; STATE_REVOKED = 2; STATE_SUPERSEDED = 3; }
+  enum PaymentSourceValue { PAYMENT_SOURCE_UNSPECIFIED = 0; PAYMENT_SOURCE_PSP = 1; PAYMENT_SOURCE_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+  string plan_version_id = 4;
+  string starts_at = 5;
+  string ends_at = 6;
+  int64 anchor_day = 7;
+  StateValue state = 8;
+  string confirmed_at = 9;
+  PaymentSourceValue payment_source = 10;
+}
+
+message SubscriptionPeriodPage {
+  repeated SubscriptionPeriod items = 1;
+  optional string next_cursor = 2;
+}
+
+message ChangePlanRequest {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string plan_version_id = 1;
+  optional CurrencyValue currency = 2;
+  optional PaymentMethodValue payment_method = 3;
+  bool confirmed = 4;
+}
+
+message PlanChange {
+  enum EffectValue { EFFECT_UNSPECIFIED = 0; EFFECT_IMMEDIATE = 1; EFFECT_AFTER_PAYMENT = 2; EFFECT_NEXT_PERIOD = 3; }
+  Subscription subscription = 1;
+  EffectValue effect = 2;
+  optional string invoice_id = 3;
+  optional string effective_at = 4;
+  string operation_id = 5;
+}
+
+message BillingAddress {
+  string country = 1;
+  string postal_code = 2;
+  string city = 3;
+  string line1 = 4;
+  optional string line2 = 5;
+}
+
+message BuyerDetails {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_BUSINESS = 1; KIND_CONSUMER = 2; }
+  KindValue kind = 1;
+  string name = 2;
+  string email = 3;
+  BillingAddress address = 4;
+  optional string tax_id = 5;
+}
+
+message SellerSnapshot {
+  string legal_name = 1;
+  string registration_id = 2;
+  optional string tax_id = 3;
+  BillingAddress address = 4;
+}
+
+message TaxLine {
+  string label = 1;
+  string rate = 2;
+  Money amount = 3;
+}
+
+message InvoiceLine {
+  string description = 1;
+  int64 quantity = 2;
+  Money net = 3;
+  repeated TaxLine taxes = 4;
+  Money total = 5;
+}
+
+message WireInstructions {
+  string beneficiary_name = 1;
+  string iban = 2;
+  string bic = 3;
+  string bank_name = 4;
+  string reference = 5;
+}
+
+message Invoice {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_OPEN = 2; STATE_PARTIALLY_PAID = 3; STATE_PAID = 4; STATE_EXPIRED = 5; STATE_VOID = 6; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string number = 3;
+  PurposeValue purpose = 4;
+  StateValue state = 5;
+  string plan_version_id = 6;
+  BuyerDetails buyer = 7;
+  SellerSnapshot seller = 8;
+  repeated InvoiceLine lines = 9;
+  Money total = 10;
+  Money allocated = 11;
+  Money remaining = 12;
+  string issued_at = 13;
+  string due_at = 14;
+  optional FxQuote fx_quote = 15;
+  PaymentMethodValue payment_method = 16;
+  optional WireInstructions wire_instructions = 17;
+  string version = 18;
+  optional string replaces_invoice_id = 19;
+  Money matched_unallocated = 20;
+}
+
+message InvoicePage {
+  repeated Invoice items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateInvoiceRequest {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string plan_version_id = 1;
+  PurposeValue purpose = 2;
+  CurrencyValue currency = 3;
+  PaymentMethodValue payment_method = 4;
+  BuyerDetails buyer = 5;
+}
+
+message CheckoutRequest {
+  enum ReturnTargetValue { RETURN_TARGET_UNSPECIFIED = 0; RETURN_TARGET_BILLING = 1; RETURN_TARGET_CREATION = 2; }
+  ReturnTargetValue return_target = 1;
+  bool confirmed = 2;
+}
+
+message Checkout {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_CREATED = 1; STATE_PENDING = 2; STATE_UNKNOWN = 3; STATE_SUCCEEDED = 4; STATE_FAILED = 5; STATE_EXPIRED = 6; }
+  string id = 1;
+  string invoice_id = 2;
+  StateValue state = 3;
+  optional string redirect_url = 4;
+  optional string expires_at = 5;
+}
+
+message AutopayConsentRequest {
+  bool consent = 1;
+  optional string payment_method_id = 2;
+  optional string terms_version = 3;
+  bool confirmed = 4;
+}
+
+message AutopayMandate {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DISABLED = 1; STATE_CONSENTED = 2; STATE_SUSPENDED = 3; }
+  string id = 1;
+  string owner_id = 2;
+  StateValue state = 3;
+  reserved 4;
+  reserved "terms_version";
+  optional string consented_at = 5;
+  string version = 6;
+  string owner_version = 7;
+  optional ConsentSnapshot.ConsentChannelValue consent_channel = 8;
+  optional ConsentSnapshot consent_snapshot = 9;
+  optional string consent_terms_version = 10;
+}
+
+message PaymentFact {
+  enum SourceValue { SOURCE_UNSPECIFIED = 0; SOURCE_PSP = 1; SOURCE_WIRE = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_OBSERVED = 1; STATE_CONFIRMED = 2; STATE_REJECTED = 3; STATE_MANUAL_REVIEW = 4; }
+  string id = 1;
+  SourceValue source = 2;
+  string source_reference = 3;
+  Money amount = 4;
+  reserved 5;
+  reserved "received_at";
+  string observed_at = 6;
+  optional string confirmed_at = 7;
+  optional string confirmed_by = 8;
+  StateValue state = 9;
+  optional string invoice_id = 10;
+  Money unallocated = 11;
+  OccurrencePrecision occurred_precision = 12;
+  optional string occurred_at = 13;
+  optional string occurred_not_before = 14;
+  optional string occurred_before = 15;
+  optional string payer_ref = 16;
+  Money matched_unallocated = 17;
+  string provider_account_id = 18;
+}
+
+message PaymentFactPage {
+  repeated PaymentFact items = 1;
+  optional string next_cursor = 2;
+}
+
+message RecordWireReceiptRequest {
+  string bank_reference = 1;
+  Money amount = 2;
+  reserved 3;
+  reserved "received_at";
+  optional string invoice_id = 4;
+  string evidence_reference = 5;
+  OccurrencePrecision occurred_precision = 6;
+  optional string occurred_at = 7;
+  optional string occurred_not_before = 8;
+  optional string occurred_before = 9;
+  string payer_ref = 10;
+  string provider_account_id = 11;
+}
+
+message ConfirmWireReceiptRequest {
+  bool confirmed = 1;
+  optional string expected_invoice_id = 2;
+  string evidence_reference = 3;
+  optional string evidence_id = 4;
+}
+
+message WireReconciliationResult {
+  enum OutcomeValue { OUTCOME_UNSPECIFIED = 0; OUTCOME_PARTIAL_WAITING = 1; OUTCOME_PAID = 2; OUTCOME_EXCESS_REFUND_REQUIRED = 3; OUTCOME_LATE_INITIAL_REFUND_AND_REINVOICE = 4; OUTCOME_LATE_RENEWAL_NEW_PERIOD = 5; OUTCOME_CLOSED_CREATION_REFUND_REQUIRED = 6; OUTCOME_MANUAL_REVIEW = 7; }
+  PaymentFact payment = 1;
+  OutcomeValue outcome = 2;
+  optional string invoice_id = 3;
+  optional string period_id = 4;
+  optional string refund_id = 5;
+  optional string replacement_invoice_id = 6;
+}
+
+message RefundRequest {
+  string payment_id = 1;
+  string reason = 2;
+  bool confirmed = 3;
+  RefundReasonCode reason_code = 4;
+}
+
+message Refund {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SUBSCRIPTION_FULL = 1; KIND_UNALLOCATED_RETURN = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_REQUESTED = 1; STATE_APPROVED = 2; STATE_SUBMITTING = 3; STATE_UNKNOWN = 4; STATE_CONFIRMED = 5; STATE_FAILED = 6; STATE_REJECTED = 7; }
+  string id = 1;
+  string tenant_id = 2;
+  string payment_id = 3;
+  KindValue kind = 4;
+  StateValue state = 5;
+  Money amount = 6;
+  string requested_at = 7;
+  optional string confirmed_at = 8;
+  string version = 9;
+  RefundReasonCode reason_code = 10;
+}
+
+message RefundPage {
+  repeated Refund items = 1;
+  optional string next_cursor = 2;
+}
+
+message RefundDecisionRequest {
+  enum DecisionValue { DECISION_UNSPECIFIED = 0; DECISION_APPROVE = 1; DECISION_REJECT = 2; }
+  DecisionValue decision = 1;
+  string reason = 2;
+  bool confirmed = 3;
+  optional RefundReasonCode reason_code = 4;
+}
+
+message RefundSubmissionRequest {
+  string external_reference = 1;
+  string evidence_reference = 2;
+  bool confirmed = 3;
+}
+
+message RefundConfirmationRequest {
+  string external_reference = 1;
+  string confirmed_at = 2;
+  string evidence_reference = 3;
+  bool confirmed = 4;
+}
+
+message UnallocatedReturnRequest {
+  string payment_fact_id = 1;
+  bool confirmed = 2;
+  reserved 3;
+  reserved "reason";
+  RefundReasonCode reason_code = 4;
+}
+
+message Dispute {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_OPEN = 1; STATE_WON = 2; STATE_LOST = 3; STATE_WITHDRAWN = 4; STATE_NEEDS_REVIEW = 5; }
+  string id = 1;
+  string tenant_id = 2;
+  string payment_id = 3;
+  StateValue state = 4;
+  string opened_at = 5;
+  optional string resolved_at = 6;
+  string version = 7;
+}
+
+message DisputePage {
+  repeated Dispute items = 1;
+  optional string next_cursor = 2;
+}
+
+message DisputeOutcomeRequest {
+  enum OutcomeValue { OUTCOME_UNSPECIFIED = 0; OUTCOME_WON = 1; OUTCOME_WITHDRAWN_CONFIRMED = 2; OUTCOME_LOST_FULL_REFUND = 3; OUTCOME_PARTIAL_MANUAL_REVIEW = 4; }
+  OutcomeValue outcome = 1;
+  string evidence_reference = 2;
+  string external_reference = 3;
+  bool confirmed = 4;
+}
+
+message Entitlement {
+  string tenant_id = 1;
+  string version = 2;
+  string plan_version_id = 3;
+  optional string coverage_period_id = 4;
+  string valid_from = 5;
+  optional string valid_until = 6;
+  repeated RestrictionCode restrictions = 7;
+  repeated QuotaLimit limits = 8;
+  repeated string features = 9;
+  string issued_at = 10;
+}
+
+message Capability {
+  string action = 1;
+  bool allowed = 2;
+  repeated ErrorCode denial_codes = 3;
+  repeated RestrictionCode restrictions = 4;
+}
+
+message Capabilities {
+  string tenant_id = 1;
+  string actor_user_id = 2;
+  string policy_version = 3;
+  string entitlement_version = 4;
+  string membership_version = 5;
+  string flag_version = 6;
+  string evaluated_at = 7;
+  string expires_at = 8;
+  repeated Capability items = 9;
+}
+
+message PlatformFlag {
+  enum TypeValue { TYPE_UNSPECIFIED = 0; TYPE_BOOLEAN = 1; TYPE_INTEGER = 2; TYPE_DURATION_SECONDS = 3; }
+  string key = 1;
+  TypeValue type = 2;
+  optional bool boolean_value = 3;
+  optional string integer_value = 4;
+  string version = 5;
+}
+
+message PlatformFlagPage {
+  repeated PlatformFlag items = 1;
+  optional string next_cursor = 2;
+}
+
+message UpdateFlagRequest {
+  optional bool boolean_value = 1;
+  optional string integer_value = 2;
+}
+
+message AdminRestrictionRequest {
+  bool enabled = 1;
+  string reason = 2;
+  bool confirmed = 3;
+}
+
+message AdminAccountRequest {
+  enum ActionValue { ACTION_UNSPECIFIED = 0; ACTION_BLOCK = 1; ACTION_UNBLOCK = 2; ACTION_SET_USER_ROLE = 3; ACTION_SET_GLOBAL_ADMIN_ROLE = 4; }
+  ActionValue action = 1;
+  string reason = 2;
+  bool confirmed = 3;
+}
+
+message AdminAccount {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_USER = 1; ROLE_GLOBAL_ADMIN = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_BLOCKED = 2; STATE_DELETED = 3; }
+  string user_id = 1;
+  RoleValue role = 2;
+  StateValue state = 3;
+  string version = 4;
+}
+
+message AdminDeleteAccountRequest {
+  bool confirmed = 1;
+  string reason = 2;
+  string expected_account_version = 3;
+}
+
+message VerifiedPaymentObservation {
+  enum StatusValue { STATUS_UNSPECIFIED = 0; STATUS_PENDING = 1; STATUS_SUCCEEDED = 2; STATUS_FAILED = 3; STATUS_REFUNDED = 4; }
+  string provider_id = 1;
+  string event_id = 2;
+  string external_payment_id = 3;
+  string invoice_id = 4;
+  Money amount = 5;
+  string occurred_at = 6;
+  string observed_at = 7;
+  StatusValue status = 8;
+  string evidence_digest = 9;
+  OccurrencePrecision occurred_precision = 10; // EXACT required for normalized PSP success
+  optional string payer_ref = 11;
+  string provider_account_id = 12;
+}
+
+message PaymentObservationResult {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_NEW = 1; STATE_PROCESSING = 2; STATE_UNKNOWN = 3; STATE_SUCCEEDED = 4; STATE_FAILED = 5; }
+  bool duplicate = 1;
+  optional string payment_fact_id = 2;
+  string operation_id = 3;
+  StateValue state = 4;
+}
+
+message CreateTenantRpcRequest {
+  RequestContext context = 1;
+  CreateTenantRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ListTenantsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message GetTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message RenameTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  RenameTenantRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message CancelTenantCreationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message PauseTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ResumeTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  MutationOptions mutation = 3;
+}
+
+message TransferTenantOwnershipRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  TransferOwnershipRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ListTenantMembersRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message SetTenantMemberRoleRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  ChangeMemberRoleRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message SetTenantMemberStateRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  ChangeMemberStateRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message RemoveTenantMemberRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  MutationOptions mutation = 4;
+}
+
+message LeaveTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ListTenantInvitationsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message CreateTenantInvitationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  CreateInvitationRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ResendTenantInvitationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invitation_id = 3;
+  MutationOptions mutation = 4;
+}
+
+message RevokeTenantInvitationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invitation_id = 3;
+  MutationOptions mutation = 4;
+}
+
+message PreviewTenantInvitationRpcRequest {
+  RequestContext context = 1;
+  InvitationTokenRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message AcceptTenantInvitationRpcRequest {
+  RequestContext context = 1;
+  AcceptInvitationRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message GetTenantQuotasRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message GetTenantCapabilitiesRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message GetTenantOperationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+}
+
+message CreateTenantExportRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ExportRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetTenantExportRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string export_id = 3;
+}
+
+message DownloadTenantExportRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string export_id = 3;
+}
+
+message CreateTenantDeletionChallengeRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  DeletionChallengeRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message DeleteTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  DeleteTenantRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message StartWebSessionRpcRequest {
+  RequestContext context = 1;
+  PasswordLoginRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message RefreshWebSessionRpcRequest {
+  RequestContext context = 1;
+  RefreshSessionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message VerifyAdminMfaRpcRequest {
+  RequestContext context = 1;
+  string challenge_id = 2;
+  MfaVerifyRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ResendAdminMfaRpcRequest {
+  RequestContext context = 1;
+  string challenge_id = 2;
+  MutationOptions mutation = 3;
+}
+
+message CreateTenantSessionRpcRequest {
+  RequestContext context = 1;
+  TenantSelectionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message RevokeTenantSessionRpcRequest {
+  RequestContext context = 1;
+  string session_id = 2;
+  MutationOptions mutation = 3;
+}
+
+message RequestPasswordRecoveryRpcRequest {
+  RequestContext context = 1;
+  PasswordResetStartRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message CompletePasswordRecoveryRpcRequest {
+  RequestContext context = 1;
+  PasswordResetCompleteRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ChangeAccountPasswordRpcRequest {
+  RequestContext context = 1;
+  PasswordChangeRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message RequestAccountEmailChangeRpcRequest {
+  RequestContext context = 1;
+  EmailChangeStartRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ConfirmAccountEmailChangeRpcRequest {
+  RequestContext context = 1;
+  EmailChangeCompleteRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message GetAccountDeletionPrerequisitesRpcRequest {
+  RequestContext context = 1;
+}
+
+message CreateAccountDeletionChallengeRpcRequest {
+  RequestContext context = 1;
+  DeletionChallengeRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message DeleteAccountRpcRequest {
+  RequestContext context = 1;
+  DeleteAccountRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message CreateTenantPersonalTokenRpcRequest {
+  RequestContext context = 1;
+  PersonalTokenRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ApproveTenantOAuthGrantRpcRequest {
+  RequestContext context = 1;
+  OAuthConsentRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ListBillingPlansRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message GetSubscriptionRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message ListSubscriptionPeriodsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message ChangeSubscriptionPlanRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ChangePlanRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message CancelSubscriptionRenewalRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ResumeSubscriptionRenewalRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  MutationOptions mutation = 3;
+}
+
+message ListInvoicesRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message CreateInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  CreateInvoiceRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+}
+
+message CreateCheckoutRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+  CheckoutRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message GetCheckoutRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string checkout_id = 3;
+}
+
+message SetAutopayConsentRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  AutopayConsentRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ListRefundsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message RequestFullSubscriptionRefundRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  RefundRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetRefundRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string refund_id = 3;
+}
+
+message ListDisputesRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message GetEntitlementRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message DownloadInvoiceDocumentRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+}
+
+message CreatePlanVersionRpcRequest {
+  RequestContext context = 1;
+  CreatePlanVersionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message PublishPlanVersionRpcRequest {
+  RequestContext context = 1;
+  string plan_version_id = 2;
+  PublishPlanVersionRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ListWireReceiptsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message RecordWireReceiptRpcRequest {
+  RequestContext context = 1;
+  RecordWireReceiptRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ConfirmWireReceiptRpcRequest {
+  RequestContext context = 1;
+  string payment_id = 2;
+  ConfirmWireReceiptRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ReturnUnallocatedReceiptRpcRequest {
+  RequestContext context = 1;
+  UnallocatedReturnRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message DecideRefundRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string refund_id = 3;
+  RefundDecisionRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message SubmitRefundRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string refund_id = 3;
+  RefundSubmissionRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message ConfirmRefundRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string refund_id = 3;
+  RefundConfirmationRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message RecordDisputeOutcomeRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string dispute_id = 3;
+  DisputeOutcomeRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+
+message SetPlatformBlockRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  AdminRestrictionRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ListAdminIntegrationGrantsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message CreateAdminIntegrationGrantRpcRequest {
+  RequestContext context = 1;
+  AdminGrantRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message ReplaceAdminIntegrationGrantRpcRequest {
+  RequestContext context = 1;
+  string grant_id = 2;
+  AdminGrantRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message RevokeAdminIntegrationGrantRpcRequest {
+  RequestContext context = 1;
+  string grant_id = 2;
+  MutationOptions mutation = 3;
+}
+
+message ListPlatformFlagsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message UpdatePlatformFlagRpcRequest {
+  RequestContext context = 1;
+  string flag_key = 2;
+  UpdateFlagRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message ChangeGlobalAccountRpcRequest {
+  RequestContext context = 1;
+  string user_id = 2;
+  AdminAccountRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message AdminDeleteAccountRpcRequest {
+  RequestContext context = 1;
+  string user_id = 2;
+  AdminDeleteAccountRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message DownloadChunk { bytes data = 1; string content_type = 2; optional int64 total_bytes = 3; }
+message ReserveQuotaRpcRequest { RequestContext context = 1; ReserveQuotaRequest payload = 2; MutationOptions mutation = 3; }
+message FinalizeQuotaRpcRequest { RequestContext context = 1; string reservation_id = 2; FinalizeQuotaRequest payload = 3; MutationOptions mutation = 4; }
+message ResolveTenantAccessRequest { RequestContext context = 1; string target_tenant_id = 2; string action = 3; optional string project_id = 4; }
+message TenantAccessDecision { bool allowed = 1; repeated ErrorCode denial_codes = 2; string membership_version = 3; string owner_id = 4; }
+message GetEntitlementSnapshotRequest { RequestContext context = 1; string tenant_id = 2; optional string minimum_version = 3; }
+message B2bErrorDetail { ErrorCode code = 1; repeated RestrictionCode reasons = 2; repeated FieldViolation violations = 3; string request_id = 4; bool retryable = 5; }
+// gRPC non-OK status + serialized B2bErrorDetail trailer, never a success response containing an error.
+message ObservePaymentRpcRequest { RequestContext context = 1; VerifiedPaymentObservation observation = 2; }
+service PaymentIngressService { rpc ObserveVerifiedPayment(ObservePaymentRpcRequest) returns (PaymentObservationResult); }
+service QuotaAuthorityService {
+ rpc ReserveQuota(ReserveQuotaRpcRequest) returns (QuotaReservation);
+ rpc CommitQuota(FinalizeQuotaRpcRequest) returns (QuotaReservation);
+ rpc ReleaseQuota(FinalizeQuotaRpcRequest) returns (QuotaReservation);
+}
+service TenantAccessService { rpc ResolveTenantAccess(ResolveTenantAccessRequest) returns (TenantAccessDecision); }
+service EntitlementService { rpc GetEntitlementSnapshot(GetEntitlementSnapshotRequest) returns (Entitlement); }
+
+service TenantService {
+  rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
+  rpc ListTenants(ListTenantsRpcRequest) returns (TenantPage);
+  rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
+  rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
+  rpc PauseTenant(PauseTenantRpcRequest) returns (Tenant);
+  rpc ResumeTenant(ResumeTenantRpcRequest) returns (Tenant);
+  rpc TransferTenantOwnership(TransferTenantOwnershipRpcRequest) returns (Tenant);
+  rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
+  rpc SetTenantMemberRole(SetTenantMemberRoleRpcRequest) returns (Membership);
+  rpc SetTenantMemberState(SetTenantMemberStateRpcRequest) returns (Membership);
+  rpc RemoveTenantMember(RemoveTenantMemberRpcRequest) returns (Operation);
+  rpc LeaveTenant(LeaveTenantRpcRequest) returns (Operation);
+  rpc ListTenantInvitations(ListTenantInvitationsRpcRequest) returns (InvitationPage);
+  rpc CreateTenantInvitation(CreateTenantInvitationRpcRequest) returns (Invitation);
+  rpc ResendTenantInvitation(ResendTenantInvitationRpcRequest) returns (Invitation);
+  rpc RevokeTenantInvitation(RevokeTenantInvitationRpcRequest) returns (google.protobuf.Empty);
+  rpc PreviewTenantInvitation(PreviewTenantInvitationRpcRequest) returns (InvitationPreview);
+  rpc AcceptTenantInvitation(AcceptTenantInvitationRpcRequest) returns (InvitationAcceptance);
+  rpc GetTenantQuotas(GetTenantQuotasRpcRequest) returns (QuotaSnapshot);
+  rpc GetTenantCapabilities(GetTenantCapabilitiesRpcRequest) returns (Capabilities);
+  rpc GetTenantOperation(GetTenantOperationRpcRequest) returns (Operation);
+  rpc CreateTenantExport(CreateTenantExportRpcRequest) returns (Export);
+  rpc GetTenantExport(GetTenantExportRpcRequest) returns (Export);
+  rpc DownloadTenantExport(DownloadTenantExportRpcRequest) returns (stream DownloadChunk);
+  rpc CreateTenantDeletionChallenge(CreateTenantDeletionChallengeRpcRequest) returns (ConfirmationChallenge);
+  rpc DeleteTenant(DeleteTenantRpcRequest) returns (Operation);
+}
+
+service AccountService {
+  rpc StartWebSession(StartWebSessionRpcRequest) returns (LoginResult);
+  rpc RefreshWebSession(RefreshWebSessionRpcRequest) returns (AccessSession);
+  rpc VerifyAdminMfa(VerifyAdminMfaRpcRequest) returns (AccessSession);
+  rpc ResendAdminMfa(ResendAdminMfaRpcRequest) returns (MfaChallenge);
+  rpc CreateTenantSession(CreateTenantSessionRpcRequest) returns (AccessSession);
+  rpc RevokeTenantSession(RevokeTenantSessionRpcRequest) returns (google.protobuf.Empty);
+  rpc RequestPasswordRecovery(RequestPasswordRecoveryRpcRequest) returns (DeliveryAcknowledgement);
+  rpc CompletePasswordRecovery(CompletePasswordRecoveryRpcRequest) returns (google.protobuf.Empty);
+  rpc ChangeAccountPassword(ChangeAccountPasswordRpcRequest) returns (google.protobuf.Empty);
+  rpc RequestAccountEmailChange(RequestAccountEmailChangeRpcRequest) returns (ConfirmationChallenge);
+  rpc ConfirmAccountEmailChange(ConfirmAccountEmailChangeRpcRequest) returns (google.protobuf.Empty);
+  rpc GetAccountDeletionPrerequisites(GetAccountDeletionPrerequisitesRpcRequest) returns (DeletionPrerequisites);
+  rpc CreateAccountDeletionChallenge(CreateAccountDeletionChallengeRpcRequest) returns (ConfirmationChallenge);
+  rpc DeleteAccount(DeleteAccountRpcRequest) returns (Operation);
+  rpc CreateTenantPersonalToken(CreateTenantPersonalTokenRpcRequest) returns (PersonalTokenCreated);
+  rpc ApproveTenantOAuthGrant(ApproveTenantOAuthGrantRpcRequest) returns (OAuthConsentResult);
+}
+
+service BillingService {
+  rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
+  rpc GetSubscription(GetSubscriptionRpcRequest) returns (Subscription);
+  rpc ListSubscriptionPeriods(ListSubscriptionPeriodsRpcRequest) returns (SubscriptionPeriodPage);
+  rpc ChangeSubscriptionPlan(ChangeSubscriptionPlanRpcRequest) returns (PlanChange);
+  rpc CancelSubscriptionRenewal(CancelSubscriptionRenewalRpcRequest) returns (Subscription);
+  rpc ResumeSubscriptionRenewal(ResumeSubscriptionRenewalRpcRequest) returns (Subscription);
+  rpc ListInvoices(ListInvoicesRpcRequest) returns (InvoicePage);
+  rpc CreateInvoice(CreateInvoiceRpcRequest) returns (Invoice);
+  rpc GetInvoice(GetInvoiceRpcRequest) returns (Invoice);
+  rpc CreateCheckout(CreateCheckoutRpcRequest) returns (Checkout);
+  rpc GetCheckout(GetCheckoutRpcRequest) returns (Checkout);
+  rpc SetAutopayConsent(SetAutopayConsentRpcRequest) returns (AutopayMandate);
+  rpc ListRefunds(ListRefundsRpcRequest) returns (RefundPage);
+  rpc RequestFullSubscriptionRefund(RequestFullSubscriptionRefundRpcRequest) returns (Refund);
+  rpc GetRefund(GetRefundRpcRequest) returns (Refund);
+  rpc ListDisputes(ListDisputesRpcRequest) returns (DisputePage);
+  rpc GetEntitlement(GetEntitlementRpcRequest) returns (Entitlement);
+  rpc DownloadInvoiceDocument(DownloadInvoiceDocumentRpcRequest) returns (stream DownloadChunk);
+}
+
+service PlatformService {
+  rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);
+  rpc PublishPlanVersion(PublishPlanVersionRpcRequest) returns (PlanVersion);
+  rpc ListWireReceipts(ListWireReceiptsRpcRequest) returns (PaymentFactPage);
+  rpc RecordWireReceipt(RecordWireReceiptRpcRequest) returns (PaymentFact);
+  rpc ConfirmWireReceipt(ConfirmWireReceiptRpcRequest) returns (WireReconciliationResult);
+  rpc ReturnUnallocatedReceipt(ReturnUnallocatedReceiptRpcRequest) returns (Refund);
+  rpc DecideRefund(DecideRefundRpcRequest) returns (Refund);
+  rpc SubmitRefund(SubmitRefundRpcRequest) returns (Refund);
+  rpc ConfirmRefund(ConfirmRefundRpcRequest) returns (Refund);
+  rpc RecordDisputeOutcome(RecordDisputeOutcomeRpcRequest) returns (Dispute);
+  rpc SetPlatformBlock(SetPlatformBlockRpcRequest) returns (Tenant);
+  rpc ListAdminIntegrationGrants(ListAdminIntegrationGrantsRpcRequest) returns (AdminGrantPage);
+  rpc CreateAdminIntegrationGrant(CreateAdminIntegrationGrantRpcRequest) returns (AdminGrantCreated);
+  rpc ReplaceAdminIntegrationGrant(ReplaceAdminIntegrationGrantRpcRequest) returns (AdminGrant);
+  rpc RevokeAdminIntegrationGrant(RevokeAdminIntegrationGrantRpcRequest) returns (google.protobuf.Empty);
+  rpc ListPlatformFlags(ListPlatformFlagsRpcRequest) returns (PlatformFlagPage);
+  rpc UpdatePlatformFlag(UpdatePlatformFlagRpcRequest) returns (PlatformFlag);
+  rpc ChangeGlobalAccount(ChangeGlobalAccountRpcRequest) returns (AdminAccount);
+  rpc AdminDeleteAccount(AdminDeleteAccountRpcRequest) returns (Operation);
+}
+
+
+message GetProjectTaskQuotaRpcRequest { RequestContext context = 1; string tenant_id = 2; string project_id = 3; }
+service ProjectQuotaReadService { rpc GetProjectTaskQuota(GetProjectTaskQuotaRpcRequest) returns (QuotaUsage); }
+
+enum OccurrencePrecision { OCCURRENCE_PRECISION_UNSPECIFIED = 0; OCCURRENCE_PRECISION_EXACT = 1; OCCURRENCE_PRECISION_DAY = 2; }
+enum RefundReasonCode {
+ REFUND_REASON_CODE_UNSPECIFIED = 0;
+ REFUND_REASON_CODE_BILLING_ERROR = 1;
+ REFUND_REASON_CODE_SERVICE_FAILURE = 2;
+ REFUND_REASON_CODE_MANDATORY = 3;
+ REFUND_REASON_CODE_EXCESS = 4;
+ REFUND_REASON_CODE_LATE_FIRST_PAYMENT = 5;
+ REFUND_REASON_CODE_CLOSED_CREATION = 6;
+ REFUND_REASON_CODE_INCOMPLETE_BANK_PAYMENT = 7;
+ REFUND_REASON_CODE_DUPLICATE_PAYMENT = 8;
+}
+message ConsentSnapshot {
+ enum ConsentChannelValue { CONSENT_CHANNEL_UNSPECIFIED = 0; CONSENT_CHANNEL_WEB = 1; CONSENT_CHANNEL_PAT = 2; CONSENT_CHANNEL_OAUTH = 3; CONSENT_CHANNEL_MCP = 4; }
+ string owner_id = 1;
+ string owner_version = 2;
+ string actor_user_id = 3;
+ string consent_terms_version = 4;
+ string consent_terms_sha256 = 5;
+ ConsentChannelValue consent_channel = 6;
+ CredentialKind credential_kind = 7;
+ string payment_method_id = 8;
+ string consented_at = 9;
+ string request_id = 10;
+}
+
+message FinancialEvidenceRefinementRequest {
+ string evidence_ref = 1;
+ string digest = 2;
+ OccurrencePrecision occurred_precision = 3;
+ optional string occurred_at = 4;
+ optional string occurred_not_before = 5;
+ optional string occurred_before = 6;
+ string payer_ref = 7;
+ bool confirmed = 8;
+}
+message FinancialEvidenceRefinement {
+ string evidence_id = 1;
+ string source_fact_id = 2;
+ string evidence_ref = 3;
+ string digest = 4;
+ OccurrencePrecision occurred_precision = 5;
+ optional string occurred_at = 6;
+ optional string occurred_not_before = 7;
+ optional string occurred_before = 8;
+ string payer_ref = 9;
+ string verified_by = 10;
+ string verified_at = 11;
+}
+message AppendWireEvidenceRefinementRpcRequest { RequestContext context = 1; string payment_id = 2; FinancialEvidenceRefinementRequest payload = 3; MutationOptions mutation = 4; }
+service PaymentEvidenceService { rpc AppendWireEvidenceRefinement(AppendWireEvidenceRefinementRpcRequest) returns (FinancialEvidenceRefinement); }
+
+message RecordUnmatchedWireReceiptRequest {
+ string bank_reference = 1; string provider_account_id = 2; Money amount = 3;
+ string evidence_reference = 4; string evidence_digest = 5; OccurrencePrecision occurred_precision = 6;
+ optional string occurred_at = 7; optional string occurred_not_before = 8; optional string occurred_before = 9;
+ optional string payer_ref = 10;
+}
+message UnmatchedWireReceipt {
+ enum StateValue { STATE_UNSPECIFIED = 0; STATE_UNMATCHED = 1; STATE_ASSIGNED = 2; STATE_RETURN_PENDING = 3; STATE_RETURNED = 4; STATE_POLICY_HOLD = 5; }
+ string id = 1; StateValue state = 2; string bank_reference = 3; string provider_account_id = 4;
+ Money amount = 5; string evidence_reference = 6; string evidence_digest = 7;
+ OccurrencePrecision occurred_precision = 8; optional string occurred_at = 9;
+ optional string occurred_not_before = 10; optional string occurred_before = 11;
+ optional string payer_ref = 12; string observed_at = 13; optional string assigned_tenant_id = 14; optional string payment_fact_id = 15;
+}
+message UnmatchedWireReceiptPage { repeated UnmatchedWireReceipt items = 1; optional string next_cursor = 2; }
+message AssignUnmatchedWireReceiptRequest { string invoice_id = 1; string payer_ref = 2; string evidence_reference = 3; string evidence_digest = 4; bool confirmed = 5; }
+message ListUnmatchedWireReceiptsRpcRequest { RequestContext context = 1; PageRequest page = 2; }
+message RecordUnmatchedWireReceiptRpcRequest { RequestContext context = 1; RecordUnmatchedWireReceiptRequest payload = 2; MutationOptions mutation = 3; }
+message AssignUnmatchedWireReceiptRpcRequest { RequestContext context = 1; string receipt_id = 2; AssignUnmatchedWireReceiptRequest payload = 3; MutationOptions mutation = 4; }
+service UnmatchedWireReceiptService {
+ rpc ListUnmatchedWireReceipts(ListUnmatchedWireReceiptsRpcRequest) returns (UnmatchedWireReceiptPage);
+ rpc RecordUnmatchedWireReceipt(RecordUnmatchedWireReceiptRpcRequest) returns (UnmatchedWireReceipt);
+ rpc AssignUnmatchedWireReceipt(AssignUnmatchedWireReceiptRpcRequest) returns (PaymentFact);
+}

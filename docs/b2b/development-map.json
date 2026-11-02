@@ -1,0 +1,4742 @@
+{
+  "revision": "SA-2026-11-02",
+  "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16",
+  "implementationStatus": "DESIGNED_NOT_IMPLEMENTED",
+  "items": [
+    {
+      "key": "TAS-268",
+      "summary": "B2B: завершённая системная аналитика и контракты",
+      "kind": "ANALYSIS_DONE",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B02",
+        "B11",
+        "B12",
+        "B18",
+        "B06",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-269",
+      "summary": "tenant-service: реестр компаний и идемпотентное создание пространства",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B04",
+        "B07",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-270",
+      "summary": "gateway/common/gRPC: обязательный доверенный TenantContext и service identity",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-272",
+      "summary": "PostgreSQL/R2DBC: tenant predicates, RLS и изоляция pooled connection",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-273",
+      "summary": "tenant-service: участники компании, TENANT_ADMIN и передача владения",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-274",
+      "summary": "billing-service: фиксированные тарифы, подписки, счета и entitlement ledger",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B04",
+        "B05",
+        "B06",
+        "B08",
+        "B09",
+        "B10",
+        "B11",
+        "B01"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-275",
+      "summary": "auth-service: глобальный профиль, multi-tenant сессии и удаление аккаунта",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-276",
+      "summary": "Квоты участников, проектов, хранения и lifetime-созданий задач",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B05"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-277",
+      "summary": "Kafka/outbox/notification: tenant envelope, inbox, preferences и безопасные workers",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "async-and-files.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B13",
+        "B06"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-278",
+      "summary": "Компания: название и глобальные бизнес-флаги",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B11",
+        "B01"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-279",
+      "summary": "billing-service: сменяемый PaymentProvider и hosted checkout первого PSP",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B08",
+        "B09",
+        "B10",
+        "B11"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-280",
+      "summary": "tenant-service/auth: приглашения в компанию и безопасное принятие существующей identity",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-281",
+      "summary": "project-service: tenant isolation проектов, участников, настроек и агрегатов",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-282",
+      "summary": "admin-service: полный доступ GLOBAL_ADMIN и внутренний аудит",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-283",
+      "summary": "billing-service: verified webhook inbox, дедупликация и сверка платежей",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B08",
+        "B09",
+        "B10",
+        "B01"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-284",
+      "summary": "workflow-service: tenant workflow, bindings и замена общего default seed",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B11",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-285",
+      "summary": "billing-service: продление, отмена, просрочка и смена тарифа без двойного счёта",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B06",
+        "B07",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-286",
+      "summary": "billing-service: счета покупателям, подтверждение оплаты, возвраты и финансовый аудит",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B08",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-288",
+      "summary": "issue-service: tenant CRUD, board/search, issue keys и idempotency",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-289",
+      "summary": "gateway/domain: применять права тарифа и read-only при просрочке",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B06",
+        "B07",
+        "B11",
+        "B01",
+        "B12",
+        "B10",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-290",
+      "summary": "issue-service: изоляция комментариев, связей, меток, watchers и worklogs",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-291",
+      "summary": "Хранение: tenant-вложения и общий аватар аккаунта вне квот",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B05",
+        "B14",
+        "B16",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-293",
+      "summary": "B2B: чистый запуск без старых тестовых проектов и аккаунтов",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-294",
+      "summary": "B2B operations: экспорт, удаление компании, backup/restore и защита от noisy neighbor",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B07",
+        "B14",
+        "B17",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-295",
+      "summary": "B2B release gate: сквозные тесты изоляции, оплаты и чистого запуска двух компаний",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B05",
+        "B06",
+        "B07",
+        "B09",
+        "B10",
+        "B11",
+        "B14",
+        "B17",
+        "B18",
+        "B12",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-303",
+      "summary": "01. Реестр: таблицы и владельцев tenant-данных",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "data-inventory.md",
+        "target-data-model.md",
+        "inventory/tables.json",
+        "schemas/target-model.json"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B02",
+        "B14",
+        "B16",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-271",
+      "summary": "B2B: коммерческая конфигурация, финансовые cases и retention — пакет реализации",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [
+        "TAS-268"
+      ],
+      "wave": null,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B04",
+        "B06",
+        "B08",
+        "B09",
+        "B10",
+        "B17",
+        "B22"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-304",
+      "summary": "02. Реестр: матрицу доступа и угрозы tenant-изоляции",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [
+        "TAS-303",
+        "TAS-468",
+        "TAS-469"
+      ],
+      "wave": null,
+      "documents": [
+        "access-control.md",
+        "inventory/access-matrix.json"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B02",
+        "B03",
+        "B07",
+        "B12",
+        "B14",
+        "B17",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-305",
+      "summary": "03. Контракт: контракт TenantContext и tenant-сессий",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [
+        "TAS-304"
+      ],
+      "wave": null,
+      "documents": [
+        "contracts/README.md",
+        "contracts/b2b.proto",
+        "contracts/b2b-openapi.yaml"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-306",
+      "summary": "01. Добавить проверяемый TenantContext в gRPC",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-305"
+      ],
+      "wave": 1,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-307",
+      "summary": "01. Реализовать tenant-транзакцию на R2DBC connection",
+      "kind": "CODE",
+      "parent": "TAS-272",
+      "dependsOn": [
+        "TAS-306"
+      ],
+      "wave": 2,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-308",
+      "summary": "02. Подготовить шаблон RLS и роли БД",
+      "kind": "CODE",
+      "parent": "TAS-272",
+      "dependsOn": [
+        "TAS-307"
+      ],
+      "wave": 3,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-309",
+      "summary": "03. Подключить интеграционные проверки RLS и connection pool",
+      "kind": "CODE",
+      "parent": "TAS-272",
+      "dependsOn": [
+        "TAS-308"
+      ],
+      "wave": 4,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-310",
+      "summary": "01. Создать tenant-service и реестр компаний",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-308",
+        "TAS-470"
+      ],
+      "wave": 4,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants"
+        },
+        {
+          "operationId": "getTenant",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenants",
+        "tenant-service.tenant_memberships",
+        "tenant-service.idempotency_records",
+        "tenant-service.outbox_events",
+        "tenant-service.global_outbox_events",
+        "tenant-service.processed_events"
+      ],
+      "sections": [
+        "B01",
+        "B02",
+        "B04",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-311",
+      "summary": "tenant-service: реализовать чтение и authoritative проверку membership",
+      "kind": "CODE",
+      "parent": "TAS-273",
+      "dependsOn": [
+        "TAS-309",
+        "TAS-310"
+      ],
+      "wave": 5,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listTenantMembers",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/members"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-312",
+      "summary": "02. Защитить владельца и последнего tenant admin",
+      "kind": "CODE",
+      "parent": "TAS-273",
+      "dependsOn": [
+        "TAS-311"
+      ],
+      "wave": 6,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "setTenantMemberRole",
+          "method": "PATCH",
+          "path": "/api/v1/tenants/{tenantId}/members/{userId}/role"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-313",
+      "summary": "01. Создать billing-service и каталог тарифов",
+      "kind": "CODE",
+      "parent": "TAS-274",
+      "dependsOn": [
+        "TAS-310",
+        "TAS-471"
+      ],
+      "wave": 5,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listBillingPlans",
+          "method": "GET",
+          "path": "/api/v1/billing/plans"
+        },
+        {
+          "operationId": "createPlanVersion",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/plan-versions"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.catalog_plans",
+        "billing-service.catalog_plan_versions",
+        "billing-service.idempotency_records",
+        "billing-service.outbox_events",
+        "billing-service.global_outbox_events",
+        "billing-service.processed_events"
+      ],
+      "sections": [
+        "B04",
+        "B05",
+        "B08",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-314",
+      "summary": "02. Реализовать модель подписки и оплаченного покрытия",
+      "kind": "CODE",
+      "parent": "TAS-274",
+      "dependsOn": [
+        "TAS-313"
+      ],
+      "wave": 6,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getSubscription",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/subscription"
+        },
+        {
+          "operationId": "listSubscriptionPeriods",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/periods"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.subscriptions",
+        "billing-service.subscription_periods"
+      ],
+      "sections": [
+        "B01",
+        "B04",
+        "B06",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-315",
+      "summary": "01. Выпустить независимые tenant access/refresh сессии",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-311"
+      ],
+      "wave": 6,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "refreshWebSession",
+          "method": "POST",
+          "path": "/api/v1/auth/web-sessions/refresh"
+        },
+        {
+          "operationId": "createTenantSession",
+          "method": "POST",
+          "path": "/api/v1/auth/tenant-sessions"
+        },
+        {
+          "operationId": "revokeTenantSession",
+          "method": "DELETE",
+          "path": "/api/v1/auth/tenant-sessions/{sessionId}"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.refresh_tokens",
+        "auth-service.web_sessions",
+        "auth-service.tenant_sessions"
+      ],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-316",
+      "summary": "02. Передавать проверенный tenant из gateway во все RPC",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-315"
+      ],
+      "wave": 7,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-317",
+      "summary": "03. Настроить service identity и ротацию gRPC ключей",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-316"
+      ],
+      "wave": 8,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-318",
+      "summary": "01. Добавить tenant envelope в события и outbox",
+      "kind": "CODE",
+      "parent": "TAS-277",
+      "dependsOn": [
+        "TAS-308"
+      ],
+      "wave": 4,
+      "documents": [
+        "async-and-files.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "auth-service.outbox_events",
+        "issue-service.outbox_events",
+        "project-service.outbox_events"
+      ],
+      "sections": [
+        "B01",
+        "B13",
+        "B15",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-319",
+      "summary": "03. Выдавать versioned entitlement snapshot из billing",
+      "kind": "CODE",
+      "parent": "TAS-274",
+      "dependsOn": [
+        "TAS-318",
+        "TAS-475"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getEntitlement",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/entitlement"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.entitlement_snapshots"
+      ],
+      "sections": [
+        "B01",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-320",
+      "summary": "01. Создать PaymentProvider port и fake adapter",
+      "kind": "CODE",
+      "parent": "TAS-279",
+      "dependsOn": [
+        "TAS-471"
+      ],
+      "wave": 1,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B08",
+        "B09",
+        "B10",
+        "B18"
+      ],
+      "openQuestions": [
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-321",
+      "summary": "02. Ограничить directory участниками выбранной компании",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-315"
+      ],
+      "wave": 7,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listTenantMembers",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/members"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-322",
+      "summary": "01. Считать места участников и резервы приглашений атомарно",
+      "kind": "CODE",
+      "parent": "TAS-276",
+      "dependsOn": [
+        "TAS-311",
+        "TAS-319"
+      ],
+      "wave": 9,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantQuotas",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/quotas"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.quota_counters",
+        "tenant-service.quota_reservations",
+        "tenant-service.quota_effects"
+      ],
+      "sections": [
+        "B02",
+        "B03",
+        "B05"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-323",
+      "summary": "03. Отзывать доступ и назначения при suspension/removal",
+      "kind": "CODE",
+      "parent": "TAS-273",
+      "dependsOn": [
+        "TAS-312",
+        "TAS-317",
+        "TAS-322"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "setTenantMemberState",
+          "method": "PATCH",
+          "path": "/api/v1/tenants/{tenantId}/members/{userId}/state"
+        },
+        {
+          "operationId": "removeTenantMember",
+          "method": "DELETE",
+          "path": "/api/v1/tenants/{tenantId}/members/{userId}"
+        },
+        {
+          "operationId": "leaveTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/leave"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B13",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-324",
+      "summary": "02. Реализовать reservation/commit/release мест проектов",
+      "kind": "CODE",
+      "parent": "TAS-276",
+      "dependsOn": [
+        "TAS-322"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantQuotas",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/quotas"
+        }
+      ],
+      "schemaTables": [
+        "project-service.resource_operation_receipts"
+      ],
+      "sections": [
+        "B02",
+        "B05",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-325",
+      "summary": "02. Изолировать inbox, настройки и получателей уведомлений",
+      "kind": "CODE",
+      "parent": "TAS-277",
+      "dependsOn": [
+        "TAS-318",
+        "TAS-321"
+      ],
+      "wave": 8,
+      "documents": [
+        "async-and-files.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "notification-service.notification_preferences",
+        "notification-service.notifications",
+        "notification-service.processed_events",
+        "notification-service.telegram_link_requests",
+        "notification-service.telegram_updates",
+        "notification-service.account_notification_settings",
+        "notification-service.account_notifications",
+        "notification-service.account_processed_events"
+      ],
+      "sections": [
+        "B03",
+        "B13",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-326",
+      "summary": "03. Сделать delivery workers и retries tenant-aware",
+      "kind": "CODE",
+      "parent": "TAS-277",
+      "dependsOn": [
+        "TAS-317",
+        "TAS-325"
+      ],
+      "wave": 9,
+      "documents": [
+        "async-and-files.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "notification-service.email_delivery_attempts",
+        "notification-service.invitation_email_deliveries",
+        "notification-service.notification_channel_throttle",
+        "notification-service.notification_deliveries",
+        "notification-service.account_message_deliveries"
+      ],
+      "sections": [
+        "B03",
+        "B13",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-327",
+      "summary": "03. Реализовать безопасное восстановление пароля",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-326"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "requestPasswordRecovery",
+          "method": "POST",
+          "path": "/api/v1/auth/password-recovery"
+        },
+        {
+          "operationId": "completePasswordRecovery",
+          "method": "POST",
+          "path": "/api/v1/auth/password-recovery/complete"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.credentials",
+        "auth-service.invite_tokens",
+        "auth-service.signup_rate_limits"
+      ],
+      "sections": [
+        "B12",
+        "B14",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-328",
+      "summary": "04. Подтверждать web-вход GLOBAL_ADMIN кодом из почты",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-326"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "startWebSession",
+          "method": "POST",
+          "path": "/api/v1/auth/web-sessions"
+        },
+        {
+          "operationId": "verifyAdminMfa",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/challenges/{challengeId}/verify"
+        },
+        {
+          "operationId": "resendAdminMfa",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/challenges/{challengeId}/resend"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.confirmation_challenges"
+      ],
+      "sections": [
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-329",
+      "summary": "01. Изолировать схемы и repositories project-service",
+      "kind": "CODE",
+      "parent": "TAS-281",
+      "dependsOn": [
+        "TAS-309",
+        "TAS-310"
+      ],
+      "wave": 5,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "project-service.issue_type_creations",
+        "project-service.issue_type_deletions",
+        "project-service.project_issue_types",
+        "project-service.project_members",
+        "project-service.project_settings",
+        "project-service.project_type_operations",
+        "project-service.projects"
+      ],
+      "sections": [
+        "B01",
+        "B05",
+        "B15",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-330",
+      "summary": "01. Изолировать workflow и выдавать копию шаблона компании",
+      "kind": "CODE",
+      "parent": "TAS-284",
+      "dependsOn": [
+        "TAS-329"
+      ],
+      "wave": 6,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "workflow-service.issue_type_creation_workflow_receipts",
+        "workflow-service.issue_type_move_workflow_pins",
+        "workflow-service.statuses",
+        "workflow-service.transitions",
+        "workflow-service.validator_rules",
+        "workflow-service.workflow_binding_changes",
+        "workflow-service.workflow_bindings",
+        "workflow-service.workflows",
+        "workflow-service.workflow_templates"
+      ],
+      "sections": [
+        "B01",
+        "B11",
+        "B15",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-331",
+      "summary": "01. Рассчитывать календарные периоды и единственный счёт",
+      "kind": "CODE",
+      "parent": "TAS-285",
+      "dependsOn": [
+        "TAS-318",
+        "TAS-475"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B06",
+        "B09",
+        "B13",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-332",
+      "summary": "01. Изолировать issue keys, counters и idempotency",
+      "kind": "CODE",
+      "parent": "TAS-288",
+      "dependsOn": [
+        "TAS-329"
+      ],
+      "wave": 6,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.idempotency_keys",
+        "issue-service.project_counters"
+      ],
+      "sections": [
+        "B01",
+        "B05",
+        "B15",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-333",
+      "summary": "01. Разрешить владельцу переименовать компанию",
+      "kind": "CODE",
+      "parent": "TAS-278",
+      "dependsOn": [
+        "TAS-317"
+      ],
+      "wave": 9,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "renameTenant",
+          "method": "PATCH",
+          "path": "/api/v1/tenants/{tenantId}"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B11",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-334",
+      "summary": "Настройки: кэшировать версии флагов и entitlement snapshots",
+      "kind": "CODE",
+      "parent": "TAS-278",
+      "dependsOn": [
+        "TAS-360"
+      ],
+      "wave": 11,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B11",
+        "B13"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-335",
+      "summary": "Приглашения: создать приглашение и зарезервировать одно место",
+      "kind": "CODE",
+      "parent": "TAS-280",
+      "dependsOn": [
+        "TAS-322",
+        "TAS-326",
+        "TAS-462"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listTenantInvitations",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/invitations"
+        },
+        {
+          "operationId": "createTenantInvitation",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/invitations"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenant_invitations",
+        "tenant-service.invitation_project_grants"
+      ],
+      "sections": [
+        "B02",
+        "B03",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-336",
+      "summary": "Приглашения: принять приглашение в компанию",
+      "kind": "CODE",
+      "parent": "TAS-280",
+      "dependsOn": [
+        "TAS-335"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "previewTenantInvitation",
+          "method": "POST",
+          "path": "/api/v1/tenant-invitations/preview"
+        },
+        {
+          "operationId": "acceptTenantInvitation",
+          "method": "POST",
+          "path": "/api/v1/tenant-invitations/accept"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-337",
+      "summary": "Создание компании: выполнить возобновляемый provisioning",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-314",
+        "TAS-330",
+        "TAS-472"
+      ],
+      "wave": 7,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants"
+        },
+        {
+          "operationId": "getTenantOperation",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/operations/{operationId}"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenant_operations"
+      ],
+      "sections": [
+        "B01",
+        "B02",
+        "B04"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-338",
+      "summary": "Компании: выдать список доступных компаний пользователя",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-323",
+        "TAS-337"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listTenants",
+          "method": "GET",
+          "path": "/api/v1/tenants"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B03",
+        "B07"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-339",
+      "summary": "Приглашения: resend, отзыв и истечение срока",
+      "kind": "CODE",
+      "parent": "TAS-280",
+      "dependsOn": [
+        "TAS-323",
+        "TAS-336"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "resendTenantInvitation",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/invitations/{invitationId}/resend"
+        },
+        {
+          "operationId": "revokeTenantInvitation",
+          "method": "DELETE",
+          "path": "/api/v1/tenants/{tenantId}/invitations/{invitationId}"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B13"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-340",
+      "summary": "Проекты: применять tenant ACL во всех API и агрегатах",
+      "kind": "CODE",
+      "parent": "TAS-281",
+      "dependsOn": [
+        "TAS-324",
+        "TAS-329",
+        "TAS-462"
+      ],
+      "wave": 11,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-341",
+      "summary": "Проекты: tenant-проверки архивирования и восстановления",
+      "kind": "CODE",
+      "parent": "TAS-281",
+      "dependsOn": [
+        "TAS-323",
+        "TAS-340"
+      ],
+      "wave": 12,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-342",
+      "summary": "Workflow: проверять компанию и права во всех RPC",
+      "kind": "CODE",
+      "parent": "TAS-284",
+      "dependsOn": [
+        "TAS-330",
+        "TAS-340"
+      ],
+      "wave": 12,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B11",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-343",
+      "summary": "Задачи: изолировать CRUD, назначение и переходы",
+      "kind": "CODE",
+      "parent": "TAS-288",
+      "dependsOn": [
+        "TAS-342",
+        "TAS-460"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.issue_history",
+        "issue-service.issue_type_move_receipts",
+        "issue-service.issues",
+        "issue-service.workflow_binding_receipts"
+      ],
+      "sections": [
+        "B02",
+        "B05",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-344",
+      "summary": "Задачи: изолировать поиск, доску и пакетные счётчики",
+      "kind": "CODE",
+      "parent": "TAS-288",
+      "dependsOn": [
+        "TAS-321",
+        "TAS-343"
+      ],
+      "wave": 14,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-345",
+      "summary": "Администрирование: применять полный доступ GLOBAL_ADMIN",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-328"
+      ],
+      "wave": 11,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-346",
+      "summary": "Администрирование: ограничить queries и сводки явной областью",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-345"
+      ],
+      "wave": 12,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-347",
+      "summary": "Хранение: учитывать reservations и подтверждённые байты",
+      "kind": "CODE",
+      "parent": "TAS-276",
+      "dependsOn": [
+        "TAS-324"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantQuotas",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/quotas"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B05",
+        "B16"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-348",
+      "summary": "billing-service: реализовать Stripe Checkout adapter и sandbox-сценарии",
+      "kind": "CODE",
+      "parent": "TAS-279",
+      "dependsOn": [
+        "TAS-317",
+        "TAS-320",
+        "TAS-349",
+        "TAS-475"
+      ],
+      "wave": 10,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createCheckout",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices/{invoiceId}/checkout"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B08",
+        "B09",
+        "B11"
+      ],
+      "openQuestions": [
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-349",
+      "summary": "Оплата: сделать payment attempts устойчивыми к повтору и timeout",
+      "kind": "CODE",
+      "parent": "TAS-279",
+      "dependsOn": [
+        "TAS-319",
+        "TAS-320"
+      ],
+      "wave": 9,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createCheckout",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices/{invoiceId}/checkout"
+        },
+        {
+          "operationId": "getCheckout",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/checkout/{checkoutId}"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.payment_methods",
+        "billing-service.payment_attempts",
+        "billing-service.billing_operations"
+      ],
+      "sections": [
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-350",
+      "summary": "Администрирование: внутренний аудит и безопасный повтор outbox",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-346"
+      ],
+      "wave": 13,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "admin-service.admin_audit_log"
+      ],
+      "sections": [
+        "B02",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-351",
+      "summary": "Оплата: надёжно принять проверенный webhook",
+      "kind": "CODE",
+      "parent": "TAS-283",
+      "dependsOn": [
+        "TAS-318",
+        "TAS-320"
+      ],
+      "wave": 5,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "billing-service.provider_inbox"
+      ],
+      "sections": [
+        "B09",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-352",
+      "summary": "Оплата: однократно применить подтверждённый платёж",
+      "kind": "CODE",
+      "parent": "TAS-283",
+      "dependsOn": [
+        "TAS-354",
+        "TAS-476"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B06",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-353",
+      "summary": "Оплата: сверять UNKNOWN/PENDING и пропущенные callbacks",
+      "kind": "CODE",
+      "parent": "TAS-283",
+      "dependsOn": [
+        "TAS-349",
+        "TAS-352"
+      ],
+      "wave": 14,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-354",
+      "summary": "Подписка: менять тариф и отменять продление",
+      "kind": "CODE",
+      "parent": "TAS-285",
+      "dependsOn": [
+        "TAS-331",
+        "TAS-347",
+        "TAS-472"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "changeSubscriptionPlan",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/billing/plan-changes"
+        },
+        {
+          "operationId": "cancelSubscriptionRenewal",
+          "method": "PUT",
+          "path": "/api/v1/tenants/{tenantId}/billing/renewal-cancellation"
+        },
+        {
+          "operationId": "resumeSubscriptionRenewal",
+          "method": "DELETE",
+          "path": "/api/v1/tenants/{tenantId}/billing/renewal-cancellation"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B04",
+        "B05",
+        "B06"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-355",
+      "summary": "Подписка: выполнять продление с явным согласием на автосписание",
+      "kind": "CODE",
+      "parent": "TAS-285",
+      "dependsOn": [
+        "TAS-353"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "setAutopayConsent",
+          "method": "PUT",
+          "path": "/api/v1/tenants/{tenantId}/billing/autopay"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.autopay_mandates"
+      ],
+      "sections": [
+        "B06",
+        "B07",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-356",
+      "summary": "Счета: сохранять реквизиты покупателя в неизменном snapshot",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-345",
+        "TAS-475",
+        "TAS-519"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B08",
+        "B09"
+      ],
+      "openQuestions": [
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-357",
+      "summary": "Банк: учесть поступление EUR и подтвердить полную оплату",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-352",
+        "TAS-356"
+      ],
+      "wave": 14,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listWireReceipts",
+          "method": "GET",
+          "path": "/api/v1/admin/billing/wire-receipts"
+        },
+        {
+          "operationId": "recordWireReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/wire-receipts"
+        },
+        {
+          "operationId": "confirmWireReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/wire-receipts/{paymentId}/confirm"
+        },
+        {
+          "operationId": "appendWireEvidenceRefinement",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/wire-receipts/{paymentId}/evidence-refinements"
+        },
+        {
+          "operationId": "listUnmatchedWireReceipts",
+          "method": "GET",
+          "path": "/api/v1/admin/billing/unmatched-wire-receipts"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B06",
+        "B09"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-358",
+      "summary": "Возвраты: заявка и полный возврат платежа подписки",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-353",
+        "TAS-356"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listRefunds",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/refunds"
+        },
+        {
+          "operationId": "requestFullSubscriptionRefund",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/billing/refunds"
+        },
+        {
+          "operationId": "getRefund",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/refunds/{refundId}"
+        },
+        {
+          "operationId": "decideRefund",
+          "method": "POST",
+          "path": "/api/v1/admin/tenants/{tenantId}/refunds/{refundId}/decision"
+        },
+        {
+          "operationId": "submitRefund",
+          "method": "POST",
+          "path": "/api/v1/admin/tenants/{tenantId}/refunds/{refundId}/submit"
+        },
+        {
+          "operationId": "confirmRefund",
+          "method": "POST",
+          "path": "/api/v1/admin/tenants/{tenantId}/refunds/{refundId}/confirm"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.refunds"
+      ],
+      "sections": [
+        "B02",
+        "B07",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-359",
+      "summary": "Доступ: хранить versioned entitlement projection и ограниченный кэш",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-319",
+        "TAS-462"
+      ],
+      "wave": 9,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B05",
+        "B06",
+        "B07",
+        "B11"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-360",
+      "summary": "Доступ: реализовать общий вычислитель capabilities и причин отказа",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-359"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B07",
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-361",
+      "summary": "Доступ: проверить переходы оплаты, expiry и READ_ONLY",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-355",
+        "TAS-478",
+        "TAS-483",
+        "TAS-491",
+        "TAS-493",
+        "TAS-495"
+      ],
+      "wave": 18,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B05",
+        "B06",
+        "B07",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-362",
+      "summary": "Задачи: изолировать комментарии, worklogs и расчёт времени",
+      "kind": "CODE",
+      "parent": "TAS-290",
+      "dependsOn": [
+        "TAS-321",
+        "TAS-343"
+      ],
+      "wave": 14,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.issue_comments",
+        "issue-service.issue_worklogs"
+      ],
+      "sections": [
+        "B02",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-363",
+      "summary": "Задачи: изолировать метки, наблюдателей и их события",
+      "kind": "CODE",
+      "parent": "TAS-290",
+      "dependsOn": [
+        "TAS-323",
+        "TAS-343"
+      ],
+      "wave": 14,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.issue_labels",
+        "issue-service.issue_watchers",
+        "issue-service.project_labels"
+      ],
+      "sections": [
+        "B02",
+        "B03",
+        "B13",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-364",
+      "summary": "Задачи: проверять доступ к обоим концам связи",
+      "kind": "CODE",
+      "parent": "TAS-290",
+      "dependsOn": [
+        "TAS-344",
+        "TAS-362",
+        "TAS-363"
+      ],
+      "wave": 15,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.issue_links"
+      ],
+      "sections": [
+        "B02",
+        "B14",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-365",
+      "summary": "Вложения: выдать upload reservation и однократно подтвердить файл",
+      "kind": "CODE",
+      "parent": "TAS-291",
+      "dependsOn": [
+        "TAS-343",
+        "TAS-347"
+      ],
+      "wave": 14,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "issue-service.issue_attachments",
+        "issue-service.resource_operation_receipts",
+        "issue-service.attachment_object_manifest"
+      ],
+      "sections": [
+        "B02",
+        "B05",
+        "B16"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-366",
+      "summary": "02. Общий аватар аккаунта: загрузка, замена и удаление",
+      "kind": "CODE",
+      "parent": "TAS-291",
+      "dependsOn": [
+        "TAS-321"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "auth-service.user_avatars",
+        "auth-service.avatar_object_manifest"
+      ],
+      "sections": [
+        "B02",
+        "B12",
+        "B14",
+        "B16",
+        "B11"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-367",
+      "summary": "03. Вложения: защищённое скачивание и повторяемая очистка",
+      "kind": "CODE",
+      "parent": "TAS-291",
+      "dependsOn": [
+        "TAS-360",
+        "TAS-365"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B07",
+        "B16"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-368",
+      "summary": "03. [Исключено] Логотип компании",
+      "kind": "EXCLUDED",
+      "parent": "TAS-278",
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B11",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-369",
+      "summary": "01. Чистый старт: схемы, initializer и фикстуры A/B",
+      "kind": "CODE",
+      "parent": "TAS-293",
+      "dependsOn": [
+        "TAS-350",
+        "TAS-361"
+      ],
+      "wave": 19,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-370",
+      "summary": "02. Чистый старт: manifest очистки S3, outbox и очередей",
+      "kind": "CODE",
+      "parent": "TAS-293",
+      "dependsOn": [
+        "TAS-369"
+      ],
+      "wave": 20,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B16",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-371",
+      "summary": "harness: реализовать автоматизацию чистого B2B-запуска и smoke",
+      "kind": "CODE",
+      "parent": "TAS-293",
+      "dependsOn": [
+        "TAS-370",
+        "TAS-480"
+      ],
+      "wave": 21,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-372",
+      "summary": "01. Экспорт рабочих данных компании с актуальными ACL",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-345",
+        "TAS-364",
+        "TAS-367"
+      ],
+      "wave": 16,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenantExport",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/exports"
+        },
+        {
+          "operationId": "getTenantExport",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/exports/{exportId}"
+        },
+        {
+          "operationId": "downloadTenantExport",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/exports/{exportId}/content"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenant_exports"
+      ],
+      "sections": [
+        "B02",
+        "B07",
+        "B14",
+        "B17"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-373",
+      "summary": "02. Удаление компании: подтверждение и запуск offboarding",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-355",
+        "TAS-358",
+        "TAS-372",
+        "TAS-480"
+      ],
+      "wave": 17,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenantDeletionChallenge",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/deletion-challenges"
+        },
+        {
+          "operationId": "deleteTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/deletion"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B17"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-374",
+      "summary": "harness: реализовать восстановление tenant и автоматический restore drill",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-371",
+        "TAS-474"
+      ],
+      "wave": 22,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B17",
+        "B18"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-375",
+      "summary": "04. Ограничить нагрузку на API по компании",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-361"
+      ],
+      "wave": 19,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-376",
+      "summary": "infra: реализовать B2B deployment templates и проверки конфигурации",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-374",
+        "TAS-492"
+      ],
+      "wave": 23,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B09",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-377",
+      "summary": "01. Включить CI-матрицу изоляции компаний A/B",
+      "kind": "CODE",
+      "parent": "TAS-295",
+      "dependsOn": [
+        "TAS-333",
+        "TAS-341",
+        "TAS-366",
+        "TAS-376",
+        "TAS-473",
+        "TAS-477",
+        "TAS-479",
+        "TAS-487",
+        "TAS-496",
+        "TAS-497",
+        "TAS-499"
+      ],
+      "wave": 24,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B14",
+        "B16",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-378",
+      "summary": "02. Сквозная приёмка billing с fake clock и сбоями",
+      "kind": "CODE",
+      "parent": "TAS-295",
+      "dependsOn": [
+        "TAS-348",
+        "TAS-377",
+        "TAS-482",
+        "TAS-484",
+        "TAS-486",
+        "TAS-488",
+        "TAS-490"
+      ],
+      "wave": 25,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B05",
+        "B06",
+        "B07",
+        "B09",
+        "B10",
+        "B18"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-379",
+      "summary": "CI/security: реализовать регрессии и автоматический B2B release gate",
+      "kind": "CODE",
+      "parent": "TAS-295",
+      "dependsOn": [
+        "TAS-287",
+        "TAS-292",
+        "TAS-378",
+        "TAS-501",
+        "TAS-502",
+        "TAS-503",
+        "TAS-504",
+        "TAS-505",
+        "TAS-506",
+        "TAS-507",
+        "TAS-508",
+        "TAS-509",
+        "TAS-511",
+        "TAS-513",
+        "TAS-514",
+        "TAS-515",
+        "TAS-516",
+        "TAS-517"
+      ],
+      "wave": 26,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B12",
+        "B18"
+      ],
+      "openQuestions": [
+        "O04",
+        "O08",
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-459",
+      "summary": "04. Безвозвратное удаление проекта с освобождением квот",
+      "kind": "CODE",
+      "parent": "TAS-281",
+      "dependsOn": [
+        "TAS-367"
+      ],
+      "wave": 16,
+      "documents": [
+        "target-data-model.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-460",
+      "summary": "04. Lifetime-лимит успешных созданий задач в проекте",
+      "kind": "CODE",
+      "parent": "TAS-276",
+      "dependsOn": [
+        "TAS-319",
+        "TAS-332"
+      ],
+      "wave": 9,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantQuotas",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/quotas"
+        },
+        {
+          "operationId": "getProjectTaskQuota",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/projects/{projectId}/task-quota"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-461",
+      "summary": "05. Удаление аккаунта: предусловия и одноразовое подтверждение",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-323",
+        "TAS-327"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getAccountDeletionPrerequisites",
+          "method": "GET",
+          "path": "/api/v1/account/deletion-prerequisites"
+        },
+        {
+          "operationId": "createAccountDeletionChallenge",
+          "method": "POST",
+          "path": "/api/v1/account/deletion-challenges"
+        },
+        {
+          "operationId": "deleteAccount",
+          "method": "POST",
+          "path": "/api/v1/account/deletion"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.account_deletion_operations",
+        "tenant-service.account_offboarding"
+      ],
+      "sections": [
+        "B03",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-462",
+      "summary": "04. Типизированный глобальный реестр бизнес-флагов",
+      "kind": "CODE",
+      "parent": "TAS-278",
+      "dependsOn": [
+        "TAS-305",
+        "TAS-310"
+      ],
+      "wave": 5,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listPlatformFlags",
+          "method": "GET",
+          "path": "/api/v1/admin/flags"
+        },
+        {
+          "operationId": "updatePlatformFlag",
+          "method": "PUT",
+          "path": "/api/v1/admin/flags/{flagKey}"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.platform_configuration_versions"
+      ],
+      "sections": [
+        "B01",
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-463",
+      "summary": "04. Привязать пользовательский PAT к одной компании",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-315",
+        "TAS-319",
+        "TAS-462"
+      ],
+      "wave": 9,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenantPersonalToken",
+          "method": "POST",
+          "path": "/api/v1/account/tenant-tokens"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.personal_access_tokens",
+        "auth-service.integration_grants"
+      ],
+      "sections": [
+        "B02",
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-287",
+      "summary": "taska-ui: компания, участники и аккаунт — пакет UI-подзадач",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [
+        "TAS-275",
+        "TAS-278",
+        "TAS-280",
+        "TAS-281"
+      ],
+      "wave": null,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B03",
+        "B07",
+        "B11",
+        "B12",
+        "B14",
+        "B17"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-292",
+      "summary": "taska-ui: подписка, оплата и ограничения — пакет UI-подзадач",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [
+        "TAS-279",
+        "TAS-286",
+        "TAS-289"
+      ],
+      "wave": null,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04",
+        "O08",
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-267",
+      "summary": "B2B SaaS: компании, изоляция данных и подписки",
+      "kind": "CONTAINER",
+      "parent": null,
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B10",
+        "B11",
+        "B12",
+        "B13",
+        "B14",
+        "B15",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "openQuestions": [
+        "O04",
+        "O08",
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-468",
+      "summary": "Реестр: REST/RPC и пути доступа к данным",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "api-inventory.md",
+        "inventory/api-operations.json"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B12",
+        "B13",
+        "B16",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-469",
+      "summary": "Реестр: события, jobs, кэши и файловые ключи",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [],
+      "wave": null,
+      "documents": [
+        "async-and-files.md",
+        "inventory/async-paths.json"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B12",
+        "B13",
+        "B16",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-470",
+      "summary": "Контракт компаний, участников и quota reservations",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [
+        "TAS-305"
+      ],
+      "wave": null,
+      "documents": [
+        "contracts/README.md",
+        "contracts/b2b-openapi.yaml",
+        "target-data-model.md",
+        "state-machines.md"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B02",
+        "B03",
+        "B05",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-471",
+      "summary": "Контракт подписки, счетов и entitlement snapshot",
+      "kind": "ANALYSIS_DONE",
+      "parent": "TAS-268",
+      "dependsOn": [
+        "TAS-305"
+      ],
+      "wave": null,
+      "documents": [
+        "contracts/README.md",
+        "contracts/b2b-openapi.yaml",
+        "target-data-model.md",
+        "state-machines.md"
+      ],
+      "operations": [],
+      "schemaTables": null,
+      "sections": [
+        "B01",
+        "B04",
+        "B06",
+        "B08",
+        "B09",
+        "B10",
+        "B18"
+      ],
+      "openQuestions": [
+        "O04",
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-472",
+      "summary": "Атомарно учитывать единственную FREE-возможность владельца",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-311"
+      ],
+      "wave": 6,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "createTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.free_eligibility_ledger"
+      ],
+      "sections": [
+        "B04",
+        "B14"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-473",
+      "summary": "Передать владение оплаченной компанией",
+      "kind": "CODE",
+      "parent": "TAS-273",
+      "dependsOn": [
+        "TAS-323"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "transferTenantOwnership",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/ownership-transfer"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B04",
+        "B07",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-475",
+      "summary": "Создать неизменяемые счета подписки",
+      "kind": "CODE",
+      "parent": "TAS-274",
+      "dependsOn": [
+        "TAS-314"
+      ],
+      "wave": 7,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listInvoices",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices"
+        },
+        {
+          "operationId": "createInvoice",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices"
+        },
+        {
+          "operationId": "getInvoice",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices/{invoiceId}"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.invoices",
+        "billing-service.invoice_lines"
+      ],
+      "sections": [
+        "B04",
+        "B06",
+        "B08",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-476",
+      "summary": "Создать журнал финансовых фактов и распределений",
+      "kind": "CODE",
+      "parent": "TAS-274",
+      "dependsOn": [
+        "TAS-475"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "billing-service.payment_facts",
+        "billing-service.payment_allocations",
+        "billing-service.invoice_payment_matches"
+      ],
+      "sections": [
+        "B09",
+        "B10",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-477",
+      "summary": "Обновлять единый профиль аккаунта через веб",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-321"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "changeAccountPassword",
+          "method": "PUT",
+          "path": "/api/v1/account/password"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.users"
+      ],
+      "sections": [
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-479",
+      "summary": "Подтвердить смену email глобального аккаунта",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-327"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "requestAccountEmailChange",
+          "method": "POST",
+          "path": "/api/v1/account/email-changes"
+        },
+        {
+          "operationId": "confirmAccountEmailChange",
+          "method": "POST",
+          "path": "/api/v1/account/email-changes/confirm"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-481",
+      "summary": "Подключить почту первого GLOBAL_ADMIN и операторское восстановление",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-327",
+        "TAS-328"
+      ],
+      "wave": 11,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-483",
+      "summary": "Применять новые условия тарифа после уведомления",
+      "kind": "CODE",
+      "parent": "TAS-285",
+      "dependsOn": [
+        "TAS-319",
+        "TAS-326",
+        "TAS-331"
+      ],
+      "wave": 10,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "publishPlanVersion",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/plan-versions/{planVersionId}/publish"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.change_notices"
+      ],
+      "sections": [
+        "B04",
+        "B05",
+        "B06",
+        "B13"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-478",
+      "summary": "Создание компании: отмена и автоматическое закрытие без первой оплаты",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-337"
+      ],
+      "wave": 8,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "cancelTenantCreation",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/cancel-creation"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-480",
+      "summary": "Компании: пауза владельцем и блокировка платформой",
+      "kind": "CODE",
+      "parent": "TAS-269",
+      "dependsOn": [
+        "TAS-338",
+        "TAS-359"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "pauseTenant",
+          "method": "PUT",
+          "path": "/api/v1/tenants/{tenantId}/pause"
+        },
+        {
+          "operationId": "resumeTenant",
+          "method": "DELETE",
+          "path": "/api/v1/tenants/{tenantId}/pause"
+        },
+        {
+          "operationId": "setPlatformBlock",
+          "method": "PUT",
+          "path": "/api/v1/admin/tenants/{tenantId}/platform-block"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenant_restrictions"
+      ],
+      "sections": [
+        "B02",
+        "B07",
+        "B11"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-482",
+      "summary": "Счета: формировать и скачивать приватные финансовые документы",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-356",
+        "TAS-519"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "downloadInvoiceDocument",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/invoices/{invoiceId}/document"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B08",
+        "B09"
+      ],
+      "openQuestions": [
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-484",
+      "summary": "Банк: разбирать поздние и нераспределённые поступления",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-349",
+        "TAS-357",
+        "TAS-518"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "confirmWireReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/wire-receipts/{paymentId}/confirm"
+        },
+        {
+          "operationId": "appendWireEvidenceRefinement",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/wire-receipts/{paymentId}/evidence-refinements"
+        },
+        {
+          "operationId": "recordUnmatchedWireReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/unmatched-wire-receipts"
+        },
+        {
+          "operationId": "assignUnmatchedWireReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/unmatched-wire-receipts/{receiptId}/assignment"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.unmatched_bank_receipts"
+      ],
+      "sections": [
+        "B01",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-486",
+      "summary": "Банк: вернуть нераспределённый излишек первой оплаты",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-357",
+        "TAS-518"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "returnUnallocatedReceipt",
+          "method": "POST",
+          "path": "/api/v1/admin/billing/unallocated-returns"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-488",
+      "summary": "Банк: выставить счет продления и обязательное напоминание",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-357",
+        "TAS-462"
+      ],
+      "wave": 15,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B06",
+        "B09",
+        "B11",
+        "B13"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-490",
+      "summary": "Споры: учитывать подтверждённые исходы и пересчитывать доступ",
+      "kind": "CODE",
+      "parent": "TAS-286",
+      "dependsOn": [
+        "TAS-351",
+        "TAS-358",
+        "TAS-518"
+      ],
+      "wave": 16,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listDisputes",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/billing/disputes"
+        },
+        {
+          "operationId": "recordDisputeOutcome",
+          "method": "POST",
+          "path": "/api/v1/admin/tenants/{tenantId}/disputes/{disputeId}/outcome"
+        }
+      ],
+      "schemaTables": [
+        "billing-service.disputes"
+      ],
+      "sections": [
+        "B07",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-491",
+      "summary": "Доступ: подключить capabilities к операциям компании и участников",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-339",
+        "TAS-360"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B07",
+        "B17"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-493",
+      "summary": "Доступ: подключить capabilities к project/workflow операциям",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-459"
+      ],
+      "wave": 17,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B07",
+        "B11",
+        "B15"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-495",
+      "summary": "Доступ: подключить capabilities к задачам и вложениям",
+      "kind": "CODE",
+      "parent": "TAS-289",
+      "dependsOn": [
+        "TAS-360",
+        "TAS-364",
+        "TAS-365"
+      ],
+      "wave": 16,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B05",
+        "B07",
+        "B11",
+        "B15",
+        "B16"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-474",
+      "summary": "Удаление компании: повторяемая очистка доменов и файлов",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-373",
+        "TAS-520"
+      ],
+      "wave": 18,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantOperation",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/operations/{operationId}"
+        },
+        {
+          "operationId": "deleteTenant",
+          "method": "POST",
+          "path": "/api/v1/tenants/{tenantId}/deletion"
+        }
+      ],
+      "schemaTables": [
+        "tenant-service.tenant_deletion_steps"
+      ],
+      "sections": [
+        "B14",
+        "B16",
+        "B17",
+        "B18"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-489",
+      "summary": "Распределять outbox, email и export jobs справедливо по компаниям",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-372",
+        "TAS-375"
+      ],
+      "wave": 20,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "project-service.tenant_work_partitions",
+        "workflow-service.tenant_work_partitions",
+        "issue-service.tenant_work_partitions",
+        "notification-service.tenant_work_partitions",
+        "tenant-service.tenant_work_partitions",
+        "billing-service.tenant_work_partitions"
+      ],
+      "sections": [
+        "B13",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-492",
+      "summary": "Добавить диагностику tenant jobs, квот и сверки",
+      "kind": "CODE",
+      "parent": "TAS-294",
+      "dependsOn": [
+        "TAS-489"
+      ],
+      "wave": 21,
+      "documents": [
+        "operations-design.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-494",
+      "summary": "Удаление аккаунта: отзыв доступов и очистка членств",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-461",
+        "TAS-472",
+        "TAS-520"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "deleteAccount",
+          "method": "POST",
+          "path": "/api/v1/account/deletion"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B03",
+        "B04",
+        "B12",
+        "B14"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-496",
+      "summary": "Показывать удалённого автора без прежнего профиля",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-494"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B14",
+        "B17"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-497",
+      "summary": "Публиковать effective capabilities и причины ограничений",
+      "kind": "CODE",
+      "parent": "TAS-278",
+      "dependsOn": [
+        "TAS-334"
+      ],
+      "wave": 12,
+      "documents": [
+        "technical-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "getTenantCapabilities",
+          "method": "GET",
+          "path": "/api/v1/tenants/{tenantId}/capabilities"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-498",
+      "summary": "Привязать пользовательское OAuth-разрешение к одной компании",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-463"
+      ],
+      "wave": 10,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "approveTenantOAuthGrant",
+          "method": "POST",
+          "path": "/api/v1/auth/tenant-oauth-consents"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.oauth_grants",
+        "auth-service.oauth_states",
+        "oauth-server.oauth2_authorization",
+        "oauth-server.oauth2_authorization_consent",
+        "oauth-server.oauth2_registered_client",
+        "oauth-server.oauth_refresh_history",
+        "oauth-server.oauth_registration_lock"
+      ],
+      "sections": [
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-499",
+      "summary": "Административные PAT/OAuth: выдача, область и уровни",
+      "kind": "CODE",
+      "parent": "TAS-270",
+      "dependsOn": [
+        "TAS-345",
+        "TAS-498"
+      ],
+      "wave": 12,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "listAdminIntegrationGrants",
+          "method": "GET",
+          "path": "/api/v1/admin/integration-grants"
+        },
+        {
+          "operationId": "createAdminIntegrationGrant",
+          "method": "POST",
+          "path": "/api/v1/admin/integration-grants"
+        },
+        {
+          "operationId": "replaceAdminIntegrationGrant",
+          "method": "PUT",
+          "path": "/api/v1/admin/integration-grants/{grantId}"
+        },
+        {
+          "operationId": "revokeAdminIntegrationGrant",
+          "method": "DELETE",
+          "path": "/api/v1/admin/integration-grants/{grantId}"
+        }
+      ],
+      "schemaTables": [
+        "auth-service.integration_grant_tenants"
+      ],
+      "sections": [
+        "B02",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-500",
+      "summary": "UI: выбор компании и изоляция workspace между вкладками",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-316",
+        "TAS-340"
+      ],
+      "wave": 12,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-501",
+      "summary": "UI: самостоятельное создание FREE и paid-компании",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-338",
+        "TAS-478",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B04",
+        "B06",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-502",
+      "summary": "UI: участники компании и управление приглашениями",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-339",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B03"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-503",
+      "summary": "UI: принятие приглашения новым и существующим аккаунтом",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-339"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B03",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-504",
+      "summary": "UI: название, владелец и пауза компании",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-333",
+        "TAS-473",
+        "TAS-480",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B11"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-505",
+      "summary": "UI: запуск и скачивание рабочего экспорта",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-372",
+        "TAS-500"
+      ],
+      "wave": 17,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B17"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-506",
+      "summary": "UI: необратимое удаление компании с кодом",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-474",
+        "TAS-500"
+      ],
+      "wave": 19,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B17"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-507",
+      "summary": "UI: единые имя и аватар аккаунта",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-366",
+        "TAS-477",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B14",
+        "B16"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-508",
+      "summary": "UI: предусловия и подтверждение удаления аккаунта",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-496"
+      ],
+      "wave": 14,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B14"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-509",
+      "summary": "UI: пользовательские PAT и OAuth-подключения одной компании",
+      "kind": "CODE",
+      "parent": "TAS-287",
+      "dependsOn": [
+        "TAS-498",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "contracts/README.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B11",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-510",
+      "summary": "UI GLOBAL_ADMIN: вход с email-кодом и путь восстановления",
+      "kind": "CODE",
+      "parent": "TAS-275",
+      "dependsOn": [
+        "TAS-481"
+      ],
+      "wave": 12,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B12",
+        "B14"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-511",
+      "summary": "UI GLOBAL_ADMIN: выдача и изменение административных разрешений",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-499",
+        "TAS-510"
+      ],
+      "wave": 13,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-512",
+      "summary": "UI: подписка, квоты и объяснение ограничений",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-483",
+        "TAS-497",
+        "TAS-500"
+      ],
+      "wave": 13,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B04",
+        "B05",
+        "B06",
+        "B07"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-513",
+      "summary": "UI: hosted checkout и подтверждённый статус оплаты",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-348",
+        "TAS-349",
+        "TAS-352",
+        "TAS-512"
+      ],
+      "wave": 14,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B01",
+        "B08",
+        "B09"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-514",
+      "summary": "UI: банковский счёт, реквизиты и ручная сверка",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-482",
+        "TAS-484",
+        "TAS-486",
+        "TAS-512"
+      ],
+      "wave": 16,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B06",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04",
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-515",
+      "summary": "UI: смена тарифа, продление и согласие на autopay",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-355",
+        "TAS-512"
+      ],
+      "wave": 16,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B04",
+        "B06",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-516",
+      "summary": "UI: заявки владельца на возврат и состояние финансового спора",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-486",
+        "TAS-490",
+        "TAS-512"
+      ],
+      "wave": 17,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B07",
+        "B09",
+        "B10"
+      ],
+      "openQuestions": [
+        "O04",
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-517",
+      "summary": "UI GLOBAL_ADMIN: ручная сверка и финансовые решения",
+      "kind": "CODE",
+      "parent": "TAS-292",
+      "dependsOn": [
+        "TAS-484",
+        "TAS-486",
+        "TAS-490",
+        "TAS-510"
+      ],
+      "wave": 17,
+      "documents": [
+        "state-machines.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B09",
+        "B10",
+        "B12"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-485",
+      "summary": "Администрирование: глобальные роли и блокировка аккаунтов",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-345"
+      ],
+      "wave": 12,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "changeGlobalAccount",
+          "method": "POST",
+          "path": "/api/v1/admin/accounts/{userId}/actions"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B14",
+        "B18"
+      ],
+      "openQuestions": []
+    },
+    {
+      "key": "TAS-487",
+      "summary": "Администрирование: удаление глобального аккаунта с сохранением целостности",
+      "kind": "CODE",
+      "parent": "TAS-282",
+      "dependsOn": [
+        "TAS-485",
+        "TAS-494"
+      ],
+      "wave": 13,
+      "documents": [
+        "access-control.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [
+        {
+          "operationId": "adminDeleteAccount",
+          "method": "POST",
+          "path": "/api/v1/admin/accounts/{userId}/deletion"
+        }
+      ],
+      "schemaTables": [],
+      "sections": [
+        "B02",
+        "B12",
+        "B14",
+        "B18"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    },
+    {
+      "key": "TAS-518",
+      "summary": "billing-service: реализовать очередь ручного финансового разбора",
+      "kind": "CODE",
+      "parent": "TAS-271",
+      "dependsOn": [
+        "TAS-345",
+        "TAS-476"
+      ],
+      "wave": 12,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "billing-service.settlement_cases"
+      ],
+      "sections": [
+        "B09",
+        "B10",
+        "B22"
+      ],
+      "openQuestions": [
+        "O04"
+      ]
+    },
+    {
+      "key": "TAS-519",
+      "summary": "billing-service: валидировать коммерческий профиль и готовность live-оплаты",
+      "kind": "CODE",
+      "parent": "TAS-271",
+      "dependsOn": [
+        "TAS-462"
+      ],
+      "wave": 6,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "billing-service.fx_quotes"
+      ],
+      "sections": [
+        "B08",
+        "B09",
+        "B10",
+        "B22"
+      ],
+      "openQuestions": [
+        "O08"
+      ]
+    },
+    {
+      "key": "TAS-520",
+      "summary": "tenant/auth: реализовать retention policies, holds и повторяемый purge",
+      "kind": "CODE",
+      "parent": "TAS-271",
+      "dependsOn": [
+        "TAS-310",
+        "TAS-462"
+      ],
+      "wave": 6,
+      "documents": [
+        "commercial-decisions.md",
+        "contracts/README.md",
+        "target-data-model.md"
+      ],
+      "operations": [],
+      "schemaTables": [
+        "tenant-service.retention_holds"
+      ],
+      "sections": [
+        "B04",
+        "B14",
+        "B17",
+        "B22"
+      ],
+      "openQuestions": [
+        "O09"
+      ]
+    }
+  ]
+}
