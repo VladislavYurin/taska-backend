@@ -50,6 +50,21 @@ class E2ETest(unittest.TestCase):
             self.store.create('a' * 16, 'local', 'isolated-compose', 'actor')
         self.assertEqual(self.store.load(self.store.path('b' * 16)), other)
 
+    def test_interrupt_during_cleanup_still_writes_failed_report(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(command='e2e', tier='local', scenario=['E2E-01'], run_id='c' * 16, config=None)
+        with patch.object(e, 'catalog', return_value={'E2E-01': 'fixture'}), \
+                patch.object(e, 'source', return_value={'sourceHead': 'fixture', 'sourceTree': 'fixture', 'dirty': False}), \
+                patch.object(e.Local, 'provision', side_effect=e.Blocked('fixture prerequisite missing')), \
+                patch.object(e, 'finish_environment', side_effect=KeyboardInterrupt()):
+            report, code = e.handle(args, self.root)
+        saved = json.loads((self.store.path('c' * 16).parent / 'report.json').read_text())
+        self.assertEqual(code, 1)
+        self.assertEqual(saved['status'], 'FAIL')
+        self.assertEqual(saved['cleanupStatus'], 'FAIL')
+        self.assertTrue(any(r['reason'].startswith('Cleanup interrupted') for r in saved['results']))
+        self.assertEqual(self.store.load(self.store.path('c' * 16))['cleanupStatus'], 'FAIL')
+
     def test_malformed_stage_config_returns_controlled_error(self):
         import copy
         config = {'origin': 'https://fixture.invalid', 'allowedOrigins': ['https://fixture.invalid'],

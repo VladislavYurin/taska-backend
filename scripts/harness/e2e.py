@@ -825,8 +825,16 @@ def _handle(args, root):
     except (Failure, Blocked, Invalid, OSError, KeyError, ValueError) as exc:
         report['results'].append({'checkId': 'preflight', 'status': 'BLOCKED' if isinstance(exc, Blocked) else 'FAIL', 'reason': str(exc) if isinstance(exc, (Failure, Blocked, Invalid)) else 'Lifecycle error: ' + type(exc).__name__})
     finally:
-        signal.signal(signal.SIGTERM, old_handler)
-        finish_environment(store, state, report, local, clients, config)
+        try:
+            try:
+                finish_environment(store, state, report, local, clients, config)
+            except KeyboardInterrupt:
+                state['cleanupStatus'] = 'FAIL'
+                store.save(state)
+                report['results'].append({'checkId': 'cleanup', 'status': 'FAIL',
+                                          'reason': 'Cleanup interrupted; repeat cleanup from run-state'})
+        finally:
+            signal.signal(signal.SIGTERM, old_handler)
     report['finishedAt'] = now()
     report['cleanupStatus'] = state['cleanupStatus']
     report['remainingOwnedResources'] = [{'type': 'archived-project' if r.get('archived') else r['type'], 'id': r['id']} for r in state['resources']]
