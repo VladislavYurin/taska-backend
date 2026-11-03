@@ -23,7 +23,7 @@ python3 scripts/harness.py check --all
 
 `plan` сравнивает merge-base указанного commit/ref с текущим рабочим деревом, включая tracked удаления и untracked файлы вне ignore. Список checks сопровождается причинами: module changes, consumers из POM, event/trust rules, консервативный fallback для неизвестного общего файла. Изменения модуля распространяются на downstream; upstream для сборки добавляется отдельно, без распространения impact в соседние сервисы. Проверка event semantics и выбор E2E остаются обязанностью агента. План не выполняется автоматически.
 
-`check --module` запускает `clean verify` и специальные IT из manifest с зависимостями. `--check` выбирает конкретный стабильный check ID, зависимый verify выполняется автоматически. Можно повторять `--check`. `--all` выполняет все 14 модулей и integration/config/harness/docs проверки последовательно. Требуются все prerequisites выбранного набора; нет скрытой установки инструментов или автоматического изменения `.env`.
+`check --module` запускает `clean verify` и специальные IT из manifest с зависимостями. `--check` выбирает конкретный стабильный check ID, зависимый verify выполняется автоматически. Можно повторять `--check`. `--all` выполняет все 15 модулей и integration/config/harness/docs проверки последовательно. Требуются все prerequisites выбранного набора; нет скрытой установки инструментов или автоматического изменения `.env`.
 
 Существующие groups: `java`, `config`, `harness`, `docs`. TAS-454 добавляет отдельные `e2e` и `cleanup`: [команды, конфигурация и ограниченный scope](e2e.md). Отчёт JSON выводится в stdout, прогресс ID/status — в stderr. Сохранять stdout можно в ignored `target/` или внешний каталог; credentials в аргументы не передавать. Verification-команды не создают постоянных raw logs (E2E startup diagnostics сохраняются только приватно); диагностика ограничена и санитизируется. Реальные subprocesses могут создавать свои build outputs и Maven cache.
 
@@ -100,7 +100,7 @@ OAuth overlays имеют отдельные требования; см. [OAuth 
 | `workflow-service` | `IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT` |
 | `auth-service` | `InvitedUnblockIT` |
 
-Источник: [verification.json](../../scripts/harness/verification.json). [PR CI](../../.github/workflows/pr-check.yml) получает все 14 модулей из manifest и вызывает тот же `check --module`. `storage-lib` и `metrics-starter` теперь имеют отдельные matrix jobs. Для `kafka-lib` и `metrics-starter` явно указано отсутствие default Surefire test sources; появление таких тестов требует обновить ожидания manifest. CI проверяет документацию и Python/Node-тесты harness отдельной job.
+Источник: [verification.json](../../scripts/harness/verification.json). [PR CI](../../.github/workflows/pr-check.yml) получает все 15 модулей из manifest и вызывает тот же `check --module`. `storage-lib` и `metrics-starter` теперь имеют отдельные matrix jobs. Для `kafka-lib` и `metrics-starter` явно указано отсутствие default Surefire test sources; появление таких тестов требует обновить ожидания manifest. CI проверяет документацию и Python/Node-тесты harness отдельной job.
 
 ## MCP Compose и snapshot
 
@@ -152,3 +152,5 @@ TAS-307: `common-lib.verify` включает `TenantTransactionExecutorIntegrat
 TAS-308: `TenantRlsTemplatesIntegrationTest` в common-lib.verify исполняет общие psql/SQL templates на PostgreSQL16 с настоящими runtime LOGIN sessions. Проверяет RLS, composite FK, role/grant/policy drift и default privileges. Требуется Docker; psql берётся из контейнера. [Шаблоны и применение](../data/tenant-rls-templates.md).
 
 TAS-309: common-lib.verify дополнительно требует свежий `TenantIsolationContractIntegrationTest` report. Suite использует shipped TAS-308 templates, настоящий app LOGIN и executor: сложные SQL/batch/RETURNING, composite FK, nested/retry/cancel, одновременно занятые pool connections и естественные tenant-leading plans на 40 000 issues. [Переиспользуемая fixture, планы и ограничения](../data/tenant-isolation-suite.md). Fixture экспортируется только в test classifier; runtime jar не расширяет API доверенного контекста.
+
+TAS-310: `tenant-service.verify` — новый обязательный Maven/Docker check; требует `TenantRegistryIntegrationTest`. Проверяет Liquibase из реального deployer→migrator, runtime LOGIN, конкурентный create/replay/conflict, FREE rollback, immutable deadline, membership isolation и Spring Boot health. [Запуск и границы foundation](../../tenant-service/README.md). gRPC contract additive: все consumers проверяет CI-матрица. Отдельный opt-in Compose — `infra/tenant/compose.yml`, общий deploy-stage этим PR не расширяется.

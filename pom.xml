@@ -30,6 +30,7 @@
         <module>admin-service</module>
         <module>mcp-server</module>
         <module>oauth-server</module>
+        <module>tenant-service</module>
     </modules>
 
     <properties>

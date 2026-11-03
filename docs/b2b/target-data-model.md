@@ -91,7 +91,7 @@
 
 ### tenant-service · taska.tenants
 
-Scope `TENANT`; retention `TENANT_WORKDATA`. RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate.
+Scope `TENANT`; retention `TENANT_WORKDATA`. RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate. TAS-310 stores immutable original actor/request SHA-256/plan/operation and derives UUIDv8 from actor+idempotency key; durable creation identity survives response-cache expiry. [Implementation and limits](../../tenant-service/README.md).
 
 ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
@@ -111,6 +111,10 @@ ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpos
 - `updated_at` `timestamptz` NOT NULL DEFAULT `now()`
 - `deleted_at` `timestamptz` NULL
 - `owner_version` `bigint` NOT NULL DEFAULT `1`
+- `plan_version_id` `uuid` NOT NULL
+- `creation_actor_id` `uuid` NOT NULL
+- `creation_request_hash` `bytea` NOT NULL
+- `creation_operation_id` `uuid` NOT NULL
 
 PK `(id)`.
 

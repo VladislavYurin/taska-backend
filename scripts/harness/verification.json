@@ -14,7 +14,8 @@
     "metrics-starter",
     "admin-service",
     "mcp-server",
-    "oauth-server"
+    "oauth-server",
+    "tenant-service"
   ],
   "capabilities": {
     "git": {
@@ -535,6 +536,42 @@
         "directory": "oauth-server/target/surefire-reports",
         "selectors": [
           "*"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
+    },
+    {
+      "id": "tenant-service.verify",
+      "module": "tenant-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "tenant-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "tenant-service/target/surefire-reports",
+        "selectors": [
+          "*",
+          "TenantRegistryIntegrationTest"
         ],
         "noTestsReason": null
       },
