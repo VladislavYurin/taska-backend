@@ -172,7 +172,8 @@ public final class WebSessionStore {
         .bind("user", user).bind("key", key).fetch().one()
         .flatMap(row -> {
           if (!operation.equals(row.get("operation"))
-              || !Objects.equals(web, operation.equals("TENANT_SELECT") ? row.get("web_session_id") : null)
+              || (operation.equals("TENANT_SELECT")
+                  && !Objects.equals(web, row.get("web_session_id")))
               || !Objects.equals(tenant, row.get("tenant_id")))
             return Mono.error(new DomainException(DomainStatus.ABORTED, "Idempotency conflict"));
           if (!"ACTIVE".equals(row.get("web_state")) || row.get("web_revoked") != null
@@ -384,6 +385,7 @@ public final class WebSessionStore {
 
   private Mono<Void> revokeFamily(Map<String, Object> row, Instant now) {
     UUID session = (UUID) row.get("tenant_session_id");
+    // A tenant refresh family is independent: reuse in tab A must not revoke tab B.
     Mono<?> revokeSession = session == null
         ? db.sql("UPDATE taska.web_sessions SET state='REVOKED',revoked_at=:now WHERE id=:id")
             .bind("now", now.atOffset(ZoneOffset.UTC))

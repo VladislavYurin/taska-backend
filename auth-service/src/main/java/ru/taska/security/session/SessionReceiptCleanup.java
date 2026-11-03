@@ -1,6 +1,9 @@
 package ru.taska.security.session;
 
 import java.time.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,8 +14,10 @@ import reactor.core.publisher.Mono;
 @Component
 @ConditionalOnProperty(name = "taska.b2b.sessions.enabled", havingValue = "true")
 public final class SessionReceiptCleanup {
+  private static final Logger log = LoggerFactory.getLogger(SessionReceiptCleanup.class);
   private final DatabaseClient db;
   private final Clock clock;
+  private final AtomicBoolean running = new AtomicBoolean();
 
   public SessionReceiptCleanup(DatabaseClient db) {
     this(db, Clock.systemUTC());
@@ -35,6 +40,9 @@ public final class SessionReceiptCleanup {
 
   @Scheduled(fixedDelayString = "${taska.b2b.sessions.receipt-cleanup-interval:1m}")
   public void run() {
-    purge().block(Duration.ofSeconds(30));
+    if (!running.compareAndSet(false, true)) return;
+    purge().timeout(Duration.ofSeconds(30))
+        .doFinally(ignored -> running.set(false))
+        .subscribe(ignored -> {}, error -> log.warn("Session receipt cleanup failed"));
   }
 }

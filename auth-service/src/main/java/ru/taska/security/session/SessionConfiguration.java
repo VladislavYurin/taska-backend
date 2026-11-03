@@ -22,7 +22,9 @@ public class SessionConfiguration {
       WebSessionStore.MembershipAuthority membership,
       @Value("${taska.b2b.sessions.refresh-receipt-key:}") String encodedReceiptKey,
       @Value("${taska.b2b.sessions.refresh-ttl:7d}") Duration refreshTtl) {
-    byte[] receiptKey = Base64.getDecoder().decode(encodedReceiptKey);
+    byte[] receiptKey = decode("TASKA_B2B_REFRESH_RECEIPT_KEY", encodedReceiptKey);
+    if (receiptKey.length != 32)
+      throw new IllegalStateException("TASKA_B2B_REFRESH_RECEIPT_KEY must contain 32 bytes");
     return new WebSessionStore(db, tx, Clock.systemUTC(), new SecureRandom(),
         refreshTtl, membership, receiptKey);
   }
@@ -33,9 +35,19 @@ public class SessionConfiguration {
       @Value("${taska.b2b.sessions.ed25519-kid:}") String kid,
       @Value("${taska.b2b.sessions.access-ttl:15m}") Duration accessTtl)
       throws GeneralSecurityException {
-    byte[] der = Base64.getDecoder().decode(encodedPrivateKey);
+    byte[] der = decode("TASKA_B2B_ED25519_PRIVATE_KEY", encodedPrivateKey);
     PrivateKey privateKey = KeyFactory.getInstance("Ed25519")
         .generatePrivate(new PKCS8EncodedKeySpec(der));
     return new TenantAccessIssuer(privateKey, kid, Clock.systemUTC(), accessTtl);
+  }
+
+  private static byte[] decode(String name, String encoded) {
+    if (encoded == null || encoded.isBlank())
+      throw new IllegalStateException(name + " must be configured before enabling B2B sessions");
+    try {
+      return Base64.getDecoder().decode(encoded);
+    } catch (IllegalArgumentException error) {
+      throw new IllegalStateException(name + " must be valid Base64", error);
+    }
   }
 }
