@@ -994,4 +994,52 @@ class TenantRegistryIntegrationTest {
             true,
             service.create(request("different-race", PAID, "third payload"))));
   }
+
+  @Test
+  void sqlBootstrapHookStartsFreshPostgresAndProvisionsRuntimeLogin() throws Exception {
+    java.nio.file.Path root = java.nio.file.Path.of("").toAbsolutePath();
+    while (root != null && !java.nio.file.Files.exists(root.resolve("infra/tenant/init.sql")))
+      root = root.getParent();
+    assertNotNull(root, "Repository SQL init fixture missing");
+    String appPassword = UUID.randomUUID().toString(),
+        deployerPassword = UUID.randomUUID().toString();
+    try (var fresh = new PostgreSQLContainer<>("postgres:16")) {
+      fresh
+          .withEnv("TENANT_APP_PASSWORD", appPassword)
+          .withEnv("TENANT_DEPLOY_PASSWORD", deployerPassword)
+          .withCopyFileToContainer(
+              MountableFile.forHostPath(root.resolve("infra/tenant/init.sql")),
+              "/docker-entrypoint-initdb.d/10-tenant.sql");
+      for (String extension : List.of("sql", "psql"))
+        fresh.withCopyFileToContainer(
+            MountableFile.forClasspathResource("db/tenant/bootstrap." + extension),
+            "/opt/taska/templates/bootstrap." + extension);
+      fresh.start();
+      try (var connection =
+              java.sql.DriverManager.getConnection(
+                  fresh.getJdbcUrl(), "taska_tenant_app", appPassword);
+          var statement = connection.createStatement();
+          var rows =
+              statement.executeQuery(
+                  "SELECT current_user='taska_tenant_app' AND NOT rolsuper AND NOT rolbypassrls AND"
+                      + " NOT rolcreatedb AND NOT rolcreaterole FROM pg_roles WHERE"
+                      + " rolname=current_user")) {
+        assertTrue(rows.next());
+        assertTrue(rows.getBoolean(1));
+      }
+      try (var connection =
+              java.sql.DriverManager.getConnection(
+                  fresh.getJdbcUrl(), "taska_tenant_deployer", deployerPassword);
+          var statement = connection.createStatement()) {
+        statement.execute("SET ROLE taska_tenant_migrator");
+        try (var rows =
+            statement.executeQuery(
+                "SELECT nspowner='taska_tenant_migrator'::regrole FROM pg_namespace WHERE"
+                    + " nspname='tenant_liquibase'")) {
+          assertTrue(rows.next());
+          assertTrue(rows.getBoolean(1));
+        }
+      }
+    }
+  }
 }

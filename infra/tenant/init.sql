@@ -1,7 +1,4 @@
-#!/bin/sh
-set -eu
-# Only called by the isolated PostgreSQL image on an empty private data directory.
-psql -X -q -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
+-- Fresh private PostgreSQL database only; secrets come from container environment.
 \set service tenant
 \set schema taska
 \i /opt/taska/templates/bootstrap.psql
@@ -12,4 +9,3 @@ REVOKE ALL ON SCHEMA tenant_liquibase FROM PUBLIC;
 \getenv deploy_password TENANT_DEPLOY_PASSWORD
 ALTER ROLE taska_tenant_app PASSWORD :'app_password';
 ALTER ROLE taska_tenant_deployer PASSWORD :'deploy_password';
-SQL

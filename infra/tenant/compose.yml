@@ -10,7 +10,7 @@ services:
       TENANT_DEPLOY_PASSWORD: ${TENANT_DEPLOY_PASSWORD:?Set TENANT_DEPLOY_PASSWORD}
     volumes:
       - ../../common-lib/src/main/resources/db/tenant:/opt/taska/templates:ro
-      - ./init.sh:/docker-entrypoint-initdb.d/10-tenant.sh:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/10-tenant.sql:ro
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U tenant_operator -d tenant_db']
       interval: 2s
