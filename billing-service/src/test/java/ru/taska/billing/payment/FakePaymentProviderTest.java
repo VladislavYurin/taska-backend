@@ -97,7 +97,7 @@ class FakePaymentProviderTest extends PaymentProviderContractTest {
         StepVerifier.create(fake.refund(merchant, paid.providerPaymentId(), invoice.total(), UUID.randomUUID(), "second-refund"))
                 .expectErrorSatisfies(error -> assertReason(error, INVALID_STATE)).verify();
         StepVerifier.create(fake.refund(merchant, paid.providerPaymentId(), new Money(1000, "EUR"), UUID.randomUUID(), "partial"))
-                .expectErrorSatisfies(error -> assertReason(error, INVALID_STATE)).verify();
+                .expectErrorSatisfies(error -> assertReason(error, UNSUPPORTED_CAPABILITY)).verify();
     }
 
     @Test void testAdapterRejectsLiveAndCrossMerchantAccess() {
@@ -105,9 +105,17 @@ class FakePaymentProviderTest extends PaymentProviderContractTest {
         StepVerifier.create(fake.capabilities(live)).expectErrorSatisfies(error -> assertReason(error, UNSUPPORTED_CAPABILITY)).verify();
         StepVerifier.create(fake.createCheckout(live, invoice, operation, "live"))
                 .expectErrorSatisfies(error -> assertReason(error, UNSUPPORTED_CAPABILITY)).verify();
+        Capabilities capabilities = fake.capabilities(merchant).block();
+        assertTrue(capabilities.fullRefunds());
+        assertFalse(capabilities.partialRefunds());
+        assertFalse(capabilities.recurring());
         Checkout paid = fake.createCheckout(merchant, invoice, operation, "test").block();
-        StepVerifier.create(fake.fetchPayment(new Merchant("merchant-B", Environment.TEST), paid.providerPaymentId()))
+        Merchant otherMerchant = new Merchant("merchant-B", Environment.TEST);
+        StepVerifier.create(fake.fetchPayment(otherMerchant, paid.providerPaymentId()))
                 .expectErrorSatisfies(error -> assertReason(error, NOT_FOUND)).verify();
+        StepVerifier.create(fake.refund(otherMerchant, paid.providerPaymentId(), invoice.total(), UUID.randomUUID(), "other-refund"))
+                .expectErrorSatisfies(error -> assertReason(error, NOT_FOUND)).verify();
+        assertEquals(State.SUCCEEDED, fake.fetchPayment(merchant, paid.providerPaymentId()).block().state());
     }
 
     @Test void moneyRejectsInvalidAmountAndCurrency() {

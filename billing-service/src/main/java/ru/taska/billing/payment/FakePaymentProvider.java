@@ -44,7 +44,7 @@ public final class FakePaymentProvider implements PaymentProvider {
     public void nextRefund(Scenario scenario) { nextRefund.set(Objects.requireNonNull(scenario)); }
 
     @Override public Mono<Capabilities> capabilities(Merchant merchant) {
-        return Mono.fromSupplier(() -> { Objects.requireNonNull(merchant); requireTest(merchant); return new Capabilities(true, true, true, true); });
+        return Mono.fromSupplier(() -> { Objects.requireNonNull(merchant); requireTest(merchant); return new Capabilities(true, true, true, false, false, true); });
     }
     @Override public Mono<Checkout> createCheckout(Merchant merchant, Invoice invoice, UUID operationId, String key) {
         return Mono.defer(() -> {
@@ -78,8 +78,11 @@ public final class FakePaymentProvider implements PaymentProvider {
                 Key scoped = new Key(merchant, key);
                 RefundAttempt existing = refundAttempts.get(scoped);
                 if (existing != null) return Mono.just(refundResult(matching(existing, providerPaymentId, amount, operationId), key));
-                if (payment.state().get() != State.SUCCEEDED || !payment.invoice().total().equals(amount))
-                    return Mono.error(new ProviderException(INVALID_STATE));
+                if (payment.state().get() != State.SUCCEEDED) return Mono.error(new ProviderException(INVALID_STATE));
+                if (amount.amountMinor() < payment.invoice().total().amountMinor()
+                        && amount.currency().equals(payment.invoice().total().currency()))
+                    return Mono.error(new ProviderException(UNSUPPORTED_CAPABILITY));
+                if (!payment.invoice().total().equals(amount)) return Mono.error(new ProviderException(INVALID_STATE));
                 if (refundByPayment.containsKey(providerPaymentId)) return Mono.error(new ProviderException(INVALID_STATE));
                 Scenario scenario = nextRefund.getAndSet(Scenario.SUCCESS);
                 RefundAttempt attempt = new RefundAttempt(providerPaymentId, amount, operationId, "fake-refund-" + UUID.randomUUID(),

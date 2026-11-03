@@ -31,7 +31,8 @@ public interface PaymentProvider {
     record Invoice(UUID invoiceId, Money total) {
         public Invoice { Objects.requireNonNull(invoiceId); Objects.requireNonNull(total); }
     }
-    record Capabilities(boolean hostedCheckout, boolean statusLookup, boolean refunds, boolean signedWebhooks) {}
+    record Capabilities(boolean hostedCheckout, boolean statusLookup, boolean fullRefunds,
+                        boolean partialRefunds, boolean recurring, boolean signedWebhooks) {}
     record Checkout(String providerPaymentId, String hostedUrl, State state, String providerIdempotencyKey) {}
     record Payment(String providerPaymentId, UUID invoiceId, Money amount, State state) {}
     record Refund(String providerRefundId, String providerPaymentId, Money amount, RefundState state, String providerIdempotencyKey) {}
