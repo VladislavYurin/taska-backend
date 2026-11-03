@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "task": "TAS-455",
+  "scope": "Hermetic docs fixture",
+  "branch": "codex/TAS-455-agent-workflows",
+  "baseHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sourceTree": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dirty": false,
+  "contracts": [],
+  "checks": [
+    {
+      "id": "harness.docs",
+      "status": "PASS",
+      "sourceHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scope": "links",
+      "reason": ""
+    }
+  ],
+  "requiredChecks": [
+    "harness.docs"
+  ],
+  "review": {
+    "sourceHead": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "completeDiff": true,
+    "unresolvedBlocking": 0
+  },
+  "limitations": [],
+  "resources": []
+}

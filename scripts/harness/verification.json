@@ -773,6 +773,27 @@
       ]
     },
     {
+      "id": "harness.evals",
+      "group": "harness",
+      "tier": "static",
+      "argv": [
+        "{python}",
+        "-B",
+        "scripts/harness/eval_runner.py"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "python",
+        "git"
+      ],
+      "timeout": 120,
+      "requires": [],
+      "writeScope": [
+        "target/harness-evals/",
+        "temporary fixture directories"
+      ]
+    },
+    {
       "id": "harness.tests",
       "group": "harness",
       "tier": "static",
