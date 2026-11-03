@@ -137,18 +137,31 @@ class Evaluator:
                 raise AssertionError('Business URL mutation was erased')
             return {'status': 'PASS', 'reason': 'Only known ephemeral URL fields excluded'}
         if case_id == 'timeout-after-write':
-            http = self.e.Http('http://fixture.invalid')
+            e = self.e
+            store = e.StateStore(scratch)
+            state = store.create('0123456789abcdef', 'local', 'isolated-fixture', 'actor-own')
+            http = e.Http('http://fixture.invalid')
             writes = []
             def transport(request, **kwargs):
-                writes.append(request.data)
+                body = json.loads(request.data)
+                saved = store.load(store.path(state['runId']))
+                intent = saved['pendingWrites'][-1]
+                if (request.method != 'POST' or intent['projectKey'] != body['projectKey'] or
+                        intent['actor'] != 'actor-own' or intent['creationMarker'] != body['description']):
+                    raise AssertionError('Creation intent was not durable before POST')
+                writes.append(body)
                 raise TimeoutError('Timeout after fake service committed')
             with patch.object(http.opener, 'open', side_effect=transport):
                 try:
-                    http.request('POST', '/api/v1/projects', {'name': 'owned-fixture'})
-                except self.e.UnknownWrite:
+                    e.create_project(store, state, http, 'actor-own', 'A')
+                except e.UnknownWrite:
+                    saved = store.load(store.path(state['runId']))
                     if len(writes) != 1:
                         raise AssertionError('Unknown write was retried')
-                    return {'status': 'PARTIAL', 'reason': 'Committed write outcome unknown; reconciliation required'}
+                    if (len(saved['pendingWrites']) != 1 or saved['resources'] or
+                            saved['pendingWrites'][0]['creationMarker'] != writes[0]['description']):
+                        raise AssertionError('Unknown creation intent was lost or falsely confirmed')
+                    return {'status': 'PARTIAL', 'reason': 'Creation intent retained after one POST; reconciliation required'}
             return {'status': 'PASS', 'reason': 'Unknown write returned success'}
         if case_id == 'redaction':
             secret = 'eval-fixture-secret-never-publish'

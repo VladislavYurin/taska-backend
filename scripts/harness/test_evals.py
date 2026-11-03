@@ -28,11 +28,28 @@ class EvalTest(unittest.TestCase):
         baseline = evals.evaluate([case], evaluator)
         self.assertEqual(baseline['cases'][0]['evaluationStatus'], 'PASS')
         self.assertEqual(baseline['metrics']['falsePassCount'], 0)
-        with patch.object(evaluator.e.Http, 'request', return_value=evaluator.e.Response(201, {}, b'{}')):
+        def swallowed(client, method, path, body):
+            project = dict(body, id='12345678-1234-4234-8234-123456789abc', createdBy='actor-own')
+            return evaluator.e.Response(201, {}, evals.json.dumps(project).encode())
+        with patch.object(evaluator.e.Http, 'request', swallowed):
             mutant = evals.evaluate([case], evaluator)
         self.assertEqual(mutant['cases'][0]['observedOutcome'], 'PASS')
         self.assertEqual(mutant['cases'][0]['evaluationStatus'], 'FAIL')
         self.assertEqual(mutant['metrics']['falsePassCount'], 1)
+
+    def test_create_project_retry_after_timeout_mutant_is_rejected(self):
+        case = next(c for c in evals.load_cases() if c['id'] == 'timeout-after-write')
+        evaluator = evals.Evaluator()
+        original = evaluator.e.create_project
+        def retry(*args, **kwargs):
+            try:
+                return original(*args, **kwargs)
+            except evaluator.e.UnknownWrite:
+                return original(*args, **kwargs)
+        with patch.object(evaluator.e, 'create_project', retry):
+            mutant = evals.evaluate([case], evaluator)
+        self.assertEqual(mutant['cases'][0]['evaluationStatus'], 'FAIL')
+        self.assertIn('AssertionError', mutant['cases'][0]['reason'])
 
     def test_oauth_validation_bypass_mutant_is_rejected(self):
         case = next(c for c in evals.load_cases() if c['id'] == 'oauth-confused-identities')
