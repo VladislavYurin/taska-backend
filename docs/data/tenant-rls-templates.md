@@ -49,3 +49,5 @@ psql 'service=taska-bootstrap' -v service=project -v schema=taska \
 Проверка `TenantRlsTemplatesIntegrationTest` запускает shipped wrappers и SQL cores через psql внутри отдельного PostgreSQL16 Testcontainer. Runtime проверки открывают настоящие LOGIN-сессии (session_user=runtime), не SET ROLE из superuser-сессии. Проверяются чтение/DML/FK, DDL/TRUNCATE/role escalation, owner FORCE RLS, grant/policy drift и атомарный отказ. Это проверка шаблонов, а не заявление о включённой RLS в существующих production таблицах.
 
 App DML profile обязателен: read_write — SELECT/INSERT/UPDATE/DELETE, append_only — SELECT/INSERT, read_only — SELECT. Профиль выбирается owning migration по целевой модели; blanket CRUD для append-only ledger не применяется. Audit проверяет ровно заданный профиль.
+
+Диагностика bootstrap перечисляет лишних incoming members. Регрессии отдельно подтверждают materialized default ACL, перепутанный parent FK order и конфликт named index на другой таблице: такие конфликты завершаются отказом без частичного включения RLS.

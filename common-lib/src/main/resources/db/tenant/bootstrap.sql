@@ -2,7 +2,7 @@ DO $bootstrap$
 DECLARE
   service text := current_setting('taska.bootstrap_service');
   target_schema text := current_setting('taska.bootstrap_schema');
-  suffix text; role_name text; owner_name text; deploy_name text; r record;
+  suffix text; role_name text; owner_name text; deploy_name text; incoming_members text; r record;
 BEGIN
   IF service NOT IN ('auth','tenant','billing','project','workflow','issue','notification','admin','oauth')
      OR target_schema !~ '^[a-z][a-z0-9_]{0,31}$' OR target_schema IN ('public','information_schema')
@@ -25,10 +25,13 @@ BEGIN
                AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option)) THEN
       RAISE EXCEPTION 'Unexpected role membership: %', role_name;
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.roleid=r.oid AND NOT (
+    SELECT string_agg(m.member::regrole::text,', ' ORDER BY m.member::regrole::text) INTO incoming_members
+    FROM pg_auth_members m WHERE m.roleid=r.oid AND NOT (
       suffix='migrator' AND COALESCE(m.member=(SELECT oid FROM pg_roles WHERE rolname=deploy_name)
-      AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option,false))) THEN
-      RAISE EXCEPTION 'Unexpected incoming role membership: %',role_name; END IF;
+      AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option,false));
+    IF incoming_members IS NOT NULL THEN
+      RAISE EXCEPTION 'Unexpected incoming role membership: % (members: %)',role_name,incoming_members;
+    END IF;
   END LOOP;
   EXECUTE format('GRANT %I TO %I WITH INHERIT FALSE, SET TRUE, ADMIN FALSE',owner_name,deploy_name);
   EXECUTE format('REVOKE CREATE,TEMPORARY,CONNECT ON DATABASE %I FROM PUBLIC',current_database());

@@ -42,7 +42,7 @@ class TenantRlsTemplatesIntegrationTest {
     var result = postgres.execInContainer(command.toArray(String[]::new));
     if (success) assertEquals(0, result.getExitCode(), result.getStderr());
     else assertNotEquals(0, result.getExitCode(), result.getStdout());
-    return result.getStdout().trim();
+    return success ? result.getStdout().trim() : result.getStderr().trim();
   }
 
   static String sql(String query) throws Exception {
@@ -584,6 +584,129 @@ class TenantRlsTemplatesIntegrationTest {
       }
     } finally {
       sql("DROP TABLE taska.ledger_probe");
+    }
+  }
+
+  @Test
+  void defaultPrivilegesAreMaterializedAndDoNotChangeExistingNullAcl() throws Exception {
+    sql(
+        "CREATE ROLE default_acl_probe NOLOGIN;SET ROLE taska_project_migrator;CREATE TABLE"
+            + " taska.existing_acl_probe(id uuid PRIMARY KEY,tenant_id uuid);");
+    try {
+      assertEquals(
+          "t|f",
+          sql(
+              "SELECT relacl IS NULL,has_table_privilege('taska_project_app',oid,'TRUNCATE') FROM"
+                  + " pg_class WHERE oid='taska.existing_acl_probe'::regclass"));
+      sql(
+          "SET ROLE taska_project_migrator;ALTER DEFAULT PRIVILEGES IN SCHEMA taska GRANT SELECT ON"
+              + " TABLES TO default_acl_probe;ALTER DEFAULT PRIVILEGES IN SCHEMA taska GRANT"
+              + " TRUNCATE ON TABLES TO taska_project_app;CREATE TABLE taska.new_acl_probe(id uuid"
+              + " PRIMARY KEY,tenant_id uuid);");
+      assertEquals(
+          "t|f",
+          sql(
+              "SELECT relacl IS NULL,has_table_privilege('taska_project_app',oid,'TRUNCATE') FROM"
+                  + " pg_class WHERE oid='taska.existing_acl_probe'::regclass"));
+      assertEquals(
+          "f|t",
+          sql(
+              "SELECT relacl IS NULL,has_table_privilege('taska_project_app',oid,'TRUNCATE') FROM"
+                  + " pg_class WHERE oid='taska.new_acl_probe'::regclass"));
+      protect("new_acl_probe", "tenant_id");
+      run(
+          false,
+          "-v",
+          "service=project",
+          "-v",
+          "schema=taska",
+          "-v",
+          "table=new_acl_probe",
+          "-v",
+          "tenant_column=tenant_id",
+          "-f",
+          "/tmp/audit.psql");
+    } finally {
+      sql(
+          "SET ROLE taska_project_migrator;ALTER DEFAULT PRIVILEGES IN SCHEMA taska REVOKE SELECT"
+              + " ON TABLES FROM default_acl_probe;ALTER DEFAULT PRIVILEGES IN SCHEMA taska REVOKE"
+              + " TRUNCATE ON TABLES FROM taska_project_app;RESET ROLE;DROP TABLE IF EXISTS"
+              + " taska.new_acl_probe;DROP TABLE taska.existing_acl_probe;DROP ROLE"
+              + " default_acl_probe;");
+    }
+  }
+
+  @Test
+  void parentTenantColumnMustBeFirstEvenWhenChildOrderIsCorrect() throws Exception {
+    sql(
+        "SET ROLE taska_project_migrator;ALTER TABLE taska.projects ADD CONSTRAINT"
+            + " projects_reverse_probe UNIQUE(id,tenant_id);CREATE TABLE"
+            + " taska.parent_order_probe(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,ref"
+            + " uuid,FOREIGN KEY(tenant_id,ref) REFERENCES taska.projects(id,tenant_id));");
+    try {
+      protect("parent_order_probe", "tenant_id");
+      run(
+          false,
+          "-v",
+          "service=project",
+          "-v",
+          "schema=taska",
+          "-v",
+          "table=parent_order_probe",
+          "-v",
+          "tenant_column=tenant_id",
+          "-f",
+          "/tmp/audit.psql");
+    } finally {
+      sql(
+          "DROP TABLE taska.parent_order_probe;ALTER TABLE taska.projects DROP CONSTRAINT"
+              + " projects_reverse_probe;");
+    }
+  }
+
+  @Test
+  void indexNameCollisionOnAnotherTableAbortsProtection() throws Exception {
+    sql(
+        "SET ROLE taska_project_migrator;CREATE TABLE taska.index_collision_probe(id uuid PRIMARY"
+            + " KEY,tenant_id uuid);CREATE INDEX index_collision_probe_tenant_guard_idx ON"
+            + " taska.projects(tenant_id);");
+    try {
+      runAs(
+          "taska_project_deployer",
+          false,
+          "-v",
+          "service=project",
+          "-v",
+          "schema=taska",
+          "-v",
+          "table=index_collision_probe",
+          "-v",
+          "tenant_column=tenant_id",
+          "-c",
+          "SET ROLE taska_project_migrator",
+          "-f",
+          "/tmp/protect-table.psql");
+      assertEquals(
+          "f",
+          sql(
+              "SELECT relrowsecurity FROM pg_class WHERE"
+                  + " oid='taska.index_collision_probe'::regclass"));
+    } finally {
+      sql(
+          "DROP TABLE taska.index_collision_probe;DROP INDEX"
+              + " taska.index_collision_probe_tenant_guard_idx;");
+    }
+  }
+
+  @Test
+  void bootstrapReportsUnexpectedMemberName() throws Exception {
+    sql("CREATE ROLE unexpected_member NOLOGIN;GRANT taska_project_app TO unexpected_member;");
+    try {
+      String error =
+          run(false, "-v", "service=project", "-v", "schema=taska", "-f", "/tmp/bootstrap.psql");
+      assertTrue(error.contains("unexpected_member"), error);
+    } finally {
+      sql("REVOKE taska_project_app FROM unexpected_member;DROP ROLE unexpected_member;");
     }
   }
 }

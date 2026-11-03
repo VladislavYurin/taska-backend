@@ -25,6 +25,8 @@ BEGIN
   IF lower(regexp_replace(pg_get_expr(policy.polqual,relation),'[[:space:]()]','','g')) IS DISTINCT FROM lower(regexp_replace(expected,'[[:space:]()]','','g'))
      OR pg_get_expr(policy.polqual,relation) IS DISTINCT FROM pg_get_expr(policy.polwithcheck,relation) THEN
     RAISE EXCEPTION 'Policy predicate mismatch'; END IF;
+  -- NULL relacl means built-in defaults; ALTER DEFAULT PRIVILEGES is materialized at CREATE.
+  -- Effective privileges and role memberships are also checked below.
   IF EXISTS (SELECT 1 FROM pg_class x CROSS JOIN LATERAL aclexplode(COALESCE(x.relacl,acldefault('r',x.relowner))) acl
       WHERE x.oid=relation AND acl.grantee<>ALL(ARRAY[owner_name::regrole::oid,('taska_'||service||'_app')::regrole::oid,
         ('taska_'||service||'_admin')::regrole::oid,('taska_'||service||'_job')::regrole::oid]))
@@ -45,6 +47,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_class x CROSS JOIN LATERAL aclexplode(x.relacl) acl
     WHERE x.oid=relation AND acl.grantee<>x.relowner AND acl.is_grantable) THEN
     RAISE EXCEPTION 'Runtime must not have grant options'; END IF;
+  -- Non-RLS global parents are explicit inventory exclusions, not inferred tenant tables.
+  -- Both child and parent leading attributes must be their tenant columns.
   IF EXISTS (SELECT 1 FROM pg_constraint fk JOIN pg_class parent ON parent.oid=fk.confrelid
       JOIN pg_attribute child_col ON child_col.attrelid=relation AND child_col.attname=c
       JOIN pg_attribute parent_col ON parent_col.attrelid=parent.oid AND parent_col.attname='tenant_id' AND NOT parent_col.attisdropped

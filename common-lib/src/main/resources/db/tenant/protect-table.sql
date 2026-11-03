@@ -36,6 +36,7 @@ BEGIN
   EXECUTE format('GRANT SELECT ON TABLE %s TO %I',relation,admin_role);
   -- job DML is service-specific: grant it explicitly in the owning migration, never blanket DML.
   IF c='tenant_id' THEN
+    -- A name collision is verified below; RAISE rolls back the whole DO/transaction.
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %s (tenant_id)',t||'_tenant_guard_idx',relation);
     IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]
       WHERE i.indexrelid=to_regclass(format('%I.%I',s,t||'_tenant_guard_idx')) AND i.indrelid=relation
