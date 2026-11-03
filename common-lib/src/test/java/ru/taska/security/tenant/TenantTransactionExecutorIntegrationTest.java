@@ -551,4 +551,73 @@ class TenantTransactionExecutorIntegrationTest {
     assertEquals(
         1L, as(A, executor.execute(TenantTransactionExecutorIntegrationTest::count)).block());
   }
+
+  @Test
+  void cancellationInMultiConnectionPoolDoesNotCancelAnotherTenant() throws Exception {
+    var multiPool =
+        new ConnectionPool(
+            ConnectionPoolConfiguration.builder(factory("tenant_app", "test-only"))
+                .initialSize(2)
+                .maxSize(2)
+                .maxAcquireTime(Duration.ofSeconds(5))
+                .build());
+    var local = new TenantTransactionExecutor(multiPool);
+    reactor.core.Disposable cancelled = null;
+    try {
+      multiPool.warmup().block();
+      cancelled =
+          as(
+                  A,
+                  local.execute(
+                      db ->
+                          insert(db, A, "multi-cancel")
+                              .then(db.sql("SELECT pg_sleep(30)").fetch().all().then())))
+              .subscribe();
+      var other =
+          as(
+                  B,
+                  local.execute(
+                      db ->
+                          db.sql(
+                                  "SELECT pg_sleep(2),current_setting('app.tenant_id') AS"
+                                      + " tenant,pg_backend_pid() AS pid")
+                              .map(
+                                  (row, m) ->
+                                      new Snapshot(
+                                          row.get("pid", Integer.class),
+                                          0L,
+                                          row.get("tenant", String.class),
+                                          null))
+                              .one()))
+              .toFuture();
+      Flux.interval(Duration.ZERO, Duration.ofMillis(20))
+          .concatMap(
+              tick ->
+                  admin
+                      .sql(
+                          "SELECT count(*) AS n FROM pg_stat_activity WHERE usename='tenant_app'"
+                              + " AND wait_event='PgSleep'")
+                      .map((row, m) -> row.get("n", Long.class))
+                      .one())
+          .filter(n -> n >= 2)
+          .next()
+          .block(Duration.ofSeconds(5));
+      cancelled.dispose();
+      assertEquals(B, other.get(5, TimeUnit.SECONDS).tenant());
+      assertEquals(
+          1L,
+          as(A, local.execute(TenantTransactionExecutorIntegrationTest::count))
+              .block(Duration.ofSeconds(5)));
+      var plain = DatabaseClient.create(multiPool);
+      for (int n = 0; n < 3; n++) {
+        var clean = snapshot(plain).block();
+        assertNull(clean.tenant());
+        assertNull(clean.actor());
+      }
+      admin.sql("TRUNCATE tenant_probe").fetch().rowsUpdated().block(Duration.ofSeconds(5));
+    } finally {
+      if (cancelled != null) cancelled.dispose();
+      multiPool.disposeLater().block();
+    }
+  }
 }

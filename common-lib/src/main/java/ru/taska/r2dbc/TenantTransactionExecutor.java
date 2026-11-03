@@ -94,7 +94,15 @@ public final class TenantTransactionExecutor {
                               .then(Mono.from(frame.physical.close()))
                               .onErrorResume(
                                   closeError ->
-                                      manager.rollback(status).then(Mono.error(closeError)))
+                                      manager
+                                          .rollback(status)
+                                          .onErrorMap(
+                                              rollbackError -> {
+                                                if (rollbackError != closeError)
+                                                  closeError.addSuppressed(rollbackError);
+                                                return closeError;
+                                              })
+                                          .then(Mono.error(closeError)))
                               // Spring must still unbind/release the pooled handle. ROLLBACK on the
                               // already
                               // closed physical connection can fail, after its transaction was
