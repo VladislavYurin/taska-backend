@@ -50,6 +50,37 @@ class E2ETest(unittest.TestCase):
             self.store.create('a' * 16, 'local', 'isolated-compose', 'actor')
         self.assertEqual(self.store.load(self.store.path('b' * 16)), other)
 
+    def test_stage_cleanup_uses_actor_ids_and_rejects_live_ownership_mismatch(self):
+        actor = '12345678-1234-4234-8234-123456789012'
+        project_id = '22345678-1234-4234-8234-123456789012'
+        self.state['actors'] = {'A': actor}
+        resource = {'type': 'project', 'id': project_id, 'projectKey': e.project_key('a' * 16, 'A'),
+                    'slot': 'A', 'actor': actor, 'runId': 'a' * 16, 'origin': 'created-response'}
+        self.state['resources'] = [resource]
+        http = e.Http('https://fixture.invalid')
+        path = '/api/v1/projects/' + project_id
+        actual = {'id': project_id, 'projectKey': resource['projectKey'],
+                  'createdBy': 'foreign-actor', 'currentUserRole': 'ADMIN', 'archivedAt': None}
+        with patch.object(http, 'expect', return_value=e.Response(200, {}, json.dumps(actual).encode())) as request:
+            with self.assertRaises(e.Invalid):
+                e.cleanup_projects(self.store, self.state, {actor: http})
+        self.assertEqual(request.call_args_list[0].args, ('GET', path, 200))
+        self.assertEqual(request.call_count, 1)
+        self.assertNotIn('archived', resource)
+        actual['createdBy'] = actor
+        def successful(method, route, status):
+            if method == 'GET' and route == path:
+                return e.Response(200, {}, json.dumps(actual).encode())
+            if method == 'GET' and route == path + '/members':
+                return e.Response(200, {}, json.dumps({'members': [{'userId': actor, 'role': 'ADMIN'}]}).encode())
+            if method == 'DELETE' and route == path:
+                return e.Response(200, {}, b'{"archivedAt":"2026-11-03T00:00:00Z"}')
+            self.fail('Unexpected cleanup operation')
+        with patch.object(http, 'expect', side_effect=successful):
+            e.cleanup_projects(self.store, self.state, {actor: http})
+        self.assertEqual(self.state['cleanupStatus'], 'PASS')
+        self.assertTrue(resource['archived'])
+
     def test_interrupt_during_cleanup_still_writes_failed_report(self):
         from types import SimpleNamespace
         args = SimpleNamespace(command='e2e', tier='local', scenario=['E2E-01'], run_id='c' * 16, config=None)
