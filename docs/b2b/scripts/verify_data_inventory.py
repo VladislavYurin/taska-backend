@@ -176,6 +176,9 @@ def verify_target(model, postgres=False):
     tables=model['existing_tables']+model['new_tables']; by={(t['owner'],t['name']):t for t in tables}
     if len(by)!=len(tables):raise AssertionError('Duplicate target table')
     for t in tables:
+        expected_rls=t['scope']=='TENANT'
+        if t.get('rls_enabled') is not expected_rls or t.get('rls_forced') is not expected_rls:
+            raise AssertionError('Target RLS metadata contradicts scope: '+t['owner']+'.'+t['name'])
         columns=[c['name'] for c in t['columns']]
         if len(columns)!=len(set(columns)):raise AssertionError('Duplicate target column: '+t['name'])
         fks=t.get('foreign_keys',[]) or [dict(columns=x['columns'],table=x['referenced_table'].split('.')[-1],referenced_columns=x['referenced_columns']) for x in t.get('constraints',[]) if x['kind']=='f']
@@ -247,6 +250,12 @@ def verify_target(model, postgres=False):
                     check_insert('disputes',{**dispute,'state':'WON'},False)
                     check_insert('disputes',{**dispute,'state':'NEEDS_REVIEW'},False)
                     check_insert('disputes',{**dispute,'state':'WON','final_outcome':'WON','confirmed_money_fact_id':None},True)
+                if owner=='auth-service':
+                    psql=['docker','exec','-i',name,'psql','-X','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
+                    initial=run(psql,"INSERT INTO taska.users(email,display_name) VALUES ('account-version-positive@example.invalid','Version fixture') RETURNING account_version;")
+                    if initial.splitlines()[0]!='1':raise AssertionError('AdminAccount initial persisted version is not 1')
+                    invalid=subprocess.run(psql,input="INSERT INTO taska.users(email,display_name,account_version) VALUES ('account-version-zero@example.invalid','Invalid version fixture',0);",text=True,capture_output=True)
+                    if invalid.returncode==0 or 'users_account_version_positive_chk' not in invalid.stderr:raise AssertionError('AdminAccount zero version was not rejected by the intended CHECK')
                 if owner=='tenant-service':
                     psql=['docker','exec','-i',name,'psql','-X','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
                     tenant=str(uuid.uuid4()); user=str(uuid.uuid4())
@@ -283,7 +292,7 @@ def verify_target(model, postgres=False):
                     admin=run(psql,"SET ROLE taska_project_admin; BEGIN; SET LOCAL app.tenant_id='"+tenant_b+"'; SELECT count(*) FROM taska.projects; COMMIT; SELECT count(*) FROM taska.projects;")
                     if admin.splitlines()[-1]!='0':raise AssertionError('SET LOCAL tenant leaked after commit')
         finally:run(['docker','rm','-f',name])
-    return dict(existing_target_tables=len(model['existing_tables']),new_target_tables=len(model['new_tables']),target_ddl='PASS' if postgres else 'NOT_RUN',target_rls_probes=10 if postgres else 0,target_check_probes=20 if postgres else 0,target_mutation_guard_probes=5 if postgres else 0,target_free_binding_probes=4 if postgres else 0,target_archive_consume_probes=3 if postgres else 0)
+    return dict(existing_target_tables=len(model['existing_tables']),new_target_tables=len(model['new_tables']),target_ddl='PASS' if postgres else 'NOT_RUN',target_rls_probes=10 if postgres else 0,target_check_probes=22 if postgres else 0,target_mutation_guard_probes=5 if postgres else 0,target_free_binding_probes=4 if postgres else 0,target_archive_consume_probes=3 if postgres else 0)
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--postgres',action='store_true');ap.add_argument('--write',action='store_true');ap.add_argument('--target-postgres',action='store_true'); args=ap.parse_args()

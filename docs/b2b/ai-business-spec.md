@@ -1,6 +1,6 @@
 # Taska B2B — AI-спецификация бизнеса и карта реализации
 
-Источник истины: [единая страница Confluence](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751880), версия 43, SA-2026-11-03. Решения D01–D252 и делегированная политика D253; целевой дизайн, не утверждение о внедрении. Для задачи читать её B-разделы и [технические артефакты](README.md). Вопросы C02/C03/C05/C06 закрыты: Stripe выбран, реальное подключение отложено; partial chargeback, банковский SLA и retention ES_V1 определены. Jira leaf tasks — код/тесты/конфигурация.
+Источник истины: [единая страница Confluence](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751880), версия 44, SA-2026-11-03. Решения D01–D252 и делегированная политика D253; целевой дизайн, не утверждение о внедрении. Для задачи читать её B-разделы и [технические артефакты](README.md). Вопросы C02/C03/C05/C06 закрыты: Stripe выбран, реальное подключение отложено; partial chargeback, банковский SLA и retention ES_V1 определены. Jira leaf tasks — код/тесты/конфигурация.
 
 **Ревизия SA-2026-11-03; решения D01–D253 (D253 принят по делегации владельца).** Все бизнес-требования ведутся на этой странице. Jira содержит короткие постановки отдельных результатов с критериями приёмки и ссылками на разделы. Реализация и запуск этой редакцией не объявляются.
 
@@ -696,7 +696,7 @@ B25. Системная аналитика и порядок разработк�
 ### Таблицы, контракты и логика
 
 * DATA: 7 сервисов,66 SQL,55 таблиц,526 колонок,188 constraints,186 indexes; target55 existing+65 new tables. Liquibase14 SYSTEM отдельно.
-* API:307 inventory records (111staticREST,148RPC,22MCP,15extra controllers,11protocol/view handlers). Target85REST/122DTO/91RPC.
+* API:307 inventory records (111staticREST,148RPC,22MCP,15extra controllers,11protocol/view handlers). Target86REST/122DTO/92RPC.
 * SECURITY/ASYNC:93 actions,438 anchors/131source files,12 future worker paths; native queries/events/files/cache covered.
 * LOGIC:L01–L12 (транзакции, lifecycle, quotas, billing, refund,delete), T01–T27 minor ADR, R01–R06 ops algorithms;42 acceptance vectors.
 
@@ -706,11 +706,11 @@ B25. Системная аналитика и порядок разработк�
 
 Первыми после этой аналитики можно брать [TAS-306](https://jira.ozero.dev/browse/TAS-306) (контекст/RPC) и [TAS-320](https://jira.ozero.dev/browse/TAS-320) (PaymentProvider/fake). Далее trusted context → same-connection R2DBC → RLS → tenant registry, затем membership/config/domain isolation; billing port/fake разрабатывается параллельно. Глобальный реестр флагов TAS-462 зависит от каркаса tenant-service TAS-310. Stripe sandbox adapter зависит от durable payment attempts TAS-349; выбор live merchant не блокирует sandbox.
 
-285 непосредственных Blocks, циклов нет, завершение контейнеров учитывает их дочерние задачи. Подробные волны и конкретные входы — [план разработки](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751899). Волны не обещают календарный срок: можно начинать карточку после её собственных входов, не ожидая всю волну.
+287 непосредственных Blocks, циклов нет, завершение контейнеров учитывает их дочерние задачи. Подробные волны и конкретные входы — [план разработки](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751899). Волны не обещают календарный срок: можно начинать карточку после её собственных входов, не ожидая всю волну.
 
 ### Готовность и оставшиеся решения
 
-Технические проверки: независимый PostgreSQL replay, полный target DDL,RLS/CHECK/immutability/unique probes; OpenAPI validator72schema+7temporal+14billing/SLA examples,protobuf compile,source inventory completeness и docs-check. Это проверки аналитических артефактов, не runtime приёмка продукта.
+Технические проверки: независимый PostgreSQL replay, полный target DDL,RLS/CHECK/immutability/unique probes; OpenAPI validator78schema+7temporal+14billing/SLA examples,protobuf compile,source inventory completeness и docs-check. Это проверки аналитических артефактов, не runtime приёмка продукта.
 
 Исследование и решения O04/O08/O09 завершены D250–D253: Stripe выбран, live provision отложен; final partial loss снимает связанное покрытие; банковский SLA5 рабочих дней/комиссия Taska; retention ES\_V1 принят по делегации. Подробности [commercial-decisions.md](https://github.com/VladislavYurin/taska-backend/blob/codex/TAS-268-b2b-technical-analysis/docs/b2b/commercial-decisions.md). Final outcomes определены; guard закрывает ненастроенный live merchant или повреждённую policy, проверенный финансовый факт не теряется. TAS-518/519/520 реализуют этот механизм, а не придумывают политику.
 

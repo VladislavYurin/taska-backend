@@ -960,7 +960,7 @@ message AdminAccountRequest {
 
 message AdminAccount {
   enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_USER = 1; ROLE_GLOBAL_ADMIN = 2; }
-  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_BLOCKED = 2; STATE_DELETED = 3; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_BLOCKED = 2; STATE_DELETED = 3; STATE_INVITED = 4; STATE_LOCKED = 5; }
   string user_id = 1;
   RoleValue role = 2;
   StateValue state = 3;
@@ -1335,6 +1335,7 @@ message GetCheckoutRpcRequest {
   string checkout_id = 3;
 }
 
+// mutation.expected_version is Subscription.version, never AutopayMandate.version.
 message SetAutopayConsentRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
@@ -1490,6 +1491,11 @@ message UpdatePlatformFlagRpcRequest {
   MutationOptions mutation = 4;
 }
 
+// Nonmutating strict account-management read; current authority is rechecked online.
+message GetGlobalAccountRpcRequest {
+  RequestContext context = 1;
+  string user_id = 2;
+}
 message ChangeGlobalAccountRpcRequest {
   RequestContext context = 1;
   string user_id = 2;
@@ -1497,6 +1503,7 @@ message ChangeGlobalAccountRpcRequest {
   MutationOptions mutation = 4;
 }
 
+// mutation.expected_version must equal payload.expected_account_version from GetGlobalAccount.
 message AdminDeleteAccountRpcRequest {
   RequestContext context = 1;
   string user_id = 2;
@@ -1610,6 +1617,7 @@ service PlatformService {
   rpc RevokeAdminIntegrationGrant(RevokeAdminIntegrationGrantRpcRequest) returns (google.protobuf.Empty);
   rpc ListPlatformFlags(ListPlatformFlagsRpcRequest) returns (PlatformFlagPage);
   rpc UpdatePlatformFlag(UpdatePlatformFlagRpcRequest) returns (PlatformFlag);
+  rpc GetGlobalAccount(GetGlobalAccountRpcRequest) returns (AdminAccount);
   rpc ChangeGlobalAccount(ChangeGlobalAccountRpcRequest) returns (AdminAccount);
   rpc AdminDeleteAccount(AdminDeleteAccountRpcRequest) returns (Operation);
 }

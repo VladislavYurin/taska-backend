@@ -9,7 +9,10 @@
       "changeClass": "EXISTING_DISPOSITION",
       "scope": "PLATFORM_AUDIT",
       "schemaImplementation": "TAS-350",
-      "additionalConsumers": [],
+      "additionalConsumers": [
+        "TAS-482",
+        "TAS-520"
+      ],
       "contract": "schemas/target-model.json"
     },
     {

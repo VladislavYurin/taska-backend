@@ -2,9 +2,11 @@
 
 Один исполнитель схемы/исходного преобразования на таблицу; остальные карточки используют или расширяют её своим поведением. `EXISTING_DISPOSITION` включает сохранение GLOBAL/SYSTEM scope без выдуманной tenant-миграции. Для совместной таблицы новые поля/ограничения из target JSON распределяются primary ticket; consumer не переписывает применённый changeset.
 
+Для `admin_audit_log` TAS-350 создаёт case/permit поля, dedupe/consume indexes и immutable receipt guard. TAS-482/520 зависят от этой схемы для интеграционной приёмки; каждый реализует свой workflow и не дублирует миграцию.
+
 | Сервис / таблица | Scope | Исполнитель схемы | Использование / расширение |
 | --- | --- | --- | --- |
-| `admin-service.admin_audit_log` | PLATFORM_AUDIT | [TAS-350](https://jira.ozero.dev/browse/TAS-350) |  |
+| `admin-service.admin_audit_log` | PLATFORM_AUDIT | [TAS-350](https://jira.ozero.dev/browse/TAS-350) | TAS-482, TAS-520 |
 | `auth-service.credentials` | GLOBAL | [TAS-327](https://jira.ozero.dev/browse/TAS-327) |  |
 | `auth-service.invite_tokens` | GLOBAL | [TAS-327](https://jira.ozero.dev/browse/TAS-327) |  |
 | `auth-service.oauth_grants` | GLOBAL | [TAS-498](https://jira.ozero.dev/browse/TAS-498) |  |

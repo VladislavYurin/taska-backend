@@ -1864,6 +1864,12 @@
           "type": "timestamptz",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "account_version",
+          "type": "bigint",
+          "nullable": false,
+          "default": "1"
         }
       ],
       "constraints": [
@@ -1923,6 +1929,16 @@
           "definition": "CHECK (status::text = ANY (ARRAY['INVITED'::character varying, 'ACTIVE'::character varying, 'BLOCKED'::character varying, 'LOCKED'::character varying]::text[]))",
           "columns": [
             "status"
+          ],
+          "referenced_table": null,
+          "referenced_columns": null
+        },
+        {
+          "name": "users_account_version_positive_chk",
+          "kind": "c",
+          "definition": "CHECK (account_version > 0)",
+          "columns": [
+            "account_version"
           ],
           "referenced_table": null,
           "referenced_columns": null
@@ -1991,7 +2007,8 @@
       ],
       "retention_class": "DELETED_PROFILE",
       "changes": [
-        "After confirmed deletion expose tombstone identity; purge/anonymization policy held by O09. No reuse of user UUID."
+        "After confirmed deletion expose tombstone identity; purge/anonymization follows accepted D253/ES_V1 and applicable scoped legal holds. Missing/corrupt policy blocks physical purge only, never restores access. No reuse of user UUID.",
+        "AdminAccount.version is the decimal-string representation of account_version (bigint NOT NULL DEFAULT 1, CHECK > 0). It is the control aggregate version for global_role/status/deleted_at, distinct from profile_version and auth_version. Under the auth user-row lock compare the expected account version, recheck authority and state, then increment once in the same transaction for each actual role/state/logical-deletion transition, including invitation acceptance, login lock/unlock and bootstrap/recovery when those flows change existing control fields. Account creation starts at version 1. Idempotent replay/no-op does not increment; profile-only updates do not substitute this clock. Schema migration belongs to TAS-477; administrative transition logic and GET mapping belong to TAS-485, deletion transition consumer TAS-487. A retained deletion tombstone exposes no historical profile PII; after lawful physical purge administrative GET returns 404."
       ],
       "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
       "retention_policy_mapping": {
@@ -2141,8 +2158,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -2288,8 +2305,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -2483,8 +2500,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -2652,8 +2669,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -2815,8 +2832,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -3015,8 +3032,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -3193,8 +3210,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -3351,8 +3368,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -3546,8 +3563,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4003,8 +4020,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4250,8 +4267,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4360,8 +4377,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4511,8 +4528,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4676,8 +4693,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "issue-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -4847,8 +4864,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -5048,8 +5065,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -5375,8 +5392,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -5468,8 +5485,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -5646,8 +5663,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -5772,8 +5789,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "notification-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -6955,8 +6972,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -7223,8 +7240,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -7462,8 +7479,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -7688,8 +7705,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -7823,8 +7840,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -7923,8 +7940,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8081,8 +8098,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8239,8 +8256,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "project-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8392,8 +8409,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8532,8 +8549,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8715,8 +8732,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -8929,8 +8946,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -9118,8 +9135,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -9393,8 +9410,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -9548,8 +9565,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -9681,8 +9698,8 @@
           "predicate": null
         }
       ],
-      "rls_enabled": false,
-      "rls_forced": false,
+      "rls_enabled": true,
+      "rls_forced": true,
       "owner": "workflow-service",
       "scope": "TENANT",
       "inventory_class": "APPLICATION",
@@ -9835,7 +9852,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -9926,7 +9945,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10067,7 +10088,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10145,7 +10168,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10240,7 +10265,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10323,7 +10350,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10473,7 +10502,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10572,7 +10603,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10668,7 +10701,9 @@
           }
         ],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -10803,7 +10838,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -10923,14 +10960,16 @@
       ],
       "indexes": [],
       "retention_class": "TENANT_WORKDATA",
-      "notes": "Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data.",
+      "notes": "Retry/checkpoint per owner under accepted D253/ES_V1. Execute due cleanup when policy and fiscal applicability are valid; active scoped legal hold or missing/corrupt required policy/applicability yields HELD only for the affected step. Preserve tombstone and revoked access. Failure is not successful deletion of physical data.",
       "retention_policy_mapping": {
         "policy_version": "ES_V1",
         "policy_id": "TENANT_WORKDATA",
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -11063,7 +11102,9 @@
         "dataset": "tenant_workfiles",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -11136,7 +11177,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -11179,7 +11222,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -11314,7 +11359,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -11428,7 +11475,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -11565,7 +11614,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -11771,7 +11822,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -11866,7 +11919,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12071,7 +12126,9 @@
           }
         ],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12205,7 +12262,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12477,7 +12536,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12634,7 +12695,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12719,7 +12782,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12846,7 +12911,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -12968,7 +13035,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -13108,7 +13177,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -13227,7 +13298,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -13358,7 +13431,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -13497,7 +13572,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -13597,7 +13674,9 @@
           }
         ],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -13674,7 +13753,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -13765,7 +13846,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -13897,7 +13980,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "tenant-service",
@@ -13999,7 +14084,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -14056,7 +14143,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -14147,7 +14236,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -14279,7 +14370,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -14381,7 +14474,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -14438,7 +14533,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "billing-service",
@@ -14555,7 +14652,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "auth-service",
@@ -14650,7 +14749,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -14757,7 +14858,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -14869,7 +14972,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -14920,7 +15025,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -15057,7 +15164,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -15174,7 +15283,9 @@
         "dataset": "deletion_evidence",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "auth-service",
@@ -15329,7 +15440,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "workflow-service",
@@ -15403,7 +15516,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "project-service",
@@ -15493,7 +15608,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "issue-service",
@@ -15583,7 +15700,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "issue-service",
@@ -15779,7 +15898,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     },
     {
       "owner": "notification-service",
@@ -15876,7 +15997,9 @@
         "dataset": "deleted_account_profile",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "notification-service",
@@ -15955,7 +16078,9 @@
         "dataset": "deleted_account_profile",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "notification-service",
@@ -16065,7 +16190,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "notification-service",
@@ -16109,7 +16236,9 @@
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
         "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "project-service",
@@ -16167,7 +16296,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "workflow-service",
@@ -16225,7 +16356,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "issue-service",
@@ -16283,7 +16416,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "notification-service",
@@ -16341,7 +16476,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -16399,7 +16536,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -16457,7 +16596,9 @@
         "dataset": "tenant_tasks_comments_history",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -16530,7 +16671,9 @@
         "dataset": "deleted_account_profile",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "tenant-service",
@@ -16693,7 +16836,9 @@
         "dataset": "deletion_evidence",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": false,
+      "rls_forced": false
     },
     {
       "owner": "billing-service",
@@ -16801,7 +16946,9 @@
         "dataset": "ledger",
         "field_or_purpose_overrides": [],
         "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
-      }
+      },
+      "rls_enabled": true,
+      "rls_forced": true
     }
   ],
   "system_tables_disposition": "All 14 Liquibase tables remain SYSTEM, excluded from tenant RLS; only migrator access. Auth history schema follows verified existing journal selection.",

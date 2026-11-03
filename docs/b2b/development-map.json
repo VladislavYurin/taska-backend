@@ -3590,10 +3590,11 @@
       "kind": "CODE",
       "parent": "TAS-286",
       "dependsOn": [
+        "TAS-350",
         "TAS-356",
         "TAS-519"
       ],
-      "wave": 13,
+      "wave": 14,
       "documents": [
         "state-machines.md",
         "contracts/README.md",
@@ -3932,7 +3933,7 @@
         "TAS-472",
         "TAS-520"
       ],
-      "wave": 12,
+      "wave": 15,
       "documents": [
         "state-machines.md",
         "contracts/README.md",
@@ -3962,7 +3963,7 @@
       "dependsOn": [
         "TAS-494"
       ],
-      "wave": 13,
+      "wave": 16,
       "documents": [
         "state-machines.md",
         "contracts/README.md",
@@ -4291,7 +4292,7 @@
       "dependsOn": [
         "TAS-496"
       ],
-      "wave": 14,
+      "wave": 17,
       "documents": [
         "contracts/README.md",
         "contracts/README.md",
@@ -4550,6 +4551,11 @@
           "operationId": "changeGlobalAccount",
           "method": "POST",
           "path": "/api/v1/admin/accounts/{userId}/actions"
+        },
+        {
+          "operationId": "getGlobalAccount",
+          "method": "GET",
+          "path": "/api/v1/admin/accounts/{userId}"
         }
       ],
       "schemaTables": [],
@@ -4570,7 +4576,7 @@
         "TAS-485",
         "TAS-494"
       ],
-      "wave": 13,
+      "wave": 16,
       "documents": [
         "access-control.md",
         "contracts/README.md",
@@ -4651,9 +4657,10 @@
       "parent": "TAS-271",
       "dependsOn": [
         "TAS-310",
+        "TAS-350",
         "TAS-462"
       ],
-      "wave": 6,
+      "wave": 14,
       "documents": [
         "commercial-decisions.md",
         "contracts/README.md",

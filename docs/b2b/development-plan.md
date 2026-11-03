@@ -8,7 +8,7 @@
 
 ## Что отдавать первым
 
-Волны ниже вычислены по непосредственным Blocks и завершению подзадач контейнера. Задача из следующей волны может стартовать, как только готовы именно её inputs; ждать всю волну не нужно. Это порядок зависимостей, не обещание сроков.
+Волны ниже вычислены по непосредственным Blocks и завершению подзадач контейнера. Задача из следующей волны может стартовать, как только готовы именно её inputs; ждать всю волну не нужно. Это порядок зависимостей, не обещание сроков. Схему case/permit/retention receipts в admin_audit_log выполняет TAS-350; TAS-482 и TAS-520 принимаются после неё. Граф содержит 287 прямых Blocks; с завершением подзадач контейнеров — 415 связей, циклов нет.
 
 ### Волна 1
 
@@ -46,7 +46,6 @@
 - [TAS-332](https://jira.ozero.dev/browse/TAS-332) — 01. Изолировать issue keys, counters и idempotency
 - [TAS-472](https://jira.ozero.dev/browse/TAS-472) — Атомарно учитывать единственную FREE-возможность владельца
 - [TAS-519](https://jira.ozero.dev/browse/TAS-519) — billing-service: валидировать коммерческий профиль и готовность live-оплаты
-- [TAS-520](https://jira.ozero.dev/browse/TAS-520) — tenant/auth: реализовать retention policies, holds и повторяемый purge
 
 ### Волна 7
 
@@ -111,7 +110,6 @@
 - [TAS-356](https://jira.ozero.dev/browse/TAS-356) — Счета: сохранять реквизиты покупателя в неизменном snapshot
 - [TAS-480](https://jira.ozero.dev/browse/TAS-480) — Компании: пауза владельцем и блокировка платформой
 - [TAS-485](https://jira.ozero.dev/browse/TAS-485) — Администрирование: глобальные роли и блокировка аккаунтов
-- [TAS-494](https://jira.ozero.dev/browse/TAS-494) — Удаление аккаунта: отзыв доступов и очистка членств
 - [TAS-497](https://jira.ozero.dev/browse/TAS-497) — Публиковать effective capabilities и причины ограничений
 - [TAS-499](https://jira.ozero.dev/browse/TAS-499) — Административные PAT/OAuth: выдача, область и уровни
 - [TAS-500](https://jira.ozero.dev/browse/TAS-500) — UI: выбор компании и изоляция workspace между вкладками
@@ -123,10 +121,7 @@
 - [TAS-343](https://jira.ozero.dev/browse/TAS-343) — Задачи: изолировать CRUD, назначение и переходы
 - [TAS-350](https://jira.ozero.dev/browse/TAS-350) — Администрирование: внутренний аудит и безопасный повтор outbox
 - [TAS-352](https://jira.ozero.dev/browse/TAS-352) — Оплата: однократно применить подтверждённый платёж
-- [TAS-482](https://jira.ozero.dev/browse/TAS-482) — Счета: формировать и скачивать приватные финансовые документы
-- [TAS-487](https://jira.ozero.dev/browse/TAS-487) — Администрирование: удаление глобального аккаунта с сохранением целостности
 - [TAS-491](https://jira.ozero.dev/browse/TAS-491) — Доступ: подключить capabilities к операциям компании и участников
-- [TAS-496](https://jira.ozero.dev/browse/TAS-496) — Показывать удалённого автора без прежнего профиля
 - [TAS-501](https://jira.ozero.dev/browse/TAS-501) — UI: самостоятельное создание FREE и paid-компании
 - [TAS-502](https://jira.ozero.dev/browse/TAS-502) — UI: участники компании и управление приглашениями
 - [TAS-503](https://jira.ozero.dev/browse/TAS-503) — UI: принятие приглашения новым и существующим аккаунтом
@@ -144,8 +139,9 @@
 - [TAS-362](https://jira.ozero.dev/browse/TAS-362) — Задачи: изолировать комментарии, worklogs и расчёт времени
 - [TAS-363](https://jira.ozero.dev/browse/TAS-363) — Задачи: изолировать метки, наблюдателей и их события
 - [TAS-365](https://jira.ozero.dev/browse/TAS-365) — Вложения: выдать upload reservation и однократно подтвердить файл
-- [TAS-508](https://jira.ozero.dev/browse/TAS-508) — UI: предусловия и подтверждение удаления аккаунта
+- [TAS-482](https://jira.ozero.dev/browse/TAS-482) — Счета: формировать и скачивать приватные финансовые документы
 - [TAS-513](https://jira.ozero.dev/browse/TAS-513) — UI: hosted checkout и подтверждённый статус оплаты
+- [TAS-520](https://jira.ozero.dev/browse/TAS-520) — tenant/auth: реализовать retention policies, holds и повторяемый purge
 
 ### Волна 15
 
@@ -156,13 +152,16 @@
 - [TAS-484](https://jira.ozero.dev/browse/TAS-484) — Банк: разбирать поздние и нераспределённые поступления
 - [TAS-486](https://jira.ozero.dev/browse/TAS-486) — Банк: вернуть нераспределённый излишек первой оплаты
 - [TAS-488](https://jira.ozero.dev/browse/TAS-488) — Банк: выставить счет продления и обязательное напоминание
+- [TAS-494](https://jira.ozero.dev/browse/TAS-494) — Удаление аккаунта: отзыв доступов и очистка членств
 
 ### Волна 16
 
 - [TAS-372](https://jira.ozero.dev/browse/TAS-372) — 01. Экспорт рабочих данных компании с актуальными ACL
 - [TAS-459](https://jira.ozero.dev/browse/TAS-459) — 04. Безвозвратное удаление проекта с освобождением квот
+- [TAS-487](https://jira.ozero.dev/browse/TAS-487) — Администрирование: удаление глобального аккаунта с сохранением целостности
 - [TAS-490](https://jira.ozero.dev/browse/TAS-490) — Споры: учитывать подтверждённые исходы и пересчитывать доступ
 - [TAS-495](https://jira.ozero.dev/browse/TAS-495) — Доступ: подключить capabilities к задачам и вложениям
+- [TAS-496](https://jira.ozero.dev/browse/TAS-496) — Показывать удалённого автора без прежнего профиля
 - [TAS-514](https://jira.ozero.dev/browse/TAS-514) — UI: банковский счёт, реквизиты и ручная сверка
 - [TAS-515](https://jira.ozero.dev/browse/TAS-515) — UI: смена тарифа, продление и согласие на autopay
 
@@ -171,6 +170,7 @@
 - [TAS-373](https://jira.ozero.dev/browse/TAS-373) — 02. Удаление компании: подтверждение и запуск offboarding
 - [TAS-493](https://jira.ozero.dev/browse/TAS-493) — Доступ: подключить capabilities к project/workflow операциям
 - [TAS-505](https://jira.ozero.dev/browse/TAS-505) — UI: запуск и скачивание рабочего экспорта
+- [TAS-508](https://jira.ozero.dev/browse/TAS-508) — UI: предусловия и подтверждение удаления аккаунта
 - [TAS-516](https://jira.ozero.dev/browse/TAS-516) — UI: заявки владельца на возврат и состояние финансового спора
 - [TAS-517](https://jira.ozero.dev/browse/TAS-517) — UI GLOBAL_ADMIN: ручная сверка и финансовые решения
 
@@ -227,6 +227,6 @@
 
 ## Принятые решения и отложенное подключение
 
-D250: Stripe выбран, реальное подключение отложено до внесения operator merchant configuration; sandbox/fake готовятся сейчас. D251: окончательный partial chargeback снимает связанное покрытие, новая полная оплата даёт новый месяц. D252: решение/отправка банковского возврата ≤5 рабочих дней, комиссия Taska. D253: [retention ES_V1 и доступ к документам](retention-policy.md) принят по делегации. [C02/C03/C05/C06](commercial-decisions.md) закрыты; TAS-518/519/520 реализуют эти правила. Очередь/зависимости не изменились, первыми TAS-306 и TAS-320.
+D250: Stripe выбран, реальное подключение отложено до внесения operator merchant configuration; sandbox/fake готовятся сейчас. D251: окончательный partial chargeback снимает связанное покрытие, новая полная оплата даёт новый месяц. D252: решение/отправка банковского возврата ≤5 рабочих дней, комиссия Taska. D253: [retention ES_V1 и доступ к документам](retention-policy.md) принят по делегации. [C02/C03/C05/C06](commercial-decisions.md) закрыты; TAS-518/519/520 реализуют эти правила. Уточнены schema inputs: TAS-350 → TAS-482 и TAS-350 → TAS-520; первые независимые задачи остаются TAS-306 и TAS-320.
 
 Ручное разрешение запуска и независимый security sign-off описаны в [operations-design.md](operations-design.md); их нельзя объявить выполненными при закрытии аналитики. TAS-371/374/376/379 реализуют команды, тесты и configuration gates.

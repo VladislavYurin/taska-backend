@@ -5,9 +5,23 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]
 BASE='af7ab57ead44304b89bbd47dabeeba45b761ce16'
 OPEN='api-gateway/src/main/resources/static/openapi.yml'
+# These operations share a service and /users/me prefix but have different owners.
+# Task delivery opt-ins belong to (tenant,user); Telegram contact binding is global.
+NOTIFICATION_POLICIES={
+ '/api/v1/users/me/notification-preferences':'TENANT_SELF',
+ 'notification-settings.proto/notificationsettingsservice/getpreferences':'TENANT_SELF',
+ 'notification-settings.proto/notificationsettingsservice/updatepreferences':'TENANT_SELF',
+ '/api/v1/users/me/telegram/link':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+ '/api/v1/users/me/telegram/confirm':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+ '/api/v1/users/me/telegram':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+ 'notification-settings.proto/notificationsettingsservice/createtelegramlink':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+ 'notification-settings.proto/notificationsettingsservice/confirmtelegramlink':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+ 'notification-settings.proto/notificationsettingsservice/disconnecttelegram':'GLOBAL_SELF_SESSION_FOR_MUTATION',
+}
 def source(p,n=1): return {'path':str(p),'line':n,'baseline':BASE}
 def policy(path,method='GET'):
  p=path.lower()
+ if p in NOTIFICATION_POLICIES:return NOTIFICATION_POLICIES[p],'TAS-325'
  if any(x in p for x in ['admin','readonly']): return 'ADMIN_EXPLICIT_SCOPE','TAS-345,TAS-346,TAS-499'
  if any(x in p for x in ['avatar','profile','users/me','personalaccesstoken','connectedapp']): return 'GLOBAL_SELF_SESSION_FOR_MUTATION','TAS-477,TAS-463,TAS-498'
  if any(x in p for x in ['auth','login','oauth','signup','password','token','inviteuser']): return 'AUTH_PROTOCOL_OR_GLOBAL_IDENTITY','TAS-315,TAS-328,TAS-498'
@@ -118,6 +132,27 @@ for r in records:
    r['source']['line']=txt.count('\n',0,pos)+1
    r['handler'][0]['source']['line']=r['source']['line']
 counts={k:sum(r['kind']==k for r in records) for k in sorted({r['kind'] for r in records})}
+# Check complete emitted records, including method/RPC identity and task ownership,
+# independently of the broad path-name classifier. Do not invent target routes.
+notification_boundaries=[
+ ('REST_OPENAPI','GET /api/v1/users/me/notification-preferences','TENANT_SELF'),
+ ('REST_OPENAPI','PATCH /api/v1/users/me/notification-preferences','TENANT_SELF'),
+ ('REST_OPENAPI','POST /api/v1/users/me/telegram/link','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('REST_OPENAPI','POST /api/v1/users/me/telegram/confirm','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('REST_OPENAPI','DELETE /api/v1/users/me/telegram','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('REST_OPENAPI','POST /api/v1/integrations/telegram/webhook','VERIFIED_INTEGRATION'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/GetPreferences','TENANT_SELF'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/UpdatePreferences','TENANT_SELF'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/CreateTelegramLink','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/ConfirmTelegramLink','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/DisconnectTelegram','GLOBAL_SELF_SESSION_FOR_MUTATION'),
+ ('GRPC','ru.taska.notification.v1.NotificationSettingsService/ProcessTelegramUpdate','VERIFIED_INTEGRATION'),
+]
+for kind,identity,expected_policy in notification_boundaries:
+ matches=[r for r in records if r['kind']==kind and (r.get('rpc') if kind=='GRPC' else r.get('method','')+' '+r.get('path',''))==identity]
+ assert len(matches)==1,'Missing or duplicate notification boundary: '+identity
+ assert matches[0]['targetPolicy']==expected_policy and matches[0]['implementationTas']==['TAS-325'],'Incorrect notification boundary: '+identity
+ if kind=='GRPC':assert matches[0]['scope']==expected_policy,'Incorrect RPC scope: '+identity
 out={'schemaVersion':1,'baseline':BASE,'businessRevision':'Confluence39 D01-D249','counts':counts,'policySemantics':'api-inventory.md#target-policy','operations':records}
 import argparse
 parser=argparse.ArgumentParser(description='Reconstruct REST/RPC/MCP inventory from baseline source; --check never writes.')

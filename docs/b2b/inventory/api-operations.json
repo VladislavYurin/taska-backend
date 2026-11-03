@@ -263,11 +263,9 @@
         "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16"
       },
       "scope": "PROTECTED",
-      "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "targetPolicy": "TENANT_SELF",
       "implementationTas": [
-        "TAS-477",
-        "TAS-463",
-        "TAS-498"
+        "TAS-325"
       ],
       "contractPresence": "STATIC_OPENAPI",
       "currentScope": "NO_TENANT_CONTEXT_IN_BASELINE; existing identity/project ACL applies",
@@ -296,11 +294,9 @@
         "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16"
       },
       "scope": "PROTECTED",
-      "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "targetPolicy": "TENANT_SELF",
       "implementationTas": [
-        "TAS-477",
-        "TAS-463",
-        "TAS-498"
+        "TAS-325"
       ],
       "contractPresence": "STATIC_OPENAPI",
       "currentScope": "NO_TENANT_CONTEXT_IN_BASELINE; existing identity/project ACL applies",
@@ -331,9 +327,7 @@
       "scope": "PROTECTED",
       "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
-        "TAS-477",
-        "TAS-463",
-        "TAS-498"
+        "TAS-325"
       ],
       "contractPresence": "STATIC_OPENAPI",
       "currentScope": "NO_TENANT_CONTEXT_IN_BASELINE; existing identity/project ACL applies",
@@ -364,9 +358,7 @@
       "scope": "PROTECTED",
       "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
-        "TAS-477",
-        "TAS-463",
-        "TAS-498"
+        "TAS-325"
       ],
       "contractPresence": "STATIC_OPENAPI",
       "currentScope": "NO_TENANT_CONTEXT_IN_BASELINE; existing identity/project ACL applies",
@@ -397,9 +389,7 @@
       "scope": "PROTECTED",
       "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
-        "TAS-477",
-        "TAS-463",
-        "TAS-498"
+        "TAS-325"
       ],
       "contractPresence": "STATIC_OPENAPI",
       "currentScope": "NO_TENANT_CONTEXT_IN_BASELINE; existing identity/project ACL applies",
@@ -8198,8 +8188,8 @@
         "line": 12,
         "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16"
       },
-      "scope": "TENANT_SELF",
-      "targetPolicy": "TENANT_SELF",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
         "TAS-325"
       ],
@@ -8225,8 +8215,8 @@
         "line": 13,
         "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16"
       },
-      "scope": "TENANT_SELF",
-      "targetPolicy": "TENANT_SELF",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
         "TAS-325"
       ],
@@ -8252,8 +8242,8 @@
         "line": 14,
         "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16"
       },
-      "scope": "TENANT_SELF",
-      "targetPolicy": "TENANT_SELF",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "targetPolicy": "GLOBAL_SELF_SESSION_FOR_MUTATION",
       "implementationTas": [
         "TAS-325"
       ],

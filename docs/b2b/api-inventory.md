@@ -118,7 +118,7 @@ Baseline не содержит tenant isolation. `currentScope` явно пом�
 | Policy | Обязательное целевое поведение |
 |---|---|
 | TENANT_* | Signed target tenant совпадает с ресурсом/route; актуальное membership, project ACL, capabilities и квоты. GET/list/search/batch проверяют ту же область. |
-| GLOBAL_SELF_SESSION_FOR_MUTATION | Общий профиль/credentials/avatar; для изменения только web-session по D221, чтение профиля другого участника ограничено directory ACL. |
+| GLOBAL_SELF_SESSION_FOR_MUTATION | Общий профиль/credentials/avatar и личная привязка Telegram; для изменения только web-session по D221, чтение профиля другого участника ограничено directory ACL. |
 | AUTH_PROTOCOL_OR_GLOBAL_IDENTITY | Identity/token flow не выбирает tenant из внешнего header; авторизация/выдача нового PAT и refresh различаются. |
 | ADMIN_EXPLICIT_SCOPE | Полная административная web-session либо отдельный administrative PAT/OAuth; role + grant scope + level + target, account-management отдельно. |
 | PUBLIC_SAFE_METADATA | Только открытые метаданные, без секретов, private actor context или tenant-проекций. |
@@ -128,11 +128,16 @@ Baseline не содержит tenant isolation. `currentScope` явно пом�
 
 В проектных routes `projectId` из пути и issue/comment/file из payload должны совпасть по tenant и владельцу; загрузить по одному ID и довериться остальным нельзя. Для issue links проверяются оба конца. Файлы, directory, aggregate counts и admin generic read-only tables входят в тот же принцип. Нормативные политики каналов и ошибки — [contracts README](contracts/README.md).
 
+Настройки обычных уведомлений `GET/PATCH /api/v1/users/me/notification-preferences` и RPC `GetPreferences`/`UpdatePreferences` требуют выбранную компанию: `TENANT_SELF`, ключ `(tenant_id,user_id)` в `notification_preferences`. Префикс `/users/me` не делает эти настройки глобальными. Привязка Telegram (`POST /api/v1/users/me/telegram/link`, `POST .../confirm`, `DELETE /api/v1/users/me/telegram` и RPC `CreateTelegramLink`/`ConfirmTelegramLink`/`DisconnectTelegram`) принадлежит глобальному `account_notification_settings`: `GLOBAL_SELF_SESSION_FOR_MUTATION`, без копирования привязки по компаниям. Webhook/`ProcessTelegramUpdate` сохраняют `VERIFIED_INTEGRATION`. Вся эта группа принадлежит TAS-325; разделение согласовано с [моделью данных](target-data-model.md) и `notification.preferences` в [матрице доступа](inventory/access-matrix.json).
+
 ## Повторяемая проверка
 
 ```sh
 python3 docs/b2b/inventory/generate_api_inventory.py
+python3 docs/b2b/inventory/generate_api_inventory.py --check
 python3 docs/b2b/contracts/validate_contracts.py
 ```
 
 Генератор использует Python stdlib и локальный Ruby/Psych для baseline YAML. Validator требует PyYAML/openapi-spec-validator. Генератор рассчитан на указанный baseline: при будущем изменении baseline переснять и явно изменить SHA, а не выдавать новые данные за старый срез. Runtime-тесты из этой инвентаризации не следуют; target схемы не реализованы и не развёрнуты.
+
+Генератор проверяет наличие и классификацию всех 12 текущих REST/RPC операций настроек/Telegram, включая границу tenant/global и владельца TAS-325. `--check` дополнительно сравнивает полный результат с сохранённым JSON и не пишет файлы.

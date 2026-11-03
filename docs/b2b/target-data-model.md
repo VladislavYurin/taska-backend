@@ -33,7 +33,7 @@
 | `auth-service.refresh_tokens` | GLOBAL | Bind refresh family to web_sessions; tenant contexts have separate tenant_sessions IDs and cannot switch each other. |
 | `auth-service.signup_rate_limits` | GLOBAL | Полная исходная структура сохранена; применяется общая политика scope. |
 | `auth-service.user_avatars` | GLOBAL | Keep global ownership and 2 MB cap; no tenant_id. S3 lifecycle is durable via avatar_object_manifest. |
-| `auth-service.users` | GLOBAL | After confirmed deletion expose tombstone identity; purge/anonymization policy held by O09. No reuse of user UUID. |
+| `auth-service.users` | GLOBAL | After confirmed deletion expose tombstone identity; purge/anonymization follows accepted D253/ES_V1 and applicable scoped legal holds. Missing/corrupt policy blocks physical purge only, never restores access. No reuse of user UUID. AdminAccount.version is the decimal-string representation of account_version (bigint NOT NULL DEFAULT 1, CHECK > 0). It is the control aggregate version for global_role/status/deleted_at, distinct from profile_version and auth_version. Under the auth user-row lock compare the expected account version, recheck authority and state, then increment once in the same transaction for each actual role/state/logical-deletion transition, including invitation acceptance, login lock/unlock and bootstrap/recovery when those flows change existing control fields. Account creation starts at version 1. Idempotent replay/no-op does not increment; profile-only updates do not substitute this clock. Schema migration belongs to TAS-477; administrative transition logic and GET mapping belong to TAS-485, deletion transition consumer TAS-487. A retained deletion tombstone exposes no historical profile PII; after lawful physical purge administrative GET returns 404. |
 | `issue-service.idempotency_keys` | TENANT | Replace (user_id,key) uniqueness with (tenant_id,user_id,operation_code,key); hash includes canonical target IDs and payload. Financial effects additionally have permanent operation identity. |
 | `issue-service.issue_attachments` | TENANT | Полная исходная структура сохранена; применяется общая политика scope. |
 | `issue-service.issue_comments` | TENANT | Полная исходная структура сохранена; применяется общая политика scope. |
@@ -78,6 +78,12 @@
 | `workflow-service.workflow_binding_changes` | TENANT | Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership. |
 | `workflow-service.workflow_bindings` | TENANT | Полная исходная структура сохранена; применяется общая политика scope. |
 | `workflow-service.workflows` | TENANT | All runtime workflows belong to one tenant/project; global templates move to workflow_templates, copied with new workflow/status/transition UUIDs. Shared mutable default workflows are prohibited. |
+
+### Версия административного состояния аккаунта
+
+В target `auth-service.taska.users` добавляется `account_version bigint NOT NULL DEFAULT 1`, ограничение `users_account_version_positive_chk: CHECK (account_version > 0)`. `AdminAccount.version` передаёт его десятичной строкой; version из GET используется для последующих административных If-Match/expectedAccountVersion. Это отдельная версия управляющего состояния, не `profile_version` и не `auth_version`.
+
+Изменение global_role/status/deleted_at выполняется под блокировкой строки пользователя: повторно проверить полномочия и текущую account_version, применить переход и увеличить account_version ровно один раз в той же транзакции. Все writers этих полей используют общий version protocol, включая принятие приглашения, login lock/unlock и bootstrap/recovery при изменении управляющих полей существующего аккаунта; новый аккаунт начинает с версии 1. retry уже выполненной операции и фактический no-op версию не увеличивают. Security revocation изменяет auth_version отдельно по своим правилам. Миграция users — TAS-477; административные GET/переходы — TAS-485, удаление — TAS-487. Retained tombstone не раскрывает прежние профильные PII; после допустимого физического purge административный GET возвращает 404.
 
 ## Новые таблицы: полные поля и ограничения
 
@@ -431,7 +437,7 @@ CHECK:
 
 ### tenant-service · taska.tenant_deletion_steps
 
-Scope `TENANT`; retention `TENANT_WORKDATA`. Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Retry/checkpoint per owner under accepted D253/ES_V1. Execute due cleanup when policy and fiscal applicability are valid; active scoped legal hold or missing/corrupt required policy/applicability yields HELD only for the affected step. Preserve tombstone and revoked access. Failure is not successful deletion of physical data.
 
 ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 

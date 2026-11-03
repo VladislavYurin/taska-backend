@@ -16,12 +16,69 @@ for path,methods in spec['paths'].items():
   assert names==set(re.findall(r'{([^}]+)}',path)),(path,names)
   if method!='get': assert any(x.get('$ref','').endswith('/IdempotencyKey') for x in op.get('parameters',[]))
 assert len(ops)==len(set(ops))
+# Pause/resume are versioned commands; DELETE deliberately has no payload.
+pause_path=spec['paths']['/api/v1/tenants/{tenantId}/pause']
+for method,operation in [('put','pauseTenant'),('delete','resumeTenant')]:
+ op=pause_path[method]
+ assert op['operationId']==operation
+ refs={p.get('$ref') for p in op['parameters']}
+ for parameter in ['IdempotencyKey','IfMatch']:
+  assert '#/components/parameters/'+parameter in refs
+  assert spec['components']['parameters'][parameter]['required'] is True
+ assert {'412','428'} <= set(op['responses'])
+assert pause_path['put']['requestBody']['required'] is True
+assert pause_path['put']['requestBody']['content']['application/json']['schema']['$ref'].endswith('/ConfirmedAction')
+assert 'requestBody' not in pause_path['delete']
+# Immutable wire receipts have no entity version to read; concurrency is guarded by
+# source/invoice locks and durable business deduplication, not an invented If-Match.
+wire_confirm=spec['paths']['/api/v1/admin/billing/wire-receipts/{paymentId}/confirm']['post']
+wire_refs={p.get('$ref') for p in wire_confirm['parameters']}
+assert '#/components/parameters/IdempotencyKey' in wire_refs
+assert '#/components/parameters/IfMatch' not in wire_refs
+assert not {'412','428'} & set(wire_confirm['responses'])
+assert wire_confirm['requestBody']['required'] is True
+assert wire_confirm['requestBody']['content']['application/json']['schema']['$ref'].endswith('/ConfirmWireReceiptRequest')
+wire_payload=spec['components']['schemas']['ConfirmWireReceiptRequest']
+assert {'confirmed','evidenceReference'} <= set(wire_payload['required'])
+assert wire_payload['properties']['confirmed']['enum']==[True]
+# Every newly specified precondition has an authorized readable source and a
+# required decimal version, including first autopay consent and account deletion.
+by_operation={op['operationId']:(method,op) for methods in spec['paths'].values() for method,op in methods.items()}
+for command,read_operation,schema in [('setAutopayConsent','getSubscription','Subscription'),
+                                      ('changeGlobalAccount','getGlobalAccount','AdminAccount'),
+                                      ('adminDeleteAccount','getGlobalAccount','AdminAccount')]:
+ _,op=by_operation[command]
+ assert op['x-version-source']=={'operationId':read_operation,'schema':schema,'property':'version'}
+ read_method,read_op=by_operation[read_operation]
+ assert read_method=='get' and 'requestBody' not in read_op
+ assert read_op['responses']['200']['content']['application/json']['schema']['$ref']=='#/components/schemas/'+schema
+ versioned_schema=spec['components']['schemas'][schema]
+ assert 'version' in versioned_schema['required']
+ assert versioned_schema['properties']['version']['type']=='string'
+ assert '#/components/parameters/IfMatch' in {p.get('$ref') for p in op['parameters']}
+ assert {'412','428'} <= set(op['responses'])
+account_read=by_operation['getGlobalAccount'][1]
+for name in ['getGlobalAccount','changeGlobalAccount','adminDeleteAccount']:
+ assert by_operation[name][1]['x-policy']=='ADMIN_GLOBAL_ACCOUNTS_WRITE'
+ assert by_operation[name][1]['security']==[{'bearerAuth':[]}]
+assert account_read['x-implementation-tas']==['TAS-485']
+assert set(spec['components']['schemas']['AdminAccount']['properties'])=={'userId','role','state','version'}
+assert set(spec['components']['schemas']['AdminAccount']['properties']['state']['enum'])=={'ACTIVE','BLOCKED','DELETED','INVITED','LOCKED'}
+account_delete=spec['components']['schemas']['AdminDeleteAccountRequest']
+assert 'expectedAccountVersion' in account_delete['required']
+assert account_delete['properties']['expectedAccountVersion']['pattern']==spec['components']['schemas']['AdminAccount']['properties']['version']['pattern']
 for n,s in spec['components']['schemas'].items():
  if s.get('type')=='object':assert s.get('additionalProperties') is False,n
 proto=(P/'b2b.proto').read_text();rpc=re.findall(r'\brpc\s+(\w+)\(',proto)
 for ident in ops:assert ident[0].upper()+ident[1:] in rpc,ident
 uid='00000000-0000-4000-8000-000000000001'
 fixtures=[
+ ('AdminAccount',{'userId':uid,'role':'USER','state':'ACTIVE','version':'1'},True),
+ ('AdminAccount',{'userId':uid,'role':'USER','state':'ACTIVE','version':'0'},False),
+ ('AdminAccount',{'userId':uid,'role':'USER','state':'INVITED','version':'1'},True),
+ ('AdminAccount',{'userId':uid,'role':'USER','state':'LOCKED','version':'2'},True),
+ ('AdminDeleteAccountRequest',{'confirmed':True,'reason':'verified request','expectedAccountVersion':'1'},True),
+ ('AdminDeleteAccountRequest',{'confirmed':True,'reason':'verified request','expectedAccountVersion':'0'},False),
  ('Money',{'amountMinor':'2000','currency':'EUR','exponent':2},True),
  ('Money',{'amountMinor':'2000','currency':'EUR','exponent':1},False),
  ('Money',{'amountMinor':20.0,'currency':'EUR','exponent':2},False),

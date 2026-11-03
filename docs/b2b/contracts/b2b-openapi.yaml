@@ -283,6 +283,8 @@ paths:
     delete:
       operationId: resumeTenant
       summary: resumeTenant
+      description: Remove only the owner's pause. This explicit command has no request body or additional confirmation code;
+        Idempotency-Key and If-Match are required. Platform blocks, disputes and missing paid coverage remain independent.
       tags:
       - Tenant
       x-policy: OWNER_OR_ADMIN_WRITE
@@ -2403,6 +2405,14 @@ paths:
     put:
       operationId: setAutopayConsent
       summary: setAutopayConsent
+      description: If-Match is the parent Subscription.version returned by getSubscription, including first consent when no mandate
+        exists. Under the subscription row lock, recheck the current owner and admission fences, then update the mandate and
+        increment Subscription.version in one transaction. No subscription returns INVALID_STATE/409. AutopayMandate.version
+        is not this precondition; read getSubscription again before the next command.
+      x-version-source:
+        operationId: getSubscription
+        schema: Subscription
+        property: version
       tags:
       - Billing
       x-policy: OWNER_OR_ADMIN_WRITE
@@ -2875,6 +2885,9 @@ paths:
     post:
       operationId: confirmWireReceipt
       summary: confirmWireReceipt
+      description: Idempotent reconciliation of an immutable receipt, without If-Match. Under ordered source-payment and invoice
+        locks, recheck verified evidence, eligibility and current allocation/coverage state before applying one financial effect.
+        PaymentFact has no mutable entity version; schema_version is never a concurrency token.
       tags:
       - Platform
       x-policy: ADMIN_TARGET_WRITE
@@ -2898,11 +2911,7 @@ paths:
           $ref: '#/components/responses/Problem'
         '409':
           $ref: '#/components/responses/Problem'
-        '412':
-          $ref: '#/components/responses/Problem'
         '422':
-          $ref: '#/components/responses/Problem'
-        '428':
           $ref: '#/components/responses/Problem'
         '429':
           $ref: '#/components/responses/Problem'
@@ -2918,7 +2927,6 @@ paths:
           type: string
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
-      - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
@@ -3515,10 +3523,58 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateFlagRequest'
+  /api/v1/admin/accounts/{userId}:
+    get:
+      operationId: getGlobalAccount
+      summary: getGlobalAccount
+      description: Nonmutating account-management read returning the current account version before an administrative action.
+        Reuses ADMIN_GLOBAL_ACCOUNTS_WRITE authority deliberately; does not promote a READ grant. Require a currently active
+        GLOBAL_ADMIN with completed MFA web session or current administrative PLATFORM+MODIFY grant with accounts:manage;
+        recheck live role, account and grant state before returning only userId, role, state and version. No profile PII.
+        INVITED/LOCKED reflect existing identity states without enabling new management transitions. A purged account returns 404;
+        reading a retained tombstone never restores the account or exposes old email/displayName/avatar.
+      tags:
+      - Platform
+      x-policy: ADMIN_GLOBAL_ACCOUNTS_WRITE
+      x-implementation-tas:
+      - TAS-485
+      responses:
+        '200':
+          description: Current authoritative account-management projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
   /api/v1/admin/accounts/{userId}/actions:
     post:
       operationId: changeGlobalAccount
       summary: changeGlobalAccount
+      description: If-Match is AdminAccount.version from getGlobalAccount. Recheck current administrative authority and target account version under the auth-service account row lock before applying one state change.
+      x-version-source:
+        operationId: getGlobalAccount
+        schema: AdminAccount
+        property: version
       tags:
       - Platform
       x-policy: ADMIN_GLOBAL_ACCOUNTS_WRITE
@@ -3572,6 +3628,11 @@ paths:
     post:
       operationId: adminDeleteAccount
       summary: adminDeleteAccount
+      description: If-Match is AdminAccount.version from getGlobalAccount. Recheck current administrative authority and target account version under the auth-service account row lock before applying one state change. The unquoted If-Match value must equal payload.expectedAccountVersion; mismatch is VALIDATION_FAILED/400, stale current account version is VERSION_CONFLICT/412, missing If-Match is 428. Owner/last-admin guards remain mandatory.
+      x-version-source:
+        operationId: getGlobalAccount
+        schema: AdminAccount
+        property: version
       tags:
       - Platform
       x-policy: ADMIN_GLOBAL_ACCOUNTS_WRITE
@@ -7128,11 +7189,13 @@ components:
           - ACTIVE
           - BLOCKED
           - DELETED
+          - INVITED
+          - LOCKED
         version:
           type: string
           minLength: 1
           maxLength: 19
-          pattern: ^(0|[1-9][0-9]{0,18})$
+          pattern: ^[1-9][0-9]{0,18}$
       required:
       - userId
       - role
@@ -7154,7 +7217,7 @@ components:
           type: string
           minLength: 1
           maxLength: 19
-          pattern: ^(0|[1-9][0-9]{0,18})$
+          pattern: ^[1-9][0-9]{0,18}$
       required:
       - confirmed
       - reason
