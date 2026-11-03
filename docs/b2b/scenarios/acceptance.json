@@ -1,5 +1,5 @@
 {
-  "revision": "SA-2026-11-02",
+  "revision": "SA-2026-11-03",
   "status": "DESIGN_VECTORS_NOT_PRODUCT_TEST_RESULTS",
   "scenarios": [
     {
@@ -410,14 +410,27 @@
         "TAS-378"
       ],
       "given": {
-        "partialExternalChargebackMinor": "500",
-        "policyC03": null
+        "originalPaymentMinor": "2000",
+        "confirmedFinalPartialChargebackMinor": "500",
+        "linkedCoverage": "coverage-A",
+        "independentCoverage": "coverage-B",
+        "outcome": "LOST_PARTIAL_COVERAGE_REVOKED"
       },
-      "when": "Attempt final restore/revoke policy decision",
+      "when": "GLOBAL_ADMIN records verified final outcome twice, then an older duplicate webhook arrives",
       "expect": {
-        "state": "NEEDS_REVIEW",
-        "readOnly": true,
-        "finalAction": "POLICY_NOT_CONFIGURED"
+        "disputeState": "LOST",
+        "revokedCoverage": [
+          "coverage-A"
+        ],
+        "unchangedCoverage": [
+          "coverage-B"
+        ],
+        "additionalOutgoingRefunds": 0,
+        "additionalMoneyFacts": 0,
+        "autopayEnabled": false,
+        "repeatEffectCount": 1,
+        "paidRecovery": "NEW_FULL_PAYMENT_NEW_FULL_MONTH",
+        "otherRestrictionsPreserved": true
       }
     },
     {
@@ -607,6 +620,199 @@
         "liveReadiness": false,
         "successfulPurgeClaim": false,
         "oldAccessRestored": false
+      }
+    },
+    {
+      "id": "BILL-22",
+      "tasks": [
+        "TAS-358",
+        "TAS-486",
+        "TAS-518",
+        "TAS-378"
+      ],
+      "given": {
+        "evidenceCompletedAt": "2026-11-02T11:00:00+01:00",
+        "calendar": "SYNTHETIC_MON_FRI_NO_HOLIDAYS",
+        "policy": "WIRE_RETURN_ES_V1"
+      },
+      "when": "Approve after 2 business dates; retry/reassign after 4; publish new calendar",
+      "expect": {
+        "decisionDueAt": "2026-11-09T10:00:00Z",
+        "sendDueAt": "2026-11-09T10:00:00Z",
+        "deadlineRecomputed": false,
+        "liveCalendarFixtureAllowed": false
+      }
+    },
+    {
+      "id": "BILL-23",
+      "tasks": [
+        "TAS-358",
+        "TAS-486",
+        "TAS-488",
+        "TAS-378"
+      ],
+      "given": {
+        "unallocatedReturnPrincipalMinor": "500",
+        "bankFeeMinor": "50",
+        "feeBearer": "TASKA"
+      },
+      "when": "Submit WIRE return and subsequently verify outgoing bank fact",
+      "expect": {
+        "recipientPrincipalMinor": "500",
+        "separateTaskaExpenseMinor": "50",
+        "confirmedBeforeBankEvidence": false,
+        "deductedFeeMinor": "0"
+      }
+    },
+    {
+      "id": "BILL-24",
+      "tasks": [
+        "TAS-490",
+        "TAS-352",
+        "TAS-361",
+        "TAS-378"
+      ],
+      "given": {
+        "lostPartialLinkedCoverageRevoked": true,
+        "otherActiveCoverage": false,
+        "newPaymentSuccessAt": "2026-11-03T10:00:00Z",
+        "ownerPaused": true
+      },
+      "when": "Confirm new complete PSP payment",
+      "expect": {
+        "periodStart": "2026-11-03T10:00:00Z",
+        "periodEnd": "2026-12-03T10:00:00Z",
+        "oldPeriodRemainderAdded": false,
+        "ownerPaused": true,
+        "autopayEnabled": false
+      }
+    },
+    {
+      "id": "BILL-25",
+      "tasks": [
+        "TAS-358",
+        "TAS-518",
+        "TAS-492"
+      ],
+      "given": {
+        "sendDueAt": "2026-11-09T10:00:00Z",
+        "now": "2026-11-10T10:00:00Z",
+        "refundApproved": true,
+        "moneySourceReconciled": true
+      },
+      "when": "Send overdue refund",
+      "expect": {
+        "sendAllowed": true,
+        "deadlineShifted": false,
+        "overdueVisible": true,
+        "alertCreated": true,
+        "confirmedWithoutEvidence": false
+      }
+    },
+    {
+      "id": "RETENTION-02",
+      "tasks": [
+        "TAS-520",
+        "TAS-474",
+        "TAS-494",
+        "TAS-374"
+      ],
+      "given": {
+        "policyVersion": "ES_V1",
+        "tombstoneAt": "2026-11-03T00:00:00Z",
+        "backupCapturedAt": "2026-11-01T00:00:00Z"
+      },
+      "when": "Copy backup on November20 and restore before expiry",
+      "expect": {
+        "activePurgeDeadline": "2026-12-03T00:00:00Z",
+        "backupEraseDeadline": "2026-12-06T00:00:00Z",
+        "copyExtendsTtl": false,
+        "tombstoneAppliedBeforeTraffic": true,
+        "oldIdentityRestored": false
+      }
+    },
+    {
+      "id": "RETENTION-03",
+      "tasks": [
+        "TAS-520",
+        "TAS-482"
+      ],
+      "given": {
+        "financialRecordBaseDueAt": "2032-11-03T00:00:00Z",
+        "scopedLegalHoldActive": true,
+        "actor": "SUPPORT"
+      },
+      "when": "Purge then attempt ordinary read of BLOCKED_LEGAL identity evidence",
+      "expect": {
+        "purged": false,
+        "ordinaryBlockedReadAllowed": false,
+        "holdGrantsAdditionalRead": false,
+        "unrelatedRecordsHeld": false
+      }
+    },
+    {
+      "id": "RETENTION-04",
+      "tasks": [
+        "TAS-472",
+        "TAS-520",
+        "TAS-494"
+      ],
+      "given": {
+        "accountAndTenantDeleted": true,
+        "freeMarkerPurposeActive": true,
+        "lawfulErasureRequestUpheld": true
+      },
+      "when": "Dispose FREE marker under ES_V1",
+      "expect": {
+        "operationalMatchingAllowed": false,
+        "reconstructFromInvoiceBackupProfile": false,
+        "rawEmailRetainedForFreeCheck": false,
+        "fingerprintingAllowed": false
+      }
+    },
+    {
+      "id": "RETENTION-05",
+      "tasks": [
+        "TAS-482",
+        "TAS-520"
+      ],
+      "given": {
+        "deletedAccount": true,
+        "requesterFormerOwnerOnly": true,
+        "currentAuthorityVerified": false
+      },
+      "when": "Request archived invoice through operator case",
+      "expect": {
+        "documentDelivered": false,
+        "accountRevived": false,
+        "tenantSessionCreated": false,
+        "blockedProfileRead": false,
+        "auditedDenial": true
+      }
+    },
+    {
+      "id": "COMMERCIAL-01",
+      "tasks": [
+        "TAS-348",
+        "TAS-519",
+        "TAS-378"
+      ],
+      "given": {
+        "provider": "STRIPE",
+        "liveProvisioning": "DEFERRED",
+        "merchantProfile": null,
+        "currencies": [
+          "EUR",
+          "USD"
+        ]
+      },
+      "when": "Run sandbox fixtures then request live checkout",
+      "expect": {
+        "sandboxAvailable": true,
+        "liveCheckoutSent": false,
+        "liveError": "POLICY_NOT_CONFIGURED",
+        "usdRemovedFromContract": false,
+        "inventedSellerDetails": false
       }
     }
   ]

@@ -6915,7 +6915,7 @@
       "scope": "TENANT",
       "durableKey": "tenantId/deletionGeneration/step",
       "trust": "committed DELETING journal",
-      "retry": "same receipt per domain; O09 blocks only governed purge",
+      "retry": "same receipt per domain; configured ES_V1 executes due cleanup, scoped hold or missing/corrupt policy blocks only governed purge",
       "dedup": "step receipt",
       "fence": "tenant tombstone + generation",
       "targetTasks": [

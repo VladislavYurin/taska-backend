@@ -146,6 +146,20 @@ def target_ddl(model):
                 for i,ix in enumerate(t['indexes']):
                     unique=ix.startswith('UNIQUE ')
                     later.append('CREATE '+('UNIQUE ' if unique else '')+'INDEX '+t['name']+'_target_ix_'+str(i)+' ON '+q+' '+(ix[7:] if unique else ix)+';')
+            for guard in t.get('mutation_guards',[]):
+                if guard['trigger']!='BEFORE UPDATE' or guard['error_sqlstate']!='23514':raise AssertionError('Unsupported target mutation guard')
+                columns={c['name'] for c in t['columns']}
+                guarded=set(guard['always_immutable_columns']+guard['frozen_columns']+[guard['freeze_when_old_not_null']])
+                if not guarded<=columns:raise AssertionError('Unknown mutation guard column')
+                function=schema+'.'+guard['name']+'_fn'
+                checks=[]
+                for column in guard['always_immutable_columns']:
+                    checks.append('OLD.'+column+' IS DISTINCT FROM NEW.'+column)
+                old_row='ROW('+','.join('OLD.'+c for c in guard['frozen_columns'])+')'
+                new_row='ROW('+','.join('NEW.'+c for c in guard['frozen_columns'])+')'
+                checks.append('(OLD.'+guard['freeze_when_old_not_null']+' IS NOT NULL AND '+old_row+' IS DISTINCT FROM '+new_row+')')
+                later.append('CREATE FUNCTION '+function+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF "+' OR '.join(checks)+" THEN RAISE check_violation USING MESSAGE='immutable policy evidence bundle'; END IF; RETURN NEW; END $$;")
+                later.append('CREATE TRIGGER '+guard['name']+' BEFORE UPDATE ON '+q+' FOR EACH ROW EXECUTE FUNCTION '+function+'();')
         roles=[]
         short=owner.replace('-service','').replace('-','_')
         role_names=['taska_'+short+'_'+x for x in ('app','admin','job')]
@@ -202,9 +216,59 @@ def verify_target(model, postgres=False):
                     check_insert('payment_facts',{**day,'occurred_before':'2026-09-30T00:00:00Z'},False)
                     check_insert('payment_facts',{**fact,'payer_ref':None},False)
                     run(psql,insert_sql('payment_facts',fact))
-                    refund=dict(id=str(uuid.uuid4()),tenant_id=tenant,source_payment_fact_id=fact['id'],invoice_id=None,kind='UNALLOCATED_RETURN',requested_by=str(uuid.uuid4()),amount_minor=5,state='REQUESTED',operation_id=str(uuid.uuid4()),provider_request_id=None,confirmed_fact_id=None,reason_code='EXCESS',created_at=when,updated_at=when)
+                    refund=dict(id=str(uuid.uuid4()),tenant_id=tenant,source_payment_fact_id=fact['id'],invoice_id=None,kind='UNALLOCATED_RETURN',requested_by=str(uuid.uuid4()),amount_minor=5,state='REQUESTED',operation_id=str(uuid.uuid4()),provider_request_id=None,confirmed_fact_id=None,reason_code='EXCESS',created_at=when,updated_at=when,source_method='WIRE',fee_bearer='TASKA')
                     check_insert('refunds',refund,True)
                     check_insert('refunds',{**refund,'kind':'SUBSCRIPTION_FULL'},False)
+                    sla=dict(businessDays=5,feeBearer='TASKA',countingRule='T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME',timezone='Europe/Madrid',calendarDigest='a'*64,excludeEvidenceDate=True,dstGapRule='NEXT_VALID_INSTANT',dstOverlapRule='LATER_OFFSET')
+                    complete={**refund,'evidence_completed_at':when,'business_calendar_id':'SANDBOX_ONLY_ES_FIXTURE','calendar_version':'fixture-v1','sla_policy_version':'WIRE_RETURN_ES_V1','sla_snapshot':json.dumps(sla),'decision_due_at':'2026-10-08T12:00:00Z','send_due_at':'2026-10-08T12:00:00Z'}
+                    check_insert('refunds',complete,True)
+                    check_insert('refunds',{**complete,'fee_bearer':'PRINCIPAL_DEDUCT'},False)
+                    check_insert('refunds',{**complete,'sla_snapshot':json.dumps({**sla,'feeBearer':None})},False)
+                    check_insert('refunds',{**complete,'calendar_version':None},False)
+                    check_insert('refunds',{**complete,'send_due_at':'2026-10-09T12:00:00Z'},False)
+                    check_insert('refunds',{**complete,'decided_at':'2026-10-12T12:00:00Z'},True)
+                    run(psql,insert_sql('refunds',complete))
+                    def check_update(assignment,should_pass):
+                        sql="BEGIN; UPDATE taska.refunds SET "+assignment+" WHERE id='"+complete['id']+"'; ROLLBACK;"
+                        response=subprocess.run(psql,input=sql,text=True,capture_output=True)
+                        if (response.returncode==0)!=should_pass:raise AssertionError('SLA mutation guard probe failed: '+response.stderr[-1000:])
+                        if not should_pass and 'immutable policy evidence bundle' not in response.stderr:raise AssertionError('Mutation rejected for wrong reason: '+response.stderr[-1000:])
+                    check_update("evidence_completed_at='2026-10-02T12:00:00Z'",False)
+                    check_update("calendar_version='fixture-v2'",False)
+                    check_update("sla_snapshot=jsonb_set(sla_snapshot,'{calendarDigest}',to_jsonb(repeat('b',64)))",False)
+                    check_update("decision_due_at='2026-10-09T12:00:00Z',send_due_at='2026-10-09T12:00:00Z'",False)
+                    check_update("decided_at='2026-10-12T12:00:00Z',updated_at='2026-10-12T12:00:00Z'",True)
+                    loss={**fact,'id':str(uuid.uuid4()),'external_fact_id':'partial-chargeback','parent_fact_id':fact['id'],'fact_kind':'CHARGEBACK','amount_minor':5}
+                    run(psql,insert_sql('payment_facts',loss))
+                    dispute=dict(id=str(uuid.uuid4()),tenant_id=tenant,payment_fact_id=fact['id'],provider='TEST',external_dispute_id='partial-loss-case',state='LOST',amount_minor=5,confirmed_money_fact_id=loss['id'],version=1,opened_at=when,closed_at='2026-10-02T12:00:00Z',final_outcome='LOST_PARTIAL_COVERAGE_REVOKED',resolution_evidence_ref='private-resolution-proof',resolution_evidence_digest='proof',resolution_verified_at='2026-10-02T12:00:00Z')
+                    check_insert('disputes',dispute,True)
+                    check_insert('disputes',{**dispute,'final_outcome':None},False)
+                    check_insert('disputes',{**dispute,'confirmed_money_fact_id':None},False)
+                    check_insert('disputes',{**dispute,'state':'WON'},False)
+                    check_insert('disputes',{**dispute,'state':'NEEDS_REVIEW'},False)
+                    check_insert('disputes',{**dispute,'state':'WON','final_outcome':'WON','confirmed_money_fact_id':None},True)
+                if owner=='tenant-service':
+                    psql=['docker','exec','-i',name,'psql','-X','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
+                    tenant=str(uuid.uuid4()); user=str(uuid.uuid4())
+                    seed="INSERT INTO taska.free_eligibility_ledger(email_digest,digest_key_version,first_user_id,bound_tenant_id,consumed_at,operation_id,purpose_version,review_due_at) VALUES "
+                    values=["('"+digest+"',1,'"+user+"','"+tenant+"','2026-11-01',gen_random_uuid(),'ES_V1','2027-11-01')" for digest in ('owner-before','owner-after')]
+                    run(psql,seed+','.join(values)+';')
+                    run(psql,"UPDATE taska.free_eligibility_ledger SET first_user_id=NULL WHERE email_digest='owner-before';")
+                    bad=subprocess.run(psql,input="BEGIN; UPDATE taska.free_eligibility_ledger SET bound_tenant_id=NULL WHERE email_digest='owner-after'; ROLLBACK;",text=True,capture_output=True)
+                    if bad.returncode==0 or 'check constraint' not in bad.stderr:raise AssertionError('FREE partial binding cleanup admitted')
+                    run(psql,"UPDATE taska.free_eligibility_ledger SET bound_tenant_id=NULL,first_user_id=NULL,operation_id=NULL WHERE bound_tenant_id='"+tenant+"';")
+                    if run(psql,"SELECT count(*) FROM taska.free_eligibility_ledger WHERE bound_tenant_id IS NULL AND first_user_id IS NULL AND operation_id IS NULL;").splitlines()[-1]!='2':raise AssertionError('FREE cleanup did not clear all owner markers')
+                if owner=='admin-service':
+                    psql=['docker','exec','-i',name,'psql','-X','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
+                    case=str(uuid.uuid4());permit=str(uuid.uuid4())
+                    details=json.dumps(dict(caseId=case,permitId=permit,ticketHash='a'*64,ticketExpiresAt='2026-11-03T12:10:00Z',documentIds=['fixture-doc'],archiveVersion='fixture-v1',verifiedRecipientRef='fixture-recipient'))
+                    def consume_sql(event_key):
+                        return "INSERT INTO taska.admin_audit_log(id,actor_user_id,actor_display_name,actor_roles,action,target_service,target_table,target_id,reason,channel,actor_auth_version,operation_id,case_id,permit_id,case_event_key,details_json) VALUES (gen_random_uuid(),gen_random_uuid(),'Fixture','[]','DELIVERY_PERMIT_CONSUMED','billing-service','financial_documents','fixture-doc','Verified fixture request','WEB',1,gen_random_uuid(),'"+case+"','"+permit+"','"+event_key+"','"+details+"');"
+                    run(psql,consume_sql('consume-1'))
+                    duplicate=subprocess.run(psql,input=consume_sql('consume-2'),text=True,capture_output=True)
+                    if duplicate.returncode==0 or 'admin_audit_permit_consumed_unique' not in duplicate.stderr:raise AssertionError('Archive duplicate permit consumption admitted: '+duplicate.stderr[-1000:])
+                    mutate=subprocess.run(psql,input="UPDATE taska.admin_audit_log SET reason='Changed' WHERE permit_id='"+permit+"';",text=True,capture_output=True)
+                    if mutate.returncode==0 or 'immutable policy evidence bundle' not in mutate.stderr:raise AssertionError('Archive consume receipt mutation admitted')
                 if owner=='project-service':
                     psql=['docker','exec','-i',name,'psql','-X','-A','-t','-v','ON_ERROR_STOP=1','-U','postgres','-d',db]
                     tenant_a='00000000-0000-0000-0000-000000000001';tenant_b='00000000-0000-0000-0000-000000000002'
@@ -219,7 +283,7 @@ def verify_target(model, postgres=False):
                     admin=run(psql,"SET ROLE taska_project_admin; BEGIN; SET LOCAL app.tenant_id='"+tenant_b+"'; SELECT count(*) FROM taska.projects; COMMIT; SELECT count(*) FROM taska.projects;")
                     if admin.splitlines()[-1]!='0':raise AssertionError('SET LOCAL tenant leaked after commit')
         finally:run(['docker','rm','-f',name])
-    return dict(existing_target_tables=len(model['existing_tables']),new_target_tables=len(model['new_tables']),target_ddl='PASS' if postgres else 'NOT_RUN',target_rls_probes=10 if postgres else 0,target_check_probes=8 if postgres else 0)
+    return dict(existing_target_tables=len(model['existing_tables']),new_target_tables=len(model['new_tables']),target_ddl='PASS' if postgres else 'NOT_RUN',target_rls_probes=10 if postgres else 0,target_check_probes=20 if postgres else 0,target_mutation_guard_probes=5 if postgres else 0,target_free_binding_probes=4 if postgres else 0,target_archive_consume_probes=3 if postgres else 0)
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--postgres',action='store_true');ap.add_argument('--write',action='store_true');ap.add_argument('--target-postgres',action='store_true'); args=ap.parse_args()

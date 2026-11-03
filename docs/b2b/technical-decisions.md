@@ -1,6 +1,6 @@
 # B2B: принятые технические решения
 
-Ревизия SA-2026-11-02. Это проектные решения аналитики, принятые в пределах поручения владельца о minor decisions. Они не изменяют D01–D249 и не подтверждают реализацию. Коммерческие факты, обязательные документы и сроки хранения не подменяются техническими defaults; их реестр — [commercial-decisions.md](commercial-decisions.md).
+Ревизия SA-2026-11-03. Это проектные решения аналитики, принятые в пределах поручения владельца о minor decisions. Они дополняют D01–D253 и не подтверждают реализацию. Решения владельца и делегированная retention policy — [commercial-decisions.md](commercial-decisions.md) / [retention-policy.md](retention-policy.md). Реальные реквизиты продавца/merchant не подменяются defaults.
 
 | ID | Решение | Причина / реализация |
 | --- | --- | --- |
@@ -26,7 +26,10 @@
 | T20 | Удаление account имеет admission fence в tenant-service | Оно блокирует гонку с назначением owner/last admin, затем auth tombstone и повторяемое revoke/cleanup. Удалённый автор выдаётся без старых PII snapshots. |
 | T21 | Локальный audit сохраняет actor/channel/grant/tenant/operation/reason/version/effect | Логировать identifiers и result, не raw tokens, OTP, полные банковские выписки/секреты и приватный текст. Административные bypass всегда различимы. |
 | T22 | Release checks и rehearsals реализуются как код/конфигурация | Manual sign-off — операционная процедура runbook; она не является задачей на аналитическое проектирование для разработчика. Отчёт имеет source SHA, environment, gate results; нет evidence → no-go. |
-| T23 | Live коммерческий профиль — versioned server configuration с readiness guard | Неизвестный PSP/merchant/tax/FX/retention не получает фиктивные значения. Fake provider разрешён в изолированном тестовом контуре; live actions требуют целостной конфигурации. |
+| T23 | Live коммерческий профиль — versioned server configuration с readiness guard | Stripe выбран D250, ES_V1 принят D253; неизвестные live merchant/tax/FX значения не получают фиктивные реквизиты. Fake provider разрешён в изолированном тестовом контуре; live actions требуют целостной конфигурации. |
 | T24 | Технические лимиты фоновой обработки конфигурируются отдельно от тарифов | Bounded pages/chunks, per-tenant fair queues и concurrency; 429/Retry-After для admission overload. Не объявлять числа бизнес-SLO без измерений. Safety caps не дают дополнительных тарифных прав. |
+| T25 | Банковский SLA WIRE_RETURN_ES_V1 использует versioned business calendar | 5 рабочих локальных дат Europe/Madrid, стартовая дата исключена; единый decision/send deadline. DST, timezone/calendar versions и hash snapshot фиксированы в C05, retries не сбрасывают срок. |
+| T26 | Retention ES_V1 разделяет purpose archive и statutory blocking | Рабочие данные30d, backup35d, financial6y с исключениями, audit/logs и FREE marker по отдельным основаниям. Проверка holds перед irreversible шагом, restore применяет tombstones до traffic. |
+| T27 | Финансовый документ после удаления выдаётся отдельным operator workflow | Проверенная личность/полномочия и конкретный document scope, короткая приватная доставка; deleted identity не восстанавливается, blocked profile не читается для поддержки. |
 
 Протокольные enum/field names и номера protobuf определяются машинными [контрактами](contracts/README.md). Если реализации требуется изменить контракт, изменить DTO, schema, алгоритм и связанные Jira acceptance вместе; не добавлять скрытый endpoint с другой моделью прав.

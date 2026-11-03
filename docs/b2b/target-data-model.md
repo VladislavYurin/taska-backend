@@ -1,6 +1,6 @@
 # Целевая модель данных Taska B2B — TAS-303
 
-**DESIGNED, не реализовано и не развёрнуто.** Baseline `af7ab57ead44304b89bbd47dabeeba45b761ce16`; бизнес-источник Confluence 60751880 v39, D01–D249. [Текущий реестр](data-inventory.md) содержит всю фактическую SQL-схему. [Полный target JSON](schemas/target-model.json) задаёт итоговые колонки/ограничения/индексы для **55 существующих и 65 новых таблиц**. Этот документ описывает решения и полный каталог новых сущностей; JSON нормативен для точных per-table полей/DDL.
+**DESIGNED, не реализовано и не развёрнуто.** Baseline `af7ab57ead44304b89bbd47dabeeba45b761ce16`; бизнес-источник Confluence 60751880 v42, D01–D253. [Текущий реестр](data-inventory.md) содержит всю фактическую SQL-схему. [Полный target JSON](schemas/target-model.json) задаёт итоговые колонки/ограничения/индексы для **55 существующих и 65 новых таблиц**. Этот документ описывает решения и полный каталог новых сущностей; JSON нормативен для точных per-table полей/DDL.
 
 ## Принятые технические решения
 
@@ -85,7 +85,9 @@
 
 ### tenant-service · taska.tenants
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate.
+Scope `TENANT`; retention `TENANT_WORKDATA`. RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -124,7 +126,9 @@ CHECK:
 
 ### tenant-service · taska.tenant_memberships
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Removed membership is tombstone; rejoin increments version. Owner and last active admin protected by tenant row lock, not partial UNIQUE. SUSPENDED consumes seat.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Removed membership is tombstone; rejoin increments version. Owner and last active admin protected by tenant row lock, not partial UNIQUE. SUSPENDED consumes seat.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -156,7 +160,9 @@ CHECK:
 
 ### tenant-service · taska.tenant_invitations
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. TTL snapshot default 7 days; hashing only, email canonicalization same as auth. Expiry process changes state before a replacement reservation is accepted.
+Scope `TENANT`; retention `TENANT_WORKDATA`. TTL snapshot default 7 days; hashing only, email canonicalization same as auth. Expiry process changes state before a replacement reservation is accepted.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -197,7 +203,9 @@ CHECK:
 
 ### tenant-service · taska.invitation_project_grants
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Project ID cross-service logical FK checked at issue and acceptance. Skipped grants never roll back accepted membership.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Project ID cross-service logical FK checked at issue and acceptance. Skipped grants never roll back accepted membership.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -221,7 +229,9 @@ CHECK:
 
 ### tenant-service · taska.tenant_restrictions
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Each source remains independent; clearing one dispute does not clear another or pause/block. Billing source event monotonic version guards stale delivery.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Each source remains independent; clearing one dispute does not clear another or pause/block. Billing source event monotonic version guards stale delivery.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -251,7 +261,9 @@ CHECK:
 
 ### tenant-service · taska.quota_counters
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked.
+Scope `TENANT`; retention `TENANT_WORKDATA`. scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -277,7 +289,9 @@ CHECK:
 
 ### tenant-service · taska.quota_reservations
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -317,7 +331,9 @@ CHECK:
 
 ### tenant-service · taska.quota_effects
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Permanent replay fence for applied resource effects. TASK_LIFETIME is not reserved or released here; tenant-service only receives a read projection.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Permanent replay fence for applied resource effects. TASK_LIFETIME is not reserved or released here; tenant-service only receives a read projection.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -344,24 +360,40 @@ CHECK:
 
 ### tenant-service · taska.free_eligibility_ledger
 
-Scope `GLOBAL`; retention `O09_FREE_MARKER_HOLD`. HMAC-SHA256(canonical verified email) under external secret key; never raw email. Atomic consume; check all accepted key versions, keep old keys available for lookup. No expiry implemented until O09 approves basis/retention; release gate, not silently approved indefinite personal-data retention.
+Scope `GLOBAL`; retention `FREE_ELIGIBILITY`. ES_V1 FREE_ELIGIBILITY: HMAC-SHA256 of canonical verified email under dedicated KMS key, no fingerprinting or cross-email inference. purpose_version and review_due_at freeze approved purpose assessment; annual review does not extend on lookup. Same live company FREE-paid-FREE keeps tenant binding. Paid owner transfer never rewrites/releases the previous identity marker: check current owner marker on later FREE selection (same company allow; unused consume; other company deny). Multiple identity markers may bind the same tenant: NO UNIQUE(bound_tenant_id). Account deletion may clear first_user_id while live tenant binding remains. Tenant deletion clears bound_tenant_id, first_user_id and operation_id on ALL matching rows; only digest/key version/consumed_at(published usedAt)/purpose_version/review_due_at remain. Upheld erasure or purpose end removes active matching; never reconstruct from backups/financial archives; overdue purpose review denies new FREE admission as POLICY_NOT_CONFIGURED. A legally blocked copy, if required by separately evidenced disposition, is outside this matching table and cannot be queried for FREE decisions.
+
+ES_V1 mapping: `FREE_ELIGIBILITY` / `free_live_company_binding`; field/purpose overrides — target JSON.
 
 Поля:
 
 - `email_digest` `bytea` NOT NULL
 - `digest_key_version` `integer` NOT NULL
-- `first_user_id` `uuid` NOT NULL
-- `bound_tenant_id` `uuid` NOT NULL
+- `first_user_id` `uuid` NULL
+- `bound_tenant_id` `uuid` NULL
 - `consumed_at` `timestamptz` NOT NULL
-- `operation_id` `uuid` NOT NULL
+- `operation_id` `uuid` NULL
+- `purpose_version` `text` NOT NULL
+- `review_due_at` `timestamptz` NOT NULL
 
 PK `(digest_key_version, email_digest)`.
 
 UNIQUE: `(operation_id)`.
 
+CHECK:
+
+- `bound_tenant_id IS NOT NULL OR (first_user_id IS NULL AND operation_id IS NULL)`.
+- `review_due_at>consumed_at`.
+
+Дополнительные indexes:
+
+- `(bound_tenant_id) WHERE bound_tenant_id IS NOT NULL`.
+- `(review_due_at,digest_key_version)`.
+
 ### tenant-service · taska.tenant_operations
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Payload schema keyed by kind in state-machine doc; no credentials or private message bodies. Original actor/grant retained; job revalidates current authority when operation requires it.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Payload schema keyed by kind in state-machine doc; no credentials or private message bodies. Original actor/grant retained; job revalidates current authority when operation requires it.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -399,7 +431,9 @@ CHECK:
 
 ### tenant-service · taska.tenant_deletion_steps
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -431,7 +465,9 @@ CHECK:
 
 ### tenant-service · taska.tenant_exports
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Authorize snapshot generation and download with current ACL; financial and credential material excluded. Artifact expiry 24h technical default; irreversible tenant financial data retention separate O09.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Authorize snapshot generation and download with current ACL; financial and credential material excluded. Artifact expiry 24h technical default; irreversible tenant financial data retention separate O09.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_workfiles`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -471,6 +507,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `PLATFORM_CONFIGURATION`. Only explicit registry keys, typed value validation. JSON only for versioned MERCHANT_CONFIGURATION, RETENTION_POLICY, SETTLEMENT_POLICY schemas with readiness, unresolved decision IDs and secret refs; unset critical values never enable final actions. No tenant overrides. See root registry for defaults/ranges.
 
+ES_V1 mapping: `NON_PERSONAL_CONFIGURATION` / `active/referenced configuration`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `key` `text` NOT NULL
@@ -496,6 +534,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `CATALOG_HISTORY`. Stable product identity; no deletion referenced by snapshots.
 
+ES_V1 mapping: `NON_PERSONAL_CONFIGURATION` / `active/referenced configuration`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `plan_code` `text` NOT NULL
@@ -507,6 +547,8 @@ PK `(plan_code)`.
 ### billing-service · taska.catalog_plan_versions
 
 Scope `GLOBAL`; retention `CATALOG_HISTORY`. Immutable after publication; NULL max_tasks means unlimited paid task cap, usage still counted. Fixed company price, not seats.
+
+ES_V1 mapping: `NON_PERSONAL_CONFIGURATION` / `active/referenced configuration`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -542,7 +584,9 @@ CHECK:
 
 ### billing-service · taska.subscriptions
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Current entitlement pointer is not full payment history. No implicit FREE fallback. Calendar retains original day through short months.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Current entitlement pointer is not full payment history. No implicit FREE fallback. Calendar retains original day through short months.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -571,7 +615,9 @@ CHECK:
 
 ### billing-service · taska.subscription_periods
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Period immutable times/terms. Status is GRANTED/REVOKED/SUPERSEDED; future/active/expired are computed from UTC timestamps, never scheduler freshness. Historical overlapping paid periods allowed on immediate downgrade; entitlement selects current non-superseded coverage. Do not EXCLUDE all overlap.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Period immutable times/terms. Status is GRANTED/REVOKED/SUPERSEDED; future/active/expired are computed from UTC timestamps, never scheduler freshness. Historical overlapping paid periods allowed on immediate downgrade; entitlement selects current non-superseded coverage. Do not EXCLUDE all overlap.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -608,7 +654,9 @@ CHECK:
 
 ### billing-service · taska.invoices
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. All financial snapshots immutable after issue; state is projection. Seller/tax/legal numbering content remains O08, explicit schemas in contracts; fake issuer is test-only. Receipt timing determines timeliness. method enum uses canonical WIRE/PSP. PARTIALLY_PAID reflects eligible unmatched coverage candidates in invoice_payment_matches, not final allocations.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. All financial snapshots immutable after issue; state is projection. Seller/tax/legal numbering content remains O08, explicit schemas in contracts; fake issuer is test-only. Receipt timing determines timeliness. method enum uses canonical WIRE/PSP. PARTIALLY_PAID reflects eligible unmatched coverage candidates in invoice_payment_matches, not final allocations.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -660,7 +708,9 @@ CHECK:
 
 ### billing-service · taska.invoice_lines
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. All lines same invoice currency/exponent; no float amounts.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. All lines same invoice currency/exponent; no float amounts.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -686,7 +736,9 @@ CHECK:
 
 ### billing-service · taska.payment_facts
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Append-only verified normalized money movement, not webhook receipt. Bank occurred_at is statement receipt; verified_at is admin confirmation. Provider evidence held privately; no raw payload in Kafka. External partial facts always recorded. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary. observed_at is ingress observation, verified_at maps to DTO confirmedAt; neither substitutes financial occurredAt for timeliness. PSP exact occurrence comes from provider status; unresolved unknown-payer WIRE stays in unmatched_bank_receipts until verified.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Append-only verified normalized money movement, not webhook receipt. Bank occurred_at is statement receipt; verified_at is admin confirmation. Provider evidence held privately; no raw payload in Kafka. External partial facts always recorded. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary. observed_at is ingress observation, verified_at maps to DTO confirmedAt; neither substitutes financial occurredAt for timeliness. PSP exact occurrence comes from provider status; unresolved unknown-payer WIRE stays in unmatched_bank_receipts until verified.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -738,7 +790,9 @@ CHECK:
 
 ### billing-service · taska.payment_allocations
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Locked invoice + fact enforce SUM allocation <= verified positive amount and invoice total. Refunds do not edit immutable original allocation. Same-currency only; no silent FX on allocation. Insert allocations only when effective matched sum equals invoice total and every source is eligible. One allocation per match with identical invoice/source/amount; enforce via ordered aggregate locks plus owner DB guard trigger. Allocation + PAID invoice + period + outbox commit atomically. matched amount is not added again to allocated amount in conservation equations. eligibility_evidence is immutable VerifiedPaymentEligibility snapshot: original factId, optional selected refinement evidenceId, canonical occurred precision/time or range, verifiedBy/confirmedAt, applicable invoice/deadline and decisionCode; no raw bank documents.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Locked invoice + fact enforce SUM allocation <= verified positive amount and invoice total. Refunds do not edit immutable original allocation. Same-currency only; no silent FX on allocation. Insert allocations only when effective matched sum equals invoice total and every source is eligible. One allocation per match with identical invoice/source/amount; enforce via ordered aggregate locks plus owner DB guard trigger. Allocation + PAID invoice + period + outbox commit atomically. matched amount is not added again to allocated amount in conservation equations. eligibility_evidence is immutable VerifiedPaymentEligibility snapshot: original factId, optional selected refinement evidenceId, canonical occurred precision/time or range, verifiedBy/confirmedAt, applicable invoice/deadline and decisionCode; no raw bank documents.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -774,7 +828,9 @@ CHECK:
 
 ### billing-service · taska.refunds
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Subscription amount must equal full original covered amount, no arbitrary partial product refund. Aggregate lock prevents initiating refund beyond currently available principal; externally confirmed over-return facts are still recorded, never rejected or silently clipped, and enter manual reconciliation. Confirmation fact alone triggers financial effect; O04 controls unresolved manual outcomes. kind exactly matches REST/proto SUBSCRIPTION_FULL/UNALLOCATED_RETURN; detailed accepted case is reason_code, not a second kind vocabulary. SUBSCRIPTION_FULL equals full original covered amount; a prior external partial return requires settlement review and cannot silently create a partial product refund. UNALLOCATED_RETURN includes only principal never covered by a final payment_allocation.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Subscription amount must equal full original covered amount, no arbitrary partial product refund. Aggregate lock prevents initiating refund beyond currently available principal; externally confirmed over-return facts are still recorded, never rejected or silently clipped, and enter manual reconciliation. Confirmation fact alone triggers financial effect. Owner decisions of 2026-11-03 fix final partial-chargeback outcome and WIRE return SLA; missing/inconsistent evidence alone still requires reconciliation. kind exactly matches REST/proto SUBSCRIPTION_FULL/UNALLOCATED_RETURN; detailed accepted case is reason_code, not a second kind vocabulary. SUBSCRIPTION_FULL equals full original covered amount; a confirmed final partial chargeback revokes only linked coverage and creates no further refund intent; other ambiguous external evidence requires reconciliation and cannot create a partial product refund. UNALLOCATED_RETURN includes only principal never covered by a final payment_allocation. WIRE evidence_completed_at is the first accepted complete verified dossier; freeze WIRE_RETURN_ES_V1, business_calendar_id/version/digest, typed sla_snapshot, one decision_due_at=send_due_at and fee_bearer=TASKA atomically. Count five eligible Europe/Madrid dates after the evidence local date at the same local wall time; Mon-Fri minus versioned Spain national and seller regional/local bank holidays. DST gap uses NEXT_VALID_INSTANT; overlap LATER_OFFSET. Retry, assignee change, later calendar publication or a new evidence request never restarts the deadline. No automatic approval/submission/confirmation at SLA expiry. decided_at/submitted_at record actual events even when late; submitted_at means verified outgoing instruction acceptance, may remain NULL for UNKNOWN. outbound_fee_minor/currency is Taska expense separately evidenced, never deducted from refund amount_minor principal. Actual live calendar is provisioned with seller/Stripe merchant profile; synthetic calendar is sandbox-only. WIRE fee_bearer=TASKA is mandatory from initial request, before complete evidence; it never waits for SLA admission. PSP has no WIRE SLA bundle.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -792,6 +848,19 @@ Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Subscription amount must e
 - `reason_code` `text` NOT NULL
 - `created_at` `timestamptz` NOT NULL
 - `updated_at` `timestamptz` NOT NULL
+- `source_method` `text` NOT NULL
+- `evidence_completed_at` `timestamptz` NULL
+- `business_calendar_id` `text` NULL
+- `calendar_version` `text` NULL
+- `sla_policy_version` `text` NULL
+- `sla_snapshot` `jsonb` NULL
+- `decision_due_at` `timestamptz` NULL
+- `send_due_at` `timestamptz` NULL
+- `decided_at` `timestamptz` NULL
+- `submitted_at` `timestamptz` NULL
+- `fee_bearer` `text` NULL
+- `outbound_fee_minor` `bigint` NULL
+- `outbound_fee_currency` `char(3)` NULL
 
 PK `(id)`.
 
@@ -810,14 +879,28 @@ CHECK:
 - `kind IN ('SUBSCRIPTION_FULL','UNALLOCATED_RETURN')`.
 - `reason_code IN ('BILLING_ERROR','SERVICE_FAILURE','MANDATORY','EXCESS','LATE_FIRST_PAYMENT','CLOSED_CREATION','INCOMPLETE_BANK_PAYMENT','DUPLICATE_PAYMENT')`.
 - `(kind='SUBSCRIPTION_FULL' AND reason_code IN ('BILLING_ERROR','SERVICE_FAILURE','MANDATORY')) OR (kind='UNALLOCATED_RETURN' AND reason_code IN ('EXCESS','LATE_FIRST_PAYMENT','CLOSED_CREATION','INCOMPLETE_BANK_PAYMENT','DUPLICATE_PAYMENT'))`.
+- `source_method IN ('PSP','WIRE')`.
+- `source_method<>'WIRE' OR state NOT IN ('APPROVED','SUBMITTING','UNKNOWN','CONFIRMED') OR evidence_completed_at IS NOT NULL`.
+- `sla_policy_version IS NULL OR sla_policy_version='WIRE_RETURN_ES_V1'`.
+- `decision_due_at IS NULL OR (decision_due_at=send_due_at AND decision_due_at>evidence_completed_at)`.
+- `(source_method='WIRE' AND fee_bearer IS NOT NULL AND fee_bearer='TASKA') OR (source_method='PSP' AND fee_bearer IS NULL)`.
+- `(evidence_completed_at IS NULL AND business_calendar_id IS NULL AND calendar_version IS NULL AND sla_policy_version IS NULL AND sla_snapshot IS NULL AND decision_due_at IS NULL AND send_due_at IS NULL) OR (source_method='WIRE' AND evidence_completed_at IS NOT NULL AND business_calendar_id IS NOT NULL AND calendar_version IS NOT NULL AND sla_policy_version IS NOT NULL AND sla_snapshot IS NOT NULL AND decision_due_at IS NOT NULL AND send_due_at IS NOT NULL)`.
+- `(outbound_fee_minor IS NULL AND outbound_fee_currency IS NULL) OR (outbound_fee_minor IS NOT NULL AND outbound_fee_minor>=0 AND outbound_fee_currency IS NOT NULL)`.
+- `sla_snapshot IS NULL OR (jsonb_typeof(sla_snapshot)='object' AND sla_snapshot ?& ARRAY['businessDays','feeBearer','countingRule','timezone','excludeEvidenceDate','dstGapRule','dstOverlapRule','calendarDigest'] AND sla_snapshot - ARRAY['businessDays','feeBearer','countingRule','timezone','excludeEvidenceDate','dstGapRule','dstOverlapRule','calendarDigest'] = '{}'::jsonb AND sla_snapshot @> '{"businessDays":5,"feeBearer":"TASKA","countingRule":"T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME","timezone":"Europe/Madrid","excludeEvidenceDate":true,"dstGapRule":"NEXT_VALID_INSTANT","dstOverlapRule":"LATER_OFFSET"}'::jsonb AND jsonb_typeof(sla_snapshot->'calendarDigest')='string' AND sla_snapshot->>'calendarDigest' ~ '^[0-9a-f]{64}$')`.
 
 Дополнительные indexes:
 
 - `(tenant_id,source_payment_fact_id,state)`.
+- `(tenant_id,decision_due_at,id) WHERE source_method='WIRE' AND evidence_completed_at IS NOT NULL AND decided_at IS NULL`.
+- `(tenant_id,send_due_at,id) WHERE source_method='WIRE' AND evidence_completed_at IS NOT NULL AND submitted_at IS NULL AND state NOT IN ('REJECTED','CONFIRMED')`.
+
+Frozen SLA guard: `source_method` и `fee_bearer` неизменяемы с создания; после первого полного `evidence_completed_at` весь SLA bundle неизменяем, включая попытку очистить его. SQLSTATE23514. Смена assignment/retry/calendar не сдвигает clock.
 
 ### billing-service · taska.disputes
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Confirmed final provider version only; partial loss remains manual review and financial restriction; resolving does not restore old mandate.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Confirmed final provider resolution only. WON and WITHDRAWN_CONFIRMED preserve the original period remainder without creating a new period; no new money fact is required when funds never left. LOST_FULL_REFUND and LOST_PARTIAL_COVERAGE_REVOKED persist state LOST and require verified linked monetary loss fact. Final partial chargeback revokes only coverage backed by that source payment; independent current coverage survives. It creates no additional outgoing refund/return intent. Regaining paid coverage requires a new full payment and full month (PSP success / WIRE admin confirmation); no partial top-up obligation. Old autopay mandate remains revoked; new owner consent required. NEEDS_REVIEW is transient for absent/inconsistent evidence, never the final policy for an already confirmed partial loss. closed_at maps to resolvedAt. Resolution evidence and final_outcome are immutable once accepted; later duplicate/out-of-order provider events cannot replace a newer terminal decision. Owner transaction verifies confirmed money kind/currency/amount and source linkage; simple FK alone does not prove a partial chargeback.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -832,6 +915,10 @@ Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Confirmed final provider v
 - `version` `bigint` NOT NULL
 - `opened_at` `timestamptz` NOT NULL
 - `closed_at` `timestamptz` NULL
+- `final_outcome` `text` NULL
+- `resolution_evidence_ref` `text` NULL
+- `resolution_evidence_digest` `bytea` NULL
+- `resolution_verified_at` `timestamptz` NULL
 
 PK `(id)`.
 
@@ -846,6 +933,10 @@ CHECK:
 
 - `state IN ('OPEN','WON','LOST','WITHDRAWN','NEEDS_REVIEW')`.
 - `amount_minor>0 AND version>0`.
+- `final_outcome IS NULL OR final_outcome IN ('WON','WITHDRAWN_CONFIRMED','LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED')`.
+- `final_outcome IS NULL OR (resolution_evidence_ref IS NOT NULL AND resolution_evidence_digest IS NOT NULL AND resolution_verified_at IS NOT NULL)`.
+- `final_outcome NOT IN ('LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED') OR confirmed_money_fact_id IS NOT NULL`.
+- `(state IN ('OPEN','NEEDS_REVIEW') AND final_outcome IS NULL AND closed_at IS NULL) OR (final_outcome IS NOT NULL AND closed_at IS NOT NULL AND ((state='WON' AND final_outcome='WON') OR (state='WITHDRAWN' AND final_outcome='WITHDRAWN_CONFIRMED') OR (state='LOST' AND final_outcome IN ('LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED'))))`.
 
 Дополнительные indexes:
 
@@ -853,7 +944,9 @@ CHECK:
 
 ### billing-service · taska.payment_methods
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Opaque provider references, no PAN/CVV/bank secret. Owner transfer revokes linkage for new charges.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Opaque provider references, no PAN/CVV/bank secret. Owner transfer revokes linkage for new charges.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -877,7 +970,9 @@ CHECK:
 
 ### billing-service · taska.autopay_mandates
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. No SUSPENDED->ACTIVE reactivation: transfer/dispute/refund revocation needs new mandate/consent. Pause flags stop new attempts; accepted attempt reconciles. Immutable consent snapshot conforms to transport ConsentSnapshot: exact consent wording/template revision and accepted configuration, terms version, channel, owner version and consented_at; live owner_id AND owner_version checked before each new dispatch. A transfer increments owner_version in the same tenant transaction.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. No SUSPENDED->ACTIVE reactivation: transfer/dispute/refund revocation needs new mandate/consent. Pause flags stop new attempts; accepted attempt reconciles. Immutable consent snapshot conforms to transport ConsentSnapshot: exact consent wording/template revision and accepted configuration, terms version, channel, owner version and consented_at; live owner_id AND owner_version checked before each new dispatch. A transfer increments owner_version in the same tenant transaction.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -916,7 +1011,9 @@ CHECK:
 
 ### billing-service · taska.payment_attempts
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. UNKNOWN is reconciled by provider idempotency key before another attempt. Redirect is never confirmation.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. UNKNOWN is reconciled by provider idempotency key before another attempt. Redirect is never confirmation.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -950,7 +1047,9 @@ CHECK:
 
 ### billing-service · taska.entitlement_snapshots
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Immutable output version; not actor capabilities. Limit cache keyed tenant+version; validity reevaluated by clock even without event.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Immutable output version; not actor capabilities. Limit cache keyed tenant+version; validity reevaluated by clock even without event.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -985,7 +1084,9 @@ CHECK:
 
 ### billing-service · taska.change_notices
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Countdown starts only after durable inbox-created receipt, not queued event/email attempt/read. Email retries independent. FREE effective time direct; paid first anchor boundary after warning.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Countdown starts only after durable inbox-created receipt, not queued event/email attempt/read. Email retries independent. FREE effective time direct; paid first anchor boundary after warning.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1020,7 +1121,9 @@ CHECK:
 
 ### billing-service · taska.settlement_cases
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. O04 unsupported resolutions remain WAITING_EVIDENCE with policy_version NULL; normalized facts never discarded. D236/D237 allocation and excess tracked separately. evidence_log is append-only FinancialEvidenceRefinement[]; each entry has evidenceId/sourceFactId/evidenceRef/digest/occurredPrecision/occurredAt or bounds/payerRef/verifiedBy/verifiedAt. Existing prefix cannot be edited or removed (DB guard trigger). It refines knowledge about one monetary fact, never creates another movement. Command dedupes evidenceId and stores immutable canonical digest; precise supplemental evidence does not overwrite original DAY fact. Confirm uses selected verified evidenceId and freezes its eligibility snapshot in final allocation.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Absent/inconsistent evidence remains WAITING_EVIDENCE; normalized facts are never discarded. The accepted 2026-11-03 final partial chargeback outcome is LOST_PARTIAL_COVERAGE_REVOKED: apply linked coverage revocation and resolve the case without initiating another outgoing refund. Bank return service deadline follows frozen WIRE_RETURN_ES_V1; C03/C05 are no longer unresolved owner-policy gates. D236/D237 allocation and excess tracked separately. evidence_log is append-only FinancialEvidenceRefinement[]; each entry has evidenceId/sourceFactId/evidenceRef/digest/occurredPrecision/occurredAt or bounds/payerRef/verifiedBy/verifiedAt. Existing prefix cannot be edited or removed (DB guard trigger). It refines knowledge about one monetary fact, never creates another movement. Command dedupes evidenceId and stores immutable canonical digest; precise supplemental evidence does not overwrite original DAY fact. Confirm uses selected verified evidenceId and freezes its eligibility snapshot in final allocation.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1057,7 +1160,9 @@ CHECK:
 
 ### billing-service · taska.unmatched_bank_receipts
 
-Scope `GLOBAL_FINANCIAL`; retention `O09_FINANCIAL_AUDIT_HOLD`. Unmatched receipt cannot invent tenant_id. Admin-only intake; assignment is audited and creates one verified tenant payment fact, preserving global dedupe. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary.
+Scope `GLOBAL_FINANCIAL`; retention `FINANCIAL_RECORD`. Unmatched receipt cannot invent tenant_id. Admin-only intake; assignment is audited and creates one verified tenant payment fact, preserving global dedupe. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1097,7 +1202,9 @@ CHECK:
 
 ### billing-service · taska.provider_inbox
 
-Scope `GLOBAL_FINANCIAL`; retention `O09_FINANCIAL_AUDIT_HOLD`. Authenticated transport inbox is not payment fact. Private encrypted raw payload object, bounded access, retention O09; outbox carries normalized safe references.
+Scope `GLOBAL_FINANCIAL`; retention `FINANCIAL_RECORD`. Authenticated transport inbox is not payment fact. Private encrypted raw payload object, bounded access, retention O09; outbox carries normalized safe references.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1126,6 +1233,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `CATALOG_HISTORY`. EUR source price; rate and final rounding snapshotted in invoice. Provider/source/currency launch list O08. HALF_UP once on final invoice minor amount. No floating point.
 
+ES_V1 mapping: `NON_PERSONAL_CONFIGURATION` / `active/referenced configuration`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1151,6 +1260,8 @@ CHECK:
 
 Scope `TENANT`; retention `IDEMPOTENCY_RESPONSE_TTL`. 24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1174,6 +1285,8 @@ CHECK:
 ### tenant-service · taska.outbox_events
 
 Scope `TENANT`; retention `OUTBOX_REPLAY_SAFETY`. Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1210,6 +1323,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `OUTBOX_REPLAY_SAFETY`. Only catalog/config/identity-free aggregate data; no tenant business payload.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1240,6 +1355,8 @@ CHECK:
 
 Scope `TENANT`; retention `OUTBOX_REPLAY_SAFETY`. Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1253,6 +1370,8 @@ PK `(tenant_id, consumer, event_id)`.
 ### billing-service · taska.idempotency_records
 
 Scope `TENANT`; retention `IDEMPOTENCY_RESPONSE_TTL`. 24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1277,6 +1396,8 @@ CHECK:
 ### billing-service · taska.outbox_events
 
 Scope `TENANT`; retention `OUTBOX_REPLAY_SAFETY`. Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1313,6 +1434,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `OUTBOX_REPLAY_SAFETY`. Only catalog/config/identity-free aggregate data; no tenant business payload.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1343,6 +1466,8 @@ CHECK:
 
 Scope `TENANT`; retention `OUTBOX_REPLAY_SAFETY`. Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1355,7 +1480,9 @@ PK `(tenant_id, consumer, event_id)`.
 
 ### billing-service · taska.billing_operations
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Permanent settlement/renewal/refund identity; deterministic keys for scheduler period+purpose. No actor nullable for manual action; nullable only verified provider/scheduler subject.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Permanent settlement/renewal/refund identity; deterministic keys for scheduler period+purpose. No actor nullable for manual action; nullable only verified provider/scheduler subject.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1390,6 +1517,8 @@ CHECK:
 
 Scope `GLOBAL_ACCOUNT`; retention `SESSION_SECURITY`. Admin web session only after email MFA; session claim does not replace current global-role check.
 
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1423,6 +1552,8 @@ CHECK:
 
 Scope `GLOBAL_ACCOUNT`; retention `SESSION_SECURITY`. Opaque independent context per tab; no single selectedTenant field on global user/session. Tenant membership logical RPC reference.
 
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1454,6 +1585,8 @@ CHECK:
 ### auth-service · taska.integration_grants
 
 Scope `GLOBAL_ACCOUNT`; retention `SESSION_SECURITY`. ONE_TENANT only for ordinary integrations; ADMIN PLATFORM required for global account actions, live role check mandatory. permissions from allowlist, widening fresh explicit consent.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1493,6 +1626,8 @@ CHECK:
 
 Scope `GLOBAL_ACCOUNT`; retention `SESSION_SECURITY`. Only TENANT_SET grant; service transaction validates nonempty set and type, never ordinary USER. Target tenants logical cross-service refs.
 
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `grant_id` `uuid` NOT NULL
@@ -1511,6 +1646,8 @@ PK `(grant_id, tenant_id)`.
 ### auth-service · taska.confirmation_challenges
 
 Scope `GLOBAL_ACCOUNT`; retention `SHORT_LIVED_SECRET`. 10min absolute TTL, 5 attempts, resend every 60s maximum 3 without extending expiry; eight-digit random code stored HMAC with per-challenge salt outside plaintext. Deletion purpose/target/version distinct; transfer/bank-confirm/refund do not use OTP.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1551,7 +1688,9 @@ CHECK:
 
 ### auth-service · taska.account_deletion_operations
 
-Scope `GLOBAL_ACCOUNT`; retention `O09_IDENTITY_HOLD`. Auth/tenant deletion lock prevents concurrent owner/last-admin assignments; repeat owner/last-admin preconditions before irreversible execution. Preserve global tombstone author ID and mask snapshots.
+Scope `GLOBAL_ACCOUNT`; retention `PRIVACY_CASE`. Auth/tenant deletion lock prevents concurrent owner/last-admin assignments; repeat owner/last-admin preconditions before irreversible execution. Preserve global tombstone author ID and mask snapshots.
+
+ES_V1 mapping: `PRIVACY_CASE` / `deletion_evidence`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1583,6 +1722,8 @@ CHECK:
 ### auth-service · taska.avatar_object_manifest
 
 Scope `GLOBAL_ACCOUNT`; retention `OBJECT_LIFECYCLE`. Not tenant quota; avatars/{userId}/{objectId}. Replacement marks old object for durable deletion; account FK is RESTRICT until manifest/tombstone lifecycle resolved. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_user_avatars`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1630,6 +1771,8 @@ CHECK:
 
 Scope `GLOBAL`; retention `PLATFORM_CONFIGURATION`. Read-only published graph schema contains status keys/categories, transition endpoints, validator rules. Instantiate new tenant/project rows; no runtime FK to another tenant graph.
 
+ES_V1 mapping: `NON_PERSONAL_CONFIGURATION` / `active/referenced configuration`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `id` `uuid` NOT NULL
@@ -1650,7 +1793,9 @@ CHECK:
 
 ### project-service · taska.resource_operation_receipts
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1675,7 +1820,9 @@ CHECK:
 
 ### issue-service · taska.resource_operation_receipts
 
-Scope `TENANT`; retention `TENANT_LIFECYCLE`. Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.
+Scope `TENANT`; retention `TENANT_WORKDATA`. Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1701,6 +1848,8 @@ CHECK:
 ### issue-service · taska.attachment_object_manifest
 
 Scope `TENANT`; retention `OBJECT_LIFECYCLE`. tenant/{tenantId}/project/{projectId}/issue/{issueId}/{objectId}; HEAD confirms actual bytes/MIME; usage released only by idempotent confirmed object deletion effect, no negative quota after failed S3 delete. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_workfiles`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1752,7 +1901,9 @@ CHECK:
 
 ### notification-service · taska.account_notification_settings
 
-Scope `GLOBAL_ACCOUNT`; retention `GLOBAL_ACCOUNT`. Global contact binding, consent/version; ordinary task opt-ins are per tenant in notification_preferences. Mandatory security channels separate.
+Scope `GLOBAL_ACCOUNT`; retention `DELETED_PROFILE`. Global contact binding, consent/version; ordinary task opt-ins are per tenant in notification_preferences. Mandatory security channels separate.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1774,7 +1925,9 @@ UNIQUE: `(telegram_chat_id)`; `(telegram_user_id)`.
 
 ### notification-service · taska.account_notifications
 
-Scope `GLOBAL_ACCOUNT`; retention `GLOBAL_ACCOUNT`. Account security only; no tenant task/project/financial payload.
+Scope `GLOBAL_ACCOUNT`; retention `DELETED_PROFILE`. Account security only; no tenant task/project/financial payload.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1798,6 +1951,8 @@ UNIQUE: `(user_id, source_event_id)`.
 ### notification-service · taska.account_message_deliveries
 
 Scope `GLOBAL_ACCOUNT`; retention `SHORT_LIVED_SECRET`. Global registration/MFA/deletion code delivery. secret_ref retrieved only by authorized sender; expiry destroys secret even if retry remains.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1832,6 +1987,8 @@ CHECK:
 
 Scope `GLOBAL_ACCOUNT`; retention `OUTBOX_REPLAY_SAFETY`. Explicit account event scope; never fallback sink for missing tenant IDs.
 
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `consumer` `text` NOT NULL
@@ -1843,6 +2000,8 @@ PK `(consumer, event_id)`.
 ### project-service · taska.tenant_work_partitions
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1866,6 +2025,8 @@ CHECK:
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1887,6 +2048,8 @@ CHECK:
 ### issue-service · taska.tenant_work_partitions
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1910,6 +2073,8 @@ CHECK:
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1931,6 +2096,8 @@ CHECK:
 ### tenant-service · taska.tenant_work_partitions
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
+
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1954,6 +2121,8 @@ CHECK:
 
 Scope `SYSTEM`; retention `SYSTEM_CONFIGURATION`. Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.
 
+ES_V1 mapping: `TENANT_WORKDATA` / `tenant_tasks_comments_history`; field/purpose overrides — target JSON.
+
 Поля:
 
 - `tenant_id` `uuid` NOT NULL
@@ -1974,7 +2143,9 @@ CHECK:
 
 ### tenant-service · taska.account_offboarding
 
-Scope `GLOBAL_ACCOUNT`; retention `O09_IDENTITY_HOLD`. Admission barrier inside membership owner DB. All ownership/last-admin relevant commands acquire this user guard in sorted user-ID order before tenant lock; absent guard inserted idempotently and locked. Deletion sets ADMISSION_CLOSED before checking all memberships; owner assignment cannot race. Global account restriction bypass per D249 does not bypass this integrity fence. Every leave/remove/suspend/demotion command also locks the tenant and computes surviving ACTIVE TENANT_ADMIN users excluding guards in ADMISSION_CLOSED/REMOVING_MEMBERSHIPS/COMPLETED. This prevents another administrator leaving after deletion precheck and making the deleting user last-admin. Count runs after tenant lock on a fresh READ COMMITTED statement; guard creation/admission close precedes deletion membership prechecks.
+Scope `GLOBAL_ACCOUNT`; retention `DELETED_PROFILE`. Admission barrier inside membership owner DB. All ownership/last-admin relevant commands acquire this user guard in sorted user-ID order before tenant lock; absent guard inserted idempotently and locked. Deletion sets ADMISSION_CLOSED before checking all memberships; owner assignment cannot race. Global account restriction bypass per D249 does not bypass this integrity fence. Every leave/remove/suspend/demotion command also locks the tenant and computes surviving ACTIVE TENANT_ADMIN users excluding guards in ADMISSION_CLOSED/REMOVING_MEMBERSHIPS/COMPLETED. This prevents another administrator leaving after deletion precheck and making the deleting user last-admin. Count runs after tenant lock on a fresh READ COMMITTED statement; guard creation/admission close precedes deletion membership prechecks.
+
+ES_V1 mapping: `DELETED_PROFILE` / `deleted_account_profile`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -1997,7 +2168,9 @@ CHECK:
 
 ### tenant-service · taska.retention_holds
 
-Scope `GLOBAL_CONTROL`; retention `O09_FINANCIAL_AUDIT_HOLD`. Explicit global retention control plane; no nullable tenant inference. Record/policy unresolved means physical purge blocked. Deletion step captures policy/hold versions and admission permit before irreversible execution; new hold prevents subsequent unaccepted steps. Already accepted irreversible step reported truthfully, never promised reversible by late hold. Held artifacts remain unavailable to ordinary tenant/user API.
+Scope `GLOBAL_CONTROL`; retention `PRIVACY_CASE`. ES_V1 scoped hold control plane, not an authorization grant. record_refs is a nonempty typed allowlist of exact owner/dataset/record or object-version references; no wildcard tenant dump or whole-backup hold. case_owner_ref and legal_basis identify accountable purpose, review_at at most 90 days after created_at/latest real review. Overdue keeps data restricted and escalates; it never auto-releases. Hold changes and irreversible purge admission serialize per referenced record; release is explicit authorized append-only case receipt, does not restart the original retention clock and cannot recover destroyed data. case_closed_at anchors minimal hold metadata retention under PRIVACY_CASE (case closure+3 calendar years), subject to evidenced legal extension. policy_version references ES_V1 configuration revision, not a mutable field inside financial facts.
+
+ES_V1 mapping: `PRIVACY_CASE` / `deletion_evidence`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -2014,16 +2187,28 @@ Scope `GLOBAL_CONTROL`; retention `O09_FINANCIAL_AUDIT_HOLD`. Explicit global re
 - `created_at` `timestamptz` NOT NULL
 - `resolved_by` `uuid` NULL
 - `resolved_at` `timestamptz` NULL
+- `case_id` `uuid` NOT NULL
+- `record_refs` `jsonb` NOT NULL
+- `legal_basis` `text[]` NOT NULL
+- `case_owner_ref` `text` NOT NULL
+- `last_reviewed_at` `timestamptz` NULL
+- `review_at` `timestamptz` NOT NULL
+- `case_closed_at` `timestamptz` NULL
 
 PK `(id)`.
 
-UNIQUE: `(subject_kind, subject_id, owner_service, reason_code)`.
+UNIQUE: `(case_id, subject_kind, subject_id, owner_service, reason_code)`.
 
 CHECK:
 
 - `subject_kind IN ('TENANT','ACCOUNT','FINANCIAL_FACT','AUDIT','FREE_MARKER')`.
 - `state IN ('ACTIVE','RESOLVED')`.
 - `version>0`.
+- `jsonb_typeof(record_refs)='array' AND jsonb_array_length(record_refs)>0`.
+- `cardinality(legal_basis)>0`.
+- `length(btrim(case_owner_ref))>0`.
+- `review_at>COALESCE(last_reviewed_at,created_at) AND review_at<=COALESCE(last_reviewed_at,created_at)+INTERVAL '90 days'`.
+- `state<>'RESOLVED' OR (resolved_by IS NOT NULL AND resolved_at IS NOT NULL)`.
 
 Дополнительные indexes:
 
@@ -2031,7 +2216,9 @@ CHECK:
 
 ### billing-service · taska.invoice_payment_matches
 
-Scope `TENANT`; retention `O09_FINANCIAL_AUDIT_HOLD`. Append-only matching of one verified receipt to at most one invoice. Not final allocation, not paid coverage. Under ordered source/invoice locks, match min(unmatched available source amount, remaining invoice total); sum matches <= invoice total and each source amount. Match is permanent even after return; refund state excludes returned amounts from pending payable balance. Partial matched receipt remains unallocated principal until all invoice matches cover total. At expiry all matched-but-unallocated principal becomes RETURN_REQUIRED; excess never advances a future invoice. Matching an incorrect invoice is not edited in place: unresolved mistake enters settlement review, original evidence preserved.
+Scope `TENANT`; retention `FINANCIAL_RECORD`. Append-only matching of one verified receipt to at most one invoice. Not final allocation, not paid coverage. Under ordered source/invoice locks, match min(unmatched available source amount, remaining invoice total); sum matches <= invoice total and each source amount. Match is permanent even after return; refund state excludes returned amounts from pending payable balance. Partial matched receipt remains unallocated principal until all invoice matches cover total. At expiry all matched-but-unallocated principal becomes RETURN_REQUIRED; excess never advances a future invoice. Matching an incorrect invoice is not edited in place: unresolved mistake enters settlement review, original evidence preserved.
+
+ES_V1 mapping: `FINANCIAL_RECORD` / `ledger`; field/purpose overrides — target JSON.
 
 Поля:
 
@@ -2131,34 +2318,25 @@ Verified administrative path:
 
 Для перечисления компаний admin сначала получает UUID из отдельного авторизованного tenant directory API; content читается per tenant. Worker dispatcher видит только `tenant_work_partitions`, затем открывает scoped transaction. Глобальные catalog/config/identity operations имеют отдельные API/таблицы и никогда не выбираются отсутствием tenant в обычном запросе. Нужен audit cross-tenant directory lookup; выдача всех ID обычному app client запрещена.
 
-## Cleanup и хранение
+## Cleanup и хранение — ES_V1
 
-| Класс | Правило удаления / граница |
-|---|---|
-| `TENANT_LIFECYCLE` | Рабочие данные принадлежит компании. Soft/physical delete делает владелец БД через idempotent deletion steps. Физический purge после удаления компании активируется только утверждённой O09 policy version; до неё логическое закрытие/deny access и видимый hold. Другие tenant и global avatar не затрагиваются. |
-| `GLOBAL_ACCOUNT` | Профиль/contact/preferences принадлежит глобальному user. Удаление tenant их не удаляет. После account deletion внешние representations показывают tombstone без прежних snapshots; физический purge/финансовые исключения — O09. |
-| `O09_IDENTITY_HOLD` | Account deletion saga/fences и evidence не уничтожать молча. Хранение и восстановление требуют решения O09; нет самовольного срока. |
-| `O09_FINANCIAL_AUDIT_HOLD` | Financial facts/invoice/allocations/refund/dispute и платформенный audit append-only, сохраняются отдельно от рабочих данных. Не назначен юридический срок и не реализовано автоматическое уничтожение до O09. |
-| `O09_FREE_MARKER_HOLD` | Минимальный HMAC verified-email marker, global consumption. Не содержит plaintext email/profile. D207 запрещает повторную FREE; правовое основание/срок хранения и допустимый доступ после удаления подтверждает O09. Этот gate нельзя считать закрытым выбором HMAC. |
-| `SHORT_LIVED_SECRET` | Secret уничтожается после consumption/expiry; кодовые challenge 10min, invitation secret максимум snapshot expiresAt. Secret не копируется в Kafka/history/logs. Метаданные попыток/аудит имеют отдельную политику; удаление секрета не удаляет необходимый replay fence. |
-| `SESSION_SECURITY` | Revoke немедленно, cleanup истёкших token/session secrets по TTL; tombstone/version держится не меньше максимального ещё проверяемого token/grant lifetime. Audit/legal остатки — O09. |
-| `OBJECT_LIFECYCLE` | Object manifest состояния и delete lease/fence; orphan/expired upload удаляется после проверки owner/generation и terminal absence of confirmation. Manifest не удалять до подтверждённого S3 deletion и applied quota effect. Tenant deletion не задевает avatars; avatar delete не уменьшает tenant storage. |
-| `IDEMPOTENCY_RESPONSE_TTL` | Response payload cache 24h, затем можно scrub response. Уникальный domain operation и финансовый/ресурсный receipt остаётся; reuse того же ключа не создаёт повторный irreversible effect. |
-| `OUTBOX_REPLAY_SAFETY` | Сначала acknowledged publication, потребители и replay watermark; без этого GC запрещён. Global permanent dedupe для money/usage отделён от transport row cleanup. Срок хранения частного payload согласуется с O09; его отсутствие не препятствует хранению минимального ID fence. |
-| `CATALOG_HISTORY` / `PLATFORM_CONFIGURATION` | Опубликованные версии, используемые snapshot/notice, не переписываются. Неиспользованный draft можно удалить; references и audit сохраняются. |
-| `SYSTEM_CONFIGURATION` / SYSTEM | Liquibase/registration singleton/worker partitions управляются инфраструктурой; не включаются в пользовательский export или tenant financial purge. Partition без бизнес-работы удаляется только после подтверждённого закрытия tenant jobs. |
+Утверждённая политика: [retention-policy.md](retention-policy.md), [ES_V1 JSON](schemas/retention-policy.json). Для каждой из 120 target tables JSON содержит `retention_policy_mapping`: policy/dataset и отдельные field/purpose overrides. Финансовые факты не получают mutable retention clock columns: срок выводится из authoritative accounting entry/corrections, применимости tax/OSS/claims и действующих scoped holds. Неизвестный fiscal anchor или applicability → POLICY_NOT_CONFIGURED, не догадка о шести годах для всех данных.
 
-Экспортный artifact имеет технический expiry 24h, download требует текущую авторизацию. Это срок transient архива, не срок хранения исходных данных компании. Изменяемые технические TTL/числа получают versioned typed properties; snapshot конкретной принятой операции сохраняется.
+- FINANCIAL_RECORD — нормализованный финансовый реестр и необходимые evidence; TAX_OSS_RECORD/CONTRACT_CLAIM применяются только при установленной применимости. PRIVATE raw PSP body отдельно PROVIDER_RAW, не прикрывается длинным сроком ledger.
+- Admin audit PURPOSE_AUDIT отделён от PRIVACY_CASE/financial approval evidence по назначению записи. Legal block не даёт обычного чтения, не обходится GLOBAL_ADMIN и не разрешает FREE matching.
+- DELETED_PROFILE и TENANT_WORKDATA задают удаление своих active copies; удаление аккаунта не удаляет рабочую историю действующей компании. BACKUP сохраняет исходный capturedAt: повторная копия не перезапускает срок.
+- FREE_ELIGIBILITY сохраняет связь каждого identity marker с живой компанией для FREE→paid→FREE. UNIQUE(bound_tenant_id) отсутствует: старый и новый владельцы могут иметь разные markers одной компании. При удалении аккаунта user-ref nullable; при удалении tenant очищаются tenant/user/operation refs всех его markers. Остаются только HMAC/key version/usedAt/purposeVersion/reviewDueAt. Нет восстановления из архива или сравнения после upheld erasure/purpose end.
+- Secret/session/object/replay lifecycles остаются отдельными техническими ограничениями: legal retention не продлевает жизнь OTP/credentials/raw delivery secret. Минимальный ID fence хранится только до подтверждённого token/replay/unexpired-backup horizon, без копии профиля.
+
+План удаления материализует immutable decision snapshot (`recordRefs`, policyVersion, sourceFactVersion/watermark, startEventAt, operationalUntil, eraseAfter, legalBasis, holdIds, disposition) в existing deletion step либо append-only RETENTION_* receipt admin_audit_log. Перед irreversible admission predicates и holds пересчитываются под локальной сериализацией владельца; snapshot и monetary fact не переписываются. Hold содержит caseId, точные recordRefs, legal basis, accountable owner и reviewAt не позже 90 дней от реального review; overdue не снимает hold. Минимальные hold metadata имеют PRIVACY_CASE anchor case_closed_at, а не время нового retry.
 
 ## Разделение подтверждённого и открытого
 
-Технический выбор схем, DTO IDs, составных ключей, UTC/anchor, atomic counters, receipts, RLS ролей, global avatar и grant model выполнен этой аналитикой. Разработчик не должен выбирать между альтернативными владельцами или заново инвентаризировать таблицы.
-
-Остались только решения владельца O04 (неутверждённые процедуры/исходы финансового разбора), O08 (продавец, PSP/валюты, налоги и юридические документы), O09 (retention/purge/recovery). Они не блокируют создание независимых схем и fake-provider tests. `WAITING_EVIDENCE`/policy hold сохраняет проверенные деньги и историю, не выдавая неподтверждённый возврат/платное покрытие за успех.
+Дизайн и owner decisions D250–D253 от 03.11.2026 завершены: Stripe выбран, final partial chargeback отзывает только связанное покрытие без нового refund, WIRE return имеет SLA 5 рабочих дат с комиссией Taska, retention определён ES_V1. Готовность live требует фактические seller/Stripe merchant credentials, tax/currency/document settings и рабочий calendar; sandbox fixtures их не заменяют. WAITING_EVIDENCE относится к отсутствующим/противоречивым фактам, а не к уже закрытым C03/C05. Дополнительной самостоятельной аналитики разработчику не оставлено.
 
 ## Проверка и критерии готовности миграционных задач
 
-`verify_data_inventory.py --postgres --target-postgres` повторяет actual SQL reconstruction и затем создаёт весь target DDL в отдельных disposable БД. Выполняются 10 RLS assertions: три роли app/admin/job × (missing-tenant sees zero, own tenant sees one, чужая запись отвергается), плюс transaction-local setting отсутствует после commit. Ещё восемь CHECK probes проверяют допустимые EXACT/DAY, отсутствие обязательной exact даты, ошибочную exact дату для DAY, обратный диапазон, отсутствие payer у WIRE и совместимость refund kind/reason. Это подтверждает DB форму и fail-closed policy, но не реализованный auth/RPC/admin pipeline, DB guard triggers или денежную saga.
+`verify_data_inventory.py --postgres --target-postgres` повторяет actual SQL reconstruction и затем создаёт весь target DDL в отдельных disposable БД. Выполняются 10 RLS assertions: три роли app/admin/job × (missing-tenant sees zero, own tenant sees one, чужая запись отвергается), плюс transaction-local setting отсутствует после commit. Выполняются 20 CHECK probes (occurrence, payer, refund kind/reason, WIRE SLA и terminal dispute), 5 probes immutable SLA guard, 4 FREE binding/cleanup probes и 3 archive consume/append-only probes. Это подтверждает target DB форму, предложенные guard triggers и fail-closed RLS, но не реализацию production auth/RPC/admin pipeline или денежной saga.
 
 После написания production migrations нужны свои IT: fresh и upgrade по принятому clean-start runbook; composite FK cross-tenant rejection; отсутствующий/чужой tenant/connection reuse; scopes на global tables; unique concurrent admission/owner transfer/last-admin; exactly-once resource/financial effect; rollback не меняет состояние; snapshot update denied. Проверки runtime и business effects не объявлены выполненными документационным DDL replay. Clean-start удаление старых тестовых данных, PR merge и deployment здесь не выполнялись и отдельно не авторизованы.
 
@@ -2185,3 +2363,15 @@ received              = netAllocated + unallocatedRemaining + confirmedNetReturn
 Для EXACT своевременность означает `occurred_at <= deadline`. Для DAY весь диапазон своевременен при `occurred_before <= deadline`, определённо поздний при `occurred_not_before > deadline`; остальные случаи, включая начало диапазона ровно в deadline, требуют WAITING_EVIDENCE. Для первой оплаты проверяется минимальный из invoice deadline и creation deadline. Точная дополнительная выписка создаёт append-only `FinancialEvidenceRefinement` в `settlement_cases.evidence_log`; она уточняет knowledge существующего fact, не создаёт новый денежный приход и не переписывает исходный DAY. Подтверждение выбирает проверенный `evidenceId`, а final allocation сохраняет неизменяемый `eligibility_evidence` snapshot выбранного основания. Повторы evidence/confirmation не дублируют деньги, allocation или period.
 
 `autopay_mandates` сохраняет owner_id + owner_version и immutable consent snapshot/version/channel. `tenants.owner_version` увеличивается только при передаче владельца; проверка двух полей перед новым dispatch не позволяет старому mandate снова ожить при последовательности A→B→A. Смена имени компании сама mandate не инвалидирует.
+
+## Дополнение 03.11: финальный dispute и immutable WIRE SLA
+
+`LOST_PARTIAL_COVERAGE_REVOKED` — terminal outcome при `disputes.state=LOST`, с verified monetary loss и resolution evidence. Он отзывает только coverage этого source; независимое текущее покрытие сохраняется. Новый outgoing refund не создаётся. Для нового оплаченного месяца нужна новая полная оплата (PSP success / WIRE GLOBAL_ADMIN confirmedAt), старое autopay consent не восстанавливается. WON/WITHDRAWN_CONFIRMED не требуют выдуманного нового money fact, но требуют verified final resolution evidence.
+
+`refunds.source_method` выводится из исходного факта. Для WIRE `fee_bearer=TASKA` обязателен уже при запросе. Первый полный комплект evidence атомарно фиксирует `evidence_completed_at`, `business_calendar_id`, `calendar_version`, `sla_policy_version=WIRE_RETURN_ES_V1`, typed `sla_snapshot`, `decision_due_at=send_due_at`. Календарь Europe/Madrid: пять eligible local dates после даты completeness, тот же local wall time; Mon–Fri без versioned Spanish national/seller regional/local bank nonworking days; DST gap→NEXT_VALID_INSTANT, overlap→LATER_OFFSET. Календарь/digest и deadline неизменяемы после фиксации; смена assignment, повтор, новая calendar version не перезапускают clock. Реальные decided_at/submitted_at могут быть позже срока — это breach, а не повод отклонить истинный факт. При необходимости оператор действует раньше неизменяемого SLA; отдельного hidden override deadline нет. Outbound fee учитывается отдельно от amount_minor principal и не уменьшает возврат.
+
+## Operator archive case: durable consume существующим audit
+
+TAS-482 использует локальный operator CLI и существующий `admin_audit_log`, без нового публичного API или таблицы. Добавлены nullable `case_id`, `permit_id`, `case_event_key` и обязательный `details_json` с закрытыми allowlists operator/RETENTION_* receipts. Raw OTP/permit secret/выписки/документы в JSON запрещены; только private evidence refs и hash.
+
+`UNIQUE(case_id,case_event_key) WHERE case_id IS NOT NULL` исключает повтор receipt; `UNIQUE(permit_id) WHERE action='DELIVERY_PERMIT_CONSUMED'` обеспечивает одно потребление между процессами. Consume требует ненулевых case/permit IDs, совпадающих JSON bindings и обязательных hash/expiry/document/recipient/archive полей. После проверки текущего operator/MFA/case permission и срока 10 min транзакция вставляет consume receipt и **COMMIT до первого байта stream**. Конкурирующая вставка получает unique violation; in-memory lock не является доказательством одноразовости. Падение stream не отменяет consume: новая выдача требует нового проверенного permit. UPDATE audit receipt блокирует append-only guard; sanctioned retention erasure отделён от обычных app/admin grants.

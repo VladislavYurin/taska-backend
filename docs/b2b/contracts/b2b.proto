@@ -819,6 +819,18 @@ message Refund {
   optional string confirmed_at = 8;
   string version = 9;
   RefundReasonCode reason_code = 10;
+  enum SourceMethodValue { SOURCE_METHOD_UNSPECIFIED = 0; SOURCE_METHOD_PSP = 1; SOURCE_METHOD_WIRE = 2; }
+  SourceMethodValue source_method = 11;
+  optional string evidence_completed_at = 12;
+  optional string business_calendar_id = 13;
+  optional string calendar_version = 14;
+  optional string sla_policy_version = 15;
+  optional RefundSlaSnapshot sla_snapshot = 16;
+  optional string decision_due_at = 17;
+  optional string send_due_at = 18;
+  optional string decided_at = 19;
+  optional string submitted_at = 20;
+  optional RefundSlaSnapshot.FeeBearerValue fee_bearer = 21;
 }
 
 message RefundPage {
@@ -864,6 +876,8 @@ message Dispute {
   string opened_at = 5;
   optional string resolved_at = 6;
   string version = 7;
+  optional DisputeOutcomeRequest.OutcomeValue final_outcome = 8;
+  optional string confirmed_money_fact_id = 9;
 }
 
 message DisputePage {
@@ -872,11 +886,12 @@ message DisputePage {
 }
 
 message DisputeOutcomeRequest {
-  enum OutcomeValue { OUTCOME_UNSPECIFIED = 0; OUTCOME_WON = 1; OUTCOME_WITHDRAWN_CONFIRMED = 2; OUTCOME_LOST_FULL_REFUND = 3; OUTCOME_PARTIAL_MANUAL_REVIEW = 4; }
+  enum OutcomeValue { OUTCOME_UNSPECIFIED = 0; OUTCOME_WON = 1; OUTCOME_WITHDRAWN_CONFIRMED = 2; OUTCOME_LOST_FULL_REFUND = 3; reserved 4; reserved "OUTCOME_PARTIAL_MANUAL_REVIEW"; OUTCOME_LOST_PARTIAL_COVERAGE_REVOKED = 5; }
   OutcomeValue outcome = 1;
   string evidence_reference = 2;
   string external_reference = 3;
   bool confirmed = 4;
+  optional string confirmed_money_fact_id = 5; // required for both verified loss outcomes; no outgoing refund intent
 }
 
 message Entitlement {
@@ -1678,4 +1693,19 @@ service UnmatchedWireReceiptService {
  rpc ListUnmatchedWireReceipts(ListUnmatchedWireReceiptsRpcRequest) returns (UnmatchedWireReceiptPage);
  rpc RecordUnmatchedWireReceipt(RecordUnmatchedWireReceiptRpcRequest) returns (UnmatchedWireReceipt);
  rpc AssignUnmatchedWireReceipt(AssignUnmatchedWireReceiptRpcRequest) returns (PaymentFact);
+}
+
+message RefundSlaSnapshot {
+ enum FeeBearerValue { FEE_BEARER_UNSPECIFIED = 0; FEE_BEARER_TASKA = 1; }
+ enum CountingRuleValue { COUNTING_RULE_UNSPECIFIED = 0; COUNTING_RULE_T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME = 1; }
+ enum DstGapRuleValue { DST_GAP_RULE_UNSPECIFIED = 0; DST_GAP_RULE_NEXT_VALID_INSTANT = 1; }
+ enum DstOverlapRuleValue { DST_OVERLAP_RULE_UNSPECIFIED = 0; DST_OVERLAP_RULE_LATER_OFFSET = 1; }
+ uint32 business_days = 1; // exactly 5
+ FeeBearerValue fee_bearer = 2;
+ CountingRuleValue counting_rule = 3;
+ string timezone = 4; // Europe/Madrid
+ string calendar_digest = 5;
+ bool exclude_evidence_date = 6; // true
+ DstGapRuleValue dst_gap_rule = 7;
+ DstOverlapRuleValue dst_overlap_rule = 8;
 }

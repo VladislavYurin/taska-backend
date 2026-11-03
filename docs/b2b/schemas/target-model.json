@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "DESIGNED_NOT_IMPLEMENTED",
   "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16",
-  "business_source": "Confluence 60751880 version 39; D01-D249",
+  "business_source": "Confluence 60751880 version 42; D01-D253; accepted owner follow-up 2026-11-03",
   "existing_tables": [
     {
       "owner_schema": "taska",
@@ -121,6 +121,30 @@
           "type": "uuid",
           "nullable": false,
           "default": null
+        },
+        {
+          "name": "case_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "permit_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "case_event_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "details_json",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
         }
       ],
       "constraints": [
@@ -140,6 +164,41 @@
           "definition": "CHECK (length(TRIM(BOTH FROM reason)) > 0)",
           "columns": [
             "reason"
+          ],
+          "referenced_table": null,
+          "referenced_columns": null
+        },
+        {
+          "name": "audit_case_shape",
+          "kind": "c",
+          "definition": "CHECK ((case_id IS NULL AND case_event_key IS NULL) OR (case_id IS NOT NULL AND case_event_key IS NOT NULL AND length(btrim(case_event_key))>0))",
+          "columns": [
+            "case_id",
+            "case_event_key"
+          ],
+          "referenced_table": null,
+          "referenced_columns": null
+        },
+        {
+          "name": "audit_details_whitelist",
+          "kind": "c",
+          "definition": "CHECK (jsonb_typeof(details_json)='object' AND ((action=ANY(ARRAY['CASE_OPENED','IDENTITY_VERIFIED','ACCESS_DECLINED','DELIVERY_PERMITTED','DELIVERY_PERMIT_CONSUMED','STREAM_STARTED','DELIVERY_CONFIRMED','DELIVERY_FAILED','CASE_CLOSED']) AND details_json - ARRAY['caseId','permitId','policyVersion','documentIds','archiveVersion','verifiedRecipientRef','verificationMethod','verificationOutcome','privateEvidenceRefs','reasonCode','ticketHash','ticketExpiresAt','ticketStatus','deliveryChannelRef','deliveryOutcome','priorReceiptId']='{}'::jsonb) OR (action LIKE 'RETENTION_%' AND details_json - ARRAY['caseId','policyVersion','recordRefs','sourceFactVersion','sourceWatermark','startEventAt','operationalUntil','eraseAfter','legalBasis','holdIds','fieldAllowlist','disposition','decisionReceiptId','reasonCode','privateEvidenceRefs','result','checksum']='{}'::jsonb) OR (NOT (action=ANY(ARRAY['CASE_OPENED','IDENTITY_VERIFIED','ACCESS_DECLINED','DELIVERY_PERMITTED','DELIVERY_PERMIT_CONSUMED','STREAM_STARTED','DELIVERY_CONFIRMED','DELIVERY_FAILED','CASE_CLOSED'])) AND action NOT LIKE 'RETENTION_%' AND details_json='{}'::jsonb)))",
+          "columns": [
+            "action",
+            "details_json"
+          ],
+          "referenced_table": null,
+          "referenced_columns": null
+        },
+        {
+          "name": "audit_permit_consumption_required",
+          "kind": "c",
+          "definition": "CHECK (action<>'DELIVERY_PERMIT_CONSUMED' OR (case_id IS NOT NULL AND permit_id IS NOT NULL AND details_json @> jsonb_build_object('permitId',permit_id::text,'caseId',case_id::text) AND details_json ?& ARRAY['permitId','caseId','ticketHash','ticketExpiresAt','documentIds','archiveVersion','verifiedRecipientRef'] AND jsonb_typeof(details_json->'ticketHash')='string' AND details_json->>'ticketHash' ~ '^[0-9a-f]{64}$' AND jsonb_typeof(details_json->'documentIds')='array' AND jsonb_array_length(details_json->'documentIds')>0))",
+          "columns": [
+            "action",
+            "case_id",
+            "permit_id",
+            "details_json"
           ],
           "referenced_table": null,
           "referenced_columns": null
@@ -180,6 +239,20 @@
           "primary": false,
           "definition": "CREATE INDEX admin_audit_log_target_idx ON taska.admin_audit_log USING btree (target_service, target_table, target_id)",
           "predicate": null
+        },
+        {
+          "name": "admin_audit_case_event_unique",
+          "unique": true,
+          "primary": false,
+          "definition": "CREATE UNIQUE INDEX admin_audit_case_event_unique ON taska.admin_audit_log (case_id,case_event_key) WHERE case_id IS NOT NULL",
+          "predicate": "case_id IS NOT NULL"
+        },
+        {
+          "name": "admin_audit_permit_consumed_unique",
+          "unique": true,
+          "primary": false,
+          "definition": "CREATE UNIQUE INDEX admin_audit_permit_consumed_unique ON taska.admin_audit_log (permit_id) WHERE action='DELIVERY_PERMIT_CONSUMED'",
+          "predicate": "action='DELIVERY_PERMIT_CONSUMED'"
         }
       ],
       "rls_enabled": false,
@@ -193,11 +266,89 @@
         "admin-service/src/main/resources/db/changelog/changes/0003-audit-actor-identity.sql",
         "admin-service/src/main/resources/db/changelog/changes/0004-mask-audit-outbox-retry.sql"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
+      "retention_class": "PURPOSE_AUDIT",
       "changes": [
-        "Add optional target tenant; audit remains platform-only and is never exposed to tenant roles."
+        "Add optional target tenant; audit remains platform-only and is never exposed to tenant roles.",
+        "ES_V1 operator delivery and retention use append-only typed case receipts in this existing table; no new public endpoint/table. Insert unique DELIVERY_PERMIT_CONSUMED receipt transactionally and COMMIT before streaming any byte. Unique permit_id serializes competing processes/retries; no in-memory lock. A failed/uncertain stream does not unconsume permit; issue a new authorized permit. Verify live operator+MFA+case permission, scoped document list/hash/expiry immediately before consume; details_json allowlist excludes raw secret/OTP/bank/customer document bytes."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "mutation_guards": [
+        {
+          "name": "admin_audit_append_only",
+          "trigger": "BEFORE UPDATE",
+          "always_immutable_columns": [
+            "id",
+            "request_id",
+            "actor_user_id",
+            "actor_display_name",
+            "actor_roles",
+            "action",
+            "target_service",
+            "target_table",
+            "target_id",
+            "old_value",
+            "new_value",
+            "reason",
+            "created_at",
+            "actor_email",
+            "tenant_id",
+            "grant_id",
+            "channel",
+            "actor_auth_version",
+            "operation_id",
+            "case_id",
+            "permit_id",
+            "case_event_key",
+            "details_json"
+          ],
+          "freeze_when_old_not_null": "id",
+          "frozen_columns": [
+            "id",
+            "request_id",
+            "actor_user_id",
+            "actor_display_name",
+            "actor_roles",
+            "action",
+            "target_service",
+            "target_table",
+            "target_id",
+            "old_value",
+            "new_value",
+            "reason",
+            "created_at",
+            "actor_email",
+            "tenant_id",
+            "grant_id",
+            "channel",
+            "actor_auth_version",
+            "operation_id",
+            "case_id",
+            "permit_id",
+            "case_event_key",
+            "details_json"
+          ],
+          "error_sqlstate": "23514",
+          "notes": "Runtime INSERT/SELECT only; receipt mutation prohibited. Authorized retention disposition may ERASE selected records through separate retention executor, never normal admin business bypass."
+        }
+      ],
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "PURPOSE_AUDIT",
+        "dataset": "admin_security_audit",
+        "field_or_purpose_overrides": [
+          {
+            "condition": "financial approval evidence",
+            "policy_id": "FINANCIAL_RECORD",
+            "dataset": "financial_approval_evidence"
+          },
+          {
+            "condition": "declined identity/delivery or privacy-rights evidence",
+            "policy_id": "PRIVACY_CASE",
+            "dataset": "identity_verification_decision"
+          }
+        ],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -377,9 +528,16 @@
         "auth-service/src/main/resources/db/changelog/changes/0004-user-locked-until.sql",
         "auth-service/src/main/resources/db/changelog/changes/0011-blocked-from-status.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -518,11 +676,18 @@
       "source_files": [
         "auth-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Retain only global registration/password onboarding purposes; company invitations move to tenant-service. Add purpose check to prevent token confusion."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -648,9 +813,16 @@
         "auth-service/src/main/resources/db/changelog/changes/0010-oauth-flows.sql",
         "auth-service/src/main/resources/db/changelog/changes/0012-oauth-sign-in-target.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -759,9 +931,16 @@
         "auth-service/src/main/resources/db/changelog/changes/0010-oauth-flows.sql",
         "auth-service/src/main/resources/db/changelog/changes/0012-oauth-sign-in-target.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -967,7 +1146,15 @@
       "changes": [
         "Auth outbox remains GLOBAL_ACCOUNT only; project/issue outboxes are TENANT only. Scope kind is constrained to its owner and cannot claim a foreign tenant."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner_schema": "taska",
@@ -1175,11 +1362,18 @@
       "source_files": [
         "auth-service/src/main/resources/db/changelog/changes/0008-personal-access-tokens.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Token is global credential whose authoritative grant selects tenant(s); no untrusted tenant header can expand grant."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -1354,11 +1548,18 @@
       "source_files": [
         "auth-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Bind refresh family to web_sessions; tenant contexts have separate tenant_sessions IDs and cannot switch each other."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -1429,9 +1630,16 @@
       "source_files": [
         "auth-service/src/main/resources/db/changelog/changes/0010-signup-rate-limits.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "SECURITY_OPERATIONAL_LOG",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "SECURITY_OPERATIONAL_LOG",
+        "dataset": "operational_security_logs",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -1556,11 +1764,18 @@
         "auth-service/src/main/resources/db/changelog/changes/0002-user-avatars.sql",
         "auth-service/src/main/resources/db/changelog/changes/0005-avatar-object-key-unique.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Keep global ownership and 2 MB cap; no tenant_id. S3 lifecycle is durable via avatar_object_manifest."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_user_avatars",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -1774,11 +1989,18 @@
         "auth-service/src/main/resources/db/changelog/changes/0009-user-created-via.sql",
         "auth-service/src/main/resources/db/changelog/changes/0011-blocked-from-status.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "After confirmed deletion expose tombstone identity; purge/anonymization policy held by O09. No reuse of user UUID."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -1927,13 +2149,20 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Replace (user_id,key) uniqueness with (tenant_id,user_id,operation_code,key); hash includes canonical target IDs and payload. Financial effects additionally have permanent operation identity."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2067,12 +2296,19 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0001-issue-attachments.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_workfiles",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2256,12 +2492,19 @@
         "issue-service/src/main/resources/db/changelog/changes/0003-add-issue-comments.sql",
         "issue-service/src/main/resources/db/changelog/changes/0011-action-channel.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2424,12 +2667,19 @@
         "issue-service/src/main/resources/db/changelog/changes/0009-redact-comment-event-text.sql",
         "issue-service/src/main/resources/db/changelog/changes/0011-action-channel.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2573,12 +2823,19 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0005-add-labels-tables.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2767,12 +3024,19 @@
         "issue-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "issue-service/src/main/resources/db/changelog/changes/0004-issue-links-modify.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -2937,13 +3201,20 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0013-issue-type-move-receipts.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -3088,12 +3359,19 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0005-add-issue-watchers.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -3277,12 +3555,19 @@
         "issue-service/src/main/resources/db/changelog/changes/0008-add-issue-worklogs.sql",
         "issue-service/src/main/resources/db/changelog/changes/0011-worklog-page-index.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -3736,12 +4021,19 @@
         "issue-service/src/main/resources/db/changelog/changes/0010-open-issue-types.sql",
         "issue-service/src/main/resources/db/changelog/changes/0012-board-column-cursor.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -3973,7 +4265,15 @@
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Auth outbox remains GLOBAL_ACCOUNT only; project/issue outboxes are TENANT only. Scope kind is constrained to its owner and cannot claim a foreign tenant."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner_schema": "taska",
@@ -4068,13 +4368,20 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "next_issue_number is display numbering only. lifetime_created is authoritative TASK_LIFETIME usage, incremented atomically with issue + idempotency receipt/outbox in the same issue-service transaction on FREE and paid. No remote reservation. Never derive successful creation count from max number or current rows. Deleting an issue never decrements lifetime_created."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -4212,12 +4519,19 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0005-add-labels-tables.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -4370,13 +4684,20 @@
       "source_files": [
         "issue-service/src/main/resources/db/changelog/changes/0014-workflow-binding-receipts.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -4534,13 +4855,20 @@
       "source_files": [
         "notification-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Only tenant-origin work/mandatory billing messages; global account security uses account_notifications/account_message_deliveries. Resolve current recipient/ACL again before sending."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -4729,13 +5057,20 @@
         "notification-service/src/main/resources/db/changelog/changes/0003-invitation-email-queue.sql",
         "notification-service/src/main/resources/db/changelog/changes/0006-signup-email-kind.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "PK is delivery UUID, not recipient user; multiple companies/invitations coexist. secret_ref references protected short-lived delivery secret; never Kafka plaintext. Global signup/security uses account_message_deliveries."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -4785,7 +5120,15 @@
       ],
       "retention_class": "GLOBAL_ACCOUNT",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner_schema": "taska",
@@ -5040,13 +5383,20 @@
       "source_files": [
         "notification-service/src/main/resources/db/changelog/changes/0009-notification-channels.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Only tenant-origin work/mandatory billing messages; global account security uses account_notifications/account_message_deliveries. Resolve current recipient/ACL again before sending."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -5127,13 +5477,20 @@
         "notification-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "notification-service/src/main/resources/db/changelog/changes/0009-notification-channels.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Task delivery opt-ins belong to (tenant_id,user_id). Move global contact/Telegram binding/version to account_notification_settings; do not clone Telegram secrets per tenant. Mandatory messages bypass ordinary opt-outs."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -5308,13 +5665,20 @@
         "notification-service/src/main/resources/db/changelog/changes/0010-project-archived-notification.sql",
         "notification-service/src/main/resources/db/changelog/changes/0011-personal-token-notifications.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Only tenant-origin work/mandatory billing messages; global account security uses account_notifications/account_message_deliveries. Resolve current recipient/ACL again before sending."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -5416,13 +5780,20 @@
       "source_files": [
         "notification-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Tenant scope enforced in uniqueness; global dedupe uses account_processed_events."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -5564,9 +5935,16 @@
       "source_files": [
         "notification-service/src/main/resources/db/changelog/changes/0009-notification-channels.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -5621,9 +5999,16 @@
       "source_files": [
         "notification-service/src/main/resources/db/changelog/changes/0009-notification-channels.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "SECURITY_OPERATIONAL_LOG",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "SECURITY_OPERATIONAL_LOG",
+        "dataset": "operational_security_logs",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "public",
@@ -5904,11 +6289,18 @@
       "source_files": [
         "oauth-server/src/main/resources/db/changelog/0001-oauth.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Authoritative grant is auth-service.integration_grants; cross-database link is verified by RPC, never SQL FK. Consent primary key includes integration_grant_id, so tenant A consent never overwrites tenant B."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "public",
@@ -5976,11 +6368,18 @@
       "source_files": [
         "oauth-server/src/main/resources/db/changelog/0001-oauth.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Authoritative grant is auth-service.integration_grants; cross-database link is verified by RPC, never SQL FK. Consent primary key includes integration_grant_id, so tenant A consent never overwrites tenant B."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "public",
@@ -6103,7 +6502,15 @@
       ],
       "retention_class": "GLOBAL_ACCOUNT",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner_schema": "public",
@@ -6182,11 +6589,18 @@
       "source_files": [
         "oauth-server/src/main/resources/db/changelog/0001-oauth.sql"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
+      "retention_class": "DELETED_PROFILE",
       "changes": [
         "Grant scope inherited from immutable authorization -> integration_grant_id; token refresh cannot widen scope."
       ],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "public",
@@ -6230,7 +6644,15 @@
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
       "changes": [],
-      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API"
+      "rls_policy": "GLOBAL_EXPLICIT_SERVICE_API",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner_schema": "taska",
@@ -6542,13 +6964,20 @@
         "project-service/src/main/resources/db/changelog/changes/0005-project-type-operations.sql",
         "project-service/src/main/resources/db/changelog/changes/0006-first-type-explicit-workflow.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -6803,13 +7232,20 @@
         "project-service/src/main/resources/db/changelog/changes/0004-issue-type-deletion-intents.sql",
         "project-service/src/main/resources/db/changelog/changes/0005-project-type-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7040,7 +7476,15 @@
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Auth outbox remains GLOBAL_ACCOUNT only; project/issue outboxes are TENANT only. Scope kind is constrained to its owner and cannot claim a foreign tenant."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner_schema": "taska",
@@ -7256,12 +7700,19 @@
         "project-service/src/main/resources/db/changelog/changes/0004-issue-type-deletion-intents.sql",
         "project-service/src/main/resources/db/changelog/changes/0005-project-type-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7380,12 +7831,19 @@
       "source_files": [
         "project-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7474,12 +7932,19 @@
         "project-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "project-service/src/main/resources/db/changelog/changes/0001-project-issue-types.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7624,13 +8089,20 @@
       "source_files": [
         "project-service/src/main/resources/db/changelog/changes/0005-project-type-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7780,12 +8252,19 @@
         "project-service/src/main/resources/db/changelog/changes/0004-issue-type-deletion-intents.sql",
         "project-service/src/main/resources/db/changelog/changes/0005-project-type-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -7921,13 +8400,20 @@
       "source_files": [
         "workflow-service/src/main/resources/db/changelog/changes/0011-workflow-binding-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -8054,13 +8540,20 @@
       "source_files": [
         "workflow-service/src/main/resources/db/changelog/changes/0010-issue-type-move-pins.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -8230,12 +8723,19 @@
       "source_files": [
         "workflow-service/src/main/resources/db/changelog/changes/0000-init.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -8438,13 +8938,20 @@
         "workflow-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "workflow-service/src/main/resources/db/changelog/changes/0001-default-workflow-missing-transitions.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Both endpoints constrained to same tenant AND workflow, not merely existing status IDs."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -8620,12 +9127,19 @@
         "workflow-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "workflow-service/src/main/resources/db/changelog/changes/0001-default-workflow-missing-transitions.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -8887,13 +9401,20 @@
       "source_files": [
         "workflow-service/src/main/resources/db/changelog/changes/0011-workflow-binding-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "Retain verified original actor/grant/version and operation fence for recovery; jobs do not manufacture an administrator context or ignore revoked membership."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -9037,12 +9558,19 @@
         "workflow-service/src/main/resources/db/changelog/changes/0005-issue-type-generation.sql",
         "workflow-service/src/main/resources/db/changelog/changes/0011-workflow-binding-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner_schema": "taska",
@@ -9162,13 +9690,20 @@
         "workflow-service/src/main/resources/db/changelog/changes/0000-init.sql",
         "workflow-service/src/main/resources/db/changelog/changes/0011-workflow-binding-operations.sql"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
+      "retention_class": "TENANT_WORKDATA",
       "changes": [
         "Add tenant_id uuid NOT NULL; clean-start removes old business rows; never infer a tenant from actor alone.",
         "Preserve globally unique UUID PK; add UNIQUE(tenant_id,id/operation_id) for composite FK; prefix natural unique constraints and B-tree query indexes with tenant_id. Existing GIN retained alongside tenant B-tree.",
         "All runtime workflows belong to one tenant/project; global templates move to workflow_templates, copied with new workflow/status/transition UUIDs. Shared mutable default workflows are prohibited."
       ],
-      "rls_policy": "TENANT_STRICT"
+      "rls_policy": "TENANT_STRICT",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     }
   ],
   "new_tables": [
@@ -9292,8 +9827,15 @@
         "(owner_id,id)",
         "(creation_deadline_at,id) WHERE lifecycle='AWAITING_PAYMENT'"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9376,8 +9918,15 @@
         "(user_id,status,tenant_id)",
         "(tenant_id,role,status,user_id)"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Removed membership is tombstone; rejoin increments version. Owner and last active admin protected by tenant row lock, not partial UNIQUE. SUSPENDED consumes seat."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Removed membership is tombstone; rejoin increments version. Owner and last active admin protected by tenant row lock, not partial UNIQUE. SUSPENDED consumes seat.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9510,8 +10059,15 @@
         "(tenant_id,inviter_id,state)",
         "(tenant_id,expires_at,id) WHERE state='PENDING'"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "TTL snapshot default 7 days; hashing only, email canonicalization same as auth. Expiry process changes state before a replacement reservation is accepted."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "TTL snapshot default 7 days; hashing only, email canonicalization same as auth. Expiry process changes state before a replacement reservation is accepted.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9581,8 +10137,15 @@
         "outcome IS NULL OR outcome IN ('APPLIED','SKIPPED')"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Project ID cross-service logical FK checked at issue and acceptance. Skipped grants never roll back accepted membership."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Project ID cross-service logical FK checked at issue and acceptance. Skipped grants never roll back accepted membership.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9669,8 +10232,15 @@
       "indexes": [
         "(tenant_id,active,kind)"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Each source remains independent; clearing one dispute does not clear another or pause/block. Billing source event monotonic version guards stale delivery."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Each source remains independent; clearing one dispute does not clear another or pause/block. Billing source event monotonic version guards stale delivery.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9745,8 +10315,15 @@
         "scope_id=tenant_id"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9888,8 +10465,15 @@
       "indexes": [
         "(tenant_id,expires_at,id) WHERE state='ACTIVE'"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -9980,8 +10564,15 @@
         "amount>0"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Permanent replay fence for applied resource effects. TASK_LIFETIME is not reserved or released here; tenant-service only receives a read projection."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Permanent replay fence for applied resource effects. TASK_LIFETIME is not reserved or released here; tenant-service only receives a read projection.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -10004,13 +10595,13 @@
         {
           "name": "first_user_id",
           "type": "uuid",
-          "nullable": false,
+          "nullable": true,
           "default": null
         },
         {
           "name": "bound_tenant_id",
           "type": "uuid",
-          "nullable": false,
+          "nullable": true,
           "default": null
         },
         {
@@ -10022,6 +10613,18 @@
         {
           "name": "operation_id",
           "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "purpose_version",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "review_due_at",
+          "type": "timestamptz",
           "nullable": false,
           "default": null
         }
@@ -10036,10 +10639,36 @@
         ]
       ],
       "foreign_keys": [],
-      "checks": [],
-      "indexes": [],
-      "retention_class": "O09_FREE_MARKER_HOLD",
-      "notes": "HMAC-SHA256(canonical verified email) under external secret key; never raw email. Atomic consume; check all accepted key versions, keep old keys available for lookup. No expiry implemented until O09 approves basis/retention; release gate, not silently approved indefinite personal-data retention."
+      "checks": [
+        "bound_tenant_id IS NOT NULL OR (first_user_id IS NULL AND operation_id IS NULL)",
+        "review_due_at>consumed_at"
+      ],
+      "indexes": [
+        "(bound_tenant_id) WHERE bound_tenant_id IS NOT NULL",
+        "(review_due_at,digest_key_version)"
+      ],
+      "retention_class": "FREE_ELIGIBILITY",
+      "notes": "ES_V1 FREE_ELIGIBILITY: HMAC-SHA256 of canonical verified email under dedicated KMS key, no fingerprinting or cross-email inference. purpose_version and review_due_at freeze approved purpose assessment; annual review does not extend on lookup. Same live company FREE-paid-FREE keeps tenant binding. Paid owner transfer never rewrites/releases the previous identity marker: check current owner marker on later FREE selection (same company allow; unused consume; other company deny). Multiple identity markers may bind the same tenant: NO UNIQUE(bound_tenant_id). Account deletion may clear first_user_id while live tenant binding remains. Tenant deletion clears bound_tenant_id, first_user_id and operation_id on ALL matching rows; only digest/key version/consumed_at(published usedAt)/purpose_version/review_due_at remain. Upheld erasure or purpose end removes active matching; never reconstruct from backups/financial archives; overdue purpose review denies new FREE admission as POLICY_NOT_CONFIGURED. A legally blocked copy, if required by separately evidenced disposition, is outside this matching table and cannot be queried for FREE decisions.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FREE_ELIGIBILITY",
+        "dataset": "free_live_company_binding",
+        "field_or_purpose_overrides": [
+          {
+            "condition": "bound_tenant_id IS NULL",
+            "policy_id": "FREE_ELIGIBILITY",
+            "dataset": "free_used_hmac_after_deletion",
+            "allowed_nonnull_fields": [
+              "email_digest",
+              "digest_key_version",
+              "consumed_at",
+              "purpose_version",
+              "review_due_at"
+            ]
+          }
+        ],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -10166,8 +10795,15 @@
       "indexes": [
         "(tenant_id,updated_at,id) WHERE state IN ('ACCEPTED','RUNNING','COMPENSATING')"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Payload schema keyed by kind in state-machine doc; no credentials or private message bodies. Original actor/grant retained; job revalidates current authority when operation requires it."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Payload schema keyed by kind in state-machine doc; no credentials or private message bodies. Original actor/grant retained; job revalidates current authority when operation requires it.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -10286,8 +10922,15 @@
         "attempts>=0"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Retry/checkpoint per owner; financial/audit/FREE marker purge steps HELD until O09. Failure is not successful deletion of physical data.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -10412,8 +11055,15 @@
       "indexes": [
         "(tenant_id,actor_id,created_at,id)"
       ],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Authorize snapshot generation and download with current ACL; financial and credential material excluded. Artifact expiry 24h technical default; irreversible tenant financial data retention separate O09."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Authorize snapshot generation and download with current ACL; financial and credential material excluded. Artifact expiry 24h technical default; irreversible tenant financial data retention separate O09.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_workfiles",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -10478,7 +11128,15 @@
         "(key,effective_at DESC,version DESC)"
       ],
       "retention_class": "PLATFORM_CONFIGURATION",
-      "notes": "Only explicit registry keys, typed value validation. JSON only for versioned MERCHANT_CONFIGURATION, RETENTION_POLICY, SETTLEMENT_POLICY schemas with readiness, unresolved decision IDs and secret refs; unset critical values never enable final actions. No tenant overrides. See root registry for defaults/ranges."
+      "notes": "Only explicit registry keys, typed value validation. JSON only for versioned MERCHANT_CONFIGURATION, RETENTION_POLICY, SETTLEMENT_POLICY schemas with readiness, unresolved decision IDs and secret refs; unset critical values never enable final actions. No tenant overrides. See root registry for defaults/ranges.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner": "billing-service",
@@ -10513,7 +11171,15 @@
       "checks": [],
       "indexes": [],
       "retention_class": "CATALOG_HISTORY",
-      "notes": "Stable product identity; no deletion referenced by snapshots."
+      "notes": "Stable product identity; no deletion referenced by snapshots.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner": "billing-service",
@@ -10640,7 +11306,15 @@
       ],
       "indexes": [],
       "retention_class": "CATALOG_HISTORY",
-      "notes": "Immutable after publication; NULL max_tasks means unlimited paid task cap, usage still counted. Fixed company price, not seats."
+      "notes": "Immutable after publication; NULL max_tasks means unlimited paid task cap, usage still counted. Fixed company price, not seats.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner": "billing-service",
@@ -10746,8 +11420,15 @@
         "version>0"
       ],
       "indexes": [],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Current entitlement pointer is not full payment history. No implicit FREE fallback. Calendar retains original day through short months."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Current entitlement pointer is not full payment history. No implicit FREE fallback. Calendar retains original day through short months.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -10876,8 +11557,15 @@
       "indexes": [
         "(tenant_id,starts_at,ends_at)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Period immutable times/terms. Status is GRANTED/REVOKED/SUPERSEDED; future/active/expired are computed from UTC timestamps, never scheduler freshness. Historical overlapping paid periods allowed on immediate downgrade; entitlement selects current non-superseded coverage. Do not EXCLUDE all overlap."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Period immutable times/terms. Status is GRANTED/REVOKED/SUPERSEDED; future/active/expired are computed from UTC timestamps, never scheduler freshness. Historical overlapping paid periods allowed on immediate downgrade; entitlement selects current non-superseded coverage. Do not EXCLUDE all overlap.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11075,8 +11763,15 @@
         "(tenant_id,issued_at DESC,id)",
         "(tenant_id,payable_until,id) WHERE state IN ('OPEN','PARTIALLY_PAID')"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "All financial snapshots immutable after issue; state is projection. Seller/tax/legal numbering content remains O08, explicit schemas in contracts; fake issuer is test-only. Receipt timing determines timeliness. method enum uses canonical WIRE/PSP. PARTIALLY_PAID reflects eligible unmatched coverage candidates in invoice_payment_matches, not final allocations."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "All financial snapshots immutable after issue; state is projection. Seller/tax/legal numbering content remains O08, explicit schemas in contracts; fake issuer is test-only. Receipt timing determines timeliness. method enum uses canonical WIRE/PSP. PARTIALLY_PAID reflects eligible unmatched coverage candidates in invoice_payment_matches, not final allocations.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11163,8 +11858,15 @@
         "line_no>0 AND quantity>0 AND net_minor>=0 AND tax_minor>=0 AND total_minor=net_minor+tax_minor"
       ],
       "indexes": [],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "All lines same invoice currency/exponent; no float amounts."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "All lines same invoice currency/exponent; no float amounts.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11351,8 +12053,25 @@
         "(tenant_id,occurred_at,id)",
         "(tenant_id,parent_fact_id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Append-only verified normalized money movement, not webhook receipt. Bank occurred_at is statement receipt; verified_at is admin confirmation. Provider evidence held privately; no raw payload in Kafka. External partial facts always recorded. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary. observed_at is ingress observation, verified_at maps to DTO confirmedAt; neither substitutes financial occurredAt for timeliness. PSP exact occurrence comes from provider status; unresolved unknown-payer WIRE stays in unmatched_bank_receipts until verified."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Append-only verified normalized money movement, not webhook receipt. Bank occurred_at is statement receipt; verified_at is admin confirmation. Provider evidence held privately; no raw payload in Kafka. External partial facts always recorded. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary. observed_at is ingress observation, verified_at maps to DTO confirmedAt; neither substitutes financial occurredAt for timeliness. PSP exact occurrence comes from provider status; unresolved unknown-payer WIRE stays in unmatched_bank_receipts until verified.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [
+          {
+            "fields": [
+              "evidence_ref",
+              "evidence_digest"
+            ],
+            "policy_id": "FINANCIAL_RECORD",
+            "dataset": "financial_approval_evidence",
+            "note": "Reference is normalized verification receipt or necessary financial statement evidence, not an excuse to retain full raw provider payload."
+          }
+        ],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11478,8 +12197,15 @@
         "(tenant_id,payment_fact_id)",
         "(tenant_id,invoice_id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Locked invoice + fact enforce SUM allocation <= verified positive amount and invoice total. Refunds do not edit immutable original allocation. Same-currency only; no silent FX on allocation. Insert allocations only when effective matched sum equals invoice total and every source is eligible. One allocation per match with identical invoice/source/amount; enforce via ordered aggregate locks plus owner DB guard trigger. Allocation + PAID invoice + period + outbox commit atomically. matched amount is not added again to allocated amount in conservation equations. eligibility_evidence is immutable VerifiedPaymentEligibility snapshot: original factId, optional selected refinement evidenceId, canonical occurred precision/time or range, verifiedBy/confirmedAt, applicable invoice/deadline and decisionCode; no raw bank documents."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Locked invoice + fact enforce SUM allocation <= verified positive amount and invoice total. Refunds do not edit immutable original allocation. Same-currency only; no silent FX on allocation. Insert allocations only when effective matched sum equals invoice total and every source is eligible. One allocation per match with identical invoice/source/amount; enforce via ordered aggregate locks plus owner DB guard trigger. Allocation + PAID invoice + period + outbox commit atomically. matched amount is not added again to allocated amount in conservation equations. eligibility_evidence is immutable VerifiedPaymentEligibility snapshot: original factId, optional selected refinement evidenceId, canonical occurred precision/time or range, verifiedBy/confirmedAt, applicable invoice/deadline and decisionCode; no raw bank documents.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11570,6 +12296,84 @@
           "type": "timestamptz",
           "nullable": false,
           "default": null
+        },
+        {
+          "name": "source_method",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "evidence_completed_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "business_calendar_id",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "calendar_version",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "sla_policy_version",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "sla_snapshot",
+          "type": "jsonb",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "decision_due_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "send_due_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "decided_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "submitted_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "fee_bearer",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "outbound_fee_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "outbound_fee_currency",
+          "type": "char(3)",
+          "nullable": true,
+          "default": null
         }
       ],
       "primary_key": [
@@ -11628,13 +12432,52 @@
         "amount_minor>0",
         "kind IN ('SUBSCRIPTION_FULL','UNALLOCATED_RETURN')",
         "reason_code IN ('BILLING_ERROR','SERVICE_FAILURE','MANDATORY','EXCESS','LATE_FIRST_PAYMENT','CLOSED_CREATION','INCOMPLETE_BANK_PAYMENT','DUPLICATE_PAYMENT')",
-        "(kind='SUBSCRIPTION_FULL' AND reason_code IN ('BILLING_ERROR','SERVICE_FAILURE','MANDATORY')) OR (kind='UNALLOCATED_RETURN' AND reason_code IN ('EXCESS','LATE_FIRST_PAYMENT','CLOSED_CREATION','INCOMPLETE_BANK_PAYMENT','DUPLICATE_PAYMENT'))"
+        "(kind='SUBSCRIPTION_FULL' AND reason_code IN ('BILLING_ERROR','SERVICE_FAILURE','MANDATORY')) OR (kind='UNALLOCATED_RETURN' AND reason_code IN ('EXCESS','LATE_FIRST_PAYMENT','CLOSED_CREATION','INCOMPLETE_BANK_PAYMENT','DUPLICATE_PAYMENT'))",
+        "source_method IN ('PSP','WIRE')",
+        "source_method<>'WIRE' OR state NOT IN ('APPROVED','SUBMITTING','UNKNOWN','CONFIRMED') OR evidence_completed_at IS NOT NULL",
+        "sla_policy_version IS NULL OR sla_policy_version='WIRE_RETURN_ES_V1'",
+        "decision_due_at IS NULL OR (decision_due_at=send_due_at AND decision_due_at>evidence_completed_at)",
+        "(source_method='WIRE' AND fee_bearer IS NOT NULL AND fee_bearer='TASKA') OR (source_method='PSP' AND fee_bearer IS NULL)",
+        "(evidence_completed_at IS NULL AND business_calendar_id IS NULL AND calendar_version IS NULL AND sla_policy_version IS NULL AND sla_snapshot IS NULL AND decision_due_at IS NULL AND send_due_at IS NULL) OR (source_method='WIRE' AND evidence_completed_at IS NOT NULL AND business_calendar_id IS NOT NULL AND calendar_version IS NOT NULL AND sla_policy_version IS NOT NULL AND sla_snapshot IS NOT NULL AND decision_due_at IS NOT NULL AND send_due_at IS NOT NULL)",
+        "(outbound_fee_minor IS NULL AND outbound_fee_currency IS NULL) OR (outbound_fee_minor IS NOT NULL AND outbound_fee_minor>=0 AND outbound_fee_currency IS NOT NULL)",
+        "sla_snapshot IS NULL OR (jsonb_typeof(sla_snapshot)='object' AND sla_snapshot ?& ARRAY['businessDays','feeBearer','countingRule','timezone','excludeEvidenceDate','dstGapRule','dstOverlapRule','calendarDigest'] AND sla_snapshot - ARRAY['businessDays','feeBearer','countingRule','timezone','excludeEvidenceDate','dstGapRule','dstOverlapRule','calendarDigest'] = '{}'::jsonb AND sla_snapshot @> '{\"businessDays\":5,\"feeBearer\":\"TASKA\",\"countingRule\":\"T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME\",\"timezone\":\"Europe/Madrid\",\"excludeEvidenceDate\":true,\"dstGapRule\":\"NEXT_VALID_INSTANT\",\"dstOverlapRule\":\"LATER_OFFSET\"}'::jsonb AND jsonb_typeof(sla_snapshot->'calendarDigest')='string' AND sla_snapshot->>'calendarDigest' ~ '^[0-9a-f]{64}$')"
       ],
       "indexes": [
-        "(tenant_id,source_payment_fact_id,state)"
+        "(tenant_id,source_payment_fact_id,state)",
+        "(tenant_id,decision_due_at,id) WHERE source_method='WIRE' AND evidence_completed_at IS NOT NULL AND decided_at IS NULL",
+        "(tenant_id,send_due_at,id) WHERE source_method='WIRE' AND evidence_completed_at IS NOT NULL AND submitted_at IS NULL AND state NOT IN ('REJECTED','CONFIRMED')"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Subscription amount must equal full original covered amount, no arbitrary partial product refund. Aggregate lock prevents initiating refund beyond currently available principal; externally confirmed over-return facts are still recorded, never rejected or silently clipped, and enter manual reconciliation. Confirmation fact alone triggers financial effect; O04 controls unresolved manual outcomes. kind exactly matches REST/proto SUBSCRIPTION_FULL/UNALLOCATED_RETURN; detailed accepted case is reason_code, not a second kind vocabulary. SUBSCRIPTION_FULL equals full original covered amount; a prior external partial return requires settlement review and cannot silently create a partial product refund. UNALLOCATED_RETURN includes only principal never covered by a final payment_allocation."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Subscription amount must equal full original covered amount, no arbitrary partial product refund. Aggregate lock prevents initiating refund beyond currently available principal; externally confirmed over-return facts are still recorded, never rejected or silently clipped, and enter manual reconciliation. Confirmation fact alone triggers financial effect. Owner decisions of 2026-11-03 fix final partial-chargeback outcome and WIRE return SLA; missing/inconsistent evidence alone still requires reconciliation. kind exactly matches REST/proto SUBSCRIPTION_FULL/UNALLOCATED_RETURN; detailed accepted case is reason_code, not a second kind vocabulary. SUBSCRIPTION_FULL equals full original covered amount; a confirmed final partial chargeback revokes only linked coverage and creates no further refund intent; other ambiguous external evidence requires reconciliation and cannot create a partial product refund. UNALLOCATED_RETURN includes only principal never covered by a final payment_allocation. WIRE evidence_completed_at is the first accepted complete verified dossier; freeze WIRE_RETURN_ES_V1, business_calendar_id/version/digest, typed sla_snapshot, one decision_due_at=send_due_at and fee_bearer=TASKA atomically. Count five eligible Europe/Madrid dates after the evidence local date at the same local wall time; Mon-Fri minus versioned Spain national and seller regional/local bank holidays. DST gap uses NEXT_VALID_INSTANT; overlap LATER_OFFSET. Retry, assignee change, later calendar publication or a new evidence request never restarts the deadline. No automatic approval/submission/confirmation at SLA expiry. decided_at/submitted_at record actual events even when late; submitted_at means verified outgoing instruction acceptance, may remain NULL for UNKNOWN. outbound_fee_minor/currency is Taska expense separately evidenced, never deducted from refund amount_minor principal. Actual live calendar is provisioned with seller/Stripe merchant profile; synthetic calendar is sandbox-only. WIRE fee_bearer=TASKA is mandatory from initial request, before complete evidence; it never waits for SLA admission. PSP has no WIRE SLA bundle.",
+      "mutation_guards": [
+        {
+          "name": "refunds_frozen_sla",
+          "trigger": "BEFORE UPDATE",
+          "always_immutable_columns": [
+            "source_method",
+            "fee_bearer"
+          ],
+          "freeze_when_old_not_null": "evidence_completed_at",
+          "frozen_columns": [
+            "evidence_completed_at",
+            "business_calendar_id",
+            "calendar_version",
+            "sla_policy_version",
+            "sla_snapshot",
+            "decision_due_at",
+            "send_due_at"
+          ],
+          "error_sqlstate": "23514",
+          "notes": "First complete-evidence admission sets all fields atomically; future UPDATE cannot clear/change any frozen field. Actual decision/submission/fee evidence remains append/update permitted by its separate domain transition rules."
+        }
+      ],
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11707,6 +12550,30 @@
           "type": "timestamptz",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "final_outcome",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "resolution_evidence_ref",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "resolution_evidence_digest",
+          "type": "bytea",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "resolution_verified_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
         }
       ],
       "primary_key": [
@@ -11750,13 +12617,24 @@
       ],
       "checks": [
         "state IN ('OPEN','WON','LOST','WITHDRAWN','NEEDS_REVIEW')",
-        "amount_minor>0 AND version>0"
+        "amount_minor>0 AND version>0",
+        "final_outcome IS NULL OR final_outcome IN ('WON','WITHDRAWN_CONFIRMED','LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED')",
+        "final_outcome IS NULL OR (resolution_evidence_ref IS NOT NULL AND resolution_evidence_digest IS NOT NULL AND resolution_verified_at IS NOT NULL)",
+        "final_outcome NOT IN ('LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED') OR confirmed_money_fact_id IS NOT NULL",
+        "(state IN ('OPEN','NEEDS_REVIEW') AND final_outcome IS NULL AND closed_at IS NULL) OR (final_outcome IS NOT NULL AND closed_at IS NOT NULL AND ((state='WON' AND final_outcome='WON') OR (state='WITHDRAWN' AND final_outcome='WITHDRAWN_CONFIRMED') OR (state='LOST' AND final_outcome IN ('LOST_FULL_REFUND','LOST_PARTIAL_COVERAGE_REVOKED'))))"
       ],
       "indexes": [
         "(tenant_id,payment_fact_id,state)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Confirmed final provider version only; partial loss remains manual review and financial restriction; resolving does not restore old mandate."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Confirmed final provider resolution only. WON and WITHDRAWN_CONFIRMED preserve the original period remainder without creating a new period; no new money fact is required when funds never left. LOST_FULL_REFUND and LOST_PARTIAL_COVERAGE_REVOKED persist state LOST and require verified linked monetary loss fact. Final partial chargeback revokes only coverage backed by that source payment; independent current coverage survives. It creates no additional outgoing refund/return intent. Regaining paid coverage requires a new full payment and full month (PSP success / WIRE admin confirmation); no partial top-up obligation. Old autopay mandate remains revoked; new owner consent required. NEEDS_REVIEW is transient for absent/inconsistent evidence, never the final policy for an already confirmed partial loss. closed_at maps to resolvedAt. Resolution evidence and final_outcome are immutable once accepted; later duplicate/out-of-order provider events cannot replace a newer terminal decision. Owner transaction verifies confirmed money kind/currency/amount and source linkage; simple FK alone does not prove a partial chargeback.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11833,8 +12711,15 @@
         "status IN ('ACTIVE','REVOKED')"
       ],
       "indexes": [],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Opaque provider references, no PAN/CVV/bank secret. Owner transfer revokes linkage for new charges."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Opaque provider references, no PAN/CVV/bank secret. Owner transfer revokes linkage for new charges.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -11953,8 +12838,15 @@
       "indexes": [
         "UNIQUE (tenant_id) WHERE state='ACTIVE'"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "No SUSPENDED->ACTIVE reactivation: transfer/dispute/refund revocation needs new mandate/consent. Pause flags stop new attempts; accepted attempt reconciles. Immutable consent snapshot conforms to transport ConsentSnapshot: exact consent wording/template revision and accepted configuration, terms version, channel, owner version and consented_at; live owner_id AND owner_version checked before each new dispatch. A transfer increments owner_version in the same tenant transaction."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "No SUSPENDED->ACTIVE reactivation: transfer/dispute/refund revocation needs new mandate/consent. Pause flags stop new attempts; accepted attempt reconciles. Immutable consent snapshot conforms to transport ConsentSnapshot: exact consent wording/template revision and accepted configuration, terms version, channel, owner version and consented_at; live owner_id AND owner_version checked before each new dispatch. A transfer increments owner_version in the same tenant transaction.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12068,8 +12960,15 @@
       "indexes": [
         "(tenant_id,invoice_id,state)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "UNKNOWN is reconciled by provider idempotency key before another attempt. Redirect is never confirmation."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "UNKNOWN is reconciled by provider idempotency key before another attempt. Redirect is never confirmation.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12201,8 +13100,15 @@
         "coverage_state IN ('FREE','PAID','UNPAID','DISPUTED','REVOKED')"
       ],
       "indexes": [],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Immutable output version; not actor capabilities. Limit cache keyed tenant+version; validity reevaluated by clock even without event."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Immutable output version; not actor capabilities. Limit cache keyed tenant+version; validity reevaluated by clock even without event.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12313,8 +13219,15 @@
       "indexes": [
         "(tenant_id,effective_at,id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Countdown starts only after durable inbox-created receipt, not queued event/email attempt/read. Email retries independent. FREE effective time direct; paid first anchor boundary after warning."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Countdown starts only after durable inbox-created receipt, not queued event/email attempt/read. Email retries independent. FREE effective time direct; paid first anchor boundary after warning.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12437,8 +13350,15 @@
       "indexes": [
         "(tenant_id,state,created_at,id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "O04 unsupported resolutions remain WAITING_EVIDENCE with policy_version NULL; normalized facts never discarded. D236/D237 allocation and excess tracked separately. evidence_log is append-only FinancialEvidenceRefinement[]; each entry has evidenceId/sourceFactId/evidenceRef/digest/occurredPrecision/occurredAt or bounds/payerRef/verifiedBy/verifiedAt. Existing prefix cannot be edited or removed (DB guard trigger). It refines knowledge about one monetary fact, never creates another movement. Command dedupes evidenceId and stores immutable canonical digest; precise supplemental evidence does not overwrite original DAY fact. Confirm uses selected verified evidenceId and freezes its eligibility snapshot in final allocation."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Absent/inconsistent evidence remains WAITING_EVIDENCE; normalized facts are never discarded. The accepted 2026-11-03 final partial chargeback outcome is LOST_PARTIAL_COVERAGE_REVOKED: apply linked coverage revocation and resolve the case without initiating another outgoing refund. Bank return service deadline follows frozen WIRE_RETURN_ES_V1; C03/C05 are no longer unresolved owner-policy gates. D236/D237 allocation and excess tracked separately. evidence_log is append-only FinancialEvidenceRefinement[]; each entry has evidenceId/sourceFactId/evidenceRef/digest/occurredPrecision/occurredAt or bounds/payerRef/verifiedBy/verifiedAt. Existing prefix cannot be edited or removed (DB guard trigger). It refines knowledge about one monetary fact, never creates another movement. Command dedupes evidenceId and stores immutable canonical digest; precise supplemental evidence does not overwrite original DAY fact. Confirm uses selected verified evidenceId and freezes its eligibility snapshot in final allocation.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12569,8 +13489,15 @@
       "indexes": [
         "(state,occurred_at,id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Unmatched receipt cannot invent tenant_id. Admin-only intake; assignment is audited and creates one verified tenant payment fact, preserving global dedupe. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Unmatched receipt cannot invent tenant_id. Admin-only intake; assignment is audited and creates one verified tenant payment fact, preserving global dedupe. occurredAt is an exact financial occurrence only for EXACT. DAY preserves the evidence-derived UTC half-open interval [occurred_not_before,occurred_before), never invented midnight. Statement calendar/timezone evidence determines bounds; ambiguous boundary creates WAITING_EVIDENCE. payer_ref is a verified opaque reference to the original payer, no arbitrary replacement beneficiary.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12652,8 +13579,25 @@
       "indexes": [
         "(state,received_at,event_id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Authenticated transport inbox is not payment fact. Private encrypted raw payload object, bounded access, retention O09; outbox carries normalized safe references."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Authenticated transport inbox is not payment fact. Private encrypted raw payload object, bounded access, retention O09; outbox carries normalized safe references.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [
+          {
+            "fields": [
+              "payload_ref"
+            ],
+            "policy_id": "PROVIDER_RAW",
+            "dataset": "raw_provider_payload",
+            "anchor": "SETTLEMENT_TERMINAL_AT",
+            "note": "Erase private raw body after terminal+30d; retain minimal normalized proof separately. Unresolved case needs scoped reconciliation hold."
+          }
+        ],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -12722,7 +13666,15 @@
         "(base_currency,quote_currency,quoted_at DESC)"
       ],
       "retention_class": "CATALOG_HISTORY",
-      "notes": "EUR source price; rate and final rounding snapshotted in invoice. Provider/source/currency launch list O08. HALF_UP once on final invoice minor amount. No floating point."
+      "notes": "EUR source price; rate and final rounding snapshotted in invoice. Provider/source/currency launch list O08. HALF_UP once on final invoice minor amount. No floating point.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner": "tenant-service",
@@ -12805,7 +13757,15 @@
       ],
       "indexes": [],
       "retention_class": "IDEMPOTENCY_RESPONSE_TTL",
-      "notes": "24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility."
+      "notes": "24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "tenant-service",
@@ -12929,7 +13889,15 @@
         "(tenant_id,status,created_at,id) WHERE status IN ('NEW','PROCESSING')"
       ],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape."
+      "notes": "Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "tenant-service",
@@ -13023,7 +13991,15 @@
         "(status,created_at,id) WHERE status IN ('NEW','PROCESSING')"
       ],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Only catalog/config/identity-free aggregate data; no tenant business payload."
+      "notes": "Only catalog/config/identity-free aggregate data; no tenant business payload.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "tenant-service",
@@ -13072,7 +14048,15 @@
       "checks": [],
       "indexes": [],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks."
+      "notes": "Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "billing-service",
@@ -13155,7 +14139,15 @@
       ],
       "indexes": [],
       "retention_class": "IDEMPOTENCY_RESPONSE_TTL",
-      "notes": "24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility."
+      "notes": "24h response-cache TTL technical default; domain operation/payment/receipt dedupe identity survives cache eviction. Hash mismatch is conflict; replay rechecks current visibility.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "billing-service",
@@ -13279,7 +14271,15 @@
         "(tenant_id,status,created_at,id) WHERE status IN ('NEW','PROCESSING')"
       ],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape."
+      "notes": "Commit with business mutation; tenant queues selected fairly. Platform config/catalog has separate global_outbox_events to avoid nullable tenant escape.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "billing-service",
@@ -13373,7 +14373,15 @@
         "(status,created_at,id) WHERE status IN ('NEW','PROCESSING')"
       ],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Only catalog/config/identity-free aggregate data; no tenant business payload."
+      "notes": "Only catalog/config/identity-free aggregate data; no tenant business payload.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "billing-service",
@@ -13422,7 +14430,15 @@
       "checks": [],
       "indexes": [],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks."
+      "notes": "Insert dedupe row in same local transaction as effect; event dedupe does not replace aggregate version checks.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "billing-service",
@@ -13531,8 +14547,15 @@
       "indexes": [
         "(tenant_id,state,updated_at,id) WHERE state IN ('NEW','PROCESSING','UNKNOWN')"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Permanent settlement/renewal/refund identity; deterministic keys for scheduler period+purpose. No actor nullable for manual action; nullable only verified provider/scheduler subject."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Permanent settlement/renewal/refund identity; deterministic keys for scheduler period+purpose. No actor nullable for manual action; nullable only verified provider/scheduler subject.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "auth-service",
@@ -13619,7 +14642,15 @@
         "(user_id,state,id)"
       ],
       "retention_class": "SESSION_SECURITY",
-      "notes": "Admin web session only after email MFA; session claim does not replace current global-role check."
+      "notes": "Admin web session only after email MFA; session claim does not replace current global-role check.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "auth-service",
@@ -13718,7 +14749,15 @@
         "(tenant_id,user_id)"
       ],
       "retention_class": "SESSION_SECURITY",
-      "notes": "Opaque independent context per tab; no single selectedTenant field on global user/session. Tenant membership logical RPC reference."
+      "notes": "Opaque independent context per tab; no single selectedTenant field on global user/session. Tenant membership logical RPC reference.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "auth-service",
@@ -13822,7 +14861,15 @@
         "(user_id,revoked_at,id)"
       ],
       "retention_class": "SESSION_SECURITY",
-      "notes": "ONE_TENANT only for ordinary integrations; ADMIN PLATFORM required for global account actions, live role check mandatory. permissions from allowlist, widening fresh explicit consent."
+      "notes": "ONE_TENANT only for ordinary integrations; ADMIN PLATFORM required for global account actions, live role check mandatory. permissions from allowlist, widening fresh explicit consent.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "auth-service",
@@ -13865,7 +14912,15 @@
         "(tenant_id,grant_id)"
       ],
       "retention_class": "SESSION_SECURITY",
-      "notes": "Only TENANT_SET grant; service transaction validates nonempty set and type, never ordinary USER. Target tenants logical cross-service refs."
+      "notes": "Only TENANT_SET grant; service transaction validates nonempty set and type, never ordinary USER. Target tenants logical cross-service refs.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "auth-service",
@@ -13994,7 +15049,15 @@
         "(user_id,purpose,expires_at)"
       ],
       "retention_class": "SHORT_LIVED_SECRET",
-      "notes": "10min absolute TTL, 5 attempts, resend every 60s maximum 3 without extending expiry; eight-digit random code stored HMAC with per-challenge salt outside plaintext. Deletion purpose/target/version distinct; transfer/bank-confirm/refund do not use OTP."
+      "notes": "10min absolute TTL, 5 attempts, resend every 60s maximum 3 without extending expiry; eight-digit random code stored HMAC with per-challenge salt outside plaintext. Deletion purpose/target/version distinct; transfer/bank-confirm/refund do not use OTP.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "auth-service",
@@ -14103,8 +15166,15 @@
         "state IN ('ACCEPTED','REVOKING','REMOVING_MEMBERSHIPS','ANONYMIZING','COMPLETED','RETRYABLE_FAILURE','POLICY_HOLD')"
       ],
       "indexes": [],
-      "retention_class": "O09_IDENTITY_HOLD",
-      "notes": "Auth/tenant deletion lock prevents concurrent owner/last-admin assignments; repeat owner/last-admin preconditions before irreversible execution. Preserve global tombstone author ID and mask snapshots."
+      "retention_class": "PRIVACY_CASE",
+      "notes": "Auth/tenant deletion lock prevents concurrent owner/last-admin assignments; repeat owner/last-admin preconditions before irreversible execution. Preserve global tombstone author ID and mask snapshots.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "PRIVACY_CASE",
+        "dataset": "deletion_evidence",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "auth-service",
@@ -14251,7 +15321,15 @@
         "(state,expires_at,id)"
       ],
       "retention_class": "OBJECT_LIFECYCLE",
-      "notes": "Not tenant quota; avatars/{userId}/{objectId}. Replacement marks old object for durable deletion; account FK is RESTRICT until manifest/tombstone lifecycle resolved. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation."
+      "notes": "Not tenant quota; avatars/{userId}/{objectId}. Replacement marks old object for durable deletion; account FK is RESTRICT until manifest/tombstone lifecycle resolved. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_user_avatars",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "workflow-service",
@@ -14317,7 +15395,15 @@
       ],
       "indexes": [],
       "retention_class": "PLATFORM_CONFIGURATION",
-      "notes": "Read-only published graph schema contains status keys/categories, transition endpoints, validator rules. Instantiate new tenant/project rows; no runtime FK to another tenant graph."
+      "notes": "Read-only published graph schema contains status keys/categories, transition endpoints, validator rules. Instantiate new tenant/project rows; no runtime FK to another tenant graph.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": null,
+        "dataset": null,
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "non_personal_configuration_reason": "Published service/catalog/client configuration without personal payload; preserve while referenced/active, account tokens/consents remain separate classified tables."
+      }
     },
     {
       "owner": "project-service",
@@ -14399,8 +15485,15 @@
         "amount>0 AND reservation_fence>0"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "issue-service",
@@ -14482,8 +15575,15 @@
         "amount>0 AND reservation_fence>0"
       ],
       "indexes": [],
-      "retention_class": "TENANT_LIFECYCLE",
-      "notes": "Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal."
+      "retention_class": "TENANT_WORKDATA",
+      "notes": "Write resource+receipt+outbox atomically. Admit only matching active reservation generation; query receipt on ambiguous commit before releasing quota. Retain fence after physical business resource removal.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "issue-service",
@@ -14671,7 +15771,15 @@
         "(tenant_id,project_id,state)"
       ],
       "retention_class": "OBJECT_LIFECYCLE",
-      "notes": "tenant/{tenantId}/project/{projectId}/issue/{issueId}/{objectId}; HEAD confirms actual bytes/MIME; usage released only by idempotent confirmed object deletion effect, no negative quota after failed S3 delete. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation."
+      "notes": "tenant/{tenantId}/project/{projectId}/issue/{issueId}/{objectId}; HEAD confirms actual bytes/MIME; usage released only by idempotent confirmed object deletion effect, no negative quota after failed S3 delete. Upload reservation TTL 15min, PUT <=5min. Pin stagingVersionId after HEAD then server-copy that exact version to immutable final object; confirm references finalObjectVersion and checksumSha256. leaseEpoch fences retry/delete workers, never read mutable latest object after validation.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_workfiles",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "notification-service",
@@ -14760,8 +15868,15 @@
       "foreign_keys": [],
       "checks": [],
       "indexes": [],
-      "retention_class": "GLOBAL_ACCOUNT",
-      "notes": "Global contact binding, consent/version; ordinary task opt-ins are per tenant in notification_preferences. Mandatory security channels separate."
+      "retention_class": "DELETED_PROFILE",
+      "notes": "Global contact binding, consent/version; ordinary task opt-ins are per tenant in notification_preferences. Mandatory security channels separate.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "notification-service",
@@ -14832,8 +15947,15 @@
       "indexes": [
         "(user_id,created_at DESC,id)"
       ],
-      "retention_class": "GLOBAL_ACCOUNT",
-      "notes": "Account security only; no tenant task/project/financial payload."
+      "retention_class": "DELETED_PROFILE",
+      "notes": "Account security only; no tenant task/project/financial payload.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "notification-service",
@@ -14935,7 +16057,15 @@
         "(state,next_attempt_at,id)"
       ],
       "retention_class": "SHORT_LIVED_SECRET",
-      "notes": "Global registration/MFA/deletion code delivery. secret_ref retrieved only by authorized sender; expiry destroys secret even if retry remains."
+      "notes": "Global registration/MFA/deletion code delivery. secret_ref retrieved only by authorized sender; expiry destroys secret even if retry remains.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "notification-service",
@@ -14971,7 +16101,15 @@
       "checks": [],
       "indexes": [],
       "retention_class": "OUTBOX_REPLAY_SAFETY",
-      "notes": "Explicit account event scope; never fallback sink for missing tenant IDs."
+      "notes": "Explicit account event scope; never fallback sink for missing tenant IDs.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge",
+        "operational_lifecycle": "Existing secret expiry/revocation/object-confirmation/response-cache/replay-safety rules remain; ES_V1 is not permission to retain raw secret until the longest legal deadline. Keep only minimal IDs through actual token/replay/unexpired-backup horizon."
+      }
     },
     {
       "owner": "project-service",
@@ -15022,7 +16160,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "workflow-service",
@@ -15073,7 +16218,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "issue-service",
@@ -15124,7 +16276,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "notification-service",
@@ -15175,7 +16334,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -15226,7 +16392,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -15277,7 +16450,14 @@
         "(next_due_at,tenant_id)"
       ],
       "retention_class": "SYSTEM_CONFIGURATION",
-      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups."
+      "notes": "Dispatcher only sees tenant UUID/due time; no actor/content/financial state. Workers select one partition then open tenant-scoped transaction, check durable authorization and fence. Domain row mutations enqueue partition in same local transaction; periodic tenant directory reconciler repairs missing wakeups.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "TENANT_WORKDATA",
+        "dataset": "tenant_tasks_comments_history",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -15342,8 +16522,15 @@
         "fence>0 AND version>0"
       ],
       "indexes": [],
-      "retention_class": "O09_IDENTITY_HOLD",
-      "notes": "Admission barrier inside membership owner DB. All ownership/last-admin relevant commands acquire this user guard in sorted user-ID order before tenant lock; absent guard inserted idempotently and locked. Deletion sets ADMISSION_CLOSED before checking all memberships; owner assignment cannot race. Global account restriction bypass per D249 does not bypass this integrity fence. Every leave/remove/suspend/demotion command also locks the tenant and computes surviving ACTIVE TENANT_ADMIN users excluding guards in ADMISSION_CLOSED/REMOVING_MEMBERSHIPS/COMPLETED. This prevents another administrator leaving after deletion precheck and making the deleting user last-admin. Count runs after tenant lock on a fresh READ COMMITTED statement; guard creation/admission close precedes deletion membership prechecks."
+      "retention_class": "DELETED_PROFILE",
+      "notes": "Admission barrier inside membership owner DB. All ownership/last-admin relevant commands acquire this user guard in sorted user-ID order before tenant lock; absent guard inserted idempotently and locked. Deletion sets ADMISSION_CLOSED before checking all memberships; owner assignment cannot race. Global account restriction bypass per D249 does not bypass this integrity fence. Every leave/remove/suspend/demotion command also locks the tenant and computes surviving ACTIVE TENANT_ADMIN users excluding guards in ADMISSION_CLOSED/REMOVING_MEMBERSHIPS/COMPLETED. This prevents another administrator leaving after deletion precheck and making the deleting user last-admin. Count runs after tenant lock on a fresh READ COMMITTED statement; guard creation/admission close precedes deletion membership prechecks.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "DELETED_PROFILE",
+        "dataset": "deleted_account_profile",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "tenant-service",
@@ -15428,6 +16615,48 @@
           "type": "timestamptz",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "case_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "record_refs",
+          "type": "jsonb",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "legal_basis",
+          "type": "text[]",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "case_owner_ref",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "last_reviewed_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "review_at",
+          "type": "timestamptz",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "case_closed_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "default": null
         }
       ],
       "primary_key": [
@@ -15435,6 +16664,7 @@
       ],
       "unique_constraints": [
         [
+          "case_id",
           "subject_kind",
           "subject_id",
           "owner_service",
@@ -15445,13 +16675,25 @@
       "checks": [
         "subject_kind IN ('TENANT','ACCOUNT','FINANCIAL_FACT','AUDIT','FREE_MARKER')",
         "state IN ('ACTIVE','RESOLVED')",
-        "version>0"
+        "version>0",
+        "jsonb_typeof(record_refs)='array' AND jsonb_array_length(record_refs)>0",
+        "cardinality(legal_basis)>0",
+        "length(btrim(case_owner_ref))>0",
+        "review_at>COALESCE(last_reviewed_at,created_at) AND review_at<=COALESCE(last_reviewed_at,created_at)+INTERVAL '90 days'",
+        "state<>'RESOLVED' OR (resolved_by IS NOT NULL AND resolved_at IS NOT NULL)"
       ],
       "indexes": [
         "(subject_kind,subject_id,state,version)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Explicit global retention control plane; no nullable tenant inference. Record/policy unresolved means physical purge blocked. Deletion step captures policy/hold versions and admission permit before irreversible execution; new hold prevents subsequent unaccepted steps. Already accepted irreversible step reported truthfully, never promised reversible by late hold. Held artifacts remain unavailable to ordinary tenant/user API."
+      "retention_class": "PRIVACY_CASE",
+      "notes": "ES_V1 scoped hold control plane, not an authorization grant. record_refs is a nonempty typed allowlist of exact owner/dataset/record or object-version references; no wildcard tenant dump or whole-backup hold. case_owner_ref and legal_basis identify accountable purpose, review_at at most 90 days after created_at/latest real review. Overdue keeps data restricted and escalates; it never auto-releases. Hold changes and irreversible purge admission serialize per referenced record; release is explicit authorized append-only case receipt, does not restart the original retention clock and cannot recover destroyed data. case_closed_at anchors minimal hold metadata retention under PRIVACY_CASE (case closure+3 calendar years), subject to evidenced legal extension. policy_version references ES_V1 configuration revision, not a mutable field inside financial facts.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "PRIVACY_CASE",
+        "dataset": "deletion_evidence",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     },
     {
       "owner": "billing-service",
@@ -15551,15 +16793,21 @@
       "indexes": [
         "(tenant_id,invoice_id,matched_at,id)"
       ],
-      "retention_class": "O09_FINANCIAL_AUDIT_HOLD",
-      "notes": "Append-only matching of one verified receipt to at most one invoice. Not final allocation, not paid coverage. Under ordered source/invoice locks, match min(unmatched available source amount, remaining invoice total); sum matches <= invoice total and each source amount. Match is permanent even after return; refund state excludes returned amounts from pending payable balance. Partial matched receipt remains unallocated principal until all invoice matches cover total. At expiry all matched-but-unallocated principal becomes RETURN_REQUIRED; excess never advances a future invoice. Matching an incorrect invoice is not edited in place: unresolved mistake enters settlement review, original evidence preserved."
+      "retention_class": "FINANCIAL_RECORD",
+      "notes": "Append-only matching of one verified receipt to at most one invoice. Not final allocation, not paid coverage. Under ordered source/invoice locks, match min(unmatched available source amount, remaining invoice total); sum matches <= invoice total and each source amount. Match is permanent even after return; refund state excludes returned amounts from pending payable balance. Partial matched receipt remains unallocated principal until all invoice matches cover total. At expiry all matched-but-unallocated principal becomes RETURN_REQUIRED; excess never advances a future invoice. Matching an incorrect invoice is not edited in place: unresolved mistake enters settlement review, original evidence preserved.",
+      "retention_policy_mapping": {
+        "policy_version": "ES_V1",
+        "policy_id": "FINANCIAL_RECORD",
+        "dataset": "ledger",
+        "field_or_purpose_overrides": [],
+        "execution": "derive current eligibility and hold predicates, materialize immutable decision receipt before purge"
+      }
     }
   ],
   "system_tables_disposition": "All 14 Liquibase tables remain SYSTEM, excluded from tenant RLS; only migrator access. Auth history schema follows verified existing journal selection.",
   "major_decision_gates": [
-    "O04: unresolved financial settlement/refund execution outcomes",
-    "O08: legal seller/PSP/currencies/tax/financial documents",
-    "O09: retention/purge/recovery of financial, identity, audit and FREE marker data"
+    "O08: populate actual live seller/Stripe merchant, currencies/tax/document and working-calendar configuration; provider choice is settled",
+    "ES_V1: apply configured per-dataset policy/holds and authoritative fiscal anchors; missing record applicability yields POLICY_NOT_CONFIGURED, not an invented blanket TTL"
   ],
   "financial_conservation": {
     "definitions": {
@@ -15578,5 +16826,141 @@
       "Outgoing command admission requires nonnegative available principal after pending outgoing reservations; incoming evidence persistence is not constrained by this admission check",
       "Partial matched receipts remain unallocated until full invoice settlement; expiry creates RETURN_REQUIRED for their entire unallocated remaining principal"
     ]
+  },
+  "accepted_followup": {
+    "date": "2026-11-03",
+    "decisions": [
+      "Stripe chosen; live seller/merchant credentials remain deployment readiness inputs",
+      "Verified final partial chargeback revokes linked coverage; new full payment required for new paid period; no extra refund",
+      "Bank return decision/submission within five business dates from complete verified evidence; Taska bears outgoing fee",
+      "Retention values and evidence policy owned by root retention-policy artifact; this patch adds no retention duration"
+    ]
+  },
+  "policy_schemas": {
+    "RefundSlaSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "businessDays",
+        "feeBearer",
+        "countingRule",
+        "timezone",
+        "calendarDigest",
+        "excludeEvidenceDate",
+        "dstGapRule",
+        "dstOverlapRule"
+      ],
+      "properties": {
+        "businessDays": {
+          "type": "integer",
+          "const": 5
+        },
+        "feeBearer": {
+          "type": "string",
+          "const": "TASKA"
+        },
+        "countingRule": {
+          "type": "string",
+          "const": "T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME"
+        },
+        "timezone": {
+          "type": "string",
+          "const": "Europe/Madrid"
+        },
+        "calendarDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "excludeEvidenceDate": {
+          "type": "boolean",
+          "const": true
+        },
+        "dstGapRule": {
+          "type": "string",
+          "const": "NEXT_VALID_INSTANT"
+        },
+        "dstOverlapRule": {
+          "type": "string",
+          "const": "LATER_OFFSET"
+        }
+      }
+    },
+    "OperatorCaseReceiptDetails": {
+      "allowed_operator_events": [
+        "CASE_OPENED",
+        "IDENTITY_VERIFIED",
+        "ACCESS_DECLINED",
+        "DELIVERY_PERMITTED",
+        "DELIVERY_PERMIT_CONSUMED",
+        "STREAM_STARTED",
+        "DELIVERY_CONFIRMED",
+        "DELIVERY_FAILED",
+        "CASE_CLOSED"
+      ],
+      "operator_detail_keys": [
+        "caseId",
+        "permitId",
+        "policyVersion",
+        "documentIds",
+        "archiveVersion",
+        "verifiedRecipientRef",
+        "verificationMethod",
+        "verificationOutcome",
+        "privateEvidenceRefs",
+        "reasonCode",
+        "ticketHash",
+        "ticketExpiresAt",
+        "ticketStatus",
+        "deliveryChannelRef",
+        "deliveryOutcome",
+        "priorReceiptId"
+      ],
+      "allowed_retention_detail_keys": [
+        "caseId",
+        "policyVersion",
+        "recordRefs",
+        "sourceFactVersion",
+        "sourceWatermark",
+        "startEventAt",
+        "operationalUntil",
+        "eraseAfter",
+        "legalBasis",
+        "holdIds",
+        "fieldAllowlist",
+        "disposition",
+        "decisionReceiptId",
+        "reasonCode",
+        "privateEvidenceRefs",
+        "result",
+        "checksum"
+      ],
+      "raw_evidence": "private references only",
+      "permit_rule": "10min single use, hash-only secret, exact case/operator/documents/recipient/archive binding; unique consumed permit receipt committed before stream"
+    }
+  },
+  "retention_policy_version": "ES_V1",
+  "retention_policy_reference": "retention-policy.json",
+  "retention_execution_design": {
+    "immutable_domain_fact_boundary": "Do not UPDATE payment_facts/allocations/invoice financial snapshots to cache retention clocks. Derive last accounting entry including linked verified corrections from authoritative accounting refs; missing fiscal anchor/applicability => POLICY_NOT_CONFIGURED.",
+    "decision_snapshot_store": [
+      "tenant_deletion_steps.retention_snapshot",
+      "account_deletion_operations.retention_snapshot",
+      "admin_audit_log.details_json for RETENTION_*"
+    ],
+    "snapshot_fields": [
+      "recordRefs",
+      "policyVersion",
+      "sourceFactVersion",
+      "sourceWatermark",
+      "startEventAt",
+      "operationalUntil",
+      "eraseAfter",
+      "legalBasis",
+      "holdIds",
+      "disposition",
+      "decisionReceiptId"
+    ],
+    "admission": "Re-read current facts/holds under owner local serialization immediately before irreversible admission; original immutable receipt remains evidence of selected inputs. A later hold does not pretend an admitted/destructed step is reversible.",
+    "backup_tombstone": "Minimal non-PII deletion IDs survive the bounded replay/token/unexpired-backup horizon; no resurrection of profiles, memberships or FREE matching. Copies never reset capture anchor."
   }
 }

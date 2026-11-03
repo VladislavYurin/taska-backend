@@ -64,7 +64,7 @@ fixtures += [
  ('RecordWireReceiptRequest',without(exact,'payerRef'),False),
  ('RecordWireReceiptRequest',dict(exact,amount=dict(money,currency='USD')),False),
 ]
-refund={'id':uid,'tenantId':uid,'paymentId':uid,'kind':'SUBSCRIPTION_FULL','state':'REQUESTED','amount':money,'requestedAt':'2026-11-02T10:00:00Z','version':'1','reasonCode':'SERVICE_FAILURE'}
+refund={'sourceMethod':'PSP','id':uid,'tenantId':uid,'paymentId':uid,'kind':'SUBSCRIPTION_FULL','state':'REQUESTED','amount':money,'requestedAt':'2026-11-02T10:00:00Z','version':'1','reasonCode':'SERVICE_FAILURE'}
 fixtures += [
  ('Refund',refund,True),
  ('Refund',dict(refund,reasonCode='EXCESS'),False),
@@ -92,12 +92,50 @@ fixtures += [
  ('AssignUnmatchedWireReceiptRequest',{'invoiceId':uid,'evidenceReference':'evidence-003','evidenceDigest':'b'*64,'confirmed':True},False),
  ('AssignUnmatchedWireReceiptRequest',{'invoiceId':uid,'payerRef':'verified-payer','evidenceReference':'evidence-003','evidenceDigest':'b'*64,'confirmed':True},True),
 ]
+final_partial='LOST_PARTIAL_COVERAGE_REVOKED'
+outcome={'outcome':final_partial,'evidenceReference':'verified-resolution','externalReference':'provider-dispute','confirmed':True,'confirmedMoneyFactId':uid}
+dispute={'id':uid,'tenantId':uid,'paymentId':uid,'state':'LOST','openedAt':'2026-11-02T10:00:00Z','resolvedAt':'2026-11-03T10:00:00Z','version':'2','finalOutcome':final_partial,'confirmedMoneyFactId':uid}
+fixtures += [
+ ('DisputeOutcomeRequest',outcome,True),
+ ('DisputeOutcomeRequest',dict(outcome,outcome='PARTIAL_MANUAL_REVIEW'),False),
+ ('DisputeOutcomeRequest',without(outcome,'confirmedMoneyFactId'),False),
+ ('DisputeOutcomeRequest',dict(outcome,confirmed=False),False),
+ ('DisputeOutcomeRequest',dict(outcome,refundAmount=money),False),
+ ('Dispute',dispute,True),
+ ('Dispute',dict(dispute,state='NEEDS_REVIEW'),False),
+ ('Dispute',dict(dispute,finalOutcome='WON'),False),
+ ('Dispute',without(dispute,'resolvedAt'),False),
+ ('Dispute',without(dispute,'confirmedMoneyFactId'),False),
+ ('Dispute',dict(without(dispute,'confirmedMoneyFactId'),state='WON',finalOutcome='WON'),True),
+]
+sla={'businessDays':5,'feeBearer':'TASKA','countingRule':'T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME','timezone':'Europe/Madrid','calendarDigest':'f'*64,'excludeEvidenceDate':True,'dstGapRule':'NEXT_VALID_INSTANT','dstOverlapRule':'LATER_OFFSET'}
+wire_refund=dict(refund,sourceMethod='WIRE',feeBearer='TASKA')
+wire_clock=dict(wire_refund,evidenceCompletedAt='2026-11-03T09:30:00Z',businessCalendarId='SANDBOX_FIXTURE_ES',calendarVersion='fixture-1',slaPolicyVersion='WIRE_RETURN_ES_V1',slaSnapshot=sla,decisionDueAt='2026-11-10T09:30:00Z',sendDueAt='2026-11-10T09:30:00Z')
+fixtures += [
+ ('Refund',wire_refund,True),
+ ('Refund',without(wire_refund,'feeBearer'),False),
+ ('Refund',dict(wire_refund,feeBearer='PAYER'),False),
+ ('Refund',dict(wire_refund,evidenceCompletedAt='2026-11-03T09:30:00Z'),False),
+ ('Refund',wire_clock,True),
+ ('Refund',dict(wire_clock,submittedAt='2026-11-12T09:30:00Z'),True),
+ ('Refund',without(wire_clock,'sendDueAt'),False),
+ ('Refund',dict(wire_clock,sourceMethod='PSP'),False),
+ ('Refund',dict(wire_refund,submittedAt='2026-11-03T12:30:00Z'),False),
+ ('RefundSlaSnapshot',dict(sla,businessDays=10),False),
+ ('RefundSlaSnapshot',dict(sla,feeBearer='PAYER'),False),
+ ('RefundSlaSnapshot',dict(sla,excludeEvidenceDate=False),False),
+]
+assert spec['components']['schemas']['Dispute']['properties']['finalOutcome']['enum']==spec['components']['schemas']['DisputeOutcomeRequest']['properties']['outcome']['enum']
+assert 'reserved "OUTCOME_PARTIAL_MANUAL_REVIEW"' in proto
 for name,value,valid in fixtures:
  schema={'$ref':'#/components/schemas/'+name,'components':spec['components']}
  # Resolve nested refs so positive/negative examples validate complete wire DTOs.
  errors=list(OAS30Validator(schema,format_checker=OAS30Validator.FORMAT_CHECKER).iter_errors(value));assert bool(errors)!=valid,(name,value,errors)
 # Normative temporal examples, not evidence that billing runtime implements these rules.
-from datetime import datetime
+from datetime import datetime,timedelta,timezone
+from zoneinfo import ZoneInfo
+from copy import deepcopy
+from calendar import monthrange
 def classify_occurrence(value,deadline):
  def utc(v):
   assert v.endswith('Z'), 'UTC evidence required'
@@ -122,6 +160,93 @@ for value,deadline,expected in temporal_cases:assert classify_occurrence(value,d
 try:classify_occurrence(dict(day,occurredBefore=day['occurredNotBefore']),'2026-11-03T00:00:00Z')
 except ValueError:pass
 else:raise AssertionError('empty interval accepted')
+# Executable normative references for 2026-11-03 decisions, not production service tests.
+billing_scenarios=[]
+def final_partial_effect(state,payment_id,fact_id):
+ result=deepcopy(state)
+ fact=result['facts'][fact_id]
+ if not fact['confirmed'] or fact['paymentId']!=payment_id or not 0<fact['lostMinor']<fact['paidMinor']:
+  raise ValueError('verified partial loss of this payment required')
+ if fact_id in result['appliedFacts']:return result
+ for period in result['periods']:
+  if period['paymentId']==payment_id:period['state']='REVOKED'
+ result['autopay']='DISABLED'
+ result['appliedFacts'].append(fact_id)
+ # No new monetary fact or outgoing return is produced by recording terminal outcome.
+ return result
+state={'periods':[{'id':'period-a','paymentId':'payment-a','state':'GRANTED'},{'id':'period-b','paymentId':'payment-b','state':'GRANTED'}],'facts':{'loss-a':{'paymentId':'payment-a','confirmed':True,'lostMinor':300,'paidMinor':2000},'loss-duplicate':{'paymentId':'duplicate-payment','confirmed':True,'lostMinor':300,'paidMinor':2000}},'autopay':'CONSENTED','appliedFacts':[],'outgoingReturns':[],'independentRestrictions':['OWNER_PAUSE']}
+result=final_partial_effect(state,'payment-a','loss-a')
+assert result['periods'][0]['state']=='REVOKED' and result['periods'][1]==state['periods'][1]
+assert result['facts']==state['facts'] and result['outgoingReturns']==[] and result['independentRestrictions']==['OWNER_PAUSE'] and result['autopay']=='DISABLED'
+billing_scenarios.append('revoke-linked-only-preserve-independent-no-new-money')
+assert final_partial_effect(result,'payment-a','loss-a')==result
+billing_scenarios.append('duplicate-terminal-fact-has-no-second-effect')
+assert final_partial_effect(state,'duplicate-payment','loss-duplicate')['periods']==state['periods']
+billing_scenarios.append('duplicate-historical-payment-has-no-linked-coverage')
+try:final_partial_effect(state,'payment-b','loss-a')
+except ValueError:pass
+else:raise AssertionError('cross-payment loss accepted')
+billing_scenarios.append('wrong-payment-evidence-rejected')
+for invalid_fact in [{'confirmed':False},{'lostMinor':2000}]:
+ invalid=deepcopy(state);invalid['facts']['loss-a'].update(invalid_fact)
+ try:final_partial_effect(invalid,'payment-a','loss-a')
+ except ValueError:pass
+ else:raise AssertionError('unverified or nonpartial loss accepted')
+ assert invalid['periods']==state['periods'] and invalid['outgoingReturns']==[]
+ billing_scenarios.append('reject-invalid-partial-fact-'+next(iter(invalid_fact)))
+def new_full_month(source,psp_success=None,wire_confirmed=None):
+ start=psp_success if source=='PSP' else wire_confirmed
+ if start is None:raise ValueError('confirmed payment required')
+ start=datetime.fromisoformat(start.replace('Z','+00:00'))
+ year,month=(start.year+1,1) if start.month==12 else (start.year,start.month+1)
+ return start,start.replace(year=year,month=month,day=min(start.day,monthrange(year,month)[1]))
+psp_start,psp_end=new_full_month('PSP',psp_success='2027-01-31T10:00:00Z')
+assert psp_start.isoformat()=='2027-01-31T10:00:00+00:00' and psp_end.isoformat()=='2027-02-28T10:00:00+00:00'
+billing_scenarios.append('new-psp-payment-new-full-calendar-month')
+wire_start,wire_end=new_full_month('WIRE',psp_success='2027-01-31T10:00:00Z',wire_confirmed='2027-02-02T12:00:00Z')
+assert wire_start.isoformat()=='2027-02-02T12:00:00+00:00' and wire_end.isoformat()=='2027-03-02T12:00:00+00:00'
+billing_scenarios.append('wire-month-starts-at-admin-confirmation')
+try:new_full_month('WIRE',psp_success='2027-01-31T10:00:00Z')
+except ValueError:pass
+else:raise AssertionError('wire coverage without confirmation')
+billing_scenarios.append('receipt-or-client-success-does-not-activate-wire')
+MADRID=ZoneInfo('Europe/Madrid')
+def resolve_madrid(local):
+ probe=local
+ while True:
+  candidates=[]
+  for fold in (0,1):
+   aware=probe.replace(tzinfo=MADRID,fold=fold)
+   utc=aware.astimezone(timezone.utc)
+   if utc.astimezone(MADRID).replace(tzinfo=None)==probe:candidates.append(utc)
+  if candidates:return max(candidates) # Later instant/offset at overlap.
+  probe=probe.replace(second=0,microsecond=0)+timedelta(minutes=1) # First valid instant after a gap.
+def wire_due(completed,nonworking):
+ local=datetime.fromisoformat(completed.replace('Z','+00:00')).astimezone(MADRID)
+ candidate=local.date();count=0
+ while count<5:
+  candidate+=timedelta(days=1)
+  if candidate.weekday()<5 and candidate.isoformat() not in nonworking:count+=1
+ return resolve_madrid(datetime.combine(candidate,local.time().replace(tzinfo=None)))
+# Named fixture calendars only; these dates do not claim to be the seller's live bank calendar.
+assert wire_due('2026-11-02T10:00:00Z',set()).isoformat()=='2026-11-09T10:00:00+00:00'
+billing_scenarios.append('sla-excludes-completion-day-and-weekend')
+assert wire_due('2026-11-03T09:30:00Z',{'2026-11-04'}).isoformat()=='2026-11-11T09:30:00+00:00'
+billing_scenarios.append('sla-versioned-fixture-holiday-excluded')
+assert wire_due('2027-03-26T10:00:00Z',set()).isoformat()=='2027-04-02T09:00:00+00:00'
+billing_scenarios.append('sla-keeps-madrid-wall-time-across-dst')
+assert resolve_madrid(datetime(2027,3,28,2,30)).isoformat()=='2027-03-28T01:00:00+00:00'
+assert resolve_madrid(datetime(2027,10,31,2,30)).isoformat()=='2027-10-31T01:30:00+00:00'
+billing_scenarios.append('sla-gap-next-valid-overlap-later-offset')
+def check_frozen_clock(record):
+ assert record['decisionDueAt']==record['sendDueAt']
+ assert record['feeBearer']=='TASKA' and record['slaSnapshot']['feeBearer']=='TASKA'
+check_frozen_clock(wire_clock)
+try:check_frozen_clock(dict(wire_clock,sendDueAt='2026-11-17T09:30:00Z'))
+except AssertionError:pass
+else:raise AssertionError('new five-day send clock accepted')
+assert dict(wire_clock,decidedAt='2026-11-09T09:30:00Z')['sendDueAt']==wire_clock['sendDueAt']
+billing_scenarios.append('one-frozen-decision-and-send-deadline-no-reset')
 inventory=json.loads((P.parent/'inventory/api-operations.json').read_text())
 for r in inventory['operations']:
  assert r['source']['baseline']==inventory['baseline']
@@ -129,4 +254,4 @@ for r in inventory['operations']:
  for src in [r['source']]+[h['source'] for h in r['handler']]:
   file=P.parents[2]/src['path'];assert file.is_file(),src
   assert 0<src['line']<=len(file.read_text().splitlines()),src
-print(json.dumps({'openapiPaths':len(spec['paths']),'openapiOperations':len(ops),'schemas':len(spec['components']['schemas']),'targetRpcs':len(rpc),'schemaCases':len(fixtures),'temporalCases':len(temporal_cases)+1,'baselineCounts':inventory['counts']},indent=2))
+print(json.dumps({'openapiPaths':len(spec['paths']),'openapiOperations':len(ops),'schemas':len(spec['components']['schemas']),'targetRpcs':len(rpc),'schemaCases':len(fixtures),'temporalCases':len(temporal_cases)+1,'billingScenarioCases':len(billing_scenarios),'baselineCounts':inventory['counts']},indent=2))

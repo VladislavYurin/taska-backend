@@ -3698,14 +3698,14 @@
         "owner",
         "financial fact verification",
         "new autopay disallowed by pause/block/dispute",
-        "manual financial recovery follows supported state-machine action; unsettled policy fails503"
+        "manual financial recovery follows D251/D252 state-machine action; missing/corrupt required policy fails503"
       ]
     },
     "FINANCE_RECOVERY": {
       "checks": [
         "owner",
         "supported finance request under independent restrictions",
-        "unresolved O04-specific command fails503, read/fact recording continues"
+        "D251/D252 configured final outcomes allowed; missing/corrupt WIRE_RETURN_ES_V1 fails503 only for affected command, read/fact recording continues"
       ]
     },
     "AUTOPAY": {

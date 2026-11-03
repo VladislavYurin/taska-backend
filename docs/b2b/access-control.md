@@ -82,7 +82,7 @@ TRANSFER строка не создаёт новое исключение из �
 
 Account deletion и last-admin/owner guards проверяются по **всем** memberships, не только выбранному tenant, до выдачи challenge и повторно под соответствующими locks при commit. tenant-service ставит global account admission fence; все операции назначения owner/admin, новой membership и нового tenant проверяют этот fence, поэтому новые обязанности не возникают после global precheck. Purpose ACCOUNT_DELETE не принимается для TENANT_DELETE и наоборот; code связан с account/target/version/expiry/single-use. Race создания нового owned tenant или ухода другого admin до commit отклоняет исполнение без частичного удаления. Новый account с тем же email не восстанавливает старое авторство или membership.
 
-Owner pause, platform block и dispute останавливают **новые** autopay attempts; уже принятые attempts сверяются до terminal ledger fact. Их сохранение не означает новый платёж. Owner financial calls, для которых settlement процедура ещё O04, возвращают POLICY_NOT_CONFIGURED для конкретной команды, но не блокируют чтение/сохранение финансового факта и независимые действия. O08 (PSP) и O09 (retention) аналогично локализованы.
+Owner pause, platform block и dispute останавливают **новые** autopay attempts; уже принятые attempts сверяются до terminal ledger fact. Их сохранение не означает новый платёж. D251/D252 определяют окончательный partial-chargeback outcome и SLA возврата. POLICY_NOT_CONFIGURED относится только к отсутствующей/повреждённой обязательной конфигурации; факт сохраняется. Stripe live отложен D250; retention ES_V1 принят D253, обычный offboarding не ждёт нового бизнес-решения.
 
 ## 4. Детерминированный evaluator и ошибки
 
@@ -158,6 +158,6 @@ D248: transfer, bank confirmation и refund используют действу�
 
 Матрица покрывает роли и все credential kinds; source inventory покрывает current non-HTTP paths; concrete state/error/TTL/key/fence decisions заданы выше. Coding tasks должны ссылаться на action ID и source anchors, добавлять success/denial/state-preservation/concurrency checks, а не оставлять «проанализировать позже».
 
-Текущая аналитика не доказывает работающую изоляцию: её нужно реализовать и проверить через static OpenAPI/proto parity, PostgreSQL/RLS pool IT, scoped admin, MCP/OAuth security и E2E на final head. Owner/last-admin constraints и signed scope обходить тестовым GLOBAL_ADMIN запрещено. O04/O08/O09 остаются только финансовыми/launch/retention business decisions владельца; остальные описанные механизмы готовы к coding.
+Текущая аналитика не доказывает работающую изоляцию: её нужно реализовать и проверить через static OpenAPI/proto parity, PostgreSQL/RLS pool IT, scoped admin, MCP/OAuth security и E2E на final head. Owner/last-admin constraints и signed scope обходить тестовым GLOBAL_ADMIN запрещено. O04/O08/O09 закрыты D250–D253: правила готовы к coding, фактическое подключение Stripe выполняется позже оператором по versioned configuration.
 
 Assertion детали — [contracts README §4](contracts/README.md): подписываются `rpc`, `context_sha256`, `request_sha256`; mutation `jti` consume-once, повтор получает новый assertion при том же business operationId. Presentation-колонки WEB/MCP/SERVICE_WORKER матрицы не wire enum; wire kinds — WEB_GLOBAL/WEB_TENANT/USER_PAT/USER_OAUTH/ADMIN_PAT/ADMIN_OAUTH/SERVICE.

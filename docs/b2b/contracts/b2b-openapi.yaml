@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
   title: Taska B2B additive target contract
-  version: 1.0.0-blueprint
+  version: 1.0.1-blueprint
   description: 'Design only at baseline af7ab57ead44304b89bbd47dabeeba45b761ce16; does not replace or publish current
-    static OpenAPI. Normative behavior and gates: README.md, ai-business-spec.md D01-D249. No live payment/deletion
-    authorization.'
+    static OpenAPI. Normative behavior and gates: README.md, ai-business-spec.md D01-D249 plus owner clarifications
+    of 2026-11-03. No live payment/deletion authorization.'
 servers:
 - url: https://api.taska.example
   description: Non-routable documentation placeholder; replace per environment
@@ -1249,7 +1249,8 @@ paths:
           $ref: '#/components/responses/Problem'
       security:
       - bearerAuth: []
-      description: O09 live execution gate. Confirmed name + explicit confirmation + purpose-bound code. Platform
+      description: Logical offboarding/tombstone proceeds after authorisation; physical purge requires ES_V1;
+        missing/corrupt policy holds purge only, never restores access. Confirmed name + explicit confirmation + purpose-bound code. Platform
         block/dispute deny ordinary owner; owner pause allowed.
       parameters:
       - name: tenantId
@@ -3202,6 +3203,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/DisputeOutcomeRequest'
+      description: Apply verified terminal outcome to this dispute and source payment only. LOST_PARTIAL_COVERAGE_REVOKED
+        never submits an outgoing refund. Recompute effective access from independent coverage and restrictions;
+        disable autopay until a new explicit consent.
   /api/v1/admin/tenants/{tenantId}/platform-block:
     put:
       operationId: setPlatformBlock
@@ -3824,7 +3828,7 @@ paths:
       - name: receiptId
         in: path
         required: true
-        schema: &id009
+        schema: &id013
           type: string
           format: uuid
       requestBody:
@@ -6453,6 +6457,36 @@ components:
           pattern: ^(0|[1-9][0-9]{0,18})$
         reasonCode:
           $ref: '#/components/schemas/RefundReasonCode'
+        sourceMethod:
+          type: string
+          enum:
+          - PSP
+          - WIRE
+        evidenceCompletedAt: &id002
+          type: string
+          format: date-time
+        businessCalendarId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        calendarVersion:
+          type: string
+          minLength: 1
+          maxLength: 100
+        slaPolicyVersion:
+          type: string
+          enum:
+          - WIRE_RETURN_ES_V1
+        slaSnapshot:
+          $ref: '#/components/schemas/RefundSlaSnapshot'
+        decisionDueAt: *id002
+        sendDueAt: *id002
+        decidedAt: *id002
+        submittedAt: *id002
+        feeBearer:
+          type: string
+          enum:
+          - TASKA
       required:
       - id
       - tenantId
@@ -6463,6 +6497,7 @@ components:
       - requestedAt
       - version
       - reasonCode
+      - sourceMethod
       oneOf:
       - properties:
           kind:
@@ -6484,6 +6519,67 @@ components:
             - CLOSED_CREATION
             - INCOMPLETE_BANK_PAYMENT
             - DUPLICATE_PAYMENT
+      allOf:
+      - oneOf:
+        - properties:
+            sourceMethod:
+              enum:
+              - PSP
+          not:
+            anyOf:
+            - required:
+              - evidenceCompletedAt
+            - required:
+              - feeBearer
+            - required:
+              - businessCalendarId
+            - required:
+              - calendarVersion
+            - required:
+              - slaPolicyVersion
+            - required:
+              - slaSnapshot
+            - required:
+              - decisionDueAt
+            - required:
+              - sendDueAt
+        - properties:
+            sourceMethod:
+              enum:
+              - WIRE
+          required:
+          - feeBearer
+          oneOf:
+          - required:
+            - evidenceCompletedAt
+            - businessCalendarId
+            - calendarVersion
+            - slaPolicyVersion
+            - slaSnapshot
+            - decisionDueAt
+            - sendDueAt
+          - not:
+              anyOf:
+              - required:
+                - evidenceCompletedAt
+              - required:
+                - submittedAt
+              - required:
+                - businessCalendarId
+              - required:
+                - calendarVersion
+              - required:
+                - slaPolicyVersion
+              - required:
+                - slaSnapshot
+              - required:
+                - decisionDueAt
+              - required:
+                - sendDueAt
+      description: 'sourceMethod derives from original verified payment, never caller choice. WIRE feeBearer TASKA
+        does not deduct principal. First complete evidence freezes WIRE_RETURN_ES_V1 and calendar: decisionDueAt=sendDueAt
+        at T+5 business dates excluding evidence date, same Europe/Madrid wall time. Retry/assignment/decision never
+        reset the clock; due time does not confirm transfer or promise bank arrival.'
     RefundPage:
       type: object
       additionalProperties: false
@@ -6578,7 +6674,9 @@ components:
       - confirmedAt
       - evidenceReference
       - confirmed
-      description: Allowed only when O04 evidence policy configured; submission is not confirmation.
+      description: Requires a verified outgoing bank/provider settlement fact tied to original payer and amount,
+        with source-return dedupe. Submission or expiry of the five-business-day operator deadline is not confirmed
+        return. No additional refund is created by a chargeback outcome.
     UnallocatedReturnRequest:
       type: object
       additionalProperties: false
@@ -6634,6 +6732,16 @@ components:
           minLength: 1
           maxLength: 19
           pattern: ^(0|[1-9][0-9]{0,18})$
+        finalOutcome:
+          type: string
+          enum: &id003
+          - WON
+          - WITHDRAWN_CONFIRMED
+          - LOST_FULL_REFUND
+          - LOST_PARTIAL_COVERAGE_REVOKED
+        confirmedMoneyFactId: &id004
+          type: string
+          format: uuid
       required:
       - id
       - tenantId
@@ -6641,6 +6749,53 @@ components:
       - state
       - openedAt
       - version
+      oneOf:
+      - properties:
+          state:
+            enum:
+            - OPEN
+            - NEEDS_REVIEW
+        not:
+          anyOf:
+          - required:
+            - finalOutcome
+          - required:
+            - resolvedAt
+      - properties:
+          state:
+            enum:
+            - WON
+          finalOutcome:
+            enum:
+            - WON
+        required:
+        - finalOutcome
+        - resolvedAt
+      - properties:
+          state:
+            enum:
+            - WITHDRAWN
+          finalOutcome:
+            enum:
+            - WITHDRAWN_CONFIRMED
+        required:
+        - finalOutcome
+        - resolvedAt
+      - properties:
+          state:
+            enum:
+            - LOST
+          finalOutcome:
+            enum: &id005
+            - LOST_FULL_REFUND
+            - LOST_PARTIAL_COVERAGE_REVOKED
+        required:
+        - finalOutcome
+        - confirmedMoneyFactId
+        - resolvedAt
+      description: NEEDS_REVIEW is nonterminal while evidence remains incomplete. Final partial chargeback is LOST
+        with finalOutcome LOST_PARTIAL_COVERAGE_REVOKED and verified source fact. Terminal facts/outcomes are immutable
+        and duplicate delivery has no second financial or entitlement effect.
     DisputePage:
       type: object
       additionalProperties: false
@@ -6662,11 +6817,7 @@ components:
       properties:
         outcome:
           type: string
-          enum:
-          - WON
-          - WITHDRAWN_CONFIRMED
-          - LOST_FULL_REFUND
-          - PARTIAL_MANUAL_REVIEW
+          enum: *id003
         evidenceReference:
           type: string
           minLength: 1
@@ -6679,11 +6830,27 @@ components:
           type: boolean
           enum:
           - true
+        confirmedMoneyFactId: *id004
       required:
       - outcome
       - evidenceReference
       - externalReference
       - confirmed
+      oneOf:
+      - properties:
+          outcome:
+            enum:
+            - WON
+            - WITHDRAWN_CONFIRMED
+      - properties:
+          outcome:
+            enum: *id005
+        required:
+        - confirmedMoneyFactId
+      description: Final verified dispute outcome, not a request to send money. Loss outcomes require an existing
+        verified money fact for this exact disputed payment. Partial loss revokes only coverage linked to that payment;
+        no extra refund, no independent-coverage revocation. New full confirmed payment creates a new full month;
+        autopay needs new explicit consent.
     Entitlement:
       type: object
       additionalProperties: false
@@ -7164,27 +7331,27 @@ components:
       type: object
       additionalProperties: false
       properties:
-        occurredPrecision: &id002
+        occurredPrecision: &id006
           $ref: '#/components/schemas/OccurrencePrecision'
-        occurredAt: &id003
+        occurredAt: &id007
           type: string
           format: date-time
           nullable: true
-        occurredNotBefore: &id004
+        occurredNotBefore: &id008
           type: string
           format: date-time
-        occurredBefore: &id005
+        occurredBefore: &id009
           type: string
           format: date-time
-        payerRef: &id006
+        payerRef: &id010
           type: string
           minLength: 1
           maxLength: 200
-        evidenceRef: &id007
+        evidenceRef: &id011
           type: string
           minLength: 1
           maxLength: 300
-        digest: &id008
+        digest: &id012
           type: string
           pattern: ^[a-f0-9]{64}$
         confirmed:
@@ -7231,13 +7398,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        occurredPrecision: *id002
-        occurredAt: *id003
-        occurredNotBefore: *id004
-        occurredBefore: *id005
-        payerRef: *id006
-        evidenceRef: *id007
-        digest: *id008
+        occurredPrecision: *id006
+        occurredAt: *id007
+        occurredNotBefore: *id008
+        occurredBefore: *id009
+        payerRef: *id010
+        evidenceRef: *id011
+        digest: *id012
         evidenceId: *id001
         sourceFactId: *id001
         verifiedBy: *id001
@@ -7406,7 +7573,7 @@ components:
         evidenceDigest:
           type: string
           pattern: ^[a-f0-9]{64}$
-        id: *id009
+        id: *id013
         state:
           type: string
           enum:
@@ -7418,8 +7585,8 @@ components:
         observedAt:
           type: string
           format: date-time
-        assignedTenantId: *id009
-        paymentFactId: *id009
+        assignedTenantId: *id013
+        paymentFactId: *id013
       required:
       - id
       - state
@@ -7491,7 +7658,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        invoiceId: *id009
+        invoiceId: *id013
         payerRef:
           type: string
           minLength: 1
@@ -7516,6 +7683,52 @@ components:
       description: Verify original payer and invoice owner. Atomically assign global receipt once to tenant payment
         fact under global source dedupe. No coverage; use confirmWireReceipt separately. Does not alter original
         amount/time evidence.
+    RefundSlaSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        businessDays:
+          type: integer
+          enum:
+          - 5
+        feeBearer:
+          type: string
+          enum:
+          - TASKA
+        countingRule:
+          type: string
+          enum:
+          - T_PLUS_5_BUSINESS_DATES_SAME_LOCAL_TIME
+        timezone:
+          type: string
+          enum:
+          - Europe/Madrid
+        calendarDigest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        excludeEvidenceDate:
+          type: boolean
+          enum:
+          - true
+        dstGapRule:
+          type: string
+          enum:
+          - NEXT_VALID_INSTANT
+        dstOverlapRule:
+          type: string
+          enum:
+          - LATER_OFFSET
+      description: Immutable WIRE_RETURN_ES_V1 snapshot. Mon-Fri minus versioned Spain national plus seller regional/local
+        bank nonworking dates. Sandbox fixture calendar is never used for live returns.
+      required:
+      - businessDays
+      - feeBearer
+      - countingRule
+      - timezone
+      - calendarDigest
+      - excludeEvidenceDate
+      - dstGapRule
+      - dstOverlapRule
   securitySchemes:
     bearerAuth:
       type: http

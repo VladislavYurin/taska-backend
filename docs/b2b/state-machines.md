@@ -1,6 +1,6 @@
 # B2B: алгоритмы и переходы состояний
 
-Статус: целевой дизайн SA-2026-11-02, а не реализованный функционал. Бизнес-источник — [единая спецификация, D01–D249](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751880). Исходный код инвентаризирован на `af7ab57ead44304b89bbd47dabeeba45b761ce16`. Структуры БД — [target-data-model.md](target-data-model.md), transport DTO — [contracts/README.md](contracts/README.md), проверки доступа — [access-control.md](access-control.md). Дальнейшие правила не заменяют согласованные бизнес-исключения.
+Статус: целевой дизайн SA-2026-11-03, а не реализованный функционал. Бизнес-источник — [единая спецификация, D01–D253](https://confluence.ozero.dev/pages/viewpage.action?pageId=60751880). Исходный код инвентаризирован на `af7ab57ead44304b89bbd47dabeeba45b761ce16`. Структуры БД — [target-data-model.md](target-data-model.md), transport DTO — [contracts/README.md](contracts/README.md), проверки доступа — [access-control.md](access-control.md). Дальнейшие правила не заменяют согласованные бизнес-исключения.
 
 ## L01. Общие правила выполнения команды
 
@@ -25,7 +25,7 @@
 | Своевременная оплата, поздняя доставка | Все необходимые деньги фактически получены не позже invoice deadline и creation deadline; AUTO_CLOSED допускает возврат к активации той же компании (D216). | OWNER_CANCELLED/DELETING/DELETED не оживают; partial/late payment не является исключением. Независимая блокировка остаётся. |
 | Отмена владельцем | До первой оплаты → OWNER_CANCELLED; не даёт FREE, не удаляет аккаунт. Пришедшие деньги сохраняются и возвращаются через settlement case. | Гонка cancel/payment сериализуется по tenant operation fence; результат подтверждённого платежа не теряется. |
 
-FREE marker хранит HMAC канонического подтверждённого email и идентификатор использовавшей право компании. Повторная регистрация того же подтверждённого адреса не обнуляет право; разные адреса не связываются fingerprinting. Смена email не освобождает уже использованное право. Юридическое основание/срок marker — отдельное решение C06 в [commercial-decisions.md](commercial-decisions.md); HMAC не считается анонимизацией.
+FREE marker хранит HMAC канонического подтверждённого email и идентификатор использовавшей право компании. Повторная регистрация того же подтверждённого адреса не обнуляет право; разные адреса не связываются fingerprinting. Смена email не освобождает уже использованное право. Срок и основания определены D253 / [retention-policy.md](retention-policy.md): минимальный purpose-bound marker с ежегодной проверкой необходимости; lawful erasure обрабатывается явно, HMAC не считается анонимизацией.
 
 ## L03. Membership, приглашение и передача владельца
 
@@ -93,8 +93,13 @@ Refund kind: `SUBSCRIPTION_FULL` либо `UNALLOCATED_RETURN`; произвол
 | WON с сохранением денег | Снять только эту dispute reason; остаток прежнего периода, без продления | Новое согласие владельца обязательно |
 | WITHDRAWN с окончательным PSP подтверждением сохранения оплаты | Как WON; заявление клиента недостаточно | Новое согласие |
 | LOST + подтверждённый полный chargeback | Revoke связанный coverage; никакого дополнительного refund | Отключён |
-| Частичный внешний chargeback | NEEDS_REVIEW, READ_ONLY, неизменный ledger | Отключён; бизнес-итог C03 ещё не подтверждён |
+| Частичный внешний chargeback до окончательной сверки | NEEDS_REVIEW, READ_ONLY по затронутому покрытию, неизменный ledger | Отключён |
+| LOST_PARTIAL_COVERAGE_REVOKED (D251), подтверждённый окончательный частичный проигрыш | Dispute → LOST; полностью revoke только связанный coverage. Новое покрытие требует полной оплаты и нового месяца; независимый период не отзывается. Никакого дополнительного refund | Отключён до нового согласия |
 | Только generic CLOSED / неподтверждённый status | Сверка, не считать оплатой | Не восстанавливать автоматически |
+
+После окончательного частичного проигрыша убрать только закрытую dispute reason; при отсутствии другого покрытия действует NO_PAID_COVERAGE. Новая полная оплата не снимает pause/block/другой спор. Идемпотентная запись outcome требует confirmedMoneyFactId и evidence; generic CLOSED не заменяет подтверждения.
+
+Банковский возврат (D252): first evidenceCompletedAt + 5 рабочих дней по WIRE_RETURN_ES_V1; decisionDueAt = sendDueAt, snapshot календаря/tzdb неизменяем. FeeBearer TASKA; principal не уменьшается. Retry/переназначение не запускает SLA заново, submitted не равно confirmed. Полный алгоритм — [C05](commercial-decisions.md).
 
 ## L08. Autopay, уведомления и версии тарифов
 
@@ -126,7 +131,7 @@ Company delete: обычный owner + explicit double confirmation + purpose-bo
 
 Account self-delete: web only, purpose-bound account code отдельно от tenant code. Проверки ownership и last ACTIVE TENANT_ADMIN во всех компаниях выполняются tenant-service через глобальный account admission fence. Все команды назначения owner/admin и новой membership сверяют fence. Все leave/remove/suspend/demotion под lock компании считают оставшихся ACTIVE администраторов, исключая accounts с ADMISSION_CLOSED/REMOVING_MEMBERSHIPS. Поэтому параллельный уход второго администратора после precheck не оставит компанию без администратора. После fence — повторная проверка инвариантов; при конфликте снять fence и отказать без удаления. При успехе auth tombstone/security version, revoke sessions/PAT/OAuth, cleanup memberships/projections/avatar, отмена приглашений этого identity. Pause/block/dispute оставшихся компаний не препятствуют (D249).
 
-Историческое авторство ссылается на stable tombstone: «Удалённый пользователь», без прежних имени/email/avatar snapshots в выдаче/поиске. Финансовые и обязательные audit records не фальсифицируются переписыванием автора; их доступ и срок — retention policy. Admin account deletion использует тот же integrity workflow: до удаления owner должен быть явно переназначен, нельзя оставить dangling owner/zero last admin. Политика выдачи финансовых документов после удаления — C06, не восстановление старой web identity.
+Историческое авторство ссылается на stable tombstone: «Удалённый пользователь», без прежних имени/email/avatar snapshots в выдаче/поиске. Финансовые и обязательные audit records не фальсифицируются переписыванием автора; их доступ и срок — retention policy. Admin account deletion использует тот же integrity workflow: до удаления owner должен быть явно переназначен, нельзя оставить dangling owner/zero last admin. Документы после удаления — по D253 / [retention-policy.md](retention-policy.md), через verified operator case без восстановления старой web identity.
 
 ## L12. Приёмочные сценарии реализации
 

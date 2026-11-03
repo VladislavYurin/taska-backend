@@ -1,5 +1,5 @@
 {
-  "revision": "SA-2026-11-02",
+  "revision": "SA-2026-11-03",
   "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16",
   "implementationStatus": "DESIGNED_NOT_IMPLEMENTED",
   "items": [
@@ -1102,9 +1102,7 @@
         "B10",
         "B18"
       ],
-      "openQuestions": [
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-321",
@@ -1962,9 +1960,7 @@
         "B09",
         "B11"
       ],
-      "openQuestions": [
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-349",
@@ -2198,9 +2194,7 @@
         "B08",
         "B09"
       ],
-      "openQuestions": [
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-357",
@@ -2250,9 +2244,7 @@
         "B06",
         "B09"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-358",
@@ -2310,9 +2302,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-359",
@@ -2728,9 +2718,7 @@
         "B07",
         "B17"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-374",
@@ -2753,9 +2741,7 @@
         "B17",
         "B18"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-375",
@@ -2868,9 +2854,7 @@
         "B10",
         "B18"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-379",
@@ -2911,11 +2895,7 @@
         "B12",
         "B18"
       ],
-      "openQuestions": [
-        "O04",
-        "O08",
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-459",
@@ -3015,9 +2995,7 @@
         "B12",
         "B14"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-462",
@@ -3119,9 +3097,7 @@
         "B14",
         "B17"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-292",
@@ -3151,11 +3127,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04",
-        "O08",
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-267",
@@ -3191,11 +3163,7 @@
         "B17",
         "B18"
       ],
-      "openQuestions": [
-        "O04",
-        "O08",
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-468",
@@ -3293,10 +3261,7 @@
         "B10",
         "B18"
       ],
-      "openQuestions": [
-        "O04",
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-472",
@@ -3310,7 +3275,8 @@
       "documents": [
         "state-machines.md",
         "contracts/README.md",
-        "target-data-model.md"
+        "target-data-model.md",
+        "retention-policy.md"
       ],
       "operations": [
         {
@@ -3326,9 +3292,7 @@
         "B04",
         "B14"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-473",
@@ -3633,7 +3597,8 @@
       "documents": [
         "state-machines.md",
         "contracts/README.md",
-        "target-data-model.md"
+        "target-data-model.md",
+        "retention-policy.md"
       ],
       "operations": [
         {
@@ -3648,9 +3613,7 @@
         "B08",
         "B09"
       ],
-      "openQuestions": [
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-484",
@@ -3698,9 +3661,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-486",
@@ -3729,9 +3690,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-488",
@@ -3794,9 +3753,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-491",
@@ -3912,9 +3869,7 @@
         "B17",
         "B18"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-489",
@@ -3997,9 +3952,7 @@
         "B12",
         "B14"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-496",
@@ -4303,9 +4256,7 @@
         "B07",
         "B17"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-507",
@@ -4352,9 +4303,7 @@
         "B12",
         "B14"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-509",
@@ -4501,10 +4450,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04",
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-515",
@@ -4556,10 +4502,7 @@
         "B09",
         "B10"
       ],
-      "openQuestions": [
-        "O04",
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-517",
@@ -4586,9 +4529,7 @@
         "B10",
         "B12"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-485",
@@ -4649,9 +4590,7 @@
         "B14",
         "B18"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-518",
@@ -4677,9 +4616,7 @@
         "B10",
         "B22"
       ],
-      "openQuestions": [
-        "O04"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-519",
@@ -4705,9 +4642,7 @@
         "B10",
         "B22"
       ],
-      "openQuestions": [
-        "O08"
-      ]
+      "openQuestions": []
     },
     {
       "key": "TAS-520",
@@ -4722,7 +4657,8 @@
       "documents": [
         "commercial-decisions.md",
         "contracts/README.md",
-        "target-data-model.md"
+        "target-data-model.md",
+        "retention-policy.md"
       ],
       "operations": [],
       "schemaTables": [
@@ -4734,9 +4670,7 @@
         "B17",
         "B22"
       ],
-      "openQuestions": [
-        "O09"
-      ]
+      "openQuestions": []
     }
   ]
 }
