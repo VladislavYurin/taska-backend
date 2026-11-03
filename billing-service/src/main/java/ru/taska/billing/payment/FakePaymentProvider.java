@@ -104,6 +104,7 @@ public final class FakePaymentProvider implements PaymentProvider {
     }
     /** Test driver: models a later verified provider observation, never billing's PAID decision. */
     public SignedWebhook confirmPayment(Merchant merchant, String paymentId, State finalState, String eventId) {
+        requireTest(merchant);
         PaymentAttempt a = payment(merchant, paymentId);
         if (finalState != State.SUCCEEDED && finalState != State.DECLINED) throw new ProviderException(INVALID_STATE);
         State previousState = a.state().get();

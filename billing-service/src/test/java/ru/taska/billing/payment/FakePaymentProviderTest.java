@@ -10,11 +10,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static ru.taska.billing.payment.PaymentProvider.*;
 import static ru.taska.billing.payment.ProviderException.Reason.*;
 
-class FakePaymentProviderTest {
+class FakePaymentProviderTest extends PaymentProviderContractTest {
     private final FakePaymentProvider fake = new FakePaymentProvider("a fixture key with at least thirty-two bytes".getBytes(StandardCharsets.UTF_8));
     private final Merchant merchant = new Merchant("merchant-A", Environment.TEST);
     private final Invoice invoice = new Invoice(UUID.randomUUID(), new Money(2000, "EUR"));
     private final UUID operation = UUID.randomUUID();
+
+    @Override protected Fixture fixture() { return new Fixture(fake, merchant, invoice); }
 
     @Test void repeatUsesOneProviderPaymentAndRejectsChangedInvoice() {
         Checkout first = fake.createCheckout(merchant, invoice, operation, "payment-1").block();
@@ -61,7 +63,22 @@ class FakePaymentProviderTest {
         StepVerifier.create(fake.createCheckout(merchant, invoice, unknownOperation, "unknown"))
                 .expectErrorSatisfies(error -> assertReason(error, UNKNOWN_OUTCOME)).verify();
         Checkout unknown = fake.createCheckout(merchant, invoice, unknownOperation, "unknown").block();
+        assertEquals(State.UNKNOWN, unknown.state());
         assertEquals(State.UNKNOWN, fake.fetchPayment(merchant, unknown.providerPaymentId()).block().state());
+        assertEquals(unknown.providerPaymentId(), fake.createCheckout(merchant, invoice, unknownOperation, "unknown").block().providerPaymentId());
+    }
+
+    @Test void refundWaitsForConfirmedPaymentAndLeavesNoReservationOnRefusal() {
+        fake.nextPayment(FakePaymentProvider.Scenario.TIMEOUT_ACCEPTED);
+        StepVerifier.create(fake.createCheckout(merchant, invoice, operation, "pending"))
+                .expectErrorSatisfies(error -> assertReason(error, UNKNOWN_OUTCOME)).verify();
+        Checkout pending = fake.createCheckout(merchant, invoice, operation, "pending").block();
+        UUID refundOperation = UUID.randomUUID();
+        StepVerifier.create(fake.refund(merchant, pending.providerPaymentId(), invoice.total(), refundOperation, "refund-after-payment"))
+                .expectErrorSatisfies(error -> assertReason(error, INVALID_STATE)).verify();
+        fake.confirmPayment(merchant, pending.providerPaymentId(), State.SUCCEEDED, "payment-confirmed");
+        assertEquals(RefundState.SUCCEEDED, fake.refund(merchant, pending.providerPaymentId(), invoice.total(), refundOperation,
+                "refund-after-payment").block().state());
     }
 
     @Test void refundIsFullIdempotentAndCanConfirmLater() {
