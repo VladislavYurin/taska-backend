@@ -1,4 +1,4 @@
-# tenant-service — TAS-310/311
+# tenant-service — TAS-310/311/312
 
 Сервис владеет реестром компаний. `TenantService.CreateTenant/GetTenant` реализуют подмножество принятого [B2B protobuf](../docs/b2b/contracts/b2b.proto), опубликованное в `grpc-common-lib/src/main/proto/v1/tenant-registry.proto` с сохранением имён и номеров полей. Публичные HTTP endpoints ещё не подключены: gateway должен сначала получить глобальные/tenant session adapters и provisioning flow. Статический REST OpenAPI существующей системы не расширяется недоступным маршрутом.
 
@@ -21,7 +21,15 @@ Cursor подписан HMAC-SHA256, versioned, TTL15min. Он привязан 
 
 Batch возвращает tenant lifecycle и общее membership generation; каждый найденный snapshot содержит индивидуальную version и то же общее generation. State не кешируется. Строки и обе generations читаются одним SELECT snapshot, включая LEFT JOIN для unknown users. Для бизнес-действия потребитель дополнительно проверяет lifecycle/capabilities и project ACL; found/ACTIVE сами не выдают рабочие права. DELETED/неизвестный tenant скрывается как TENANT_NOT_FOUND. Ответы не содержат credentials, display names, email или данные другой компании.
 
-Internal proto добавлен к blueprint без изменения старых field numbers. Миграция0002 добавляет partial `(tenant_id,joined_at,user_id)` index для видимых состояний; changeset0001 не меняется. Обязательный TenantMembershipIntegrationTest проверяет A/B states/versions, HMAC и revocation/rejoin, natural keyset plan, отсутствие writes/outbox и реальный mTLS/JWS всех трёх новых RPC через production policy map.
+Internal proto добавлен к blueprint без изменения старых field numbers. Миграция0002 добавляет partial `(tenant_id,joined_at,user_id)` index для видимых состояний; changeset0001 не меняется. Обязательный TenantMembershipIntegrationTest проверяет A/B states/versions, HMAC и revocation/rejoin, natural keyset plan, отсутствие writes/outbox при чтении и реальный mTLS/JWS read RPC через production policy map.
+
+## Изменение роли и выход — TAS-312
+
+`TenantService.SetTenantMemberRole` и `LeaveTenant` опубликованы во внутреннем protobuf с номерами полей из B2B blueprint. Публичный HTTP adapter пока отсутствует; эти методы нельзя вызывать через существующий REST gateway. Human caller требует verified tenant/action, WEB_TENANT session либо USER_PAT/USER_OAUTH credential, `write` scope и текущую ACTIVE membership с совпадающей signed generation. Для назначения/снятия роли нужен собственный `TENANT_ADMIN` в той же компании. Обычный GLOBAL_ADMIN не получает неявный bypass. `LeaveTenant` требует явное `confirmed=true`; он действует только на самого caller.
+
+Обе команды требуют UUID Idempotency-Key и `expected_version` membership (аналог If-Match). Одна tenant-row блокировка сериализует выбор actor/target, проверку owner и число ACTIVE TENANT_ADMIN, изменение membership, рост `tenants.membership_version`, receipt, audit и outbox. Владелец не может потерять роль или выйти до отдельного transfer/delete flow; последнего ACTIVE TENANT_ADMIN снять нельзя. Смена роли/выход увеличивает row version. Повтор с тем же ключом и payload возвращает сохранённый результат без новой записи; другой payload с тем же ключом даёт `IDEMPOTENCY_CONFLICT`. Успешное фактическое изменение создаёт `TenantMembershipChanged` outbox event с tenant/user/actor UUID, ролью, состоянием и результатом, без credentials или directory данных. Append-only `membership_audit` сохраняет actor/tenant/target, старое и новое состояние, версию и результат каждой принятой команды. No-op сохраняет receipt/audit, но не создаёт событие и не меняет версии. Миграция0003 добавляет защищённую tenant RLS audit таблицу; старые changesets не изменяются.
+
+Выход сразу делает membership REMOVED и отзывает старую generation. Его повтор с прежним credential может быть отвергнут на live-auth boundary после отзыва; повтор не создаст второе изменение. State/suspend/remove чужого участника остаются задачей TAS-323; owner transfer — TAS-473. Эти RPC не означают готовый публичный B2B self-service или доступность на общем стенде.
 
 ## Создание и повторы
 
@@ -39,7 +47,7 @@ Paid начинается AWAITING_PAYMENT с `creationDeadline=createdAt+30d`, 
 
 ## Trust и запуск
 
-`RpcContextSecurity` должен получить настоящие Keys, shared ReplayGuard и online Authority adapters TAS-306. Authority обязан привязать исходную сессию к зарегистрированному действующему пользователю, RPC/action/scope и актуальным generations; одного наличия account недостаточно. TenantServerInterceptor проверяет message-bound JWS и mTLS SPIFFE peer; пять методов registry/membership внесены в allowlist. Без trust provider все gRPC calls получают UNAVAILABLE до handler, plaintext не становится fallback. Liveness/DB health доступны отдельно. Этот foundation ещё не означает доступный self-service на общем стенде.
+`RpcContextSecurity` должен получить настоящие Keys, shared ReplayGuard и online Authority adapters TAS-306. Authority обязан привязать исходную сессию к зарегистрированному действующему пользователю, RPC/action/scope и актуальным generations; одного наличия account недостаточно. TenantServerInterceptor проверяет message-bound JWS и mTLS SPIFFE peer; семь методов registry/membership внесены в allowlist. Без trust provider все gRPC calls получают UNAVAILABLE до handler, plaintext не становится fallback. Liveness/DB health доступны отдельно. Этот foundation ещё не означает доступный self-service на общем стенде.
 
 База выделена сервису. До первого старта оператор выполняет:
 

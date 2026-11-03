@@ -126,10 +126,31 @@ message ListTenantMembersRpcRequest {
   PageRequest page = 3;
 }
 
+message ChangeMemberRoleRequest {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  RoleValue role = 1;
+}
+message SetTenantMemberRoleRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  ChangeMemberRoleRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+message ConfirmedAction { bool confirmed = 1; }
+message LeaveTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
 service TenantService {
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
   rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
+  rpc SetTenantMemberRole(SetTenantMemberRoleRpcRequest) returns (Membership);
+  rpc LeaveTenant(LeaveTenantRpcRequest) returns (Operation);
 }
 
 // TAS-311 internal authority: state only, no directory/credentials or mutation APIs.

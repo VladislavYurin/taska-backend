@@ -114,6 +114,12 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantMembershipMutationService tenantMembershipMutations(TenantTransactionExecutor transactions) {
+    return new TenantMembershipMutationService(transactions, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -128,6 +134,10 @@ public class TenantConfiguration {
               TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false),
               TenantServiceGrpc.getListTenantMembersMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              TenantServiceGrpc.getSetTenantMemberRoleMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              TenantServiceGrpc.getLeaveTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false),
               TenantMembershipServiceGrpc.getGetMembershipMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false),

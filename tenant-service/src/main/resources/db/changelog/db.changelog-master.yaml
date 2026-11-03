@@ -84,6 +84,17 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-membership-audit-0003",
+        "author": "taska",
+        "changes": [
+          { "sqlFile": { "path": "0003-membership-audit.sql", "relativeToChangelogFile": true, "splitStatements": false } },
+          { "sql": { "sql": "SET LOCAL ROLE taska_tenant_migrator; SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','membership_audit',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);" } },
+          { "sqlFile": { "path": "db/tenant/protect-table.sql", "splitStatements": false } }
+        ]
+      }
     }
   ]
 }

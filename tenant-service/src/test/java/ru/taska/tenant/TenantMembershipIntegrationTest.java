@@ -46,6 +46,7 @@ class TenantMembershipIntegrationTest {
   static ConnectionFactory operatorFactory;
   static TenantTransactionExecutor transactions;
   TenantMembershipService service;
+  TenantMembershipMutationService mutations;
   MembershipCursor cursor;
   AtomicReference<Instant> time;
   Clock clock;
@@ -97,7 +98,7 @@ class TenantMembershipIntegrationTest {
         new ConnectionPool(
             ConnectionPoolConfiguration.builder(factory("taska_tenant_app", APP_PASSWORD))
                 .initialSize(1)
-                .maxSize(1)
+                .maxSize(4)
                 .maxAcquireTime(WAIT)
                 .build());
     raw = DatabaseClient.create(pool);
@@ -114,7 +115,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records,taska.membership_audit")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -188,6 +189,7 @@ class TenantMembershipIntegrationTest {
     service =
         new TenantMembershipService(
             transactions, cursor, Set.of("auth-service", "project-service"));
+    mutations = new TenantMembershipMutationService(transactions, clock);
     owner = human(OWNER, A, "1", "session-owner");
   }
 
@@ -255,6 +257,122 @@ class TenantMembershipIntegrationTest {
                 .setTenantId(tenant.toString())
                 .setUserId(user.toString())
                 .build()));
+  }
+
+  TrustedTenantContext writer(UUID actor, UUID tenant, String generation, String action) {
+    return human(actor, tenant, generation, "writer-" + actor).toBuilder()
+        .addScopes("write").setAction(action).build();
+  }
+
+  Mono<Membership> role(TrustedTenantContext claims, UUID target, String role,
+      String version, String key) {
+    return as(claims, mutations.setRole(SetTenantMemberRoleRpcRequest.newBuilder()
+        .setTenantId(claims.getTenantId()).setUserId(target.toString())
+        .setPayload(ChangeMemberRoleRequest.newBuilder().setRole(
+            ChangeMemberRoleRequest.RoleValue.valueOf(role)))
+        .setMutation(MutationOptions.newBuilder().setIdempotencyKey(key)
+            .setExpectedVersion(version)).build()));
+  }
+
+  Mono<Operation> leave(TrustedTenantContext claims, String version, String key) {
+    return as(claims, mutations.leave(LeaveTenantRpcRequest.newBuilder()
+        .setTenantId(claims.getTenantId())
+        .setPayload(ConfirmedAction.newBuilder().setConfirmed(true))
+        .setMutation(MutationOptions.newBuilder().setIdempotencyKey(key)
+            .setExpectedVersion(version)).build()));
+  }
+
+  long count(String sql) {
+    return operator.sql(sql).map((r, m) -> r.get("n", Long.class)).one().block(WAIT);
+  }
+
+  @Test
+  void roleChangeIsAtomicAuditedAndIdempotent() {
+    var admin = writer(OWNER, A, "1", "setTenantMemberRole");
+    String key = UUID.randomUUID().toString();
+    var changed = role(admin, SHARED, "ROLE_TENANT_ADMIN", "3", key).block(WAIT);
+    assertEquals(Membership.RoleValue.ROLE_TENANT_ADMIN, changed.getRole());
+    assertEquals("4", changed.getVersion());
+    assertEquals(changed, role(admin, SHARED, "ROLE_TENANT_ADMIN", "3", key).block(WAIT));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.membership_audit"));
+    var audit = operator.sql("SELECT actor_id,target_user_id,result,old_role,new_role"
+            + " FROM taska.membership_audit WHERE tenant_id=:tenant")
+        .bind("tenant", A).fetch().one().block(WAIT);
+    assertEquals(OWNER, audit.get("actor_id"));
+    assertEquals(SHARED, audit.get("target_user_id"));
+    assertEquals("SUCCEEDED", audit.get("result"));
+    assertEquals("MEMBER", audit.get("old_role"));
+    assertEquals("TENANT_ADMIN", audit.get("new_role"));
+    assertEquals(11L, count("SELECT membership_version n FROM taska.tenants WHERE id='" + A + "'"));
+    rejects(DomainStatus.ABORTED, role(admin, SHARED, "ROLE_MEMBER", "3", key));
+    rejects(DomainStatus.ABORTED, role(admin, SHARED, "ROLE_MEMBER", "3", UUID.randomUUID().toString()));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals("4", get(A, SHARED).block(WAIT).getVersion());
+  }
+
+  @Test
+  void ownerAndUnauthorizedActorsCannotChangeRolesOrLeave() {
+    var admin = writer(OWNER, A, "1", "setTenantMemberRole");
+    rejects(DomainStatus.FAILED_PRECONDITION,
+        role(admin, OWNER, "ROLE_MEMBER", "1", UUID.randomUUID().toString()));
+    rejects(DomainStatus.PERMISSION_DENIED,
+        role(writer(SHARED, A, "3", "setTenantMemberRole"), ADMIN,
+            "ROLE_MEMBER", "11", UUID.randomUUID().toString()));
+    rejects(DomainStatus.PERMISSION_DENIED,
+        role(writer(SUSPENDED, A, "5", "setTenantMemberRole"), ADMIN,
+            "ROLE_MEMBER", "11", UUID.randomUUID().toString()));
+    rejects(DomainStatus.NOT_FOUND,
+        role(writer(FOREIGN, A, "99", "setTenantMemberRole"), ADMIN,
+            "ROLE_MEMBER", "11", UUID.randomUUID().toString()));
+    rejects(DomainStatus.FAILED_PRECONDITION,
+        leave(writer(OWNER, A, "1", "leaveTenant"), "1", UUID.randomUUID().toString()));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+  }
+
+  @Test
+  void settingExistingRoleRecordsNoChangeWithoutAdvancingVersions() {
+    var claims = writer(OWNER, A, "1", "setTenantMemberRole");
+    var response = role(claims, SHARED, "ROLE_MEMBER", "3",
+        UUID.randomUUID().toString()).block(WAIT);
+    assertEquals("3", response.getVersion());
+    assertEquals(10L, count("SELECT membership_version n FROM taska.tenants WHERE id='" + A + "'"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals("NO_CHANGE", operator.sql("SELECT result FROM taska.membership_audit")
+        .map((r, m) -> r.get("result", String.class)).one().block(WAIT));
+  }
+
+  @Test
+  void leaveRemovesOnlyActorAndAdvancesGeneration() {
+    var claims = writer(SHARED, A, "3", "leaveTenant");
+    var result = leave(claims, "3", UUID.randomUUID().toString()).block(WAIT);
+    assertEquals(Operation.StateValue.STATE_SUCCEEDED, result.getState());
+    assertEquals(Membership.StateValue.STATE_REMOVED, get(A, SHARED).block(WAIT).getState());
+    assertEquals("4", get(A, SHARED).block(WAIT).getVersion());
+    assertEquals(11L, count("SELECT membership_version n FROM taska.tenants WHERE id='" + A + "'"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+  }
+
+  @Test
+  void concurrentLeavesCannotRemoveTheLastActiveAdmin() {
+    role(writer(OWNER, A, "1", "setTenantMemberRole"), SHARED,
+        "ROLE_TENANT_ADMIN", "3", UUID.randomUUID().toString()).block(WAIT);
+    // Model a legacy state in which ownership repair is pending; both remaining admins race.
+    operator.sql("UPDATE taska.tenant_memberships SET status='SUSPENDED'"
+            + " WHERE tenant_id=:tenant AND user_id=:owner")
+        .bind("tenant", A).bind("owner", OWNER).fetch().rowsUpdated().block(WAIT);
+    var first = leave(writer(ADMIN, A, "11", "leaveTenant"), "11",
+        UUID.randomUUID().toString())
+        .map(value -> "success").onErrorResume(e -> Mono.just("failure"));
+    var second = leave(writer(SHARED, A, "4", "leaveTenant"), "4",
+        UUID.randomUUID().toString())
+        .map(value -> "success").onErrorResume(e -> Mono.just("failure"));
+    var outcomes = Flux.merge(first, second).collectList().block(WAIT);
+    assertEquals(1, outcomes.stream().filter("success"::equals).count());
+    assertEquals(1, outcomes.stream().filter("failure"::equals).count());
+    assertEquals(1L, count("SELECT count(*) n FROM taska.tenant_memberships"
+        + " WHERE tenant_id='" + A + "' AND role='TENANT_ADMIN' AND status='ACTIVE'"));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.outbox_events"));
   }
 
   static void rejects(DomainStatus status, Mono<?> work) {
@@ -794,7 +912,7 @@ class TenantMembershipIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        org.mockito.Mockito.mock(TenantRegistryService.class), service),
+                        org.mockito.Mockito.mock(TenantRegistryService.class), service, mutations),
                     interceptor))
             .addService(
                 io.grpc.ServerInterceptors.intercept(
@@ -856,6 +974,23 @@ class TenantMembershipIntegrationTest {
                   .listTenantMembers(next)
                   .getItems(0)
                   .getUserId());
+          var change = SetTenantMemberRoleRpcRequest.newBuilder()
+              .setTenantId(A.toString()).setUserId(ADMIN.toString())
+              .setPayload(ChangeMemberRoleRequest.newBuilder()
+                  .setRole(ChangeMemberRoleRequest.RoleValue.ROLE_MEMBER))
+              .setMutation(MutationOptions.newBuilder()
+                  .setIdempotencyKey(UUID.randomUUID().toString()).setExpectedVersion("11"))
+              .setContext(wire(writer(OWNER, A, "1", "setTenantMemberRole"))).build();
+          String changeRpc = TenantServiceGrpc.getSetTenantMemberRoleMethod().getFullMethodName();
+          var signedChange = plain.withInterceptors(
+              io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                  TenantRegistryIntegrationTest.signed(sender, change, policy, changeRpc)));
+          assertEquals(io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(io.grpc.StatusRuntimeException.class,
+                  () -> signedChange.setTenantMemberRole(change.toBuilder()
+                      .setUserId(SHARED.toString()).build())).getStatus().getCode());
+          assertEquals(Membership.RoleValue.ROLE_MEMBER,
+              signedChange.setTenantMemberRole(change).getRole());
         } else {
           var request =
               GetMembershipRpcRequest.newBuilder()

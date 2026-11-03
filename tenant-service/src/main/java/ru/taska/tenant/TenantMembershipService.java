@@ -180,7 +180,7 @@ public final class TenantMembershipService {
             });
   }
 
-  private static Membership publicMember(Map<String, Object> row) {
+  static Membership publicMember(Map<String, Object> row) {
     UUID tenant = (UUID) row.get("tenant_id"), user = (UUID) row.get("user_id");
     // Composite membership identity; stable across role changes/rejoin, never an auth credential.
     byte[] bytes =
