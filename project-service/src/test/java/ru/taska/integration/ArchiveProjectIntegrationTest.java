@@ -30,6 +30,7 @@ import ru.taska.service.ProjectWriteGuard;
 import ru.taska.transport.kafka.OutboxEventScheduler;
 
 import static org.assertj.core.api.Assertions.*;
+import static ru.taska.integration.TenantTestContext.withTenant;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.NONE, properties={"spring.grpc.server.port=0", "spring.grpc.server.host=127.0.0.1"})
 @Testcontainers
@@ -58,8 +59,8 @@ class ArchiveProjectIntegrationTest {
     @Test
     void archiveIsIdempotentKeepsDataReadableAndHidesOnlyFromList() {
         var p=project();
-        var one=archive.archive(p.getId(),actor,"r","n").block();
-        var two=archive.archive(p.getId(),actor,"retry","n").block();
+        var one=withTenant(archive.archive(p.getId(),actor,"r","n")).block();
+        var two=withTenant(archive.archive(p.getId(),actor,"retry","n")).block();
         assertThat(one.getArchivedAt()).isNotNull();
         assertThat(two.getArchivedAt()).isEqualTo(one.getArchivedAt());
         assertThat(service.getProject("r","n",p.getId(),actor).block().archived_at()).isEqualTo(one.getArchivedAt());
@@ -75,7 +76,7 @@ class ArchiveProjectIntegrationTest {
     @Test
     void concurrentArchivesProduceOneEvent() {
         var p=project();
-        assertThat(Flux.merge(archive.archive(p.getId(),actor,"a","n"),archive.archive(p.getId(),actor,"b","n"))
+        assertThat(withTenant(Flux.merge(archive.archive(p.getId(),actor,"a","n"),archive.archive(p.getId(),actor,"b","n")))
                 .collectList().block()).hasSize(2);
         assertThat(countEvents(p)).isEqualTo(1);
     }
@@ -96,7 +97,7 @@ class ArchiveProjectIntegrationTest {
     @Test
     void projectLocalWritesRejectArchiveButTypeMetadataRemainsReadable() {
         var p=project();
-        archive.archive(p.getId(),actor,"r","n").block();
+        withTenant(archive.archive(p.getId(),actor,"r","n")).block();
         StepVerifier.create(guard.check(p.getId(),actor)).expectErrorSatisfies(this::archived).verify();
         StepVerifier.create(membership.rmProjectMember("r","n",actor,actor,p.getId())).expectErrorSatisfies(this::archived).verify();
         StepVerifier.create(creations.begin(p.getId(),actor,"archive-request","n","REQUEST","Request","blue","flag",null,1,null,ru.taska.domain.ActionMetadata.NONE)).expectErrorSatisfies(this::archived).verify();
@@ -110,7 +111,7 @@ class ArchiveProjectIntegrationTest {
         db.sql("ALTER TABLE taska.outbox_events ADD CONSTRAINT archive_test CHECK (aggregate_id <> '"+p.getId()+"'::uuid) NOT VALID")
                 .fetch().rowsUpdated().block();
         try {
-            StepVerifier.create(archive.archive(p.getId(),actor,"r","n"))
+            StepVerifier.create(withTenant(archive.archive(p.getId(),actor,"r","n")))
                     .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
             assertThat(projects.findById(p.getId()).block().getArchivedAt()).isNull();
         } finally { db.sql("ALTER TABLE taska.outbox_events DROP CONSTRAINT archive_test").fetch().rowsUpdated().block(); }
@@ -126,9 +127,9 @@ class ArchiveProjectIntegrationTest {
         var lookup = reactor.core.publisher.Sinks.<ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse>one();
         org.mockito.Mockito.when(auth.getUserDetailsByIds(java.util.List.of(addedUser), "add", "n"))
                 .thenReturn(Mono.defer(() -> { lookupStarted.countDown(); return lookup.asMono(); }));
-        var addition = membership.addProjectMember("add", "n", addedUser, actor, ProjectRole.MEMBER, p.getId()).toFuture();
+        var addition = withTenant(membership.addProjectMember("add", "n", addedUser, actor, ProjectRole.MEMBER, p.getId())).toFuture();
         assertThat(lookupStarted.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-        var revocation = membership.changeProjectMemberRole("revoke", "n", actor, secondAdmin, ProjectRole.MEMBER, p.getId());
+        var revocation = withTenant(membership.changeProjectMemberRole("revoke", "n", actor, secondAdmin, ProjectRole.MEMBER, p.getId()));
         try {
             StepVerifier.create(revocation).expectSubscription().expectNoEvent(java.time.Duration.ofMillis(200))
                     .then(() -> lookup.tryEmitValue(ru.taska.api.auth.profile.v1.GetUserDetailsByIdsResponse.newBuilder()
@@ -151,7 +152,7 @@ class ArchiveProjectIntegrationTest {
                 .bind("one", first.getId()).bind("two", second.getId()).fetch().rowsUpdated().block();
         db.sql("UPDATE taska.projects SET created_at='2026-01-01T00:00:00Z' WHERE id=:id")
                 .bind("id", older.getId()).fetch().rowsUpdated().block();
-        archive.archive(hidden.getId(), actor, "archive", "n").block();
+        withTenant(archive.archive(hidden.getId(), actor, "archive", "n")).block();
         var tied = java.util.stream.Stream.of(first.getId(), second.getId())
                 .sorted(java.util.Comparator.comparing(UUID::toString)).toList();
         var expected = java.util.List.of(older.getId(), tied.get(0), tied.get(1));

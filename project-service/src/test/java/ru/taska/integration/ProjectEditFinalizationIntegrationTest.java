@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
+import static ru.taska.integration.TenantTestContext.withTenant;
 
 class ProjectEditFinalizationIntegrationTest extends AbstractIT {
     @Autowired ProjectService service;
@@ -62,10 +63,10 @@ class ProjectEditFinalizationIntegrationTest extends AbstractIT {
     @Test
     void concurrentPartialUpdatesPreserveBothFields() {
         var p = create();
-        var results = Flux.merge(
+        var results = withTenant(Flux.merge(
                 service.updateProject("r", "n", p.getId(), actor, Optional.of("Concurrent name"), Optional.empty(), false, Optional.empty(), false),
                 service.updateProject("r", "n", p.getId(), actor, Optional.empty(), Optional.of("Concurrent description"), false, Optional.empty(), false))
-                .collectList().block();
+                .collectList()).block();
         assertThat(results).hasSize(2);
         var saved = projects.findById(p.getId()).block();
         assertThat(saved.getName()).isEqualTo("Concurrent name");
@@ -93,7 +94,7 @@ class ProjectEditFinalizationIntegrationTest extends AbstractIT {
         db.sql("ALTER TABLE taska.outbox_events ADD CONSTRAINT project_edit_test CHECK (aggregate_id <> '" + p.getId() + "'::uuid) NOT VALID")
                 .fetch().rowsUpdated().block();
         try {
-            StepVerifier.create(service.updateProject("r", "n", p.getId(), actor, Optional.of("Must rollback"), Optional.empty(), false, Optional.empty(), false))
+            StepVerifier.create(withTenant(service.updateProject("r", "n", p.getId(), actor, Optional.of("Must rollback"), Optional.empty(), false, Optional.empty(), false)))
                     .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
             assertThat(projects.findById(p.getId()).block().getName()).isEqualTo(p.getName());
             assertThat(countUpdates(p)).isZero();
@@ -103,12 +104,12 @@ class ProjectEditFinalizationIntegrationTest extends AbstractIT {
     }
 
     private Project create() {
-        return service.createProject("r", "n", "P" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(), "Project", actor,
-                Optional.of("Description"), Optional.empty()).block();
+        return withTenant(service.createProject("r", "n", "P" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(), "Project", actor,
+                Optional.of("Description"), Optional.empty())).block();
     }
 
     private Project edit(Project p, Optional<String> name, Optional<String> description, boolean clearColor) {
-        return service.updateProject("r", "n", p.getId(), actor, name, description, false, Optional.empty(), clearColor).block().project();
+        return withTenant(service.updateProject("r", "n", p.getId(), actor, name, description, false, Optional.empty(), clearColor)).block().project();
     }
 
     private long countUpdates(Project p) {
