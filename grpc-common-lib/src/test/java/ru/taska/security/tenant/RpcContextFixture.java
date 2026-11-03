@@ -24,7 +24,8 @@ abstract class RpcContextFixture {
   RpcContextSecurity sender, recipient;
   Set<String> consumed;
   KeyPair pair;
-  boolean allowed = true;
+  RpcContextSecurity.Keys keys;
+  volatile boolean allowed = true;
 
   @BeforeAll
   static void descriptor() throws Exception {
@@ -60,7 +61,7 @@ abstract class RpcContextFixture {
   void setup() throws Exception {
     pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
     consumed = ConcurrentHashMap.newKeySet();
-    var keys =
+    keys =
         new RpcContextSecurity.Keys() {
           public RpcContextSecurity.SigningKey signingKey(String issuer) {
             return new RpcContextSecurity.SigningKey("test-key", pair.getPrivate());

@@ -161,6 +161,25 @@ class TenantTransportTest extends RpcContextFixture {
           RpcContextSecurity.context(response).getContext().getAssertionId(),
           RpcContextSecurity.context(retry).getContext().getAssertionId());
       assertEquals(2, hits.get());
+      // Signed request reaches the receiver, whose current authority denies it.
+      var metadata = new Metadata();
+      metadata.put(TenantServerInterceptor.ASSERTION, sign(c, m));
+      var signedRaw =
+          ClientInterceptors.intercept(
+              channel, MetadataUtils.newAttachHeadersInterceptor(metadata));
+      allowed = false;
+      var denied =
+          assertThrows(
+              StatusRuntimeException.class,
+              () ->
+                  ClientCalls.blockingUnaryCall(
+                      signedRaw,
+                      method,
+                      CallOptions.DEFAULT.withDeadlineAfter(5, TimeUnit.SECONDS),
+                      m));
+      assertEquals(Status.Code.PERMISSION_DENIED, denied.getStatus().getCode());
+      assertEquals(2, hits.get());
+      allowed = true;
       // A plaintext metadata assertion never replaces authenticated transport identity.
       var raw =
           assertThrows(

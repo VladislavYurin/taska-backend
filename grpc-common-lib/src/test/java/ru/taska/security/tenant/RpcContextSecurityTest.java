@@ -276,4 +276,57 @@ class RpcContextSecurityTest extends RpcContextFixture {
     context.cancel(null);
     assertEquals(Status.Code.CANCELLED, cancelled.join().getCode());
   }
+
+  @Test
+  void receiverExpiryUsesBoundedClockSkewAndNeverAcceptsTheBoundary() {
+    var c = context();
+    var m = message(c, "expiry");
+    var assertion = sign(c, m);
+    var read = new RpcContextSecurity.Policy(true, false);
+    var within =
+        new RpcContextSecurity(
+            "b",
+            Clock.fixed(NOW.plusSeconds(34).plusNanos(999999999), ZoneOffset.UTC),
+            keys,
+            (issuer, jti, until) -> Mono.just(true),
+            (ctx, rpc, p) -> Mono.just(true));
+    assertNotNull(within.verify(m, assertion, RPC, "a", read).block());
+    for (long seconds : List.of(35L, 36L, 120L)) {
+      var expired =
+          new RpcContextSecurity(
+              "b",
+              Clock.fixed(NOW.plusSeconds(seconds), ZoneOffset.UTC),
+              keys,
+              (issuer, jti, until) -> Mono.just(true),
+              (ctx, rpc, p) -> Mono.just(true));
+      rejects(expired.verify(m, assertion, RPC, "a", read), Status.Code.UNAUTHENTICATED);
+    }
+    var overlong =
+        c.toBuilder()
+            .setContext(c.getContext().toBuilder().setExpiresAt(NOW.plusSeconds(31).toString()))
+            .build();
+    rejects(sender.authorize(overlong, RPC, POLICY), Status.Code.UNAUTHENTICATED);
+    var future =
+        c.toBuilder()
+            .setContext(
+                c.getContext().toBuilder()
+                    .setIssuedAt(NOW.plusSeconds(6).toString())
+                    .setExpiresAt(NOW.plusSeconds(30).toString()))
+            .build();
+    rejects(sender.authorize(future, RPC, POLICY), Status.Code.UNAUTHENTICATED);
+  }
+
+  @Test
+  void synchronousAuthorityProviderFailureIsUnavailable() {
+    var broken =
+        new RpcContextSecurity(
+            "a",
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            keys,
+            (i, j, e) -> Mono.just(true),
+            (c, r, p) -> {
+              throw new IllegalStateException("private");
+            });
+    rejects(broken.authorize(context(), RPC, POLICY), Status.Code.UNAVAILABLE);
+  }
 }

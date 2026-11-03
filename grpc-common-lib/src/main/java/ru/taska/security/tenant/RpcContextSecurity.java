@@ -115,6 +115,7 @@ public final class RpcContextSecurity {
       UUID.fromString(c.getAssertionId());
       if (c.hasActorUserId()) UUID.fromString(c.getActorUserId());
       if (c.hasTenantId()) UUID.fromString(c.getTenantId());
+      // exp-iat is the credential TTL; receiver tolerance is a separate bounded clock skew.
       Instant issued = Instant.parse(c.getIssuedAt()),
           expires = Instant.parse(c.getExpiresAt()),
           now = clock.instant();
@@ -160,6 +161,7 @@ public final class RpcContextSecurity {
           return Mono.defer(() -> authority.allowed(r, rpc, policy))
               .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
               .onErrorMap(e -> Status.UNAVAILABLE.asRuntimeException())
+              // This operator precedes the explicit denial: false must remain PERMISSION_DENIED.
               .flatMap(
                   ok ->
                       ok

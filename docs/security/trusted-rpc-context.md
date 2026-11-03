@@ -15,7 +15,7 @@
 - Keys: отдельные от auth JWT Ed25519 keys, kid/issuer allowlist, emergency revocation и hard TTL доверенной конфигурации. Неизвестный kid возвращает null; недоступный обязательный источник — ошибку. Private keys не покидают issuer.
 - Authority: актуальные account/grant/membership, разрешённый service→RPC/action и исходные полномочия; false означает PERMISSION_DENIED, отсутствие результата/недоступность — UNAVAILABLE.
 - ReplayGuard: общий для всех реплик atomic consume(issuer,jti,retainUntil). Сохранять до expiresAt+5s; consume не отменяется при error/cancel. Недоступность/пустой ответ — UNAVAILABLE. In-memory реализация подходит только тестам.
-- Clock: доверенные UTC часы. Assertion TTL≤30s, skew≤5s.
+- Clock: доверенные UTC часы. Assertion TTL (exp−iat) ≤30s; receiver clock skew≤5s: now<exp+5s, на границе отказ. Skew компенсирует разницу часов, не увеличивает exp−iat. Future iat>now+5s запрещён.
 
 Ошибки проверки credential возвращают UNAUTHENTICATED. Не логировать raw assertions, контекст и payload. Опубликованные providers не подключаются автоматически: fail-closed конфигурация и rollout реализуются последующими задачами.
 
