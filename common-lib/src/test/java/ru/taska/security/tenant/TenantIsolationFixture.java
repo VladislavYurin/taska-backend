@@ -61,8 +61,15 @@ public final class TenantIsolationFixture implements AutoCloseable {
       }
       operator = DatabaseClient.create(factory(postgres.getUsername(), postgres.getPassword()));
       String password = UUID.randomUUID().toString();
+      String quotedPassword =
+          operator
+              .sql("SELECT quote_literal(:password) AS quoted")
+              .bind("password", password)
+              .map((row, metadata) -> row.get("quoted", String.class))
+              .one()
+              .block(WAIT);
       operator
-          .sql("ALTER ROLE taska_project_app PASSWORD '" + password + "'")
+          .sql("ALTER ROLE taska_project_app PASSWORD " + quotedPassword)
           .fetch()
           .rowsUpdated()
           .block(WAIT);

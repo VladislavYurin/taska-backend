@@ -17,9 +17,10 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 
 /** Exercises shipped RLS templates through the real executor/driver/pool as app LOGIN. */
-@Timeout(60)
+@Timeout(90)
 class TenantIsolationContractIntegrationTest {
   static TenantIsolationFixture f;
 
@@ -92,7 +93,11 @@ class TenantIsolationContractIntegrationTest {
                   invoked.incrementAndGet();
                   return count(db);
                 }))
-        .expectError(DomainException.class)
+        .expectErrorSatisfies(
+            error ->
+                assertEquals(
+                    DomainStatus.UNAUTHENTICATED,
+                    assertInstanceOf(DomainException.class, error).getStatus()))
         .verify(WAIT);
     assertEquals(0, invoked.get());
     assertEquals(0L, count(f.raw).block(WAIT));
@@ -381,7 +386,7 @@ class TenantIsolationContractIntegrationTest {
               .map((r, m) -> r.get("pid", Integer.class))
               .one()
               .repeatWhenEmpty(repeats -> repeats.delayElements(Duration.ofMillis(20)))
-              .block(Duration.ofSeconds(5)));
+              .block(WAIT));
     } finally {
       subscription.dispose();
     }
@@ -427,7 +432,9 @@ class TenantIsolationContractIntegrationTest {
                                               return Mono.fromCallable(
                                                       () -> {
                                                         assertTrue(
-                                                            entered.await(5, TimeUnit.SECONDS));
+                                                            entered.await(
+                                                                WAIT.toSeconds(),
+                                                                TimeUnit.SECONDS));
                                                         return true;
                                                       })
                                                   .subscribeOn(Schedulers.boundedElastic())
@@ -486,7 +493,7 @@ class TenantIsolationContractIntegrationTest {
 
   @Test
   void selectivePlansUseTenantLeadingIndexesWithNaturalPlannerSettings() {
-    f.reset(4000);
+    f.reset(20000);
     for (UUID tenant : List.of(A, B)) {
       UUID project = tenant.equals(A) ? PROJECT_A : PROJECT_B;
       String plan =

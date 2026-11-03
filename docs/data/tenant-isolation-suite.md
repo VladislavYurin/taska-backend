@@ -33,7 +33,7 @@ Fixture экспортируется в отдельном `common-lib-1.0-SNAPS
 
 ## Планы и объём данных
 
-Плановый сценарий создаёт 4 000 issues на компанию (8 000 всего), выполняет ANALYZE, затем под app role для каждой компании запускает `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` выборки по tenant/project и диапазону issue_number 10..20. Seqscan не отключается, planner settings не форсируются. Ожидается индексный доступ с tenant-leading ключом и ровно 11 фактическими строками. JSON plans сохраняются в ignored `common-lib/target/tenant-isolation-plans/`; timing не является порогом CI. Это воспроизводимый smoke для selective query, а не гарантия планов всех сервисных запросов или production latency. Доменные задачи фиксируют свои планы на реалистичном объёме.
+Плановый сценарий создаёт 20 000 issues на компанию (40 000 всего), выполняет ANALYZE, затем под app role для каждой компании запускает `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` выборки по tenant/project и диапазону issue_number 10..20. Seqscan не отключается, planner settings не форсируются. Допускается Index Scan, Index Only Scan или Bitmap Index Scan/Bitmap Heap Scan; конкретное имя/тип индекса не фиксируется. Ожидается индексный доступ с tenant-leading ключом и ровно 11 фактическими строками. JSON plans сохраняются в ignored `common-lib/target/tenant-isolation-plans/`; timing не является порогом CI. Это воспроизводимый smoke для selective query, а не гарантия планов всех сервисных запросов или production latency. Доменные задачи фиксируют свои планы на реалистичном объёме.
 
 ## Запуск и CI
 
