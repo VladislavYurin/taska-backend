@@ -4,6 +4,7 @@ WORKDIR /workspace
 COPY pom.xml ./
 COPY mcp-server ./mcp-server
 COPY oauth-server ./oauth-server
+COPY tenant-service ./tenant-service
 COPY common-lib ./common-lib
 COPY grpc-common-lib ./grpc-common-lib
 COPY kafka-lib ./kafka-lib

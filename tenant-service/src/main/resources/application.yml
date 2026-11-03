@@ -1,0 +1,31 @@
+server:
+  port: ${TENANT_SERVER_PORT:8089}
+spring:
+  application:
+    name: tenant-service
+  grpc:
+    server:
+      port: ${TENANT_GRPC_SERVER_PORT:9099}
+  r2dbc:
+    url: ${TENANT_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5440/tenant_db}
+    username: ${TENANT_SPRING_R2DBC_USERNAME:taska_tenant_app}
+    password: ${TENANT_SPRING_R2DBC_PASSWORD}
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+    url: ${TENANT_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5440/tenant_db}
+    user: ${TENANT_SPRING_LIQUIBASE_USERNAME:taska_tenant_deployer}
+    password: ${TENANT_SPRING_LIQUIBASE_PASSWORD}
+    liquibase-schema: tenant_liquibase
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+taska:
+  tenant:
+    creation-window: 30d

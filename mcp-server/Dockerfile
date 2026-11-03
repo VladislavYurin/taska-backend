@@ -9,6 +9,7 @@ COPY storage-lib ./storage-lib
 COPY api-gateway ./api-gateway
 COPY mcp-server ./mcp-server
 COPY oauth-server ./oauth-server
+COPY tenant-service ./tenant-service
 COPY auth-service ./auth-service
 COPY project-service ./project-service
 COPY workflow-service ./workflow-service

@@ -9813,6 +9813,30 @@
           "type": "bigint",
           "nullable": false,
           "default": "1"
+        },
+        {
+          "name": "plan_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "creation_actor_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "creation_request_hash",
+          "type": "bytea",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "creation_operation_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
         }
       ],
       "primary_key": [
@@ -9845,7 +9869,7 @@
         "(creation_deadline_at,id) WHERE lifecycle='AWAITING_PAYMENT'"
       ],
       "retention_class": "TENANT_WORKDATA",
-      "notes": "RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate.",
+      "notes": "RLS compares id to context tenant, not a duplicate tenant_id; owner_id is global auth UUID (logical FK). creation deadline immutable once assigned; no tenant timezone/logo/settings map. owner_version increases only on ownership transfer; unrelated name/limit/membership changes do not invalidate a mandate. TAS-310 durable pre-tenant dedupe: UUIDv8 derived from actor/idempotency key, immutable original actor/hash/operation/plan survive response-cache TTL; original creation facts protected by trigger. Registry acceptance is not saga completion.",
       "retention_policy_mapping": {
         "policy_version": "ES_V1",
         "policy_id": "TENANT_WORKDATA",

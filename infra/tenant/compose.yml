@@ -1,0 +1,36 @@
+# Standalone opt-in stack. It never starts or reconfigures the shared Taska deployment.
+services:
+  tenant-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: tenant_db
+      POSTGRES_USER: tenant_operator
+      POSTGRES_PASSWORD: ${TENANT_OPERATOR_PASSWORD:?Set TENANT_OPERATOR_PASSWORD}
+      TENANT_APP_PASSWORD: ${TENANT_APP_PASSWORD:?Set TENANT_APP_PASSWORD}
+      TENANT_DEPLOY_PASSWORD: ${TENANT_DEPLOY_PASSWORD:?Set TENANT_DEPLOY_PASSWORD}
+    volumes:
+      - ../../common-lib/src/main/resources/db/tenant:/opt/taska/templates:ro
+      - ./init.sh:/docker-entrypoint-initdb.d/10-tenant.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U tenant_operator -d tenant_db']
+      interval: 2s
+      retries: 30
+  tenant-service:
+    build:
+      context: ../..
+      dockerfile: tenant-service/Dockerfile
+    environment:
+      TENANT_SERVER_PORT: 8080
+      TENANT_GRPC_SERVER_PORT: 9090
+      TENANT_SPRING_R2DBC_URL: r2dbc:postgresql://tenant-db:5432/tenant_db
+      TENANT_SPRING_R2DBC_USERNAME: taska_tenant_app
+      TENANT_SPRING_R2DBC_PASSWORD: ${TENANT_APP_PASSWORD:?Set TENANT_APP_PASSWORD}
+      TENANT_SPRING_LIQUIBASE_URL: jdbc:postgresql://tenant-db:5432/tenant_db
+      TENANT_SPRING_LIQUIBASE_USERNAME: taska_tenant_deployer
+      TENANT_SPRING_LIQUIBASE_PASSWORD: ${TENANT_DEPLOY_PASSWORD:?Set TENANT_DEPLOY_PASSWORD}
+    depends_on:
+      tenant-db:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8089:8080'
+      - '127.0.0.1:9099:9090'

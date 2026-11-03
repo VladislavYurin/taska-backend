@@ -1,0 +1,102 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// TAS-310: implemented subset of docs/b2b/contracts/b2b.proto; wire numbers preserved.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_AUTHENTICATION_REQUIRED = 1;
+  ERROR_CODE_MFA_REQUIRED = 2;
+  ERROR_CODE_TOKEN_REVOKED = 3;
+  ERROR_CODE_TENANT_REQUIRED = 4;
+  ERROR_CODE_TENANT_MISMATCH = 5;
+  ERROR_CODE_TENANT_NOT_FOUND = 6;
+  ERROR_CODE_MEMBERSHIP_INACTIVE = 7;
+  ERROR_CODE_SCOPE_DENIED = 8;
+  ERROR_CODE_SESSION_REQUIRED = 9;
+  ERROR_CODE_ADMIN_GRANT_REQUIRED = 10;
+  ERROR_CODE_ADMIN_SCOPE_DENIED = 11;
+  ERROR_CODE_RESOURCE_NOT_FOUND = 12;
+  ERROR_CODE_VERSION_CONFLICT = 13;
+  ERROR_CODE_IDEMPOTENCY_CONFLICT = 14;
+  ERROR_CODE_QUOTA_EXCEEDED = 15;
+  ERROR_CODE_CAPABILITY_DISABLED = 16;
+  ERROR_CODE_READ_ONLY = 17;
+  ERROR_CODE_OWNER_REQUIRED = 18;
+  ERROR_CODE_LAST_ADMIN = 19;
+  ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED = 20;
+  ERROR_CODE_INVITATION_EXPIRED = 21;
+  ERROR_CODE_INVITATION_EMAIL_MISMATCH = 22;
+  ERROR_CODE_FREE_ELIGIBILITY_USED = 23;
+  ERROR_CODE_PAYMENT_PENDING = 24;
+  ERROR_CODE_INVALID_STATE = 25;
+  ERROR_CODE_CONFIRMATION_REQUIRED = 26;
+  ERROR_CODE_CONFIRMATION_EXPIRED = 27;
+  ERROR_CODE_RATE_LIMITED = 28;
+  ERROR_CODE_DEPENDENCY_UNAVAILABLE = 29;
+  ERROR_CODE_POLICY_NOT_CONFIGURED = 30;
+  ERROR_CODE_VALIDATION_FAILED = 31;
+}
+
+enum RestrictionCode {
+  RESTRICTION_CODE_UNSPECIFIED = 0;
+  RESTRICTION_CODE_PAYMENT_EXPIRED = 1;
+  RESTRICTION_CODE_OVER_QUOTA = 2;
+  RESTRICTION_CODE_OWNER_PAUSE = 3;
+  RESTRICTION_CODE_PLATFORM_BLOCK = 4;
+  RESTRICTION_CODE_PAYMENT_DISPUTE = 5;
+  RESTRICTION_CODE_PENDING_FIRST_PAYMENT = 6;
+}
+
+message Operation {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_PENDING = 1; STATE_RUNNING = 2; STATE_SUCCEEDED = 3; STATE_FAILED = 4; STATE_MANUAL_REVIEW = 5; }
+  string id = 1;
+  string type = 2;
+  StateValue state = 3;
+  string created_at = 4;
+  string updated_at = 5;
+  optional string tenant_id = 6;
+  optional string resource_id = 7;
+  optional ErrorCode failure_code = 8;
+}
+
+message Tenant {
+  enum LifecycleValue { LIFECYCLE_UNSPECIFIED = 0; LIFECYCLE_PROVISIONING = 1; LIFECYCLE_AWAITING_PAYMENT = 2; LIFECYCLE_ACTIVE = 3; LIFECYCLE_AUTO_CLOSED = 4; LIFECYCLE_OWNER_CANCELLED = 5; LIFECYCLE_DELETING = 6; LIFECYCLE_DELETED = 7; }
+  string id = 1;
+  string name = 2;
+  string owner_id = 3;
+  LifecycleValue lifecycle = 4;
+  repeated RestrictionCode restrictions = 5;
+  string created_at = 6;
+  optional string creation_deadline = 7;
+  string version = 8;
+  string owner_version = 9;
+}
+
+message CreateTenantRequest {
+  string name = 1;
+  string plan_version_id = 2;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+  Operation operation = 2;
+}
+
+message MutationOptions { string idempotency_key = 1; optional string expected_version = 2; }
+
+message CreateTenantRpcRequest {
+  RequestContext context = 1;
+  CreateTenantRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message GetTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+service TenantService {
+  rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
+  rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+}

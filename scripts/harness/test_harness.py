@@ -259,7 +259,9 @@ class HarnessTest(unittest.TestCase):
                     'WorkflowCreatedTypeBindingIT', 'WorkflowScopeCheckIT'}
         actual = {s for c in self.manifest['checks'] if c['id'].endswith('.it') for s in c['reports']['selectors']}
         self.assertEqual(expected, actual)
-        self.assertEqual(len(self.manifest['modules']), 14)
+        self.assertEqual(len(self.manifest['modules']), 15)
+        tenant = next(c for c in self.manifest['checks'] if c['id'] == 'tenant-service.verify')
+        self.assertIn('TenantRegistryIntegrationTest', tenant['reports']['selectors'])
 
     def test_docs_check_detects_missing_test_source_and_ci_drift(self):
         m = copy.deepcopy(self.manifest)

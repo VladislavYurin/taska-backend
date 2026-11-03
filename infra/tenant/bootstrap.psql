@@ -1,0 +1,8 @@
+\set ON_ERROR_STOP on
+\set service tenant
+\set schema taska
+\ir ../../common-lib/src/main/resources/db/tenant/bootstrap.psql
+CREATE SCHEMA IF NOT EXISTS tenant_liquibase AUTHORIZATION taska_tenant_migrator;
+DO $$ BEGIN IF (SELECT nspowner FROM pg_namespace WHERE nspname='tenant_liquibase') <> 'taska_tenant_migrator'::regrole THEN RAISE EXCEPTION 'Unexpected Liquibase schema owner'; END IF; END $$;
+REVOKE ALL ON SCHEMA tenant_liquibase FROM PUBLIC;
+-- Passwords are provisioned separately through the operator's secret manager.
