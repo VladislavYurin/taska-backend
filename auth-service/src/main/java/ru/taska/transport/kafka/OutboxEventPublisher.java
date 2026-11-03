@@ -35,7 +35,8 @@ public class OutboxEventPublisher extends AbstractOutboxEventPublisher<OutboxEve
 
     @Override
     protected String getKey(OutboxEvent event) {
-        return event.getAggregateId().toString();
+        return ru.taska.event.TaskaEventContract.globalPartitionKey(
+                ru.taska.event.EventScopeKind.GLOBAL_USER, event.getAggregateId(), event.getAggregateId());
     }
 
     @Override

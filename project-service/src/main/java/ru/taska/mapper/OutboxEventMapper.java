@@ -2,11 +2,12 @@ package ru.taska.mapper;
 
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.event.EventType;
+import ru.taska.event.EventScopeKind;
 import ru.taska.event.TaskaEvent;
+import ru.taska.event.TaskaEventContract;
 import ru.taska.event.payload.projectService.MemberAddedPayload;
 import ru.taska.event.payload.projectService.MemberRemovedPayload;
 import ru.taska.event.payload.projectService.MemberUpdatedPayload;
@@ -25,6 +26,8 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class OutboxEventMapper {
 
+    private static final String PRODUCER_SERVICE = "project-service";
+
     private static final String ID = "id";
     private static final String PROJECT_ID = "projectId";
     private static final String PROJECT_KEY = "projectKey";
@@ -36,29 +39,29 @@ public class OutboxEventMapper {
     private static final String DESCRIPTION = "description";
     private static final String COLOR = "color";
     private static final String UPDATED_BY = "updatedBy";
-    private static final String SCHEMA_VERSION = "v1";
-
-    @Value("${spring.application.name}")
-    private String producerService;
 
     private final ObjectMapper objectMapper;
 
     public TaskaEvent toTaskaEvent(OutboxEvent event) {
         return TaskaEvent.builder()
                          .id(event.getId())
+                         .scopeKind(EventScopeKind.TENANT)
+                         .tenantId(event.getTenantId())
+                         .scopeId(event.getTenantId())
                          .aggregateType(event.getAggregateType())
                          .aggregateId(event.getAggregateId())
                          .eventType(event.getEventType())
                          .payload(buildPayload(event))
                          .requestId(event.getRequestId())
                          .occurredAt(event.getCreatedAt())
-                         .producerService(producerService)
-                         .schemaVersion(SCHEMA_VERSION)
+                         .producerService(PRODUCER_SERVICE)
+                         .schemaVersion(TaskaEventContract.SCHEMA_VERSION)
                          .build();
     }
 
     public String toTaskaEventJsonAsString(OutboxEvent event) {
-        return objectMapper.writeValueAsString(toTaskaEvent(event));
+        return objectMapper.writeValueAsString(
+                TaskaEventContract.requireValid(toTaskaEvent(event)));
     }
 
     private JsonNode buildPayload(OutboxEvent event) {

@@ -52,7 +52,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_CREATED, project.getId());
-        return outboxEventRepository.save(event);
+        return save(event);
     }
 
     @Override
@@ -116,7 +116,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_UPDATED, project.getId());
-        return outboxEventRepository.save(event);
+        return save(event);
     }
 
     private Mono<OutboxEvent> saveMemberEvent(OutboxEvent event, java.util.function.Function<String, JsonNode> payload) {
@@ -125,8 +125,18 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .defaultIfEmpty("")
                 .flatMap(key -> {
                     event.setPayload(payload.apply(key));
-                    return outboxEventRepository.save(event);
+                    return save(event);
                 });
+    }
+
+    private Mono<OutboxEvent> save(OutboxEvent event) {
+        return Mono.deferContextual(context -> {
+            if (context.hasKey(ru.taska.security.tenant.VerifiedTenantContext.class)) {
+                var verified = context.get(ru.taska.security.tenant.VerifiedTenantContext.class);
+                event.setTenantId(UUID.fromString(verified.tenantId()));
+            }
+            return outboxEventRepository.save(event);
+        });
     }
 
     private JsonNode projectUpdatePayload(Project project , UUID actorUserId){

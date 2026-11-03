@@ -28,13 +28,13 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Transactional
     public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, AggregateType aggregateType, Issue issue) {
         return Mono.deferContextual(context -> outboxEventRepository.save(
-                OutboxEvent.builder()
+                withTenant(OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(issue.getId())
                         .eventType(EventType.ISSUE_CREATED.getValue())
                         .payload(withChannel(payloadSerializer.createIssueCreatedPayload(issue), context))
                         .requestId(requestId)
-                        .build()));
+                        .build(), context)));
     }
 
     @Override
@@ -48,13 +48,21 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             JsonNode payload
     ) {
         return Mono.deferContextual(context -> outboxEventRepository.save(
-                OutboxEvent.builder()
+                withTenant(OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(aggregateId)
                         .eventType(type.getValue())
                         .payload(withChannel(payload, context))
                         .requestId(requestId)
-                        .build()));
+                        .build(), context)));
+    }
+
+    private OutboxEvent withTenant(OutboxEvent event, reactor.util.context.ContextView context) {
+        if (context.hasKey(ru.taska.security.tenant.VerifiedTenantContext.class)) {
+            var verified = context.get(ru.taska.security.tenant.VerifiedTenantContext.class);
+            event.setTenantId(UUID.fromString(verified.tenantId()));
+        }
+        return event;
     }
     private JsonNode withChannel(JsonNode payload, reactor.util.context.ContextView context) {
         var channel = ru.taska.domain.ActionMetadata.current(context).channel();
