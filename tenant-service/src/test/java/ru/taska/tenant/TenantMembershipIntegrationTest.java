@@ -402,6 +402,32 @@ class TenantMembershipIntegrationTest {
   }
 
   @Test
+  void emptyLateralPagePreservesHeaderAndStillChecksGeneration() {
+    String token = list(owner, 1, null).block(WAIT).getNextCursor();
+    // Deliberately keep the generation in this fixture to exercise an empty LATERAL result.
+    // Real membership mutations must advance it; that case is checked below as well.
+    operator
+        .sql(
+            "UPDATE taska.tenant_memberships SET status='REMOVED' WHERE tenant_id=:t AND"
+                + " user_id<>:owner")
+        .bind("t", A)
+        .bind("owner", OWNER)
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    var empty = list(owner, 1, token).block(WAIT);
+    assertEquals(0, empty.getItemsCount());
+    assertFalse(empty.hasNextCursor());
+    operator
+        .sql("UPDATE taska.tenants SET membership_version=11 WHERE id=:t")
+        .bind("t", A)
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    rejects(DomainStatus.INVALID_ARGUMENT, list(owner, 1, token));
+  }
+
+  @Test
   void aggregateGenerationInvalidatesOldPageAndBoundsAreEnforced() {
     String token = list(owner, 1, null).block(WAIT).getNextCursor();
     operator
