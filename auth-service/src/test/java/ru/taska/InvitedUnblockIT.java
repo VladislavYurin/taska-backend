@@ -76,6 +76,7 @@ class InvitedUnblockIT extends AbstractIT {
             assertThat(users.findById(user.getId()).block(TIMEOUT).getBlockedFromStatus()).isEqualTo(UserStatus.ACTIVE);
             assertThat(management.unblockUser("unblock", "test", request(user)).block(TIMEOUT).newStatus()).isEqualTo(UserStatus.ACTIVE);
         }
+        assertThat(count("SELECT auth_version FROM taska.users WHERE id=:id", user.getId())).isEqualTo(5);
         assertThat(count("SELECT count(*) FROM taska.credentials WHERE user_id=:id AND credential_type='PASSWORD'", user.getId())).isZero();
     }
 
@@ -89,7 +90,9 @@ class InvitedUnblockIT extends AbstractIT {
         User unchanged = users.findById(user.getId()).block(TIMEOUT);
         assertThat(unchanged.getStatus()).isEqualTo(UserStatus.INVITED);
         assertThat(unchanged.getBlockedFromStatus()).isNull();
+        assertThat(count("SELECT auth_version FROM taska.users WHERE id=:id", user.getId())).isEqualTo(1);
         management.blockUser("block", "test", request(user)).block(TIMEOUT);
+        assertThat(count("SELECT auth_version FROM taska.users WHERE id=:id", user.getId())).isEqualTo(2);
         rejectEvent("UserUnblocked");
         try {
             assertThatThrownBy(() -> management.unblockUser("failed", "test", request(user)).block(TIMEOUT)).isInstanceOf(RuntimeException.class);
@@ -97,7 +100,9 @@ class InvitedUnblockIT extends AbstractIT {
         User stillBlocked = users.findById(user.getId()).block(TIMEOUT);
         assertThat(stillBlocked.getStatus()).isEqualTo(UserStatus.BLOCKED);
         assertThat(stillBlocked.getBlockedFromStatus()).isEqualTo(UserStatus.INVITED);
+        assertThat(count("SELECT auth_version FROM taska.users WHERE id=:id", user.getId())).isEqualTo(2);
         assertThat(management.unblockUser("retry", "test", request(user)).block(TIMEOUT).newStatus()).isEqualTo(UserStatus.INVITED);
+        assertThat(count("SELECT auth_version FROM taska.users WHERE id=:id", user.getId())).isEqualTo(3);
     }
 
     @ParameterizedTest

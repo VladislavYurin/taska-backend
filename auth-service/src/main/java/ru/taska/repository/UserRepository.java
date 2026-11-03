@@ -3,6 +3,7 @@ package ru.taska.repository;
 import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
@@ -24,6 +25,10 @@ public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
 
     @Query("SELECT * FROM taska.users WHERE id = :id FOR UPDATE")
     Mono<User> findByIdForUpdate(UUID id);
+
+    @Modifying
+    @Query("UPDATE taska.users SET auth_version=auth_version+1 WHERE id=:id")
+    Mono<Integer> incrementAuthVersion(UUID id);
 
     @Query("""
         SELECT u.id AS user_id, u.display_name, u.email,

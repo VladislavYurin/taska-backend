@@ -15,6 +15,7 @@
 | Роли, каналы, scope, operation policy, угрозы | [access-control.md](access-control.md), [access-matrix.json](inventory/access-matrix.json) | TAS-304 |
 | Jobs, events, caches, native queries, files и recovery | [async-and-files.md](async-and-files.md), [async-paths.json](inventory/async-paths.json) | TAS-469 |
 | Typed REST/gRPC, headers, sessions, errors, idempotency | [contracts/README.md](contracts/README.md), [b2b-openapi.yaml](contracts/b2b-openapi.yaml), [b2b.proto](contracts/b2b.proto) | TAS-305/470/471 |
+| Реализуемые backend web-сессии и граница включения | [auth-sessions-implementation.md](auth-sessions-implementation.md) | TAS-315 |
 | Транзакции, state machines, quota/billing/refund/delete algorithms | [state-machines.md](state-machines.md), L01–L12 | TAS-268 + реализации |
 | Принятые minor решения | [technical-decisions.md](technical-decisions.md), T01–T27 | Все реализации |
 | Cutover/restore/operator/config/release/retention algorithms | [operations-design.md](operations-design.md), R01–R06 | TAS-371/374/376/379/481/520 |

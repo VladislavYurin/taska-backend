@@ -64,6 +64,8 @@ class AdminUserManagementServiceImplTest {
     void setUp() {
         org.mockito.Mockito.lenient().when(personalTokens.revokeAll(org.mockito.Mockito.any(), org.mockito.Mockito.anyString(), org.mockito.Mockito.any()))
                 .thenReturn(Mono.empty());
+        org.mockito.Mockito.lenient().when(userRepository.incrementAuthVersion(org.mockito.Mockito.any(UUID.class)))
+                .thenReturn(Mono.just(1));
         service = new AdminUserManagementServiceImpl(
                 userRepository,
                 outboxEventMapper,
