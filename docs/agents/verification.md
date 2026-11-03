@@ -148,3 +148,5 @@ PGADMIN_CONTAINER_TEST=1 python3 -m unittest discover -s infra/pgadmin -p 'test_
 TAS-306: grpc-common-lib теперь имеет обязательные Surefire tests (RpcContextSecurityTest и TenantTransportTest); no-test exemption снят. Для локального mTLS-теста нужен openssl и возможность открыть loopback port. Ключи генерируются в test temporary directory.
 
 TAS-307: `common-lib.verify` включает `TenantTransactionExecutorIntegrationTest` (PostgreSQL16/Testcontainers, R2DBC pool maxSize=1, непривилегированная RLS-роль). Docker обязателен; prerequisite также указан для grpc-common-lib.verify и kafka-lib.verify, запускающих common-lib tests через -am. Тест проверяет transaction-local settings, commit/error/cancel cleanup и блокировки; выполняется стандартным Surefire без отдельного IT selector. [Контракт executor](../data/tenant-transactions.md).
+
+TAS-308: `TenantRlsTemplatesIntegrationTest` в common-lib.verify исполняет общие psql/SQL templates на PostgreSQL16 с настоящими runtime LOGIN sessions. Проверяет RLS, composite FK, role/grant/policy drift и default privileges. Требуется Docker; psql берётся из контейнера. [Шаблоны и применение](../data/tenant-rls-templates.md).

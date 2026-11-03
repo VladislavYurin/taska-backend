@@ -1,0 +1,8 @@
+\set ON_ERROR_STOP on
+-- Bootstrap administrator only; dedicated service database. No passwords are embedded.
+BEGIN;
+SET LOCAL search_path = pg_catalog;
+SELECT set_config('taska.bootstrap_service', :'service', true),
+       set_config('taska.bootstrap_schema', :'schema', true);
+\ir bootstrap.sql
+COMMIT;
