@@ -152,4 +152,4 @@ Harness не требует внешних skills/plugins, поэтому у н�
 
 После обновления repository/client/plugin повторите static doctor, docs-check, adapter smoke и один согласованный workflow. Новый client/version требует нового наблюдения обнаружения инструкций. Не переносите status PASS из старой установки.
 
-Регрессионная оценка самого harness и добавление контрольного case: [evals](evals.md).
+Регрессионная оценка самого harness — следующий этап TAS-456.
