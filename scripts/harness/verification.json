@@ -571,7 +571,8 @@
         "directory": "tenant-service/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantRegistryIntegrationTest"
+          "TenantRegistryIntegrationTest",
+          "TenantMembershipIntegrationTest"
         ],
         "noTestsReason": null
       },

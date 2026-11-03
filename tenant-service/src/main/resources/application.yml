@@ -29,3 +29,5 @@ management:
 taska:
   tenant:
     creation-window: 30d
+    membership-cursor-key: ${TENANT_MEMBERSHIP_CURSOR_KEY:}
+    membership-readers: ${TENANT_MEMBERSHIP_READERS:auth-service,api-gateway,project-service,workflow-service,issue-service}

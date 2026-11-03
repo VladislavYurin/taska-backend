@@ -500,7 +500,8 @@ class TenantRegistryIntegrationTest {
 
   @Test
   void grpcWithoutVerifiedInterceptorContextNeverReachesDatabase() {
-    var adapter = new TenantGrpcService(service);
+    var adapter =
+        new TenantGrpcService(service, org.mockito.Mockito.mock(TenantMembershipService.class));
     StepVerifier.create(adapter.createTenant(Mono.just(request("untrusted", PAID, "Company"))))
         .expectErrorSatisfies(
             e ->
@@ -774,7 +775,8 @@ class TenantRegistryIntegrationTest {
             .sslContext(ssl)
             .addService(
                 io.grpc.ServerInterceptors.intercept(
-                    new TenantGrpcService(service),
+                    new TenantGrpcService(
+                        service, org.mockito.Mockito.mock(TenantMembershipService.class)),
                     new ru.taska.security.tenant.TenantServerInterceptor(
                         recipient, policies, "test")))
             .build()

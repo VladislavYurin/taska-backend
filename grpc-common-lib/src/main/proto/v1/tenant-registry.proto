@@ -98,7 +98,73 @@ message GetTenantRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
 }
+message PageRequest { optional string cursor = 1; uint32 limit = 2; }
+
+message Membership {
+  enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_SUSPENDED = 2; STATE_REMOVED = 3; }
+  string id = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  RoleValue role = 4;
+  StateValue state = 5;
+  bool is_owner = 6;
+  string display_name = 7;
+  string email = 8;
+  optional string avatar_path = 9;
+  string version = 10;
+}
+
+message MembershipPage {
+  repeated Membership items = 1;
+  optional string next_cursor = 2;
+}
+
+message ListTenantMembersRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
 service TenantService {
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
+}
+
+// TAS-311 internal authority: state only, no directory/credentials or mutation APIs.
+message MembershipSnapshot {
+  string tenant_id = 1;
+  string user_id = 2;
+  Membership.RoleValue role = 3;
+  Membership.StateValue state = 4;
+  string version = 5;
+  string tenant_membership_version = 6;
+  bool is_owner = 7;
+  string joined_at = 8;
+}
+message GetMembershipRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+}
+message BatchValidateMembershipsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  repeated string user_ids = 3; // 1..100 distinct canonical UUIDs, same tenant.
+}
+message MembershipValidation {
+  string user_id = 1;
+  bool found = 2;
+  optional MembershipSnapshot membership = 3;
+}
+message MembershipValidationBatch {
+  string tenant_id = 1;
+  string tenant_membership_version = 2;
+  repeated MembershipValidation items = 3; // Same order as requested user_ids.
+  Tenant.LifecycleValue tenant_lifecycle = 4;
+}
+service TenantMembershipService {
+  rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);
+  rpc BatchValidateMemberships(BatchValidateMembershipsRpcRequest) returns (MembershipValidationBatch);
 }

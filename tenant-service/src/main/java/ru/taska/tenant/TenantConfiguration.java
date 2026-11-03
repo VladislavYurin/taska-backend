@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.*;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.TenantMembershipServiceGrpc;
 import ru.taska.api.b2b.v1.TenantServiceGrpc;
 import ru.taska.exception.*;
 import ru.taska.r2dbc.TenantTransactionExecutor;
@@ -97,6 +98,22 @@ public class TenantConfiguration {
   }
 
   @Bean
+  MembershipCursor membershipCursor(@Value("${taska.tenant.membership-cursor-key:}") String key) {
+    return new MembershipCursor(key, Clock.systemUTC());
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantMembershipService tenantMemberships(
+      TenantTransactionExecutor transactions,
+      MembershipCursor cursor,
+      @Value(
+              "${taska.tenant.membership-readers:auth-service,api-gateway,project-service,workflow-service,issue-service}")
+          java.util.Set<String> readers) {
+    return new TenantMembershipService(transactions, cursor, readers);
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -109,6 +126,12 @@ public class TenantConfiguration {
               TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true),
               TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              TenantServiceGrpc.getListTenantMembersMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              TenantMembershipServiceGrpc.getGetMembershipMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              TenantMembershipServiceGrpc.getBatchValidateMembershipsMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
           environment);
     // No permissive bootstrap. Keys/replay/online-authority adapters must be explicitly supplied.

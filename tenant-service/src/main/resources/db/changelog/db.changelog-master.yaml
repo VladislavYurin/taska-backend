@@ -69,6 +69,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-membership-read-0002",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0002-membership-read.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

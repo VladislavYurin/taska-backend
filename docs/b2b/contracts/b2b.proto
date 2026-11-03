@@ -1717,3 +1717,40 @@ message RefundSlaSnapshot {
  DstGapRuleValue dst_gap_rule = 7;
  DstOverlapRuleValue dst_overlap_rule = 8;
 }
+
+// TAS-311 internal authority: state only, no directory/credentials or mutation APIs.
+message MembershipSnapshot {
+  string tenant_id = 1;
+  string user_id = 2;
+  Membership.RoleValue role = 3;
+  Membership.StateValue state = 4;
+  string version = 5;
+  string tenant_membership_version = 6;
+  bool is_owner = 7;
+  string joined_at = 8;
+}
+message GetMembershipRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+}
+message BatchValidateMembershipsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  repeated string user_ids = 3; // 1..100 distinct canonical UUIDs, same tenant.
+}
+message MembershipValidation {
+  string user_id = 1;
+  bool found = 2;
+  optional MembershipSnapshot membership = 3;
+}
+message MembershipValidationBatch {
+  string tenant_id = 1;
+  string tenant_membership_version = 2;
+  repeated MembershipValidation items = 3; // Same order as requested user_ids.
+  Tenant.LifecycleValue tenant_lifecycle = 4;
+}
+service TenantMembershipService {
+  rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);
+  rpc BatchValidateMemberships(BatchValidateMembershipsRpcRequest) returns (MembershipValidationBatch);
+}

@@ -1,6 +1,27 @@
-# tenant-service — TAS-310
+# tenant-service — TAS-310/311
 
 Сервис владеет реестром компаний. `TenantService.CreateTenant/GetTenant` реализуют подмножество принятого [B2B protobuf](../docs/b2b/contracts/b2b.proto), опубликованное в `grpc-common-lib/src/main/proto/v1/tenant-registry.proto` с сохранением имён и номеров полей. Публичные HTTP endpoints ещё не подключены: gateway должен сначала получить глобальные/tenant session adapters и provisioning flow. Статический REST OpenAPI существующей системы не расширяется недоступным маршрутом.
+
+## Membership authority — TAS-311
+
+`TenantService.ListTenantMembers` возвращает metadata участия. Поля display_name/email/avatar_path остаются незаполненными: directory enrichment и публичный HTTP adapter принадлежат TAS-321. Номера полей Membership/Page взяты из blueprint. Membership.id — стабильный UUIDv8 от tenant/user с namespace taska:membership:v1; одна global identity имеет разные membership IDs в A/B. В mutation routes ключом остаётся user_id внутри tenant.
+
+Список требует WEB_TENANT session либо USER_PAT/USER_OAUTH credential, read scope, signed tenant/action listTenantMembers и текущую ACTIVE actor membership с совпадающей signed membership generation. Компания должна быть ACTIVE. GLOBAL_ADMIN сам по себе не даёт bypass; отдельный административный путь — TAS-346. Список включает ACTIVE/SUSPENDED; REMOVED tombstones доступны только служебной authority. Порядок `(joined_at,user_id)` задаёт время вступления и уникальный tie-break; default50/max100, keyset без OFFSET. Следующие mutation задачи должны атомарно увеличивать row version и tenants.membership_version. Изменение общего поколения инвалидирует старую страницу: клиент начинает чтение заново.
+
+Cursor подписан HMAC-SHA256, versioned, TTL15min. Он привязан к actor/tenant, actor и membership generations, credential kind/session/credential/grant/grantGeneration, sorted scopes, page size и фиксированным filters/order. Текущая membership проверяется на каждой странице. Пустой/подменённый/истёкший/чужой cursor даёт VALIDATION_FAILED, отозванная actor membership — concealed NOT_FOUND. Общий для replicas случайный ключ Base64 минимум32bytes задаётся TENANT_MEMBERSHIP_CURSOR_KEY. Пустая конфигурация отключает list с POLICY_NOT_CONFIGURED; backend reads от этого ключа не зависят. Некорректный непустой ключ останавливает старт без вывода его значения. Ротация ключа инвалидирует старые cursors. Ключ не хранить в Git/логах.
+
+Внутренний `TenantMembershipService` имеет два read-only RPC:
+
+| RPC | Ответ |
+| --- | --- |
+| GetMembership | Актуальные role/state/version, tenant_membership_version, owner flag и joined_at для одного tenant/user; отсутствующий membership — RESOURCE_NOT_FOUND |
+| BatchValidateMemberships | 1..100 distinct canonical user UUIDs одного tenant, один результат на входной user в том же порядке; found=false без membership для отсутствующего, включая существующего только в другой компании |
+
+Оба требуют verified SERVICE, scope memberships:read, точные target tenant/action и issuer из server allowlist TENANT_MEMBERSHIP_READERS. Defaults: auth-service, api-gateway, project-service, workflow-service, issue-service. mTLS peer, подпись и live caller→RPC edge проверяет общий RpcContextSecurity до handler. SERVICE authority проверяет служебный purpose и не вызывает membership validation рекурсивно для собственной аутентификации. Human actor может отсутствовать. ACTIVE membership caller не требуется: служебный read должен получать SUSPENDED/REMOVED с актуальной generation для отзыва доступа. Mutation/activate API отсутствуют.
+
+Batch возвращает tenant lifecycle и общее membership generation; каждый найденный snapshot содержит индивидуальную version и то же общее generation. State не кешируется. Строки и обе generations читаются одним SELECT snapshot, включая LEFT JOIN для unknown users. Для бизнес-действия потребитель дополнительно проверяет lifecycle/capabilities и project ACL; found/ACTIVE сами не выдают рабочие права. DELETED/неизвестный tenant скрывается как TENANT_NOT_FOUND. Ответы не содержат credentials, display names, email или данные другой компании.
+
+Internal proto добавлен к blueprint без изменения старых field numbers. Миграция0002 добавляет partial `(tenant_id,joined_at,user_id)` index для видимых состояний; changeset0001 не меняется. Обязательный TenantMembershipIntegrationTest проверяет A/B states/versions, HMAC и revocation/rejoin, natural keyset plan, отсутствие writes/outbox и реальный mTLS/JWS всех трёх новых RPC через production policy map.
 
 ## Создание и повторы
 
@@ -18,7 +39,7 @@ Paid начинается AWAITING_PAYMENT с `creationDeadline=createdAt+30d`, 
 
 ## Trust и запуск
 
-`RpcContextSecurity` должен получить настоящие Keys, shared ReplayGuard и online Authority adapters TAS-306. Authority обязан привязать исходную сессию к зарегистрированному действующему пользователю, RPC/action/scope и актуальным generations; одного наличия account недостаточно. TenantServerInterceptor проверяет message-bound JWS и mTLS SPIFFE peer; только два метода внесены в allowlist. Без trust provider все gRPC calls получают UNAVAILABLE до handler, plaintext не становится fallback. Liveness/DB health доступны отдельно. Этот foundation ещё не означает доступный self-service на общем стенде.
+`RpcContextSecurity` должен получить настоящие Keys, shared ReplayGuard и online Authority adapters TAS-306. Authority обязан привязать исходную сессию к зарегистрированному действующему пользователю, RPC/action/scope и актуальным generations; одного наличия account недостаточно. TenantServerInterceptor проверяет message-bound JWS и mTLS SPIFFE peer; пять методов registry/membership внесены в allowlist. Без trust provider все gRPC calls получают UNAVAILABLE до handler, plaintext не становится fallback. Liveness/DB health доступны отдельно. Этот foundation ещё не означает доступный self-service на общем стенде.
 
 База выделена сервису. До первого старта оператор выполняет:
 
