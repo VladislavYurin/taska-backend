@@ -1,0 +1,819 @@
+{
+  "revision": "SA-2026-11-03",
+  "status": "DESIGN_VECTORS_NOT_PRODUCT_TEST_RESULTS",
+  "scenarios": [
+    {
+      "id": "ISO-01",
+      "tasks": [
+        "TAS-306",
+        "TAS-307",
+        "TAS-309",
+        "TAS-377"
+      ],
+      "given": {
+        "tenants": [
+          "A",
+          "B"
+        ],
+        "sameConnection": true
+      },
+      "when": "A commit; B read with reused pool connection",
+      "expect": {
+        "B_sees_A": false,
+        "contextIsTransactionLocal": true
+      }
+    },
+    {
+      "id": "ISO-02",
+      "tasks": [
+        "TAS-306",
+        "TAS-316",
+        "TAS-377"
+      ],
+      "given": {
+        "scope": "A",
+        "requestedTenant": "B"
+      },
+      "when": "Forge body/header tenant and role",
+      "expect": {
+        "allowed": false,
+        "sideEffects": 0,
+        "foreignExistenceLeaked": false
+      }
+    },
+    {
+      "id": "ISO-03",
+      "tasks": [
+        "TAS-499",
+        "TAS-345",
+        "TAS-377"
+      ],
+      "given": {
+        "adminGrant": "READ",
+        "scope": "PLATFORM"
+      },
+      "when": "Mutate any tenant object",
+      "expect": {
+        "status": 403,
+        "sideEffects": 0
+      }
+    },
+    {
+      "id": "ISO-04",
+      "tasks": [
+        "TAS-499",
+        "TAS-511",
+        "TAS-377"
+      ],
+      "given": {
+        "adminGrant": "MODIFY",
+        "mfaComplete": false
+      },
+      "when": "Issue or expand admin grant",
+      "expect": {
+        "allowed": false,
+        "newGrant": false
+      }
+    },
+    {
+      "id": "ISO-05",
+      "tasks": [
+        "TAS-343",
+        "TAS-344",
+        "TAS-362",
+        "TAS-364",
+        "TAS-377"
+      ],
+      "given": {
+        "tenant": "A",
+        "foreignProject": "B",
+        "sameObjectUUID": true
+      },
+      "when": "Search/count/link/cross-project write",
+      "expect": {
+        "foreignRows": 0,
+        "foreignCounts": 0,
+        "crossTenantLinks": 0
+      }
+    },
+    {
+      "id": "QUOTA-01",
+      "tasks": [
+        "TAS-322",
+        "TAS-335",
+        "TAS-336"
+      ],
+      "given": {
+        "used": 4,
+        "reserved": 0,
+        "limit": 5
+      },
+      "when": "Two concurrent distinct invitations",
+      "expect": {
+        "successfulReservations": 1,
+        "usedPlusReserved": 5
+      }
+    },
+    {
+      "id": "QUOTA-02",
+      "tasks": [
+        "TAS-324",
+        "TAS-337"
+      ],
+      "given": {
+        "reservation": "ACTIVE",
+        "domainOutcome": "UNKNOWN"
+      },
+      "when": "Expiry worker while owner unavailable",
+      "expect": {
+        "reservationStillAccounted": true,
+        "retry": true
+      }
+    },
+    {
+      "id": "QUOTA-03",
+      "tasks": [
+        "TAS-460",
+        "TAS-332",
+        "TAS-343"
+      ],
+      "given": {
+        "lifetimeCreated": 49,
+        "plan": "FREE"
+      },
+      "when": "Create task then repeat same idempotency key",
+      "expect": {
+        "lifetimeCreated": 50,
+        "newIssues": 1,
+        "repeatSameResult": true
+      }
+    },
+    {
+      "id": "QUOTA-04",
+      "tasks": [
+        "TAS-460",
+        "TAS-343"
+      ],
+      "given": {
+        "lifetimeCreated": 50,
+        "plan": "FREE"
+      },
+      "when": "Create one task; independently edit existing task",
+      "expect": {
+        "newIssueAllowed": false,
+        "editAllowedWithACL": true,
+        "lifetimeCreated": 50
+      }
+    },
+    {
+      "id": "QUOTA-05",
+      "tasks": [
+        "TAS-460",
+        "TAS-354",
+        "TAS-360"
+      ],
+      "given": {
+        "lifetimeCreated": 51,
+        "plan": "PAID"
+      },
+      "when": "Downgrade to eligible FREE",
+      "expect": {
+        "tenantReadOnly": true,
+        "storedIssuesPreserved": true,
+        "lifetimeCreated": 51
+      }
+    },
+    {
+      "id": "TIME-01",
+      "tasks": [
+        "TAS-331",
+        "TAS-378"
+      ],
+      "given": {
+        "start": "2027-01-31T12:00:00Z",
+        "anchorDay": 31
+      },
+      "when": "Renew twice",
+      "expect": {
+        "boundaries": [
+          "2027-02-28T12:00:00Z",
+          "2027-03-31T12:00:00Z"
+        ]
+      }
+    },
+    {
+      "id": "TIME-02",
+      "tasks": [
+        "TAS-319",
+        "TAS-360",
+        "TAS-378"
+      ],
+      "given": {
+        "endAt": "2027-02-28T12:00:00Z",
+        "now": "2027-02-28T12:00:00Z"
+      },
+      "when": "Evaluate expired paid period without renewal",
+      "expect": {
+        "paidCoverageActive": false,
+        "grace": false
+      }
+    },
+    {
+      "id": "BILL-01",
+      "tasks": [
+        "TAS-351",
+        "TAS-352",
+        "TAS-357",
+        "TAS-476",
+        "TAS-378"
+      ],
+      "given": {
+        "invoiceMinor": "2000",
+        "currency": "EUR"
+      },
+      "when": "PSP success and WIRE 2000 confirmed concurrently",
+      "expect": {
+        "invoicePaidCount": 1,
+        "coverageCount": 1,
+        "secondSourceUnallocated": "2000"
+      }
+    },
+    {
+      "id": "BILL-02",
+      "tasks": [
+        "TAS-357",
+        "TAS-484",
+        "TAS-378"
+      ],
+      "given": {
+        "invoiceMinor": "2000",
+        "firstReceiptMinor": "1200"
+      },
+      "when": "No top-up before deadline",
+      "expect": {
+        "coverageCreated": false,
+        "returnRequiredMinor": "1200",
+        "existingIndependentCoverageRevoked": false
+      }
+    },
+    {
+      "id": "BILL-03",
+      "tasks": [
+        "TAS-357",
+        "TAS-484",
+        "TAS-378"
+      ],
+      "given": {
+        "invoiceMinor": "2000",
+        "firstReceiptMinor": "1200"
+      },
+      "when": "Additional 800 received timely and verified",
+      "expect": {
+        "allocatedMinor": "2000",
+        "coverageCount": 1,
+        "unallocatedMinor": "0"
+      }
+    },
+    {
+      "id": "BILL-04",
+      "tasks": [
+        "TAS-357",
+        "TAS-486",
+        "TAS-378"
+      ],
+      "given": {
+        "invoiceMinor": "2000",
+        "receiptMinor": "2500",
+        "timely": true
+      },
+      "when": "Confirm then return full excess",
+      "expect": {
+        "coverageAmountMinor": "2000",
+        "returnedMinor": "500",
+        "periodUnchanged": true,
+        "autopayDisabledByExcessReturn": false
+      }
+    },
+    {
+      "id": "BILL-05",
+      "tasks": [
+        "TAS-478",
+        "TAS-484",
+        "TAS-378"
+      ],
+      "given": {
+        "creation": "AUTO_CLOSED",
+        "fullPaymentReceivedBeforeBothDeadlines": true
+      },
+      "when": "Receive delayed verified evidence",
+      "expect": {
+        "sameTenantActivated": true,
+        "coverageCount": 1
+      }
+    },
+    {
+      "id": "BILL-06",
+      "tasks": [
+        "TAS-478",
+        "TAS-484",
+        "TAS-378"
+      ],
+      "given": {
+        "creation": "OWNER_CANCELLED",
+        "receiptMinor": "2000"
+      },
+      "when": "Receive full payment",
+      "expect": {
+        "activated": false,
+        "returnRequiredMinor": "2000"
+      }
+    },
+    {
+      "id": "BILL-07",
+      "tasks": [
+        "TAS-484",
+        "TAS-378"
+      ],
+      "given": {
+        "invoicePurpose": "RENEWAL",
+        "invoiceExpired": true,
+        "tenantBlocked": false,
+        "confirmedAt": "2027-03-10T11:00:00Z"
+      },
+      "when": "Manually confirm late WIRE",
+      "expect": {
+        "startsAt": "2027-03-10T11:00:00Z",
+        "endsAt": "2027-04-10T11:00:00Z",
+        "backdatedCharge": false
+      }
+    },
+    {
+      "id": "BILL-08",
+      "tasks": [
+        "TAS-518",
+        "TAS-357",
+        "TAS-378"
+      ],
+      "given": {
+        "precision": "DAY",
+        "possibleTimeCrossesDeadline": true
+      },
+      "when": "Register statement without exact time",
+      "expect": {
+        "case": "WAITING_EVIDENCE",
+        "automaticallyTimely": false,
+        "automaticallyLate": false,
+        "inventedTimestamp": false
+      }
+    },
+    {
+      "id": "BILL-09",
+      "tasks": [
+        "TAS-354",
+        "TAS-378"
+      ],
+      "given": {
+        "from": "PAID",
+        "oldPeriodStillCalendarValid": true
+      },
+      "when": "Downgrade FREE then return PAID",
+      "expect": {
+        "newPaymentRequired": true,
+        "oldCoverageRevived": false,
+        "newMonthFromNewPayment": true
+      }
+    },
+    {
+      "id": "BILL-10",
+      "tasks": [
+        "TAS-358",
+        "TAS-490",
+        "TAS-518",
+        "TAS-378"
+      ],
+      "given": {
+        "paymentMinor": "2000",
+        "refundOutcome": "UNKNOWN"
+      },
+      "when": "Receive confirmed full chargeback",
+      "expect": {
+        "additionalRefundSent": false,
+        "confirmedMoneyFactsPreserved": true,
+        "linkedCoverageRevoked": true
+      }
+    },
+    {
+      "id": "BILL-11",
+      "tasks": [
+        "TAS-490",
+        "TAS-518",
+        "TAS-378"
+      ],
+      "given": {
+        "originalPaymentMinor": "2000",
+        "confirmedFinalPartialChargebackMinor": "500",
+        "linkedCoverage": "coverage-A",
+        "independentCoverage": "coverage-B",
+        "outcome": "LOST_PARTIAL_COVERAGE_REVOKED"
+      },
+      "when": "GLOBAL_ADMIN records verified final outcome twice, then an older duplicate webhook arrives",
+      "expect": {
+        "disputeState": "LOST",
+        "revokedCoverage": [
+          "coverage-A"
+        ],
+        "unchangedCoverage": [
+          "coverage-B"
+        ],
+        "additionalOutgoingRefunds": 0,
+        "additionalMoneyFacts": 0,
+        "autopayEnabled": false,
+        "repeatEffectCount": 1,
+        "paidRecovery": "NEW_FULL_PAYMENT_NEW_FULL_MONTH",
+        "otherRestrictionsPreserved": true
+      }
+    },
+    {
+      "id": "BILL-12",
+      "tasks": [
+        "TAS-490",
+        "TAS-355",
+        "TAS-378"
+      ],
+      "given": {
+        "dispute": "OPEN",
+        "autopayPreviouslyEnabled": true,
+        "coverageStillValid": true
+      },
+      "when": "Verified WON",
+      "expect": {
+        "disputeReasonRemoved": true,
+        "endAtUnchanged": true,
+        "autopayEnabled": false,
+        "newConsentRequired": true
+      }
+    },
+    {
+      "id": "BILL-13",
+      "tasks": [
+        "TAS-483",
+        "TAS-325",
+        "TAS-378"
+      ],
+      "given": {
+        "plan": "FREE",
+        "inboxCreatedAt": "2027-01-01T10:00:00Z",
+        "noticeDays": 30,
+        "emailFailed": true
+      },
+      "when": "Apply published new limits",
+      "expect": {
+        "effectiveAt": "2027-01-31T10:00:00Z",
+        "waitForMonthBoundary": false,
+        "retryEmail": true
+      }
+    },
+    {
+      "id": "AUTH-01",
+      "tasks": [
+        "TAS-312",
+        "TAS-461",
+        "TAS-494",
+        "TAS-377"
+      ],
+      "given": {
+        "activeAdmins": [
+          "A",
+          "B"
+        ]
+      },
+      "when": "B installs deletion fence; A concurrently leaves",
+      "expect": {
+        "bothRemoved": false,
+        "lastAdminInvariant": true,
+        "tenantLockUsed": true
+      }
+    },
+    {
+      "id": "AUTH-02",
+      "tasks": [
+        "TAS-461",
+        "TAS-494",
+        "TAS-378"
+      ],
+      "given": {
+        "ownedTenants": 0,
+        "lastAdminAnywhere": false,
+        "remainingTenant": "PLATFORM_BLOCKED"
+      },
+      "when": "Self-delete with valid purpose code",
+      "expect": {
+        "allowed": true,
+        "membershipsRevoked": true,
+        "tenantBlockDoesNotPrevent": true
+      }
+    },
+    {
+      "id": "AUTH-03",
+      "tasks": [
+        "TAS-473",
+        "TAS-355",
+        "TAS-378"
+      ],
+      "given": {
+        "owner": "A",
+        "receiver": "B",
+        "paid": true,
+        "paused": true
+      },
+      "when": "Transfer with explicit confirmation",
+      "expect": {
+        "owner": "B",
+        "oldOwnerTenantAdmin": true,
+        "newOwnerTenantAdmin": true,
+        "oldAutopayRevoked": true,
+        "extraOTPRequired": false
+      }
+    },
+    {
+      "id": "AUTH-04",
+      "tasks": [
+        "TAS-473",
+        "TAS-373",
+        "TAS-378"
+      ],
+      "given": {
+        "owner": "A",
+        "platformBlocked": true
+      },
+      "when": "Ordinary owner transfer/delete",
+      "expect": {
+        "allowed": false,
+        "sideEffects": 0
+      }
+    },
+    {
+      "id": "FILE-01",
+      "tasks": [
+        "TAS-365",
+        "TAS-367",
+        "TAS-377"
+      ],
+      "given": {
+        "uploadConfirmedVersion": "v1",
+        "oldPresignedPutStillValid": true
+      },
+      "when": "Overwrite staging key with v2 then download",
+      "expect": {
+        "downloadedVersion": "immutable copy of v1",
+        "usageUnchanged": true
+      }
+    },
+    {
+      "id": "FILE-02",
+      "tasks": [
+        "TAS-367",
+        "TAS-372",
+        "TAS-377"
+      ],
+      "given": {
+        "exportReady": true,
+        "membershipRevoked": true
+      },
+      "when": "Download or start new Range request",
+      "expect": {
+        "allowed": false,
+        "clientGetsS3URL": false
+      }
+    },
+    {
+      "id": "RESTORE-01",
+      "tasks": [
+        "TAS-374",
+        "TAS-460"
+      ],
+      "given": {
+        "backupLifetime": 40,
+        "currentLifetimeHighWater": 50
+      },
+      "when": "Restore company A beside live B",
+      "expect": {
+        "restoredLifetimeMinimum": 50,
+        "BUnchanged": true,
+        "countCurrentIssuesUsedAsLifetime": false
+      }
+    },
+    {
+      "id": "RETENTION-01",
+      "tasks": [
+        "TAS-520",
+        "TAS-474",
+        "TAS-494"
+      ],
+      "given": {
+        "policy": null,
+        "deleted": true
+      },
+      "when": "Run purge scheduler",
+      "expect": {
+        "state": "HELD",
+        "liveReadiness": false,
+        "successfulPurgeClaim": false,
+        "oldAccessRestored": false
+      }
+    },
+    {
+      "id": "BILL-22",
+      "tasks": [
+        "TAS-358",
+        "TAS-486",
+        "TAS-518",
+        "TAS-378"
+      ],
+      "given": {
+        "evidenceCompletedAt": "2026-11-02T11:00:00+01:00",
+        "calendar": "SYNTHETIC_MON_FRI_NO_HOLIDAYS",
+        "policy": "WIRE_RETURN_ES_V1"
+      },
+      "when": "Approve after 2 business dates; retry/reassign after 4; publish new calendar",
+      "expect": {
+        "decisionDueAt": "2026-11-09T10:00:00Z",
+        "sendDueAt": "2026-11-09T10:00:00Z",
+        "deadlineRecomputed": false,
+        "liveCalendarFixtureAllowed": false
+      }
+    },
+    {
+      "id": "BILL-23",
+      "tasks": [
+        "TAS-358",
+        "TAS-486",
+        "TAS-488",
+        "TAS-378"
+      ],
+      "given": {
+        "unallocatedReturnPrincipalMinor": "500",
+        "bankFeeMinor": "50",
+        "feeBearer": "TASKA"
+      },
+      "when": "Submit WIRE return and subsequently verify outgoing bank fact",
+      "expect": {
+        "recipientPrincipalMinor": "500",
+        "separateTaskaExpenseMinor": "50",
+        "confirmedBeforeBankEvidence": false,
+        "deductedFeeMinor": "0"
+      }
+    },
+    {
+      "id": "BILL-24",
+      "tasks": [
+        "TAS-490",
+        "TAS-352",
+        "TAS-361",
+        "TAS-378"
+      ],
+      "given": {
+        "lostPartialLinkedCoverageRevoked": true,
+        "otherActiveCoverage": false,
+        "newPaymentSuccessAt": "2026-11-03T10:00:00Z",
+        "ownerPaused": true
+      },
+      "when": "Confirm new complete PSP payment",
+      "expect": {
+        "periodStart": "2026-11-03T10:00:00Z",
+        "periodEnd": "2026-12-03T10:00:00Z",
+        "oldPeriodRemainderAdded": false,
+        "ownerPaused": true,
+        "autopayEnabled": false
+      }
+    },
+    {
+      "id": "BILL-25",
+      "tasks": [
+        "TAS-358",
+        "TAS-518",
+        "TAS-492"
+      ],
+      "given": {
+        "sendDueAt": "2026-11-09T10:00:00Z",
+        "now": "2026-11-10T10:00:00Z",
+        "refundApproved": true,
+        "moneySourceReconciled": true
+      },
+      "when": "Send overdue refund",
+      "expect": {
+        "sendAllowed": true,
+        "deadlineShifted": false,
+        "overdueVisible": true,
+        "alertCreated": true,
+        "confirmedWithoutEvidence": false
+      }
+    },
+    {
+      "id": "RETENTION-02",
+      "tasks": [
+        "TAS-520",
+        "TAS-474",
+        "TAS-494",
+        "TAS-374"
+      ],
+      "given": {
+        "policyVersion": "ES_V1",
+        "tombstoneAt": "2026-11-03T00:00:00Z",
+        "backupCapturedAt": "2026-11-01T00:00:00Z"
+      },
+      "when": "Copy backup on November20 and restore before expiry",
+      "expect": {
+        "activePurgeDeadline": "2026-12-03T00:00:00Z",
+        "backupEraseDeadline": "2026-12-06T00:00:00Z",
+        "copyExtendsTtl": false,
+        "tombstoneAppliedBeforeTraffic": true,
+        "oldIdentityRestored": false
+      }
+    },
+    {
+      "id": "RETENTION-03",
+      "tasks": [
+        "TAS-520",
+        "TAS-482"
+      ],
+      "given": {
+        "financialRecordBaseDueAt": "2032-11-03T00:00:00Z",
+        "scopedLegalHoldActive": true,
+        "actor": "SUPPORT"
+      },
+      "when": "Purge then attempt ordinary read of BLOCKED_LEGAL identity evidence",
+      "expect": {
+        "purged": false,
+        "ordinaryBlockedReadAllowed": false,
+        "holdGrantsAdditionalRead": false,
+        "unrelatedRecordsHeld": false
+      }
+    },
+    {
+      "id": "RETENTION-04",
+      "tasks": [
+        "TAS-472",
+        "TAS-520",
+        "TAS-494"
+      ],
+      "given": {
+        "accountAndTenantDeleted": true,
+        "freeMarkerPurposeActive": true,
+        "lawfulErasureRequestUpheld": true
+      },
+      "when": "Dispose FREE marker under ES_V1",
+      "expect": {
+        "operationalMatchingAllowed": false,
+        "reconstructFromInvoiceBackupProfile": false,
+        "rawEmailRetainedForFreeCheck": false,
+        "fingerprintingAllowed": false
+      }
+    },
+    {
+      "id": "RETENTION-05",
+      "tasks": [
+        "TAS-482",
+        "TAS-520"
+      ],
+      "given": {
+        "deletedAccount": true,
+        "requesterFormerOwnerOnly": true,
+        "currentAuthorityVerified": false
+      },
+      "when": "Request archived invoice through operator case",
+      "expect": {
+        "documentDelivered": false,
+        "accountRevived": false,
+        "tenantSessionCreated": false,
+        "blockedProfileRead": false,
+        "auditedDenial": true
+      }
+    },
+    {
+      "id": "COMMERCIAL-01",
+      "tasks": [
+        "TAS-348",
+        "TAS-519",
+        "TAS-378"
+      ],
+      "given": {
+        "provider": "STRIPE",
+        "liveProvisioning": "DEFERRED",
+        "merchantProfile": null,
+        "currencies": [
+          "EUR",
+          "USD"
+        ]
+      },
+      "when": "Run sandbox fixtures then request live checkout",
+      "expect": {
+        "sandboxAvailable": true,
+        "liveCheckoutSent": false,
+        "liveError": "POLICY_NOT_CONFIGURED",
+        "usdRemovedFromContract": false,
+        "inventedSellerDetails": false
+      }
+    }
+  ]
+}
