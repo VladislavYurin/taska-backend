@@ -56,4 +56,4 @@ Harness объединяет инструкции, доступные инстр
 
 **TAS-455:** пять repo-local skills, инструкции настройки, Codex adapter smoke и offline handoff validator. Фактическое обнаружение клиентом проверяется отдельно в новой сессии; Claude Code/Cursor не заявлены проверенными.
 
-**Следующий этап TAS-456:** регрессионные evals самого harness.
+**TAS-456:** [регрессионные evals](evals.md) проверяют механизмы harness на собственных fixtures; отчёты и baseline остаются вне Git.
