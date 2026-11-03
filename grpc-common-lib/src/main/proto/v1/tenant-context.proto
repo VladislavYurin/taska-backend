@@ -1,0 +1,57 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/common.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+enum CredentialKind { CREDENTIAL_KIND_UNSPECIFIED = 0; CREDENTIAL_KIND_WEB_GLOBAL = 1; CREDENTIAL_KIND_WEB_TENANT = 2; CREDENTIAL_KIND_USER_PAT = 3; CREDENTIAL_KIND_USER_OAUTH = 4; CREDENTIAL_KIND_ADMIN_PAT = 5; CREDENTIAL_KIND_ADMIN_OAUTH = 6; CREDENTIAL_KIND_SERVICE = 7; }
+
+message AdminScope {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_TENANT_SET = 1; KIND_PLATFORM = 2; }
+  KindValue kind = 1;
+  repeated string tenant_ids = 2;
+}
+
+message AdminGrant {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_PAT = 1; KIND_OAUTH = 2; }
+  enum LevelValue { LEVEL_UNSPECIFIED = 0; LEVEL_READ = 1; LEVEL_MODIFY = 2; }
+  string id = 1;
+  KindValue kind = 2;
+  string actor_user_id = 3;
+  string name = 4;
+  AdminScope scope = 5;
+  LevelValue level = 6;
+  bool manage_global_accounts = 7;
+  string version = 8;
+  string expires_at = 9;
+  bool revoked = 10;
+}
+
+message TrustedTenantContext {
+  optional string actor_user_id = 1;
+  optional string tenant_id = 2;
+  CredentialKind credential_kind = 3;
+  optional string session_id = 4;
+  optional string credential_id = 5;
+  optional string grant_id = 6;
+  repeated string scopes = 7;
+  string action = 8;
+  string actor_generation = 9;
+  optional string membership_generation = 10;
+  optional string grant_generation = 11;
+  string issuer_service = 12;
+  string audience_service = 13;
+  string issued_at = 14;
+  string expires_at = 15;
+  string assertion_id = 16;
+  optional AdminScope administrative_scope = 17;
+  optional AdminGrant.LevelValue administrative_level = 18;
+  bool manage_global_accounts = 19;
+  uint32 context_version = 20;
+}
+
+message RequestContext {
+  ru.taska.common.v1.Header header = 1;
+  TrustedTenantContext context = 2;
+  // JWS in x-taska-context metadata signs exact context digest + request digest + RPC full name.
+  // Context is UNTRUSTED until recipient interceptor verifies mTLS peer, signature/audience and online state.
+}

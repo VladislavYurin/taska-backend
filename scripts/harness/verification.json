@@ -115,8 +115,10 @@
       "timeout": 1800,
       "reports": {
         "directory": "grpc-common-lib/target/surefire-reports",
-        "selectors": [],
-        "noTestsReason": "No default Surefire test sources in this module; verify compilation and upstream tests."
+        "selectors": [
+          "*"
+        ],
+        "noTestsReason": null
       },
       "requires": [],
       "writeScope": [
