@@ -29,4 +29,16 @@ public final class RegistryTestContext {
             wire.toByteArray());
     return work.contextWrite(verified::install);
   }
+
+  public static <T> Mono<T> withClaims(TrustedTenantContext claims, Mono<T> work) {
+    var verified =
+        new VerifiedTenantContext(
+            claims.hasActorUserId() ? claims.getActorUserId() : null,
+            claims.hasTenantId() ? claims.getTenantId() : null,
+            UUID.randomUUID().toString(),
+            claims.getAction(),
+            Set.copyOf(claims.getScopesList()),
+            RequestContext.newBuilder().setContext(claims).build().toByteArray());
+    return work.contextWrite(verified::install);
+  }
 }

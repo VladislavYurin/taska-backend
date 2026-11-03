@@ -9,9 +9,11 @@ import ru.taska.security.tenant.RpcContextBridge;
 @Service
 public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServiceImplBase {
   private final TenantRegistryService registry;
+  private final TenantMembershipService memberships;
 
-  public TenantGrpcService(TenantRegistryService registry) {
+  public TenantGrpcService(TenantRegistryService registry, TenantMembershipService memberships) {
     this.registry = registry;
+    this.memberships = memberships;
   }
 
   @Override
@@ -25,6 +27,14 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   @Override
   public Mono<Tenant> getTenant(Mono<GetTenantRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(registry::get))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<MembershipPage> listTenantMembers(Mono<ListTenantMembersRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(memberships::list))
         .onErrorMap(
             ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
