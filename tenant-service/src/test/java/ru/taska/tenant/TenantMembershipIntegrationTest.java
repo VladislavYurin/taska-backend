@@ -345,12 +345,15 @@ class TenantMembershipIntegrationTest {
   @Test
   void leaveRemovesOnlyActorAndAdvancesGeneration() {
     var claims = writer(SHARED, A, "3", "leaveTenant");
-    var result = leave(claims, "3", UUID.randomUUID().toString()).block(WAIT);
+    String key = UUID.randomUUID().toString();
+    var result = leave(claims, "3", key).block(WAIT);
     assertEquals(Operation.StateValue.STATE_SUCCEEDED, result.getState());
+    assertEquals(result, leave(claims, "3", key).block(WAIT));
     assertEquals(Membership.StateValue.STATE_REMOVED, get(A, SHARED).block(WAIT).getState());
     assertEquals("4", get(A, SHARED).block(WAIT).getVersion());
     assertEquals(11L, count("SELECT membership_version n FROM taska.tenants WHERE id='" + A + "'"));
     assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.membership_audit"));
   }
 
   @Test

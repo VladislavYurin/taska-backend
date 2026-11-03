@@ -95,7 +95,8 @@ public final class TenantMembershipMutationService {
         .flatMap(tenant -> {
           if (!"ACTIVE".equals(tenant.get("lifecycle")))
             return Mono.error(TenantRegistryService.fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE"));
-          return member(db, c.tenant(), c.actor())
+          UUID owner = (UUID) tenant.get("owner_id");
+          Mono<Result> fresh = member(db, c.tenant(), c.actor())
               .switchIfEmpty(Mono.error(TenantRegistryService.fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND")))
               .flatMap(actor -> {
                 if (!"ACTIVE".equals(actor.get("status"))
@@ -105,12 +106,16 @@ public final class TenantMembershipMutationService {
                 if (!c.leave() && !"TENANT_ADMIN".equals(actor.get("role")))
                   return Mono.error(TenantRegistryService.fail(DomainStatus.PERMISSION_DENIED,
                       "SCOPE_DENIED"));
-                return replay(db, c, (UUID) tenant.get("owner_id"))
+                Mono<Result> previous = c.leave() ? Mono.empty() : replay(db, c, owner);
+                return previous
                     .switchIfEmpty(member(db, c.tenant(), c.target())
                         .switchIfEmpty(Mono.error(TenantRegistryService.fail(
                             DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")))
-                        .flatMap(target -> change(db, c, target, (UUID) tenant.get("owner_id"))));
+                        .flatMap(target -> change(db, c, target, owner)));
               });
+          // A successful self-leave revokes the actor's membership generation. The same signed
+          // request can only retrieve its own saved receipt; it cannot perform another mutation.
+          return c.leave() ? replay(db, c, owner).switchIfEmpty(fresh) : fresh;
         });
   }
 
