@@ -18,6 +18,7 @@ import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -131,10 +132,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
     private Mono<OutboxEvent> save(OutboxEvent event) {
         return Mono.deferContextual(context -> {
-            if (context.hasKey(ru.taska.security.tenant.VerifiedTenantContext.class)) {
-                var verified = context.get(ru.taska.security.tenant.VerifiedTenantContext.class);
-                event.setTenantId(UUID.fromString(verified.tenantId()));
-            }
+            var verified = VerifiedTenantContext.require(context);
+            event.setTenantId(UUID.fromString(verified.tenantId()));
             return outboxEventRepository.save(event);
         });
     }

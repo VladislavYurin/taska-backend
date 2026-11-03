@@ -10,6 +10,7 @@ import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.repository.OutboxEventRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
@@ -58,10 +59,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     }
 
     private OutboxEvent withTenant(OutboxEvent event, reactor.util.context.ContextView context) {
-        if (context.hasKey(ru.taska.security.tenant.VerifiedTenantContext.class)) {
-            var verified = context.get(ru.taska.security.tenant.VerifiedTenantContext.class);
-            event.setTenantId(UUID.fromString(verified.tenantId()));
-        }
+        var verified = VerifiedTenantContext.require(context);
+        event.setTenantId(UUID.fromString(verified.tenantId()));
         return event;
     }
     private JsonNode withChannel(JsonNode payload, reactor.util.context.ContextView context) {
