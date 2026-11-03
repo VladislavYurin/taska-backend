@@ -3,7 +3,6 @@ import base64
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import fcntl
 import hashlib
 from http.client import HTTPException
 import hmac
@@ -84,8 +83,19 @@ def secure_file(path):
     return path
 
 
+def posix_locking():
+    if os.name != 'posix' or not hasattr(os, 'getuid'):
+        raise Blocked('E2E/cleanup require Linux/macOS or Windows WSL with POSIX file locking')
+    try:
+        import fcntl
+    except ImportError as exc:
+        raise Blocked('E2E/cleanup require POSIX file locking (fcntl)') from exc
+    return fcntl
+
+
 @contextlib.contextmanager
 def mutex(path, wait=False):
+    fcntl = posix_locking()
     fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
     try:
         try:
@@ -851,6 +861,10 @@ def _handle(args, root):
 
 
 def handle(args, root):
+    try:
+        posix_locking()
+    except Blocked as exc:
+        return {'status': 'BLOCKED', 'reason': str(exc)}, 3
     store = StateStore(root)
     if args.command == 'cleanup':
         run_id = store.load(args.run_state)['runId']

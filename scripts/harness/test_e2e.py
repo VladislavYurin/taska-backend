@@ -50,6 +50,24 @@ class E2ETest(unittest.TestCase):
             self.store.create('a' * 16, 'local', 'isolated-compose', 'actor')
         self.assertEqual(self.store.load(self.store.path('b' * 16)), other)
 
+    def test_missing_posix_runtime_is_blocked_without_breaking_module_discovery(self):
+        import builtins
+        from types import SimpleNamespace
+        original_import = builtins.__import__
+        def without_fcntl(name, *args, **kwargs):
+            if name == 'fcntl':
+                raise ModuleNotFoundError('simulated unsupported platform')
+            return original_import(name, *args, **kwargs)
+        with patch.object(builtins, '__import__', side_effect=without_fcntl):
+            spec = importlib.util.spec_from_file_location('harness_without_fcntl', Path(__file__).with_name('e2e.py'))
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            report, code = module.handle(SimpleNamespace(command='e2e'), self.root)
+        self.assertEqual(code, 3)
+        self.assertEqual(report['status'], 'BLOCKED')
+        self.assertIn('fcntl', report['reason'])
+
     def test_stage_cleanup_uses_actor_ids_and_rejects_live_ownership_mismatch(self):
         actor = '12345678-1234-4234-8234-123456789012'
         project_id = '22345678-1234-4234-8234-123456789012'
