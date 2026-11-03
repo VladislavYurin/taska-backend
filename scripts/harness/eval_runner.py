@@ -196,6 +196,26 @@ class Evaluator:
             except e.Invalid:
                 return {'status': 'FAIL', 'reason': 'Tampered state rejected before cleanup'}
             return {'status': 'PASS', 'reason': 'Tampered state accepted'}
+        if case_id == 'cleanup-daemon-switch':
+            state['dockerDaemon'] = 'original-daemon'
+            state['composeProject'] = 'taska-harness-' + run_id
+            state['pendingWrites'] = ['must-remain']
+            store.save(state)
+            local = e.Local(scratch, store, state)
+            calls = []
+            def switched(argv, *args, **kwargs):
+                calls.append(argv)
+                if argv[1:3] == ['info', '--format']:
+                    return 'other-daemon'
+                raise AssertionError('Cleanup queried or mutated another daemon')
+            with patch.object(e, 'run_command', side_effect=switched):
+                try:
+                    local.cleanup()
+                except e.Invalid:
+                    if store.load(store.path(run_id))['pendingWrites'] != ['must-remain']:
+                        raise AssertionError('Other daemon erased original cleanup intent')
+                    return {'status': 'FAIL', 'reason': 'Changed Docker daemon rejected before cleanup'}
+            return {'status': 'PASS', 'reason': 'Different Docker daemon accepted'}
         if case_id == 'cleanup-foreign-owner':
             local = e.Local(scratch, store, state)
             calls = []

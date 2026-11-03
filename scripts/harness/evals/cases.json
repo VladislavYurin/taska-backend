@@ -156,6 +156,12 @@
       "area": "http",
       "expectedOutcome": "PASS",
       "purpose": "Presigned URLs excluded but business URL mutation preserved"
+    },
+    {
+      "id": "cleanup-daemon-switch",
+      "area": "state",
+      "expectedOutcome": "FAIL",
+      "purpose": "A different Docker daemon cannot report successful cleanup of original resources"
     }
   ]
 }

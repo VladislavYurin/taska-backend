@@ -32,6 +32,7 @@ python3 scripts/harness.py check --group harness
 | Stale review, truncated diff, отсутствующий/неприменимый обязательный check | `workflows.validate_handoff`: независимые ожидаемые head/check IDs, причины PARTIAL, отсутствие ложного PASS |
 | Untrusted Jira/PR text | Текст остаётся данными `untrustedContext`; validator не выполняет вложенную команду и не выводит её/секрет-маркер. Это тест границы обработки данных, не LLM-eval |
 | Подмена state/среды | `StateStore.load`: изменение подписанного JSON не допускается до cleanup |
+| Подмена Docker daemon | `Local.verify_daemon`: смена Docker context не доказывает отсутствие собственных ресурсов; очистка отклоняется, исходный checkpoint сохраняется |
 | Чужой Docker owner | `Local.cleanup`: весь список объектов проверяется до первой операции удаления; Docker transport подменён собственной in-memory fixture |
 | Прерывание/повтор cleanup | Реальный дочерний Python сохраняет state и аварийно завершается через `os._exit`; новый экземпляр читает checkpoint и дважды выполняет cleanup через собственный fake Docker transport |
 | Смена revision, mailbox отсутствует | Реальные `revision_result`/`capability_result`, PARTIAL/BLOCKED вместо PASS |
