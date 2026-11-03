@@ -924,4 +924,74 @@ class TenantRegistryIntegrationTest {
     assertEquals(1, count("tenants"));
     assertEquals(1, count("outbox_events"));
   }
+
+  @Test
+  void competingDifferentPayloadsAtTheSameKeyCommitOneAndReturnConflict() {
+    var arrivals = new AtomicInteger();
+    var barrier = reactor.core.publisher.Sinks.<Boolean>one();
+    service =
+        registry(
+            id ->
+                Mono.defer(
+                    () -> {
+                      if (arrivals.incrementAndGet() == 2) barrier.tryEmitValue(true);
+                      return barrier
+                          .asMono()
+                          .timeout(WAIT)
+                          .thenReturn(new PublishedPlan(id, false));
+                    }),
+            (db, actor, tenant) -> Mono.empty());
+    var results =
+        Flux.range(0, 2)
+            .flatMap(
+                i ->
+                    RegistryTestContext.as(
+                            OWNER,
+                            null,
+                            "createTenant",
+                            CREDENTIAL_KIND_WEB_GLOBAL,
+                            true,
+                            service.create(
+                                request(
+                                    "different-race",
+                                    PAID,
+                                    i == 0 ? "First payload" : "Second payload")))
+                        .materialize()
+                        .subscribeOn(Schedulers.parallel()),
+                2)
+            .collectList()
+            .block(WAIT);
+    assertEquals(2, arrivals.get());
+    assertEquals(1, results.stream().filter(reactor.core.publisher.Signal::isOnNext).count());
+    var failure =
+        results.stream().filter(reactor.core.publisher.Signal::isOnError).findFirst().orElseThrow();
+    var error = assertInstanceOf(DomainException.class, failure.getThrowable());
+    assertEquals(DomainStatus.ALREADY_EXISTS, error.getStatus());
+    assertEquals("IDEMPOTENCY_CONFLICT", error.getDetails().get("code"));
+    for (String table :
+        List.of("tenants", "tenant_memberships", "outbox_events", "idempotency_records"))
+      assertEquals(1, count(table));
+    assertEquals(
+        "ACTIVE",
+        operator
+            .sql("SELECT status FROM taska.tenant_memberships")
+            .map((row, m) -> row.get("status", String.class))
+            .one()
+            .block(WAIT));
+    // Conflict reporting never outranks visibility after that membership has been revoked.
+    operator
+        .sql("UPDATE taska.tenant_memberships SET status='REMOVED'")
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    rejects(
+        DomainStatus.NOT_FOUND,
+        RegistryTestContext.as(
+            OWNER,
+            null,
+            "createTenant",
+            CREDENTIAL_KIND_WEB_GLOBAL,
+            true,
+            service.create(request("different-race", PAID, "third payload"))));
+  }
 }

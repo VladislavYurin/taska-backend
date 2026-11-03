@@ -84,6 +84,8 @@ message CreateTenantResponse {
   Operation operation = 2;
 }
 
+// idempotency_key MUST be a canonical UUID, matching B2B OpenAPI IdempotencyKey
+// and docs/b2b/contracts/README.md section 7. Protobuf string does not relax that format.
 message MutationOptions { string idempotency_key = 1; optional string expected_version = 2; }
 
 message CreateTenantRpcRequest {
