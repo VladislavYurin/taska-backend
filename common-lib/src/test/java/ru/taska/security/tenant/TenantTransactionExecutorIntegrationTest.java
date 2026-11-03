@@ -499,22 +499,22 @@ class TenantTransactionExecutorIntegrationTest {
                 executor.execute(
                     db ->
                         insert(db, A, "cancel-running")
-                            .then(db.sql("SELECT pg_sleep(30)").fetch().all().then())))
+                            .then(
+                                db.sql("SELECT pg_sleep(30) /* tas307-single-cancel */")
+                                    .fetch()
+                                    .all()
+                                    .then())))
             .subscribe();
     Integer sleepingPid;
     try {
       sleepingPid =
-          Flux.interval(Duration.ZERO, Duration.ofMillis(20))
-              .concatMap(
-                  tick ->
-                      admin
-                          .sql(
-                              "SELECT pid FROM pg_stat_activity WHERE usename='tenant_app'"
-                                  + " AND wait_event='PgSleep'")
-                          .map((row, m) -> row.get("pid", Integer.class))
-                          .one())
-              .filter(n -> n > 0)
-              .next()
+          admin
+              .sql(
+                  "SELECT pid FROM pg_stat_activity WHERE usename='tenant_app' AND"
+                      + " wait_event='PgSleep' AND query LIKE '%tas307-single-cancel%'")
+              .map((row, m) -> row.get("pid", Integer.class))
+              .one()
+              .repeatWhenEmpty(repeats -> repeats.delayElements(Duration.ofMillis(20)))
               .block(Duration.ofSeconds(5));
     } finally {
       subscription.dispose();
@@ -563,6 +563,7 @@ class TenantTransactionExecutorIntegrationTest {
                 .build());
     var local = new TenantTransactionExecutor(multiPool);
     reactor.core.Disposable cancelled = null;
+    java.util.concurrent.CompletableFuture<Snapshot> other = null;
     try {
       multiPool.warmup().block();
       cancelled =
@@ -571,16 +572,20 @@ class TenantTransactionExecutorIntegrationTest {
                   local.execute(
                       db ->
                           insert(db, A, "multi-cancel")
-                              .then(db.sql("SELECT pg_sleep(30)").fetch().all().then())))
+                              .then(
+                                  db.sql("SELECT pg_sleep(30) /* tas307-multi-cancel */")
+                                      .fetch()
+                                      .all()
+                                      .then())))
               .subscribe();
-      var other =
+      other =
           as(
                   B,
                   local.execute(
                       db ->
                           db.sql(
                                   "SELECT pg_sleep(2),current_setting('app.tenant_id') AS"
-                                      + " tenant,pg_backend_pid() AS pid")
+                                      + " tenant,pg_backend_pid() AS pid /* tas307-multi-other */")
                               .map(
                                   (row, m) ->
                                       new Snapshot(
@@ -590,17 +595,15 @@ class TenantTransactionExecutorIntegrationTest {
                                           null))
                               .one()))
               .toFuture();
-      Flux.interval(Duration.ZERO, Duration.ofMillis(20))
-          .concatMap(
-              tick ->
-                  admin
-                      .sql(
-                          "SELECT count(*) AS n FROM pg_stat_activity WHERE usename='tenant_app'"
-                              + " AND wait_event='PgSleep'")
-                      .map((row, m) -> row.get("n", Long.class))
-                      .one())
+      admin
+          .sql(
+              "SELECT count(*) AS n FROM pg_stat_activity WHERE usename='tenant_app' AND"
+                  + " wait_event='PgSleep' AND (query LIKE '%tas307-multi-cancel%' OR query LIKE"
+                  + " '%tas307-multi-other%')")
+          .map((row, m) -> row.get("n", Long.class))
+          .one()
           .filter(n -> n >= 2)
-          .next()
+          .repeatWhenEmpty(repeats -> repeats.delayElements(Duration.ofMillis(20)))
           .block(Duration.ofSeconds(5));
       cancelled.dispose();
       assertEquals(B, other.get(5, TimeUnit.SECONDS).tenant());
@@ -617,6 +620,7 @@ class TenantTransactionExecutorIntegrationTest {
       admin.sql("TRUNCATE tenant_probe").fetch().rowsUpdated().block(Duration.ofSeconds(5));
     } finally {
       if (cancelled != null) cancelled.dispose();
+      if (other != null) other.cancel(true);
       multiPool.disposeLater().block();
     }
   }
