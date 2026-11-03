@@ -63,12 +63,12 @@ class CommentPrivacyIntegrationTest extends AbstractIT {
     @Test
     void commentLifecycle_keepsTextOnlyInCommentStorageAndMetadataInHistoryAndOutbox() {
         Issue issue = createIssue();
-        var comment = comments.addComment("privacy", "test", issue.getId(), ACTOR, SECRET).block();
+        var comment = withTenant(comments.addComment("privacy", "test", issue.getId(), ACTOR, SECRET)).block();
         assertThat(comment).isNotNull();
-        var updated = comments.updateComment("privacy", "test", issue.getId(), comment.getId(), ACTOR,
-                SECRET + " edited").block();
+        var updated = withTenant(comments.updateComment("privacy", "test", issue.getId(), comment.getId(), ACTOR,
+                SECRET + " edited")).block();
         assertThat(updated.getBody()).isEqualTo(SECRET + " edited");
-        comments.deleteComment("privacy", "test", issue.getId(), comment.getId(), ACTOR).block();
+        withTenant(comments.deleteComment("privacy", "test", issue.getId(), comment.getId(), ACTOR)).block();
         assertThat(commentRepository.findActiveById(comment.getId()).block()).isNull();
         assertThat(commentRepository.countActiveByIssueId(issue.getId()).block()).isZero();
 

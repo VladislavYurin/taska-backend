@@ -183,7 +183,7 @@ class DeleteIssueIntegrationTest extends AbstractIT {
     }
 
     private Mono<Issue> delete(UUID issueId) {
-        return issueService.deleteIssue(REQUEST_ID, NODE_ID, issueId, ACTOR_ID);
+        return withTenant(issueService.deleteIssue(REQUEST_ID, NODE_ID, issueId, ACTOR_ID));
     }
 
     private void assertUnchanged(Issue before) {
