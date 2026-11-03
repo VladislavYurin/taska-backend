@@ -22,6 +22,39 @@ class EvalTest(unittest.TestCase):
         self.assertEqual(result['cases'][0]['evaluationStatus'], 'FAIL')
         self.assertEqual(result['metrics']['falsePassCount'], 1)
 
+    def test_http_timeout_swallowed_mutant_is_rejected(self):
+        case = next(c for c in evals.load_cases() if c['id'] == 'timeout-after-write')
+        evaluator = evals.Evaluator()
+        baseline = evals.evaluate([case], evaluator)
+        self.assertEqual(baseline['cases'][0]['evaluationStatus'], 'PASS')
+        self.assertEqual(baseline['metrics']['falsePassCount'], 0)
+        with patch.object(evaluator.e.Http, 'request', return_value=evaluator.e.Response(201, {}, b'{}')):
+            mutant = evals.evaluate([case], evaluator)
+        self.assertEqual(mutant['cases'][0]['observedOutcome'], 'PASS')
+        self.assertEqual(mutant['cases'][0]['evaluationStatus'], 'FAIL')
+        self.assertEqual(mutant['metrics']['falsePassCount'], 1)
+
+    def test_oauth_validation_bypass_mutant_is_rejected(self):
+        case = next(c for c in evals.load_cases() if c['id'] == 'oauth-confused-identities')
+        evaluator = evals.Evaluator()
+        baseline = evals.evaluate([case], evaluator)
+        self.assertEqual(baseline['cases'][0]['evaluationStatus'], 'PASS')
+        self.assertEqual(baseline['metrics']['falsePassCount'], 0)
+        with patch.object(evaluator.e, 'OAuthIds', return_value=object()):
+            mutant = evals.evaluate([case], evaluator)
+        self.assertEqual(mutant['cases'][0]['observedOutcome'], 'PASS')
+        self.assertEqual(mutant['cases'][0]['evaluationStatus'], 'FAIL')
+        self.assertEqual(mutant['metrics']['falsePassCount'], 1)
+
+    def test_business_url_erasure_mutant_is_rejected(self):
+        case = next(c for c in evals.load_cases() if c['id'] == 'business-projection')
+        evaluator = evals.Evaluator()
+        self.assertEqual(evals.evaluate([case], evaluator)['cases'][0]['evaluationStatus'], 'PASS')
+        with patch.object(evaluator.e, 'business_projection', side_effect=lambda value: {'name': value['name']}):
+            mutant = evals.evaluate([case], evaluator)
+        self.assertEqual(mutant['cases'][0]['evaluationStatus'], 'FAIL')
+        self.assertEqual(mutant['cases'][0]['observedOutcome'], 'FAIL')
+
     def test_missing_dependency_never_counts_as_expected_block(self):
         case = next(c for c in evals.load_cases() if c['id'] == 'missing-mailbox')
         with patch.object(evals.Evaluator, 'observe', side_effect=evals.MissingImplementation()):

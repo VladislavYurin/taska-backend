@@ -289,7 +289,7 @@ store=m.StateStore(Path(sys.argv[2])); state=store.load(Path(sys.argv[3])); stat
 def evaluate(cases, evaluator):
     results = []
     started = time.monotonic()
-    first_useful = None
+    first_evaluated_fixture = None
     for case in cases:
         before = time.monotonic()
         result = {'caseId': case['id'], 'expectedOutcome': case['expectedOutcome'],
@@ -304,8 +304,8 @@ def evaluate(cases, evaluator):
                 raise AssertionError('Missing outcome or incomplete reason')
             result.update(observedOutcome=actual, evaluationStatus='PASS' if actual == case['expectedOutcome'] else 'FAIL',
                           reason='Expected outcome observed' if actual == case['expectedOutcome'] else 'Unexpected harness outcome')
-            if first_useful is None:
-                first_useful = time.monotonic() - started
+            if first_evaluated_fixture is None:
+                first_evaluated_fixture = time.monotonic() - started
         except MissingImplementation:
             result.update(observedOutcome='BLOCKED', evaluationStatus='BLOCKED', reason='Required harness implementation unavailable')
         except Exception as exc:
@@ -316,7 +316,7 @@ def evaluate(cases, evaluator):
     negative = [r for r in results if r['expectedOutcome'] != 'PASS']
     return {'cases': results, 'metrics': {
         'durationSeconds': round(time.monotonic() - started, 6),
-        'secondsToFirstUsefulTest': round(first_useful, 6) if first_useful is not None else None,
+        'secondsToFirstEvaluatedFixture': round(first_evaluated_fixture, 6) if first_evaluated_fixture is not None else None,
         'manualActions': None,
         'manualActionsReason': 'Human setup and agent intervention are not measured by the deterministic runner',
         'fullPositiveFixtureRatio': sum(r['evaluationStatus'] == 'PASS' for r in results if r['expectedOutcome'] == 'PASS') / max(1, sum(r['expectedOutcome'] == 'PASS' for r in results)),
