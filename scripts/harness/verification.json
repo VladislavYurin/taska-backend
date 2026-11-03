@@ -83,7 +83,8 @@
       "reports": {
         "directory": "common-lib/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantIsolationContractIntegrationTest"
         ],
         "noTestsReason": null
       },
