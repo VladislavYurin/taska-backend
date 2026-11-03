@@ -36,6 +36,31 @@ class EvalTest(unittest.TestCase):
         self.assertEqual(result['cases'][0]['evaluationStatus'], 'FAIL')
         self.assertNotIn('secret-do-not-publish', str(result))
 
+    def test_ci_parity_rejects_unrouted_docs_check(self):
+        evaluator = evals.Evaluator()
+        manifest = evaluator.h.load_manifest(evaluator.root)
+        extra = copy.deepcopy(next(c for c in manifest['checks'] if c['id'] == 'docs'))
+        extra['id'] = 'docs.extra'
+        manifest['checks'].append(extra)
+        with patch.object(evaluator.h, 'load_manifest', return_value=manifest):
+            with tempfile.TemporaryDirectory() as directory:
+                result = evaluator.observe('ci-local-required-checks', Path(directory))
+        self.assertEqual(result['status'], 'FAIL')
+
+    def test_ci_parity_rejects_command_only_inside_comment(self):
+        evaluator = evals.Evaluator()
+        original = Path.read_text
+        def read(path, *args, **kwargs):
+            text = original(path, *args, **kwargs)
+            if path.name == 'pr-check.yml':
+                return text.replace('run: python3 scripts/harness.py check --group harness',
+                                    'run: echo skipped # python3 scripts/harness.py check --group harness')
+            return text
+        with patch.object(Path, 'read_text', read):
+            with tempfile.TemporaryDirectory() as directory:
+                result = evaluator.observe('ci-local-required-checks', Path(directory))
+        self.assertEqual(result['status'], 'FAIL')
+
     def test_catalog_rejects_duplicate_and_unknown_expectation(self):
         cases = evals.load_cases()
         for mutant in [cases + [cases[0]], [dict(cases[0], expectedOutcome='SKIP')]]:

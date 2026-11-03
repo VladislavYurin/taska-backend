@@ -40,7 +40,7 @@ python3 scripts/harness.py check --group harness
 | Headers/пустой 403, business projection | Регистронезависимые headers; пустой body не разбирается как JSON; изменчивые presigned URLs исключены, бизнес-URL сохраняется |
 | Timeout после записи | Fake HTTP transport фиксирует commit и возвращает timeout; `Http` выдаёт UnknownWrite и не повторяет POST автоматически |
 | Redaction | Реальный неуспешный subprocess печатает синтетические secrets; общедоступная диагностика их не содержит |
-| CI/local parity | Каждый check manifest попадает в реальные CI routes; документационные проверки обнаруживают дрейф binding команд |
+| CI/local parity | Каждый check manifest попадает в реальные CI routes; проверка распознаёт используемые в CI прямые `run:` команды, исключает комментарии; новые shell/YAML формы требуют обновления recognizer |
 
 Fixtures не внедряют сбои на stage. Имена/ID/email/секреты — синтетические; API адреса `.invalid` никогда не вызываются: HTTP transport заменён до запроса. State и temporary repos удаляются при выходе. Реальная локальная Compose E2E остаётся отдельной проверкой TAS-454.
 

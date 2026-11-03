@@ -49,6 +49,21 @@ def load_cases():
     return data['cases']
 
 
+def ci_run_commands(text):
+    """Recognize this repo's direct scalar run steps; other shell/YAML forms fail closed."""
+    commands = set()
+    for line in text.splitlines():
+        match = re.match(r'^\s+run:\s*(.*)$', line)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if len(value) > 1 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        # A whole command, never a substring of echo/comment/heredoc content.
+        commands.add(value.split(' #', 1)[0].strip())
+    return commands
+
+
 class Evaluator:
     def __init__(self, root=ROOT):
         self.root = root
@@ -147,8 +162,18 @@ class Evaluator:
             manifest = self.h.load_manifest(self.root)
             errors = self.h.docs_errors(self.root, manifest)
             checks = manifest['checks']
-            ci_groups = {'harness', 'config', 'docs'}
-            covered = {c['id'] for c in checks if c.get('module') in manifest['modules'] or c['group'] in ci_groups}
+            # Match executable run statements, not comments/substrings. The repository
+            # uses these simple literal routes; a new YAML/shell form needs explicit review.
+            ci = (self.root / '.github/workflows/pr-check.yml').read_text()
+            commands = ci_run_commands(ci)
+            required_routes = {'python3 scripts/harness.py docs-check',
+                'python3 scripts/harness.py check --group harness',
+                'python3 scripts/harness.py check --group config',
+                'python3 scripts/harness.py check --module ${{ matrix.mod.module }}'}
+            covered = {c['id'] for c in checks if c.get('module') in manifest['modules'] or
+                       c['group'] in {'harness', 'config'} or c['id'] == 'docs'}
+            if not required_routes <= commands:
+                return {'status': 'FAIL', 'reason': 'Required CI route is not an executable run statement'}
             all_checks = {c['id'] for c in self.h.ordered_checks(manifest, [c['id'] for c in checks])}
             if errors or covered != all_checks:
                 return {'status': 'FAIL', 'reason': 'CI/local manifest coverage differs'}
