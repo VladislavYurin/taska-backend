@@ -297,6 +297,7 @@ class HarnessTest(unittest.TestCase):
                     'capabilities': {'python': {'argv': ['{python}', '--version']}}}
         self.write('scripts/harness/verification.json', json.dumps(manifest))
         self.write('scripts/harness.py', (h.ROOT / 'scripts/harness.py').read_text())
+        self.write('scripts/harness/e2e.py', (h.ROOT / 'scripts/harness/e2e.py').read_text())
         self.git('add', '.')
         self.git('commit', '-qm', 'clean CLI fixture')
         cli = subprocess.run([sys.executable, '-B', 'scripts/harness.py', 'check', '--all'], cwd=self.root,

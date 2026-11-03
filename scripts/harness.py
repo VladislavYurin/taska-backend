@@ -414,8 +414,18 @@ def main(argv=None, root=ROOT):
     selection.add_argument('--check', action='append')
     selection.add_argument('--all', action='store_true')
     sub.add_parser('docs-check', help='Read-only docs, manifest and CI consistency checks')
+    import importlib.util
+    e2e_spec = importlib.util.spec_from_file_location('taska_e2e', ROOT / 'scripts/harness/e2e.py')
+    e2e = importlib.util.module_from_spec(e2e_spec)
+    sys.modules[e2e_spec.name] = e2e
+    e2e_spec.loader.exec_module(e2e)
+    e2e.add_cli(sub)
     args = parser.parse_args(argv)
     try:
+        if args.command in ('e2e', 'cleanup'):
+            report, code = e2e.handle(args, root)
+            emit(report)
+            return code
         m = load_manifest(root)
         if args.command == 'doctor':
             names = {'static': ['python', 'git'], 'java': ['python', 'git', 'java', 'docker'],
@@ -448,7 +458,7 @@ def main(argv=None, root=ROOT):
         emit({'sourceHead': git(root, 'rev-parse', 'HEAD').strip(),
               'dirty': bool(git(root, 'status', '--porcelain')), 'results': results})
         return combined(results)
-    except Invalid as exc:
+    except (Invalid, e2e.Invalid) as exc:
         emit({'status': 'FAIL', 'reason': str(exc)})
         return 2
     except (OSError, ET.ParseError) as exc:

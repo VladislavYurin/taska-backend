@@ -2,7 +2,7 @@
 
 Задача: [TAS-452](https://jira.ozero.dev/browse/TAS-452). Дата базового среза: 28.10.2026, `develop` `d886b031041a2d9b63ca3368fc8258cded19279b`.
 
-Документ определяет процесс разработки и целевую автоматизацию. **Документационный слой введён в TAS-452. TAS-453 реализует doctor/plan/check/docs-check и verification manifest; текущие команды описаны в [матрице проверок](verification.md). E2E/cleanup, skills, адаптеры и evals остаются проектом этапов C–E.** При чтении учитывать состояние PR и текущего checkout.
+Документ определяет процесс разработки и целевую автоматизацию. **Документационный слой введён в TAS-452. TAS-453 реализует doctor/plan/check/docs-check и verification manifest; текущие команды описаны в [матрице проверок](verification.md). TAS-454 добавляет E2E/cleanup: реализованный scope и ограничения описаны в [руководстве](e2e.md). Skills, адаптеры и evals остаются этапами D–E.** При чтении учитывать состояние PR и текущего checkout.
 
 ## 1. Цель и границы
 
@@ -101,7 +101,7 @@ Jira закрывать по факту выполнения её критери
 
 ## 6. Проект интерфейса команд harness
 
-Entry point этапа B — `python3 scripts/harness.py`, использующий существующие Maven/Node/Python/Compose инструменты и стандартную библиотеку Python 3.9+. В TAS-453 реализованы doctor/plan/check/docs-check. Строки e2e/cleanup таблицы относятся к будущему этапу C и отсутствуют в текущем CLI.
+Entry point этапа B — `python3 scripts/harness.py`, использующий существующие Maven/Node/Python/Compose инструменты и стандартную библиотеку Python 3.9+. В TAS-453 реализованы doctor/plan/check/docs-check. Команды e2e/cleanup реализованы TAS-454; их поднаборы и непокрытые критерии описаны в [руководстве](e2e.md).
 
 | Планируемая команда после `python3 scripts/harness.py` | Вход | Результат и побочные эффекты |
 |---|---|---|
