@@ -22,6 +22,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 import uuid
+import xml.etree.ElementTree as ET
 
 MODULES = ('auth-service', 'project-service', 'workflow-service', 'issue-service',
            'notification-service', 'api-gateway', 'mcp-server')
@@ -172,7 +173,7 @@ def validate_resource(resource, run_id, actor):
         uuid.UUID(resource['id'])
     except (ValueError, KeyError, TypeError) as exc:
         raise Invalid('Invalid resource ID') from exc
-    if resource.get('projectKey') != 'H' + run_id[:14].upper() + resource.get('slot', ''):
+    if resource.get('projectKey') != 'H' + run_id.upper() + resource.get('slot', ''):
         raise Invalid('Resource project identity mismatch')
 
 
@@ -277,7 +278,7 @@ def run_command(argv, cwd, timeout=600, input_text=None):
         raise Blocked('Required executable unavailable') from exc
     try:
         output, _ = child.communicate(input_text, timeout=timeout)
-    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupted:
         termination_error = False
         try:
             os.killpg(child.pid, signal.SIGTERM)
@@ -292,7 +293,7 @@ def run_command(argv, cwd, timeout=600, input_text=None):
         child.communicate()
         if termination_error:
             raise Failure('Process group termination could not be confirmed') from None
-        if isinstance(__import__('sys').exc_info()[1], KeyboardInterrupt):
+        if isinstance(interrupted, KeyboardInterrupt):
             raise
         raise Failure('Local command timed out') from None
     if child.returncode:
@@ -312,17 +313,31 @@ def source(root):
 def load_config(path):
     if not path:
         raise Invalid('stage requires --config with approved environment and actor allowlist')
-    c = json.loads(secure_file(Path(path)).read_text())
+    try:
+        c = json.loads(secure_file(Path(path)).read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        raise Invalid('Stage configuration must be a readable private JSON file') from exc
+    if not isinstance(c, dict):
+        raise Invalid('Stage configuration must be an object')
     origin = c.get('origin', '')
+    if not isinstance(origin, str) or not isinstance(c.get('allowedOrigins'), list) or not all(isinstance(v, str) for v in c['allowedOrigins']):
+        raise Invalid('origin and allowedOrigins must contain strings')
     parsed = urlsplit(origin)
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
             or parsed.path or parsed.query or parsed.fragment or origin not in c.get('allowedOrigins', [])):
         raise Invalid('Stage origin must be an exact allowlisted HTTPS origin')
-    if not c.get('environmentId') or c.get('allowProjectArchiveResidue') is not True:
+    if (not isinstance(c.get('environmentId'), str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', c['environmentId'])
+            or c.get('allowProjectArchiveResidue') is not True):
         raise Invalid('Explicit environment identity and project archive residue policy required')
     actors = c.get('actors', {})
+    if not isinstance(actors, dict) or set(actors) != {'A', 'M', 'V', 'O', 'G'}:
+        raise Invalid('Exactly A/M/V/O/G actors required')
     for role in ('A', 'M', 'V', 'O', 'G'):
         a = actors.get(role, {})
+        if not isinstance(a, dict):
+            raise Invalid('Each actor must be an object')
+        if not isinstance(a.get('id'), str) or not isinstance(a.get('tokenEnv'), str):
+            raise Invalid('Actor id/tokenEnv must be strings')
         try:
             uuid.UUID(a['id'])
         except (KeyError, ValueError, TypeError) as exc:
@@ -331,12 +346,30 @@ def load_config(path):
             raise Invalid('Actor tokenEnv must name an environment variable')
     if len({a['id'] for a in actors.values()}) != len(actors):
         raise Invalid('Actors must be distinct')
-    if not set(MODULES[:-1]) <= set(c.get('revisionPaths', {})):
+    if (not isinstance(c.get('revisionPaths'), dict) or not set(MODULES[:-1]) <= set(c['revisionPaths'])
+            or not set(c['revisionPaths']) <= set(MODULES)):
         raise Invalid('revisionPaths required; static declared revisions are not observations')
     for path in c['revisionPaths'].values():
-        if not re.fullmatch(r'/[A-Za-z0-9_./-]+', path):
+        if not isinstance(path, str) or not re.fullmatch(r'/[A-Za-z0-9_./-]+', path):
             raise Invalid('Revisions must use same-origin read paths')
     return c
+
+
+def packaged_jar(root, module):
+    ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+    parent = ET.parse(Path(root) / 'pom.xml')
+    pom = ET.parse(Path(root) / module / 'pom.xml')
+    artifact = pom.findtext('m:artifactId', namespaces=ns)
+    version = (pom.findtext('m:version', namespaces=ns) or pom.findtext('m:parent/m:version', namespaces=ns)
+               or parent.findtext('m:version', namespaces=ns))
+    final_name = (pom.findtext('m:build/m:finalName', namespaces=ns)
+                  or parent.findtext('m:build/m:finalName', namespaces=ns) or '${project.artifactId}-${project.version}')
+    if not artifact or not version:
+        raise Invalid('Packaged artifact identity missing from POM')
+    final_name = final_name.replace('${project.artifactId}', artifact).replace('${project.version}', version)
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+', final_name):
+        raise Invalid('Unsupported dynamic Maven finalName; provide a concrete artifact name')
+    return Path(root) / module / 'target' / (final_name + '.jar')
 
 
 class Local:
@@ -365,7 +398,7 @@ class Local:
             jars.mkdir()
             revisions = {}
             for module in MODULES:
-                src = self.root / module / 'target' / (module + '-1.0-SNAPSHOT.jar')
+                src = packaged_jar(self.root, module)
                 shutil.copyfile(src, jars / (module + '.jar'))
                 revisions[module] = hashlib.sha256(src.read_bytes()).hexdigest()
         compose = json.loads((self.root / 'mcp-server/src/test/compose/compose.yml').read_text())
@@ -500,10 +533,13 @@ def stage_revisions(config):
 
 
 def project_key(run_id, slot):
-    return 'H' + run_id[:14].upper() + slot
+    return 'H' + run_id.upper() + slot
 
 
 def register_project(store, state, actor, slot, project):
+    pending = next((p for p in state['pendingWrites'] if p['slot'] == slot), None)
+    require(pending is not None and project.get('description') == pending.get('creationMarker'),
+            'Created project does not match pending creation marker')
     resource = {'type': 'project', 'id': project['id'], 'projectKey': project_key(state['runId'], slot),
                 'slot': slot, 'actor': actor, 'runId': state['runId'], 'origin': 'created-response'}
     validate_resource(resource, state['runId'], actor)
@@ -518,20 +554,29 @@ def register_project(store, state, actor, slot, project):
 
 def create_project(store, state, client, actor, slot):
     key = project_key(state['runId'], slot)
-    # Write-ahead intent survives timeout/kill before receiving a resource ID.
-    state['pendingWrites'].append({'slot': slot, 'actor': actor, 'projectKey': key})
+    marker = 'Harness creation ' + str(uuid.uuid4())
+    # A distinct marker is essential when a duplicate-key 409 response is lost:
+    # an existing same-actor/key project must never become this run's resource.
+    state['pendingWrites'].append({'slot': slot, 'actor': actor, 'projectKey': key, 'creationMarker': marker})
     store.save(state)
-    project = client.expect('POST', '/api/v1/projects', 201,
-                            {'projectKey': key, 'name': 'Harness ' + state['runId'],
-                             'description': 'Isolated E2E fixture', 'color': '#0052CC'}).json()
-    return register_project(store, state, actor, slot, project)
+    response = client.request('POST', '/api/v1/projects',
+                              {'projectKey': key, 'name': 'Harness ' + state['runId'],
+                               'description': marker, 'color': '#0052CC'})
+    if 400 <= response.status < 500:
+        state['pendingWrites'] = [p for p in state['pendingWrites'] if p['slot'] != slot]
+        store.save(state)
+    if response.status >= 500:
+        raise UnknownWrite('Project creation outcome unknown after server error; reconcile creation marker')
+    require(response.status == 201, 'Project creation expected HTTP 201, got %s' % response.status)
+    return register_project(store, state, actor, slot, response.json())
 
 
 def reconcile_projects(store, state, clients):
     for pending in list(state['pendingWrites']):
         client = clients[pending['actor']]
         matches = [p for p in client.expect('GET', '/api/v1/projects', 200).json()['items']
-                   if p.get('projectKey') == pending['projectKey'] and p.get('createdBy') == pending['actor']]
+                   if p.get('projectKey') == pending['projectKey'] and p.get('createdBy') == pending['actor']
+                   and pending.get('creationMarker') and p.get('description') == pending['creationMarker']]
         if len(matches) == 1:
             register_project(store, state, pending['actor'], pending['slot'], matches[0])
         else:
@@ -667,13 +712,14 @@ def stage_clients(config, state=None):
             raise Blocked('Actor token unavailable: ' + role)
         client = Http(config['origin'], token)
         me = client.expect('GET', '/api/v1/users/me', 200).json()
+        require(isinstance(me, dict), 'Actor profile must be an object')
         require(me.get('id') == a['id'], 'Configured actor identity mismatch')
         require(me.get('status') == 'ACTIVE', 'Configured actor is not ACTIVE')
         require(me.get('globalRole') == ('GLOBAL_ADMIN' if role == 'G' else 'USER'), 'Configured actor role mismatch')
         actors[role] = {'id': a['id']}
         clients[a['id']] = client
-    if state and ({k: v['id'] for k, v in actors.items()} != state['actors']
-                  or config['origin'] != state['origin'] or config['environmentId'] != state['environment']):
+    if state and ({k: v['id'] for k, v in actors.items()} != state.get('actors')
+                  or config['origin'] != state.get('origin') or config['environmentId'] != state.get('environment')):
         raise Invalid('Stage environment/actor differs from authenticated run-state')
     return actors, clients
 
@@ -714,14 +760,18 @@ def _handle(args, root):
         try:
             if state['tier'] == 'local':
                 Local(root, store, state).cleanup()
+            elif not state['resources'] and not state['pendingWrites']:
+                state['cleanupStatus'] = 'PASS'
+                store.save(state)
             else:
                 config = load_config(args.config)
                 _, clients = stage_clients(config, state)
                 cleanup_projects(store, state, clients)
-        except (Invalid, Failure, Blocked) as exc:
+        except (Invalid, Failure, Blocked, KeyError, ValueError, OSError) as exc:
             state['cleanupStatus'] = 'FAIL'
             store.save(state)
-            return {'status': 'FAIL', 'reason': str(exc), 'runId': state['runId'], 'cleanupStatus': 'FAIL'}, 1
+            return {'status': 'FAIL', 'reason': str(exc) if isinstance(exc, (Invalid, Failure, Blocked)) else 'Invalid cleanup state/configuration',
+                    'runId': state['runId'], 'cleanupStatus': 'FAIL'}, 1
         return {'status': 'PASS', 'runId': state['runId'], 'cleanupStatus': 'PASS',
                 'remainingOwnedResources': [{'type': 'archived-project', 'id': r['id']} for r in state['resources']]}, 0
     ids = list(dict.fromkeys(args.scenario))
@@ -730,6 +780,11 @@ def _handle(args, root):
     run_id = args.run_id or secrets.token_hex(8)
     config = load_config(args.config) if args.tier == 'stage' else None
     state = store.create(run_id, args.tier, config['environmentId'] if config else 'isolated-compose', '')
+    if config:
+        state['origin'] = config['origin']
+        state['actors'] = {k: a['id'] for k, a in config['actors'].items()}
+        state['actor'] = config['actors']['A']['id']
+        store.save(state)
     report = dict(schemaVersion=1, runId=run_id, startedAt=now(), environment=state['environment'],
                   tier=args.tier, results=[], serviceRevisionsBefore={}, serviceRevisionsAfter={}, **source(root))
     local, clients, actors = None, {}, {}

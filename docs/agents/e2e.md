@@ -35,7 +35,7 @@ python3 scripts/harness.py cleanup --run-state target/harness-e2e/0123456789abcd
 
 Команда идемпотентна. Она не исполняет argv/compose path из state и не принимает произвольные Docker project names. Подмена HMAC, пути, checkout, environment или ownership отклоняется. Для local сохраняется наблюдаемый Docker daemon ID: смена context/DOCKER_HOST на другой daemon запрещает cleanup, даже если в нём не найдено контейнеров RUN. При потере `.state-key` автоматическая очистка недоступна: оператор отдельно сопоставляет реальные Docker labels и владельца; не создавайте фиктивный state.
 
-Для создания проекта сначала сохраняется pending intent, затем отправляется единственный POST. После transport timeout повтор записи не выполняется. Stage cleanup ищет свой projectKey и createdBy через публичный список, сохраняет найденный ID и архивирует. Если запись ещё не видна, pending intent остаётся unresolved: повторите cleanup позже. Отсутствие объекта сразу после timeout не считается доказательством отсутствия записи.
+Для создания проекта сначала сохраняется pending intent, затем отправляется единственный POST. После transport timeout повтор записи не выполняется. Stage cleanup ищет свой projectKey и createdBy через публичный список, проверяет также уникальный creation marker из исходного POST description, сохраняет найденный ID и архивирует. Совпадения actor/projectKey недостаточно: старый проект с другим marker не принимается в registry. При явном отказе 4xx intent удаляется; после timeout/5xx сохраняется для безопасного reconcile. Если запись ещё не видна, pending intent остаётся unresolved: повторите cleanup позже. Отсутствие объекта сразу после timeout не считается доказательством отсутствия записи.
 
 ## Opt-in stage
 

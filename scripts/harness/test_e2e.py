@@ -50,6 +50,83 @@ class E2ETest(unittest.TestCase):
             self.store.create('a' * 16, 'local', 'isolated-compose', 'actor')
         self.assertEqual(self.store.load(self.store.path('b' * 16)), other)
 
+    def test_malformed_stage_config_returns_controlled_error(self):
+        import copy
+        config = {'origin': 'https://fixture.invalid', 'allowedOrigins': ['https://fixture.invalid'],
+                  'environmentId': 'test-stage', 'allowProjectArchiveResidue': True,
+                  'actors': {role: {'id': str(e.uuid.uuid4()), 'tokenEnv': 'HARNESS_' + role} for role in ('A', 'M', 'V', 'O', 'G')},
+                  'revisionPaths': {m: '/revision/' + m for m in e.MODULES[:-1]}}
+        mutations = [lambda c: c.update(origin=12), lambda c: c.update(allowedOrigins=None),
+                     lambda c: c.update(environmentId=[]), lambda c: c['actors']['A'].update(id=3),
+                     lambda c: c['actors']['A'].update(tokenEnv=None), lambda c: c.update(revisionPaths=[]),
+                     lambda c: c['revisionPaths'].update({'auth-service': 3})]
+        path = self.root / 'stage.json'
+        for mutate in mutations:
+            invalid = copy.deepcopy(config)
+            mutate(invalid)
+            e.private_json(path, invalid)
+            with self.assertRaises(e.Invalid):
+                e.load_config(path)
+
+    def test_cleanup_early_stage_state_is_idempotent_without_network(self):
+        from types import SimpleNamespace
+        state = self.store.create('b' * 16, 'stage', 'approved-stage', '')
+        args = SimpleNamespace(command='cleanup', run_state=self.store.path('b' * 16), config=None)
+        with patch.object(e.Http, 'request', side_effect=AssertionError('No HTTP for an empty registry')):
+            for _ in range(2):
+                report, code = e.handle(args, self.root)
+                self.assertEqual(code, 0)
+                self.assertEqual(report['cleanupStatus'], 'PASS')
+
+    def test_rejected_creation_clears_intent_and_never_adopts_existing_project(self):
+        http = e.Http('https://fixture.invalid')
+        with patch.object(http, 'request', return_value=e.Response(409, {}, b'')):
+            with self.assertRaises(e.Failure):
+                e.create_project(self.store, self.state, http, 'actor', 'A')
+        recovered = self.store.load(self.store.path('a' * 16))
+        self.assertEqual(recovered['pendingWrites'], [])
+        self.assertEqual(recovered['resources'], [])
+
+    def test_lost_duplicate_response_cannot_reconcile_foreign_creation(self):
+        http = e.Http('https://fixture.invalid')
+        with patch.object(http, 'request', side_effect=e.UnknownWrite('lost response')):
+            with self.assertRaises(e.UnknownWrite):
+                e.create_project(self.store, self.state, http, 'actor', 'A')
+        pending = self.state['pendingWrites'][0]
+        old = {'id': '12345678-1234-4234-8234-123456789012', 'createdBy': 'actor',
+               'projectKey': pending['projectKey'], 'description': 'Harness creation from another run'}
+        with patch.object(http, 'expect', return_value=e.Response(200, {}, json.dumps({'items': [old]}).encode())):
+            with self.assertRaises(e.Failure):
+                e.reconcile_projects(self.store, self.state, {'actor': http})
+        self.assertEqual(self.state['resources'], [])
+        old['description'] = pending['creationMarker']
+        with patch.object(http, 'expect', return_value=e.Response(200, {}, json.dumps({'items': [old]}).encode())):
+            e.reconcile_projects(self.store, self.state, {'actor': http})
+        self.assertEqual(self.state['resources'][0]['id'], old['id'])
+        self.assertEqual(self.state['pendingWrites'], [])
+
+    def test_project_keys_preserve_entire_run_identity(self):
+        self.assertNotEqual(e.project_key('a' * 14 + '01', 'A'), e.project_key('a' * 14 + '02', 'A'))
+
+    def test_packaged_artifact_name_uses_pom_version_and_final_name(self):
+        (self.root / 'service').mkdir()
+        (self.root / 'pom.xml').write_text('<project xmlns="http://maven.apache.org/POM/4.0.0"><version>2.0-SNAPSHOT</version></project>')
+        module = self.root / 'service/pom.xml'
+        module.write_text('<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>service</artifactId></project>')
+        self.assertEqual(e.packaged_jar(self.root, 'service').name, 'service-2.0-SNAPSHOT.jar')
+        module.write_text('<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>service</artifactId><version>3.0</version><build><finalName>custom-${project.version}</finalName></build></project>')
+        self.assertEqual(e.packaged_jar(self.root, 'service').name, 'custom-3.0.jar')
+
+    def test_keyboard_interrupt_is_preserved_after_child_reaping(self):
+        from unittest.mock import Mock
+        child = Mock()
+        child.pid = 1234
+        child.communicate.side_effect = [KeyboardInterrupt(), ('', '')]
+        with patch.object(e.subprocess, 'Popen', return_value=child), patch.object(e.os, 'killpg'), patch.object(e.time, 'sleep'):
+            with self.assertRaises(KeyboardInterrupt):
+                e.run_command(['fixture'], self.root)
+        self.assertEqual(child.communicate.call_count, 2)
+
     def test_revision_outage_does_not_skip_or_falsify_cleanup(self):
         self.state['composeProject'] = 'fixture'
         report = {'results': [], 'serviceRevisionsBefore': {'service': 'old'}, 'serviceRevisionsAfter': {}}
