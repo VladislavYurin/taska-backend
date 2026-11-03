@@ -92,6 +92,7 @@ flowchart LR
 | `notification-service` | Kafka consumer, дедупликация событий, inbox и email-доставка |
 | `admin-service` | глобальный административный read-only API, маскирование, аудит и мониторинг outbox |
 | `tenant-service` | [реестр компаний TAS-310](tenant-service/README.md), защищённые CreateTenant/GetTenant; self-service activation требует следующих B2B-задач |
+| `billing-service` | [порт оплаты и fake TAS-320](billing-service/README.md); каталог, invoice/ledger и работающий billing API относятся к следующим задачам |
 | `common-lib` | общие доменные типы, события, исключения и R2DBC-конвертеры |
 | `grpc-common-lib` | protobuf-контракты и сгенерированные gRPC/Reactor stubs |
 | `kafka-lib` | общая реализация transactional outbox |

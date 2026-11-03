@@ -29,6 +29,7 @@ Harness объединяет инструкции, доступные инстр
 | Файлы | `storage-lib`, `auth-service`, `issue-service` | presigned URL, confirm, размер/MIME, доступ и очистка объектов |
 | Администрирование | [admin-service](../../admin-service/README.md) | session-only guards, безопасное чтение, аудит, повтор outbox |
 | MCP | [mcp-server](../../mcp-server/README.md) | schemas, catalog snapshot, scopes, owner isolation, REST dispatch |
+| Оплата B2B | [billing-service](../../billing-service/README.md) | PaymentProvider port/fake сейчас; invoice, ledger, Stripe и entitlement проектируются отдельно |
 | OAuth AS | `oauth-server`, `auth-service`, `api-gateway`, `mcp-server` | [AS и доверие](../tas-413-oauth-backend.md), discovery, PKCE, consent, revocation |
 | Социальный вход | `oauth-server`, `auth-service`, `api-gateway` | [provider flow](../tas-424-oauth.md), [сценарии](../tas-447-social-sign-in-scenarios.md) |
 | Метрики и эксплуатация | `metrics-starter`, `infra/`, Compose, `.github/workflows/` | конфигурационные тесты, секреты, health и revision каждого сервиса |
