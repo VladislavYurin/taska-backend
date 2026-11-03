@@ -50,4 +50,6 @@ Harness объединяет инструкции, доступные инстр
 
 **Реализует TAS-453:** CLI `scripts/harness.py` с doctor/plan/check/docs-check, versioned verification manifest, консервативный impact по POM и event rules, контроль свежих Maven XML-отчётов, единые проверки локально и в PR CI. Команды и ограничения — в [матрице](verification.md).
 
-**Проектируется:** общий backend E2E/stage-runner (TAS-454), repo-local skills и адаптеры (TAS-455), регрессионные evals (TAS-456). E2E/cleanup не являются командами текущего CLI.
+**TAS-454:** [E2E/cleanup runner](e2e.md) с изолированным Compose, защищённым run-state и opt-in stage. Автоматизированы поднаборы E2E-01/08 с честным PARTIAL; остальные сценарии manual/BLOCKED.
+
+**Проектируется:** repo-local skills и адаптеры (TAS-455), регрессионные evals (TAS-456).
