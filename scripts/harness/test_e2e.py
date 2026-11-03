@@ -50,6 +50,20 @@ class E2ETest(unittest.TestCase):
             self.store.create('a' * 16, 'local', 'isolated-compose', 'actor')
         self.assertEqual(self.store.load(self.store.path('b' * 16)), other)
 
+    def test_revision_outage_does_not_skip_or_falsify_cleanup(self):
+        self.state['composeProject'] = 'fixture'
+        report = {'results': [], 'serviceRevisionsBefore': {'service': 'old'}, 'serviceRevisionsAfter': {}}
+        local = e.Local(self.root, self.store, self.state)
+        def cleaned():
+            self.state['cleanupStatus'] = 'PASS'
+        with patch.object(local, 'revisions', side_effect=e.Blocked('stopped')):
+            with patch.object(local, 'cleanup', side_effect=cleaned) as cleanup:
+                e.finish_environment(self.store, self.state, report, local=local)
+        cleanup.assert_called_once()
+        self.assertEqual(self.state['cleanupStatus'], 'PASS')
+        self.assertTrue(any(r['status'] == 'BLOCKED' for r in report['results']))
+        self.assertFalse(any(r['checkId'] == 'cleanup' for r in report['results']))
+
     def test_daemon_switch_refuses_cleanup_before_deletion(self):
         self.state['dockerDaemon'] = 'original-daemon'
         self.state['resources'] = [{'type': 'owned'}]

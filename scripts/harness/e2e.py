@@ -678,6 +678,35 @@ def stage_clients(config, state=None):
     return actors, clients
 
 
+def finish_environment(store, state, report, local=None, clients=None, config=None):
+    clients = clients or {}
+    provisioned = bool(local and state.get('composeProject'))
+    if provisioned or clients:
+        try:
+            report['serviceRevisionsAfter'] = local.revisions() if local else stage_revisions(config)
+        except (Failure, Blocked, Invalid, KeyError, OSError, ValueError):
+            report['results'].append({'checkId': 'revision-observation', 'status': 'BLOCKED',
+                                      'reason': 'Final service revision observation unavailable'})
+    # Cleanup has its own outcome. An observation failure must neither skip cleanup
+    # nor overwrite successful cleanup with a fabricated cleanup failure.
+    try:
+        if provisioned:
+            local.cleanup()
+        elif clients:
+            cleanup_projects(store, state, clients)
+        else:
+            state['cleanupStatus'] = 'PASS' if not state['resources'] and not state['pendingWrites'] else 'FAIL'
+            store.save(state)
+    except (Failure, Blocked, Invalid, KeyError, OSError, ValueError):
+        state['cleanupStatus'] = 'FAIL'
+        store.save(state)
+        report['results'].append({'checkId': 'cleanup', 'status': 'FAIL',
+                                  'reason': 'Cleanup failed; repeat cleanup from run-state'})
+    if report['serviceRevisionsBefore']:
+        report['results'].append(dict(revision_result(report['serviceRevisionsBefore'], report['serviceRevisionsAfter']),
+                                      checkId='revision-stability'))
+
+
 def _handle(args, root):
     store = StateStore(root)
     if args.command == 'cleanup':
@@ -742,29 +771,7 @@ def _handle(args, root):
         report['results'].append({'checkId': 'preflight', 'status': 'BLOCKED' if isinstance(exc, Blocked) else 'FAIL', 'reason': str(exc) if isinstance(exc, (Failure, Blocked, Invalid)) else 'Lifecycle error: ' + type(exc).__name__})
     finally:
         signal.signal(signal.SIGTERM, old_handler)
-        try:
-            if local and not state.get('composeProject'):
-                state['cleanupStatus'] = 'PASS'
-                store.save(state)
-            elif local:
-                try:
-                    report['serviceRevisionsAfter'] = local.revisions()
-                finally:
-                    local.cleanup()
-            elif clients:
-                try:
-                    report['serviceRevisionsAfter'] = stage_revisions(config)
-                finally:
-                    cleanup_projects(store, state, clients)
-            else:
-                state['cleanupStatus'] = 'PASS' if not state['resources'] and not state['pendingWrites'] else 'FAIL'
-                store.save(state)
-        except (Failure, Blocked, Invalid, KeyError, OSError, ValueError) as exc:
-            state['cleanupStatus'] = 'FAIL'
-            store.save(state)
-            report['results'].append({'checkId': 'cleanup', 'status': 'FAIL', 'reason': 'Cleanup/revision validation failed; repeat cleanup from run-state'})
-        if report['serviceRevisionsBefore']:
-            report['results'].append(dict(revision_result(report['serviceRevisionsBefore'], report['serviceRevisionsAfter']), checkId='revision-stability'))
+        finish_environment(store, state, report, local, clients, config)
     report['finishedAt'] = now()
     report['cleanupStatus'] = state['cleanupStatus']
     report['remainingOwnedResources'] = [{'type': 'archived-project' if r.get('archived') else r['type'], 'id': r['id']} for r in state['resources']]
