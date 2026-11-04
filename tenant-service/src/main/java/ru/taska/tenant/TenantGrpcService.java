@@ -3,7 +3,17 @@ package ru.taska.tenant;
 import mapper.GrpcExceptionMapper;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.CreateTenantResponse;
+import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
+import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipPage;
+import ru.taska.api.b2b.v1.Operation;
+import ru.taska.api.b2b.v1.ReactorTenantServiceGrpc;
+import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
+import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.security.tenant.RpcContextBridge;
 
 @Service
