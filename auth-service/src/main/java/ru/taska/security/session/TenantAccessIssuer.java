@@ -4,8 +4,13 @@ import io.jsonwebtoken.Jwts;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
 
 /** Separate B2B Ed25519 issuer; legacy HMAC JWTs cannot become tenant authority. */
 public final class TenantAccessIssuer {

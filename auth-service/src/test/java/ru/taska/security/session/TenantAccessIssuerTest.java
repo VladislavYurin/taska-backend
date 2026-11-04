@@ -1,11 +1,16 @@
 package ru.taska.security.session;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.jsonwebtoken.Jwts;
 import java.security.KeyPairGenerator;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Date;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class TenantAccessIssuerTest {

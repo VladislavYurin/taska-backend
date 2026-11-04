@@ -1,6 +1,7 @@
 package ru.taska;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,7 +20,9 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import ru.taska.dto.AdminUserManagementDto.UserStatusRequestDto;
-import ru.taska.entity.*;
+import ru.taska.entity.User;
+import ru.taska.entity.UserCreatedVia;
+import ru.taska.entity.UserStatus;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserRepository;
