@@ -5,8 +5,13 @@ import reactor.test.StepVerifier;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static ru.taska.billing.payment.PaymentProvider.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static ru.taska.billing.payment.PaymentProvider.Checkout;
+import static ru.taska.billing.payment.PaymentProvider.Invoice;
+import static ru.taska.billing.payment.PaymentProvider.Merchant;
+import static ru.taska.billing.payment.PaymentProvider.Money;
+import static ru.taska.billing.payment.PaymentProvider.Payment;
 
 /** Reusable adapter contract: future sandbox adapters provide a fresh fixture per test. */
 abstract class PaymentProviderContractTest {

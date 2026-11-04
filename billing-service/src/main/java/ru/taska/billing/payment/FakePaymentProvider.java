@@ -13,8 +13,25 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static ru.taska.billing.payment.PaymentProvider.*;
-import static ru.taska.billing.payment.ProviderException.Reason.*;
+import static ru.taska.billing.payment.PaymentProvider.Capabilities;
+import static ru.taska.billing.payment.PaymentProvider.Checkout;
+import static ru.taska.billing.payment.PaymentProvider.Environment;
+import static ru.taska.billing.payment.PaymentProvider.EventKind;
+import static ru.taska.billing.payment.PaymentProvider.Invoice;
+import static ru.taska.billing.payment.PaymentProvider.Merchant;
+import static ru.taska.billing.payment.PaymentProvider.Money;
+import static ru.taska.billing.payment.PaymentProvider.Payment;
+import static ru.taska.billing.payment.PaymentProvider.Refund;
+import static ru.taska.billing.payment.PaymentProvider.RefundState;
+import static ru.taska.billing.payment.PaymentProvider.State;
+import static ru.taska.billing.payment.PaymentProvider.VerifiedEvent;
+import static ru.taska.billing.payment.PaymentProvider.require;
+import static ru.taska.billing.payment.ProviderException.Reason.IDEMPOTENCY_CONFLICT;
+import static ru.taska.billing.payment.ProviderException.Reason.INVALID_STATE;
+import static ru.taska.billing.payment.ProviderException.Reason.INVALID_WEBHOOK;
+import static ru.taska.billing.payment.ProviderException.Reason.NOT_FOUND;
+import static ru.taska.billing.payment.ProviderException.Reason.UNKNOWN_OUTCOME;
+import static ru.taska.billing.payment.ProviderException.Reason.UNSUPPORTED_CAPABILITY;
 
 /** Explicit test adapter. It has no Spring bean annotation and cannot initiate a real payment. */
 public final class FakePaymentProvider implements PaymentProvider {

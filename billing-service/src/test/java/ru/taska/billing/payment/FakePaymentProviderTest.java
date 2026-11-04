@@ -6,9 +6,27 @@ import reactor.test.StepVerifier;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static ru.taska.billing.payment.PaymentProvider.*;
-import static ru.taska.billing.payment.ProviderException.Reason.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static ru.taska.billing.payment.PaymentProvider.Capabilities;
+import static ru.taska.billing.payment.PaymentProvider.Checkout;
+import static ru.taska.billing.payment.PaymentProvider.Environment;
+import static ru.taska.billing.payment.PaymentProvider.Invoice;
+import static ru.taska.billing.payment.PaymentProvider.Merchant;
+import static ru.taska.billing.payment.PaymentProvider.Money;
+import static ru.taska.billing.payment.PaymentProvider.Refund;
+import static ru.taska.billing.payment.PaymentProvider.RefundState;
+import static ru.taska.billing.payment.PaymentProvider.State;
+import static ru.taska.billing.payment.PaymentProvider.VerifiedEvent;
+import static ru.taska.billing.payment.ProviderException.Reason.IDEMPOTENCY_CONFLICT;
+import static ru.taska.billing.payment.ProviderException.Reason.INVALID_STATE;
+import static ru.taska.billing.payment.ProviderException.Reason.INVALID_WEBHOOK;
+import static ru.taska.billing.payment.ProviderException.Reason.NOT_FOUND;
+import static ru.taska.billing.payment.ProviderException.Reason.UNKNOWN_OUTCOME;
+import static ru.taska.billing.payment.ProviderException.Reason.UNSUPPORTED_CAPABILITY;
 
 class FakePaymentProviderTest extends PaymentProviderContractTest {
     private final FakePaymentProvider fake = new FakePaymentProvider("a fixture key with at least thirty-two bytes".getBytes(StandardCharsets.UTF_8));
