@@ -1063,7 +1063,8 @@
           "*",
           "BillingCatalogIntegrationTest",
           "SubscriptionIntegrationTest",
-          "InvoiceIntegrationTest"
+          "InvoiceIntegrationTest",
+          "FinancialLedgerIntegrationTest"
         ],
         "noTestsReason": null
       },

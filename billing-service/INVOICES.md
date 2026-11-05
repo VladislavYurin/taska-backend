@@ -3,8 +3,8 @@
 The delivered boundary is `BillingService.CreateInvoice/GetInvoice/ListInvoices` in
 [billing-catalog.proto](../grpc-common-lib/src/main/proto/v1/billing-catalog.proto).
 Field numbers and DTOs match the B2B blueprint. Public gateway REST, calendar/plan-change
-policy, payment ingress, ledger/allocation and commercial production activation remain
-separate tasks. This layer issues an obligation; it never charges money or grants coverage.
+policy, payment ingress, settlement policy and commercial production activation remain
+separate tasks. [TAS-476](LEDGER.md) adds the immutable ledger storage primitives. This layer issues an obligation; it never charges money or grants coverage.
 
 ## Issuance and retries
 

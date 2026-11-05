@@ -167,6 +167,31 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  FinancialLedgerDependencies.EvidenceAuthority financialEvidenceAuthority() {
+    return (db, tenant, evidence) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  FinancialLedgerDependencies.EligibilityAuthority financialEligibilityAuthority() {
+    return (db, tenant, invoice, matches) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  FinancialLedger financialLedger(
+      ConnectionFactory factory,
+      FinancialReadAuthority readers,
+      FinancialLedgerDependencies.EvidenceAuthority evidence,
+      FinancialLedgerDependencies.EligibilityAuthority eligibility) {
+    return new FinancialLedger(
+        new TenantTransactionExecutor(factory), readers, evidence, eligibility, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
