@@ -473,7 +473,7 @@ class TenantProvisioningRpcIntegrationTest {
             "tenant-service",
             interceptor(new TenantConfiguration(), tenantTrust, "registrySecurity"),
             new TenantGrpcService(
-                registry, org.mockito.Mockito.mock(TenantMembershipService.class)),
+                registry, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
             new TenantProvisioningRpc(saga),
             new TenantCreationLifecycleGrpc(lifecycle));
     closureRpc =

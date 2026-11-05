@@ -114,7 +114,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -823,6 +823,29 @@ class TenantMembershipIntegrationTest {
             .trustManager(certs.resolve("ca.crt").toFile())
             .clientAuth(io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth.REQUIRE)
             .build();
+    var quotaStore =
+        new SeatQuotaStore(
+            transactions,
+            (actor, command) ->
+                Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "purpose not configured")),
+            (tenant, minimum) -> {
+              var e =
+                  Entitlement.newBuilder()
+                      .setTenantId(tenant.toString())
+                      .setVersion("1")
+                      .setPlanVersionId(id(500).toString())
+                      .setValidFrom(NOW.minusSeconds(1).toString())
+                      .setIssuedAt(NOW.toString());
+              for (var kind :
+                  List.of(
+                      QuotaLimit.KindValue.KIND_SEAT,
+                      QuotaLimit.KindValue.KIND_PROJECT,
+                      QuotaLimit.KindValue.KIND_STORAGE_BYTES,
+                      QuotaLimit.KindValue.KIND_TASK_LIFETIME))
+                e.addLimits(QuotaLimit.newBuilder().setKind(kind).setLimit("50"));
+              return Mono.just(e.build());
+            },
+            clock);
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(
                 new java.net.InetSocketAddress("127.0.0.1", 0))
@@ -830,7 +853,7 @@ class TenantMembershipIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        org.mockito.Mockito.mock(TenantRegistryService.class), service),
+                        org.mockito.Mockito.mock(TenantRegistryService.class), service, quotaStore),
                     interceptor))
             .addService(
                 io.grpc.ServerInterceptors.intercept(
@@ -892,6 +915,41 @@ class TenantMembershipIntegrationTest {
                   .listTenantMembers(next)
                   .getItems(0)
                   .getUserId());
+          var quotaRequest =
+              GetTenantQuotasRpcRequest.newBuilder()
+                  .setTenantId(A.toString())
+                  .setContext(wire(owner.toBuilder().setAction("getTenantQuotas").build()))
+                  .build();
+          String quotaRpc = TenantServiceGrpc.getGetTenantQuotasMethod().getFullMethodName();
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () -> plain.getTenantQuotas(quotaRequest))
+                  .getStatus()
+                  .getCode());
+          var quotaStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender, quotaRequest, policy, quotaRpc)));
+          assertEquals("4", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
+          operator
+              .sql(
+                  "UPDATE taska.tenant_memberships SET status='SUSPENDED' WHERE tenant_id=:t AND"
+                      + " user_id=:u")
+              .bind("t", A)
+              .bind("u", OWNER)
+              .fetch()
+              .rowsUpdated()
+              .block(WAIT);
+          assertEquals(
+              io.grpc.Status.Code.PERMISSION_DENIED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () -> quotaStub.getTenantQuotas(quotaRequest))
+                  .getStatus()
+                  .getCode());
         } else {
           var request =
               GetMembershipRpcRequest.newBuilder()

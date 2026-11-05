@@ -10340,6 +10340,12 @@
           "type": "timestamptz",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "entitlement_version",
+          "type": "bigint",
+          "nullable": false,
+          "default": "0"
         }
       ],
       "primary_key": [
@@ -10367,7 +10373,7 @@
       ],
       "indexes": [],
       "retention_class": "TENANT_WORKDATA",
-      "notes": "scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked.",
+      "notes": "scope_id equals tenant UUID for all central resources; TASK_LIFETIME is authoritative in issue-service.project_counters.lifetime_created. No nullable/sentinel scope. Row locked atomic admission; limit sourced from versioned entitlement. BIGINT safe arithmetic checked. TAS-322 implementation metadata entitlement_version is the monotonic observed billing version; zero before first authoritative lookup grants no admission.",
       "retention_policy_mapping": {
         "policy_version": "ES_V1",
         "policy_id": "TENANT_WORKDATA",
@@ -10479,6 +10485,12 @@
           "type": "bigint",
           "nullable": false,
           "default": "1"
+        },
+        {
+          "name": "request_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null
         }
       ],
       "primary_key": [
@@ -10519,7 +10531,7 @@
         "(tenant_id,expires_at,id) WHERE state='ACTIVE'"
       ],
       "retention_class": "TENANT_WORKDATA",
-      "notes": "Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt.",
+      "notes": "Expiration is eligible-to-reconcile, not proof no resource exists. Query durable owner receipt before release; lease/fence forbids later commit of expired generation. COMMITTED storage remains used until confirmed deletion receipt. TAS-322 request_hash binds original tenant/operation/invitation/expiry after resource_id becomes membership user UUID. SEAT amount=1; expiry can reconcile locally because membership commit is the same database transaction.",
       "retention_policy_mapping": {
         "policy_version": "ES_V1",
         "policy_id": "TENANT_WORKDATA",

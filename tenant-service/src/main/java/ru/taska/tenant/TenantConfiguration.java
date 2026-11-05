@@ -302,6 +302,38 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  SeatQuotaStore.Authority seatQuotaAuthority() {
+    return (context, command) ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  ru.taska.entitlement.EntitlementProjection.Source quotaEntitlements(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc.ReactorEntitlementServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.entitlement.GrpcEntitlementSource(
+          stub, trust, Clock.systemUTC(), "tenant-service");
+    return (tenant, minimum) ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  SeatQuotaStore seatQuotas(
+      TenantTransactionExecutor transactions,
+      SeatQuotaStore.Authority authority,
+      ru.taska.entitlement.EntitlementProjection.Source source) {
+    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -311,6 +343,9 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              java.util.Map.entry(
+                  TenantServiceGrpc.getGetTenantQuotasMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   TenantServiceGrpc.getCancelTenantCreationMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),

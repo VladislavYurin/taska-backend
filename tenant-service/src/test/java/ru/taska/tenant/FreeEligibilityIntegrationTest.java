@@ -214,7 +214,7 @@ class FreeEligibilityIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
+            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
     emails = new ConcurrentHashMap<>();
     cases = new ConcurrentHashMap<>();
     secretKeys = new ConcurrentHashMap<>();
@@ -1031,7 +1031,7 @@ class FreeEligibilityIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        registry, org.mockito.Mockito.mock(TenantMembershipService.class)),
+                        registry, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
                     interceptor))
             .build()
             .start();

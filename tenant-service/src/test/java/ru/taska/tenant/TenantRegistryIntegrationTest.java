@@ -123,7 +123,7 @@ class TenantRegistryIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -501,7 +501,7 @@ class TenantRegistryIntegrationTest {
   @Test
   void grpcWithoutVerifiedInterceptorContextNeverReachesDatabase() {
     var adapter =
-        new TenantGrpcService(service, org.mockito.Mockito.mock(TenantMembershipService.class));
+        new TenantGrpcService(service, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class));
     StepVerifier.create(adapter.createTenant(Mono.just(request("untrusted", PAID, "Company"))))
         .expectErrorSatisfies(
             e ->
@@ -776,7 +776,7 @@ class TenantRegistryIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        service, org.mockito.Mockito.mock(TenantMembershipService.class)),
+                        service, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
                     new ru.taska.security.tenant.TenantServerInterceptor(
                         recipient, policies, "test")))
             .build()

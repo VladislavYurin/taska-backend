@@ -1,6 +1,7 @@
 syntax = "proto3";
 package ru.taska.b2b.v1;
 import "v1/tenant-context.proto";
+import "v1/quota-admission.proto";
 option java_multiple_files = true;
 option java_package = "ru.taska.api.b2b.v1";
 // TAS-310: implemented subset of docs/b2b/contracts/b2b.proto; wire numbers preserved.
@@ -148,6 +149,7 @@ message GetTenantOperationRpcRequest {
 }
 
 service TenantService {
+  rpc GetTenantQuotas(GetTenantQuotasRpcRequest) returns (QuotaSnapshot);
   rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
   rpc GetTenantOperation(GetTenantOperationRpcRequest) returns (Operation);
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);

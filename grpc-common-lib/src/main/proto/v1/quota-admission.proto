@@ -1,0 +1,25 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message QuotaUsage {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; KIND_TASK_LIFETIME = 4; }
+  KindValue kind = 1;
+  string used = 2;
+  string reserved = 3;
+  optional string limit = 4;
+  bool unlimited = 5;
+  optional string project_id = 6;
+  string version = 7;
+}
+message QuotaSnapshot {
+  string tenant_id = 1;
+  string version = 2;
+  repeated QuotaUsage quotas = 3;
+  string as_of = 4;
+}
+message GetTenantQuotasRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
