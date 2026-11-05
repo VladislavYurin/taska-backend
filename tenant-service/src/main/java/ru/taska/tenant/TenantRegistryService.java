@@ -3,15 +3,32 @@ package ru.taska.tenant;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.CreateTenantResponse;
+import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.Operation;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
-import ru.taska.tenant.RegistryDependencies.*;
+import ru.taska.security.tenant.TenantCreationTransaction;
+import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.tenant.RegistryDependencies.FreeAdmission;
+import ru.taska.tenant.RegistryDependencies.PublishedPlan;
+import ru.taska.tenant.RegistryDependencies.PublishedPlans;
 
 public final class TenantRegistryService {
   private final TenantTransactionExecutor transactions;
@@ -19,7 +36,7 @@ public final class TenantRegistryService {
   private final PublishedPlans plans;
   private final FreeAdmission free;
   private final Clock clock;
-  private final Duration window;
+  private final Function<DatabaseClient, Mono<Duration>> creationWindows;
 
   public TenantRegistryService(
       TenantTransactionExecutor transactions,
@@ -27,14 +44,23 @@ public final class TenantRegistryService {
       FreeAdmission free,
       Clock clock,
       Duration window) {
+    this(transactions, plans, free, clock, db -> Mono.just(window));
+    if (window.isNegative() || window.isZero())
+      throw new IllegalArgumentException("creation window must be positive");
+  }
+
+  public TenantRegistryService(
+      TenantTransactionExecutor transactions,
+      PublishedPlans plans,
+      FreeAdmission free,
+      Clock clock,
+      Function<DatabaseClient, Mono<Duration>> creationWindows) {
     this.transactions = transactions;
     this.creations = new TenantCreationTransaction(transactions);
     this.plans = plans;
     this.free = free;
     this.clock = clock;
-    this.window = window;
-    if (window.isNegative() || window.isZero())
-      throw new IllegalArgumentException("creation window must be positive");
+    this.creationWindows = creationWindows;
   }
 
   static DomainException fail(DomainStatus status, String code) {
@@ -159,6 +185,19 @@ public final class TenantRegistryService {
       String key,
       byte[] hash,
       PublishedPlan plan) {
+    return (plan.free() ? Mono.just(Duration.ZERO) : creationWindows.apply(db))
+        .flatMap(window -> insertWithWindow(db, tenant, actor, name, key, hash, plan, window));
+  }
+
+  private Mono<CreateTenantResponse> insertWithWindow(
+      DatabaseClient db,
+      UUID tenant,
+      UUID actor,
+      String name,
+      String key,
+      byte[] hash,
+      PublishedPlan plan,
+      Duration window) {
     Instant now = clock.instant();
     UUID operation = UUID.randomUUID();
     var sql =

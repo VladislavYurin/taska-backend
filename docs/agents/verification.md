@@ -72,6 +72,7 @@ OAuth overlays имеют отдельные требования; см. [OAuth 
 | REST endpoint, DTO, mapping, ACL | `api-gateway` и сервис-владелец | OpenAPI parity, успех/валидация/отказ, неизменность после отказа, применимые E2E |
 | Proto или `common-lib` | производитель и все найденные потребители | сериализация/совместимость, семантика enum и отсутствующих значений; широкая CI-матрица |
 | Проекты и типы | `project-service` | `IssueTypeDeletionIT`, `IssueTypeCreationIT`; связанные workflow/issue проверки |
+| Project tenant storage | `project-service` | обязательный `TenantProjectStorageIntegrationTest`: app LOGIN/RLS/FK, A/B, archive/rollback, query plans и чистый профиль |
 | Workflow и привязки типов | `workflow-service`, `project-service`, `issue-service`, gateway при изменении REST | reservation/binding IT из списка ниже; версии, повторы, перенос/восстановление |
 | Доска, issue migration | `issue-service` | `ListIssuesForBoardIT`, `IssueTypeMoveIT`, `WorkflowBindingMigrationIT` по изменённой логике |
 | Блокировка приглашённого | `auth-service`, gateway при изменении REST | `InvitedUnblockIT`; online access и сохранность credentials |
@@ -164,3 +165,4 @@ TAS-311: `tenant-service.verify` также требует свежий `TenantM
 TAS-314 adds [subscription model verification](../../billing-service/SUBSCRIPTIONS.md): upgrade with unchanged catalog checksum, transactional coverage/idempotency/outbox, immutable terms, financial owner/admin guards, A/B isolation and real mTLS read RPCs. This does not establish external settlement/calendar/gateway readiness.
 
 TAS-475 adds [immutable invoice verification](../../billing-service/INVOICES.md): issuance/replay concurrency, exact snapshot amounts, sealed lines, transactional rollback, financial access and real mTLS/JWS invoice RPCs. Commercial/assignment production adapters and public REST/PSP E2E remain separate.
+TAS-462: `tenant-service.verify` additionally requires `PlatformFlagsIntegrationTest`: preceding-schema upgrade, typed B11 defaults, administrative scope, concurrent version/idempotency races, audit/outbox rollback, signed pagination and production mTLS/JWS policies. [Registry and activation boundaries](../../tenant-service/PLATFORM-FLAGS.md). Final review is followed by this protected-RPC integration rerun; public REST/stage B2B E2E needs the future gateway/trust adapters.

@@ -294,7 +294,8 @@
       "reports": {
         "directory": "project-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantProjectStorageIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -573,7 +574,8 @@
         "selectors": [
           "*",
           "TenantRegistryIntegrationTest",
-          "TenantMembershipIntegrationTest"
+          "TenantMembershipIntegrationTest",
+          "PlatformFlagsIntegrationTest"
         ],
         "noTestsReason": null
       },
