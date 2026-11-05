@@ -184,3 +184,5 @@ TAS-310 implements the additive `TenantService.CreateTenant/GetTenant` subset in
 ### Subscription/coverage backend (TAS-314)
 
 The existing BillingService now implements `GetSubscription` and `ListSubscriptionPeriods` with unchanged blueprint field numbers. [Stored model, internal evidence ports, read semantics and activation prerequisites](../../../billing-service/SUBSCRIPTIONS.md). `paidThrough` is the exclusive end instant of the current paid coverage, absent for FREE/before first payment; future renewals do not apply early. Expired history can retain the past end and never authorizes access by field presence alone.
+
+TAS-519 implements the private operator/billing commercial profile in [commercial-configuration.proto](../../../grpc-common-lib/src/main/proto/v1/commercial-configuration.proto). These service RPCs do not add public REST routes; private secret references are excluded from scalar flags and administrative response views. [Runtime validation and activation](../../../billing-service/COMMERCIAL-READINESS.md).

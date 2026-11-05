@@ -120,6 +120,7 @@ class PlatformFlagsIntegrationTest {
                 "/db/changelog/db.changelog-master.yaml"));
     var changes = (tools.jackson.databind.node.ArrayNode) log.get("databaseChangeLog");
     changes.remove(changes.size() - 1);
+    changes.remove(changes.size() - 1);
     for (var entry : changes)
       for (var change : entry.get("changeSet").get("changes")) {
         if (change.has("sqlFile") && change.get("sqlFile").has("relativeToChangelogFile")) {
@@ -155,8 +156,9 @@ class PlatformFlagsIntegrationTest {
         checksums,
         operator
             .sql(
-                "SELECT id,md5sum FROM tenant_liquibase.databasechangelog WHERE"
-                    + " id<>'tenant-platform-flags-0003' ORDER BY id")
+                "SELECT id,md5sum FROM tenant_liquibase.databasechangelog WHERE id NOT IN"
+                    + " ('tenant-platform-flags-0003','tenant-merchant-configuration-0004') ORDER"
+                    + " BY id")
             .fetch()
             .all()
             .collectList()
@@ -416,7 +418,7 @@ class PlatformFlagsIntegrationTest {
                     UpdateFlagRequest.newBuilder().setBooleanValue(false).setIntegerValue("1"))
                 .build())) rejects(DomainStatus.INVALID_ARGUMENT, admin(true, service.update(r)));
     rejects(DomainStatus.NOT_FOUND, admin(true, service.update(bool("SECRET_TOKEN", "1", false))));
-    assertEquals(24, count("platform_configuration_versions"));
+    assertEquals(25, count("platform_configuration_versions"));
     assertEquals(0, count("platform_configuration_receipts"));
     assertEquals(0, count("global_outbox_events"));
   }
@@ -456,7 +458,7 @@ class PlatformFlagsIntegrationTest {
                 .build(),
             service.list(ListPlatformFlagsRpcRequest.getDefaultInstance())));
     rejects(DomainStatus.UNAUTHENTICATED, service.update(r));
-    assertEquals(24, count("platform_configuration_versions"));
+    assertEquals(25, count("platform_configuration_versions"));
   }
 
   @Test
@@ -542,7 +544,7 @@ class PlatformFlagsIntegrationTest {
     }
     assertEquals("1", flag("MCP").getVersion());
     assertEquals(0, count("platform_configuration_receipts"));
-    assertEquals(24, count("platform_configuration_versions"));
+    assertEquals(25, count("platform_configuration_versions"));
   }
 
   @Test
@@ -587,7 +589,7 @@ class PlatformFlagsIntegrationTest {
                 .fetch()
                 .rowsUpdated()
                 .block(WAIT));
-    assertEquals(24, count("platform_configuration_versions"));
+    assertEquals(25, count("platform_configuration_versions"));
   }
 
   @Test

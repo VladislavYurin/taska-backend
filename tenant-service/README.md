@@ -68,3 +68,7 @@ PostgreSQL16/Testcontainers, фактический Liquibase с deployer→migr
 ## Platform configuration — TAS-462
 
 [Typed global business flags](PLATFORM-FLAGS.md) add protected ListPlatformFlags/UpdatePlatformFlag RPCs, immutable version/audit history, idempotent optimistic updates and transactional global events. Paid creation now snapshots its 30-day default from the DB registry; existing deadlines and retries retain their original value. Public capabilities and flag enforcement in other domains remain separate tasks.
+
+## Private merchant policy — TAS-519
+
+The [commercial configuration authority](../billing-service/COMMERCIAL-READINESS.md) adds protected Get/Publish/ResolveMerchantConfiguration RPCs and one private JSON policy in the platform registry. Scalar flag listing excludes this document. Administrative responses and version events contain metadata only; full configuration is restricted to the verified billing-service reader.
