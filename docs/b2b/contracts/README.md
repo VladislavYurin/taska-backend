@@ -184,3 +184,5 @@ TAS-310 implements the additive `TenantService.CreateTenant/GetTenant` subset in
 ### Subscription/coverage backend (TAS-314)
 
 The existing BillingService now implements `GetSubscription` and `ListSubscriptionPeriods` with unchanged blueprint field numbers. [Stored model, internal evidence ports, read semantics and activation prerequisites](../../../billing-service/SUBSCRIPTIONS.md). `paidThrough` is the exclusive end instant of the current paid coverage, absent for FREE/before first payment; future renewals do not apply early. Expired history can retain the past end and never authorizes access by field presence alone.
+
+TAS-475 implements [immutable invoice RPCs and storage](../../../billing-service/INVOICES.md) (`CreateInvoice/GetInvoice/ListInvoices`) with the blueprint DTO field numbers in billing-catalog.proto. Mandatory assignment/commercial authorities fail closed until provisioned; gateway REST, financial projectors and PSP activation are separate tasks.

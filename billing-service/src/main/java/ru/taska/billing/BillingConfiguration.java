@@ -133,6 +133,40 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  InvoiceDependencies.ObligationAuthority invoiceObligationAuthority() {
+    return (db, tenant, request, now) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  InvoiceDependencies.CommercialPolicy invoiceCommercialPolicy() {
+    return (db, plan, request, now) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  InvoiceStore invoices(
+      ConnectionFactory factory,
+      FinancialReadAuthority readers,
+      InvoiceDependencies.ObligationAuthority obligations,
+      InvoiceDependencies.CommercialPolicy commercial,
+      BillingCatalog catalog,
+      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String key) {
+    var clock = Clock.systemUTC();
+    return new InvoiceStore(
+        new TenantTransactionExecutor(factory),
+        readers,
+        obligations,
+        commercial,
+        catalog,
+        clock,
+        new PeriodCursor(key, clock));
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -142,6 +176,12 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.of(
+              BillingServiceGrpc.getListInvoicesMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              BillingServiceGrpc.getGetInvoiceMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              BillingServiceGrpc.getCreateInvoiceMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true),
               BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false),
               BillingServiceGrpc.getListSubscriptionPeriodsMethod().getFullMethodName(),

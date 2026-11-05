@@ -872,7 +872,9 @@ class BillingCatalogIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new BillingCatalogRpc(
-                        catalog, org.mockito.Mockito.mock(SubscriptionStore.class)),
+                        catalog,
+                        org.mockito.Mockito.mock(SubscriptionStore.class),
+                        org.mockito.Mockito.mock(InvoiceStore.class)),
                     interceptor))
             .build()
             .start();

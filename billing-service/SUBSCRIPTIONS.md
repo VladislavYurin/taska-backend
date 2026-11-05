@@ -1,6 +1,6 @@
 # Subscription model — TAS-314
 
-Implemented alongside the [catalog](README.md), using [BillingService](../grpc-common-lib/src/main/proto/v1/billing-catalog.proto). This is the tenant-scoped subscription/coverage model, not invoice issuance, payment processing, calendar calculation or plan-change policy. Those inputs belong to TAS-475/476/331/352/354. Gateway REST and production trust activation remain separate.
+Implemented alongside the [catalog](README.md), using [BillingService](../grpc-common-lib/src/main/proto/v1/billing-catalog.proto). This is the tenant-scoped subscription/coverage model, not payment processing, calendar calculation or plan-change policy. [Invoice issuance TAS-475](INVOICES.md) extends it; financial/calendar/policy inputs belong to TAS-476/331/352/354. Gateway REST and production trust activation remain separate.
 
 ## Stored model and migration
 
@@ -10,7 +10,7 @@ Implemented alongside the [catalog](README.md), using [BillingService](../grpc-c
 - `subscription_periods`: immutable tenant/invoice/source financial fact/plan/activation identity, UTC `[starts_at,ends_at)`, original day/time anchor, plan terms snapshot, source PSP/WIRE and `confirmed_at`. Status alone may transition GRANTED → REVOKED or SUPERSEDED. Dates, financial provenance and terms cannot be rewritten; history cannot be deleted through normal DML. Overlap is deliberately allowed. Tenant+invoice and tenant+activation operation are unique, preventing a second period for a repeated settlement or a PSP/WIRE race.
 - `subscription_command_receipts`: tenant/action/key/requestHash, exact protobuf response and issuer/optional actor. This separate scoped receipt permits a legitimate SERVICE principal without inventing a human actor UUID or fake global tenant. Receipt replay still requires current verified service authority. These are financial/idempotency metadata; production retention integration is subsequent work.
 
-The current-period FK is composite `(tenant_id,current_period_id)`. The actual invoices table is introduced by TAS-475: **that migration must add** `(tenant_id,invoice_id) → invoices(tenant_id,id)` on periods before enabling invoice settlement. No fake invoice/financial-fact table is created to satisfy a forward FK. Until authoritative evidence adapters exist, settlement is fail-closed. Financial facts/invoices and periods reside in the same billing database; future settlement must use the supplied transaction connection, preserving atomicity.
+The current-period FK is composite `(tenant_id,current_period_id)`. TAS-475 adds the actual invoices table and composite `(tenant_id,invoice_id) → invoices(tenant_id,id)` FK on periods in [0003](src/main/resources/db/changelog/0003-invoices.sql). No fake invoice/financial-fact table is created to satisfy a forward FK. Until authoritative evidence adapters exist, settlement is fail-closed. Financial facts/invoices and periods reside in the same billing database; future settlement must use the supplied transaction connection, preserving atomicity.
 
 ## Internal commands and evidence
 

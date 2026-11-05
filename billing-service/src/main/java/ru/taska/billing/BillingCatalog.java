@@ -464,7 +464,7 @@ public final class BillingCatalog {
         .then();
   }
 
-  private PlanVersion map(Map<String, Object> row) {
+  PlanVersion map(Map<String, Object> row) {
     var p =
         PlanVersion.newBuilder()
             .setId(row.get("id").toString())
