@@ -608,6 +608,25 @@ class CapabilityEvaluatorTest {
     facts.webMfa = true;
     allowed(ISSUE_READ);
   }
+
+  @Test
+  void collectionSelectorCannotWidenVerifiedSingleTenantEvenWhenGrantAllowsBoth() {
+    admin(AdminGrant.LevelValue.LEVEL_READ, false, false);
+    UUID other = UUID.randomUUID();
+    var scope = facts.grant.getScope().toBuilder().addTenantIds(other.toString()).build();
+    facts.grant = facts.grant.toBuilder().setScope(scope).build();
+    claims.setAdministrativeScope(scope);
+    target = new Target(null, null, null, null, Set.of(other));
+    denied(ADMIN_QUERY, ERROR_CODE_TENANT_MISMATCH);
+    assertEquals(0, facts.reads.get());
+    target = new Target(null, null, null, null, Set.of(TENANT, other));
+    denied(ADMIN_QUERY, ERROR_CODE_TENANT_MISMATCH);
+    assertEquals(0, facts.reads.get());
+    assertThrows(
+        IllegalArgumentException.class, () -> new Target(TENANT, null, null, null, Set.of(other)));
+    target = new Target(null, null, null, null, Set.of(TENANT));
+    allowed(ADMIN_QUERY);
+  }
 }
 
 /**
