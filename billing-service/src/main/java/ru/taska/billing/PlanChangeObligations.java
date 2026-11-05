@@ -19,6 +19,12 @@ public final class PlanChangeObligations {
       PlanChangeDependencies.Policy policy) {
     if (request.getPurpose() != CreateInvoiceRequest.PurposeValue.PURPOSE_PLAN_CHANGE)
       return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE"));
+    if (!Set.of(
+            CreateInvoiceRequest.CurrencyValue.CURRENCY_EUR,
+            CreateInvoiceRequest.CurrencyValue.CURRENCY_USD)
+        .contains(request.getCurrency())) return Mono.error(CatalogErrors.invalid());
+    String currency =
+        request.getCurrency() == CreateInvoiceRequest.CurrencyValue.CURRENCY_EUR ? "EUR" : "USD";
     return VerifiedTenantContext.current()
         .flatMap(
             c ->
@@ -53,9 +59,7 @@ public final class PlanChangeObligations {
                                           || !p.get("target_plan_version_id")
                                               .toString()
                                               .equals(request.getPlanVersionId())
-                                          || !Objects.equals(
-                                              p.get("currency"),
-                                              request.getCurrency().name().substring(9))
+                                          || !Objects.equals(p.get("currency"), currency)
                                           || !grant.owner().equals(p.get("owner_id"))
                                           || !Long.valueOf(grant.ownerVersion())
                                               .equals(p.get("owner_version")))

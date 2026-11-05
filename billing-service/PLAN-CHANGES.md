@@ -83,7 +83,9 @@ lost-response recovery. `FreeEligibilityIntegrationTest` checks durable decision
 owner/admin denials and the production billing client over real mTLS/JWS. The existing three-database
 `TenantProvisioningRpcIntegrationTest` additionally composes actual billing downgrade/entitlement
 with actual Root storage ledger: bytes and documents survive while the lowered limit produces the
-independent OVER_QUOTA cause. Primary policy, identity/KMS and financial providers are fixture ports.
+independent OVER_QUOTA cause. The common CapabilityEvaluator consumes those actual terms/causes
+and denies issue mutation with READ_ONLY. Primary ACL, identity/KMS and financial providers are
+fixture ports.
 These are isolated backend integrations, not real PSP/WIRE or deployed public E2E.
 
 ```sh

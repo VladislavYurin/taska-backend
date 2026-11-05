@@ -1080,6 +1080,83 @@ class TenantProvisioningRpcIntegrationTest {
         ru.taska.security.tenant.RegistryTestContext.withClaims(rootClaims, root.restrictions(t))
             .block(WAIT)
             .contains(RestrictionCode.RESTRICTION_CODE_OVER_QUOTA));
+
+    // The real common evaluator consumes actual billing terms and actual Root quota causes.
+    var target =
+        new ru.taska.capability.CapabilityFacts.Target(
+            t, UUID.randomUUID(), UUID.randomUUID(), null);
+    var flags =
+        new java.util.EnumMap<ru.taska.capability.CapabilityFacts.Flag, Boolean>(
+            ru.taska.capability.CapabilityFacts.Flag.class);
+    for (var flag : ru.taska.capability.CapabilityFacts.Flag.values()) flags.put(flag, true);
+    var evaluator =
+        new ru.taska.capability.CapabilityEvaluator(
+            (context, scope, actions) ->
+                terms
+                    .current(t, 0)
+                    .zipWith(root.restrictions(t))
+                    .map(
+                        current -> {
+                          var claims =
+                              ru.taska.security.tenant.RpcContextBridge.details(context)
+                                  .getContext();
+                          var invariants =
+                              new java.util.EnumMap<
+                                  ru.taska.capability.Action, java.util.Set<ErrorCode>>(
+                                  ru.taska.capability.Action.class);
+                          actions.forEach(action -> invariants.put(action, java.util.Set.of()));
+                          return new ru.taska.capability.CapabilityFacts(
+                              OWNER,
+                              scope,
+                              context.requestId(),
+                              CLOCK.instant().plusSeconds(10),
+                              new ru.taska.capability.CapabilityFacts.Identity(
+                                  true,
+                                  false,
+                                  "1",
+                                  true,
+                                  "",
+                                  claims.getSessionId(),
+                                  false,
+                                  java.util.Set.of("read", "write")),
+                              MembershipSnapshot.newBuilder()
+                                  .setTenantId(t.toString())
+                                  .setUserId(OWNER.toString())
+                                  .setRole(Membership.RoleValue.ROLE_TENANT_ADMIN)
+                                  .setState(Membership.StateValue.STATE_ACTIVE)
+                                  .setVersion("1")
+                                  .setTenantMembershipVersion("1")
+                                  .setIsOwner(true)
+                                  .build(),
+                              ru.taska.capability.CapabilityFacts.ProjectRole.ADMIN,
+                              Tenant.LifecycleValue.LIFECYCLE_ACTIVE,
+                              true,
+                              true,
+                              null,
+                              current.getT1(),
+                              ru.taska.capability.CapabilityFacts.PlanKind.FREE,
+                              current.getT2(),
+                              flags,
+                              "1",
+                              ru.taska.capability.CapabilityFacts.Channel.DIRECT,
+                              ru.taska.capability.CapabilityFacts.PaymentChannel.NONE,
+                              false,
+                              invariants,
+                              invariants,
+                              null,
+                              null);
+                        }),
+            CLOCK);
+    var policyClaims =
+        rootClaims.toBuilder().setExpiresAt(CLOCK.instant().plusSeconds(60).toString()).build();
+    var effective =
+        ru.taska.security.tenant.RegistryTestContext.withClaims(
+                policyClaims, evaluator.evaluate(ru.taska.capability.Action.ISSUE_UPDATE, target))
+            .block(WAIT);
+    org.junit.jupiter.api.Assertions.assertFalse(effective.capability().getAllowed());
+    org.junit.jupiter.api.Assertions.assertTrue(
+        effective.capability().getDenialCodesList().contains(ErrorCode.ERROR_CODE_READ_ONLY));
+
     assertEquals(
         1L,
         billingDb

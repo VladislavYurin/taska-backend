@@ -415,7 +415,7 @@ class TenantProvisioningIntegrationTest {
         }
         connection.setAutoCommit(false);
         // Reset only this private pre-upgrade fault fixture; RESTRICT protects the cyclic FK.
-        sql.execute("TRUNCATE taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships");
+        sql.execute("TRUNCATE taska.tenants,taska.tenant_memberships");
         sql.execute(tenantSeed);
         sql.execute(memberSeed);
         connection.commit();

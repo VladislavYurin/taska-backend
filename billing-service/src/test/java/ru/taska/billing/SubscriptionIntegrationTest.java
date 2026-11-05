@@ -1504,13 +1504,14 @@ class SubscriptionIntegrationTest {
   SubscriptionPlanChanges changes;
   Map<UUID, FreeProof> freeDecisions;
   Set<UUID> freeOwners;
-  AtomicBoolean loseFreeReply, denyFree;
+  AtomicBoolean loseFreeReply, denyFree, abortAfterFree;
 
   void planCommands() {
     freeDecisions = new ConcurrentHashMap<>();
     freeOwners = ConcurrentHashMap.newKeySet();
     loseFreeReply = new AtomicBoolean();
     denyFree = new AtomicBoolean();
+    abortAfterFree = new AtomicBoolean();
     changes =
         new SubscriptionPlanChanges(
             store,
@@ -1536,6 +1537,9 @@ class SubscriptionIntegrationTest {
                                 DomainStatus.FAILED_PRECONDITION, "FREE_ELIGIBILITY_USED"));
                       var proof = new FreeProof(t, op, owner, version);
                       freeDecisions.put(op, proof);
+                      if (abortAfterFree.getAndSet(false))
+                        return Mono.error(
+                            CatalogErrors.fail(DomainStatus.ABORTED, "VERSION_CONFLICT"));
                       return loseFreeReply.getAndSet(false)
                           ? Mono.error(
                               CatalogErrors.fail(
@@ -1963,5 +1967,88 @@ class SubscriptionIntegrationTest {
         rights().getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
     assertEquals(1, count("subscription_periods"));
     assertEquals(0, freeOwners.size());
+  }
+
+  @Test
+  void admittedDecisionWinsWhenCancellationRunsAfterDefinitiveRemoteError() {
+    paid();
+    abortAfterFree.set(true);
+    var result = select(FREE, "root-admitted-before-error");
+    assertEquals(FREE.toString(), result.getSubscription().getPlanVersionId());
+    assertEquals(1, freeOwners.size());
+    assertEquals(1, freeDecisions.size());
+    assertTrue(freeDecisions.values().iterator().next().admitted());
+  }
+
+  @Test
+  void newCoverageCannotSlipBetweenPreparedFreeAndItsCompletion() {
+    paid();
+    loseFreeReply.set(true);
+    rejects(
+        DomainStatus.UNAVAILABLE,
+        "FREE_ADMISSION_UNAVAILABLE",
+        change(selection(FREE, "unknown-free", get(OWNER_A, A).getVersion())));
+    UUID renewal = proof(A, NOW, Instant.parse("2026-02-28T12:34:56Z"));
+    rejects(DomainStatus.ABORTED, "FREE_TRANSITION_PENDING", grant(A, renewal, "new-coverage"));
+    assertEquals(1, count("subscription_periods"));
+    var claims =
+        worker(A, "recoverFreePlanChange", "billing-service").toBuilder()
+            .addScopes("plans:recover")
+            .addScopes("free:admit")
+            .build();
+    var results =
+        Flux.merge(
+                RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList()),
+                RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList()))
+            .collectList()
+            .block(WAIT);
+    assertTrue(results.stream().mapToInt(List::size).sum() >= 1);
+    assertEquals(1, freeOwners.size());
+    assertEquals(FREE.toString(), get(OWNER_A, A).getPlanVersionId());
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        "PLAN_SELECTION_CHANGED",
+        grant(A, renewal, "new-coverage"));
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void usdObligationBindsChoiceAndUnknownCurrencyFailsWithoutNewDocuments() {
+    paid();
+    UUID cheap = plan(1000);
+    var request =
+        selection(cheap, "usd", get(OWNER_A, A).getVersion()).toBuilder()
+            .setPayload(
+                selection(cheap, "usd", get(OWNER_A, A).getVersion()).getPayload().toBuilder()
+                    .setCurrency(ChangePlanRequest.CurrencyValue.CURRENCY_USD))
+            .build();
+    var pending = change(request).block(WAIT);
+    var invoice =
+        CreateInvoiceRequest.newBuilder()
+            .setPlanVersionId(cheap.toString())
+            .setPurpose(CreateInvoiceRequest.PurposeValue.PURPOSE_PLAN_CHANGE)
+            .setCurrency(CreateInvoiceRequest.CurrencyValue.CURRENCY_USD)
+            .setPaymentMethod(CreateInvoiceRequest.PaymentMethodValue.PAYMENT_METHOD_PSP)
+            .build();
+    PlanChangeDependencies.Policy policy = (c, command) -> Mono.just(new Grant(OWNER_A, 1));
+    var claims = human(OWNER_A, A, "createInvoice").toBuilder().addScopes("write").build();
+    var obligation =
+        RegistryTestContext.withClaims(
+                claims,
+                transactions.execute(
+                    client -> PlanChangeObligations.resolve(client, A, invoice, policy)))
+            .block(WAIT);
+    assertEquals(UUID.fromString(pending.getOperationId()), obligation.operationId());
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        "VALIDATION_FAILED",
+        RegistryTestContext.withClaims(
+            claims,
+            transactions.execute(
+                client ->
+                    PlanChangeObligations.resolve(
+                        client, A, invoice.toBuilder().setCurrencyValue(999).build(), policy))));
+    assertEquals(1, count("invoices"));
+    assertEquals(1, count("subscription_periods"));
   }
 }

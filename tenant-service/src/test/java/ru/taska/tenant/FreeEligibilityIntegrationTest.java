@@ -40,6 +40,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.AdmitFreeTenantRequest;
@@ -1448,8 +1449,7 @@ class FreeEligibilityIntegrationTest {
             ledger.cancel(cancellation(b, UUID.randomUUID(), B)))
         .block(WAIT);
     assertEquals(0, count("free_eligibility_ledger"));
-    apply(decision(DispositionAction.MINIMIZE_ACCOUNT, A, List.of(), List.of(), null))
-        .block(WAIT);
+    apply(decision(DispositionAction.MINIMIZE_ACCOUNT, A, List.of(), List.of(), null)).block(WAIT);
     assertEquals(
         1L,
         operator
@@ -1478,5 +1478,33 @@ class FreeEligibilityIntegrationTest {
         0L,
         RegistryTestContext.withClaims(ownerCaller(A, a, "getFreeAdmissionReceipt"), hidden)
             .block(WAIT));
+  }
+
+  @Test
+  void concurrentRootCancelAndAdmissionProduceOneDurableDecision() {
+    UUID tenant = paidTenant(A), operation = UUID.randomUUID();
+    var decisions =
+        Flux.merge(
+                RegistryTestContext.withClaims(
+                        ownerCaller(A, tenant, "admitFreeTenant"),
+                        ledger.admit(admission(tenant, operation)))
+                    .map(FreeAdmissionResult::getReceipt),
+                RegistryTestContext.withClaims(
+                    ownerCaller(A, tenant, "cancelFreeTenantAdmission"),
+                    ledger.cancel(cancellation(tenant, operation, A))))
+            .collectList()
+            .block(WAIT);
+    assertEquals(2, decisions.size());
+    assertEquals(decisions.get(0), decisions.get(1));
+    assertEquals(decisions.getFirst().getAdmitted() ? 1 : 0, count("free_eligibility_ledger"));
+    assertEquals(1, count("free_plan_admissions"));
+    assertEquals(1, count("free_admission_subjects"));
+    assertEquals(
+        decisions.getFirst(),
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "admitFreeTenant"),
+                ledger.admit(admission(tenant, operation)))
+            .block(WAIT)
+            .getReceipt());
   }
 }
