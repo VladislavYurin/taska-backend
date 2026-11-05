@@ -60,7 +60,7 @@ class WorkflowBindingMigrationIT extends AbstractIT {
     @MockitoBean OutboxEventScheduler scheduler;
     @MockitoBean GrpcProjectServiceClient projects;
     @MockitoBean ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowStub;
-    @Autowired WorkflowBindingMigrationService migration;
+    private TenantAwareWorkflowMigration migration;
     @Autowired WorkflowBindingReceiptRepository receipts;
     @Autowired WorkflowIssueMigrationService legacy;
     @Autowired IssueService creates;
@@ -79,6 +79,25 @@ class WorkflowBindingMigrationIT extends AbstractIT {
     private Server server;
     private ManagedChannel channel;
     private int number;
+
+    @Autowired
+    void setMigration(WorkflowBindingMigrationService delegate) {
+        migration = new TenantAwareWorkflowMigration(delegate);
+    }
+
+    private record TenantAwareWorkflowMigration(WorkflowBindingMigrationService delegate) {
+        Mono<TypeOperationOutcome> apply(UUID project, UUID operation) {
+            return withTenant(delegate.apply(project, operation));
+        }
+
+        Mono<TypeOperationOutcome> cancel(UUID project, UUID operation) {
+            return withTenant(delegate.cancel(project, operation));
+        }
+
+        Mono<TypeOperationOutcome> release(UUID project, UUID operation) {
+            return withTenant(delegate.release(project, operation));
+        }
+    }
 
     @org.springframework.test.context.DynamicPropertySource
     static void port(org.springframework.test.context.DynamicPropertyRegistry properties) {
@@ -119,7 +138,7 @@ class WorkflowBindingMigrationIT extends AbstractIT {
                     @Override public Mono<WorkflowBindingIntent> getPending(Mono<TypeOperationProjectRequest> request) {
                         return request.map(key->journalPending?journal.get():WorkflowBindingIntent.getDefaultInstance());
                     }
-                }).addService(new WorkflowBindingIssueMigrationGrpcService(migration)).build().start();
+                }).addService(new WorkflowBindingIssueMigrationGrpcService(migration.delegate())).build().start();
         channel=ManagedChannelBuilder.forAddress("127.0.0.1",server.getPort()).usePlaintext().build();
         when(workflowStub.getChannel()).thenReturn(channel);
     }
@@ -251,7 +270,7 @@ class WorkflowBindingMigrationIT extends AbstractIT {
             if(calls.incrementAndGet()==2){entered.tryEmitEmpty();return release.asMono().thenReturn(validTransition("REVIEW"));}
             return Mono.just(validTransition("REVIEW"));
         }));
-        var moving=transitions.transitionIssue("r","n",row.getId(),transition,actor,null,row.getVersion()).subscribeOn(Schedulers.boundedElastic()).toFuture();
+        var moving=withTenant(transitions.transitionIssue("r","n",row.getId(),transition,actor,null,row.getVersion())).subscribeOn(Schedulers.boundedElastic()).toFuture();
         entered.asMono().block(TIMEOUT);journalPending=true;registry.set(types(true));mappings(Map.of("REVIEW","DONE"));
         var applying=migration.apply(project,operation).subscribeOn(Schedulers.boundedElastic()).toFuture();
         assertThatThrownBy(()->applying.get(150,TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
@@ -330,11 +349,11 @@ class WorkflowBindingMigrationIT extends AbstractIT {
                 .bind("p",project).bind("start",start).bind("prefix",project.toString()).bind("type",type).bind("actor",actor).bind("count",count).then().block(TIMEOUT);counter();
     }
     private void counter(){db.sql("INSERT INTO taska.project_counters(project_id,next_issue_number) VALUES(:p,:n) ON CONFLICT(project_id) DO UPDATE SET next_issue_number=GREATEST(taska.project_counters.next_issue_number,:n)").bind("p",project).bind("n",number+1).then().block(TIMEOUT);}
-    private Mono<Issue> create(String status){return creates.createIssue("r","n",UUID.randomUUID().toString(),project,IssueType.TASK,"New",null,IssuePriority.MEDIUM,actor,null,null,null,null,null,status);}
+    private Mono<Issue> create(String status){return withTenant(creates.createIssue("r","n",UUID.randomUUID().toString(),project,IssueType.TASK,"New",null,IssuePriority.MEDIUM,actor,null,null,null,null,null,status));}
     private IssuePatch patch(){return new IssuePatch(Optional.of("Changed"),Optional.empty(),NullableField.absent(),NullableField.absent(),NullableField.absent(),NullableField.absent(),NullableField.absent(),NullableField.absent(),NullableField.absent(),Optional.empty());}
     private void terminalAndRelease(){journal.set(journal.get().toBuilder().setState("COMPLETED").build());migration.release(project,operation).block(TIMEOUT);journalPending=false;registry.set(types(false));}
     private void newOperation(){operation=UUID.randomUUID();journal.set(journal.get().toBuilder().setOperationId(operation.toString()).setState("PENDING").clearStatusMappings().build());journalPending=true;registry.set(types(true));}
     private long count(String table,String column,UUID id){return db.sql("SELECT count(*) AS n FROM taska."+table+" WHERE "+column+"=:id").bind("id",id).map(r->r.get("n",Long.class)).one().block(TIMEOUT);}
-    private void assertPending(Mono<?> work){StepVerifier.create(work).expectErrorSatisfies(error->assertThat(((DomainException)error).getDetails()).containsEntry("reason","WORKFLOW_BINDINGS_PENDING").doesNotContainKey("operationId")).verify(TIMEOUT);}
-    private void rejected(Mono<?> work,DomainStatus status,String reason){StepVerifier.create(work).expectErrorSatisfies(error->{assertThat(error).isInstanceOf(DomainException.class);var failure=(DomainException)error;assertThat(failure.getStatus()).isEqualTo(status);if(reason!=null)assertThat(failure.getDetails()).containsEntry("reason",reason);}).verify(TIMEOUT);}
+    private void assertPending(Mono<?> work){StepVerifier.create(withTenant(work)).expectErrorSatisfies(error->assertThat(((DomainException)error).getDetails()).containsEntry("reason","WORKFLOW_BINDINGS_PENDING").doesNotContainKey("operationId")).verify(TIMEOUT);}
+    private void rejected(Mono<?> work,DomainStatus status,String reason){StepVerifier.create(withTenant(work)).expectErrorSatisfies(error->{assertThat(error).isInstanceOf(DomainException.class);var failure=(DomainException)error;assertThat(failure.getStatus()).isEqualTo(status);if(reason!=null)assertThat(failure.getDetails()).containsEntry("reason",reason);}).verify(TIMEOUT);}
 }
