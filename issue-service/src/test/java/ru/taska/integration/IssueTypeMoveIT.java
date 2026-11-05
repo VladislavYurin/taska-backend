@@ -64,7 +64,7 @@ class IssueTypeMoveIT extends AbstractIT {
     @MockitoBean GrpcWorkflowServiceClient workflows;
     @MockitoBean ReactorProjectServiceGrpc.ReactorProjectServiceStub projectStub;
     @MockitoBean ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowStub;
-    @Autowired IssueTypeMoveService moves;
+    private TenantAwareIssueTypeMoves moves;
     @Autowired IssueTypeWriteGuard guard;
     @Autowired IssueTypeMoveReceiptRepository receipts;
     @Autowired IssueService creates;
@@ -80,6 +80,21 @@ class IssueTypeMoveIT extends AbstractIT {
     private Server server;
     private ManagedChannel channel;
     private int number;
+
+    @Autowired
+    void setMoves(IssueTypeMoveService delegate) {
+        moves = new TenantAwareIssueTypeMoves(delegate);
+    }
+
+    private record TenantAwareIssueTypeMoves(IssueTypeMoveService delegate) {
+        Mono<IssueTypeMoveOutcome> apply(UUID project, UUID operation) {
+            return withTenant(delegate.apply(project, operation));
+        }
+
+        Mono<IssueTypeMoveOutcome> cancel(UUID project, UUID operation) {
+            return withTenant(delegate.cancel(project, operation));
+        }
+    }
 
     @org.springframework.test.context.DynamicPropertySource
     static void grpcPort(org.springframework.test.context.DynamicPropertyRegistry p) {
@@ -115,7 +130,7 @@ class IssueTypeMoveIT extends AbstractIT {
                                 .setProjectId(project.toString()).setWorkflowId(UUID.randomUUID().toString())
                                 .addAllValidStatusKeys(valid.get()).build());
                     }
-                }).addService(new IssueTypeIssueMigrationGrpcService(moves)).build().start();
+                }).addService(new IssueTypeIssueMigrationGrpcService(moves.delegate())).build().start();
         channel=ManagedChannelBuilder.forAddress("127.0.0.1",server.getPort()).usePlaintext().build();
         when(projectStub.getChannel()).thenReturn(channel);
         when(workflowStub.getChannel()).thenReturn(channel);
@@ -255,7 +270,7 @@ class IssueTypeMoveIT extends AbstractIT {
     void patchCanRepairAnOrphanedSourceTypeButStillRequiresRegisteredTarget() {
         var row=issue("TODO",false);
         registry.set(List.of(types(false).get(1)));
-        assertThat(patches.executePatch("r","n",row.getId(),actor,row.getVersion(),patch(IssueType.BUG))
+        assertThat(withTenant(patches.executePatch("r","n",row.getId(),actor,row.getVersion(),patch(IssueType.BUG)))
                 .block(TIMEOUT).issue().getIssueType()).isEqualTo(IssueType.BUG);
     }
 
@@ -362,8 +377,8 @@ class IssueTypeMoveIT extends AbstractIT {
                 .bind("deleted",deleted).bind("count",count).then().block(TIMEOUT);
     }
     private Mono<Issue> create() {
-        return creates.createIssue("r","n",UUID.randomUUID().toString(),project,IssueType.valueOf("REQUEST"),"New",null,
-                IssuePriority.MEDIUM,actor,null,null,null,null,null,"TODO");
+        return withTenant(creates.createIssue("r","n",UUID.randomUUID().toString(),project,IssueType.valueOf("REQUEST"),"New",null,
+                IssuePriority.MEDIUM,actor,null,null,null,null,null,"TODO"));
     }
     private IssuePatch patch(IssueType target) {
         return new IssuePatch(Optional.empty(),Optional.empty(),NullableField.absent(),NullableField.absent(),NullableField.absent(),
@@ -378,7 +393,7 @@ class IssueTypeMoveIT extends AbstractIT {
                 .bind("p",project).bind("type",type).map(r->r.get("n",Long.class)).one().block(TIMEOUT);
     }
     private void rejected(Mono<?> operation,DomainStatus status,String reason) {
-        StepVerifier.create(operation).expectErrorSatisfies(error->{
+        StepVerifier.create(withTenant(operation)).expectErrorSatisfies(error->{
             assertThat(error).isInstanceOf(DomainException.class); var failure=(DomainException)error;
             assertThat(failure.getStatus()).isEqualTo(status);
             if(reason!=null) assertThat(failure.getDetails()).containsEntry("reason",reason);
