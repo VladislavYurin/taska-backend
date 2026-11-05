@@ -18,10 +18,22 @@ import ru.taska.security.tenant.RpcContextBridge;
 public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServiceImplBase {
   private final TenantRegistryService registry;
   private final TenantMembershipService memberships;
+  private final SeatQuotaStore quotas;
 
-  public TenantGrpcService(TenantRegistryService registry, TenantMembershipService memberships) {
+  public TenantGrpcService(
+      TenantRegistryService registry, TenantMembershipService memberships, SeatQuotaStore quotas) {
     this.registry = registry;
     this.memberships = memberships;
+    this.quotas = quotas;
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.QuotaSnapshot> getTenantQuotas(
+      Mono<ru.taska.api.b2b.v1.GetTenantQuotasRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(quotas::get))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
   }
 
   @Override

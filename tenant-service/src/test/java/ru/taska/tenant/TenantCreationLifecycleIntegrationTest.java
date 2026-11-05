@@ -136,7 +136,7 @@ class TenantCreationLifecycleIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
+            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
     now = new AtomicReference<>(Instant.parse("2026-11-05T12:00:00Z"));
     clock =
         new Clock() {

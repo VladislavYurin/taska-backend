@@ -585,7 +585,8 @@
           "FreeEligibilityIntegrationTest",
           "TenantCreationLifecycleIntegrationTest",
           "TenantProvisioningIntegrationTest",
-          "TenantProvisioningRpcIntegrationTest"
+          "TenantProvisioningRpcIntegrationTest",
+          "SeatQuotaIntegrationTest"
         ],
         "noTestsReason": null
       },
