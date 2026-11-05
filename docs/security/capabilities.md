@@ -36,14 +36,21 @@ An administrative exception requires current GLOBAL_ADMIN plus a completed curre
 MFA web session, or a current nonrevoked/unexpired ADMIN_PAT/ADMIN_OAUTH grant matching
 actor, grant generation, signed scope, level and the target. TENANT_SET never grants
 global-account/platform access. Global account administration also requires
-manage_global_accounts. READ level does not create export jobs or modify data.
+manage_global_accounts. An administrative collection query carries an explicit
+`Target.selectedTenants` subset (at most100); it must fit the current grant. An empty
+selector with no single tenant does not mean all companies for a TENANT_SET grant.
+The query owner must bind that exact effective set before SQL count/page/row access.
+READ level does not create export jobs or modify data.
 User PAT/OAuth never inherit admin bypass, including tokens owned by GLOBAL_ADMIN.
 Grant issuance/expansion remains MFA web only, including for service workers.
 
 `Decision.businessBypass` is true only for a successfully authorized administrative
 exception. `auditRequired` is also true for applicable denied administrative attempts;
 it is not evidence of bypass. The owning handler must persist the internal audit with
-the real verified actor and retain ordinary attribution. Policy evaluation itself has
+the real verified actor and retain ordinary attribution. An allowed administrative
+exception also returns `bypassedRestrictions` for backend audit; these causes remain
+active in company state. Public `Capability.restrictions` describes reasons actually
+denying that action, so allowed admin actions do not pretend to be denied. Policy evaluation itself has
 no audit/database side effects. Quota owners must count actual usage even under a
 valid bypass. A public Capability is informational and is not a reusable authorization
 token; every mutation evaluates current authority again.

@@ -27,7 +27,15 @@ public final class CapabilityEvaluator {
         VerifiedTenantContext context, Target target, Set<Action> actions);
   }
 
-  public record Decision(Capability capability, boolean auditRequired, boolean businessBypass) {}
+  public record Decision(
+      Capability capability,
+      boolean auditRequired,
+      boolean businessBypass,
+      Set<RestrictionCode> bypassedRestrictions) {
+    public Decision {
+      bypassedRestrictions = Set.copyOf(bypassedRestrictions);
+    }
+  }
 
   private record Rule(
       String action,
@@ -108,10 +116,7 @@ public final class CapabilityEvaluator {
         .flatMap(
             verified -> {
               // Reject a different tenant before any authority adapter can query its data.
-              if (verified.tenantId() != null
-                  && !verified
-                      .tenantId()
-                      .equals(target.tenant() == null ? null : target.tenant().toString())) {
+              if (!tenantBinding(verified.tenantId(), target)) {
                 var denied = new EnumMap<Action, Decision>(Action.class);
                 var kind = RpcContextBridge.details(verified).getContext().getCredentialKind();
                 boolean audit =
@@ -136,8 +141,17 @@ public final class CapabilityEvaluator {
                             || !now.isBefore(facts.validUntil())
                             || facts.validUntil().isAfter(now.plusSeconds(30))) throw unavailable();
                         var result = new EnumMap<Action, Decision>(Action.class);
-                        for (Action action : requested)
-                          result.put(action, decide(verified, action, target, facts, now));
+                        for (Action action : requested) {
+                          Decision decision = decide(verified, action, target, facts, now);
+                          if (decision.businessBypass())
+                            decision =
+                                new Decision(
+                                    decision.capability(),
+                                    true,
+                                    true,
+                                    activeForAudit(facts, target, now));
+                          result.put(action, decision);
+                        }
                         return Collections.unmodifiableMap(result);
                       });
             })
@@ -239,8 +253,7 @@ public final class CapabilityEvaluator {
         return deny(action, ERROR_CODE_ADMIN_SCOPE_DENIED, true);
       bypass = true;
     } else if (web && identity.globalAdmin()) bypass = true;
-    if (verified.tenantId() != null
-        && (target.tenant() == null || !verified.tenantId().equals(target.tenant().toString())))
+    if (!tenantBinding(verified.tenantId(), target))
       return deny(action, ERROR_CODE_TENANT_MISMATCH, audit);
     if ((!GLOBAL.contains(rule.scope()) || action == Action.PAT_CREATE) && target.tenant() == null)
       return deny(action, ERROR_CODE_TENANT_REQUIRED, audit);
@@ -326,6 +339,8 @@ public final class CapabilityEvaluator {
     for (var restriction : restrictions)
       if (!(action == Action.NOTIFICATION_READ && f.controlNotification())
           && denied(rule.profile(), restriction, f, errors)) reasons.add(restriction);
+    if (rule.profile().equals("TRANSFER") && f.planKind() == PlanKind.UNKNOWN)
+      errors.add(ERROR_CODE_DEPENDENCY_UNAVAILABLE);
     if (rule.profile().equals("TRANSFER")
         && (entitlement == null
             || f.planKind() != PlanKind.PAID
@@ -405,6 +420,14 @@ public final class CapabilityEvaluator {
     if (rule.scope().equals("GLOBAL_ACCOUNT")
         && (!g.getManageGlobalAccounts() || !c.getManageGlobalAccounts())) return false;
     if (rule.action().equals("admin.audit_read") && !platform) return false;
+    if (!target.selectedTenants().isEmpty()) {
+      if (!rule.scope().equals("ADMIN_SELECTED_SCOPE")) return false;
+      return platform
+          || (g.getScope().getKind() == AdminScope.KindValue.KIND_TENANT_SET
+              && g.getScope()
+                  .getTenantIdsList()
+                  .containsAll(target.selectedTenants().stream().map(UUID::toString).toList()));
+    }
     return platform
         || (g.getScope().getKind() == AdminScope.KindValue.KIND_TENANT_SET
             && target.tenant() != null
@@ -509,6 +532,8 @@ public final class CapabilityEvaluator {
   private static Decision integrity(Action a, CapabilityFacts f, boolean audit) {
     Rule rule = RULES.get(a);
     Target t = f.target();
+    if (!t.selectedTenants().isEmpty() && !rule.scope().equals("ADMIN_SELECTED_SCOPE"))
+      return deny(a, ERROR_CODE_SCOPE_DENIED, audit);
     if (!GLOBAL.contains(rule.scope()) && t.tenant() == null)
       return deny(a, ERROR_CODE_TENANT_REQUIRED, audit);
     if ((f.lifecycle() == Tenant.LifecycleValue.LIFECYCLE_DELETED
@@ -520,7 +545,9 @@ public final class CapabilityEvaluator {
       return deny(a, ERROR_CODE_RESOURCE_NOT_FOUND, audit);
     if (rule.scope().equals("GLOBAL_SELF") && !Objects.equals(f.actor(), t.resource()))
       return deny(a, ERROR_CODE_SCOPE_DENIED, audit);
-    if (a == Action.ACCOUNT_DELETE && f.membership() != null && f.membership().getIsOwner())
+    if ((a == Action.ACCOUNT_DELETE || a == Action.MEMBERSHIP_LEAVE)
+        && f.membership() != null
+        && f.membership().getIsOwner())
       return deny(a, ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED, audit);
     return f.resourceResolved()
         ? result(a, f.integrity().get(a), Set.of(), audit)
@@ -533,7 +560,7 @@ public final class CapabilityEvaluator {
 
   private static Decision allow(Action a, boolean audit) {
     var decision = result(a, Set.of(), Set.of(), audit);
-    return new Decision(decision.capability(), audit, audit);
+    return new Decision(decision.capability(), audit, audit, Set.of());
   }
 
   private static Decision result(
@@ -553,7 +580,36 @@ public final class CapabilityEvaluator {
                     .toList())
             .build(),
         audit,
-        false);
+        false,
+        Set.of());
+  }
+
+  private static boolean tenantBinding(String verified, Target target) {
+    return verified == null
+        || verified.equals(target.tenant() == null ? null : target.tenant().toString())
+        || (target.tenant() == null
+            && target.selectedTenants().size() == 1
+            && target.selectedTenants().iterator().next().toString().equals(verified));
+  }
+
+  private static Set<RestrictionCode> activeForAudit(
+      CapabilityFacts facts, Target target, Instant now) {
+    var active = EnumSet.noneOf(RestrictionCode.class);
+    active.addAll(facts.independentRestrictions());
+    if (facts.entitlement() != null)
+      try {
+        Entitlement e = EntitlementProjection.validate(facts.entitlement());
+        if (target.tenant() != null && target.tenant().toString().equals(e.getTenantId())) {
+          active.addAll(e.getRestrictionsList());
+          if (now.isBefore(Instant.parse(e.getValidFrom()))
+              || (e.hasValidUntil() && !now.isBefore(Instant.parse(e.getValidUntil())))
+              || (e.hasPaidThrough() && !now.isBefore(Instant.parse(e.getPaidThrough()))))
+            active.add(RESTRICTION_CODE_PAYMENT_EXPIRED);
+        }
+      } catch (RuntimeException invalid) {
+        /* Do not invent a financial cause from invalid/unavailable data. */
+      }
+    return Set.copyOf(active);
   }
 
   private static Map<Action, Rule> rules() {

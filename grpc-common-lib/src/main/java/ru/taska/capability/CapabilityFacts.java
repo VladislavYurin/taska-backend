@@ -78,7 +78,20 @@ public record CapabilityFacts(
     FREE_PERSONAL_API_TOKENS
   }
 
-  public record Target(UUID tenant, UUID project, UUID resource, UUID operation) {}
+  public record Target(
+      UUID tenant, UUID project, UUID resource, UUID operation, Set<UUID> selectedTenants) {
+    public Target(UUID tenant, UUID project, UUID resource, UUID operation) {
+      this(tenant, project, resource, operation, Set.of());
+    }
+
+    public Target {
+      selectedTenants = Set.copyOf(selectedTenants);
+      if (selectedTenants.size() > 100)
+        throw new IllegalArgumentException("Bounded selected tenant set required");
+      if (tenant != null && !selectedTenants.isEmpty())
+        throw new IllegalArgumentException("Single or explicit collection scope required");
+    }
+  }
 
   public record Identity(
       boolean active,

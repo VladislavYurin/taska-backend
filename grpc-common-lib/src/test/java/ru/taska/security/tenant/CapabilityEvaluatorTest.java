@@ -550,6 +550,64 @@ class CapabilityEvaluatorTest {
     denied(ISSUE_READ, ERROR_CODE_TENANT_MISMATCH);
     assertEquals(before, facts.reads.get());
   }
+
+  @Test
+  void administrativeCollectionQueryRequiresExplicitSubsetOfCurrentSelectedGrant() {
+    admin(AdminGrant.LevelValue.LEVEL_READ, false, false);
+    claims.clearTenantId();
+    target = new Target(null, null, null, null, Set.of(TENANT));
+    allowed(ADMIN_QUERY);
+    target = new Target(null, null, null, null, Set.of(TENANT, UUID.randomUUID()));
+    denied(ADMIN_QUERY, ERROR_CODE_ADMIN_SCOPE_DENIED);
+    target = new Target(null, null, null, null);
+    denied(ADMIN_QUERY, ERROR_CODE_ADMIN_SCOPE_DENIED);
+    target = new Target(null, null, null, null, Set.of(TENANT));
+    denied(ADMIN_AUDIT_READ, ERROR_CODE_ADMIN_SCOPE_DENIED);
+  }
+
+  @Test
+  void administrativeBusinessExceptionRetainsIndependentCausesForAuditAndLeavesStateIntact() {
+    admin(AdminGrant.LevelValue.LEVEL_MODIFY, false, false);
+    facts.restrictions =
+        Set.of(
+            RESTRICTION_CODE_PLATFORM_BLOCK,
+            RESTRICTION_CODE_OWNER_PAUSE,
+            RESTRICTION_CODE_PAYMENT_DISPUTE);
+    facts.extraEntitlementReasons = Set.of(RESTRICTION_CODE_PAYMENT_EXPIRED);
+    facts.flags.put(Flag.PAID_TENANT_TRANSFER, false);
+    var result = decide(TENANT_TRANSFER_OWNERSHIP);
+    assertTrue(result.capability().getAllowed());
+    assertTrue(result.businessBypass());
+    assertTrue(result.auditRequired());
+    assertEquals(4, result.bypassedRestrictions().size());
+    assertEquals(3, facts.restrictions.size());
+    facts.globalAdmin = false;
+    claims.setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_TENANT);
+    denied(TENANT_TRANSFER_OWNERSHIP, ERROR_CODE_READ_ONLY);
+  }
+
+  @Test
+  void financialTransferReasonsAreExplicitEvenIfPaidThroughIsStillInFuture() {
+    for (var reason : List.of(RESTRICTION_CODE_PAYMENT_EXPIRED, RESTRICTION_CODE_OVER_QUOTA)) {
+      facts.extraEntitlementReasons = Set.of(reason);
+      var decision = decide(TENANT_TRANSFER_OWNERSHIP).capability();
+      assertFalse(decision.getAllowed());
+      assertTrue(decision.getRestrictionsList().contains(reason));
+    }
+  }
+
+  @Test
+  void globalWebCompanyAccessNeedsTenantBindingExceptExplicitInviteAndLeaveProtocols() {
+    claims.clearTenantId().setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL);
+    denied(ISSUE_READ, ERROR_CODE_TENANT_REQUIRED);
+    facts.owner = false;
+    facts.tenantAdmin = false;
+    allowed(INVITATION_ACCEPT);
+    allowed(MEMBERSHIP_LEAVE);
+    facts.globalAdmin = true;
+    facts.webMfa = true;
+    allowed(ISSUE_READ);
+  }
 }
 
 /**
