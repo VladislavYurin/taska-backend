@@ -35,46 +35,47 @@ public class WorkflowBindingChangeRepository {
                 .bind("project",project).map((r,m)->read(r)).one();
     }
     public Mono<Boolean> matchesCommand(WorkflowBindingChange item, String command) {
-        return sql("SELECT command_json=CAST(:command AS jsonb) FROM taska.workflow_binding_changes WHERE tenant_id=:tenant AND id=:id")
-                .bind("id",item.id()).bind("command",command).map((r,m)->Boolean.TRUE.equals(r.get(0,Boolean.class))).one();
+        return sql("SELECT command_json=CAST(:command AS jsonb) FROM taska.workflow_binding_changes WHERE tenant_id=:tenant AND project_id=:project AND id=:id")
+                .bind("id",item.id()).bind("project",item.project()).bind("command",command).map((r,m)->Boolean.TRUE.equals(r.get(0,Boolean.class))).one();
     }
     public Mono<WorkflowBindingChange> insert(WorkflowBindingChange item) {
         authority.get().requireActor(item.actor());
         var s=authority.get().bind(sql("""
                 INSERT INTO taska.workflow_binding_changes(tenant_id,id,project_id,workflow_id,actor_user_id,kind,
                     request_id,node_id,channel,token_id,command_json,plan_json,state,grant_id,actor_auth_version,membership_version)
-                VALUES(:tenant,:id,:project,:workflow,:actor,:kind,:request,:node,:channel,:token,
-                    CAST(:command AS jsonb),CAST(:plan AS jsonb),'PENDING',:grant,:authVersion,:memberVersion)
+                SELECT :tenant,:id,:project,w.id,:actor,:kind,:request,:node,:channel,:token,
+                    CAST(:command AS jsonb),CAST(:plan AS jsonb),'PENDING',:grant,:authVersion,:memberVersion
+                FROM taska.workflows w WHERE w.tenant_id=:tenant AND w.owner_project_id=:project AND w.id=:workflow FOR SHARE OF w
                 """)).bind("id",item.id()).bind("project",item.project()).bind("workflow",item.workflow())
                 .bind("actor",item.actor()).bind("kind",item.kind()).bind("request",item.requestId()).bind("node",item.nodeId())
                 .bind("command",item.commandJson()).bind("plan",mapper.writeValueAsString(item.plan()));
         s=item.attribution().channel()==null?s.bindNull("channel",String.class):s.bind("channel",item.attribution().channel().name());
         s=item.attribution().tokenId()==null?s.bindNull("token",UUID.class):s.bind("token",item.attribution().tokenId());
-        return s.fetch().rowsUpdated().then(get(item.project(),item.id()));
+        return s.fetch().rowsUpdated().flatMap(n->n==1?get(item.project(),item.id()):Mono.error(new DomainException(ru.taska.exception.DomainStatus.NOT_FOUND,"Workflow not found in project")));
     }
     public Mono<WorkflowBindingChange> cancelling(WorkflowBindingChange item, DomainException error) {
         return sql("""
                 UPDATE taska.workflow_binding_changes SET state='CANCELLING',error_status=:status,
                     error_message=:message,error_details=CAST(:details AS jsonb),updated_at=now()
-                WHERE tenant_id=:tenant AND id=:id AND state='PENDING'
-                """).bind("id",item.id()).bind("status",error.getStatus().name()).bind("message",error.getMessage())
+                WHERE tenant_id=:tenant AND project_id=:project AND id=:id AND state='PENDING'
+                """).bind("id",item.id()).bind("project",item.project()).bind("status",error.getStatus().name()).bind("message",error.getMessage())
                 .bind("details",mapper.writeValueAsString(error.getDetails())).fetch().rowsUpdated().then(get(item.project(),item.id()));
     }
     public Mono<Void> completed(WorkflowBindingChange item, byte[] result) {
-        return sql("UPDATE taska.workflow_binding_changes SET state='COMPLETED',result_bytes=:result,updated_at=now() WHERE tenant_id=:tenant AND id=:id AND state IN ('PENDING','CANCELLING')")
-                .bind("id",item.id()).bind("result",result).fetch().rowsUpdated().then();
+        return sql("UPDATE taska.workflow_binding_changes SET state='COMPLETED',result_bytes=:result,updated_at=now() WHERE tenant_id=:tenant AND project_id=:project AND id=:id AND state IN ('PENDING','CANCELLING')")
+                .bind("id",item.id()).bind("project",item.project()).bind("result",result).fetch().rowsUpdated().then();
     }
     public Mono<Void> cancelled(WorkflowBindingChange item) {
-        return sql("UPDATE taska.workflow_binding_changes SET state='CANCELLED',updated_at=now() WHERE tenant_id=:tenant AND id=:id AND state='CANCELLING'")
-                .bind("id",item.id()).fetch().rowsUpdated().then();
+        return sql("UPDATE taska.workflow_binding_changes SET state='CANCELLED',updated_at=now() WHERE tenant_id=:tenant AND project_id=:project AND id=:id AND state='CANCELLING'")
+                .bind("id",item.id()).bind("project",item.project()).fetch().rowsUpdated().then();
     }
     public Mono<Void> released(WorkflowBindingChange item) {
-        return sql("UPDATE taska.workflow_binding_changes SET reservation_released=true,updated_at=now() WHERE tenant_id=:tenant AND id=:id AND state IN ('COMPLETED','CANCELLED')")
-                .bind("id",item.id()).fetch().rowsUpdated().then();
+        return sql("UPDATE taska.workflow_binding_changes SET reservation_released=true,updated_at=now() WHERE tenant_id=:tenant AND project_id=:project AND id=:id AND state IN ('COMPLETED','CANCELLED')")
+                .bind("id",item.id()).bind("project",item.project()).fetch().rowsUpdated().then();
     }
     public Mono<Void> touched(WorkflowBindingChange item) {
-        return sql("UPDATE taska.workflow_binding_changes SET updated_at=now() WHERE tenant_id=:tenant AND id=:id")
-                .bind("id",item.id()).fetch().rowsUpdated().then();
+        return sql("UPDATE taska.workflow_binding_changes SET updated_at=now() WHERE tenant_id=:tenant AND project_id=:project AND id=:id")
+                .bind("id",item.id()).bind("project",item.project()).fetch().rowsUpdated().then();
     }
     public Flux<WorkflowBindingChange> recoverable() {
         return sql(SELECT+"WHERE tenant_id=:tenant AND reservation_released=false ORDER BY updated_at,id LIMIT 20")

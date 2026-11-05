@@ -100,9 +100,17 @@ public final class TenantWorkflowStore {
     }
 
     public Mono<Workflow> insertWorkflow(UUID id,UUID project,String name) {
+      return insertWorkflow(id,project,name,true);
+    }
+    public Mono<Workflow> insertWorkflow(UUID id,UUID project,String name,boolean active) {
       requireProject(project);
-      return sql("INSERT INTO taska.workflows(tenant_id,id,owner_project_id,name) VALUES(:tenant,:id,:project,:name) RETURNING *")
-          .bind("id",id).bind("project",project).bind("name",name).map((r,m)->workflow(r)).one();
+      return sql("INSERT INTO taska.workflows(tenant_id,id,owner_project_id,name,is_active) VALUES(:tenant,:id,:project,:name,:active) RETURNING *")
+          .bind("id",id).bind("project",project).bind("name",name).bind("active",active).map((r,m)->workflow(r)).one();
+    }
+    /** Cancellation of an unpublished CREATE graph retains its terminal journal as provenance. */
+    public Mono<Long> discardPrepared(UUID project,UUID id) {
+      return sql("DELETE FROM taska.workflows WHERE tenant_id=:tenant AND owner_project_id=:project AND id=:id AND is_active=false")
+          .bind("project",project).bind("id",id).fetch().rowsUpdated();
     }
     public Mono<Workflow> find(UUID id) {
       return sql("SELECT * FROM taska.workflows WHERE tenant_id=:tenant AND id=:id")
@@ -225,6 +233,14 @@ public final class TenantWorkflowStore {
     }
     public Mono<Receipt> recordReceipt(Receipt value) {
       if(!Set.of("APPLIED","CANCELLED").contains(value.state()))return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT,"Invalid receipt state"));
+      requireProject(value.project());
+      return receipt(value.project(),value.operation()).switchIfEmpty(Mono.defer(()->{
+        Mono<Void> graph=value.workflow()==null?Mono.empty():lock(value.workflow()).filter(w->w.project().equals(value.project()))
+            .switchIfEmpty(Mono.error(missing())).then();
+        return graph.then(Mono.defer(()->insertReceipt(value)));
+      })).filter(value::equals).switchIfEmpty(Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow receipt identity mismatch")));
+    }
+    private Mono<Receipt> insertReceipt(Receipt value) {
       var query=RecoveryStamp.from(context).bind(sql("""
           INSERT INTO taska.issue_type_creation_workflow_receipts(tenant_id,operation_id,project_id,state,workflow_id,code,generation,grant_id,actor_auth_version,membership_version)
           VALUES(:tenant,:operation,:project,:state,:workflow,:code,:generation,:grant,:authVersion,:memberVersion)
@@ -233,8 +249,7 @@ public final class TenantWorkflowStore {
       query=value.workflow()==null?query.bindNull("workflow",UUID.class):query.bind("workflow",value.workflow());
       query=value.generation()==null?query.bindNull("generation",UUID.class):query.bind("generation",value.generation());
       query=nullable(query,"code",value.code());
-      return query.then().then(receipt(value.project(),value.operation())).filter(value::equals)
-          .switchIfEmpty(Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow receipt identity mismatch")));
+      return query.then().then(receipt(value.project(),value.operation()));
     }
     private DatabaseClient.GenericExecuteSpec sql(String text) {return db.sql(text).bind("tenant",tenant);}
   }

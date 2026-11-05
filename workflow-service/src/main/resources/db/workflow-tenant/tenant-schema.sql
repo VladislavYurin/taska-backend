@@ -36,7 +36,6 @@ CREATE TABLE taska.statuses(
   UNIQUE (tenant_id, workflow_id, status_key),
   UNIQUE (tenant_id, id),
   UNIQUE (tenant_id,workflow_id,id),
-  UNIQUE(tenant_id,workflow_id,id),
   CHECK(category IN ('TODO','IN_PROGRESS','DONE'))
 );
 CREATE TABLE taska.transitions(
@@ -163,9 +162,6 @@ ALTER TABLE taska.transitions ADD FOREIGN KEY(tenant_id,workflow_id,from_status_
 ALTER TABLE taska.transitions ADD FOREIGN KEY(tenant_id,workflow_id,to_status_id) REFERENCES taska.statuses(tenant_id,workflow_id,id) ON DELETE CASCADE;
 ALTER TABLE taska.validator_rules ADD FOREIGN KEY(tenant_id,transition_id) REFERENCES taska.transitions(tenant_id,id) ON DELETE CASCADE;
 ALTER TABLE taska.workflow_bindings ADD FOREIGN KEY(tenant_id,project_id,workflow_id) REFERENCES taska.workflows(tenant_id,owner_project_id,id);
-ALTER TABLE taska.issue_type_move_workflow_pins ADD FOREIGN KEY(tenant_id,project_id,workflow_id) REFERENCES taska.workflows(tenant_id,owner_project_id,id);
-ALTER TABLE taska.workflow_binding_changes ADD FOREIGN KEY(tenant_id,project_id,workflow_id) REFERENCES taska.workflows(tenant_id,owner_project_id,id);
-ALTER TABLE taska.issue_type_creation_workflow_receipts ADD FOREIGN KEY(tenant_id,project_id,workflow_id) REFERENCES taska.workflows(tenant_id,owner_project_id,id);
 CREATE INDEX issue_type_creation_workflow_receipts_tenant_idx ON taska.issue_type_creation_workflow_receipts USING btree (tenant_id);
 CREATE INDEX issue_type_move_workflow_pins_tenant_idx ON taska.issue_type_move_workflow_pins USING btree (tenant_id);
 CREATE INDEX statuses_workflow_idx ON taska.statuses USING btree (tenant_id, workflow_id);
@@ -185,3 +181,6 @@ CREATE UNIQUE INDEX transitions_workflow_from_to_uniq ON taska.transitions(tenan
 
 CREATE UNIQUE INDEX issue_type_one_workflow_pin_per_project ON taska.issue_type_move_workflow_pins(tenant_id,project_id) WHERE released=false;
 CREATE UNIQUE INDEX workflow_binding_changes_pending_project ON taska.workflow_binding_changes(tenant_id,project_id) WHERE state IN ('PENDING','CANCELLING');
+
+-- Pins/journals/terminal receipts retain graph provenance after cancellation or cleanup.
+-- Initial writes validate scoped ownership under row locks; historical references are not live FKs.

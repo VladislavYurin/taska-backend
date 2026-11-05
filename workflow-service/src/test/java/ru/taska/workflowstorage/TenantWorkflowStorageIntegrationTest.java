@@ -81,6 +81,44 @@ class TenantWorkflowStorageIntegrationTest {
   long count(String table){return operator.sql("SELECT count(*) n FROM taska."+table).map((r,m)->r.get("n",Long.class)).one().block(WAIT);}
   static String state(Throwable error){for(var e=error;e!=null;e=e.getCause())if(e instanceof R2dbcException r)return r.getSqlState();return null;}
 
+  void awaitBlockedInsert(String table,java.util.concurrent.CompletableFuture<?> loser) {
+    Long waiting=Mono.defer(()->operator.sql("SELECT count(*) n FROM pg_stat_activity WHERE usename='taska_workflow_app' AND wait_event_type='Lock' AND query LIKE :query")
+        .bind("query","%INSERT INTO taska."+table+"%").map((r,m)->r.get("n",Long.class)).one())
+        .repeatWhen(done->done.delayElements(Duration.ofMillis(25))).filter(n->n>0).next().block(WAIT);
+    assertNotNull(waiting);assertTrue(waiting>0);assertFalse(loser.isDone());
+  }
+
+  @Test void copyWaitsForUncommittedWinnerAndReadsItsCommittedIdentity() throws Exception {
+    Sinks.Empty<Void> held=Sinks.empty(),release=Sinks.empty();
+    var winner=as(A,ACTOR,store.execute(s->s.provisionTemplate(DEFAULT).flatMap(c->{held.tryEmitEmpty();return release.asMono().thenReturn(c);}))).toFuture();
+    held.asMono().block(WAIT);
+    var loser=as(A,ACTOR,store.execute(s->s.provisionTemplate(DEFAULT))).toFuture();
+    try{awaitBlockedInsert("tenant_workflow_templates",loser);}finally{release.tryEmitEmpty();}
+    assertEquals(winner.get(20,java.util.concurrent.TimeUnit.SECONDS).id(),loser.get(20,java.util.concurrent.TimeUnit.SECONDS).id());
+    assertEquals(1,count("tenant_workflow_templates"));
+  }
+
+  @Test void copyWaitsForRollbackThenBecomesTheOnlyWinner() throws Exception {
+    Sinks.One<UUID> held=Sinks.one();Sinks.Empty<Void> release=Sinks.empty();
+    var winner=as(A,ACTOR,store.execute(s->s.provisionTemplate(DEFAULT).flatMap(c->{held.tryEmitValue(c.id());
+      return release.asMono().then(Mono.<TenantWorkflowStore.TemplateCopy>error(new IllegalStateException("fixture rollback")));}))).toFuture();
+    UUID rolledBack=held.asMono().block(WAIT);
+    var loser=as(A,ACTOR,store.execute(s->s.provisionTemplate(DEFAULT))).toFuture();
+    try{awaitBlockedInsert("tenant_workflow_templates",loser);}finally{release.tryEmitEmpty();}
+    assertThrows(java.util.concurrent.ExecutionException.class,()->winner.get(20,java.util.concurrent.TimeUnit.SECONDS));
+    assertNotEquals(rolledBack,loser.get(20,java.util.concurrent.TimeUnit.SECONDS).id());assertEquals(1,count("tenant_workflow_templates"));
+  }
+
+  @Test void instanceWaitsForUncommittedGraphAndReturnsOnlyThatCompleteGraph() throws Exception {
+    var c=copy(A);UUID project=UUID.randomUUID();Sinks.Empty<Void> held=Sinks.empty(),release=Sinks.empty();
+    var winner=as(A,ACTOR,store.execute(s->s.instantiate(c.id(),project).flatMap(w->{held.tryEmitEmpty();return release.asMono().thenReturn(w);}))).toFuture();
+    held.asMono().block(WAIT);
+    var loser=as(A,ACTOR,store.execute(s->s.instantiate(c.id(),project))).toFuture();
+    try{awaitBlockedInsert("workflow_template_instances",loser);}finally{release.tryEmitEmpty();}
+    assertEquals(winner.get(20,java.util.concurrent.TimeUnit.SECONDS).id(),loser.get(20,java.util.concurrent.TimeUnit.SECONDS).id());
+    assertEquals(1,count("workflows"));assertEquals(1,count("workflow_template_instances"));assertEquals(3,count("statuses"));assertEquals(6,count("transitions"));
+  }
+
   @Test void parallelProvisioningProducesOnePrivateCopyPerTenantVersion() {
     var copies=Flux.range(0,10).flatMap(i->as(A,ACTOR,store.execute(s->s.provisionTemplate(DEFAULT))),10).collectList().block(WAIT);
     assertEquals(1,copies.stream().map(c->c.id()).distinct().count());
@@ -266,6 +304,46 @@ class TenantWorkflowStorageIntegrationTest {
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
     assertEquals(10L,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
+    UUID globalId=UUID.randomUUID();
+    as(A,ACTOR,store.execute(s->s.insertWorkflow(globalId,UUID.randomUUID(),"Global UUID"))).block(WAIT);
+    assertEquals("23505",state(assertThrows(Exception.class,()->as(B,ACTOR,store.execute(s->s.insertWorkflow(globalId,UUID.randomUUID(),"Same UUID"))).block(WAIT))));
+    assertNull(as(B,ACTOR,store.execute(s->s.find(globalId))).block(WAIT));
+  }
+
+  @Test void cancellationRemovesPreparedGraphButRetainsScopedTerminalHistory() {
+    UUID project=UUID.randomUUID(),workflow=UUID.randomUUID(),operation=UUID.randomUUID();
+    var change=new WorkflowBindingChange(operation,project,workflow,ACTOR,"CREATE","cancel-request","node",new ActionMetadata(null,null),"{}",
+        new WorkflowBindingChange.Plan(List.of("TASK"),List.of(),Map.of(),Map.of(),"Prepared"),"PENDING",null,null,Map.of(),null,false);
+    as(A,ACTOR,store.execute(s->s.insertWorkflow(workflow,project,"Prepared",false).then(s.changes().insert(change)))).block(WAIT);
+    var foreign=graph(B,project);
+    var wrong=new WorkflowBindingChange(UUID.randomUUID(),project,foreign.id(),ACTOR,"CREATE","foreign","node",new ActionMetadata(null,null),"{}",change.plan(),"PENDING",null,null,Map.of(),null,false);
+    assertEquals(DomainStatus.NOT_FOUND,assertThrows(DomainException.class,()->as(A,ACTOR,store.execute(s->s.changes().insert(wrong))).block(WAIT)).getStatus());
+    assertEquals(0L,as(B,ACTOR,store.execute(s->s.discardPrepared(project,workflow))).block(WAIT));
+    as(A,ACTOR,store.execute(s->s.changes().cancelling(change,new DomainException(DomainStatus.ABORTED,"Cancelled"))
+        .then(s.discardPrepared(project,workflow)).doOnNext(n->assertEquals(1L,n))
+        .then(s.changes().cancelled(change)).then(s.changes().released(change)))).block(WAIT);
+    assertNull(as(A,ACTOR,store.execute(s->s.find(workflow))).block(WAIT));
+    assertEquals("CANCELLED",as(A,ACTOR,store.execute(s->s.changes().get(project,operation))).block(WAIT).state());
+    assertEquals(0L,as(A,ACTOR,store.execute(s->s.changes().recoverable().count())).block(WAIT));
+    assertNull(as(B,ACTOR,store.execute(s->s.changes().get(project,operation))).block(WAIT));
+    UUID historyGraph=UUID.randomUUID(),pin=UUID.randomUUID();
+    var receipt=new TenantWorkflowStore.Receipt(UUID.randomUUID(),project,"APPLIED",historyGraph,"STORY",UUID.randomUUID());
+    as(A,ACTOR,store.execute(s->s.insertWorkflow(historyGraph,project,"Historical")
+        .then(s.addStatus(historyGraph,"TODO","To Do","TODO",10)).then(s.pin(project,pin,historyGraph))
+        .then(s.releasePin(project,pin)).then(s.recordReceipt(receipt)))).block(WAIT);
+    as(A,ACTOR,tx.execute(db->db.sql("DELETE FROM taska.workflows WHERE tenant_id=:t AND id=:id")
+        .bind("t",A).bind("id",historyGraph).then())).block(WAIT);
+    assertEquals(receipt,as(A,null,store.execute(s->s.recordReceipt(receipt))).block(WAIT));
+    assertTrue(as(A,ACTOR,store.execute(s->s.pin(project,pin))).block(WAIT).released());
+  }
+
+  @Test void unavailableStartupRoleProbeHasAnExplicitFailureAndCause() {
+    var unavailable=new ConnectionFactory(){
+      public Mono<? extends Connection> create(){return Mono.error(new IllegalStateException("offline fixture"));}
+      public ConnectionFactoryMetadata getMetadata(){return ()->"PostgreSQL";}
+    };
+    var error=assertThrows(IllegalStateException.class,()->new TenantStorageConfiguration().safeWorkflowRuntime(unavailable).afterPropertiesSet());
+    assertTrue(error.getMessage().contains("role verification failed during startup"));assertNotNull(error.getCause());
   }
 
   @Test void tenantProfileStartsHealthyWithoutLegacyRepositoriesOrResolvers() throws Exception {

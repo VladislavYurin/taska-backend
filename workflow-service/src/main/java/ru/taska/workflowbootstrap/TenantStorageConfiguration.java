@@ -46,13 +46,17 @@ public class TenantStorageConfiguration {
     return () -> {
       // A bounded startup gate on the initialization thread, before any store can be constructed.
       // This is not a WebFlux request/event-loop path; failure must abort startup synchronously.
-      Boolean safe = DatabaseClient.create(factory).sql("""
+      Boolean safe;
+      try { safe = DatabaseClient.create(factory).sql("""
           SELECT current_user='taska_workflow_app' AND NOT
             (rolsuper OR rolinherit OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication)
             AND NOT EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid OR roleid=r.oid)
             AND NOT EXISTS (SELECT 1 FROM pg_class WHERE relowner=r.oid AND relnamespace='taska'::regnamespace)
             AS safe FROM pg_roles r WHERE rolname=current_user
           """).map((r,m) -> r.get("safe", Boolean.class)).one().block(Duration.ofSeconds(10));
+      } catch (RuntimeException failure) {
+        throw new IllegalStateException("Workflow runtime database role verification failed during startup",failure);
+      }
       if (!Boolean.TRUE.equals(safe)) throw new IllegalStateException("Unsafe workflow runtime database role");
     };
   }
