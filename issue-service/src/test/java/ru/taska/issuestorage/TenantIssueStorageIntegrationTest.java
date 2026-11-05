@@ -63,6 +63,7 @@ class TenantIssueStorageIntegrationTest {
   static DatabaseClient raw, operator;
   static TenantTransactionExecutor tx;
   static TenantIssueStore store;
+  static final AtomicBoolean missingTaskLimit = new AtomicBoolean();
   static final java.util.concurrent.atomic.AtomicBoolean
       unlimited = new java.util.concurrent.atomic.AtomicBoolean(true),
       bypass = new java.util.concurrent.atomic.AtomicBoolean(),
@@ -105,6 +106,9 @@ class TenantIssueStorageIntegrationTest {
                           ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_PROJECT,
                           ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_STORAGE_BYTES,
                           ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_TASK_LIFETIME)) {
+                    if (missingTaskLimit.get()
+                        && kind == ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_TASK_LIFETIME)
+                      continue;
                     var limit = ru.taska.api.b2b.v1.QuotaLimit.newBuilder().setKind(kind);
                     if (unlimited.get()) limit.setUnlimited(true);
                     else limit.setLimit(Long.toString(catalogLimit.get()));
@@ -196,6 +200,7 @@ class TenantIssueStorageIntegrationTest {
   @BeforeEach
   void reset() {
     unlimited.set(true);
+    missingTaskLimit.set(false);
     bypass.set(false);
     online.set(true);
     permitted.set(true);
@@ -672,9 +677,13 @@ class TenantIssueStorageIntegrationTest {
   void counterExhaustionRefusesWithoutPartialState() {
     create(A, "initial");
     sql("UPDATE taska.project_counters SET next_issue_number=2147483647");
-    assertEquals(
-        DomainStatus.RESOURCE_EXHAUSTED,
-        assertThrows(DomainException.class, () -> create(A, "full")).getStatus());
+    for (boolean admin : List.of(false, true)) {
+      bypass.set(admin);
+      assertEquals(
+          DomainStatus.RESOURCE_EXHAUSTED,
+          assertThrows(DomainException.class, () -> create(A, "full")).getStatus());
+      assertEquals(1, lifetime(A, PROJECT));
+    }
     for (String table : TABLES) assertEquals(1, count(table));
     assertEquals(
         2147483647,
@@ -1079,6 +1088,49 @@ class TenantIssueStorageIntegrationTest {
     online.set(false);
     assertThrows(DomainException.class, () -> create(A, "offline"));
     assertEquals(2, lifetime(A, PROJECT));
+  }
+
+  @Test
+  void liveCounterKeysCannotMoveAndMaximumUsesAPartialIndex() {
+    sql(
+        "INSERT INTO taska.project_counters(tenant_id,project_id) VALUES('"
+            + A
+            + "','"
+            + PROJECT
+            + "')");
+    assertThrows(
+        Exception.class,
+        () -> sql("UPDATE taska.project_counters SET project_id='" + UUID.randomUUID() + "'"));
+    assertThrows(
+        Exception.class, () -> sql("UPDATE taska.project_counters SET tenant_id='" + B + "'"));
+    assertEquals(0, lifetime(A, PROJECT));
+    var plan =
+        as(
+                A,
+                ACTOR,
+                tx.execute(
+                    db ->
+                        db.sql("SET LOCAL enable_seqscan=off")
+                            .then()
+                            .then(
+                                db.sql(
+                                        "EXPLAIN SELECT max(lifetime_created) FROM"
+                                            + " taska.project_counters WHERE tenant_id=:t AND"
+                                            + " retired_at IS NULL")
+                                    .bind("t", A)
+                                    .map((row, m) -> row.get(0, String.class))
+                                    .all()
+                                    .collectList()
+                                    .map(lines -> String.join("\n", lines)))))
+            .block(WAIT);
+    assertTrue(plan.contains("project_lifetime_max_live_idx"), plan);
+    missingTaskLimit.set(true);
+    assertEquals(
+        DomainStatus.INVALID_ARGUMENT,
+        assertThrows(DomainException.class, () -> create(A, "missing-limit")).getStatus());
+    assertEquals(0, lifetime(A, PROJECT));
+    assertEquals(0, count("idempotency_keys"));
+    assertEquals(0, count("task_quota_outbox"));
   }
 
   @Test

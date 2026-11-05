@@ -72,3 +72,20 @@ version и отсутствие fallback на 0. `GrpcTaskQuotaSourceTest`: ре
 tenant binding и отзыв текущей service authority.
 Это изолированные backend проверки; публичный REST, Kafka-доставка и общий stage
 данными тестами не подтверждаются.
+
+## Lock order и эксплуатационные версии
+
+Порядок: idempotency claim → tenant quota state → current authority → current
+billing → project counter. Предварительная authority выполняется до claim;
+повторная после ожидания lock нужна против отозванного grant. Authority/source
+должны выполнять неблокирующие current reads с deadline 5 секунд, без мутаций,
+PSP, фоновой работы или обратного входа в issue DB. TAS-459 сохраняет порядок
+quota state → counter. Индекс `(tenant_id,lifetime_created DESC) WHERE retired_at
+IS NULL` обслуживает MAX без сканирования всех проектов.
+
+Owner version монотонна и долговечна. Отдельно пересоздавать/откатывать issue DB
+при сохранении более новой tenant DB нельзя. При disaster recovery оператор
+должен сверить исходные counters/receipts и восстановить согласованный backup
+или монотонно продвинуть корректную owner projection перед возобновлением traffic.
+Сброс version или quota usage административным HTTP-запросом не предоставляется;
+`TASK_QUOTA_STALE` сохраняет отказ до восстановления согласованности.

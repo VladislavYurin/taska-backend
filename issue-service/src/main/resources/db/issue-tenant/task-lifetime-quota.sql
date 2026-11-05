@@ -1,5 +1,6 @@
 SET LOCAL ROLE taska_issue_migrator;
 ALTER TABLE taska.project_counters ADD COLUMN retired_at timestamptz;
+CREATE INDEX project_lifetime_max_live_idx ON taska.project_counters(tenant_id,lifetime_created DESC) WHERE retired_at IS NULL;
 CREATE FUNCTION taska.guard_lifetime_counter() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $body$
 BEGIN
  IF TG_OP='DELETE' THEN RAISE EXCEPTION 'Lifetime counter tombstones must be retained'; END IF;
