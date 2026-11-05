@@ -762,3 +762,16 @@
 | `DELETE /api/v1/projects/{projectId}/workflows/{workflowId}/statuses/{statusId}` | `deleteWorkflowStatus` | E2E-12 | 200 |
 | `PATCH /api/v1/projects/{projectId}/workflows/{workflowId}/transitions/{transitionId}` | `updateWorkflowTransition` | E2E-10 | 200 |
 | `DELETE /api/v1/projects/{projectId}/workflows/{workflowId}/transitions/{transitionId}` | `deleteWorkflowTransition` | E2E-10 | 200 |
+
+
+## E2E-46. Отмена и deadline неоплаченного создания (TAS-478)
+
+Локальный service-path tier: `TenantProvisioningRpcIntegrationTest` и компонентный `TenantCreationLifecycleIntegrationTest`, обязательные в `tenant-service.verify`. Реальные production RPC, mTLS/JWS, Spring scheduler и собственные PostgreSQL/Testcontainers; финансовая authority — fake immutable decisions, не реальный settlement. Общий HTTP runner этот сценарий не выбирает.
+
+1. Создать PAID, дождаться provisioning, приблизить управляемые lifecycle-часы к исходному deadline; настоящий scheduler закрывает её с причиной `AUTO_EXPIRED`. Повтор signed expiry не создаёт новый эффект; неподписанный запрос отклоняется.
+2. Передать полное своевременное primary financial decision с committed coverage: позднее подтверждение открывает AUTO_CLOSED. Partial/late/DAY-overlap/no-coverage не открывают. До готовности подготовки оплата только фиксируется; activation происходит после обоих checkpoints.
+3. Отменить другую неоплаченную PAID владельцем через signed RPC с confirmation/version/key. Поздняя оплата, retry и stale worker не снимают `OWNER_CANCELLED`; подпись связывает payload.
+4. Проверить отсутствие изменений FREE/renewal/DELETING/DELETED/другой компании, сохранение membership и финансовых периодов; concurrent expiry/cancel/payment, RLS и rollback lifecycle+receipt+outbox — компонентные PostgreSQL assertions.
+5. Рабочее чтение до оплаты даёт `PAYMENT_PENDING` / `PENDING_FIRST_PAYMENT`; PROVISIONING — `INVALID_STATE`; metadata и cancel доступны. Проверено в `TenantMembershipIntegrationTest`.
+
+Cleanup: закрыть каналы/серверы/pools и удалить собственные контейнеры в `AfterAll`. Общий стенд, PSP, refunds и retention не затрагиваются. Контракт и границы: [creation closure](../../tenant-service/CREATION-CLOSURE.md).

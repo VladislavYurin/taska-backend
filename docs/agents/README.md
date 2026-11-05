@@ -31,7 +31,7 @@ Harness объединяет инструкции, доступные инстр
 | MCP | [mcp-server](../../mcp-server/README.md) | schemas, catalog snapshot, scopes, owner isolation, REST dispatch |
 | OAuth AS | `oauth-server`, `auth-service`, `api-gateway`, `mcp-server` | [AS и доверие](../tas-413-oauth-backend.md), discovery, PKCE, consent, revocation |
 | Социальный вход | `oauth-server`, `auth-service`, `api-gateway` | [provider flow](../tas-424-oauth.md), [сценарии](../tas-447-social-sign-in-scenarios.md) |
-| Создание компании | `tenant-service`, `billing-service`, `workflow-service` | [Durable provisioning TAS-337](../../tenant-service/PROVISIONING.md), lease/fence, remote receipts, атомарность activation/operation/outbox |
+| Создание компании | `tenant-service`, `billing-service`, `workflow-service` | [Durable provisioning TAS-337](../../tenant-service/PROVISIONING.md), [отмена и deadline TAS-478](../../tenant-service/CREATION-CLOSURE.md), lease/fence, remote receipts, атомарность activation/operation/outbox |
 | Каталог тарифов | `billing-service` | [Каталог и границы TAS-313](../../billing-service/README.md), неизменяемость, global receipts/outbox, реальная PostgreSQL/RLS и mTLS |
 | Метрики и эксплуатация | `metrics-starter`, `infra/`, Compose, `.github/workflows/` | конфигурационные тесты, секреты, health и revision каждого сервиса |
 

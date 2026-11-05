@@ -132,7 +132,7 @@ class TenantProvisioningIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
+            + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
     now = new AtomicReference<>(Instant.parse("2026-11-05T12:00:00Z"));
     clock =
         new Clock() {
@@ -434,9 +434,10 @@ class TenantProvisioningIntegrationTest {
           assertFalse(rows.next());
         }
         try (var rows =
-            sql.executeQuery("SELECT operation_id FROM taska.tenant_provisioning_dispatch")) {
+            sql.executeQuery("SELECT operation_id,creation_deadline_at FROM taska.tenant_provisioning_dispatch")) {
           assertTrue(rows.next());
           assertEquals(operation, rows.getObject(1, UUID.class));
+          assertTrue(rows.getObject(2) != null);
           assertFalse(rows.next());
         }
       }

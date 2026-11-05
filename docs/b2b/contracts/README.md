@@ -191,3 +191,8 @@ TAS-519 implements the private operator/billing commercial profile in [commercia
 TAS-472 implements [free-eligibility.proto](../../../grpc-common-lib/src/main/proto/v1/free-eligibility.proto): WEB_GLOBAL creation options, internal current-owner FREE admission and authorized retention-case disposition. [Identity, atomicity and activation boundaries](../../../tenant-service/FREE-ELIGIBILITY.md). The future account/tenant-creation-options REST adapter is not yet published by the gateway.
 
 TAS-337 implements [durable provisioning and operation lookup](../../../tenant-service/PROVISIONING.md): `GetTenantOperation`, real-state create replay, additive creation metadata in Tenant, service-only `tenant-provisioning.proto` and signed billing/workflow adapters. This does not activate the public HTTP/session layer or payment settlement.
+
+
+### Unpaid creation errors (TAS-478 / A14)
+
+For authorized working-content reads, `AWAITING_PAYMENT` returns `PAYMENT_PENDING` with reason `PENDING_FIRST_PAYMENT` (HTTP 409); `PROVISIONING` returns `INVALID_STATE` (409). This does not block owner metadata/status, payment or confirmed cancellation. The current tenant member RPC implements this guard; future gateway/project/workflow B2B adapters must preserve it. See [implemented lifecycle and financial-authority boundary](../../../tenant-service/CREATION-CLOSURE.md). Tenant DTO adds optional `creationClosureReason` and `creationClosedAt`; a valid timely full primary decision may clear the current AUTO_EXPIRED closure, while its receipt history remains immutable.

@@ -132,7 +132,7 @@ public final class TenantMembershipService {
                                   + " t.membership_version=:generation) AND (:has_cursor=false OR"
                                   + " (m.joined_at,m.user_id)>(:after_at,:after_user)) ORDER BY"
                                   + " m.joined_at,m.user_id LIMIT :fetch) p ON true WHERE"
-                                  + " t.id=:tenant AND t.lifecycle='ACTIVE' ORDER BY"
+                                  + " t.id=:tenant AND t.lifecycle<>'DELETED' ORDER BY"
                                   + " p.joined_at,p.user_id")
                           .bind("actor", TenantRegistryService.uuid(a.verified().actorId()))
                           .bind("actor_version", a.claims().getMembershipGeneration())
@@ -154,6 +154,12 @@ public final class TenantMembershipService {
                                 if (rows.isEmpty())
                                   throw TenantRegistryService.fail(
                                       DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND");
+                                TenantCreationLifecycle.requireWorking(
+                                    Tenant.newBuilder()
+                                        .setLifecycle(
+                                            Tenant.LifecycleValue.valueOf(
+                                                "LIFECYCLE_" + rows.getFirst().get("lifecycle")))
+                                        .build());
                                 long generation =
                                     ((Number) rows.getFirst().get("generation")).longValue();
                                 if (position != null && position.generation() != generation)

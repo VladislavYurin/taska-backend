@@ -113,6 +113,31 @@ class TenantProvisioningRpcIntegrationTest {
   static TenantProvisioningWorker worker;
   static TenantServiceGrpc.TenantServiceBlockingStub tenant;
   static RpcContextSecurity gateway, tenantTrust;
+  static ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc
+          .TenantCreationLifecycleServiceBlockingStub
+      closureRpc,
+      paymentRpc;
+  static RpcContextSecurity billingSigner;
+  static TenantCreationLifecycle lifecycle;
+  static TenantCreationExpiryWorker expiryWorker;
+  static final Map<UUID, TenantCreationDecisions.InitialPayment> decisions =
+      new ConcurrentHashMap<>();
+  static final java.util.concurrent.atomic.AtomicReference<java.time.Instant> closureNow =
+      new java.util.concurrent.atomic.AtomicReference<>(CLOCK.instant());
+  static final Clock CLOSURE_CLOCK =
+      new Clock() {
+        public java.time.Instant instant() {
+          return closureNow.get();
+        }
+
+        public java.time.ZoneId getZone() {
+          return java.time.ZoneOffset.UTC;
+        }
+
+        public Clock withZone(java.time.ZoneId zone) {
+          return this;
+        }
+      };
   static AtomicBoolean loseWorkflow = new AtomicBoolean(true),
       loseBilling = new AtomicBoolean(true);
 
@@ -299,7 +324,8 @@ class TenantProvisioningRpcIntegrationTest {
           }
 
           public java.security.PublicKey verificationKey(String issuer, String key) {
-            return List.of("gateway", "tenant-service").contains(issuer) && key.equals("fixture")
+            return List.of("gateway", "tenant-service", "billing-service").contains(issuer)
+                    && key.equals("fixture")
                 ? pair.getPublic()
                 : null;
           }
@@ -310,7 +336,8 @@ class TenantProvisioningRpcIntegrationTest {
     RpcContextSecurity.Authority authority =
         (context, rpc, policy) ->
             Mono.just(
-                context.getContext().getIssuerService().equals("tenant-service")
+                List.of("tenant-service", "billing-service")
+                            .contains(context.getContext().getIssuerService())
                         && context.getContext().getCredentialKind()
                             == CredentialKind.CREDENTIAL_KIND_SERVICE
                     || context.getContext().getIssuerService().equals("gateway")
@@ -321,6 +348,7 @@ class TenantProvisioningRpcIntegrationTest {
     gateway = new RpcContextSecurity("gateway", CLOCK, keys, replay, authority);
     tenantTrust = new RpcContextSecurity("tenant-service", CLOCK, keys, replay, authority);
     var billingTrust = new RpcContextSecurity("billing-service", CLOCK, keys, replay, authority);
+    billingSigner = billingTrust;
     var workflowTrust = new RpcContextSecurity("workflow-service", CLOCK, keys, replay, authority);
     var tenantPool = bootstrap(tenantPg, "tenant");
     var billingPool = bootstrap(billingPg, "billing");
@@ -431,13 +459,31 @@ class TenantProvisioningRpcIntegrationTest {
             DatabaseClient.create(tenantPool),
             () -> new ProvisioningAuthority(tenantTrust, CLOCK),
             saga);
+    lifecycle =
+        new TenantCreationLifecycle(
+            tx, (t, id) -> Mono.justOrEmpty(decisions.get(id)), CLOSURE_CLOCK);
+    expiryWorker =
+        new TenantCreationExpiryWorker(
+            DatabaseClient.create(tenantPool),
+            () -> new ru.taska.security.tenant.TenantLifecycleAuthority(tenantTrust, CLOCK),
+            lifecycle,
+            CLOSURE_CLOCK);
     int tenantPort =
         server(
             "tenant-service",
             interceptor(new TenantConfiguration(), tenantTrust, "registrySecurity"),
             new TenantGrpcService(
                 registry, org.mockito.Mockito.mock(TenantMembershipService.class)),
-            new TenantProvisioningRpc(saga));
+            new TenantProvisioningRpc(saga),
+            new TenantCreationLifecycleGrpc(lifecycle));
+    closureRpc =
+        ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc.newBlockingStub(
+                channel("tenant-service", tenantPort))
+            .withDeadlineAfter(15, TimeUnit.SECONDS);
+    paymentRpc =
+        ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc.newBlockingStub(
+                channel("billing-service", tenantPort))
+            .withDeadlineAfter(15, TimeUnit.SECONDS);
     tenant =
         TenantServiceGrpc.newBlockingStub(channel("gateway", tenantPort))
             .withDeadlineAfter(15, TimeUnit.SECONDS);
@@ -606,7 +652,226 @@ class TenantProvisioningRpcIntegrationTest {
       assertEquals(4, count(tenantDb, "outbox_events"));
       assertFalse(loseWorkflow.get());
       assertFalse(loseBilling.get());
+      closureAndDecisionRpcFlow();
     }
+  }
+
+  static Metadata serviceSignature(Message request, String rpc, RpcContextSecurity signer) {
+    var policy = new RpcContextSecurity.Policy(true, true);
+    var verified = signer.authorize(RpcContextSecurity.context(request), rpc, policy).block(WAIT);
+    var result = new Metadata();
+    result.put(
+        Metadata.Key.of("x-taska-context", Metadata.ASCII_STRING_MARSHALLER),
+        signer.sign(verified, request, rpc, policy).block(WAIT));
+    return result;
+  }
+
+  void closureAndDecisionRpcFlow() {
+    var request =
+        CreateTenantRpcRequest.newBuilder()
+            .setContext(context("createTenant"))
+            .setPayload(
+                ru.taska.api.b2b.v1.CreateTenantRequest.newBuilder()
+                    .setName("Closure RPC")
+                    .setPlanVersionId(PAID.toString()))
+            .setMutation(
+                ru.taska.api.b2b.v1.MutationOptions.newBuilder()
+                    .setIdempotencyKey(UUID.randomUUID().toString()))
+            .build();
+    var created =
+        tenant
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    signature(
+                        request,
+                        TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                        true)))
+            .createTenant(request);
+    UUID id = UUID.fromString(created.getTenant().getId());
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(20))
+        .until(
+            () ->
+                "SUCCEEDED"
+                    .equals(
+                        tenantDb
+                            .sql("SELECT state FROM taska.tenant_operations WHERE tenant_id=:id")
+                            .bind("id", id)
+                            .map((r, m) -> r.get("state", String.class))
+                            .one()
+                            .block(WAIT)));
+    closureNow.set(java.time.Instant.parse(created.getTenant().getCreationDeadline()));
+    try (var scheduler =
+        new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+      scheduler
+          .getEnvironment()
+          .getPropertySources()
+          .addFirst(
+              new org.springframework.core.env.MapPropertySource(
+                  "expiry", Map.of("taska.tenant.creation-expiry-poll-ms", "20")));
+      scheduler.register(SchedulingFixture.class);
+      scheduler.registerBean(TenantCreationExpiryWorker.class, () -> expiryWorker);
+      scheduler.refresh();
+      org.awaitility.Awaitility.await()
+          .atMost(Duration.ofSeconds(10))
+          .until(
+              () ->
+                  "AUTO_CLOSED"
+                      .equals(
+                          tenantDb
+                              .sql("SELECT lifecycle FROM taska.tenants WHERE id=:id")
+                              .bind("id", id)
+                              .map((r, m) -> r.get("lifecycle", String.class))
+                              .one()
+                              .block(WAIT)));
+    }
+    var expire =
+        ru.taska.api.b2b.v1.ExpireTenantCreationRequest.newBuilder()
+            .setTenantId(id.toString())
+            .setContext(
+                ProvisioningAuthority.context(id, "tenant-service", "expireTenantCreation", CLOCK))
+            .build();
+    assertEquals(
+        Status.Code.UNAUTHENTICATED,
+        assertThrows(StatusRuntimeException.class, () -> closureRpc.expireTenantCreation(expire))
+            .getStatus()
+            .getCode());
+    var closed =
+        closureRpc
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    serviceSignature(
+                        expire,
+                        ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc
+                            .getExpireTenantCreationMethod()
+                            .getFullMethodName(),
+                        tenantTrust)))
+            .expireTenantCreation(expire);
+    assertEquals(
+        Tenant.CreationClosureReason.CREATION_CLOSURE_REASON_AUTO_EXPIRED,
+        closed.getCreationClosureReason());
+    var e =
+        new TenantCreationDecisions.InitialPayment(
+            UUID.randomUUID(),
+            id,
+            UUID.fromString(created.getOperation().getId()),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            PAID,
+            true,
+            UUID.randomUUID(),
+            TenantCreationDecisions.Precision.EXACT,
+            closureNow.get(),
+            null,
+            null,
+            closureNow.get());
+    decisions.put(e.decisionId(), e);
+    var serviceContext =
+        ProvisioningAuthority.context(
+            id, "tenant-service", "applyTenantInitialPaymentDecision", CLOCK);
+    var payment =
+        ru.taska.api.b2b.v1.ApplyTenantInitialPaymentDecisionRequest.newBuilder()
+            .setTenantId(id.toString())
+            .setDecisionId(e.decisionId().toString())
+            .setContext(
+                serviceContext.toBuilder()
+                    .setContext(
+                        serviceContext.getContext().toBuilder()
+                            .setIssuerService("billing-service")))
+            .build();
+    var result =
+        paymentRpc
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    serviceSignature(
+                        payment,
+                        ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc
+                            .getApplyTenantInitialPaymentDecisionMethod()
+                            .getFullMethodName(),
+                        billingSigner)))
+            .applyTenantInitialPaymentDecision(payment);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_ACTIVE, result.getTenant().getLifecycle());
+    var c =
+        ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest.newBuilder()
+            .setTenantId(created.getTenant().getId())
+            .setContext(context("cancelTenantCreation"))
+            .setPayload(ru.taska.api.b2b.v1.ConfirmedAction.newBuilder().setConfirmed(true))
+            .setMutation(
+                ru.taska.api.b2b.v1.MutationOptions.newBuilder()
+                    .setIdempotencyKey(UUID.randomUUID().toString())
+                    .setExpectedVersion(result.getTenant().getVersion()))
+            .build();
+    assertEquals(
+        Status.Code.FAILED_PRECONDITION,
+        assertThrows(
+                StatusRuntimeException.class,
+                () ->
+                    tenant
+                        .withInterceptors(
+                            MetadataUtils.newAttachHeadersInterceptor(
+                                signature(
+                                    c,
+                                    TenantServiceGrpc.getCancelTenantCreationMethod()
+                                        .getFullMethodName(),
+                                    true)))
+                        .cancelTenantCreation(c))
+            .getStatus()
+            .getCode());
+    var another =
+        request.toBuilder()
+            .setContext(context("createTenant"))
+            .setMutation(
+                request.getMutation().toBuilder().setIdempotencyKey(UUID.randomUUID().toString()))
+            .build();
+    var unpaidCreated =
+        tenant
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    signature(
+                        another,
+                        TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                        true)))
+            .createTenant(another);
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(20))
+        .until(
+            () ->
+                "SUCCEEDED"
+                    .equals(
+                        tenantDb
+                            .sql("SELECT state FROM taska.tenant_operations WHERE tenant_id=:id")
+                            .bind("id", UUID.fromString(unpaidCreated.getTenant().getId()))
+                            .map((r, m) -> r.get("state", String.class))
+                            .one()
+                            .block(WAIT)));
+    // Read the current optimistic version: the independent provisioning scheduler may have advanced
+    // it.
+    String version =
+        tenantDb
+            .sql("SELECT version::text v FROM taska.tenants WHERE id=:id")
+            .bind("id", UUID.fromString(unpaidCreated.getTenant().getId()))
+            .map((r, m) -> r.get("v", String.class))
+            .one()
+            .block(WAIT);
+    var cancel =
+        c.toBuilder()
+            .setTenantId(unpaidCreated.getTenant().getId())
+            .setContext(context("cancelTenantCreation"))
+            .setMutation(c.getMutation().toBuilder().setExpectedVersion(version))
+            .build();
+    var cancelled =
+        tenant
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    signature(
+                        cancel,
+                        TenantServiceGrpc.getCancelTenantCreationMethod().getFullMethodName(),
+                        true)))
+            .cancelTenantCreation(cancel);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_OWNER_CANCELLED, cancelled.getLifecycle());
+    assertEquals(
+        0,
+        count(billingDb, "subscription_periods")); // fake decision did not settle or mint a period.
   }
 
   @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)

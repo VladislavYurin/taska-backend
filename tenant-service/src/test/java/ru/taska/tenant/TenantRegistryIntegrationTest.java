@@ -123,7 +123,7 @@ class TenantRegistryIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
+                + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
         .fetch()
         .rowsUpdated()
         .block(WAIT);

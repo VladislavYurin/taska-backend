@@ -581,6 +581,7 @@
           "PlatformFlagsIntegrationTest",
           "MerchantConfigurationIntegrationTest",
           "FreeEligibilityIntegrationTest",
+          "TenantCreationLifecycleIntegrationTest",
           "TenantProvisioningIntegrationTest",
           "TenantProvisioningRpcIntegrationTest"
         ],

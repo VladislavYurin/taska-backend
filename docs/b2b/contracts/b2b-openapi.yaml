@@ -4237,6 +4237,12 @@ components:
         creationDeadline:
           type: string
           format: date-time
+        creationClosureReason:
+          type: string
+          enum: [AUTO_EXPIRED, OWNER_CANCELLED]
+        creationClosedAt:
+          type: string
+          format: date-time
         version:
           type: string
           minLength: 1

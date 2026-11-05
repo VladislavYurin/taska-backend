@@ -41,6 +41,15 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   }
 
   @Override
+  public Mono<Tenant> cancelTenantCreation(
+      Mono<ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(registry::cancelCreation))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
   public Mono<Tenant> getTenant(Mono<GetTenantRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(registry::get))
         .onErrorMap(

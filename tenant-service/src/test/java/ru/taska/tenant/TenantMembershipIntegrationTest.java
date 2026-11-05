@@ -114,7 +114,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -329,7 +329,17 @@ class TenantMembershipIntegrationTest {
         .fetch()
         .rowsUpdated()
         .block(WAIT);
-    rejects(DomainStatus.NOT_FOUND, list(owner, 2, null));
+    var pending = assertThrows(DomainException.class, () -> list(owner, 2, null).block(WAIT));
+    assertEquals(DomainStatus.FAILED_PRECONDITION, pending.getStatus());
+    assertEquals("PAYMENT_PENDING", pending.getDetails().get("code"));
+    assertEquals("PENDING_FIRST_PAYMENT", pending.getDetails().get("reason"));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='PROVISIONING' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    var preparing = assertThrows(DomainException.class, () -> list(owner, 2, null).block(WAIT));
+    assertEquals("INVALID_STATE", preparing.getDetails().get("code"));
   }
 
   @Test
