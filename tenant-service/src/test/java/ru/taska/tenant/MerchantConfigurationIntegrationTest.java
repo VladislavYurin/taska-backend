@@ -619,6 +619,32 @@ class MerchantConfigurationIntegrationTest {
       assertEquals(
           CommercialFixtures.profile(),
           privateStub.resolveMerchantConfiguration(read).getConfiguration());
+      var wrongAudience =
+          read.toBuilder()
+              .setContext(
+                  context.toBuilder()
+                      .setContext(
+                          context.getContext().toBuilder().setAudienceService("billing-service")))
+              .build();
+      var wrongAudienceStub =
+          ru.taska.api.b2b.v1.MerchantConfigurationServiceGrpc.newBlockingStub(billingChannel)
+              .withDeadlineAfter(10, java.util.concurrent.TimeUnit.SECONDS)
+              .withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          reader,
+                          wrongAudience,
+                          new RpcContextSecurity.Policy(false, false),
+                          ru.taska.api.b2b.v1.MerchantConfigurationServiceGrpc
+                              .getResolveMerchantConfigurationMethod()
+                              .getFullMethodName())));
+      assertEquals(
+          io.grpc.Status.Code.UNAUTHENTICATED,
+          assertThrows(
+                  io.grpc.StatusRuntimeException.class,
+                  () -> wrongAudienceStub.resolveMerchantConfiguration(wrongAudience))
+              .getStatus()
+              .getCode());
       allowed.set(false);
       assertEquals(
           io.grpc.Status.Code.PERMISSION_DENIED,
@@ -639,5 +665,19 @@ class MerchantConfigurationIntegrationTest {
     return original.toBuilder()
         .setContext(original.getContext().toBuilder().setAction(action))
         .build();
+  }
+
+  @Test
+  void ibanLettersAreExpandedAndInvalidChecksumIsRejected() {
+    var c = CommercialFixtures.profile();
+    var letters =
+        c.toBuilder().setBank(c.getBank().toBuilder().setIban("GB82WEST12345698765432")).build();
+    assertTrue(publish(request("1", letters)).block(WAIT).getLiveProfileComplete());
+    var invalid =
+        letters.toBuilder()
+            .setBank(letters.getBank().toBuilder().setIban("GB81WEST12345698765432"))
+            .build();
+    rejects(DomainStatus.INVALID_ARGUMENT, publish(request("2", invalid)));
+    assertEquals("2", current().getVersion());
   }
 }

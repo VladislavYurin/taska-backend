@@ -304,7 +304,8 @@ public final class CommercialReadiness {
         .onErrorMap(
             e -> {
               if (e instanceof DomainException d
-                  && d.getMessage().equals("POLICY_NOT_CONFIGURED")) {
+                  && (d.getMessage().equals("POLICY_NOT_CONFIGURED")
+                      || d.getMessage().equals("DEPENDENCY_UNAVAILABLE"))) {
                 boolean eur =
                     c.getMarketsList().stream()
                         .anyMatch(
@@ -387,6 +388,7 @@ public final class CommercialReadiness {
               market(latest, invoice.selection());
               return configurations
                   .version(invoice.configurationVersion())
+                  .onErrorMap(CommercialReadiness::dependency)
                   .switchIfEmpty(Mono.error(unavailable("COMMERCIAL_PROFILE")))
                   .flatMap(
                       stored -> {

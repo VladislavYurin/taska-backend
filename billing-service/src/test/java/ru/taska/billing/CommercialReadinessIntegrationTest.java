@@ -135,6 +135,7 @@ class CommercialReadinessIntegrationTest {
   AtomicReference<CommercialDependencies.FxObservation> observation;
   Map<String, MerchantConfigurationSnapshot> history;
   AtomicInteger fxCalls, providerCalls;
+  AtomicReference<Throwable> historyFailure, fxFailure;
   CommercialReadiness guard;
   PlanVersion plan;
 
@@ -142,6 +143,8 @@ class CommercialReadinessIntegrationTest {
   void reset() {
     sql("TRUNCATE taska.fx_quotes");
     time = new AtomicReference<>(NOW);
+    historyFailure = new AtomicReference<>();
+    fxFailure = new AtomicReference<>();
     fxCalls = new AtomicInteger();
     providerCalls = new AtomicInteger();
     history = new HashMap<>();
@@ -194,6 +197,7 @@ class CommercialReadinessIntegrationTest {
           }
 
           public Mono<MerchantConfigurationSnapshot> version(String v) {
+            if (historyFailure.get() != null) return Mono.error(historyFailure.get());
             return Mono.justOrEmpty(history.get(v));
           }
         };
@@ -204,6 +208,7 @@ class CommercialReadinessIntegrationTest {
             Mono.defer(
                 () -> {
                   fxCalls.incrementAndGet();
+                  if (fxFailure.get() != null) return Mono.error(fxFailure.get());
                   return Mono.justOrEmpty(observation.get());
                 }),
         new Clock() {
@@ -521,5 +526,51 @@ class CommercialReadinessIntegrationTest {
             NOW.plusSeconds(30)));
     failure(invoice(CommercialCurrency.COMMERCIAL_CURRENCY_USD));
     assertEquals(0, quoteCount());
+  }
+
+  @Test
+  void historicalTransportFailureIsSanitizedAndMissingVersionNeverCallsProvider() {
+    var terms = invoice(CommercialCurrency.COMMERCIAL_CURRENCY_EUR).block(WAIT);
+    historyFailure.set(new IllegalStateException("PRIVATE TRANSPORT DETAILS"));
+    var error =
+        failure(
+            guard.checkout(
+                terms,
+                CommercialEnvironment.COMMERCIAL_ENVIRONMENT_LIVE,
+                a -> {
+                  providerCalls.incrementAndGet();
+                  return Mono.just("sent");
+                }));
+    assertEquals("DEPENDENCY_UNAVAILABLE", error.getMessage());
+    assertFalse(error.toString().contains("PRIVATE"));
+    assertEquals(null, error.getCause());
+    historyFailure.set(null);
+    history.clear();
+    assertEquals(
+        "POLICY_NOT_CONFIGURED",
+        failure(
+                guard.checkout(
+                    terms,
+                    CommercialEnvironment.COMMERCIAL_ENVIRONMENT_LIVE,
+                    a -> {
+                      providerCalls.incrementAndGet();
+                      return Mono.just("sent");
+                    }))
+            .getMessage());
+    assertEquals(0, providerCalls.get());
+    assertEquals(2000, terms.grossMinor());
+  }
+
+  @Test
+  void fxProviderOutageOffersExplicitApprovedEurWithoutRepricingOrWrites() {
+    fxFailure.set(new IllegalStateException("PRIVATE FX RESPONSE"));
+    var error = failure(invoice(CommercialCurrency.COMMERCIAL_CURRENCY_USD));
+    assertEquals("DEPENDENCY_UNAVAILABLE", error.getMessage());
+    assertEquals("EUR", error.getDetails().get("offeredCurrency"));
+    assertFalse(error.toString().contains("PRIVATE"));
+    assertEquals(0, quoteCount());
+    assertEquals("2000", plan.getPrice().getAmountMinor());
+    assertEquals(
+        2000, invoice(CommercialCurrency.COMMERCIAL_CURRENCY_EUR).block(WAIT).grossMinor());
   }
 }
