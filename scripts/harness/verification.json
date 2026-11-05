@@ -1072,6 +1072,8 @@
           "BillingCatalogIntegrationTest",
           "SubscriptionIntegrationTest",
           "EntitlementIntegrationTest",
+          "SubscriptionCalendarTest",
+          "RenewalCalendarIntegrationTest",
           "InvoiceIntegrationTest",
           "FinancialLedgerIntegrationTest",
           "CommercialReadinessIntegrationTest"

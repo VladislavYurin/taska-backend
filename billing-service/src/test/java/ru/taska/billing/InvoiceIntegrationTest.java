@@ -463,7 +463,8 @@ class InvoiceIntegrationTest {
                 new BillingConfiguration().invoiceObligationAuthority(),
                 new BillingConfiguration().invoiceCommercialPolicy(),
                 catalog,
-                Base64.getEncoder().encodeToString(new byte[32]));
+                Base64.getEncoder().encodeToString(new byte[32]),
+                new BillingConfiguration().renewalAuthority());
     rejects(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", create("offline"));
     assertEquals(0, count("invoices"));
     assertEquals(0, count("invoice_lines"));

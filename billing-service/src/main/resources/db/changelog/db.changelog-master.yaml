@@ -248,6 +248,32 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "billing-renewal-calendar-0007",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0007-renewal-calendar.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','renewal_calendar_assignments',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
