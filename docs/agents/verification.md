@@ -72,6 +72,7 @@ OAuth overlays имеют отдельные требования; см. [OAuth 
 | REST endpoint, DTO, mapping, ACL | `api-gateway` и сервис-владелец | OpenAPI parity, успех/валидация/отказ, неизменность после отказа, применимые E2E |
 | Proto или `common-lib` | производитель и все найденные потребители | сериализация/совместимость, семантика enum и отсутствующих значений; широкая CI-матрица |
 | Проекты и типы | `project-service` | `IssueTypeDeletionIT`, `IssueTypeCreationIT`; связанные workflow/issue проверки |
+| Project tenant storage | `project-service` | обязательный `TenantProjectStorageIntegrationTest`: app LOGIN/RLS/FK, A/B, archive/rollback, query plans и чистый профиль |
 | Workflow и привязки типов | `workflow-service`, `project-service`, `issue-service`, gateway при изменении REST | reservation/binding IT из списка ниже; версии, повторы, перенос/восстановление |
 | Доска, issue migration | `issue-service` | `ListIssuesForBoardIT`, `IssueTypeMoveIT`, `WorkflowBindingMigrationIT` по изменённой логике |
 | Блокировка приглашённого | `auth-service`, gateway при изменении REST | `InvitedUnblockIT`; online access и сохранность credentials |
