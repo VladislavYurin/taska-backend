@@ -23,7 +23,7 @@ python3 scripts/harness.py check --all
 
 `plan` сравнивает merge-base указанного commit/ref с текущим рабочим деревом, включая tracked удаления и untracked файлы вне ignore. Список checks сопровождается причинами: module changes, consumers из POM, event/trust rules, консервативный fallback для неизвестного общего файла. Изменения модуля распространяются на downstream; upstream для сборки добавляется отдельно, без распространения impact в соседние сервисы. Проверка event semantics и выбор E2E остаются обязанностью агента. План не выполняется автоматически.
 
-`check --module` запускает `clean verify` и специальные IT из manifest с зависимостями. `--check` выбирает конкретный стабильный check ID, зависимый verify выполняется автоматически. Можно повторять `--check`. `--all` выполняет все 15 модулей и integration/config/harness/docs проверки последовательно. Требуются все prerequisites выбранного набора; нет скрытой установки инструментов или автоматического изменения `.env`.
+`check --module` запускает `clean verify` и специальные IT из manifest с зависимостями. `--check` выбирает конкретный стабильный check ID, зависимый verify выполняется автоматически. Можно повторять `--check`. `--all` выполняет все 16 модулей и integration/config/harness/docs проверки последовательно. Требуются все prerequisites выбранного набора; нет скрытой установки инструментов или автоматического изменения `.env`.
 
 Существующие groups: `java`, `config`, `harness`, `docs`. TAS-454 добавляет отдельные `e2e` и `cleanup`: [команды, конфигурация и ограниченный scope](e2e.md). Отчёт JSON выводится в stdout, прогресс ID/status — в stderr. Сохранять stdout можно в ignored `target/` или внешний каталог; credentials в аргументы не передавать. Verification-команды не создают постоянных raw logs (E2E startup diagnostics сохраняются только приватно); диагностика ограничена и санитизируется. Реальные subprocesses могут создавать свои build outputs и Maven cache.
 
@@ -100,7 +100,7 @@ OAuth overlays имеют отдельные требования; см. [OAuth 
 | `workflow-service` | `IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT` |
 | `auth-service` | `InvitedUnblockIT` |
 
-Источник: [verification.json](../../scripts/harness/verification.json). [PR CI](../../.github/workflows/pr-check.yml) получает все 15 модулей из manifest и вызывает тот же `check --module`. `storage-lib` и `metrics-starter` теперь имеют отдельные matrix jobs. Для `kafka-lib` и `metrics-starter` явно указано отсутствие default Surefire test sources; появление таких тестов требует обновить ожидания manifest. CI проверяет документацию и Python/Node-тесты harness отдельной job.
+Источник: [verification.json](../../scripts/harness/verification.json). [PR CI](../../.github/workflows/pr-check.yml) получает все 16 модулей из manifest и вызывает тот же `check --module`. `storage-lib` и `metrics-starter` теперь имеют отдельные matrix jobs. Для `kafka-lib` и `metrics-starter` явно указано отсутствие default Surefire test sources; появление таких тестов требует обновить ожидания manifest. CI проверяет документацию и Python/Node-тесты harness отдельной job.
 
 ## MCP Compose и snapshot
 
@@ -156,3 +156,7 @@ TAS-309: common-lib.verify дополнительно требует свежи�
 TAS-310: `tenant-service.verify` — новый обязательный Maven/Docker check; требует `TenantRegistryIntegrationTest`. Проверяет Liquibase из реального deployer→migrator, runtime LOGIN, конкурентный create/replay/conflict, FREE rollback, immutable deadline, membership isolation и Spring Boot health. [Запуск и границы foundation](../../tenant-service/README.md). gRPC contract additive: все consumers проверяет CI-матрица. Отдельный opt-in Compose — `infra/tenant/compose.yml`, общий deploy-stage этим PR не расширяется.
 
 TAS-311: `tenant-service.verify` также требует свежий `TenantMembershipIntegrationTest`. Проверяются metadata list/get/batch, HMAC cursor expiry/binding/revocation, независимые A/B generations и один SQL snapshot при конкурентной записи. Реальный mTLS/JWS вызывает новые методы через production policy map. Keyset index добавлен отдельным changeset. [Контракт чтения](../../tenant-service/README.md#membership-authority--tas-311).
+
+## Billing catalog
+
+`python3 scripts/harness.py check --module billing-service` requires a fresh nonempty `BillingCatalogIntegrationTest` report. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.

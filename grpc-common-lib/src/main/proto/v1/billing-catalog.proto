@@ -1,0 +1,83 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message Money {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  string amount_minor = 1;
+  CurrencyValue currency = 2;
+  int64 exponent = 3;
+}
+
+message QuotaLimit {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; KIND_TASK_LIFETIME = 4; }
+  KindValue kind = 1;
+  optional string limit = 2;
+  bool unlimited = 3;
+}
+
+message PlanVersion {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_FREE = 1; KIND_PAID = 2; }
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_PUBLISHED = 2; STATE_RETIRED = 3; }
+  string id = 1;
+  string code = 2;
+  string version = 3;
+  string name = 4;
+  Money price = 5;
+  PeriodValue period = 6;
+  repeated QuotaLimit limits = 7;
+  repeated string capabilities = 8;
+  StateValue state = 9;
+  optional string published_at = 10;
+  KindValue kind = 11;
+}
+
+message PlanVersionPage {
+  repeated PlanVersion items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreatePlanVersionRequest {
+  PlanVersion.KindValue kind = 7;
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  string code = 1;
+  string name = 2;
+  Money price = 3;
+  PeriodValue period = 4;
+  repeated QuotaLimit limits = 5;
+  repeated string capabilities = 6;
+}
+
+message PublishPlanVersionRequest {
+  bool confirmed = 1;
+}
+
+message ListBillingPlansRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message CreatePlanVersionRpcRequest {
+  RequestContext context = 1;
+  CreatePlanVersionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message PublishPlanVersionRpcRequest {
+  RequestContext context = 1;
+  string plan_version_id = 2;
+  PublishPlanVersionRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+// Catalog only. Subscription/payment RPCs are separate implementations.
+message ResolvePublishedPlanRpcRequest { RequestContext context = 1; string plan_version_id = 2; }
+
+service BillingService {
+ rpc ResolvePublishedPlan(ResolvePublishedPlanRpcRequest) returns (PlanVersion);
+ rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
+ rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);
+ rpc PublishPlanVersion(PublishPlanVersionRpcRequest) returns (PlanVersion);
+}

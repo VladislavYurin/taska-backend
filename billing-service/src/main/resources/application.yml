@@ -1,0 +1,28 @@
+server:
+  port: ${BILLING_SERVER_PORT:8090}
+spring:
+  application:
+    name: billing-service
+  grpc:
+    server:
+      port: ${BILLING_GRPC_SERVER_PORT:9100}
+  r2dbc:
+    url: ${BILLING_SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5441/billing_db}
+    username: ${BILLING_SPRING_R2DBC_USERNAME:taska_billing_app}
+    password: ${BILLING_SPRING_R2DBC_PASSWORD}
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+    url: ${BILLING_SPRING_LIQUIBASE_URL:jdbc:postgresql://localhost:5441/billing_db}
+    user: ${BILLING_SPRING_LIQUIBASE_USERNAME:taska_billing_deployer}
+    password: ${BILLING_SPRING_LIQUIBASE_PASSWORD}
+    liquibase-schema: billing_liquibase
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
