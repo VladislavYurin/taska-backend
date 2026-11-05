@@ -688,9 +688,13 @@ class StorageQuotaIntegrationTest {
     assertEquals("0", usage(A).getReserved());
     assertEquals(1, rows(rootAdmin, "quota_effects"));
     as(A, owner.deleteConfirmed(done, StorageQuotaOwner.Use.DIRECT_DELETE)).block(WAIT);
+    commit(r);
+    assertEquals(OwnerState.DELETED, as(A, owner.activate(done)).block(WAIT).state());
+    assertEquals("7", usage(A).getUsed());
     as(A, root.releaseUsage(done)).block(WAIT);
     as(A, root.releaseUsage(done)).block(WAIT);
     as(A, owner.deleteConfirmed(done, StorageQuotaOwner.Use.DIRECT_DELETE)).block(WAIT);
+    commit(r);
     assertEquals("0", usage(A).getUsed());
     assertEquals("DELETED", manifestState(r));
     assertEquals(2, rows(rootAdmin, "quota_effects"));
