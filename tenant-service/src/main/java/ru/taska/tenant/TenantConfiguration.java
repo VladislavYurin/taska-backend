@@ -72,9 +72,69 @@ public class TenantConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  FreeAdmission freeAdmission() {
-    return (db, actor, tenant) ->
+  FreeEligibilityDependencies.IdentityAuthority freeIdentityAuthority() {
+    return actor ->
         Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  FreeEligibilityDependencies.PurposeAuthority freePurposeAuthority() {
+    return () ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  FreeEligibilityDependencies.HmacAuthority freeHmacAuthority() {
+    return new FreeEligibilityDependencies.HmacAuthority() {
+      public Mono<FreeEligibilityDependencies.KeySet> keys() {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+      }
+
+      public Mono<byte[]> sign(int version, byte[] message) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+      }
+    };
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  FreeEligibilityDependencies.DispositionAuthority freeDispositionAuthority() {
+    return (caller, id) ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  FreeEligibilityDependencies.CreationPlans freeCreationPlans() {
+    return () ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  FreeEligibilityLedger freeEligibilityLedger(
+      ConnectionFactory factory,
+      TenantTransactionExecutor transactions,
+      FreeEligibilityDependencies.IdentityAuthority identities,
+      FreeEligibilityDependencies.HmacAuthority keys,
+      FreeEligibilityDependencies.PurposeAuthority purposes,
+      FreeEligibilityDependencies.DispositionAuthority dispositions,
+      FreeEligibilityDependencies.CreationPlans plans) {
+    return new FreeEligibilityLedger(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        transactions,
+        identities,
+        keys,
+        purposes,
+        dispositions,
+        plans,
+        Clock.systemUTC());
   }
 
   @Bean
@@ -157,30 +217,54 @@ public class TenantConfiguration {
     if (security != null)
       return new TenantServerInterceptor(
           security,
-          Map.of(
-              MerchantConfigurationServiceGrpc.getGetMerchantConfigurationMethod()
+          Map.ofEntries(
+              java.util.Map.entry(
+                  MerchantConfigurationServiceGrpc.getGetMerchantConfigurationMethod()
                       .getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, false),
-              MerchantConfigurationServiceGrpc.getPublishMerchantConfigurationMethod()
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  MerchantConfigurationServiceGrpc.getPublishMerchantConfigurationMethod()
                       .getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, true),
-              MerchantConfigurationServiceGrpc.getResolveMerchantConfigurationMethod()
+                  new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  MerchantConfigurationServiceGrpc.getResolveMerchantConfigurationMethod()
                       .getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, false),
-              PlatformServiceGrpc.getListPlatformFlagsMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, false),
-              PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, true),
-              TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, true),
-              TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              TenantServiceGrpc.getListTenantMembersMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              TenantMembershipServiceGrpc.getGetMembershipMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              TenantMembershipServiceGrpc.getBatchValidateMembershipsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  PlatformServiceGrpc.getListPlatformFlagsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getListTenantMembersMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantMembershipServiceGrpc.getGetMembershipMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantMembershipServiceGrpc.getBatchValidateMembershipsMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc.getGetTenantCreationOptionsMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc.getAdmitFreeTenantMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc
+                      .getApplyFreeEligibilityDispositionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true))),
           environment);
     // No permissive bootstrap. Keys/replay/online-authority adapters must be explicitly supplied.
     return new ServerInterceptor() {
