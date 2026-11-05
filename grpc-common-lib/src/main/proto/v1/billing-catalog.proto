@@ -111,6 +111,19 @@ message SubscriptionPeriodPage {
   optional string next_cursor = 2;
 }
 
+message ChangePlanRequest {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED=0; CURRENCY_EUR=1; CURRENCY_USD=2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED=0; PAYMENT_METHOD_PSP=1; PAYMENT_METHOD_WIRE=2; }
+  string plan_version_id=1; optional CurrencyValue currency=2; optional PaymentMethodValue payment_method=3; bool confirmed=4;
+}
+message PlanChange {
+  enum EffectValue { EFFECT_UNSPECIFIED=0; EFFECT_IMMEDIATE=1; EFFECT_AFTER_PAYMENT=2; EFFECT_NEXT_PERIOD=3; }
+  Subscription subscription=1; EffectValue effect=2; optional string invoice_id=3; optional string effective_at=4; string operation_id=5;
+}
+message ChangeSubscriptionPlanRpcRequest { RequestContext context=1; string tenant_id=2; ChangePlanRequest payload=3; MutationOptions mutation=4; }
+message CancelSubscriptionRenewalRpcRequest { RequestContext context=1; string tenant_id=2; ConfirmedAction payload=3; MutationOptions mutation=4; }
+message ResumeSubscriptionRenewalRpcRequest { RequestContext context=1; string tenant_id=2; MutationOptions mutation=3; }
+
 message GetSubscriptionRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
@@ -259,6 +272,9 @@ message GetEntitlementRpcRequest {
   string tenant_id = 2;
 }
 service BillingService {
+ rpc ChangeSubscriptionPlan(ChangeSubscriptionPlanRpcRequest) returns (PlanChange);
+ rpc CancelSubscriptionRenewal(CancelSubscriptionRenewalRpcRequest) returns (Subscription);
+ rpc ResumeSubscriptionRenewal(ResumeSubscriptionRenewalRpcRequest) returns (Subscription);
  rpc GetEntitlement(GetEntitlementRpcRequest) returns (Entitlement);
  rpc ListInvoices(ListInvoicesRpcRequest) returns (InvoicePage);
  rpc CreateInvoice(CreateInvoiceRpcRequest) returns (Invoice);

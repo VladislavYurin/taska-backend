@@ -132,7 +132,7 @@ class TenantProvisioningIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
+            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
     now = new AtomicReference<>(Instant.parse("2026-11-05T12:00:00Z"));
     clock =
         new Clock() {
@@ -415,7 +415,7 @@ class TenantProvisioningIntegrationTest {
         }
         connection.setAutoCommit(false);
         // Reset only this private pre-upgrade fault fixture; RESTRICT protects the cyclic FK.
-        sql.execute("TRUNCATE taska.tenants,taska.tenant_memberships");
+        sql.execute("TRUNCATE taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships");
         sql.execute(tenantSeed);
         sql.execute(memberSeed);
         connection.commit();

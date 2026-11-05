@@ -136,6 +136,54 @@ public class BillingConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
+  PlanChangeDependencies.Policy subscriptionPlanPolicy() {
+    return (c, command) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "PLAN_POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  PlanChangeDependencies.FreeAuthority freePlanAdmission(
+      org.springframework.beans.factory.ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorFreeEligibilityServiceGrpc
+                  .ReactorFreeEligibilityServiceStub>
+          stubs,
+      org.springframework.beans.factory.ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new GrpcFreePlanAdmission(stub, trust, Clock.systemUTC());
+    return new PlanChangeDependencies.FreeAuthority() {
+      public Mono<PlanChangeDependencies.FreeProof> admit(
+          UUID t, UUID op, UUID owner, long version) {
+        return Mono.error(
+            CatalogErrors.fail(DomainStatus.UNAVAILABLE, "FREE_ADMISSION_UNAVAILABLE"));
+      }
+
+      public Mono<PlanChangeDependencies.FreeProof> accepted(
+          UUID t, UUID op, UUID owner, long version) {
+        return Mono.error(
+            CatalogErrors.fail(DomainStatus.UNAVAILABLE, "FREE_ADMISSION_UNAVAILABLE"));
+      }
+
+      public Mono<PlanChangeDependencies.FreeProof> cancel(
+          UUID t, UUID op, UUID owner, long version) {
+        return Mono.error(
+            CatalogErrors.fail(DomainStatus.UNAVAILABLE, "FREE_ADMISSION_UNAVAILABLE"));
+      }
+    };
+  }
+
+  @Bean
+  SubscriptionPlanChanges subscriptionPlanChanges(
+      SubscriptionStore subscriptions,
+      PlanChangeDependencies.Policy policy,
+      PlanChangeDependencies.FreeAuthority free) {
+    return new SubscriptionPlanChanges(subscriptions, policy, free, Clock.systemUTC());
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
   EntitlementStore.ReadAuthority entitlementReadAuthority() {
     return context ->
         Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
@@ -149,9 +197,13 @@ public class BillingConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  InvoiceDependencies.ObligationAuthority invoiceObligationAuthority() {
+  InvoiceDependencies.ObligationAuthority invoiceObligationAuthority(
+      PlanChangeDependencies.Policy policy) {
     return (db, tenant, request, now) ->
-        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+        request.getPurpose()
+                == ru.taska.api.b2b.v1.CreateInvoiceRequest.PurposeValue.PURPOSE_PLAN_CHANGE
+            ? PlanChangeObligations.resolve(db, tenant, request, policy)
+            : Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
   }
 
   @Bean
@@ -305,6 +357,15 @@ public class BillingConfiguration {
                   new RpcContextSecurity.Policy(true, false)),
               Map.entry(
                   BillingServiceGrpc.getCreateInvoiceMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getChangeSubscriptionPlanMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getCancelSubscriptionRenewalMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getResumeSubscriptionRenewalMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, true)),
               Map.entry(
                   BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),

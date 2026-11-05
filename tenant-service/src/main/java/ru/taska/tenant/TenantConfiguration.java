@@ -122,6 +122,13 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  FreeEligibilityDependencies.AdmissionAuthority freePlanAdmissionAuthority() {
+    return (c, owner, version) ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
   @DependsOn("safeRuntimeRole")
   FreeEligibilityLedger freeEligibilityLedger(
       ConnectionFactory factory,
@@ -130,7 +137,8 @@ public class TenantConfiguration {
       FreeEligibilityDependencies.HmacAuthority keys,
       FreeEligibilityDependencies.PurposeAuthority purposes,
       FreeEligibilityDependencies.DispositionAuthority dispositions,
-      FreeEligibilityDependencies.CreationPlans plans) {
+      FreeEligibilityDependencies.CreationPlans plans,
+      FreeEligibilityDependencies.AdmissionAuthority admissions) {
     return new FreeEligibilityLedger(
         org.springframework.r2dbc.core.DatabaseClient.create(factory),
         org.springframework.transaction.reactive.TransactionalOperator.create(
@@ -141,7 +149,8 @@ public class TenantConfiguration {
         purposes,
         dispositions,
         plans,
-        Clock.systemUTC());
+        Clock.systemUTC(),
+        admissions);
   }
 
   @Bean
@@ -560,6 +569,15 @@ public class TenantConfiguration {
                   ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc.getGetTenantCreationOptionsMethod()
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc
+                      .getCancelFreeTenantAdmissionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc.getGetFreeAdmissionReceiptMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   ru.taska.api.b2b.v1.FreeEligibilityServiceGrpc.getAdmitFreeTenantMethod()
                       .getFullMethodName(),

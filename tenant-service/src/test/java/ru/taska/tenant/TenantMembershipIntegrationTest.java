@@ -114,7 +114,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
         .fetch()
         .rowsUpdated()
         .block(WAIT);

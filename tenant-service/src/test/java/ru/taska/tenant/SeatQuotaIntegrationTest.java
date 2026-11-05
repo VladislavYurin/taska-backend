@@ -125,7 +125,7 @@ class SeatQuotaIntegrationTest {
   void seed() {
     sql(
         "TRUNCATE"
-            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
+            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
     Mono<Void> fixtures =
         Flux.fromIterable(List.of(A, B))
             .concatMap(

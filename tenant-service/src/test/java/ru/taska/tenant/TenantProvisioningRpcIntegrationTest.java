@@ -54,6 +54,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.GetTenantOperationRpcRequest;
@@ -66,6 +67,7 @@ import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.api.b2b.v1.TenantServiceGrpc;
 import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.api.common.v1.Header;
+import ru.taska.billing.*;
 import ru.taska.billing.BillingCatalog;
 import ru.taska.billing.BillingCatalogRpc;
 import ru.taska.billing.BillingConfiguration;
@@ -473,7 +475,9 @@ class TenantProvisioningRpcIntegrationTest {
             "tenant-service",
             interceptor(new TenantConfiguration(), tenantTrust, "registrySecurity"),
             new TenantGrpcService(
-                registry, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                registry,
+                org.mockito.Mockito.mock(TenantMembershipService.class),
+                org.mockito.Mockito.mock(SeatQuotaStore.class)),
             new TenantProvisioningRpc(saga),
             new TenantCreationLifecycleGrpc(lifecycle));
     closureRpc =
@@ -653,6 +657,7 @@ class TenantProvisioningRpcIntegrationTest {
       assertFalse(loseWorkflow.get());
       assertFalse(loseBilling.get());
       closureAndDecisionRpcFlow();
+      planDowngradePreservesRootStorage();
     }
   }
 
@@ -883,5 +888,215 @@ class TenantProvisioningRpcIntegrationTest {
     for (var channel : channels) channel.shutdownNow().awaitTermination(10, TimeUnit.SECONDS);
     for (var server : servers) server.shutdownNow().awaitTermination(10, TimeUnit.SECONDS);
     for (var pool : pools) pool.disposeLater().block(WAIT);
+  }
+
+  // Actual billing and Root PostgreSQL owners; settlement/primary policy are explicit fixture
+  // ports.
+  void planDowngradePreservesRootStorage() {
+    UUID t = UUID.randomUUID(), invoice = UUID.randomUUID(), fact = UUID.randomUUID();
+    tenantDb
+        .sql(
+            """
+            DO $$ BEGIN
+              INSERT INTO taska.tenants SELECT (jsonb_populate_record(NULL::taska.tenants,to_jsonb(p)||jsonb_build_object('id','%s','creation_operation_id','%s','owner_id','%s'))).* FROM taska.tenants p WHERE lifecycle='ACTIVE' LIMIT 1;
+              INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','TENANT_ADMIN','ACTIVE');
+            END $$
+            """
+                .formatted(t, UUID.randomUUID(), OWNER, t, OWNER))
+        .then()
+        .block(WAIT);
+    var btx = new TenantTransactionExecutor(pools.get(1));
+    var now = CLOCK.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    var period = SubscriptionCalendar.initial(now);
+    var evidence =
+        new SubscriptionDependencies.CoverageEvidence(
+            t,
+            invoice,
+            fact,
+            PAID,
+            UUID.randomUUID(),
+            period.startsAt(),
+            period.endsAt(),
+            period.anchor().day(),
+            period.anchor().timeUtc(),
+            now,
+            SubscriptionDependencies.PaymentSource.PSP,
+            List.of());
+    var subscription =
+        new SubscriptionStore(
+            btx,
+            v -> Mono.just(OWNER.toString().equals(v.actorId())),
+            new SubscriptionDependencies.SettlementEvidenceAuthority() {
+              public Mono<SubscriptionDependencies.CoverageEvidence> confirmed(
+                  DatabaseClient db, UUID tenant, UUID id) {
+                return Mono.just(evidence);
+              }
+
+              public Mono<SubscriptionDependencies.RevocationEvidence> reversed(
+                  DatabaseClient db, UUID tenant, UUID id) {
+                return Mono.empty();
+              }
+            },
+            CLOCK,
+            new PeriodCursor(Base64.getEncoder().encodeToString(new byte[32]), CLOCK));
+    var service =
+        TrustedTenantContext.newBuilder()
+            .setTenantId(t.toString())
+            .setActorGeneration("1")
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+            .setIssuerService("tenant-service")
+            .setAudienceService("billing-service")
+            .setAction("initializeSubscription")
+            .addScopes("write")
+            .build();
+    ru.taska.security.tenant.RegistryTestContext.withClaims(
+            service, subscription.initialize(t, PAID, "initialize"))
+        .block(WAIT);
+    billingDb
+        .sql(
+            """
+            DO $$ BEGIN
+            INSERT INTO taska.invoices(id,tenant_id,number,operation_id,target_key,purpose,plan_version_id,method,currency,currency_exponent,subtotal_minor,tax_minor,total_minor,issued_at,payable_until,terms_snapshot,pricing_snapshot,seller_snapshot,buyer_snapshot,snapshot)
+              VALUES('%s','%s','FIXTURE-%s','%s','%s','INITIAL','%s','PSP','EUR',2,2000,0,2000,now(),now()+interval '7 days','{}','{}','{}','{}','');
+            INSERT INTO taska.invoice_lines(tenant_id,invoice_id,line_no,description,quantity,net_minor,tax_minor,total_minor,taxes_snapshot,snapshot) VALUES('%s','%s',1,'Fixture',1,2000,0,2000,'[]','');
+            UPDATE taska.invoices SET state='OPEN' WHERE tenant_id='%s';
+            END $$
+            """
+                .formatted(invoice, t, invoice, UUID.randomUUID(), invoice, PAID, t, invoice, t))
+        .then()
+        .block(WAIT);
+    var paid =
+        ru.taska.security.tenant.RegistryTestContext.withClaims(
+                service.toBuilder()
+                    .setIssuerService("billing-service")
+                    .setAction("applySubscriptionCoverage")
+                    .build(),
+                subscription.grant(t, fact, "confirmed-fixture"))
+            .block(WAIT);
+    var entitlement = new EntitlementStore(btx, v -> Mono.just(true), CLOCK);
+    var owner =
+        TrustedTenantContext.newBuilder()
+            .setActorUserId(OWNER.toString())
+            .setTenantId(t.toString())
+            .setActorGeneration("1")
+            .setMembershipGeneration("1")
+            .setSessionId(UUID.randomUUID().toString())
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_TENANT)
+            .setIssuerService("api-gateway")
+            .setAudienceService("billing-service")
+            .setAction("changeSubscriptionPlan")
+            .addScopes("write")
+            .addScopes("read")
+            .build();
+    ru.taska.entitlement.EntitlementProjection.Source terms =
+        (tenant, min) ->
+            ru.taska.security.tenant.RegistryTestContext.withClaims(
+                owner.toBuilder().setAction("getEntitlement").build(),
+                entitlement.get(
+                    GetEntitlementRpcRequest.newBuilder().setTenantId(t.toString()).build()));
+    var root =
+        new StorageQuotaStore(
+            new TenantTransactionExecutor(pools.get(0)),
+            (c, command, target) ->
+                Mono.just(new StorageQuotaStore.Grant(false, Duration.ofMinutes(15), 20000000, 1)),
+            org.mockito.Mockito.mock(ru.taska.quota.StorageQuotaProtocol.Owner.class),
+            terms,
+            CLOCK);
+    long freeLimit =
+        billingDb
+            .sql("SELECT max_storage_bytes FROM taska.catalog_plan_versions WHERE id=:id")
+            .bind("id", FREE)
+            .map((r, m) -> r.get("max_storage_bytes", Long.class))
+            .one()
+            .block(WAIT);
+    tenantDb
+        .sql(
+            "INSERT INTO taska.quota_counters(tenant_id,resource,scope_id)"
+                + " VALUES(:t,'STORAGE_BYTES',:t)")
+        .bind("t", t)
+        .then()
+        .block(WAIT);
+    tenantDb
+        .sql(
+            "INSERT INTO"
+                + " taska.quota_effects(tenant_id,operation_id,resource,scope_id,effect_kind,amount,resource_id,owner_version,applied_at)"
+                + " VALUES(:t,:op,'STORAGE_BYTES',:t,'COMMIT',:bytes,:resource,1,now())")
+        .bind("t", t)
+        .bind("op", UUID.randomUUID())
+        .bind("bytes", freeLimit + 1)
+        .bind("resource", UUID.randomUUID())
+        .then()
+        .block(WAIT);
+    var rootClaims =
+        owner.toBuilder().setAudienceService("tenant-service").setAction("storageQuota").build();
+    var before =
+        ru.taska.security.tenant.RegistryTestContext.withClaims(rootClaims, root.current(t))
+            .block(WAIT);
+    assertEquals(Long.toString(freeLimit + 1), before.getUsed());
+    var commands =
+        new SubscriptionPlanChanges(
+            subscription,
+            (c, command) -> Mono.just(new PlanChangeDependencies.Grant(OWNER, 1)),
+            new PlanChangeDependencies.FreeAuthority() {
+              public Mono<PlanChangeDependencies.FreeProof> admit(
+                  UUID tenant, UUID op, UUID actor, long version) {
+                return Mono.just(new PlanChangeDependencies.FreeProof(tenant, op, actor, version));
+              }
+
+              public Mono<PlanChangeDependencies.FreeProof> accepted(
+                  UUID tenant, UUID op, UUID actor, long version) {
+                return admit(tenant, op, actor, version);
+              }
+
+              public Mono<PlanChangeDependencies.FreeProof> cancel(
+                  UUID tenant, UUID op, UUID actor, long version) {
+                return Mono.just(
+                    new PlanChangeDependencies.FreeProof(tenant, op, actor, version, false));
+              }
+            },
+            CLOCK);
+    ru.taska.security.tenant.RegistryTestContext.withClaims(
+            owner,
+            commands.change(
+                ChangeSubscriptionPlanRpcRequest.newBuilder()
+                    .setTenantId(t.toString())
+                    .setPayload(
+                        ChangePlanRequest.newBuilder()
+                            .setPlanVersionId(FREE.toString())
+                            .setConfirmed(true))
+                    .setMutation(
+                        MutationOptions.newBuilder()
+                            .setExpectedVersion(paid.getVersion())
+                            .setIdempotencyKey("downgrade"))
+                    .build()))
+        .block(WAIT);
+    var after =
+        ru.taska.security.tenant.RegistryTestContext.withClaims(rootClaims, root.current(t))
+            .block(WAIT);
+    assertEquals(before.getUsed(), after.getUsed());
+    assertEquals(before.getReserved(), after.getReserved());
+    assertEquals(Long.toString(freeLimit), after.getLimit());
+    org.junit.jupiter.api.Assertions.assertTrue(
+        ru.taska.security.tenant.RegistryTestContext.withClaims(rootClaims, root.restrictions(t))
+            .block(WAIT)
+            .contains(RestrictionCode.RESTRICTION_CODE_OVER_QUOTA));
+    assertEquals(
+        1L,
+        billingDb
+            .sql(
+                "SELECT count(*) n FROM taska.subscription_periods WHERE tenant_id=:t AND"
+                    + " status='SUPERSEDED'")
+            .bind("t", t)
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        1L,
+        billingDb
+            .sql("SELECT count(*) n FROM taska.invoices WHERE tenant_id=:t")
+            .bind("t", t)
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
   }
 }

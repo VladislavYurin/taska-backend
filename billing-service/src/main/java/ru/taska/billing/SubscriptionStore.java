@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Function;
@@ -77,6 +78,14 @@ public final class SubscriptionStore {
     this.entitlements = entitlements;
   }
 
+  TenantTransactionExecutor transactions() {
+    return transactions;
+  }
+
+  FinancialReadAuthority readers() {
+    return readers;
+  }
+
   EntitlementStore entitlements() {
     return entitlements;
   }
@@ -129,7 +138,7 @@ public final class SubscriptionStore {
     }
   }
 
-  private Mono<Subscription> command(
+  Mono<Subscription> command(
       VerifiedTenantContext v,
       UUID tenant,
       String op,
@@ -205,7 +214,7 @@ public final class SubscriptionStore {
         });
   }
 
-  private Mono<Map<String, Object>> plan(DatabaseClient db, UUID id, boolean current) {
+  Mono<Map<String, Object>> plan(DatabaseClient db, UUID id, boolean current) {
     return db.sql(
             "SELECT p.id,c.kind,(to_jsonb(p)||jsonb_build_object('kind',c.kind))::text AS snapshot"
                 + " FROM taska.catalog_plan_versions p JOIN taska.catalog_plans c USING(plan_code)"
@@ -303,7 +312,7 @@ public final class SubscriptionStore {
                                 })));
   }
 
-  private Mono<Map<String, Object>> lock(DatabaseClient db, UUID tenant) {
+  Mono<Map<String, Object>> lock(DatabaseClient db, UUID tenant) {
     return db.sql("SELECT * FROM taska.subscriptions WHERE tenant_id=:tenant FOR UPDATE")
         .bind("tenant", tenant)
         .fetch()
@@ -355,7 +364,8 @@ public final class SubscriptionStore {
                                             fail(
                                                 DomainStatus.FAILED_PRECONDITION,
                                                 "PAYMENT_PENDING"))))
-                            .flatMap(e -> grantConfirmed(db, tenant, e))));
+                            .flatMap(e -> grantConfirmed(db, tenant, e))))
+        .flatMap(ignored -> transactions.execute(db -> view(db, tenant)));
   }
 
   private Mono<Subscription> grantConfirmed(DatabaseClient db, UUID tenant, CoverageEvidence e) {
@@ -384,7 +394,8 @@ public final class SubscriptionStore {
                         if (!plan.get("kind").equals("PAID"))
                           return Mono.error(
                               fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE"));
-                        return supersede(db, tenant, e.supersededPeriodIds())
+                        return PlanCoveragePolicy.validate(db, tenant, e, clock.instant())
+                            .then(supersede(db, tenant, e.supersededPeriodIds()))
                             .then(insertPeriod(db, tenant, e, plan.get("snapshot").toString()))
                             .then(
                                 db.sql(
@@ -411,25 +422,31 @@ public final class SubscriptionStore {
                                     .one())
                             .flatMap(
                                 version ->
-                                    event(
-                                            db,
-                                            tenant,
-                                            version,
-                                            "SubscriptionCoverageGranted",
-                                            Map.of(
-                                                "periodId",
-                                                e.activationOperationId().toString(),
-                                                "invoiceId",
-                                                e.invoiceId().toString(),
-                                                "financialFactId",
-                                                e.financialFactId().toString()))
+                                    PlanCoveragePolicy.applied(db, tenant, e, clock.instant())
+                                        .then(
+                                            event(
+                                                db,
+                                                tenant,
+                                                version,
+                                                "SubscriptionCoverageGranted",
+                                                Map.of(
+                                                    "periodId",
+                                                    e.activationOperationId().toString(),
+                                                    "invoiceId",
+                                                    e.invoiceId().toString(),
+                                                    "financialFactId",
+                                                    e.financialFactId().toString())))
                                         .then(view(db, tenant)));
                       });
             });
   }
 
   private boolean same(Map<String, Object> r, CoverageEvidence e) {
-    return r.get("invoice_id").equals(e.invoiceId())
+    return Objects.equals(
+            r.get("plan_change_id"), e.selection() == null ? null : e.selection().operationId())
+        && Long.valueOf(e.selection() == null ? 0 : e.selection().generation())
+            .equals(r.get("selection_generation"))
+        && r.get("invoice_id").equals(e.invoiceId())
         && r.get("source_financial_fact_id").equals(e.financialFactId())
         && r.get("plan_version_id").equals(e.planVersionId())
         && r.get("activation_operation_id").equals(e.activationOperationId())
@@ -463,26 +480,30 @@ public final class SubscriptionStore {
 
   private Mono<Void> insertPeriod(
       DatabaseClient db, UUID tenant, CoverageEvidence e, String snapshot) {
-    return db.sql(
-            "INSERT INTO"
-                + " taska.subscription_periods(id,tenant_id,invoice_id,source_financial_fact_id,plan_version_id,starts_at,ends_at,anchor_day,anchor_time_utc,activation_operation_id,terms_snapshot,confirmed_at,payment_source)"
-                + " VALUES(:id,:tenant,:invoice,:fact,:plan,:start,:end,:day,:time,:id,CAST(:snapshot"
-                + " AS jsonb),:confirmed,:source)")
-        .bind("id", e.activationOperationId())
-        .bind("tenant", tenant)
-        .bind("invoice", e.invoiceId())
-        .bind("fact", e.financialFactId())
-        .bind("plan", e.planVersionId())
-        .bind("start", e.startsAt().atOffset(ZoneOffset.UTC))
-        .bind("end", e.endsAt().atOffset(ZoneOffset.UTC))
-        .bind("day", e.anchorDay())
-        .bind("time", e.anchorTimeUtc())
-        .bind("snapshot", snapshot)
-        .bind("confirmed", e.confirmedAt().atOffset(ZoneOffset.UTC))
-        .bind("source", e.source().name())
-        .fetch()
-        .rowsUpdated()
-        .then();
+    var q =
+        db.sql(
+                "INSERT INTO"
+                    + " taska.subscription_periods(id,tenant_id,invoice_id,source_financial_fact_id,plan_version_id,starts_at,ends_at,anchor_day,anchor_time_utc,activation_operation_id,terms_snapshot,confirmed_at,payment_source,selection_generation,plan_change_id)"
+                    + " VALUES(:id,:tenant,:invoice,:fact,:plan,:start,:end,:day,:time,:id,CAST(:snapshot"
+                    + " AS jsonb),:confirmed,:source,:generation,:change)")
+            .bind("id", e.activationOperationId())
+            .bind("tenant", tenant)
+            .bind("invoice", e.invoiceId())
+            .bind("fact", e.financialFactId())
+            .bind("plan", e.planVersionId())
+            .bind("start", e.startsAt().atOffset(ZoneOffset.UTC))
+            .bind("end", e.endsAt().atOffset(ZoneOffset.UTC))
+            .bind("day", e.anchorDay())
+            .bind("time", e.anchorTimeUtc())
+            .bind("snapshot", snapshot)
+            .bind("confirmed", e.confirmedAt().atOffset(ZoneOffset.UTC))
+            .bind("source", e.source().name())
+            .bind("generation", e.selection() == null ? 0L : e.selection().generation());
+    q =
+        e.selection() == null || e.selection().operationId() == null
+            ? q.bindNull("change", UUID.class)
+            : q.bind("change", e.selection().operationId());
+    return q.fetch().rowsUpdated().then();
   }
 
   /**
@@ -552,7 +573,7 @@ public final class SubscriptionStore {
                                 })));
   }
 
-  private Mono<Void> event(
+  Mono<Void> event(
       DatabaseClient db, UUID tenant, long version, String type, Map<String, String> facts) {
     String payload = json.writeValueAsString(facts);
     return db.sql(
@@ -571,7 +592,7 @@ public final class SubscriptionStore {
         .then(entitlements.changed(db, tenant));
   }
 
-  private Mono<Subscription> view(DatabaseClient db, UUID tenant) {
+  Mono<Subscription> view(DatabaseClient db, UUID tenant) {
     return db.sql(
             "SELECT s.*,p.id AS effective_period_id,p.plan_version_id AS"
                 + " effective_plan_id,p.ends_at AS paid_through,p.anchor_day AS period_anchor FROM"
@@ -604,11 +625,19 @@ public final class SubscriptionStore {
                     .setPaidThrough(
                         ((OffsetDateTime) row.get("paid_through")).toInstant().toString())
                     .setAnchorDay(((Number) row.get("period_anchor")).longValue());
-              if (row.get("next_plan_version_id") != null)
+              Instant next =
+                  row.get("next_effective_at") == null
+                      ? null
+                      : ((OffsetDateTime) row.get("next_effective_at")).toInstant();
+              boolean completed =
+                  next != null
+                      && !next.isAfter(clock.instant())
+                      && Objects.equals(
+                          row.get("next_plan_version_id"), row.get("effective_plan_id"));
+              if (row.get("next_plan_version_id") != null && !completed)
                 out.setScheduledPlanVersionId(row.get("next_plan_version_id").toString());
-              if (row.get("next_effective_at") != null)
-                out.setScheduledEffectiveAt(
-                    ((OffsetDateTime) row.get("next_effective_at")).toInstant().toString());
+              if (next != null && next.isAfter(clock.instant()))
+                out.setScheduledEffectiveAt(next.toString());
               return out.build();
             })
         .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")));

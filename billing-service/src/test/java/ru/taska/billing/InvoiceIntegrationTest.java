@@ -460,7 +460,12 @@ class InvoiceIntegrationTest {
             .invoices(
                 pool,
                 f.readers,
-                new BillingConfiguration().invoiceObligationAuthority(),
+                new BillingConfiguration()
+                    .invoiceObligationAuthority(
+                        (context, command) ->
+                            Mono.error(
+                                CatalogErrors.fail(
+                                    DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"))),
                 new BillingConfiguration().invoiceCommercialPolicy(),
                 catalog,
                 Base64.getEncoder().encodeToString(new byte[32]),

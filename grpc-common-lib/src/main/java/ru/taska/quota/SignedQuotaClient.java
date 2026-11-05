@@ -34,6 +34,18 @@ public final class SignedQuotaClient {
       String action,
       Function<RequestContext, Q> request,
       BiFunction<Q, ClientInterceptor, Mono<R>> send) {
+    return call(tenant, rpc, action, new RpcContextSecurity.Policy(true, false), request, send);
+  }
+
+  public <Q extends Message, R> Mono<R> call(
+      UUID tenant,
+      String rpc,
+      String action,
+      RpcContextSecurity.Policy policy,
+      Function<RequestContext, Q> request,
+      BiFunction<Q, ClientInterceptor, Mono<R>> send) {
+    if (!policy.tenantRequired())
+      throw new IllegalArgumentException("Tenant-scoped delegation required");
     return VerifiedTenantContext.current()
         .flatMap(
             parent -> {
@@ -56,7 +68,6 @@ public final class SignedQuotaClient {
                               .setAssertionId(UUID.randomUUID().toString()))
                       .build();
               Q wire = request.apply(context);
-              var policy = new RpcContextSecurity.Policy(true, false);
               return security
                   .authorize(context, rpc, policy)
                   .flatMap(v -> security.sign(v, wire, rpc, policy))
