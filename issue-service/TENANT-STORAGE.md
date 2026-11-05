@@ -1,0 +1,27 @@
+# Tenant issue storage — TAS-332
+
+Delivered storage foundation, available only through the optional `tenant-storage` Spring profile. The default profile continues to serve the legacy API against its existing schema. TAS-343 supplies business CRUD, current project ACL, workflow/status/assignee checks and verified project metadata. TAS-460 supplies lifetime quota admission and limits. This profile does not expose tenant issue RPCs or publish Kafka events.
+
+## Database and activation
+
+Use a fresh, isolated issue-service PostgreSQL database. Run the shipped [role bootstrap](../common-lib/src/main/resources/db/tenant/bootstrap.psql) as the cluster operator with service `issue`, schema `taska`. Install `pg_trgm` in `public` as the operator and create schema `issue_liquibase AUTHORIZATION taska_issue_migrator`; revoke PUBLIC privileges on that journal schema. Provision separate passwords outside Git. Do not point this profile at the legacy/shared stage database.
+
+`spring.liquibase.url/user/password` connects as `taska_issue_deployer`, explicitly assumes the NOLOGIN migrator role and owns the private Liquibase journal. `spring.r2dbc.*` connects as `taska_issue_app`. Startup rejects privileged, inheriting, owning or member runtime roles. The versioned migration [changelog](src/main/resources/db/issue-tenant/changelog.json) refuses any existing business table, creates five tables atomically, and applies/audits the shipped RLS v2 templates. Repeat Liquibase is a no-op. No reset, inferred tenant assignment, fixture backfill or editing of applied changesets occurs.
+
+`tenant-storage` excludes legacy repositories, services, jobs, dispatchers and transport. The tenant transport interceptor refuses calls until business API activation. The default profile still loads scheduling and all legacy components. Profile activation on shared stage requires its own coordinated rollout; this change does not activate it.
+
+## Storage contract
+
+`TenantIssueStore.execute` accepts a transaction-scoped session. Only a `VerifiedTenantContext` with a canonical tenant can obtain SQL; create additionally requires a human actor. Future transport must verify the action and project/nested IDs before calling. Scoped sessions cannot change tenant, actor or action, or survive their transaction. All runtime SQL includes explicit tenant predicates/inserts and uses `TenantTransactionExecutor`.
+
+`create` claims `(tenant_id,user_id,operation_code,key)` before allocating a number. Operation code comes from the verified action. The SHA-256 request hash includes tenant/actor/operation/key, canonical project ID/key and all supplied issue fields. Optional nulls are distinct from values; story-point scale is normalized without rounding. A competing claim waits for the winner's commit/rollback, then reads its own READ COMMITTED snapshot. Same payload replays the original UUID/key/version response; conflicting payload returns `IDEMPOTENCY_CONFLICT` without allocating another number. Expiry metadata is 24 hours; this foundation does not purge/reuse receipts or run cleanup jobs. Replay remains stable while a receipt exists.
+
+One transaction writes counter, issue, idempotency result, CREATED history and metadata-only outbox. An outer/caught failure, write failure or deferred FK failure rolls back the full operation; no result is emitted before commit. Counter allocation is atomic by `(tenant_id,project_id)`; overflow fails without partial state. `next_issue_number` is display numbering; `lifetime_created` separately tracks successful stored creates on all plans, without enforcing a limit or deriving usage from the number. Limits and lifecycle/purge behavior remain TAS-460 and subsequent business work.
+
+The five tables retain current base issue fields, global UUID identities and versions. Natural key uniqueness is `(tenant_id,issue_key)` and `(tenant_id,project_id,issue_number)`; the old global key/project uniqueness is absent. Composite FK protects history, receipt and issue outbox parents; issue project references its local scoped counter, never another service's database. Tenant-leading B-tree indexes and existing GIN search indexes are preserved. History is append-only for the app; other app access uses read/write RLS profiles, FORCE RLS and audited grants. Jobs/dispatchers receive no implicit bypass.
+
+Outbox rows carry tenant scope, aggregate/schema versions and the verified request ID. Payloads here contain issue/project IDs, display key and version, never summary/description or credentials. Dispatch/envelope integration is coordinated with TAS-318 and future issue business activation; the legacy Kafka dispatcher is excluded from this profile.
+
+## Verification
+
+Run `python3 scripts/harness.py check --module issue-service`. The manifest requires a fresh, nonempty `TenantIssueStorageIntegrationTest` report in addition to the existing verify and explicit IT matrix. Tests use PostgreSQL 16 with real app LOGIN and deployer→migrator migrations: A/B keys, same-project races, waiting winner commit/rollback, actor/action namespaces, payload conflicts, FK/RLS denial, all-table rollback, deferred commit, overflow, missing/escaped context and real HTTP profile startup. These integration checks do not establish tenant public REST or shared-stage E2E readiness.
