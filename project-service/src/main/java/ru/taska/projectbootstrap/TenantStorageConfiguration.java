@@ -44,6 +44,8 @@ public class TenantStorageConfiguration {
   @DependsOn("projectTenantLiquibase")
   public org.springframework.beans.factory.InitializingBean safeProjectRuntime(ConnectionFactory factory) {
     return () -> {
+      // A bounded startup gate on the initialization thread, before any store can be constructed.
+      // This is not a WebFlux request/event-loop path; failure must abort startup synchronously.
       Boolean safe = DatabaseClient.create(factory).sql("""
           SELECT current_user='taska_project_app' AND NOT
             (rolsuper OR rolinherit OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication)

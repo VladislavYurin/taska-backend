@@ -111,8 +111,16 @@ class TenantProjectStorageIntegrationTest {
   @Test void realAppRoleRejectsForeignFkTenantMutationAndMissingTenant() {
     var a=create(A,"A"); var b=create(B,"B");
     for(var project:List.of(b.getId(),UUID.randomUUID())) {
-      assertThrows(Exception.class,()->as(A,ACTOR,store.execute(s->s.settings(project,"{}",ACTOR))).block(WAIT));
-      assertThrows(Exception.class,()->as(A,ACTOR,store.execute(s->s.addMember(project,UUID.randomUUID(),ProjectRole.MEMBER,ACTOR))).block(WAIT));
+      assertEquals(DomainStatus.NOT_FOUND,assertThrows(DomainException.class,()->as(A,ACTOR,store.execute(s->s.settings(project,"{}",ACTOR))).block(WAIT)).getStatus());
+      assertEquals(DomainStatus.NOT_FOUND,assertThrows(DomainException.class,()->as(A,ACTOR,store.execute(s->s.addMember(project,UUID.randomUUID(),ProjectRole.MEMBER,ACTOR))).block(WAIT)).getStatus());
+      // Also bypass repository prechecks to prove real PostgreSQL FK rejection as the app LOGIN.
+      for(String statement:List.of(
+          "INSERT INTO taska.project_settings(tenant_id,project_id,updated_by) VALUES(:t,:p,:actor)",
+          "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by) VALUES(:t,:p,:actor,'MEMBER',:actor)")) {
+        var rejected=assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(statement)
+            .bind("t",A).bind("p",project).bind("actor",ACTOR).then())).block(WAIT));
+        assertEquals("23503",sqlState(rejected));
+      }
     }
     assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.projects SET tenant_id=:b WHERE id=:id")
         .bind("b",B).bind("id",a.getId()).then())).block(WAIT));
@@ -182,6 +190,24 @@ class TenantProjectStorageIntegrationTest {
     assertEquals(8L,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     for(String table:TABLES) assertEquals(0L,raw.sql("SELECT count(*) n FROM taska."+table).map((r,m)->r.get("n",Long.class)).one().block(WAIT));
+  }
+
+  @Test void journalCommandsDenyMissingOrDifferentHumanActorWithoutPartialOperation() {
+    var a=create(A,"A");UUID id=UUID.randomUUID();
+    assertEquals(DomainStatus.PERMISSION_DENIED,assertThrows(DomainException.class,()->as(A,null,store.execute(s->
+        s.operations().reserve(a.getId(),id,"CREATE_TYPE"))).block(WAIT)).getStatus());
+    var type=new ProjectIssueType(a.getId(),"CUSTOM","Custom","blue",null,"square",40,null,null,UUID.randomUUID());
+    var intent=new IssueTypeCreation(id,a.getId(),UUID.randomUUID(),"request","node","digest",type,UUID.randomUUID(),
+        null,null,null,"PENDING",new ActionMetadata(null,null),null,null,Map.of());
+    assertEquals(DomainStatus.PERMISSION_DENIED,assertThrows(DomainException.class,()->as(A,ACTOR,store.execute(s->
+        s.operations().reserve(a.getId(),id,"CREATE_TYPE").then(Mono.defer(()->s.creations().insert(intent))))).block(WAIT)).getStatus());
+    assertNull(as(A,ACTOR,store.execute(s->s.operations().find(a.getId(),id))).block(WAIT));
+    assertEquals(0L,as(A,ACTOR,store.execute(s->s.creations().recoverable().count())).block(WAIT));
+  }
+
+  static String sqlState(Throwable error) {
+    for(Throwable cause=error;cause!=null;cause=cause.getCause()) if(cause instanceof R2dbcException sql) return sql.getSqlState();
+    return null;
   }
 
   @Test void journalsAndFencesAreTenantAndProjectBound() {

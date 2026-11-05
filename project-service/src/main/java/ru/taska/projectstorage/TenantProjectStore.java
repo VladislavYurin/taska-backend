@@ -112,8 +112,8 @@ public final class TenantProjectStore {
     public Mono<Void> addMember(UUID project, UUID user, ProjectRole role, UUID addedBy) {
       return sql("""
           INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by)
-          VALUES(:tenant,:project,:user,:role,:by)
-          """).bind("project",project).bind("user",user).bind("role",role.name()).bind("by",addedBy).then();
+          SELECT :tenant,id,:user,:role,:by FROM taska.projects WHERE tenant_id=:tenant AND id=:project
+          """).bind("project",project).bind("user",user).bind("role",role.name()).bind("by",addedBy).fetch().rowsUpdated().flatMap(Session::requireProjectWrite);
     }
 
     public Flux<ProjectMember> members(UUID project) {
@@ -136,10 +136,11 @@ public final class TenantProjectStore {
     public Mono<Void> settings(UUID project, String settings, UUID updatedBy) {
       return sql("""
           INSERT INTO taska.project_settings(tenant_id,project_id,settings,updated_by)
-          VALUES(:tenant,:project,CAST(:settings AS jsonb),:by)
+          SELECT :tenant,id,CAST(:settings AS jsonb),:by FROM taska.projects WHERE tenant_id=:tenant AND id=:project
           ON CONFLICT(tenant_id,project_id) DO UPDATE SET settings=EXCLUDED.settings,
             updated_at=now(),updated_by=EXCLUDED.updated_by
-          """).bind("project",project).bind("settings",settings).bind("by",updatedBy).then();
+          """).bind("project",project).bind("settings",settings).bind("by",updatedBy).fetch().rowsUpdated()
+          .flatMap(Session::requireProjectWrite);
     }
 
     public Mono<String> settings(UUID project) {
@@ -184,6 +185,10 @@ public final class TenantProjectStore {
     }
 
     private DatabaseClient.GenericExecuteSpec sql(String statement) { return db.sql(statement).bind("tenant",tenant); }
+
+    private static Mono<Void> requireProjectWrite(long rows) {
+      return rows==1 ? Mono.empty() : Mono.error(new DomainException(DomainStatus.NOT_FOUND,"Project not found"));
+    }
   }
 
   private static DatabaseClient.GenericExecuteSpec nullable(DatabaseClient.GenericExecuteSpec sql, String name, String value) {
