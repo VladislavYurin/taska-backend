@@ -72,3 +72,7 @@ PostgreSQL16/Testcontainers, фактический Liquibase с deployer→migr
 ## Private merchant policy — TAS-519
 
 The [commercial configuration authority](../billing-service/COMMERCIAL-READINESS.md) adds protected Get/Publish/ResolveMerchantConfiguration RPCs and one private JSON policy in the platform registry. Scalar flag listing excludes this document. Administrative responses and version events contain metadata only; full configuration is restricted to the verified billing-service reader.
+
+## FREE eligibility — TAS-472
+
+[Atomic FREE eligibility](FREE-ELIGIBILITY.md) implements the creation admission and protected billing admission, WEB_GLOBAL creation options and internal lawful-disposition RPCs. Identity/KMS/purpose preparation happens outside SQL; the marker commits with creation or an admission receipt. Deletion minimization retains only purpose-bound matching data. Real primary providers, gateway and offboarding/plan orchestration remain separate activation dependencies.
