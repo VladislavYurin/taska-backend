@@ -81,19 +81,81 @@ public class TenantStorageConfiguration {
   }
 
   @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.issuestorage.LifetimeTaskQuota.Authority taskQuotaAuthority() {
+    return (c, u, p) ->
+        reactor.core.publisher.Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.entitlement.EntitlementProjection.Source taskQuotaEntitlements(
+      org.springframework.beans.factory.ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc.ReactorEntitlementServiceStub>
+          stubs,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
+          security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.entitlement.GrpcEntitlementSource(
+          stub, trust, java.time.Clock.systemUTC(), "issue-service");
+    return (t, v) ->
+        reactor.core.publisher.Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "ENTITLEMENT_UNAVAILABLE"));
+  }
+
+  @Bean
   @DependsOn("safeIssueRuntime")
-  TenantIssueStore tenantIssues(ConnectionFactory factory, ObjectMapper json) {
+  ru.taska.issuestorage.LifetimeTaskQuota taskQuota(
+      ConnectionFactory factory,
+      ru.taska.issuestorage.LifetimeTaskQuota.Authority authority,
+      ru.taska.entitlement.EntitlementProjection.Source source) {
+    return new ru.taska.issuestorage.LifetimeTaskQuota(
+        new TenantTransactionExecutor(factory), authority, source, java.time.Clock.systemUTC());
+  }
+
+  @Bean
+  @DependsOn("safeIssueRuntime")
+  TenantIssueStore tenantIssues(
+      ConnectionFactory factory, ObjectMapper json, ru.taska.issuestorage.LifetimeTaskQuota quota) {
     return new TenantIssueStore(
-        new TenantTransactionExecutor(factory), json, java.time.Clock.systemUTC());
+        new TenantTransactionExecutor(factory), json, java.time.Clock.systemUTC(), quota);
   }
 
   /** TAS-343 supplies verified transport and ACL. Old RPC headers cannot mint tenant authority. */
   @Bean
   @GlobalServerInterceptor
-  ServerInterceptor issueTenantTransportClosed() {
+  ServerInterceptor issueTenantTransportClosed(
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
+          security,
+      @Value("${DEPLOY_ENVIRONMENT:local}") String environment) {
+    var trust = security.getIfAvailable();
+    ServerInterceptor quotaSecurity =
+        trust == null
+            ? null
+            : new ru.taska.security.tenant.TenantServerInterceptor(
+                trust,
+                java.util.Map.of(
+                    ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetProjectTaskQuotaMethod()
+                            .getFullMethodName(),
+                        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false),
+                    ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc
+                            .getGetTenantTaskQuotaSummaryMethod()
+                            .getFullMethodName(),
+                        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false)),
+                environment);
     return new ServerInterceptor() {
       public <Q, S> ServerCall.Listener<Q> interceptCall(
           ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
+        if (quotaSecurity != null
+            && call.getMethodDescriptor()
+                .getServiceName()
+                .equals(ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.SERVICE_NAME))
+          return quotaSecurity.interceptCall(call, headers, next);
         call.close(
             Status.UNAVAILABLE.withDescription("Issue tenant API is not activated"),
             new Metadata());

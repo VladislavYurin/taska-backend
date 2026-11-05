@@ -44,8 +44,18 @@ public final class TenantIssueStore {
   private final TenantTransactionExecutor transactions;
   private final ObjectMapper json;
   private final Clock clock;
+  private final LifetimeTaskQuota quota;
 
   public TenantIssueStore(TenantTransactionExecutor transactions, ObjectMapper json, Clock clock) {
+    this(transactions, json, clock, LifetimeTaskQuota.unavailable(transactions, clock));
+  }
+
+  public TenantIssueStore(
+      TenantTransactionExecutor transactions,
+      ObjectMapper json,
+      Clock clock,
+      LifetimeTaskQuota quota) {
+    this.quota = Objects.requireNonNull(quota);
     this.transactions = transactions;
     this.json = json;
     this.clock = clock;
@@ -169,84 +179,70 @@ public final class TenantIssueStore {
                         OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
                         // A concurrent INSERT waits for the winner. The next SELECT uses a fresh
                         // READ COMMITTED snapshot.
-                        return db.sql(
-                                """
-                                INSERT INTO taska.idempotency_keys(tenant_id,key,user_id,operation_code,request_hash,state,response,created_at,expires_at)
-                                VALUES(:tenant,:key,:actor,:op,:hash,'PENDING','{}',:now,:expires)
-                                ON CONFLICT(tenant_id,user_id,operation_code,key) DO NOTHING
-                                """)
-                            .bind("tenant", tenant)
-                            .bind("key", key)
-                            .bind("actor", UUID.fromString(actor))
-                            .bind("op", operation)
-                            .bind("hash", hash)
-                            .bind("now", now)
-                            .bind("expires", now.plusDays(1))
-                            .fetch()
-                            .rowsUpdated()
+                        return quota
+                            .authorize(LifetimeTaskQuota.Use.CREATE, command.projectId())
                             .flatMap(
-                                inserted ->
+                                grant ->
                                     db.sql(
                                             """
-                                            SELECT request_hash,state,response::text response FROM taska.idempotency_keys
-                                            WHERE tenant_id=:tenant AND user_id=:actor AND operation_code=:op AND key=:key FOR UPDATE
+                                            INSERT INTO taska.idempotency_keys(tenant_id,key,user_id,operation_code,request_hash,state,response,created_at,expires_at)
+                                            VALUES(:tenant,:key,:actor,:op,:hash,'PENDING','{}',:now,:expires)
+                                            ON CONFLICT(tenant_id,user_id,operation_code,key) DO NOTHING
                                             """)
                                         .bind("tenant", tenant)
+                                        .bind("key", key)
                                         .bind("actor", UUID.fromString(actor))
                                         .bind("op", operation)
-                                        .bind("key", key)
+                                        .bind("hash", hash)
+                                        .bind("now", now)
+                                        .bind("expires", now.plusDays(1))
                                         .fetch()
-                                        .one()
-                                        .switchIfEmpty(
-                                            Mono.error(
-                                                failure(
-                                                    DomainStatus.ABORTED,
-                                                    "Idempotency claim unavailable")))
+                                        .rowsUpdated()
                                         .flatMap(
-                                            row -> {
-                                              if (!hash.equals(row.get("request_hash")))
-                                                return Mono.error(
-                                                    failure(
-                                                        DomainStatus.ALREADY_EXISTS,
-                                                        "IDEMPOTENCY_CONFLICT"));
-                                              if ("SUCCEEDED".equals(row.get("state")))
-                                                return Mono.just(
-                                                    decode(row.get("response").toString()));
-                                              if (inserted != 1L)
-                                                return Mono.error(
-                                                    failure(
-                                                        DomainStatus.ABORTED,
-                                                        "Incomplete idempotency claim"));
-                                              return allocate(command.projectId())
-                                                  .flatMap(
-                                                      number -> persist(key, command, number, now));
-                                            }));
+                                            inserted ->
+                                                db.sql(
+                                                        """
+                                                        SELECT request_hash,state,response::text response FROM taska.idempotency_keys
+                                                        WHERE tenant_id=:tenant AND user_id=:actor AND operation_code=:op AND key=:key FOR UPDATE
+                                                        """)
+                                                    .bind("tenant", tenant)
+                                                    .bind("actor", UUID.fromString(actor))
+                                                    .bind("op", operation)
+                                                    .bind("key", key)
+                                                    .fetch()
+                                                    .one()
+                                                    .switchIfEmpty(
+                                                        Mono.error(
+                                                            failure(
+                                                                DomainStatus.ABORTED,
+                                                                "Idempotency claim unavailable")))
+                                                    .flatMap(
+                                                        row -> {
+                                                          if (!hash.equals(row.get("request_hash")))
+                                                            return Mono.error(
+                                                                failure(
+                                                                    DomainStatus.ALREADY_EXISTS,
+                                                                    "IDEMPOTENCY_CONFLICT"));
+                                                          if ("SUCCEEDED".equals(row.get("state")))
+                                                            return Mono.just(
+                                                                decode(
+                                                                    row.get("response")
+                                                                        .toString()));
+                                                          if (inserted != 1L)
+                                                            return Mono.error(
+                                                                failure(
+                                                                    DomainStatus.ABORTED,
+                                                                    "Incomplete idempotency"
+                                                                        + " claim"));
+                                                          return quota
+                                                              .allocate(db, command.projectId())
+                                                              .flatMap(
+                                                                  number ->
+                                                                      persist(
+                                                                          key, command, number,
+                                                                          now));
+                                                        })));
                       })));
-    }
-
-    private Mono<Integer> allocate(UUID project) {
-      return db.sql(
-              """
-              INSERT INTO taska.project_counters(tenant_id,project_id,next_issue_number) VALUES(:tenant,:project,1)
-              ON CONFLICT(tenant_id,project_id) DO NOTHING
-              """)
-          .bind("tenant", tenant)
-          .bind("project", project)
-          .fetch()
-          .rowsUpdated()
-          .then(
-              db.sql(
-                      """
-                      UPDATE taska.project_counters SET next_issue_number=next_issue_number+1,lifetime_created=lifetime_created+1,version=version+1
-                      WHERE tenant_id=:tenant AND project_id=:project AND next_issue_number<2147483647 AND version<9223372036854775807 AND lifetime_created<9223372036854775807
-                      RETURNING next_issue_number-1 AS allocated
-                      """)
-                  .bind("tenant", tenant)
-                  .bind("project", project)
-                  .map((r, m) -> r.get("allocated", Integer.class))
-                  .one())
-          .switchIfEmpty(
-              Mono.error(failure(DomainStatus.RESOURCE_EXHAUSTED, "Issue numbering exhausted")));
     }
 
     private Mono<Created> persist(String key, CreateIssue c, int number, OffsetDateTime now) {

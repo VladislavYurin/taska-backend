@@ -79,3 +79,5 @@ existing members, admin bypass, financial READ_ONLY acceptance, malformed/outage
 snapshots and A/B isolation. `TenantMembershipIntegrationTest` also exercises the
 actual quota RPC via mTLS/JWS and immediate membership revocation. These isolated
 checks do not establish live invitation email, PSP, public gateway or stage E2E.
+
+`GetTenantQuotas` также включает TASK_LIFETIME: максимум по живым проектам из issue-service, без project_id. Подробности источника, fail-closed reads и version fence: [lifetime-квота](../issue-service/TASK-QUOTAS.md).

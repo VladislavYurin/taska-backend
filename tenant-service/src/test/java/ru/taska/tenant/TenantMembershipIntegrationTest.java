@@ -845,7 +845,15 @@ class TenantMembershipIntegrationTest {
                 e.addLimits(QuotaLimit.newBuilder().setKind(kind).setLimit("50"));
               return Mono.just(e.build());
             },
-            clock);
+            clock,
+            t ->
+                Mono.just(
+                    ru.taska.api.b2b.v1.TenantTaskQuotaSummary.newBuilder()
+                        .setTenantId(t.toString())
+                        .setMaximumCreated("0")
+                        .setVersion("1")
+                        .setEntitlementVersion("1")
+                        .build()));
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(
                 new java.net.InetSocketAddress("127.0.0.1", 0))

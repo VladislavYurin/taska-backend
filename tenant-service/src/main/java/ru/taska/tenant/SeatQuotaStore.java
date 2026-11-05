@@ -47,12 +47,28 @@ public final class SeatQuotaStore {
   private final Authority authority;
   private final EntitlementProjection.Source billing;
   private final Clock clock;
+  private final ru.taska.entitlement.TenantTaskQuotaSource tasks;
 
   public SeatQuotaStore(
       TenantTransactionExecutor transactions,
       Authority authority,
       EntitlementProjection.Source billing,
       Clock clock) {
+    this(
+        transactions,
+        authority,
+        billing,
+        clock,
+        t -> Mono.error(fail(DomainStatus.UNAVAILABLE, "TASK_QUOTA_UNAVAILABLE")));
+  }
+
+  public SeatQuotaStore(
+      TenantTransactionExecutor transactions,
+      Authority authority,
+      EntitlementProjection.Source billing,
+      Clock clock,
+      ru.taska.entitlement.TenantTaskQuotaSource tasks) {
+    this.tasks = Objects.requireNonNull(tasks);
     this.transactions = Objects.requireNonNull(transactions);
     this.authority = Objects.requireNonNull(authority);
     this.billing = Objects.requireNonNull(billing);
@@ -321,43 +337,110 @@ public final class SeatQuotaStore {
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
               return transactions
                   .execute(db -> reader(db, tenant, context.actorId()).thenReturn(true))
-                  .then(terms(tenant))
+                  .then(Mono.zip(terms(tenant), taskSummary(tenant)))
                   .flatMap(
-                      terms ->
-                          transactions.execute(
-                              db ->
-                                  lock(db, tenant)
-                                      .then(reader(db, tenant, context.actorId()))
-                                      .then(refresh(db, tenant))
-                                      .flatMap(
-                                          counter -> {
-                                            if (terms.version() < counter.entitlement())
-                                              return Mono.error(
-                                                  fail(
-                                                      DomainStatus.UNAVAILABLE,
-                                                      "ENTITLEMENT_STALE"));
-                                            return observe(db, tenant, terms.version())
-                                                .then(refresh(db, tenant));
-                                          })
-                                      .map(
-                                          counter -> {
-                                            var usage =
-                                                QuotaUsage.newBuilder()
-                                                    .setKind(QuotaUsage.KindValue.KIND_SEAT)
-                                                    .setUsed(Long.toString(counter.used()))
-                                                    .setReserved(Long.toString(counter.reserved()))
-                                                    .setVersion(Long.toString(counter.version()))
-                                                    .setUnlimited(terms.limit().getUnlimited());
-                                            if (terms.limit().hasLimit())
-                                              usage.setLimit(terms.limit().getLimit());
-                                            return QuotaSnapshot.newBuilder()
-                                                .setTenantId(tenant.toString())
-                                                .setVersion(Long.toString(counter.version()))
-                                                .addQuotas(usage)
-                                                .setAsOf(clock.instant().toString())
-                                                .build();
-                                          })));
+                      pair -> {
+                        var terms = pair.getT1();
+                        var task = pair.getT2();
+                        if (terms.version() < Long.parseLong(task.getEntitlementVersion()))
+                          return Mono.error(fail(DomainStatus.UNAVAILABLE, "ENTITLEMENT_STALE"));
+                        return transactions.execute(
+                            db ->
+                                lock(db, tenant)
+                                    .then(reader(db, tenant, context.actorId()))
+                                    .then(refresh(db, tenant))
+                                    .flatMap(
+                                        counter -> {
+                                          if (terms.version() < counter.entitlement())
+                                            return Mono.error(
+                                                fail(
+                                                    DomainStatus.UNAVAILABLE, "ENTITLEMENT_STALE"));
+                                          return observe(db, tenant, terms.version())
+                                              .then(
+                                                  observeTasks(
+                                                      db,
+                                                      tenant,
+                                                      Long.parseLong(task.getVersion())))
+                                              .then(refresh(db, tenant));
+                                        })
+                                    .map(
+                                        counter -> {
+                                          var usage =
+                                              QuotaUsage.newBuilder()
+                                                  .setKind(QuotaUsage.KindValue.KIND_SEAT)
+                                                  .setUsed(Long.toString(counter.used()))
+                                                  .setReserved(Long.toString(counter.reserved()))
+                                                  .setVersion(Long.toString(counter.version()))
+                                                  .setUnlimited(terms.limit().getUnlimited());
+                                          if (terms.limit().hasLimit())
+                                            usage.setLimit(terms.limit().getLimit());
+                                          return QuotaSnapshot.newBuilder()
+                                              .setTenantId(tenant.toString())
+                                              .setVersion(Long.toString(counter.version()))
+                                              .addQuotas(usage)
+                                              .addQuotas(taskUsage(terms.snapshot(), task))
+                                              .setAsOf(clock.instant().toString())
+                                              .build();
+                                        }));
+                      });
             });
+  }
+
+  private Mono<TenantTaskQuotaSummary> taskSummary(UUID tenant) {
+    return tasks
+        .current(tenant)
+        .timeout(Duration.ofSeconds(5))
+        .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "TASK_QUOTA_UNAVAILABLE")))
+        .map(
+            summary -> {
+              if (!tenant.toString().equals(summary.getTenantId()))
+                throw fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH");
+              try {
+                if (!summary.getMaximumCreated().matches("0|[1-9][0-9]{0,18}")
+                    || !summary.getVersion().matches("[1-9][0-9]{0,18}")
+                    || !summary.getEntitlementVersion().matches("[1-9][0-9]{0,18}"))
+                  throw new IllegalArgumentException();
+                Long.parseLong(summary.getMaximumCreated());
+                Long.parseLong(summary.getVersion());
+                Long.parseLong(summary.getEntitlementVersion());
+              } catch (RuntimeException e) {
+                throw fail(DomainStatus.UNAVAILABLE, "INVALID_TASK_QUOTA");
+              }
+              return summary;
+            });
+  }
+
+  private Mono<Void> observeTasks(DatabaseClient db, UUID tenant, long version) {
+    return db.sql(
+            "UPDATE taska.quota_counters SET task_lifetime_version=:v,version=version+CASE WHEN"
+                + " task_lifetime_version<>:v THEN 1 ELSE 0 END WHERE tenant_id=:t AND"
+                + " resource='SEAT' AND task_lifetime_version<=:v AND version<9223372036854775807")
+        .bind("t", tenant)
+        .bind("v", version)
+        .fetch()
+        .rowsUpdated()
+        .flatMap(
+            n ->
+                n == 1
+                    ? Mono.<Void>empty()
+                    : Mono.error(fail(DomainStatus.UNAVAILABLE, "TASK_QUOTA_STALE")));
+  }
+
+  private static QuotaUsage taskUsage(Entitlement terms, TenantTaskQuotaSummary summary) {
+    var limit =
+        terms.getLimitsList().stream()
+            .filter(l -> l.getKind() == QuotaLimit.KindValue.KIND_TASK_LIFETIME)
+            .findFirst()
+            .orElseThrow();
+    var b =
+        QuotaUsage.newBuilder()
+            .setKind(QuotaUsage.KindValue.KIND_TASK_LIFETIME)
+            .setUsed(summary.getMaximumCreated())
+            .setReserved("0")
+            .setVersion(summary.getVersion())
+            .setUnlimited(limit.getUnlimited());
+    if (limit.hasLimit()) b.setLimit(limit.getLimit());
+    return b.build();
   }
 
   /** Join an owning membership removal transaction, preserving actual usage and lock order. */

@@ -23,6 +23,7 @@ Harness объединяет инструкции, доступные инстр
 | Capabilities и причины | [Common evaluator](../security/capabilities.md), `grpc-common-lib` | Current role/grant/ACL, exact recovery allowlist, flags, no user-token admin bypass and retained integrity/audit |
 | Entitlement-проекция | [Versioned projection](../data/entitlement-projection.md), `grpc-common-lib` | Monotonic events, reconciliation, bounded cache, current authority and owner migrations |
 | Внутренний RPC | [proto/v1](../../grpc-common-lib/src/main/proto/v1/) | производителей и потребителей, совместимость полей/enum, request context |
+| Lifetime-квота задач | [TASK admission](../../issue-service/TASK-QUOTAS.md), `issue-service` | Атомарность create/idempotency, current billing, 50/>50, counter tombstones и scoped reads |
 | Квоты мест | [SEAT admission](../../tenant-service/SEAT-QUOTAS.md), `tenant-service` | Membership + reservation atomicity, replay/fence/expiry, scoped admin bypass and safe quota read |
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
