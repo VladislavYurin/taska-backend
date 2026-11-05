@@ -1,0 +1,16 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/billing-catalog.proto";
+option java_multiple_files = true;
+option java_outer_classname = "EntitlementTransportProto";
+option java_package = "ru.taska.api.b2b.v1";
+message GetEntitlementSnapshotRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  optional string minimum_version = 3;
+}
+// Internal authoritative lookup. Consumer projection/cache belongs to TAS-359.
+service EntitlementService {
+  rpc GetEntitlementSnapshot(GetEntitlementSnapshotRequest) returns (Entitlement);
+}

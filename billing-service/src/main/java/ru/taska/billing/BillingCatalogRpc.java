@@ -38,6 +38,12 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
   }
 
   @Override
+  public Mono<ru.taska.api.b2b.v1.Entitlement> getEntitlement(
+      Mono<ru.taska.api.b2b.v1.GetEntitlementRpcRequest> request) {
+    return inbound(request.flatMap(subscriptions.entitlements()::get));
+  }
+
+  @Override
   public Mono<ru.taska.api.b2b.v1.Invoice> createInvoice(
       Mono<ru.taska.api.b2b.v1.CreateInvoiceRpcRequest> request) {
     return inbound(request.flatMap(invoices::create));
