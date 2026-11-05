@@ -84,6 +84,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-platform-flags-0003",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0003-platform-flags.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

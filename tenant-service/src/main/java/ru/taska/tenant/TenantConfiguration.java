@@ -1,21 +1,31 @@
 package ru.taska.tenant;
 
-import io.grpc.*;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.r2dbc.spi.ConnectionFactory;
-import java.time.*;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Map;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.PlatformServiceGrpc;
 import ru.taska.api.b2b.v1.TenantMembershipServiceGrpc;
 import ru.taska.api.b2b.v1.TenantServiceGrpc;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
-import ru.taska.tenant.RegistryDependencies.*;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.TenantServerInterceptor;
+import ru.taska.tenant.RegistryDependencies.FreeAdmission;
+import ru.taska.tenant.RegistryDependencies.PublishedPlans;
 
 @Configuration
 public class TenantConfiguration {
@@ -69,11 +79,13 @@ public class TenantConfiguration {
   @Bean
   @DependsOn("safeRuntimeRole")
   TenantRegistryService tenantRegistry(
-      TenantTransactionExecutor transactions,
-      PublishedPlans plans,
-      FreeAdmission admission,
-      @Value("${taska.tenant.creation-window:30d}") Duration window) {
-    return new TenantRegistryService(transactions, plans, admission, Clock.systemUTC(), window);
+      TenantTransactionExecutor transactions, PublishedPlans plans, FreeAdmission admission) {
+    return new TenantRegistryService(
+        transactions,
+        plans,
+        admission,
+        Clock.systemUTC(),
+        db -> PlatformFlags.duration(db, "UNPAID_CREATION_WINDOW_SECONDS"));
   }
 
   @Bean
@@ -114,6 +126,18 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @DependsOn("safeRuntimeRole")
+  PlatformFlags platformFlags(
+      ConnectionFactory factory,
+      @Value("${taska.tenant.platform-flags-cursor-key:}") String cursorKey) {
+    return new PlatformFlags(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        new PlatformFlagCursor(cursorKey, Clock.systemUTC()));
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -123,6 +147,10 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.of(
+              PlatformServiceGrpc.getListPlatformFlagsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false),
+              PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true),
               TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true),
               TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),

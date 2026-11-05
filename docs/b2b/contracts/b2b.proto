@@ -938,6 +938,12 @@ message PlatformFlag {
   optional bool boolean_value = 3;
   optional string integer_value = 4;
   string version = 5;
+  string effective_at = 6;
+  string owner = 7;
+  optional bool default_boolean_value = 8;
+  optional string default_integer_value = 9;
+  optional string minimum_value = 10;
+  optional string maximum_value = 11;
 }
 
 message PlatformFlagPage {

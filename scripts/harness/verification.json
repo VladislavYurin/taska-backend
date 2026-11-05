@@ -573,7 +573,8 @@
         "selectors": [
           "*",
           "TenantRegistryIntegrationTest",
-          "TenantMembershipIntegrationTest"
+          "TenantMembershipIntegrationTest",
+          "PlatformFlagsIntegrationTest"
         ],
         "noTestsReason": null
       },
