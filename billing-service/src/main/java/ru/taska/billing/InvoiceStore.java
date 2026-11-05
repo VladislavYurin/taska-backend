@@ -35,6 +35,7 @@ public final class InvoiceStore {
   private final BillingCatalog catalog;
   private final Clock clock;
   private final PeriodCursor cursors;
+  private final InvoiceDependencies.RenewalAuthority renewalAuthority;
   private final JsonMapper json = JsonMapper.builder().build();
 
   public InvoiceStore(
@@ -45,6 +46,28 @@ public final class InvoiceStore {
       BillingCatalog catalog,
       Clock clock,
       PeriodCursor cursors) {
+    this(
+        transactions,
+        readers,
+        obligations,
+        commercial,
+        catalog,
+        clock,
+        cursors,
+        (db, context, period, payload) ->
+            Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")));
+  }
+
+  public InvoiceStore(
+      TenantTransactionExecutor transactions,
+      ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority readers,
+      ObligationAuthority obligations,
+      CommercialPolicy commercial,
+      BillingCatalog catalog,
+      Clock clock,
+      PeriodCursor cursors,
+      InvoiceDependencies.RenewalAuthority renewalAuthority) {
+    this.renewalAuthority = renewalAuthority;
     this.transactions = transactions;
     this.access = new FinancialAccess(readers);
     this.obligations = obligations;
@@ -314,10 +337,77 @@ public final class InvoiceStore {
             });
   }
 
+  /** Tenant-scoped scheduler step. It issues an invoice, never a charge or paid period. */
+  public Mono<Invoice> issueScheduledRenewal(
+      UUID tenant, UUID sourcePeriod, CreateInvoiceRequest payload) {
+    return VerifiedTenantContext.current()
+        .onErrorMap(
+            IllegalStateException.class,
+            e -> fail(DomainStatus.UNAUTHENTICATED, "AUTHENTICATION_REQUIRED"))
+        .flatMap(
+            v -> {
+              var claims = ru.taska.security.tenant.RpcContextBridge.details(v).getContext();
+              if (!tenant.toString().equals(v.tenantId())
+                  || !"issueRenewalInvoice".equals(v.action())
+                  || claims.getCredentialKind()
+                      != ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE
+                  || !"billing-service".equals(claims.getIssuerService())
+                  || !v.scopes().contains("write"))
+                return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
+              validate(payload);
+              return transactions.execute(
+                  db ->
+                      db.sql(
+                              "SELECT tenant_id FROM taska.subscriptions WHERE tenant_id=:tenant"
+                                  + " FOR UPDATE")
+                          .bind("tenant", tenant)
+                          .fetch()
+                          .one()
+                          .switchIfEmpty(
+                              Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")))
+                          .flatMap(
+                              ignored ->
+                                  renewalAuthority
+                                      .allowed(db, v, sourcePeriod, payload)
+                                      .switchIfEmpty(
+                                          Mono.error(
+                                              fail(
+                                                  DomainStatus.UNAVAILABLE,
+                                                  "DEPENDENCY_UNAVAILABLE")))
+                                      .flatMap(
+                                          allowed ->
+                                              allowed
+                                                  ? Mono.just(true)
+                                                  : Mono.error(
+                                                      fail(
+                                                          DomainStatus.PERMISSION_DENIED,
+                                                          "SCOPE_DENIED"))))
+                          .flatMap(
+                              ignored -> {
+                                Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+                                return issue(
+                                    db,
+                                    tenant,
+                                    payload,
+                                    new RenewalCalendar()
+                                        .forPeriod(db, tenant, sourcePeriod, payload, now, true),
+                                    now);
+                              }));
+            });
+  }
+
   private Mono<Invoice> issue(DatabaseClient db, UUID tenant, CreateInvoiceRequest p) {
     Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-    return obligations
-        .resolve(db, tenant, p, now)
+    return issue(db, tenant, p, obligations.resolve(db, tenant, p, now), now);
+  }
+
+  private Mono<Invoice> issue(
+      DatabaseClient db,
+      UUID tenant,
+      CreateInvoiceRequest p,
+      Mono<Obligation> assignment,
+      Instant now) {
+    return assignment
         .switchIfEmpty(Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE")))
         .flatMap(
             o -> {

@@ -162,6 +162,24 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+      name = "billing.renewal.enabled",
+      havingValue = "true")
+  RenewalScheduler renewalScheduler(
+      InvoiceStore invoices,
+      RenewalScheduler.WorkSource jobs,
+      RenewalScheduler.ExecutionContext contexts) {
+    return new RenewalScheduler(invoices, jobs, contexts, Clock.systemUTC());
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  InvoiceDependencies.RenewalAuthority renewalAuthority() {
+    return (db, context, period, payload) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
   @DependsOn("safeRuntimeRole")
   InvoiceStore invoices(
       ConnectionFactory factory,
@@ -169,7 +187,8 @@ public class BillingConfiguration {
       InvoiceDependencies.ObligationAuthority obligations,
       InvoiceDependencies.CommercialPolicy commercial,
       BillingCatalog catalog,
-      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String key) {
+      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String key,
+      InvoiceDependencies.RenewalAuthority renewalAuthority) {
     var clock = Clock.systemUTC();
     return new InvoiceStore(
         new TenantTransactionExecutor(factory),
@@ -178,7 +197,8 @@ public class BillingConfiguration {
         commercial,
         catalog,
         clock,
-        new PeriodCursor(key, clock));
+        new PeriodCursor(key, clock),
+        renewalAuthority);
   }
 
   @Bean

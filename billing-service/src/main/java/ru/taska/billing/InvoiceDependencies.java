@@ -36,6 +36,17 @@ public final class InvoiceDependencies {
         DatabaseClient transaction, UUID tenant, CreateInvoiceRequest request, Instant now);
   }
 
+  public interface RenewalAuthority {
+    /**
+     * Current tenant lifecycle, billing channel flags and scheduler eligibility; same transaction.
+     */
+    Mono<Boolean> allowed(
+        DatabaseClient transaction,
+        ru.taska.security.tenant.VerifiedTenantContext context,
+        UUID sourcePeriodId,
+        CreateInvoiceRequest payload);
+  }
+
   public record CommercialQuote(
       String profileVersion,
       SellerSnapshot seller,
