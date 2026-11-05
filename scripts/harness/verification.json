@@ -1065,6 +1065,7 @@
           "BillingCatalogIntegrationTest",
           "SubscriptionIntegrationTest",
           "InvoiceIntegrationTest",
+          "FinancialLedgerIntegrationTest",
           "CommercialReadinessIntegrationTest"
         ],
         "noTestsReason": null

@@ -182,8 +182,41 @@ class SubscriptionIntegrationTest {
             .map((r, m) -> r.get("md5sum", String.class))
             .one()
             .block(WAIT);
+    migrateNext(); // 0003: start the ledger upgrade with a real issued invoice.
+    UUID upgradeInvoice = UUID.randomUUID();
+    InvoiceTestFixtures.ensure(operator, upgradeTenant, upgradeInvoice, PAID);
+    String invoiceChecksum =
+        operator
+            .sql(
+                "SELECT md5sum FROM billing_liquibase.databasechangelog WHERE"
+                    + " id='billing-invoices-0003'")
+            .map((r, m) -> r.get("md5sum", String.class))
+            .one()
+            .block(WAIT);
+    migrateNext(); // Preserve the independently delivered commercial 0004 before ledger 0005.
     migrate();
     migrate();
+    assertEquals(
+        invoiceChecksum,
+        operator
+            .sql(
+                "SELECT md5sum FROM billing_liquibase.databasechangelog WHERE"
+                    + " id='billing-invoices-0003'")
+            .map((r, m) -> r.get("md5sum", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        "OPEN",
+        operator
+            .sql(
+                "SELECT state FROM taska.invoices WHERE tenant_id='"
+                    + upgradeTenant
+                    + "' AND id='"
+                    + upgradeInvoice
+                    + "'")
+            .map((r, m) -> r.get("state", String.class))
+            .one()
+            .block(WAIT));
     assertEquals(
         subscriptionChecksum,
         operator
@@ -236,6 +269,27 @@ class SubscriptionIntegrationTest {
     new BillingConfiguration().safeRuntimeRole(pool).afterPropertiesSet();
   }
 
+  static void migrateNext() throws Exception {
+    var source =
+        new BillingConfiguration()
+            .registryLiquibase(pg.getJdbcUrl(), "taska_billing_deployer", DEPLOY_PASSWORD)
+            .getDataSource();
+    try (var connection = source.getConnection()) {
+      var database =
+          liquibase.database.DatabaseFactory.getInstance()
+              .findCorrectDatabaseImplementation(
+                  new liquibase.database.jvm.JdbcConnection(connection));
+      database.setLiquibaseSchemaName("billing_liquibase");
+      try (var runner =
+          new liquibase.Liquibase(
+              "db/changelog/db.changelog-master.yaml",
+              new liquibase.resource.ClassLoaderResourceAccessor(),
+              database)) {
+        runner.update(1, new liquibase.Contexts(), new liquibase.LabelExpression());
+      }
+    }
+  }
+
   static void migrate() throws Exception {
     new BillingConfiguration()
         .registryLiquibase(pg.getJdbcUrl(), "taska_billing_deployer", DEPLOY_PASSWORD)
@@ -255,7 +309,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");
