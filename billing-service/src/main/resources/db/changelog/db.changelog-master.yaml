@@ -143,6 +143,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "billing-commercial-fx-0004",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0004-commercial-fx.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

@@ -38,6 +38,10 @@
             <artifactId>protobuf-java</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.google.protobuf</groupId><artifactId>protobuf-java-util</artifactId><version>${protobuf.version}</version>
+        </dependency>
+
         <!-- Reactor -->
         <dependency>
             <groupId>io.projectreactor</groupId>

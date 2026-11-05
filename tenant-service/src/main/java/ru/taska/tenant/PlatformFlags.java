@@ -40,7 +40,7 @@ public final class PlatformFlags {
     this.cursors = cursors;
   }
 
-  private Mono<VerifiedTenantContext> authority(String action, boolean write) {
+  Mono<VerifiedTenantContext> authority(String action, boolean write) {
     return VerifiedTenantContext.current()
         .onErrorMap(
             IllegalStateException.class,
@@ -138,7 +138,11 @@ public final class PlatformFlags {
               int limit = request.getPage().getLimit() == 0 ? 50 : request.getPage().getLimit();
               if (limit < 1 || limit > 100)
                 throw fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
-              return db.sql("SELECT DISTINCT ON(v.key) " + ROW + " ORDER BY v.key,v.version DESC")
+              return db.sql(
+                      "SELECT DISTINCT ON(v.key) "
+                          + ROW
+                          + " WHERE v.value_type IN ('BOOLEAN','INTEGER','DURATION_SECONDS') ORDER"
+                          + " BY v.key,v.version DESC")
                   .fetch()
                   .all()
                   .map(PlatformFlags::map)

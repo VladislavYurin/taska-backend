@@ -1,0 +1,78 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// TAS-519: private service/operator configuration. Never returned by scalar flags or public REST.
+enum CommercialEnvironment { COMMERCIAL_ENVIRONMENT_UNSPECIFIED = 0; COMMERCIAL_ENVIRONMENT_SANDBOX = 1; COMMERCIAL_ENVIRONMENT_LIVE = 2; }
+enum CommercialCurrency { COMMERCIAL_CURRENCY_UNSPECIFIED = 0; COMMERCIAL_CURRENCY_EUR = 1; COMMERCIAL_CURRENCY_USD = 2; }
+enum CommercialMethod { COMMERCIAL_METHOD_UNSPECIFIED = 0; COMMERCIAL_METHOD_PSP = 1; COMMERCIAL_METHOD_WIRE = 2; }
+enum CommercialBuyerType { COMMERCIAL_BUYER_UNSPECIFIED = 0; COMMERCIAL_BUYER_BUSINESS = 1; COMMERCIAL_BUYER_CONSUMER = 2; }
+message CommercialSeller {
+  string profile_version = 1;
+  string legal_name = 2;
+  string registration_id = 3;
+  string tax_id = 4;
+  string address_line = 5;
+  string postal_code = 6;
+  string city = 7;
+  string country = 8;
+}
+message CommercialTaxRule { string version = 1; string label = 2; string rate = 3; }
+message CommercialMarket {
+  string country = 1;
+  CommercialBuyerType buyer_type = 2;
+  CommercialCurrency currency = 3;
+  CommercialMethod method = 4;
+  string tax_rule_version = 5;
+  string document_template_version = 6;
+  string refund_policy_version = 7;
+}
+message CommercialStripe {
+  string merchant_account = 1;
+  CommercialEnvironment environment = 2;
+  string api_key_reference = 3;
+  string webhook_key_reference = 4;
+}
+message CommercialBank {
+  string beneficiary = 1; string iban = 2; string bic = 3; string bank_name = 4;
+  string calendar_id = 5; string calendar_version = 6; string calendar_digest = 7;
+  bool calendar_verified = 8; bool fixture_calendar = 9;
+}
+message CommercialFxPolicy { string source = 1; string source_version = 2; int64 max_age_seconds = 3; }
+message MerchantConfiguration {
+  uint32 schema_version = 1;
+  bool enabled = 2;
+  CommercialEnvironment environment = 3;
+  CommercialSeller seller = 4;
+  repeated CommercialMarket markets = 5;
+  repeated CommercialTaxRule tax_rules = 6;
+  CommercialStripe stripe = 7;
+  CommercialBank bank = 8;
+  CommercialFxPolicy fx = 9;
+}
+message MerchantConfigurationView {
+  string version = 1; string effective_at = 2;
+  CommercialEnvironment environment = 3;
+  bool enabled = 4; bool live_profile_complete = 5;
+  repeated string missing_requirements = 6;
+}
+message MerchantConfigurationSnapshot {
+  string version = 1; string effective_at = 2;
+  MerchantConfiguration configuration = 3;
+}
+message GetMerchantConfigurationRequest { RequestContext context = 1; }
+message PublishMerchantConfigurationRequest {
+  RequestContext context = 1; MerchantConfiguration configuration = 2;
+  MutationOptions mutation = 3; bool confirmed = 4;
+}
+message ResolveMerchantConfigurationRequest {
+  RequestContext context = 1;
+  optional string version = 2; // Omit for current; historical snapshots never reprice old documents.
+}
+service MerchantConfigurationService {
+  rpc GetMerchantConfiguration(GetMerchantConfigurationRequest) returns (MerchantConfigurationView);
+  rpc PublishMerchantConfiguration(PublishMerchantConfigurationRequest) returns (MerchantConfigurationView);
+  rpc ResolveMerchantConfiguration(ResolveMerchantConfigurationRequest) returns (MerchantConfigurationSnapshot);
+}
