@@ -303,7 +303,12 @@ public final class EntitlementProjection {
             && (!limit.getLimit().matches("0|[1-9][0-9]{0,18}")
                 || Long.parseLong(limit.getLimit()) < 0)) throw new IllegalArgumentException();
       }
-      if (kinds.size() != 4
+      if (!kinds.equals(
+              EnumSet.of(
+                  QuotaLimit.KindValue.KIND_PROJECT,
+                  QuotaLimit.KindValue.KIND_SEAT,
+                  QuotaLimit.KindValue.KIND_STORAGE_BYTES,
+                  QuotaLimit.KindValue.KIND_TASK_LIFETIME))
           || e.getRestrictionsList().stream()
               .anyMatch(
                   r ->

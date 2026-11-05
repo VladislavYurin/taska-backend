@@ -344,4 +344,68 @@ class EntitlementProjectionIntegrationTest {
     assertTrue(free.validNow());
     free.requireNewResource();
   }
+
+  @Test
+  void identicalAuthoritativeLookupRefreshesTrustButEventsCannotRefreshIt() throws Exception {
+    read(A);
+    now.set(START.plusSeconds(10));
+    read(A); // New authoritative lookup, identical immutable version.
+    assertEquals(2, calls.get());
+    now.set(START.plusSeconds(19));
+    apply(event(UUID.randomUUID(), snapshot(A, 1))); // Same version, new envelope ID.
+    read(A);
+    assertEquals(2, calls.get());
+    now.set(START.plusSeconds(20));
+    read(A);
+    assertEquals(3, calls.get());
+  }
+
+  @Test
+  void reconciliationLosingRaceReturnsNewerCommittedEventWithoutFalseConflict() throws Exception {
+    read(A);
+    var response = reactor.core.publisher.Sinks.<Entitlement>one();
+    projection =
+        new EntitlementProjection(
+            fixture.executor,
+            (t, min) -> {
+              assertEquals(1, min);
+              return response.asMono();
+            },
+            (c, u) -> Mono.just(Set.of()),
+            (c, e) -> Mono.just(true),
+            clock,
+            Duration.ofSeconds(10),
+            2);
+    var pending = as(A, projection.resolve(EntitlementProjection.Use.NEW_RESOURCE)).toFuture();
+    // Wait for the source subscription rather than racing its initial database read.
+    long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+    while (response.currentSubscriberCount() == 0 && System.nanoTime() < deadline)
+      Thread.onSpinWait();
+    assertEquals(1, response.currentSubscriberCount());
+    apply(event(UUID.randomUUID(), snapshot(A, 3)));
+    assertEquals(reactor.core.publisher.Sinks.EmitResult.OK, response.tryEmitValue(snapshot(A, 2)));
+    assertEquals(
+        "3", pending.get(5, java.util.concurrent.TimeUnit.SECONDS).snapshot().getVersion());
+  }
+
+  @Test
+  void exactRequiredLimitKindsRejectDuplicatesMissingAndUnknownKinds() {
+    var complete = snapshot(A, 1);
+    assertEquals(4, EntitlementProjection.validate(complete).getLimitsCount());
+    assertThrows(
+        DomainException.class,
+        () ->
+            EntitlementProjection.validate(
+                complete.toBuilder().setLimits(0, complete.getLimits(1)).build()));
+    assertThrows(
+        DomainException.class,
+        () ->
+            EntitlementProjection.validate(
+                complete.toBuilder()
+                    .setLimits(0, complete.getLimits(0).toBuilder().setKindValue(99))
+                    .build()));
+    assertThrows(
+        DomainException.class,
+        () -> EntitlementProjection.validate(complete.toBuilder().removeLimits(0).build()));
+  }
 }
