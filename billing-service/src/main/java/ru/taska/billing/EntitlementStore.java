@@ -186,14 +186,17 @@ public final class EntitlementStore {
       DatabaseClient db, UUID tenant, Map<String, Object> previous, Instant now) {
     return db.sql(
             """
-            SELECT s.*,s.selected_terms_snapshot::text selected_terms,
+            SELECT s.*,c.kind selected_kind,s.selected_terms_snapshot::text selected_terms,
               p.id effective_period_id,p.plan_version_id effective_plan_id,
               p.starts_at effective_start,p.ends_at effective_end,p.terms_snapshot::text period_terms,
               (SELECT min(f.starts_at) FROM taska.subscription_periods f WHERE f.tenant_id=s.tenant_id
                  AND f.status='GRANTED' AND f.starts_at>:now) next_start,
               EXISTS(SELECT 1 FROM taska.subscription_periods r WHERE r.tenant_id=s.tenant_id
                  AND r.status='REVOKED') had_revocation
-            FROM taska.subscriptions s LEFT JOIN LATERAL (
+            FROM taska.subscriptions s
+            JOIN taska.catalog_plan_versions selected_plan ON selected_plan.id=s.selected_plan_version_id
+            JOIN taska.catalog_plans c ON c.plan_code=selected_plan.plan_code
+            LEFT JOIN LATERAL (
               SELECT * FROM taska.subscription_periods p WHERE p.tenant_id=s.tenant_id
                 AND p.status='GRANTED' AND p.starts_at<=:now
               ORDER BY (p.ends_at>:now) DESC,p.starts_at DESC,p.id DESC LIMIT 1
@@ -209,7 +212,7 @@ public final class EntitlementStore {
               Instant end = instant(row.get("effective_end"));
               boolean paid = end != null && now.isBefore(end);
               JsonNode selected = json.readTree(row.get("selected_terms").toString());
-              boolean free = !paid && "FREE".equals(selected.path("kind").asText());
+              boolean free = !paid && "FREE".equals(row.get("selected_kind"));
               boolean periodTerms = !free && end != null;
               JsonNode terms =
                   periodTerms ? json.readTree(row.get("period_terms").toString()) : selected;
@@ -236,9 +239,7 @@ public final class EntitlementStore {
                       ? "FREE"
                       : paid
                           ? "PAID"
-                          : Boolean.TRUE.equals(row.get("had_revocation")) && end == null
-                              ? "REVOKED"
-                              : "UNPAID";
+                          : Boolean.TRUE.equals(row.get("had_revocation")) ? "REVOKED" : "UNPAID";
               if (restrictions.contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_DISPUTE.name()))
                 coverage = "DISPUTED";
               Instant next = instant(row.get("next_start"));
@@ -298,6 +299,7 @@ public final class EntitlementStore {
                   max_storage_bytes,features,restrictions,coverage_state,state_key,source_operation_id,created_at)
                 VALUES(:tenant,:version,:plan,:period,:from,:until,:paid,:projects,:members,:tasks,:storage,
                   CAST(:features AS jsonb),CAST(:restrictions AS jsonb),:coverage,:signature,:operation,:now)
+                RETURNING *,features::text AS features_text,restrictions::text AS restrictions_text
                 """)
             .bind("tenant", tenant)
             .bind("version", version)
@@ -330,8 +332,9 @@ public final class EntitlementStore {
             : statement.bind("tasks", p.tasks());
     return statement
         .fetch()
-        .rowsUpdated()
-        .then(latest(db, tenant))
+        .one()
+        .switchIfEmpty(
+            Mono.error(new IllegalStateException("Entitlement insert returned no snapshot")))
         .map(this::dto)
         .flatMap(snapshot -> event(db, tenant, version, operation, snapshot).thenReturn(snapshot));
   }

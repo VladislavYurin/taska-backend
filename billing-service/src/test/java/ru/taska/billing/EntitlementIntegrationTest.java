@@ -253,7 +253,10 @@ class EntitlementIntegrationTest {
     UUID reversal = f.reverse(f.confirmed.get(old));
     f.revoke(A, reversal, "loss").block(WAIT);
     var after = get(OWNER_A, A);
-    assertEquals(before.getCoveragePeriodId(), after.getCoveragePeriodId());
+    assertEquals(
+        f.confirmed.get(independent).activationOperationId().toString(),
+        after.getCoveragePeriodId());
+    assertTrue(Long.parseLong(after.getVersion()) > Long.parseLong(before.getVersion()));
     assertEquals(NOW.plusSeconds(200).toString(), after.getPaidThrough());
     assertTrue(after.getRestrictionsList().isEmpty());
     f.revoke(A, reversal, "duplicate-loss").block(WAIT);
@@ -409,6 +412,74 @@ class EntitlementIntegrationTest {
                 .block(WAIT));
     assertEquals("1", get(OWNER_A, A).getVersion());
     assertEquals(3, count("entitlement_snapshots"));
+  }
+
+  @Test
+  void lastCoverageLossIsRevokedEvenWhenIndependentGrantedHistoryHasExpired() {
+    f.init(A, PAID, "init").block(WAIT);
+    UUID history = f.proof(A, NOW.minusSeconds(200), NOW.minusSeconds(100));
+    UUID current = f.proof(A, NOW, NOW.plusSeconds(100));
+    f.grant(A, history, "history").block(WAIT);
+    f.grant(A, current, "current").block(WAIT);
+    f.revoke(A, f.reverse(f.confirmed.get(current)), "loss").block(WAIT);
+    var result = get(OWNER_A, A);
+    assertTrue(
+        result.getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertEquals(
+        "REVOKED",
+        operator
+            .sql(
+                "SELECT coverage_state FROM taska.entitlement_snapshots WHERE tenant_id=:tenant"
+                    + " ORDER BY version DESC LIMIT 1")
+            .bind("tenant", A)
+            .map((r, m) -> r.get("coverage_state", String.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void legacyFreeTermsWithoutKindUseTheStableCatalogKindWithoutChangingLimits() {
+    sql(
+        "INSERT INTO"
+            + " taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode)"
+            + " SELECT '"
+            + A
+            + "',p.id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE p.id='"
+            + FREE
+            + "'");
+    var free = get(OWNER_A, A);
+    assertTrue(free.getRestrictionsList().isEmpty());
+    assertEquals(FREE.toString(), free.getPlanVersionId());
+    assertFalse(free.hasPaidThrough());
+    assertEquals(
+        "FREE",
+        operator
+            .sql("SELECT coverage_state FROM taska.entitlement_snapshots WHERE tenant_id=:tenant")
+            .bind("tenant", A)
+            .map((r, m) -> r.get("coverage_state", String.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void internalServicePurposeIssuerAndReadScopeAreMandatoryBeforeAnySnapshotWrite() {
+    f.init(A, FREE, "init").block(WAIT);
+    var request = GetEntitlementSnapshotRequest.newBuilder().setTenantId(A.toString()).build();
+    var valid =
+        f.worker(A, "getEntitlementSnapshot", "issue-service").toBuilder()
+            .clearScopes()
+            .addScopes("read")
+            .build();
+    for (var claims :
+        List.of(
+            valid.toBuilder().setAction("getSubscription").build(),
+            valid.toBuilder().setIssuerService("mcp-server").build(),
+            valid.toBuilder().clearScopes().addScopes("write").build()))
+      rejects(
+          DomainStatus.PERMISSION_DENIED,
+          RegistryTestContext.withClaims(claims, entitlements.getSnapshot(request)));
+    assertEquals(1, count("entitlement_snapshots"));
+    assertEquals(2, count("outbox_events"));
   }
 
   @Test
