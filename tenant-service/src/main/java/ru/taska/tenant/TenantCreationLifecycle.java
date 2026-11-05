@@ -370,17 +370,15 @@ public final class TenantCreationLifecycle {
                       updated ->
                           completeExpiry(db, tenant)
                               .then(
-                                  ready
+                                  ready || !Set.of("ACCEPTED", "RUNNING").contains(op.get("state"))
                                       ? Mono.empty()
-                                      : fence(db, tenant, false, null)
-                                          .then(
-                                              db.sql(
-                                                      "UPDATE taska.tenant_provisioning_dispatch"
-                                                          + " SET completed_at=NULL,next_attempt_at=:now"
-                                                          + " WHERE tenant_id=:tenant")
-                                                  .bind("now", at(now))
-                                                  .bind("tenant", tenant)
-                                                  .then()))
+                                      : db.sql(
+                                              "UPDATE taska.tenant_provisioning_dispatch"
+                                                  + " SET completed_at=NULL,next_attempt_at=:now"
+                                                  + " WHERE tenant_id=:tenant")
+                                          .bind("now", at(now))
+                                          .bind("tenant", tenant)
+                                          .then())
                               .then(
                                   event(
                                       db, updated, e.decisionId(), "TenantInitialPaymentAccepted"))

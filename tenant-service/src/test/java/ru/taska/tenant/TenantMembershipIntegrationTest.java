@@ -429,6 +429,32 @@ class TenantMembershipIntegrationTest {
     assertEquals(0, empty.getItemsCount());
     assertFalse(empty.hasNextCursor());
     operator
+        .sql("UPDATE taska.tenants SET lifecycle='AWAITING_PAYMENT' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    var pending = assertThrows(DomainException.class, () -> list(owner, 1, token).block(WAIT));
+    assertEquals("PAYMENT_PENDING", pending.getDetails().get("code"));
+    assertEquals(
+        Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT,
+        batch(A, OWNER).block(WAIT).getTenantLifecycle());
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='PROVISIONING' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    assertEquals(
+        "INVALID_STATE",
+        assertThrows(DomainException.class, () -> list(owner, 1, token).block(WAIT))
+            .getDetails()
+            .get("code"));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='ACTIVE' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+
+    operator
         .sql("UPDATE taska.tenants SET membership_version=11 WHERE id=:t")
         .bind("t", A)
         .fetch()

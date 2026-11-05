@@ -361,6 +361,21 @@ class TenantCreationLifecycleIntegrationTest {
     String key = UUID.randomUUID().toString();
     var r = cancelRequest(c, key, c.getTenant().getVersion(), true);
     var initial = current(c);
+    sql(
+        "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('"
+            + id(c)
+            + "','"
+            + OTHER
+            + "','TENANT_ADMIN','ACTIVE')");
+    rejected(
+        cancel(r, OTHER, null, CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL, true), "OWNER_REQUIRED");
+    sql(
+        "UPDATE taska.tenant_memberships SET status='REMOVED' WHERE tenant_id='"
+            + id(c)
+            + "' AND user_id='"
+            + OTHER
+            + "'");
+
     rejected(
         cancel(r, OTHER, null, CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL, true),
         "TENANT_NOT_FOUND");
@@ -418,9 +433,17 @@ class TenantCreationLifecycleIntegrationTest {
             CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL,
             true),
         "IDEMPOTENCY_CONFLICT");
+    rejected(
+        cancel(
+            cancelRequest(c, UUID.randomUUID().toString(), c.getTenant().getVersion(), true),
+            OWNER,
+            null,
+            CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL,
+            true),
+        "VERSION_CONFLICT");
     assertEquals(closed, cancel(c).block(WAIT));
     assertEquals(2, count("outbox_events"));
-    assertEquals(1, count("tenant_memberships"));
+    assertEquals(2, count("tenant_memberships"));
     assertEquals(0, admissions.get());
     assertEquals(Operation.StateValue.STATE_FAILED, resume(c).block(WAIT).getState());
     sql("UPDATE taska.tenant_memberships SET status='SUSPENDED' WHERE tenant_id='" + id(c) + "'");
@@ -682,6 +705,87 @@ class TenantCreationLifecycleIntegrationTest {
         Tenant.LifecycleValue.LIFECYCLE_OWNER_CANCELLED, cancel(c).block(WAIT).getLifecycle());
     assertEquals(0, admissions.get());
     assertEquals(1, count("tenant_memberships"));
+  }
+
+  @Test
+  void immutableIncompleteDecisionReplaysAndNewDecisionCanSupplyCoverage() {
+    var c = create("immutable-decision", PAID);
+    resume(c).block(WAIT);
+    var e = evidence(c, now.get(), true, null);
+    var first = apply(c, e).block(WAIT);
+    assertEquals(TenantInitialPaymentResult.Outcome.OUTCOME_NEEDS_EVIDENCE, first.getOutcome());
+    assertEquals(first, apply(c, e).block(WAIT));
+    var corrected =
+        new InitialPayment(
+            UUID.randomUUID(),
+            e.tenantId(),
+            e.creationOperationId(),
+            e.financialFactId(),
+            e.invoiceId(),
+            e.planVersionId(),
+            true,
+            UUID.randomUUID(),
+            e.precision(),
+            e.occurredAt(),
+            null,
+            null,
+            e.invoiceDeadline());
+    assertEquals(
+        TenantInitialPaymentResult.Outcome.OUTCOME_APPLIED,
+        apply(c, corrected).block(WAIT).getOutcome());
+    assertEquals(3, count("outbox_events"));
+  }
+
+  @Test
+  void firstPaymentPreservesLiveWorkerLeaseAndNoTrustLeavesExpiryIdle() {
+    var c = create("live-payment", PAID);
+    var started = Sinks.<Void>one();
+    var release = Sinks.<Void>one();
+    var healthy = dependencies();
+    saga =
+        new TenantProvisioning(
+            tx,
+            new TenantProvisioning.Dependencies() {
+              public Mono<Void> workflow(UUID t, UUID o, UUID template) {
+                started.tryEmitEmpty();
+                return release.asMono().then(healthy.workflow(t, o, template));
+              }
+
+              public Mono<Void> billing(UUID t, UUID o, UUID p, boolean f) {
+                return healthy.billing(t, o, p, f);
+              }
+            },
+            clock);
+    var live = resume(c).toFuture();
+    started.asMono().block(WAIT);
+    var before =
+        operator
+            .sql("SELECT fence,lease_until FROM taska.tenant_operations WHERE tenant_id=:id")
+            .bind("id", id(c))
+            .fetch()
+            .one()
+            .block(WAIT);
+    assertEquals(
+        TenantInitialPaymentResult.Outcome.OUTCOME_WAITING_PROVISIONING,
+        apply(c, evidence(c, now.get(), true, UUID.randomUUID())).block(WAIT).getOutcome());
+    var after =
+        operator
+            .sql("SELECT fence,lease_until FROM taska.tenant_operations WHERE tenant_id=:id")
+            .bind("id", id(c))
+            .fetch()
+            .one()
+            .block(WAIT);
+    assertEquals(before, after);
+    assertEquals(Operation.StateValue.STATE_RUNNING, resume(c).block(WAIT).getState());
+    release.tryEmitEmpty();
+    assertEquals(Operation.StateValue.STATE_SUCCEEDED, live.join().getState());
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_ACTIVE, current(c).getLifecycle());
+    var unpaid = create("idle-trust", PAID);
+    now.set(deadline(unpaid));
+    new TenantCreationExpiryWorker(raw, () -> null, lifecycle, clock).poll().block(WAIT);
+    assertEquals(unpaid.getTenant(), current(unpaid));
+    assertEquals(1, workflow.size());
+    assertEquals(1, billing.size());
   }
 
   @Test
