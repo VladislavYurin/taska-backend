@@ -3,6 +3,7 @@ package ru.taska.billing;
 import static org.junit.jupiter.api.Assertions.*;
 import static ru.taska.billing.SubscriptionIntegrationTest.*;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -788,5 +789,40 @@ class FinancialLedgerIntegrationTest {
     assertEquals(2000, balance(p.id()).netAllocated());
     assertEquals(0, balance(p.id()).unallocatedRemaining());
     assertEquals(0, count("subscription_periods"));
+  }
+
+  @Test
+  void excessReturnPreservesExistingPaidCoverageAndHistory() {
+    var p = payment(2500, "paid-history-source");
+    var m = match(p.id(), "match").block(WAIT);
+    allocate(List.of(m.id()), "allocation").block(WAIT);
+    UUID coverage = f.f.proof(A, invoice, p.id(), NOW, Instant.parse("2026-02-28T12:34:56Z"));
+    f.f.grant(A, coverage, "confirmed-coverage").block(WAIT);
+    var before = f.f.get(OWNER_A, A);
+    var history = f.f.periods(OWNER_A, A, 50, null);
+    assertTrue(before.hasPaidThrough());
+    assertEquals(1, history.getItemsCount());
+    assertEquals(p.id().toString(), f.f.confirmed.get(coverage).financialFactId().toString());
+    record(
+            proof(
+                movement(
+                    Kind.REFUND,
+                    p.id(),
+                    null,
+                    500,
+                    Currency.EUR,
+                    Method.PSP,
+                    "paid-history-excess-return")),
+            "return-excess")
+        .block(WAIT);
+    assertEquals(before, f.f.get(OWNER_A, A));
+    assertEquals(history, f.f.periods(OWNER_A, A, 50, null));
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(1, count("payment_allocations"));
+    var balance = balance(p.id());
+    assertEquals(2000, balance.netAllocated());
+    assertEquals(500, balance.confirmedNetReturned());
+    assertEquals(0, balance.unallocatedRemaining());
+    conserves(balance);
   }
 }
