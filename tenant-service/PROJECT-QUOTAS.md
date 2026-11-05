@@ -31,9 +31,13 @@
 
 ## Отмена, expiry и reconciliation
 
-Сам deadline не освобождает удалённый резерв. Root держит tenant lock, получает от
+Сам deadline не освобождает удалённый резерв. Сначала root сохраняет необратимое
+намерение отмены отдельным commit; после него commit/provision запрещены. Затем
+root держит tenant lock и получает от
 owner durable CANCELLED receipt и только затем ставит RELEASED/EXPIRED. Owner
-сериализует receipt lock даже при отсутствии проекта: tombstone не даёт позднему
+сериализует receipt lock даже при отсутствии проекта; перед owner SQL проверяется primary cancel intent.
+Даже cancel, переживший timeout/падение отправителя, не конкурирует с новым commit.
+Tombstone не даёт позднему
 provision создать ресурс после освобождения места. Скрытый aggregate удаляется
 вместе с собственным membership; видимый проект так отменить нельзя. При отказе
 owner reservation остаётся занятой. `reconcile` обрабатывает scoped batch до 100
@@ -100,4 +104,8 @@ accepted-before-off retry, архив, подтверждённое удален
 
 `TenantProjectStorageIntegrationTest` проверяет новую protected receipt migration;
 SEAT/membership integration tests повторяют существующие чтения GetTenantQuotas.
+Дополнительные отказы проверяют rollback cancel после DELETE и rollback open
+после outbox failure: receipt/visibility/membership меняются атомарно. Прямой
+PROVISIONING→OPEN без owner admission marker отвергается PostgreSQL.
+
 Изолированные сценарии не доказывают публичный REST, Kafka-доставку или общий stage.

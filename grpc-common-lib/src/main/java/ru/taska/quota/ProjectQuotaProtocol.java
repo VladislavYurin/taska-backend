@@ -36,7 +36,20 @@ public final class ProjectQuotaProtocol {
       long fence,
       Instant expiresAt,
       State state,
-      long version) {
+      long version,
+      boolean cancelRequested) {
+    public Reservation(
+        UUID tenant,
+        UUID operation,
+        UUID resource,
+        UUID id,
+        long fence,
+        Instant expiresAt,
+        State state,
+        long version) {
+      this(tenant, operation, resource, id, fence, expiresAt, state, version, false);
+    }
+
     public Reservation {
       Objects.requireNonNull(tenant);
       Objects.requireNonNull(operation);

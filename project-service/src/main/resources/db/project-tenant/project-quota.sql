@@ -45,6 +45,10 @@ CREATE FUNCTION taska.project_admission_monotonic() RETURNS trigger LANGUAGE plp
 BEGIN
  IF (OLD.admission_state='OPEN' AND NEW.admission_state<>'OPEN') OR NEW.tenant_id<>OLD.tenant_id OR NEW.id<>OLD.id
  THEN RAISE EXCEPTION 'Project admission identity/state is monotonic' USING ERRCODE='23514'; END IF;
+ IF OLD.admission_state='PROVISIONING' AND NEW.admission_state='OPEN' AND NOT EXISTS(
+   SELECT 1 FROM taska.resource_operation_receipts r WHERE r.tenant_id=OLD.tenant_id AND r.resource_id=OLD.id
+     AND r.resource_kind='PROJECT' AND r.state='COMMITTED' AND r.opened_at IS NOT NULL)
+ THEN RAISE EXCEPTION 'Project opening requires owner admission receipt' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $body$;
 CREATE TRIGGER project_admission_monotonic BEFORE UPDATE ON taska.projects FOR EACH ROW EXECUTE FUNCTION taska.project_admission_monotonic();

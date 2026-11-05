@@ -221,6 +221,11 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                               .flatMap(
                                   r -> {
                                     if (r.state() == State.COMMITTED) return Mono.just(r);
+                                    if (r.cancelRequested())
+                                      return Mono.error(
+                                          fail(
+                                              DomainStatus.FAILED_PRECONDITION,
+                                              "RESERVATION_CANCELLING"));
                                     if (r.state() != State.ACTIVE
                                         || !clock.instant().isBefore(r.expiresAt()))
                                       return Mono.error(
@@ -269,8 +274,22 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                                                     ? effect(db, r, "COMMIT")
                                                                     : Mono.error(
                                                                         fail(
-                                                                            DomainStatus.ABORTED,
-                                                                            "RESERVATION_CHANGED")))
+                                                                            clock
+                                                                                    .instant()
+                                                                                    .isBefore(
+                                                                                        r
+                                                                                            .expiresAt())
+                                                                                ? DomainStatus
+                                                                                    .ABORTED
+                                                                                : DomainStatus
+                                                                                    .FAILED_PRECONDITION,
+                                                                            clock
+                                                                                    .instant()
+                                                                                    .isBefore(
+                                                                                        r
+                                                                                            .expiresAt())
+                                                                                ? "RESERVATION_CHANGED"
+                                                                                : "RESERVATION_EXPIRED")))
                                                         .then(refresh(db, tenant))
                                                         .then(find(db, tenant, r.operation()));
                                                   });
@@ -286,13 +305,58 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
         .flatMap(
             c -> {
               scope(c, expected);
+              // Commit cancellation intent before any remote mutation can outlive this request.
               return tx.execute(
                       db ->
                           locked(db, expected.tenant(), c, Command.RELEASE, expected.operation())
                               .then(required(db, expected))
-                              .flatMap(r -> releaseLocked(db, r)))
-                  .flatMap(r -> Mono.just(r));
+                              .flatMap(r -> cancelIntent(db, r)))
+                  .flatMap(
+                      r ->
+                          r.state() == State.ACTIVE
+                              ? finishCancellation(c, r, Command.RELEASE)
+                              : Mono.just(r));
             });
+  }
+
+  private Mono<Reservation> cancelIntent(DatabaseClient db, Reservation r) {
+    if (r.state() == State.RELEASED || r.state() == State.EXPIRED || r.cancelRequested())
+      return Mono.just(r);
+    if (r.state() != State.ACTIVE)
+      return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "RESERVATION_COMMITTED"));
+    return db.sql(
+            "UPDATE taska.quota_reservations SET project_cancel_requested_at=:now,version=version+1"
+                + " WHERE tenant_id=:t AND operation_id=:op AND resource='PROJECT' AND"
+                + " state='ACTIVE' AND project_cancel_requested_at IS NULL AND"
+                + " version<9223372036854775807")
+        .bind("now", offset(clock.instant()))
+        .bind("t", r.tenant())
+        .bind("op", r.operation())
+        .fetch()
+        .rowsUpdated()
+        .flatMap(
+            n ->
+                n == 1
+                    ? find(db, r.tenant(), r.operation())
+                    : Mono.error(
+                        fail(DomainStatus.RESOURCE_EXHAUSTED, "CANCEL_INTENT_UNAVAILABLE")));
+  }
+
+  private Mono<Reservation> finishCancellation(
+      VerifiedTenantContext context, Reservation r, Command command) {
+    return tx.execute(
+        db ->
+            locked(db, r.tenant(), context, command, r.operation())
+                .then(required(db, r))
+                .flatMap(
+                    current -> {
+                      if (current.state() == State.RELEASED || current.state() == State.EXPIRED)
+                        return Mono.just(current);
+                      if (!current.cancelRequested())
+                        return Mono.error(
+                            fail(DomainStatus.FAILED_PRECONDITION, "CANCEL_NOT_REQUESTED"));
+                      return releaseLocked(db, current);
+                    }));
   }
 
   /** A worker must install a fresh scoped service context; there is no unscoped tenant scanner. */
@@ -308,10 +372,12 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                   db.sql(
                                           "SELECT * FROM taska.quota_reservations WHERE"
                                               + " tenant_id=:t AND resource='PROJECT' AND"
-                                              + " (state='ACTIVE' OR (state='COMMITTED' AND"
-                                              + " project_opened_at IS NULL)) ORDER BY"
-                                              + " created_at,id LIMIT 100")
+                                              + " ((state='ACTIVE' AND (expires_at<=:now OR"
+                                              + " project_cancel_requested_at IS NOT NULL)) OR"
+                                              + " (state='COMMITTED' AND project_opened_at IS"
+                                              + " NULL)) ORDER BY created_at,id LIMIT 100")
                                       .bind("t", tenant)
+                                      .bind("now", offset(clock.instant()))
                                       .map((row, m) -> reservation(row))
                                       .all()
                                       .collectList())
@@ -321,20 +387,19 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                           .concatMap(
                                               r ->
                                                   r.state() == State.ACTIVE
-                                                          && !clock
-                                                              .instant()
-                                                              .isBefore(r.expiresAt())
-                                                      ? releaseLocked(db, r)
+                                                      ? cancelIntent(db, r)
                                                       : Mono.just(r))
-                                          .collectList())
-                              .flatMap(rows -> refresh(db, tenant).thenReturn(rows)))
-                  // Root transaction is finished before owner.open reads primary admission over
-                  // gRPC.
+                                          .collectList()))
+                  // Each cancellation intent is durable before owner.cancel; opening also runs
+                  // after commit.
                   .flatMap(
                       rows ->
                           Flux.fromIterable(rows)
                               .concatMap(
-                                  r -> r.state() == State.COMMITTED ? complete(r) : Mono.just(r))
+                                  r ->
+                                      r.state() == State.COMMITTED
+                                          ? complete(r)
+                                          : finishCancellation(c, r, Command.RECONCILE))
                               .collectList());
             });
   }
@@ -572,7 +637,8 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
         r.get("fence", Long.class),
         r.get("expires_at", OffsetDateTime.class).toInstant(),
         State.valueOf(r.get("state", String.class)),
-        r.get("version", Long.class));
+        r.get("version", Long.class),
+        r.get("project_cancel_requested_at", OffsetDateTime.class) != null);
   }
 
   private Mono<Reservation> required(DatabaseClient db, Reservation expected) {

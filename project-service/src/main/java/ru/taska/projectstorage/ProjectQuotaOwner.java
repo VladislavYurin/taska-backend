@@ -67,6 +67,8 @@ public final class ProjectQuotaOwner implements Owner {
             })
         .flatMap(
             proof -> {
+              if (proof.cancelRequested())
+                return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "RESERVATION_CANCELLING"));
               if (proof.state() != State.ACTIVE && proof.state() != State.COMMITTED)
                 return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "RESERVATION_CLOSED"));
               String hash = hash(command);
@@ -81,6 +83,9 @@ public final class ProjectQuotaOwner implements Owner {
                                     && !hash.equals(row.get("request_hash")))
                                   return Mono.error(
                                       fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT"));
+                                if ("DELETED".equals(row.get("state")))
+                                  return Mono.error(
+                                      fail(DomainStatus.NOT_FOUND, "PROJECT_DELETED"));
                                 if (!"COMMITTED".equals(row.get("state")))
                                   return Mono.error(
                                       fail(
@@ -165,6 +170,14 @@ public final class ProjectQuotaOwner implements Owner {
   public Mono<Receipt> cancel(Reservation r) {
     return authorized(r, Use.CANCEL)
         .then(
+            primary(r)
+                .flatMap(
+                    proof ->
+                        proof.cancelRequested() && proof.state() != State.COMMITTED
+                            ? Mono.just(proof)
+                            : Mono.error(
+                                fail(DomainStatus.FAILED_PRECONDITION, "CANCEL_NOT_REQUESTED"))))
+        .then(
             tx.execute(
                 db ->
                     operationLock(db, r)
@@ -213,16 +226,6 @@ public final class ProjectQuotaOwner implements Owner {
                                           .bind("id", r.resource())
                                           .fetch()
                                           .rowsUpdated())
-                                  .then(
-                                      db.sql(
-                                              "UPDATE taska.resource_operation_receipts SET"
-                                                  + " state='CANCELLED' WHERE tenant_id=:t AND"
-                                                  + " operation_id=:op AND resource_kind='PROJECT'"
-                                                  + " AND state='COMMITTED' AND opened_at IS NULL")
-                                          .bind("t", r.tenant())
-                                          .bind("op", r.operation())
-                                          .fetch()
-                                          .rowsUpdated())
                                   .then(receipt(db, r));
                             })));
   }
@@ -251,14 +254,26 @@ public final class ProjectQuotaOwner implements Owner {
                                   return Mono.error(
                                       fail(DomainStatus.FAILED_PRECONDITION, "OPERATION_CLOSED"));
                                 if (row.get("opened_at") != null) return receipt(db, expected);
+                                // Receipt and project become OPEN atomically; the DB trigger
+                                // requires this proof.
                                 return db.sql(
-                                        "UPDATE taska.projects SET admission_state='OPEN' WHERE"
-                                            + " tenant_id=:t AND id=:id AND"
-                                            + " admission_state='PROVISIONING'")
+                                        "UPDATE taska.resource_operation_receipts SET"
+                                            + " opened_at=:now WHERE tenant_id=:t AND"
+                                            + " operation_id=:op AND resource_kind='PROJECT'")
                                     .bind("t", expected.tenant())
-                                    .bind("id", expected.resource())
+                                    .bind("op", expected.operation())
+                                    .bind("now", offset(clock.instant()))
                                     .fetch()
                                     .rowsUpdated()
+                                    .then(
+                                        db.sql(
+                                                "UPDATE taska.projects SET admission_state='OPEN'"
+                                                    + " WHERE tenant_id=:t AND id=:id AND"
+                                                    + " admission_state='PROVISIONING'")
+                                            .bind("t", expected.tenant())
+                                            .bind("id", expected.resource())
+                                            .fetch()
+                                            .rowsUpdated())
                                     .flatMap(
                                         n -> {
                                           if (n != 1)
@@ -267,26 +282,15 @@ public final class ProjectQuotaOwner implements Owner {
                                                     DomainStatus.FAILED_PRECONDITION,
                                                     "PROVISIONAL_PROJECT_MISSING"));
                                           return db.sql(
-                                                  "UPDATE taska.resource_operation_receipts SET"
-                                                      + " opened_at=:now WHERE tenant_id=:t AND"
-                                                      + " operation_id=:op AND"
-                                                      + " resource_kind='PROJECT'")
+                                                  "INSERT INTO"
+                                                      + " taska.outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload)"
+                                                      + " VALUES(:t,'project',:id,'ProjectAdmissionOpened',jsonb_build_object('projectId',CAST(:text"
+                                                      + " AS text)))")
                                               .bind("t", expected.tenant())
-                                              .bind("op", expected.operation())
-                                              .bind("now", offset(clock.instant()))
+                                              .bind("id", expected.resource())
+                                              .bind("text", expected.resource().toString())
                                               .fetch()
                                               .rowsUpdated()
-                                              .then(
-                                                  db.sql(
-                                                          "INSERT INTO"
-                                                              + " taska.outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload)"
-                                                              + " VALUES(:t,'project',:id,'ProjectAdmissionOpened',jsonb_build_object('projectId',CAST(:text"
-                                                              + " AS text)))")
-                                                      .bind("t", expected.tenant())
-                                                      .bind("id", expected.resource())
-                                                      .bind("text", expected.resource().toString())
-                                                      .fetch()
-                                                      .rowsUpdated())
                                               .then(receipt(db, expected));
                                         });
                               }));

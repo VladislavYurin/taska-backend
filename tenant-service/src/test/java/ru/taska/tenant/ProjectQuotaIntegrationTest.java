@@ -68,6 +68,8 @@ class ProjectQuotaIntegrationTest {
       ownerOnline = new AtomicBoolean(true),
       billingOnline = new AtomicBoolean(true),
       failOpen = new AtomicBoolean();
+  static final AtomicBoolean loseCancelResponse = new AtomicBoolean();
+  static final AtomicBoolean expireOnInspect = new AtomicBoolean();
   static final AtomicReference<CredentialKind> lastCredential = new AtomicReference<>();
   static final AtomicLong limit = new AtomicLong(1),
       entitlement = new AtomicLong(1),
@@ -266,6 +268,8 @@ class ProjectQuotaIntegrationTest {
                   || (use == ProjectQuotaOwner.Use.OPEN && failOpen.get()))
                 return Mono.error(
                     new DomainException(DomainStatus.UNAVAILABLE, "owner unavailable"));
+              if (use == ProjectQuotaOwner.Use.INSPECT && expireOnInspect.get())
+                time.set(time.get().plusSeconds(61));
               return Mono.empty();
             },
             clock);
@@ -282,7 +286,34 @@ class ProjectQuotaIntegrationTest {
             .addService(
                 ServerInterceptors.intercept(
                     new ProjectQuotaOwnerGrpcService(owner),
-                    new TenantServerInterceptor(ownerSecurity, ownerPolicy, "test")))
+                    new TenantServerInterceptor(ownerSecurity, ownerPolicy, "test"),
+                    new ServerInterceptor() {
+                      public <Q, S> ServerCall.Listener<Q> interceptCall(
+                          ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
+                        boolean fault =
+                            call.getMethodDescriptor()
+                                    .getFullMethodName()
+                                    .equals(
+                                        ProjectQuotaOwnerServiceGrpc.getCancelMethod()
+                                            .getFullMethodName())
+                                && loseCancelResponse.get();
+                        if (!fault) return next.startCall(call, headers);
+                        return next.startCall(
+                            new ForwardingServerCall.SimpleForwardingServerCall<Q, S>(call) {
+                              @Override
+                              public void sendMessage(S message) {}
+
+                              @Override
+                              public void close(Status status, Metadata trailers) {
+                                super.close(
+                                    Status.UNAVAILABLE.withDescription(
+                                        "fixture lost cancellation acknowledgement"),
+                                    new Metadata());
+                              }
+                            },
+                            headers);
+                      }
+                    }))
             .build()
             .start();
     ownerChannel = channel("tenant-service", ownerServer.getPort());
@@ -376,6 +407,8 @@ class ProjectQuotaIntegrationTest {
 
   @BeforeEach
   void seed() {
+    loseCancelResponse.set(false);
+    expireOnInspect.set(false);
     time.set(Instant.now());
     enabled.set(true);
     permitted.set(true);
@@ -507,6 +540,20 @@ class ProjectQuotaIntegrationTest {
     assertEquals("1", usage(A).getReserved());
     var r = attempts.stream().filter(Signal::isOnNext).findFirst().orElseThrow().get();
     as(A, owner.provision(r, command("AA"))).block(WAIT);
+    assertThrows(
+        Exception.class,
+        () ->
+            as(
+                    A,
+                    ownerTx.execute(
+                        db ->
+                            db.sql(
+                                    "UPDATE taska.projects SET admission_state='OPEN' WHERE"
+                                        + " tenant_id=:t AND id=:id")
+                                .bind("t", A)
+                                .bind("id", r.resource())
+                                .then()))
+                .block(WAIT));
     assertTrue(
         as(
                 A,
@@ -618,8 +665,18 @@ class ProjectQuotaIntegrationTest {
     as(A, root.releaseUsage(r)).block(WAIT);
     as(A, root.releaseUsage(r)).block(WAIT);
     assertEquals("0", usage(A).getUsed());
+    rootAdmin
+        .sql(
+            "UPDATE taska.quota_reservations SET project_opened_at=NULL WHERE tenant_id=:t AND"
+                + " operation_id=:op AND resource='PROJECT'")
+        .bind("t", A)
+        .bind("op", r.operation())
+        .then()
+        .block(WAIT);
+    as(A, root.reconcile()).block(WAIT);
     assertEquals(State.COMMITTED, as(A, authorityClient.commit(r)).block(WAIT).state());
     assertEquals(0, rows(ownerAdmin, "projects"));
+    assertEquals("0", usage(A).getUsed());
     assertEquals(2, rows(rootAdmin, "quota_effects"));
     assertEquals(1, rows(ownerAdmin, "resource_operation_receipts"));
     reserve(A, UUID.randomUUID(), UUID.randomUUID());
@@ -742,6 +799,125 @@ class ProjectQuotaIntegrationTest {
         .block(WAIT);
     assertEquals(CredentialKind.CREDENTIAL_KIND_USER_PAT, lastCredential.get());
     assertEquals(1, rows(rootAdmin, "quota_reservations"));
+  }
+
+  @Test
+  void cancellationFailureAfterDeleteRollsBackProjectMembershipAndReceipt() {
+    var r = reserve(A, UUID.randomUUID(), UUID.randomUUID());
+    as(A, owner.provision(r, command("AA"))).block(WAIT);
+    ownerAdmin
+        .sql(
+            "CREATE FUNCTION taska.fail_cancel() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE"
+                + " EXCEPTION 'fixture rollback';END$$")
+        .then()
+        .block(WAIT);
+    ownerAdmin
+        .sql(
+            "CREATE TRIGGER fail_cancel AFTER DELETE ON taska.projects FOR EACH ROW EXECUTE"
+                + " FUNCTION taska.fail_cancel()")
+        .then()
+        .block(WAIT);
+    try {
+      assertThrows(Exception.class, () -> as(A, authorityClient.release(r)).block(WAIT));
+      assertEquals(1, rows(ownerAdmin, "projects"));
+      assertEquals(1, rows(ownerAdmin, "project_members"));
+      assertEquals(OwnerState.PROVISIONING, as(A, owner.inspect(r)).block(WAIT).state());
+      assertEquals("1", usage(A).getReserved());
+      assertEquals(State.ACTIVE, as(A, authorityClient.get(r.operation())).block(WAIT).state());
+    } finally {
+      ownerAdmin.sql("DROP TRIGGER fail_cancel ON taska.projects").then().block(WAIT);
+      ownerAdmin.sql("DROP FUNCTION taska.fail_cancel()").then().block(WAIT);
+    }
+    assertEquals(State.RELEASED, as(A, authorityClient.release(r)).block(WAIT).state());
+    assertEquals(State.RELEASED, as(A, authorityClient.release(r)).block(WAIT).state());
+    assertEquals(0, rows(ownerAdmin, "projects"));
+    assertEquals(1, rows(ownerAdmin, "resource_operation_receipts"));
+    assertEquals("0", usage(A).getReserved());
+  }
+
+  @Test
+  void expiryDuringPrimaryInspectionNeverConsumesUsage() {
+    var r = reserve(A, UUID.randomUUID(), UUID.randomUUID());
+    as(A, owner.provision(r, command("AA"))).block(WAIT);
+    expireOnInspect.set(true);
+    var error =
+        assertThrows(
+            io.grpc.StatusRuntimeException.class,
+            () -> as(A, authorityClient.commit(r)).block(WAIT));
+    assertEquals(io.grpc.Status.Code.FAILED_PRECONDITION, error.getStatus().getCode());
+    assertEquals("RESERVATION_EXPIRED", error.getStatus().getDescription());
+    expireOnInspect.set(false);
+    assertEquals(0, rows(rootAdmin, "quota_effects"));
+    assertEquals(State.ACTIVE, as(A, authorityClient.get(r.operation())).block(WAIT).state());
+    assertEquals(OwnerState.PROVISIONING, as(A, owner.inspect(r)).block(WAIT).state());
+    as(A, root.reconcile()).block(WAIT);
+    assertEquals("0", usage(A).getUsed());
+    assertEquals("0", usage(A).getReserved());
+  }
+
+  @Test
+  void openingOutboxFailureKeepsProjectHiddenAndRecoveryOpensItOnce() {
+    var r = reserve(A, UUID.randomUUID(), UUID.randomUUID());
+    as(A, owner.provision(r, command("AA"))).block(WAIT);
+    ownerAdmin
+        .sql(
+            "CREATE FUNCTION taska.fail_open() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN IF"
+                + " NEW.event_type='ProjectAdmissionOpened' THEN RAISE EXCEPTION 'fixture"
+                + " rollback';END IF;RETURN NEW;END$$")
+        .then()
+        .block(WAIT);
+    ownerAdmin
+        .sql(
+            "CREATE TRIGGER fail_open BEFORE INSERT ON taska.outbox_events FOR EACH ROW EXECUTE"
+                + " FUNCTION taska.fail_open()")
+        .then()
+        .block(WAIT);
+    try {
+      assertThrows(Exception.class, () -> as(A, authorityClient.commit(r)).block(WAIT));
+      assertEquals(State.COMMITTED, as(A, authorityClient.get(r.operation())).block(WAIT).state());
+      assertEquals(OwnerState.PROVISIONING, as(A, owner.inspect(r)).block(WAIT).state());
+      assertEquals(1, rows(ownerAdmin, "outbox_events"));
+      assertTrue(
+          as(
+                  A,
+                  new TenantProjectStore(ownerTx, new tools.jackson.databind.ObjectMapper())
+                      .execute(s -> s.find(r.resource())))
+              .blockOptional(WAIT)
+              .isEmpty());
+    } finally {
+      ownerAdmin.sql("DROP TRIGGER fail_open ON taska.outbox_events").then().block(WAIT);
+      ownerAdmin.sql("DROP FUNCTION taska.fail_open()").then().block(WAIT);
+    }
+    as(A, root.reconcile()).block(WAIT);
+    as(A, root.reconcile()).block(WAIT);
+    assertEquals(OwnerState.OPEN, as(A, owner.inspect(r)).block(WAIT).state());
+    assertEquals(2, rows(ownerAdmin, "outbox_events"));
+    assertEquals("1", usage(A).getUsed());
+    assertEquals("0", usage(A).getReserved());
+  }
+
+  @Test
+  void lostCancellationAcknowledgementKeepsDurableIntentAndFencesCommit() {
+    var r = reserve(A, UUID.randomUUID(), UUID.randomUUID());
+    as(A, owner.provision(r, command("AA"))).block(WAIT);
+    loseCancelResponse.set(true);
+    assertThrows(Exception.class, () -> as(A, authorityClient.release(r)).block(WAIT));
+    var pending = as(A, authorityClient.get(r.operation())).block(WAIT);
+    assertEquals(State.ACTIVE, pending.state());
+    assertTrue(pending.cancelRequested());
+    assertEquals(OwnerState.CANCELLED, as(A, owner.inspect(r)).block(WAIT).state());
+    assertEquals("1", usage(A).getReserved());
+    assertEquals(0, rows(ownerAdmin, "projects"));
+    var error =
+        assertThrows(
+            StatusRuntimeException.class, () -> as(A, authorityClient.commit(r)).block(WAIT));
+    assertEquals(Status.Code.FAILED_PRECONDITION, error.getStatus().getCode());
+    assertEquals("RESERVATION_CANCELLING", error.getStatus().getDescription());
+    loseCancelResponse.set(false);
+    as(A, root.reconcile()).block(WAIT);
+    assertEquals(State.RELEASED, as(A, authorityClient.get(r.operation())).block(WAIT).state());
+    assertEquals("0", usage(A).getReserved());
+    assertEquals("0", usage(A).getUsed());
   }
 
   @Test

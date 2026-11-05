@@ -8,7 +8,7 @@ message QuotaReservation {
  enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }
  enum StateValue { STATE_UNSPECIFIED=0; STATE_ACTIVE=1; STATE_COMMITTED=2; STATE_RELEASED=3; STATE_EXPIRED=4; }
  string id=1; string operation_id=2; string tenant_id=3; KindValue kind=4; optional string project_id=5; string quantity=6; StateValue state=7; string expires_at=8; string version=9;
- string fence=10; string resource_id=11;
+ string fence=10; string resource_id=11; bool cancel_requested=12;
 }
 message ReserveQuotaRequest {
  enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }

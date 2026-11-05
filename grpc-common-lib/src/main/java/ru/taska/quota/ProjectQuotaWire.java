@@ -48,6 +48,7 @@ public final class ProjectQuotaWire {
         .setExpiresAt(r.expiresAt().toString())
         .setVersion(Long.toString(r.version()))
         .setFence(Long.toString(r.fence()))
+        .setCancelRequested(r.cancelRequested())
         .setResourceId(r.resource().toString())
         .build();
   }
@@ -65,7 +66,8 @@ public final class ProjectQuotaWire {
           number(r.getFence()),
           instant(r.getExpiresAt()),
           State.valueOf(r.getState().name().substring(6)),
-          number(r.getVersion()));
+          number(r.getVersion()),
+          r.getCancelRequested());
     } catch (RuntimeException e) {
       throw invalid();
     }
